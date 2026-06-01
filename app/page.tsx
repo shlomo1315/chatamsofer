@@ -1,0 +1,1146 @@
+'use client'
+import { useState, useCallback, useEffect } from 'react'
+import {
+  Building2, Search, AlertCircle, Loader2, CheckCircle2, User,
+  Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
+  Users, GitBranch, Heart, ArrowRight, Clock, Shield,
+} from 'lucide-react'
+
+// ─── Types ───
+
+type Step =
+  | 'id-lookup'
+  | 'not-found'
+  | 'register'
+  | 'register-success'
+  | 'dashboard'
+  | 'new-birth'
+  | 'new-loan'
+  | 'request-sent'
+
+interface FoundBeneficiary {
+  id: string
+  full_name: string
+  family_name?: string
+  eligibility_status: string
+  phone?: string
+  city?: string
+  marital_status?: string
+  created_at: string
+}
+
+// ─── Constants ───
+
+const MARITAL_OPTIONS = [
+  { value: 'רווק', label: 'רווק' },
+  { value: 'רווקה', label: 'רווקה' },
+  { value: 'נשוי', label: 'נשוי' },
+  { value: 'נשואה', label: 'נשואה' },
+  { value: 'גרוש', label: 'גרוש' },
+  { value: 'גרושה', label: 'גרושה' },
+  { value: 'אלמן', label: 'אלמן' },
+  { value: 'אלמנה', label: 'אלמנה' },
+]
+const MARRIED_STATUSES = ['נשוי', 'נשואה', 'אלמן', 'אלמנה']
+
+const LOAN_PURPOSES = [
+  { value: 'נישואי הבן/הבת', desc: 'מומלץ לצרף הזמנה' },
+  { value: 'שמחה משפחתית' },
+  { value: 'הוצאה רפואית' },
+  { value: 'חובות מנישואי הילדים' },
+  { value: 'רכישת דירה', desc: 'רק לדירה ראשונה, בעת הרכישה בפועל' },
+  { value: 'אחר' },
+]
+
+const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  pending:  { label: 'ממתין לאישור', color: 'text-amber-800',  bg: 'bg-amber-50',  border: 'border-amber-200' },
+  review:   { label: 'בבדיקה',       color: 'text-blue-800',   bg: 'bg-blue-50',   border: 'border-blue-200' },
+  approved: { label: 'מאושר',         color: 'text-green-800',  bg: 'bg-green-50',  border: 'border-green-200' },
+  rejected: { label: 'לא מאושר',      color: 'text-red-800',    bg: 'bg-red-50',    border: 'border-red-200' },
+}
+
+const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
+
+// ─── Shared helpers ───
+
+function Field({ label, required, children, hint }: {
+  label: string; required?: boolean; children: React.ReactNode; hint?: string
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-slate-700">
+        {label}{required && <span className="text-red-500 mr-1">*</span>}
+      </label>
+      {children}
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+    </div>
+  )
+}
+
+function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      className={`rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-slate-400 ${className}`}
+      {...props}
+    />
+  )
+}
+
+function SelectInput({ className = '', children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      className={`rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${className}`}
+      {...props}
+    >
+      {children}
+    </select>
+  )
+}
+
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">
+      <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+      <span>{message}</span>
+    </div>
+  )
+}
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+// ─── Lineage cascade ───
+
+interface LineageNode { id: string; name: string; generation: number; parent_id: string | null }
+
+function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[]) => void }) {
+  const [levels, setLevels] = useState<{ nodes: LineageNode[]; selected: string | null; selectedName: string }[]>([])
+  const [loadingLevel, setLoadingLevel] = useState<number | null>(null)
+
+  const loadLevel = useCallback(async (parentId: string | null, levelIdx: number) => {
+    setLoadingLevel(levelIdx)
+    try {
+      const url = parentId ? `/api/lineage?parent_id=${parentId}` : '/api/lineage'
+      const res = await fetch(url)
+      const data = await res.json()
+      setLevels(prev => {
+        const next = prev.slice(0, levelIdx)
+        if ((data.nodes ?? []).length > 0) next.push({ nodes: data.nodes, selected: null, selectedName: '' })
+        return next
+      })
+    } catch { /* ignore */ }
+    setLoadingLevel(null)
+  }, [])
+
+  useEffect(() => { loadLevel(null, 0) }, [loadLevel])
+
+  const handleSelect = async (levelIdx: number, node: LineageNode) => {
+    const currentPath = levels.slice(0, levelIdx).map(l => l.selectedName).concat(node.name)
+    setLevels(prev => prev.slice(0, levelIdx + 1).map((l, i) =>
+      i === levelIdx ? { ...l, selected: node.id, selectedName: node.name } : l
+    ))
+    setLoadingLevel(levelIdx + 1)
+    try {
+      const res = await fetch(`/api/lineage?parent_id=${node.id}`)
+      const data = await res.json()
+      const children: LineageNode[] = data.nodes ?? []
+      setLevels(prev => {
+        const next = prev.slice(0, levelIdx + 1)
+        if (children.length > 0) {
+          next.push({ nodes: children, selected: null, selectedName: '' })
+          onSelect('', currentPath)
+        } else {
+          onSelect(node.id, currentPath)
+        }
+        return next
+      })
+    } catch {
+      onSelect(node.id, currentPath)
+    }
+    setLoadingLevel(null)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {levels.map((level, idx) => (
+        <div key={idx}>
+          <p className="text-xs font-medium text-slate-500 mb-2">
+            {idx === 0 ? 'בחר מהדור הראשון:' : `בחר המשך הדור ${idx + 1}:`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {level.nodes.map(node => (
+              <button
+                key={node.id} type="button" onClick={() => handleSelect(idx, node)}
+                className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
+                  level.selected === node.id
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                }`}
+              >{node.name}</button>
+            ))}
+            {loadingLevel === idx + 1 && (
+              <span className="flex items-center gap-1 text-xs text-slate-400 self-center">
+                <Loader2 size={12} className="animate-spin" /> טוען...
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Main page ───
+
+export default function PublicPortalPage() {
+  const [step, setStep] = useState<Step>('id-lookup')
+  const [idInput, setIdInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
+  const [requestType, setRequestType] = useState<'birth' | 'loan' | null>(null)
+  const [pendingConfirmed, setPendingConfirmed] = useState(false)
+
+  // Registration form
+  const [regForm, setRegForm] = useState({
+    id_number: '', full_name: '', family_name: '', phone: '', phone2: '',
+    email: '', address: '', city: '', birth_date: '', gender: '',
+    marital_status: '', spouse_name: '', spouse_id_number: '',
+    children_count: '0', notes: '',
+  })
+  const [lineageNodeId, setLineageNodeId] = useState('')
+  const [lineagePath, setLineagePath] = useState<string[]>([])
+  const [declaredReg, setDeclaredReg] = useState(false)
+
+  // Birth request form
+  const [birthForm, setBirthForm] = useState({
+    birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '',
+  })
+  const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
+
+  // Loan request form
+  const [loanForm, setLoanForm] = useState({
+    amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '',
+  })
+
+  const setReg = (k: keyof typeof regForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setRegForm(f => ({ ...f, [k]: e.target.value }))
+
+  const setBirth = (k: keyof typeof birthForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setBirthForm(f => ({ ...f, [k]: e.target.value }))
+
+  const setLoan = (k: keyof typeof loanForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setLoanForm(f => ({ ...f, [k]: e.target.value }))
+
+  const showSpouseFields = MARRIED_STATUSES.includes(regForm.marital_status)
+
+  // Load recovery homes
+  useEffect(() => {
+    if (step === 'new-birth') {
+      fetch('/api/portal/hebrewdate').catch(() => {})
+    }
+  }, [step])
+
+  // ── Lookup ──
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const id = idInput.replace(/\D/g, '')
+    if (!id || id.length < 5) { setError('אנא הזן מספר תעודת זהות תקין'); return }
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/portal/lookup?id=${encodeURIComponent(id)}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
+      if (data.found) {
+        setBeneficiary(data.beneficiary)
+        setStep('dashboard')
+      } else {
+        setRegForm(f => ({ ...f, id_number: id }))
+        setStep('not-found')
+      }
+    } catch {
+      setError('שגיאת רשת. אנא נסה שוב.')
+    }
+    setLoading(false)
+  }
+
+  // ── Registration ──
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!regForm.full_name || !regForm.family_name || !regForm.phone) {
+      setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
+      return
+    }
+    if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/portal/public-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...regForm,
+          children_count: parseInt(regForm.children_count || '0', 10),
+          lineage_node_id: lineageNodeId || null,
+          spouse_name: showSpouseFields ? regForm.spouse_name : null,
+          spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשמירת הנתונים'); return }
+      setStep('register-success')
+    } catch {
+      setError('שגיאת רשת. אנא נסה שוב.')
+    }
+    setLoading(false)
+  }
+
+  // ── Birth request ──
+  const handleBirthRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    if (!beneficiary) return
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/portal/birth-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      setRequestType('birth')
+      setStep('request-sent')
+    } catch {
+      setError('שגיאת רשת. אנא נסה שוב.')
+    }
+    setLoading(false)
+  }
+
+  // ── Loan request ──
+  const handleLoanRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loanForm.amount || !loanForm.installments || !loanForm.purpose) {
+      setError('אנא מלא את כל שדות החובה')
+      return
+    }
+    if (!beneficiary) return
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/portal/loan-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      setRequestType('loan')
+      setStep('request-sent')
+    } catch {
+      setError('שגיאת רשת. אנא נסה שוב.')
+    }
+    setLoading(false)
+  }
+
+  // ─── Status badge ───
+  const statusMeta = beneficiary ? (STATUS_META[beneficiary.eligibility_status] ?? STATUS_META.pending) : null
+  const isPending = beneficiary?.eligibility_status === 'pending' || beneficiary?.eligibility_status === 'review'
+  const isRejected = beneficiary?.eligibility_status === 'rejected'
+  const displayName = beneficiary
+    ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
+    : ''
+
+  const goToBirthForm = () => {
+    if (isPending && !pendingConfirmed) { setPendingConfirmed(true); return }
+    setError('')
+    setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' })
+    setStep('new-birth')
+    setPendingConfirmed(false)
+  }
+  const goToLoanForm = () => {
+    if (isPending && !pendingConfirmed) { setPendingConfirmed(true); return }
+    setError('')
+    setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
+    setStep('new-loan')
+    setPendingConfirmed(false)
+  }
+
+  const backToDashboard = () => {
+    setStep('dashboard')
+    setError('')
+    setPendingConfirmed(false)
+  }
+  const backToHome = () => {
+    setStep('id-lookup')
+    setIdInput('')
+    setError('')
+    setBeneficiary(null)
+    setPendingConfirmed(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 shadow-sm">
+        <div className="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Building2 size={20} className="text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="font-bold text-slate-900 text-base leading-tight">היכל החתם סופר</h1>
+            <p className="text-xs text-slate-500">פורטל שירותים לציבור</p>
+          </div>
+          {(step === 'dashboard' || step === 'new-birth' || step === 'new-loan' || step === 'request-sent') && (
+            <button onClick={backToHome} className="text-xs text-slate-400 hover:text-indigo-600 underline">
+              יציאה
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="max-w-xl mx-auto px-4 py-8">
+
+        {/* ─── Step: ID Lookup ─── */}
+        {step === 'id-lookup' && (
+          <div className="flex flex-col gap-6">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <Building2 size={36} className="text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
+              <p className="text-slate-500">פורטל שירותים — היכל החתם סופר</p>
+            </div>
+
+            <Card>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                  <Search size={20} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">כניסה לפורטל</h3>
+                  <p className="text-sm text-slate-500">הזן את תעודת הזהות שלך</p>
+                </div>
+              </div>
+              <form onSubmit={handleLookup} className="flex flex-col gap-4">
+                <Field label='מספר תעודת זהות' required hint="הזן 9 ספרות">
+                  <TextInput
+                    value={idInput}
+                    onChange={e => setIdInput(e.target.value)}
+                    placeholder="000000000"
+                    inputMode="numeric"
+                    maxLength={9}
+                    dir="ltr"
+                    autoComplete="off"
+                    className="text-center text-lg font-semibold tracking-widest"
+                  />
+                </Field>
+                {error && <ErrorBox message={error} />}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+                >
+                  {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                  {loading ? 'מחפש...' : 'כניסה'}
+                </button>
+              </form>
+            </Card>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              {[
+                { icon: Baby, label: 'בקשת לידה' },
+                { icon: CreditCard, label: 'הלוואה' },
+                { icon: Gift, label: 'חלוקה' },
+              ].map(({ icon: Icon, label }) => (
+                <div key={label} className="bg-white rounded-xl border border-slate-200 p-3">
+                  <Icon size={22} className="text-indigo-400 mx-auto mb-1" />
+                  <p className="text-xs text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step: Not Found ─── */}
+        {step === 'not-found' && (
+          <div className="flex flex-col gap-4">
+            <Card>
+              <div className="text-center mb-5">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle size={30} className="text-amber-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mb-2">לא מופיע במערכת</h2>
+                <p className="text-slate-600 text-sm leading-relaxed">
+                  מספר תעודת הזהות{' '}
+                  <span className="font-semibold text-slate-800" dir="ltr">{idInput}</span>
+                  {' '}אינו רשום במערכת שלנו.
+                </p>
+                <p className="text-slate-500 text-sm mt-1">
+                  כדי ליהנות משירותי העמותה יש להירשם תחילה.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => { setError(''); setStep('register') }}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                >
+                  <User size={18} />
+                  רישום למערכת
+                </button>
+                <button
+                  onClick={backToHome}
+                  className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm"
+                >
+                  <ArrowRight size={16} />
+                  חזרה לכניסה
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* ─── Step: Register ─── */}
+        {step === 'register' && (
+          <form onSubmit={handleRegister} className="flex flex-col gap-4">
+
+            <div className="flex items-center gap-3 mb-1">
+              <button type="button" onClick={() => setStep('not-found')} className="text-slate-400 hover:text-slate-600">
+                <ArrowRight size={20} />
+              </button>
+              <h2 className="font-bold text-slate-900 text-lg">טופס רישום</h2>
+            </div>
+
+            {/* Personal */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <User size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">פרטים אישיים</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="שם פרטי" required>
+                    <TextInput value={regForm.full_name} onChange={setReg('full_name')} placeholder="ישראל" required />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="שם משפחה" required>
+                    <TextInput value={regForm.family_name} onChange={setReg('family_name')} placeholder="ישראלי" required />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label='תעודת זהות' required>
+                    <TextInput value={regForm.id_number} onChange={setReg('id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="תאריך לידה">
+                    <TextInput type="date" value={regForm.birth_date} onChange={setReg('birth_date')} max={new Date().toISOString().split('T')[0]} />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="מין">
+                    <SelectInput value={regForm.gender} onChange={setReg('gender')}>
+                      <option value="">בחר...</option>
+                      <option value="male">זכר</option>
+                      <option value="female">נקבה</option>
+                    </SelectInput>
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {/* Marital */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Heart size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">מצב משפחתי</h3>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {MARITAL_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value} type="button"
+                    onClick={() => setRegForm(f => ({ ...f, marital_status: opt.value }))}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      regForm.marital_status === opt.value
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                    }`}
+                  >{opt.label}</button>
+                ))}
+              </div>
+              {showSpouseFields && (
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                  <p className="col-span-2 text-xs text-slate-500 font-medium">פרטי בן/בת הזוג</p>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="שם בן/בת הזוג">
+                      <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label='ת"ז בן/בת הזוג'>
+                      <TextInput value={regForm.spouse_id_number} onChange={setReg('spouse_id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" />
+                    </Field>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Contact */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Phone size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="טלפון ראשי" required>
+                    <TextInput type="tel" value={regForm.phone} onChange={setReg('phone')} placeholder="050-0000000" dir="ltr" required />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="טלפון נוסף">
+                    <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="050-0000000" dir="ltr" />
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="דואר אלקטרוני">
+                    <TextInput type="email" value={regForm.email} onChange={setReg('email')} placeholder="your@email.com" dir="ltr" />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {/* Address */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <MapPin size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">כתובת</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Field label="רחוב ומספר בית">
+                    <TextInput value={regForm.address} onChange={setReg('address')} placeholder="הרב קוק 12" />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="עיר">
+                    <TextInput value={regForm.city} onChange={setReg('city')} placeholder="בני ברק" />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {/* Lineage */}
+            <Card>
+              <div className="flex items-center gap-2 mb-1">
+                <GitBranch size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">שיוך שושלת</h3>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">בחר את הענף שאתה שייך אליו.</p>
+              {lineagePath.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                  <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
+                  {lineagePath.map((name, i) => (
+                    <span key={i} className="flex items-center gap-1">
+                      {i > 0 && <ChevronLeft size={12} className="text-indigo-300" />}
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        i === lineagePath.length - 1 ? 'bg-indigo-600 text-white font-semibold' : 'bg-indigo-100 text-indigo-700'
+                      }`}>{name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <LineageCascade onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
+              {lineageNodeId && (
+                <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]) }}
+                  className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
+              )}
+            </Card>
+
+            {/* Children & Notes */}
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Users size={18} className="text-indigo-600" />
+                <h3 className="font-semibold text-slate-900">ילדים והערות</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="מספר ילדים">
+                    <TextInput type="number" min="0" max="30" value={regForm.children_count} onChange={setReg('children_count')} />
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="הערות" hint="כל מידע נוסף">
+                    <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
+                      placeholder="תאר את המצב המשפחתי..."
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {/* Declaration */}
+            <Card>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox" id="decl" checked={declaredReg}
+                  onChange={e => setDeclaredReg(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-indigo-600"
+                />
+                <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
+                  הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול העמותה.
+                </label>
+              </div>
+            </Card>
+
+            {error && <ErrorBox message={error} />}
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+              <p className="font-medium mb-1">שים לב</p>
+              <p>הטופס ייבדק על ידי צוות העמותה. תקבל עדכון על סטטוס הבקשה שלך.</p>
+            </div>
+
+            <button
+              type="submit" disabled={loading}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+            >
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+              {loading ? 'שולח...' : 'שלח בקשת רישום'}
+            </button>
+          </form>
+        )}
+
+        {/* ─── Step: Register Success ─── */}
+        {step === 'register-success' && (
+          <Card>
+            <div className="text-center py-4">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <CheckCircle2 size={38} className="text-green-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל!</h2>
+              <p className="text-slate-600 mb-6 leading-relaxed">
+                בקשת הרישום שלך נשלחה בהצלחה.<br />
+                צוות העמותה יעיין בבקשתך ויצור עמך קשר.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 text-right mb-6">
+                <p className="flex items-center gap-2">
+                  <Clock size={14} className="flex-shrink-0" />
+                  <span>הסטטוס כרגע: <strong>ממתין לאישור</strong>. לאחר האישור תוכל להגיש בקשות.</span>
+                </p>
+              </div>
+              <button onClick={backToHome}
+                className="flex items-center justify-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm mx-auto">
+                <ArrowRight size={16} /> חזרה לדף הכניסה
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* ─── Step: Dashboard ─── */}
+        {step === 'dashboard' && beneficiary && (
+          <div className="flex flex-col gap-4">
+
+            {/* User header */}
+            <Card>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-indigo-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <User size={26} className="text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="font-bold text-slate-900 text-lg truncate">{displayName || beneficiary.full_name}</h2>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {statusMeta && (
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusMeta.color} ${statusMeta.bg} ${statusMeta.border}`}>
+                        {statusMeta.label}
+                      </span>
+                    )}
+                    {beneficiary.city && (
+                      <span className="flex items-center gap-1 text-xs text-slate-500">
+                        <MapPin size={11} />{beneficiary.city}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone */}
+              {beneficiary.phone && (
+                <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-sm text-slate-600">
+                  <Phone size={14} className="text-slate-400 flex-shrink-0" />
+                  <span dir="ltr">{beneficiary.phone}</span>
+                </div>
+              )}
+            </Card>
+
+            {/* Status banners */}
+            {isPending && !pendingConfirmed && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 text-sm text-amber-800">
+                <div className="flex items-start gap-3">
+                  <Clock size={18} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold mb-1">הסטטוס שלך: ממתין לאישור</p>
+                    <p className="leading-relaxed">
+                      ניתן להגיש בקשה גם בשלב זה. הבקשה תועבר לאישור גורם מוסמך ותטופל בהתאם.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {pendingConfirmed && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl px-4 py-4 text-sm text-amber-900">
+                <div className="flex items-start gap-3">
+                  <Shield size={18} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold mb-1">שים לב — הגשת בקשה ראשונה</p>
+                    <p className="leading-relaxed mb-3">
+                      הנך עומד להגיש בקשה בפעם הראשונה. הסטטוס שלך הוא &quot;ממתין לאישור&quot;.<br />
+                      הבקשה תועבר לבדיקת הגורם המוסמך.
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setError(''); setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' }); setStep('new-birth'); setPendingConfirmed(false) }}
+                        className="text-xs bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800">
+                        המשך לבקשת לידה
+                      </button>
+                      <button onClick={() => { setError(''); setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' }); setStep('new-loan'); setPendingConfirmed(false) }}
+                        className="text-xs bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800">
+                        המשך לבקשת הלוואה
+                      </button>
+                      <button onClick={() => setPendingConfirmed(false)}
+                        className="text-xs text-amber-700 underline px-2 py-1.5">
+                        ביטול
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {beneficiary.eligibility_status === 'approved' && (
+              <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+                <CheckCircle2 size={16} className="flex-shrink-0" />
+                <span>חשבונך מאושר — ניתן להגיש בקשות ישירות.</span>
+              </div>
+            )}
+
+            {isRejected && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-800 flex items-center gap-2">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>חשבונך אינו מאושר. לבירורים פנה לצוות העמותה.</span>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            {!isRejected && !pendingConfirmed && (
+              <div className="flex flex-col gap-3">
+                <h3 className="font-semibold text-slate-700 text-sm px-1">הגשת בקשה</h3>
+
+                <button
+                  onClick={goToBirthForm}
+                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-colors">
+                    <Baby size={22} className="text-pink-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
+                    <p className="text-xs text-slate-500 mt-0.5">שהייה בבית החלמה לאחר לידה</p>
+                  </div>
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                </button>
+
+                <button
+                  onClick={goToLoanForm}
+                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">
+                    <CreditCard size={22} className="text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">הלוואה חדשה</p>
+                    <p className="text-xs text-slate-500 mt-0.5">בקשת הלוואה מגמ&quot;ח</p>
+                  </div>
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                </button>
+
+                <button
+                  onClick={() => alert('לבקשת חלוקה, אנא פנה ישירות לצוות העמותה')}
+                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                    <Gift size={22} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">חלוקה</p>
+                    <p className="text-xs text-slate-500 mt-0.5">קבלת מוצרים / חבילות מהעמותה</p>
+                  </div>
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                </button>
+              </div>
+            )}
+
+            <div className="text-center pt-2">
+              <p className="text-xs text-slate-400">
+                נרשמת ב-{new Date(beneficiary.created_at).toLocaleDateString('he-IL')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step: New Birth ─── */}
+        {step === 'new-birth' && (
+          <form onSubmit={handleBirthRequest} className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 mb-1">
+              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
+                <ArrowRight size={20} />
+              </button>
+              <h2 className="font-bold text-slate-900 text-lg">בקשת הבראה ליולדת</h2>
+            </div>
+
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Baby size={18} className="text-pink-500" />
+                <h3 className="font-semibold text-slate-900">פרטי הלידה</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="תאריך הלידה" required>
+                    <TextInput
+                      type="date" value={birthForm.birth_date} onChange={setBirth('birth_date')}
+                      max={new Date().toISOString().split('T')[0]} required
+                    />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="שם הנולד/ת">
+                    <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')} placeholder="שם הילד/ה" />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="מין הנולד/ת">
+                    <div className="flex gap-2">
+                      {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
+                        <button key={v} type="button"
+                          onClick={() => setBirthForm(f => ({ ...f, baby_gender: v }))}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            birthForm.baby_gender === v
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                          }`}
+                        >{l}</button>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="בית החלמה מבוקש">
+                    <SelectInput value={birthForm.recovery_home} onChange={setBirth('recovery_home')}>
+                      <option value="">בחר / לא רלוונטי</option>
+                      {recoveryHomes.map(h => <option key={h} value={h}>{h}</option>)}
+                    </SelectInput>
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="הערות נוספות">
+                    <textarea value={birthForm.notes} onChange={setBirth('notes')} rows={3}
+                      placeholder="כל מידע רלוונטי נוסף..."
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {isPending && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+                <Shield size={15} className="mt-0.5 flex-shrink-0" />
+                <span>הסטטוס שלך ממתין לאישור. הבקשה תועבר לבדיקת הגורם המוסמך.</span>
+              </div>
+            )}
+
+            {error && <ErrorBox message={error} />}
+
+            <button type="submit" disabled={loading}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+            >
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+              {loading ? 'שולח...' : 'שלח בקשה'}
+            </button>
+          </form>
+        )}
+
+        {/* ─── Step: New Loan ─── */}
+        {step === 'new-loan' && (
+          <form onSubmit={handleLoanRequest} className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 mb-1">
+              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
+                <ArrowRight size={20} />
+              </button>
+              <h2 className="font-bold text-slate-900 text-lg">בקשת הלוואה</h2>
+            </div>
+
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <CreditCard size={18} className="text-blue-500" />
+                <h3 className="font-semibold text-slate-900">פרטי ההלוואה</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <Field label="מטרת ההלוואה" required>
+                    <SelectInput value={loanForm.purpose} onChange={setLoan('purpose')} required>
+                      <option value="">בחר מטרה...</option>
+                      {LOAN_PURPOSES.map(p => (
+                        <option key={p.value} value={p.value}>{p.value}</option>
+                      ))}
+                    </SelectInput>
+                    {loanForm.purpose && LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc && (
+                      <p className="text-xs text-indigo-600 mt-1">
+                        {LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc}
+                      </p>
+                    )}
+                  </Field>
+                </div>
+                {loanForm.purpose === 'אחר' && (
+                  <div className="col-span-2">
+                    <Field label="פרט את מטרת ההלוואה" required>
+                      <TextInput value={loanForm.purpose_details} onChange={setLoan('purpose_details')} placeholder="תאר את מטרת ההלוואה..." required />
+                    </Field>
+                  </div>
+                )}
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
+                    <TextInput
+                      type="number" min="100" max="30000" step="100"
+                      value={loanForm.amount} onChange={setLoan('amount')}
+                      placeholder="5000" required
+                    />
+                  </Field>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="מספר תשלומים" required>
+                    <TextInput
+                      type="number" min="1" max="60"
+                      value={loanForm.installments} onChange={setLoan('installments')}
+                      placeholder="12" required
+                    />
+                  </Field>
+                </div>
+                {loanForm.amount && loanForm.installments && (
+                  <div className="col-span-2">
+                    <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
+                      תשלום חודשי משוער:{' '}
+                      <strong>
+                        {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
+                          .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
+                      </strong>
+                    </div>
+                  </div>
+                )}
+                <div className="col-span-2">
+                  <Field label='האם פנית בעבר לגמ"ח חתם סופר?' required>
+                    <div className="flex flex-col gap-2">
+                      {['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי'].map(opt => (
+                        <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                          <input type="radio" name="declaration" value={opt}
+                            checked={loanForm.declaration === opt}
+                            onChange={setLoan('declaration')}
+                            className="accent-indigo-600"
+                          />
+                          {opt}
+                        </label>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="הערות נוספות">
+                    <textarea value={loanForm.notes} onChange={setLoan('notes')} rows={3}
+                      placeholder="כל מידע רלוונטי נוסף..."
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                    />
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {isPending && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
+                <Shield size={15} className="mt-0.5 flex-shrink-0" />
+                <span>הסטטוס שלך ממתין לאישור. הבקשה תועבר לבדיקת הגורם המוסמך.</span>
+              </div>
+            )}
+
+            {error && <ErrorBox message={error} />}
+
+            <button type="submit" disabled={loading}
+              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+            >
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+              {loading ? 'שולח...' : 'שלח בקשה'}
+            </button>
+          </form>
+        )}
+
+        {/* ─── Step: Request Sent ─── */}
+        {step === 'request-sent' && (
+          <Card>
+            <div className="text-center py-4">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <CheckCircle2 size={38} className="text-green-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-2">הבקשה נשלחה!</h2>
+              <p className="text-slate-600 mb-6 leading-relaxed">
+                {requestType === 'birth'
+                  ? 'בקשת ההבראה ליולדת התקבלה בהצלחה.'
+                  : 'בקשת ההלוואה התקבלה בהצלחה.'}
+                <br />
+                צוות העמותה יעיין בבקשתך ויצור עמך קשר.
+              </p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 text-right mb-6">
+                <p className="flex items-center gap-2">
+                  <Clock size={14} className="text-indigo-400 flex-shrink-0" />
+                  <span>זמן טיפול ממוצע: עד 7 ימי עסקים</span>
+                </p>
+                {beneficiary?.phone && (
+                  <p className="flex items-center gap-2 mt-2">
+                    <Phone size={14} className="text-indigo-400 flex-shrink-0" />
+                    <span>עדכון יישלח לטלפון: <span dir="ltr">{beneficiary.phone}</span></span>
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <button onClick={backToDashboard}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors text-sm"
+                >
+                  <User size={16} /> חזרה לאזור האישי
+                </button>
+                <button onClick={backToHome}
+                  className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm">
+                  <ArrowRight size={16} /> יציאה
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        <p className="text-center text-xs text-slate-400 mt-6 flex items-center justify-center gap-1">
+          <Mail size={11} />
+          מערכת מאובטחת · כל הפרטים מוצפנים
+        </p>
+      </main>
+    </div>
+  )
+}
