@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/nedarim/unload-expired",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}

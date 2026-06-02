@@ -1,0 +1,327 @@
+export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
+
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'loans' | 'distributions' | 'reports'
+export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
+export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
+export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review'
+export type Gender = 'male' | 'female'
+export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
+export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
+export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloaded'
+export type DistributionStatus = 'planning' | 'active' | 'completed' | 'cancelled'
+export type DistributionRecipientStatus = 'pending' | 'received' | 'not_received'
+export type NotificationType = 'info' | 'warning' | 'urgent' | 'reminder'
+
+export interface Profile {
+  id: string
+  email: string
+  full_name: string
+  role: UserRole
+  phone?: string
+  is_active: boolean
+  permissions?: UserPermissions
+  created_at: string
+}
+
+export interface Family {
+  id: string
+  family_name: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  beneficiaries?: Beneficiary[]
+}
+
+export interface Beneficiary {
+  id: string
+  id_number: string
+  id_doc_type?: string
+  family_name?: string
+  full_name: string
+  phone?: string
+  phone2?: string
+  email?: string
+  address?: string
+  city?: string
+  birth_date?: string
+  gender?: Gender
+  family_id?: string
+  marital_status?: string
+  spouse_name?: string
+  spouse_id_number?: string
+  spouse_doc_type?: string
+  spouse_birth_date?: string
+  lineage_node_id?: string
+  lineage_manual?: string[]
+  children_count: number
+  children?: {
+    name: string
+    id_number: string | null
+    gender: string | null
+    birth_date: string | null
+    doc_type?: string
+    marital_status?: string
+    // סטטוס לידה — מסומן רק עבור ילדים שנכנסו דרך תיק יולדת.
+    // 'pending' = ממתין לאישור לידה · 'approved' = הלידה אושרה
+    birth_status?: 'pending' | 'approved'
+    maternity_aid_id?: string
+  }[]
+  eligibility_status: EligibilityStatus
+  is_active: boolean
+  notes?: string
+  nedarim_id?: string
+  created_at: string
+  updated_at: string
+  family?: Family
+}
+
+export interface FamilyRelation {
+  id: string
+  person_id: string
+  related_person_id: string
+  relation_type: string
+  document_verified: boolean
+  verified_by?: string
+  notes?: string
+  created_at: string
+  person?: Beneficiary
+  related_person?: Beneficiary
+}
+
+export interface Document {
+  id: string
+  beneficiary_id: string
+  doc_type: string
+  file_url?: string
+  file_name?: string
+  verified: boolean
+  verified_by?: string
+  uploaded_at: string
+}
+
+export interface MaternityAid {
+  id: string
+  beneficiary_id: string
+  birth_date: string
+  baby_name?: string
+  baby_id_type?: 'id' | 'passport'
+  baby_id_number?: string
+  baby_gender?: 'male' | 'female'
+  birth_certificate_url?: string
+  six_weeks_end?: string
+  card_number?: string
+  card_balance: number
+  card_loaded_at?: string
+  card_expires_at?: string
+  card_load_status?: CardLoadStatus
+  card_load_amount?: number
+  card_tlush_id?: string
+  card_load_error?: string
+  card_unloaded_at?: string
+  weekly_amount: number
+  total_weeks: number
+  recovery_home?: string
+  recovery_from?: string
+  recovery_to?: string
+  status: MaternityStatus
+  approved_by?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  beneficiary?: Beneficiary
+}
+
+export interface Loan {
+  id: string
+  beneficiary_id: string
+  amount: number
+  installments: number
+  monthly_payment: number
+  purpose?: string
+  purpose_details?: string
+  declaration?: string
+  document_urls?: { url: string; name: string }[]
+  status: LoanStatus
+  approved_by?: string
+  start_date?: string
+  end_date?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  beneficiary?: Beneficiary
+}
+
+export interface LoanPayment {
+  id: string
+  loan_id: string
+  amount: number
+  paid_at: string
+  payment_method?: string
+  is_late: boolean
+  recorded_by?: string
+  notes?: string
+}
+
+export interface Distribution {
+  id: string
+  name: string
+  holiday?: string
+  description?: string
+  criteria?: Record<string, unknown>
+  total_budget?: number
+  status: DistributionStatus
+  distribution_date?: string
+  created_by?: string
+  created_at: string
+  updated_at: string
+  recipients?: DistributionRecipient[]
+}
+
+export interface DistributionRecipient {
+  id: string
+  distribution_id: string
+  family_id?: string
+  beneficiary_id?: string
+  amount?: number
+  item_description?: string
+  received_at?: string
+  status: DistributionRecipientStatus
+  family?: Family
+  beneficiary?: Beneficiary
+}
+
+export interface ActivityLog {
+  id: string
+  user_id?: string
+  action: string
+  entity_type?: string
+  entity_id?: string
+  details?: Record<string, unknown>
+  created_at: string
+  user?: Profile
+}
+
+export interface Notification {
+  id: string
+  user_id?: string
+  title: string
+  message?: string
+  type: NotificationType
+  is_read: boolean
+  created_at: string
+}
+
+export interface DashboardStats {
+  total_beneficiaries: number
+  pending_approvals: number
+  active_loans: number
+  maternity_active: number
+  distributions_planned: number
+  total_loan_amount: number
+}
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'מנהל',
+  secretary: 'מזכירות',
+  reviewer: 'בודק',
+  collections: 'גבייה',
+}
+
+export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
+  pending: 'ממתין',
+  approved: 'מאושר',
+  rejected: 'נדחה',
+  review: 'בבדיקה',
+}
+
+export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
+  pending: 'ממתין',
+  approved: 'מאושר',
+  active: 'פעיל',
+  completed: 'הושלם',
+  rejected: 'נדחה',
+  defaulted: 'בפיגור',
+}
+
+export const MATERNITY_STATUS_LABELS: Record<MaternityStatus, string> = {
+  pending: 'ממתין',
+  active: 'פעיל',
+  completed: 'הושלם',
+  cancelled: 'בוטל',
+}
+
+export const CARD_LOAD_STATUS_LABELS: Record<CardLoadStatus, string> = {
+  idle: 'לא הוטען',
+  pending: 'בתהליך…',
+  loaded: 'הוטען',
+  failed: 'נכשל',
+  unloaded: 'נפרק',
+}
+
+export const DISTRIBUTION_STATUS_LABELS: Record<DistributionStatus, string> = {
+  planning: 'בתכנון',
+  active: 'פעיל',
+  completed: 'הושלם',
+  cancelled: 'בוטל',
+}
+
+export const GENDER_LABELS: Record<Gender, string> = {
+  male: 'זכר',
+  female: 'נקבה',
+}
+
+export const RELATION_TYPES = [
+  'אב',
+  'אם',
+  'בן',
+  'בת',
+  'אח',
+  'אחות',
+  'דוד',
+  'דודה',
+  'בן דוד',
+  'בת דוד',
+  'סבא',
+  'סבתא',
+  'נכד',
+  'נכדה',
+  'גיסה',
+  'גיס',
+  'חם',
+  'חמות',
+  'חתן',
+  'כלה',
+]
+
+export const MARITAL_STATUS_OPTIONS = [
+  'רווק/ה',
+  'נשוי/אה',
+  'גרוש/ה',
+  'אלמן/ה',
+]
+
+export const HOLIDAY_OPTIONS = [
+  'ראש השנה',
+  'סוכות',
+  'חנוכה',
+  'פורים',
+  'פסח',
+  'שבועות',
+  'ט"ו בשבט',
+  'חג המולד',
+  'אחר',
+]
+
+export const CITY_OPTIONS = [
+  'ירושלים',
+  'תל אביב',
+  'חיפה',
+  'ראשון לציון',
+  'פתח תקווה',
+  'אשדוד',
+  'נתניה',
+  'בני ברק',
+  'חולון',
+  'באר שבע',
+  'אחר',
+]
