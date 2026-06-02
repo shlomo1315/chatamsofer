@@ -126,7 +126,7 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
+function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; statusFilter: StatusFilter; generationFilter: number | null }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
@@ -149,7 +149,7 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes:
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.8, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        const next = Math.min(2.5, Math.max(0.5, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left
@@ -249,6 +249,7 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes:
 
   async function handleToggleStatus(node: LineageNode) {
     const newStatus = nextStatus(node.status)
+    onStatusChange(node.id, newStatus)
     await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -258,6 +259,7 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes:
   }
 
   async function handleSetStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
+    onStatusChange(node.id, status)
     await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -286,7 +288,7 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes:
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
         <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
         <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button onClick={() => setZoom(z => Math.max(0.8, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+        <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
       </div>
 
       {/* canvas */}
@@ -757,7 +759,7 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={loadAll} statusFilter={statusFilter} generationFilter={generationFilter} />
+        <TreeView nodes={nodes} onRefresh={loadAll} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} statusFilter={statusFilter} generationFilter={generationFilter} />
       ) : (
         <TableView
           nodes={nodes}
@@ -793,7 +795,7 @@ export default function LineagePage() {
                 <select value={formParentId ?? ''} onChange={e => setFormParentId(e.target.value || null)}
                   style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF', cursor: 'pointer' }}>
                   <option value="">— ללא הורה (שורש ראשי) —</option>
-                  {[...nodes].sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
+                  {[...nodes].filter(n => (n.status ?? 'verified') === 'verified').sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
                     <option key={n.id} value={n.id}>{n.name} (דור {n.generation})</option>
                   ))}
                 </select>
