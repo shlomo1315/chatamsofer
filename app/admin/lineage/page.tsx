@@ -25,7 +25,7 @@ interface Positioned {
 
 // ─── Tree layout ───
 
-const NW = 164, NH = 62, HGAP = 56, VGAP = 110, PAD = 80
+const NW = 160, NH = 54, HGAP = 52, VGAP = 100, PAD = 80
 
 function buildTree(flat: LineageNode[]): TreeNode[] {
   const map = new Map<string, TreeNode>()
@@ -171,7 +171,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
             const p = pal(pos.node.generation)
             const isSel = selected === pos.node.id
             return (
-              <div key={pos.node.id} onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)} style={{ position: 'absolute', left: pos.x, top: pos.y, width: NW, height: NH, borderRadius: '50%', background: p.bg, boxShadow: isSel ? `0 0 0 3px #fff,0 0 0 6px ${p.ring},0 10px 28px ${p.shadow}` : `0 6px 20px ${p.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: isSel ? 'scale(1.07)' : 'scale(1)', transition: 'box-shadow .2s,transform .2s', zIndex: isSel ? 20 : 2, userSelect: 'none' }}>
+              <div key={pos.node.id} onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)} style={{ position: 'absolute', left: pos.x, top: pos.y, width: NW, height: NH, borderRadius: 14, background: p.bg, boxShadow: isSel ? `0 0 0 3px #fff,0 0 0 5px ${p.ring},0 8px 24px ${p.shadow}` : `0 4px 16px ${p.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: isSel ? 'scale(1.06)' : 'scale(1)', transition: 'box-shadow .2s,transform .2s', zIndex: isSel ? 20 : 2, userSelect: 'none' }}>
                 {/* badge */}
                 <div style={{ position: 'absolute', top: -9, right: 4, background: '#fff', color: p.ring, fontSize: 10, fontWeight: 800, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 6px ${p.shadow}`, border: `1.5px solid ${p.ring}` }}>{pos.node.generation + 1}</div>
                 {/* name */}
