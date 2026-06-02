@@ -129,9 +129,9 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch(`/api/lineage?id=${modal.node.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
       }
       onRefresh(); close()
     } catch { setSaveErr('שגיאה בשמירה') }
@@ -142,7 +142,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     if (modal?.type !== 'delete') return
     setSaving(true)
     try {
-      await fetch(`/api/lineage?id=${modal.node.id}`, { method: 'DELETE' })
+      await fetch(`/api/admin/lineage?id=${modal.node.id}`, { method: 'DELETE' })
       if (selected === modal.node.id) setSelected(null)
       onRefresh(); close()
     } catch { setSaveErr('שגיאה במחיקה') }
@@ -443,7 +443,7 @@ export default function LineagePage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/lineage?all=1')
+      const r = await fetch('/api/admin/lineage')
       setNodes((await r.json()).nodes ?? [])
     } catch {}
     setLoading(false)
@@ -465,9 +465,9 @@ export default function LineagePage() {
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch(`/api/lineage?id=${modal.node.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
       }
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
@@ -478,7 +478,7 @@ export default function LineagePage() {
     if (modal?.type !== 'delete') return
     setSaving(true)
     try {
-      await fetch(`/api/lineage?id=${modal.node.id}`, { method: 'DELETE' })
+      await fetch(`/api/admin/lineage?id=${modal.node.id}`, { method: 'DELETE' })
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
     setSaving(false)
