@@ -263,19 +263,18 @@ function LineageTreePicker({
       >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
-            <defs>
-              {TP_PALETTE.map((p, i) => (
-                <linearGradient key={i} id={`tp-eg-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={p.ring} stopOpacity="0.45" />
-                  <stop offset="100%" stopColor={TP_PALETTE[(i + 1) % TP_PALETTE.length].ring} stopOpacity="0.25" />
-                </linearGradient>
-              ))}
-            </defs>
             {edges.map((e, i) => {
               const x1 = e.from.cx * zoom, y1 = (e.from.y + TP_NH) * zoom
               const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
               const mid = (y1 + y2) / 2
-              return <path key={i} d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke={`url(#tp-eg-${e.from.node.generation % TP_PALETTE.length})`} strokeWidth={2} strokeLinecap="round" />
+              const col = tpPal(e.from.node.generation).ring
+              const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
+              return (
+                <g key={i}>
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" opacity={0.85} />
+                </g>
+              )
             })}
           </svg>
 

@@ -186,15 +186,18 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     }
   }, [])
 
-  // Center the view horizontally on first load
+  // Center the view horizontally on first load (after layout paints)
   useEffect(() => {
     if (!positions.length || didCenter.current) return
     const el = canvasRef.current
     if (!el) return
     didCenter.current = true
-    const totalW = w * zoom
-    const scrollTo = (totalW - el.clientWidth) / 2
-    if (scrollTo > 0) el.scrollLeft = scrollTo
+    requestAnimationFrame(() => {
+      if (!canvasRef.current) return
+      const c = canvasRef.current
+      const scrollTo = (w * zoom - c.clientWidth) / 2
+      if (scrollTo > 0) c.scrollLeft = scrollTo
+    })
   }, [positions.length, w, zoom])
 
   function close() { setModal(null); setSaveErr('') }
@@ -276,31 +279,27 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
-            <defs>
-              {PALETTE.map((p, i) => (
-                <linearGradient key={i} id={`edge-grad-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={p.ring} stopOpacity="0.5" />
-                  <stop offset="100%" stopColor={PALETTE[(i + 1) % PALETTE.length].ring} stopOpacity="0.3" />
-                </linearGradient>
-              ))}
-            </defs>
             {edges.map((e, i) => {
               const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
               const mid = (y1 + y2) / 2
-              const gradId = `edge-grad-${e.from.node.generation % PALETTE.length}`
+              const col = pal(e.from.node.generation).ring
+              const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
               return (
-                <path key={i}
-                  d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`}
-                  fill="none" stroke={`url(#${gradId})`} strokeWidth={2} strokeLinecap="round"
-                />
+                <g key={i}>
+                  {/* halo so the line stands out over the dotted background */}
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" opacity={0.85} />
+                </g>
               )
             })}
           </svg>
 
           {positions.map(pos => {
-            const p = pal(pos.node.generation)
+            const genPal = pal(pos.node.generation)
             const isSel = selected === pos.node.id
             const isVerified = (pos.node.status ?? 'verified') === 'verified'
+            // ממתין לאימות → צביעה כתומה אחידה וברורה ללא קשר לדור
+            const p = isVerified ? genPal : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', light: '#FFF7ED', text: '#9A3412' }
             return (
               <div
                 key={pos.node.id}
@@ -312,12 +311,12 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   boxShadow: isSel
                     ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                     : `0 4px 18px ${p.shadow}`,
+                  border: isVerified ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
                   transition: 'box-shadow .2s, transform .2s',
                   zIndex: isSel ? 20 : 2, userSelect: 'none',
-                  opacity: isVerified ? 1 : 0.82,
                 }}>
 
                 {/* generation badge */}
@@ -331,21 +330,21 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
 
-                {/* status indicator */}
+                {/* status indicator — ירוק = מאומת, כתום = ממתין */}
                 <div
                   onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
-                  title={isVerified ? 'מאומת — לחץ לביטול' : 'ממתין — לחץ לאימות'}
+                  title={isVerified ? 'מאומת — לחץ להחזרה לממתין' : 'ממתין לאימות — לחץ לאישור'}
                   style={{
                     position: 'absolute', top: -10 * zoom, left: 6 * zoom,
-                    width: 18 * zoom, height: 18 * zoom, borderRadius: '50%',
-                    background: isVerified ? '#22C55E' : '#F97316',
+                    width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
+                    background: isVerified ? '#22C55E' : '#F59E0B',
                     border: `2px solid #fff`,
-                    boxShadow: `0 1px 4px rgba(0,0,0,0.25)`,
+                    boxShadow: `0 1px 5px rgba(0,0,0,0.3)`,
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    zIndex: 25,
+                    zIndex: 25, fontSize: Math.max(8, 11 * zoom), fontWeight: 900, color: '#fff',
                   }}>
-                  {isVerified && zoom >= 0.6 && <Check size={9 * zoom} color="#fff" strokeWidth={3} />}
+                  {zoom >= 0.5 && (isVerified ? <Check size={10 * zoom} color="#fff" strokeWidth={3} /> : '⏳')}
                 </div>
 
                 {/* name */}
