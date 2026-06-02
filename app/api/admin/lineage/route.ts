@@ -103,7 +103,7 @@ export async function PATCH(request: NextRequest) {
   }
   if (notes !== undefined) updates.notes = notes?.trim() || null
   if (body.status !== undefined) {
-    if (!['verified', 'pending'].includes(body.status)) {
+    if (!['verified', 'pending', 'rejected'].includes(body.status)) {
       return NextResponse.json({ error: 'סטטוס לא תקין' }, { status: 400 })
     }
     updates.status = body.status

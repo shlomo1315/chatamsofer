@@ -9,7 +9,27 @@ interface LineageNode {
   name: string
   generation: number
   parent_id: string | null
-  status?: 'verified' | 'pending'
+  status?: 'verified' | 'pending' | 'rejected'
+}
+
+type StatusFilter = 'verified' | 'pending' | 'rejected' | null
+
+function nextStatus(cur: LineageNode['status']): 'verified' | 'pending' | 'rejected' {
+  if (cur === 'verified') return 'pending'
+  if (cur === 'pending') return 'rejected'
+  return 'verified'
+}
+
+function statusColor(s: LineageNode['status']) {
+  if (s === 'verified') return '#22C55E'
+  if (s === 'rejected') return '#EF4444'
+  return '#F59E0B'
+}
+
+function statusLabel(s: LineageNode['status']) {
+  if (s === 'verified') return '✓'
+  if (s === 'rejected') return '✗'
+  return '⏳'
 }
 
 interface TreeNode extends LineageNode {
@@ -112,7 +132,7 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () => void }) {
+function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; onRefresh: () => void; statusFilter: StatusFilter }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
@@ -137,7 +157,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.2, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        const next = Math.min(2.5, Math.max(0.8, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left
@@ -240,7 +260,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
   }
 
   async function handleToggleStatus(node: LineageNode) {
-    const newStatus = (node.status ?? 'verified') === 'verified' ? 'pending' : 'verified'
+    const newStatus = nextStatus(node.status)
     await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -269,7 +289,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
         <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
         <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+        <button onClick={() => setZoom(z => Math.max(0.8, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
       </div>
 
       {/* canvas – only this div zooms with wheel */}
@@ -306,11 +326,14 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
           </svg>
 
           {positions.map(pos => {
+            const nodeStatus = pos.node.status ?? 'verified'
             const genPal = pal(pos.node.generation)
             const isSel = selected === pos.node.id
-            const isVerified = (pos.node.status ?? 'verified') === 'verified'
-            // ממתין לאימות → צביעה כתומה אחידה וברורה ללא קשר לדור
-            const p = isVerified ? genPal : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', light: '#FFF7ED', text: '#9A3412' }
+            const isDimmed = statusFilter !== null && nodeStatus !== statusFilter
+            const p = nodeStatus === 'verified' ? genPal
+              : nodeStatus === 'rejected'
+                ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
+                : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', light: '#FFF7ED', text: '#9A3412' }
             return (
               <div
                 key={pos.node.id}
@@ -322,11 +345,12 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   boxShadow: isSel
                     ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                     : `0 4px 18px ${p.shadow}`,
-                  border: isVerified ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
+                  border: nodeStatus === 'verified' ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                  transition: 'box-shadow .2s, transform .2s',
+                  transition: 'box-shadow .2s, transform .2s, opacity .2s',
+                  opacity: isDimmed ? 0.25 : 1,
                   zIndex: isSel ? 20 : 2, userSelect: 'none',
                 }}>
 
@@ -341,21 +365,24 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
 
-                {/* status indicator — ירוק = מאומת, כתום = ממתין */}
+                {/* status indicator dot — לחץ לשינוי סטטוס */}
                 <div
                   onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
-                  title={isVerified ? 'מאומת — לחץ להחזרה לממתין' : 'ממתין לאימות — לחץ לאישור'}
+                  title={nodeStatus === 'verified' ? 'מאומת → לחץ לממתין' : nodeStatus === 'pending' ? 'ממתין → לחץ ללא מאושר' : 'לא מאושר → לחץ לאימות'}
                   style={{
                     position: 'absolute', top: -10 * zoom, left: 6 * zoom,
                     width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
-                    background: isVerified ? '#22C55E' : '#F59E0B',
+                    background: statusColor(nodeStatus),
                     border: `2px solid #fff`,
                     boxShadow: `0 1px 5px rgba(0,0,0,0.3)`,
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     zIndex: 25, fontSize: Math.max(8, 11 * zoom), fontWeight: 900, color: '#fff',
                   }}>
-                  {zoom >= 0.5 && (isVerified ? <Check size={10 * zoom} color="#fff" strokeWidth={3} /> : '⏳')}
+                  {zoom >= 0.5 && (nodeStatus === 'verified'
+                    ? <Check size={10 * zoom} color="#fff" strokeWidth={3} />
+                    : <span style={{ fontSize: Math.max(7, 9 * zoom) }}>{nodeStatus === 'rejected' ? '✗' : '⏳'}</span>
+                  )}
                 </div>
 
                 {/* name */}
@@ -397,7 +424,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                     {[
                       { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) } },
                       { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) } },
-                      { icon: isVerified ? <X size={11} /> : <Check size={11} />, color: isVerified ? '#F97316' : '#22C55E', bg: isVerified ? '#FFF7ED' : '#F0FDF4', fn: () => handleToggleStatus(pos.node), title: isVerified ? 'בטל אימות' : 'אמת' },
+                      { icon: nodeStatus === 'verified' ? <X size={11} /> : <Check size={11} />, color: statusColor(nextStatus(nodeStatus)), bg: nodeStatus === 'verified' ? '#FFF7ED' : '#F0FDF4', fn: () => handleToggleStatus(pos.node), title: `→ ${nextStatus(nodeStatus) === 'verified' ? 'אמת' : nextStatus(nodeStatus) === 'pending' ? 'ממתין' : 'לא מאושר'}` },
                       { icon: <Trash2 size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => setModal({ type: 'delete', node: pos.node }) },
                     ].map((b, i) => (
                       <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
@@ -420,8 +447,10 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
               <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation}</span>
                 <span>{selPos.node.children.length} ילדים</span>
-                <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700, background: (selPos.node.status ?? 'verified') === 'verified' ? '#DCFCE7' : '#FEF3C7', color: (selPos.node.status ?? 'verified') === 'verified' ? '#166534' : '#92400E' }}>
-                  {(selPos.node.status ?? 'verified') === 'verified' ? '✓ מאומת' : '⏳ ממתין'}
+                <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700,
+                  background: (selPos.node.status ?? 'verified') === 'verified' ? '#DCFCE7' : (selPos.node.status === 'rejected' ? '#FEE2E2' : '#FEF3C7'),
+                  color: (selPos.node.status ?? 'verified') === 'verified' ? '#166534' : (selPos.node.status === 'rejected' ? '#991B1B' : '#92400E') }}>
+                  {(selPos.node.status ?? 'verified') === 'verified' ? '✓ מאומת' : (selPos.node.status === 'rejected' ? '✗ לא מאושר' : '⏳ ממתין')}
                 </span>
               </div>
             </div>
@@ -429,7 +458,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
               {[
                 { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
                 { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
-                { label: (selPos.node.status ?? 'verified') === 'verified' ? 'בטל אימות' : 'אמת', fn: () => handleToggleStatus(selPos.node), color: (selPos.node.status ?? 'verified') === 'verified' ? '#F97316' : '#22C55E', bg: (selPos.node.status ?? 'verified') === 'verified' ? '#FFF7ED' : '#F0FDF4' },
+                { label: `→ ${nextStatus(selPos.node.status) === 'verified' ? 'אמת' : nextStatus(selPos.node.status) === 'pending' ? 'ממתין' : 'לא מאושר'}`, fn: () => handleToggleStatus(selPos.node), color: statusColor(nextStatus(selPos.node.status)), bg: '#F8FAFC' },
                 { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#DC2626', bg: '#FEF2F2' },
               ].map(b => (
                 <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
@@ -500,12 +529,13 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
 
 // ─── Table view ───
 
-function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete }: {
+function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter }: {
   nodes: LineageNode[]
   onRefresh: () => void
   onAdd: (parentId: string | null, parentName: string) => void
   onEdit: (node: LineageNode) => void
   onDelete: (node: LineageNode) => void
+  statusFilter: StatusFilter
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
@@ -516,7 +546,7 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete }: {
   }, [nodes])
 
   async function handleToggleStatus(node: LineageNode) {
-    const newStatus = (node.status ?? 'verified') === 'verified' ? 'pending' : 'verified'
+    const newStatus = nextStatus(node.status)
     await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -530,14 +560,15 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete }: {
   }
 
   function renderRows(node: TreeNode, depth: number): React.ReactNode {
+    const nodeStatus = node.status ?? 'verified'
+    const isDimmed = statusFilter !== null && nodeStatus !== statusFilter
     const p = pal(node.generation)
     const hasChildren = node.children.length > 0
     const isExpanded = expanded.has(node.id)
-    const isVerified = (node.status ?? 'verified') === 'verified'
     return (
       <div key={node.id}>
         <div
-          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'background .12s', minWidth: 0 }}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'background .12s, opacity .2s', minWidth: 0, opacity: isDimmed ? 0.25 : 1 }}
           onMouseEnter={e => (e.currentTarget.style.background = '#FAFAFE')}
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
           <div style={{ width: depth * 22, flexShrink: 0 }} />
@@ -547,8 +578,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete }: {
           {/* status dot */}
           <button
             onClick={() => handleToggleStatus(node)}
-            title={isVerified ? 'מאומת — לחץ לביטול' : 'ממתין — לחץ לאימות'}
-            style={{ width: 14, height: 14, borderRadius: '50%', background: isVerified ? '#22C55E' : '#F97316', border: 'none', cursor: 'pointer', flexShrink: 0, boxShadow: isVerified ? '0 0 0 3px #DCFCE7' : '0 0 0 3px #FEF3C7' }}
+            title={nodeStatus === 'verified' ? 'מאומת → ממתין' : nodeStatus === 'pending' ? 'ממתין → לא מאושר' : 'לא מאושר → אמת'}
+            style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: 'pointer', flexShrink: 0,
+              boxShadow: nodeStatus === 'verified' ? '0 0 0 3px #DCFCE7' : nodeStatus === 'rejected' ? '0 0 0 3px #FEE2E2' : '0 0 0 3px #FEF3C7' }}
           />
           <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{node.name}</span>
           <div style={{ padding: '3px 10px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>דור {node.generation}</div>
@@ -597,6 +629,7 @@ export default function LineagePage() {
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [formParentId, setFormParentId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(null)
 
   function close() { setModal(null); setSaveErr(''); setFormParentId(null) }
 
@@ -618,8 +651,9 @@ export default function LineagePage() {
     return counts
   }, [nodes])
 
-  const verifiedCount = useMemo(() => nodes.filter(n => n.status === 'verified').length, [nodes])
+  const verifiedCount = useMemo(() => nodes.filter(n => (n.status ?? 'verified') === 'verified').length, [nodes])
   const pendingCount = useMemo(() => nodes.filter(n => n.status === 'pending').length, [nodes])
+  const rejectedCount = useMemo(() => nodes.filter(n => n.status === 'rejected').length, [nodes])
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
@@ -657,11 +691,26 @@ export default function LineagePage() {
           {!loading && (
             <span className="text-sm text-gray-400 font-medium">{nodes.length} רשומות</span>
           )}
-          {!loading && verifiedCount > 0 && (
-            <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: '#DCFCE7', color: '#166534' }}>✓ {verifiedCount} מאומתים</span>
-          )}
-          {!loading && pendingCount > 0 && (
-            <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: '#FEF3C7', color: '#92400E' }}>⏳ {pendingCount} ממתינים</span>
+          {!loading && (
+            <>
+              <button onClick={() => setStatusFilter(f => f === 'verified' ? null : 'verified')}
+                className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                style={{ background: statusFilter === 'verified' ? '#166534' : '#DCFCE7', color: statusFilter === 'verified' ? '#fff' : '#166534', border: `2px solid ${statusFilter === 'verified' ? '#166534' : 'transparent'}`, cursor: 'pointer' }}>
+                ✓ {verifiedCount} מאומתים
+              </button>
+              <button onClick={() => setStatusFilter(f => f === 'pending' ? null : 'pending')}
+                className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer' }}>
+                ⏳ {pendingCount} ממתינים
+              </button>
+              {rejectedCount > 0 && (
+                <button onClick={() => setStatusFilter(f => f === 'rejected' ? null : 'rejected')}
+                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                  style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#991B1B', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : 'transparent'}`, cursor: 'pointer' }}>
+                  ✗ {rejectedCount} לא מאושרים
+                </button>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -704,11 +753,12 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={loadAll} />
+        <TreeView nodes={nodes} onRefresh={loadAll} statusFilter={statusFilter} />
       ) : (
         <TableView
           nodes={nodes}
           onRefresh={loadAll}
+          statusFilter={statusFilter}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
           onEdit={node => { setFormName(node.name); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
