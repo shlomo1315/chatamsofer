@@ -515,10 +515,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
                     border: '1px solid #E2E8F0', zIndex: 30,
                   }}>
                     {[
-                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) } },
-                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) } },
-                      { icon: nodeStatus === 'verified' ? <X size={11} /> : <Check size={11} />, color: nodeStatus === 'verified' ? '#F97316' : '#22C55E', bg: nodeStatus === 'verified' ? '#FFF7ED' : '#F0FDF4', fn: () => handleSetStatus(pos.node, nodeStatus === 'verified' ? 'pending' : 'verified'), title: nodeStatus === 'verified' ? 'בטל אימות' : 'אמת' },
-                      { icon: <Trash2 size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => setModal({ type: 'delete', node: pos.node }) },
+                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
+                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
+                      ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אמת' }] : []),
+                      ...(nodeStatus !== 'rejected' ? [{ icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
+                      { icon: <Trash2 size={12} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
                     ].map((b, i) => (
                       <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
                     ))}
@@ -551,8 +552,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
               {[
                 { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
                 { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
-                { label: (selPos.node.status ?? 'verified') === 'verified' ? 'בטל אימות' : 'אמת', fn: () => handleSetStatus(selPos.node, (selPos.node.status ?? 'verified') === 'verified' ? 'pending' : 'verified'), color: (selPos.node.status ?? 'verified') === 'verified' ? '#F97316' : '#22C55E', bg: (selPos.node.status ?? 'verified') === 'verified' ? '#FFF7ED' : '#F0FDF4' },
-                { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#DC2626', bg: '#FEF2F2' },
+                ...((selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
+                ...((selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
+                { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#64748B', bg: '#F1F5F9' },
               ].map(b => (
                 <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
               ))}
