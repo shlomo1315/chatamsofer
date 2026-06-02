@@ -141,6 +141,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
   const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
+  // clear node-path selection whenever a top filter changes, so the filter takes over
+  useEffect(() => { setSelected(null) }, [statusFilter, generationFilter])
+
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
