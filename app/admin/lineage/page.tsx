@@ -440,6 +440,10 @@ export default function LineagePage() {
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
 
+  const [formParentId, setFormParentId] = useState<string | null>(null)
+
+  function close() { setModal(null); setSaveErr(''); setFormParentId(null) }
+
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
@@ -458,8 +462,6 @@ export default function LineagePage() {
     return counts
   }, [nodes])
 
-  function close() { setModal(null); setSaveErr('') }
-
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
     setSaving(true); setSaveErr('')
@@ -467,7 +469,8 @@ export default function LineagePage() {
       if (modal?.type === 'edit') {
         await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
+        const parentId = modal.parentId ?? formParentId
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: parentId }) })
       }
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
@@ -510,9 +513,9 @@ export default function LineagePage() {
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
           <button
-            onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }}
+            onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
             className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
-            <Plus size={14} /> הוסף רשומה
+            <Plus size={14} /> הוסף דור חדש
           </button>
         </div>
       </div>
@@ -561,9 +564,21 @@ export default function LineagePage() {
         </Modal>
       )}
       {modal?.type === 'add' && (
-        <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף שורש חדש'} onClose={close}>
+        <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף דור חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {!modal.parentId && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו?</label>
+                <select value={formParentId ?? ''} onChange={e => setFormParentId(e.target.value || null)}
+                  style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF', cursor: 'pointer' }}>
+                  <option value="">— ללא הורה (שורש ראשי) —</option>
+                  {[...nodes].sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
+                    <option key={n.id} value={n.id}>{n.name} (דור {n.generation})</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
