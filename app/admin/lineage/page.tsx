@@ -126,12 +126,7 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
-  nodes: LineageNode[]
-  onRefresh: () => void
-  statusFilter: StatusFilter
-  generationFilter: number | null
-}) {
+function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
@@ -147,7 +142,6 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
 
-  // zoom min = 0.8 (80%), max = 2.5 (250%)
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -160,7 +154,11 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left
         const offY = e.clientY - rect.top
-        zoomAnchor.current = { px: (el.scrollLeft + offX) / prev, py: (el.scrollTop + offY) / prev, offX, offY }
+        zoomAnchor.current = {
+          px: (el.scrollLeft + offX) / prev,
+          py: (el.scrollTop + offY) / prev,
+          offX, offY,
+        }
         return next
       })
     }
@@ -195,7 +193,10 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
         el.scrollTop  = dragRef.current.scrollY - dy
       }
     }
-    const onUp = () => { dragRef.current = null; el.style.cursor = 'grab' }
+    const onUp = () => {
+      dragRef.current = null
+      el.style.cursor = 'grab'
+    }
     el.addEventListener('mousedown', onDown)
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
@@ -248,12 +249,20 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
 
   async function handleToggleStatus(node: LineageNode) {
     const newStatus = nextStatus(node.status)
-    await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: node.id, status: newStatus }) })
+    await fetch('/api/admin/lineage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, status: newStatus }),
+    })
     onRefresh()
   }
 
   async function handleSetStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
-    await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: node.id, status }) })
+    await fetch('/api/admin/lineage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, status }),
+    })
     onRefresh()
   }
 
@@ -273,7 +282,7 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
 
   return (
     <>
-      {/* zoom controls: min 80%, max 250% */}
+      {/* zoom controls */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
         <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
         <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
@@ -281,7 +290,21 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
       </div>
 
       {/* canvas */}
-      <div ref={canvasRef} dir="ltr" style={{ overflow: 'auto', overflowAnchor: 'none', borderRadius: 18, background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)', border: '1.5px solid #E8E0F5', boxShadow: '0 4px 32px rgba(109,40,217,0.07)', height: 'calc(100vh - 260px)', minHeight: 400, cursor: 'grab' }}>
+      <div
+        ref={canvasRef}
+        dir="ltr"
+        style={{
+          overflow: 'auto',
+          overflowAnchor: 'none',
+          borderRadius: 18,
+          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
+          border: '1.5px solid #E8E0F5',
+          boxShadow: '0 4px 32px rgba(109,40,217,0.07)',
+          height: 'calc(100vh - 260px)',
+          minHeight: 400,
+          cursor: 'grab',
+        }}
+      >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
@@ -309,12 +332,16 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
                 : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', light: '#FFF7ED', text: '#9A3412' }
             return (
-              <div key={pos.node.id} onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)}
+              <div
+                key={pos.node.id}
+                onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
                   background: p.bg,
-                  boxShadow: isSel ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}` : `0 4px 18px ${p.shadow}`,
+                  boxShadow: isSel
+                    ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
+                    : `0 4px 18px ${p.shadow}`,
                   border: nodeStatus === 'verified' ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
@@ -323,34 +350,81 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
                   opacity: isDimmed ? 0.25 : 1,
                   zIndex: isSel ? 20 : 2, userSelect: 'none',
                 }}>
-                {/* generation badge */}
-                <div style={{ position: 'absolute', top: -10 * zoom, right: 6 * zoom, background: '#fff', color: p.ring, fontSize: Math.max(8, 10 * zoom), fontWeight: 900, width: 22 * zoom, height: 22 * zoom, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 2px 8px ${p.shadow}`, border: `2px solid ${p.ring}` }}>{pos.node.generation}</div>
 
-                {/* status dot - click to cycle */}
-                <div onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
+                {/* generation badge */}
+                <div style={{
+                  position: 'absolute', top: -10 * zoom, right: 6 * zoom,
+                  background: '#fff', color: p.ring,
+                  fontSize: Math.max(8, 10 * zoom), fontWeight: 900,
+                  width: 22 * zoom, height: 22 * zoom, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: `0 2px 8px ${p.shadow}`,
+                  border: `2px solid ${p.ring}`,
+                }}>{pos.node.generation}</div>
+
+                {/* status indicator dot */}
+                <div
+                  onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
                   title={nodeStatus === 'verified' ? 'מאומת → לחץ לממתין' : nodeStatus === 'pending' ? 'ממתין → לחץ ללא מאושר' : 'לא מאושר → לחץ לאימות'}
-                  style={{ position: 'absolute', top: -10 * zoom, left: 6 * zoom, width: 20 * zoom, height: 20 * zoom, borderRadius: '50%', background: statusColor(nodeStatus), border: '2px solid #fff', boxShadow: '0 1px 5px rgba(0,0,0,0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 25, color: '#fff' }}>
-                  <Check size={10 * zoom} color="#fff" strokeWidth={3} />
+                  style={{
+                    position: 'absolute', top: -10 * zoom, left: 6 * zoom,
+                    width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
+                    background: statusColor(nodeStatus),
+                    border: `2px solid #fff`,
+                    boxShadow: `0 1px 5px rgba(0,0,0,0.3)`,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 25, fontSize: Math.max(8, 11 * zoom), fontWeight: 900, color: '#fff',
+                  }}>
+                  {zoom >= 0.5 && (nodeStatus === 'verified'
+                    ? <Check size={10 * zoom} color="#fff" strokeWidth={3} />
+                    : <span style={{ fontSize: Math.max(7, 9 * zoom) }}>{nodeStatus === 'rejected' ? '✗' : '⏳'}</span>
+                  )}
                 </div>
 
                 {/* name */}
-                <span style={{ color: '#fff', fontWeight: 700, fontSize: Math.max(9, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom), textAlign: 'center', direction: 'rtl', padding: `0 ${14 * zoom}px`, lineHeight: 1.35, textShadow: '0 1px 4px rgba(0,0,0,0.3)', maxWidth: (NW - 16) * zoom, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{pos.node.name}</span>
+                <span style={{
+                  color: '#fff', fontWeight: 700,
+                  fontSize: Math.max(9, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom),
+                  textAlign: 'center', direction: 'rtl',
+                  padding: `0 ${14 * zoom}px`, lineHeight: 1.35,
+                  textShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  maxWidth: (NW - 16) * zoom,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                }}>{pos.node.name}</span>
 
-                {/* children count */}
-                {pos.node.children.length > 0 && (
-                  <div style={{ position: 'absolute', bottom: -11 * zoom, left: 6 * zoom, background: '#fff', border: `1.5px solid ${p.ring}44`, color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20, boxShadow: `0 1px 4px ${p.shadow}` }}>{pos.node.children.length} ילדים</div>
+                {/* children count chip */}
+                {pos.node.children.length > 0 && zoom >= 0.6 && (
+                  <div style={{
+                    position: 'absolute', bottom: -11 * zoom, left: 6 * zoom,
+                    background: '#fff',
+                    border: `1.5px solid ${p.ring}44`,
+                    color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
+                    padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20,
+                    boxShadow: `0 1px 4px ${p.shadow}`,
+                  }}>{pos.node.children.length} ילדים</div>
                 )}
 
                 {/* actions strip */}
                 {isSel && (
-                  <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: -54, display: 'flex', gap: 6, background: '#fff', borderRadius: 22, padding: '6px 10px', boxShadow: '0 6px 20px rgba(0,0,0,0.14)', border: '1px solid #E2E8F0', zIndex: 30 }}>
+                  <div onClick={e => e.stopPropagation()} style={{
+                    position: 'absolute', bottom: -54,
+                    display: 'flex', gap: 6,
+                    background: '#fff', borderRadius: 22,
+                    padding: '6px 10px',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.14)',
+                    border: '1px solid #E2E8F0', zIndex: 30,
+                  }}>
                     {[
                       { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) } },
                       { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) } },
                       { icon: nodeStatus === 'verified' ? <X size={11} /> : <Check size={11} />, color: nodeStatus === 'verified' ? '#F97316' : '#22C55E', bg: nodeStatus === 'verified' ? '#FFF7ED' : '#F0FDF4', fn: () => handleSetStatus(pos.node, nodeStatus === 'verified' ? 'pending' : 'verified'), title: nodeStatus === 'verified' ? 'בטל אימות' : 'אמת' },
                       { icon: <Trash2 size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => setModal({ type: 'delete', node: pos.node }) },
                     ].map((b, i) => (
-                      <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{b.icon}</button>
+                      <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
                     ))}
                   </div>
                 )}
@@ -366,11 +440,13 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>צומת נבחר</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{selPos.node.name}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>{selPos.node.name}</div>
               <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation}</span>
                 <span>{selPos.node.children.length} ילדים</span>
-                <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700, background: (selPos.node.status ?? 'verified') === 'verified' ? '#DCFCE7' : (selPos.node.status === 'rejected' ? '#FEE2E2' : '#FEF3C7'), color: (selPos.node.status ?? 'verified') === 'verified' ? '#166534' : (selPos.node.status === 'rejected' ? '#991B1B' : '#92400E') }}>
+                <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700,
+                  background: (selPos.node.status ?? 'verified') === 'verified' ? '#DCFCE7' : (selPos.node.status === 'rejected' ? '#FEE2E2' : '#FEF3C7'),
+                  color: (selPos.node.status ?? 'verified') === 'verified' ? '#166534' : (selPos.node.status === 'rejected' ? '#991B1B' : '#92400E') }}>
                   {(selPos.node.status ?? 'verified') === 'verified' ? '✓ מאומת' : (selPos.node.status === 'rejected' ? '✗ לא מאושר' : '⏳ ממתין')}
                 </span>
               </div>
@@ -382,16 +458,16 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
                 { label: (selPos.node.status ?? 'verified') === 'verified' ? 'בטל אימות' : 'אמת', fn: () => handleSetStatus(selPos.node, (selPos.node.status ?? 'verified') === 'verified' ? 'pending' : 'verified'), color: (selPos.node.status ?? 'verified') === 'verified' ? '#F97316' : '#22C55E', bg: (selPos.node.status ?? 'verified') === 'verified' ? '#FFF7ED' : '#F0FDF4' },
                 { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#DC2626', bg: '#FEF2F2' },
               ].map(b => (
-                <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{b.label}</button>
+                <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
               ))}
             </div>
           </div>
           {selPos.node.children.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, marginBottom: 7 }}>ילדים:</div>
+              <div style={{ fontSize: 11, color: '#94A3B8', fontWeight: 700, marginBottom: 7, letterSpacing: '0.05em' }}>ילדים:</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {selPos.node.children.map(c => (
-                  <button key={c.id} onClick={() => setSelected(c.id)} style={{ padding: '5px 14px', borderRadius: 20, border: 'none', background: pal(c.generation).bg, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', direction: 'rtl', boxShadow: `0 2px 8px ${pal(c.generation).shadow}` }}>{c.name}</button>
+                  <button key={c.id} onClick={() => setSelected(c.id)} style={{ padding: '5px 14px', borderRadius: 20, border: 'none', background: pal(c.generation).bg, color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', direction: 'rtl', boxShadow: `0 2px 8px ${pal(c.generation).shadow}`, transition: 'opacity .15s' }}>{c.name}</button>
                 ))}
               </div>
             </div>
@@ -399,14 +475,16 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
         </div>
       )}
 
-      <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} title="הוסף שורש" style={{ position: 'fixed', bottom: 28, left: 28, width: 50, height: 50, borderRadius: '50%', background: 'linear-gradient(135deg,#7C3AED,#5B21B6)', color: '#fff', border: 'none', fontSize: 26, fontWeight: 700, cursor: 'pointer', zIndex: 50, boxShadow: '0 6px 24px rgba(124,58,237,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
-
+      {/* modals */}
       {modal?.type === 'edit' && (
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
@@ -415,7 +493,10 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
@@ -423,9 +504,16 @@ function TreeView({ nodes, onRefresh, statusFilter, generationFilter }: {
         <Modal title="מחיקת צומת" onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.6 }}>האם למחוק את <strong style={{ color: '#0F172A' }}>{modal.node.name}</strong>?</p>
-            {(modal.node.children?.length ?? 0) > 0 && <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 11, padding: '11px 14px', fontSize: 12, color: '#92400E' }}>שים לב: {modal.node.children.length} ילדים יאבדו את הקישור.</div>}
+            {(modal.node.children?.length ?? 0) > 0 && (
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 11, padding: '11px 14px', fontSize: 12, color: '#92400E', lineHeight: 1.5 }}>
+                שים לב: {modal.node.children.length} ילדים יאבדו את הקישור להורה זה.
+              </div>
+            )}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
@@ -454,7 +542,11 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
 
   async function handleToggleStatus(node: LineageNode) {
     const newStatus = nextStatus(node.status)
-    await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: node.id, status: newStatus }) })
+    await fetch('/api/admin/lineage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, status: newStatus }),
+    })
     onRefresh()
   }
 
@@ -471,19 +563,26 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
     const isExpanded = expanded.has(node.id)
     return (
       <div key={node.id}>
-        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'opacity .2s', minWidth: 0, opacity: isDimmed ? 0.25 : 1 }}
+        <div
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'background .12s, opacity .2s', minWidth: 0, opacity: isDimmed ? 0.25 : 1 }}
           onMouseEnter={e => (e.currentTarget.style.background = '#FAFAFE')}
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
           <div style={{ width: depth * 22, flexShrink: 0 }} />
           <button onClick={() => toggle(node.id)} style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasChildren ? p.light : 'none', border: 'none', cursor: hasChildren ? 'pointer' : 'default', color: p.ring, flexShrink: 0, borderRadius: 6 }}>
             {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span style={{ width: 13 }} />}
           </button>
-          <button onClick={() => handleToggleStatus(node)}
+          {/* status dot */}
+          <button
+            onClick={() => handleToggleStatus(node)}
             title={nodeStatus === 'verified' ? 'מאומת → ממתין' : nodeStatus === 'pending' ? 'ממתין → לא מאושר' : 'לא מאושר → אמת'}
-            style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: 'pointer', flexShrink: 0, boxShadow: nodeStatus === 'verified' ? '0 0 0 3px #DCFCE7' : nodeStatus === 'rejected' ? '0 0 0 3px #FEE2E2' : '0 0 0 3px #FEF3C7' }} />
+            style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: 'pointer', flexShrink: 0,
+              boxShadow: nodeStatus === 'verified' ? '0 0 0 3px #DCFCE7' : nodeStatus === 'rejected' ? '0 0 0 3px #FEE2E2' : '0 0 0 3px #FEF3C7' }}
+          />
           <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{node.name}</span>
-          <div style={{ padding: '3px 10px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>דור {node.generation}</div>
-          <div style={{ minWidth: 56, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>{childCount.get(node.id) ?? '—'}</div>
+          <div style={{ padding: '3px 10px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>דור {node.generation}</div>
+          <div style={{ minWidth: 56, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
+            {childCount.get(node.id) ? `${childCount.get(node.id)}` : '—'}
+          </div>
           <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
             <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>
             <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
@@ -498,13 +597,17 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
   return (
     <div style={{ borderRadius: 18, border: '1.5px solid #E8E0F5', overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(109,40,217,0.06)', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', background: 'linear-gradient(135deg,#F8F6FF,#F0EDFF)', borderBottom: '1px solid #E8E0F5', direction: 'rtl', gap: 8 }}>
-        <div style={{ width: 22, flexShrink: 0 }} /><div style={{ width: 14, flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#7C3AED', minWidth: 0 }}>שם</span>
+        <div style={{ width: 22, flexShrink: 0 }} />
+        <div style={{ width: 14, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.04em', minWidth: 0 }}>שם</span>
         <span style={{ width: 80, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>דור</span>
         <span style={{ minWidth: 56, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>ילדים</span>
         <span style={{ width: 96, flexShrink: 0 }} />
       </div>
-      {roots.length === 0 ? <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>אין נתונים</div> : roots.map(r => renderRows(r, 0))}
+      {roots.length === 0
+        ? <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>אין נתונים</div>
+        : roots.map(r => renderRows(r, 0))
+      }
     </div>
   )
 }
@@ -582,21 +685,25 @@ export default function LineagePage() {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">עץ הדורות</h1>
-          {!loading && <span className="text-sm text-gray-400 font-medium">{nodes.length} רשומות</span>}
+          {!loading && (
+            <span className="text-sm text-gray-400 font-medium">{nodes.length} רשומות</span>
+          )}
           {!loading && (
             <>
-              {/* status filter buttons */}
               <button onClick={() => setStatusFilter(f => f === 'verified' ? null : 'verified')}
-                style={{ background: statusFilter === 'verified' ? '#166534' : '#DCFCE7', color: statusFilter === 'verified' ? '#fff' : '#166534', border: `2px solid ${statusFilter === 'verified' ? '#166534' : 'transparent'}`, cursor: 'pointer', padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                style={{ background: statusFilter === 'verified' ? '#166534' : '#DCFCE7', color: statusFilter === 'verified' ? '#fff' : '#166534', border: `2px solid ${statusFilter === 'verified' ? '#166534' : 'transparent'}`, cursor: 'pointer' }}>
                 ✓ {verifiedCount} מאומתים
               </button>
               <button onClick={() => setStatusFilter(f => f === 'pending' ? null : 'pending')}
-                style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer', padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer' }}>
                 ⏳ {pendingCount} ממתינים
               </button>
               {rejectedCount > 0 && (
                 <button onClick={() => setStatusFilter(f => f === 'rejected' ? null : 'rejected')}
-                  style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#991B1B', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : 'transparent'}`, cursor: 'pointer', padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
+                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                  style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#991B1B', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : 'transparent'}`, cursor: 'pointer' }}>
                   ✗ {rejectedCount} לא מאושרים
                 </button>
               )}
@@ -612,28 +719,30 @@ export default function LineagePage() {
               </button>
             ))}
           </div>
-          <button onClick={loadAll} disabled={loading} title="רענן" className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
+          <button onClick={loadAll} disabled={loading} title="רענן"
+            className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
-          <button onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
+          <button
+            onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
             className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
             <Plus size={14} /> הוסף דור חדש
           </button>
         </div>
       </div>
 
-      {/* generation chips - clickable filters */}
+      {/* generation legend — clickable filters */}
       {nodes.length > 0 && !loading && (
         <div className="flex gap-2 flex-wrap mb-4">
           {Array.from({ length: maxGen }, (_, i) => i + 1).map(g => (
             <button key={g} onClick={() => setGenerationFilter(f => f === g ? null : g)}
+              className="flex items-center px-3 py-1 rounded-full text-xs font-bold border transition-all"
               style={{
                 background: generationFilter === g ? pal(g).ring : pal(g).light,
                 borderColor: generationFilter === g ? pal(g).ring : `${pal(g).ring}33`,
                 color: generationFilter === g ? '#fff' : pal(g).text,
                 cursor: 'pointer',
                 boxShadow: generationFilter === g ? `0 2px 8px ${pal(g).shadow}` : 'none',
-                padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, border: '2px solid',
               }}>
               דור {g} · {genCounts[g] ?? 0}
             </button>
@@ -641,6 +750,7 @@ export default function LineagePage() {
         </div>
       )}
 
+      {/* content */}
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 320, gap: 12, color: '#7C3AED' }}>
           <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
@@ -650,19 +760,26 @@ export default function LineagePage() {
         <TreeView nodes={nodes} onRefresh={loadAll} statusFilter={statusFilter} generationFilter={generationFilter} />
       ) : (
         <TableView
-          nodes={nodes} onRefresh={loadAll} statusFilter={statusFilter} generationFilter={generationFilter}
+          nodes={nodes}
+          onRefresh={loadAll}
+          statusFilter={statusFilter}
+          generationFilter={generationFilter}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
           onEdit={node => { setFormName(node.name); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
         />
       )}
 
+      {/* page-level modals (table view) */}
       {modal?.type === 'edit' && (
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
@@ -683,7 +800,10 @@ export default function LineagePage() {
               </div>
             )}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
@@ -692,7 +812,10 @@ export default function LineagePage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.6 }}>האם למחוק את <strong style={{ color: '#0F172A' }}>{modal.node.name}</strong>?</p>
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
-            <div style={{ display: 'flex', gap: 8 }}><MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} /><MBtn label="ביטול" color="#94A3B8" onClick={close} /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
           </div>
         </Modal>
       )}
