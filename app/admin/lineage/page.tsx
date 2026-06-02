@@ -270,6 +270,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
 
   const selPos = selected ? positions.find(p => p.node.id === selected) ?? null : null
 
+  const pathBranch = useMemo(() => {
+    const s = new Set<string>()
+    if (!selected) return s
+    const nodeMap = new Map(positions.map(p => [p.node.id, p.node]))
+    let cur: TreeNode | undefined = nodeMap.get(selected)
+    let guard = 0
+    while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? nodeMap.get(cur.parent_id) : undefined; guard++ }
+    return s
+  }, [selected, positions])
+
   if (!nodes.length) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 18, color: '#94A3B8' }}>
       <div style={{ width: 72, height: 72, borderRadius: 20, background: 'linear-gradient(135deg,#F5F0FF,#EFF6FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #C4B5FD' }}>
@@ -285,10 +295,17 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
   return (
     <>
       {/* zoom controls */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
-        <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
-        <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        {selected ? (
+          <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, borderRadius: 8, border: '1.5px solid #7C3AED44', background: '#F5F0FF', color: '#7C3AED', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 10px' }}>
+            <X size={12} /> נקה בחירה
+          </button>
+        ) : <div />}
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
+          <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+        </div>
       </div>
 
       {/* canvas */}
@@ -314,10 +331,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
               const mid = (y1 + y2) / 2
               const col = pal(e.from.node.generation).ring
               const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
+              const isPathEdge = selected && pathBranch.has(e.from.node.id) && pathBranch.has(e.to.node.id)
               return (
                 <g key={i}>
-                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
-                  <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" opacity={0.85} />
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={isPathEdge ? 8 : 5} strokeLinecap="round" opacity={selected && !isPathEdge ? 0.1 : 0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={isPathEdge ? 4 : 2.5} strokeLinecap="round" opacity={selected && !isPathEdge ? 0.08 : 0.85} />
                 </g>
               )
             })}
@@ -327,8 +345,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
             const nodeStatus = pos.node.status ?? 'verified'
             const genPal = pal(pos.node.generation)
             const isSel = selected === pos.node.id
-            const isDimmed = (statusFilter !== null && nodeStatus !== statusFilter)
-              || (generationFilter !== null && pos.node.generation !== generationFilter)
+            const isDimmed = selected !== null
+              ? !pathBranch.has(pos.node.id)
+              : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
             const p = nodeStatus === 'verified' ? genPal
               : nodeStatus === 'rejected'
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
