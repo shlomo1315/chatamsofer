@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
@@ -132,6 +132,7 @@ function LineageTreePicker({
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const tpDragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
+  const tpZoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/lineage?all=1')
@@ -149,7 +150,7 @@ function LineageTreePicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Passive wheel — zoom toward the cursor, affecting only this frame
+  // Passive wheel — שומר עוגן ומשנה zoom
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -157,21 +158,32 @@ function LineageTreePicker({
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.2, prev - e.deltaY * 0.001))
+        const next = Math.min(2.5, Math.max(0.2, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
-        const pointerX = (el.scrollLeft + (e.clientX - rect.left)) / prev
-        const pointerY = (el.scrollTop + (e.clientY - rect.top)) / prev
-        requestAnimationFrame(() => {
-          el.scrollLeft = pointerX * next - (e.clientX - rect.left)
-          el.scrollTop = pointerY * next - (e.clientY - rect.top)
-        })
+        const offX = e.clientX - rect.left
+        const offY = e.clientY - rect.top
+        tpZoomAnchor.current = {
+          px: (el.scrollLeft + offX) / prev,
+          py: (el.scrollTop + offY) / prev,
+          offX, offY,
+        }
         return next
       })
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [])
+
+  // תיקון גלילה אחרי שינוי zoom — שמירת הנקודה מתחת לעכבר
+  useLayoutEffect(() => {
+    const el = canvasRef.current
+    const a = tpZoomAnchor.current
+    if (!el || !a) return
+    el.scrollLeft = a.px * zoom - a.offX
+    el.scrollTop = a.py * zoom - a.offY
+    tpZoomAnchor.current = null
+  }, [zoom])
 
   // Drag-to-pan
   useEffect(() => {

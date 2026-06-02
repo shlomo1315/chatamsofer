@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
 
 // ─── Types ───
@@ -122,12 +122,14 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
+  // עוגן זום-לעכבר: הנקודה הלא-משוקללת שמתחת לסמן + ההיסט שלו מקצה הקנבס
+  const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
 
-  // Passive wheel listener — zoom toward the cursor position
+  // Passive wheel listener — שומר עוגן ומשנה zoom
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -135,23 +137,33 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.2, prev - e.deltaY * 0.001))
+        const next = Math.min(2.5, Math.max(0.2, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
-        // נקודה (בקואורדינטות לא-משוקללות) שמתחת לעכבר כרגע
-        const pointerX = (el.scrollLeft + (e.clientX - rect.left)) / prev
-        const pointerY = (el.scrollTop + (e.clientY - rect.top)) / prev
-        // אחרי שינוי ה-zoom, מזיזים את הגלילה כך שאותה נקודה תישאר מתחת לעכבר
-        requestAnimationFrame(() => {
-          el.scrollLeft = pointerX * next - (e.clientX - rect.left)
-          el.scrollTop = pointerY * next - (e.clientY - rect.top)
-        })
+        const offX = e.clientX - rect.left
+        const offY = e.clientY - rect.top
+        zoomAnchor.current = {
+          px: (el.scrollLeft + offX) / prev,
+          py: (el.scrollTop + offY) / prev,
+          offX, offY,
+        }
         return next
       })
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [])
+
+  // אחרי שה-DOM גדל/הצטמצם לפי ה-zoom החדש — מתקנים את הגלילה כך
+  // שהנקודה שהייתה מתחת לעכבר תישאר מתחת לעכבר
+  useLayoutEffect(() => {
+    const el = canvasRef.current
+    const a = zoomAnchor.current
+    if (!el || !a) return
+    el.scrollLeft = a.px * zoom - a.offX
+    el.scrollTop = a.py * zoom - a.offY
+    zoomAnchor.current = null
+  }, [zoom])
 
   // Drag-to-pan with left mouse button
   useEffect(() => {
