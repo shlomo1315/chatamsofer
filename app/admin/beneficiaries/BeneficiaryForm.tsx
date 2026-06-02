@@ -46,6 +46,7 @@ interface LineageNode {
   name: string
   generation: number
   parent_id: string | null
+  status?: 'verified' | 'pending' | 'rejected'
 }
 
 // ─── Tree layout for picker ───

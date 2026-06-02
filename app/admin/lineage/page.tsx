@@ -133,6 +133,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [zoom, setZoom] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearch, setShowSearch] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
@@ -247,28 +250,64 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
     setSaving(false)
   }
 
-  async function handleToggleStatus(node: LineageNode) {
-    const newStatus = nextStatus(node.status)
-    onStatusChange(node.id, newStatus)
-    await fetch('/api/admin/lineage', {
+  async function patchStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
+    onStatusChange(node.id, status)
+    const res = await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: node.id, status: newStatus }),
+      credentials: 'include',
+      body: JSON.stringify({ id: node.id, status }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      onStatusChange(node.id, node.status ?? 'pending')
+      alert(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
+      return
+    }
     onRefresh()
+  }
+
+  async function handleToggleStatus(node: LineageNode) {
+    await patchStatus(node, nextStatus(node.status))
   }
 
   async function handleSetStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
-    onStatusChange(node.id, status)
-    await fetch('/api/admin/lineage', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: node.id, status }),
-    })
-    onRefresh()
+    await patchStatus(node, status)
   }
 
   const selPos = selected ? positions.find(p => p.node.id === selected) ?? null : null
+
+  const nodeById = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes])
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const q = searchQuery.trim().toLowerCase()
+    return nodes.filter(n => n.name.toLowerCase().includes(q)).slice(0, 8)
+  }, [searchQuery, nodes])
+
+  function scrollToNode(nodeId: string) {
+    const pos = positions.find(p => p.node.id === nodeId)
+    if (!pos || !canvasRef.current) return
+    const el = canvasRef.current
+    const targetX = pos.cx * zoom - el.clientWidth / 2
+    const targetY = pos.y * zoom - el.clientHeight / 3
+    el.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: 'smooth' })
+  }
+
+  function selectAndGo(nodeId: string) {
+    setSelected(nodeId)
+    setSearchQuery('')
+    setShowSearch(false)
+    setTimeout(() => scrollToNode(nodeId), 50)
+  }
+
+  function fitToScreen() {
+    if (!canvasRef.current || !positions.length) return
+    const el = canvasRef.current
+    const newZoom = Math.min(1.5, Math.max(0.5, Math.min(el.clientWidth / (w + PAD * 2), el.clientHeight / (h + PAD * 2))))
+    setZoom(newZoom)
+    didCenter.current = false
+  }
 
   const pathBranch = useMemo(() => {
     const s = new Set<string>()
@@ -294,14 +333,47 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
 
   return (
     <>
-      {/* zoom controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        {selected ? (
-          <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, borderRadius: 8, border: '1.5px solid #7C3AED44', background: '#F5F0FF', color: '#7C3AED', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 10px' }}>
-            <X size={12} /> נקה בחירה
-          </button>
-        ) : <div />}
-        <div style={{ display: 'flex', gap: 6 }}>
+      {/* search + zoom controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+        {/* search box */}
+        <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
+          <input
+            ref={searchRef}
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setShowSearch(true) }}
+            onFocus={() => setShowSearch(true)}
+            onBlur={() => setTimeout(() => setShowSearch(false), 150)}
+            placeholder="🔍 חיפוש שם..."
+            dir="rtl"
+            style={{ width: '100%', height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 12, padding: '0 10px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+          />
+          {showSearch && searchResults.length > 0 && (
+            <div style={{ position: 'absolute', top: 32, right: 0, left: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100, maxHeight: 260, overflowY: 'auto' }}>
+              {searchResults.map(n => {
+                const parent = n.parent_id ? nodeById.get(n.parent_id) : null
+                return (
+                  <div key={n.id} onMouseDown={() => selectAndGo(n.id)}
+                    style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #F1F5F9', direction: 'rtl' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#F5F0FF')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{n.name}</div>
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                      דור {n.generation}{parent ? ` · ${parent.name}` : ''}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {selected && (
+            <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 5, height: 28, borderRadius: 8, border: '1.5px solid #7C3AED44', background: '#F5F0FF', color: '#7C3AED', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '0 10px' }}>
+              <X size={12} /> נקה בחירה
+            </button>
+          )}
+          <button onClick={fitToScreen} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>⊡ התאם</button>
           <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
           <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
           <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
