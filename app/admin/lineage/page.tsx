@@ -139,6 +139,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
+  const draggedRef = useRef(false)
   const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   // clear node-path selection whenever a top filter changes, so the filter takes over
@@ -187,6 +188,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return
       dragRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop }
+      draggedRef.current = false
       el.style.cursor = 'grabbing'
     }
     const onMove = (e: MouseEvent) => {
@@ -194,6 +196,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       const dx = e.clientX - dragRef.current.startX
       const dy = e.clientY - dragRef.current.startY
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        draggedRef.current = true
         e.preventDefault()
         el.scrollLeft = dragRef.current.scrollX - dx
         el.scrollTop  = dragRef.current.scrollY - dy
@@ -387,6 +390,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       <div
         ref={canvasRef}
         dir="ltr"
+        onClick={() => { if (!draggedRef.current) setSelected(null) }}
         style={{
           overflow: 'auto',
           overflowAnchor: 'none',
@@ -430,7 +434,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
             return (
               <div
                 key={pos.node.id}
-                onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)}
+                onClick={e => { e.stopPropagation(); setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,

@@ -130,6 +130,7 @@ function LineageTreePicker({
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string>(initialNodeId ?? '')
   const [zoom, setZoom] = useState(0.65)
+  const [tpSearch, setTpSearch] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const tpDragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
@@ -244,10 +245,32 @@ function LineageTreePicker({
     })
   }, [positions.length, w, zoom])
 
+  const nodeById = useMemo(() => new Map(allNodes.map(n => [n.id, n])), [allNodes])
+
+  const searchResults = useMemo(() => {
+    const q = tpSearch.trim().toLowerCase()
+    if (!q) return []
+    return allNodes.filter(n => n.name.toLowerCase().includes(q)).slice(0, 8)
+  }, [tpSearch, allNodes])
+
+  function scrollToNode(nodeId: string) {
+    const pos = positions.find(p => p.node.id === nodeId)
+    if (!pos || !canvasRef.current) return
+    const el = canvasRef.current
+    el.scrollTo({ left: Math.max(0, pos.cx * zoom - el.clientWidth / 2), top: Math.max(0, pos.y * zoom - el.clientHeight / 3), behavior: 'smooth' })
+  }
+
   function handleNodeClick(pos: TreePickerPos) {
     const nodeId = pos.node.id
     setSelected(nodeId)
     onSelect(nodeId, buildNodePath(nodeId, allNodes))
+  }
+
+  function selectFromSearch(nodeId: string) {
+    setSelected(nodeId)
+    onSelect(nodeId, buildNodePath(nodeId, allNodes))
+    setTpSearch('')
+    setTimeout(() => scrollToNode(nodeId), 50)
   }
 
   if (loading) return (
@@ -263,11 +286,40 @@ function LineageTreePicker({
 
   return (
     <div style={{ direction: 'rtl' }}>
-      {/* zoom controls */}
-      <div style={{ display: 'flex', gap: 5, marginBottom: 8, justifyContent: 'flex-end' }}>
-        <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
-        <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+      {/* search + zoom controls */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
+          <input
+            type="text"
+            value={tpSearch}
+            onChange={e => setTpSearch(e.target.value)}
+            placeholder="🔍 חיפוש שם בשושלת..."
+            style={{ width: '100%', height: 30, borderRadius: 8, border: '1px solid #E2E8F0', padding: '0 10px', fontSize: 12, color: '#334155', outline: 'none', direction: 'rtl', fontFamily: 'inherit', background: '#fff' }}
+          />
+          {searchResults.length > 0 && (
+            <div style={{ position: 'absolute', top: 34, right: 0, left: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden', maxHeight: 260, overflowY: 'auto' }}>
+              {searchResults.map(n => {
+                const parent = n.parent_id ? nodeById.get(n.parent_id) : null
+                return (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => selectFromSearch(n.id)}
+                    style={{ display: 'block', width: '100%', textAlign: 'right', padding: '7px 11px', border: 'none', borderBottom: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', direction: 'rtl', fontFamily: 'inherit' }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{n.name}</div>
+                    <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>דור {n.generation}{parent ? ` · ${parent.name}` : ''}</div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
+          <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+        </div>
       </div>
 
       {/* tree canvas */}
