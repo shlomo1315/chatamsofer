@@ -166,31 +166,41 @@ function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col items-center gap-0 py-2">
       {levels.map((level, idx) => (
-        <div key={idx}>
-          <p className="text-xs font-medium text-slate-500 mb-2">
-            {idx === 0 ? 'בחר מהדור הראשון:' : `בחר המשך הדור ${idx + 1}:`}
+        <div key={idx} className="flex flex-col items-center w-full">
+          {idx > 0 && (
+            <div className="flex flex-col items-center">
+              <div className="w-px h-5 bg-indigo-200" />
+              <div className="w-2 h-2 rounded-full bg-indigo-300" />
+              <div className="w-px h-3 bg-indigo-200" />
+            </div>
+          )}
+          <p className="text-xs font-medium text-slate-400 mb-3 mt-1">
+            {idx === 0 ? 'בחר את שושלת המשפחה:' : `דור ${idx + 1} — בחר המשך:`}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-3">
             {level.nodes.map(node => (
               <button
                 key={node.id} type="button" onClick={() => handleSelect(idx, node)}
-                className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
-                  level.selected === node.id
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                }`}
+                className={`text-sm font-medium px-5 py-2.5 rounded-full border-2 transition-all duration-200 shadow-sm
+                  ${level.selected === node.id
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200 shadow-md scale-105'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50 hover:scale-105 hover:shadow-md'
+                  }`}
               >{node.name}</button>
             ))}
-            {loadingLevel === idx + 1 && (
-              <span className="flex items-center gap-1 text-xs text-slate-400 self-center">
-                <Loader2 size={12} className="animate-spin" /> טוען...
-              </span>
-            )}
           </div>
         </div>
       ))}
+      {loadingLevel !== null && (
+        <div className="flex flex-col items-center mt-2">
+          <div className="w-px h-5 bg-indigo-100" />
+          <span className="flex items-center gap-1.5 text-xs text-indigo-400 mt-1">
+            <Loader2 size={12} className="animate-spin" /> טוען דור הבא...
+          </span>
+        </div>
+      )}
     </div>
   )
 }
