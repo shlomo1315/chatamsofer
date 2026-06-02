@@ -11,6 +11,7 @@ import { he } from 'date-fns/locale'
 import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
 import DocumentsManager from './DocumentsManager'
+import LineageBranchView from './LineageBranchView'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
@@ -251,7 +252,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <GitBranch size={16} className="text-violet-500" />
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
+
+      {/* breadcrumb of the selected branch */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-4">
         {lineagePath.map((name, i) => (
           <span key={`t-${i}`} className="flex items-center gap-1.5">
             {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
@@ -265,6 +268,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           </span>
         ))}
       </div>
+
+      {/* visual tree with this beneficiary's branch highlighted */}
+      <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />
     </Card>
   )
 
