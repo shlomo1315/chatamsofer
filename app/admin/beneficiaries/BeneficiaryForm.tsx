@@ -149,14 +149,25 @@ function LineageTreePicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Passive wheel — zoom only this frame, not the page
+  // Passive wheel — zoom toward the cursor, affecting only this frame
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      setZoom(z => Math.min(2.5, Math.max(0.2, z - e.deltaY * 0.001)))
+      setZoom(prev => {
+        const next = Math.min(2.5, Math.max(0.2, prev - e.deltaY * 0.001))
+        if (next === prev) return prev
+        const rect = el.getBoundingClientRect()
+        const pointerX = (el.scrollLeft + (e.clientX - rect.left)) / prev
+        const pointerY = (el.scrollTop + (e.clientY - rect.top)) / prev
+        requestAnimationFrame(() => {
+          el.scrollLeft = pointerX * next - (e.clientX - rect.left)
+          el.scrollTop = pointerY * next - (e.clientY - rect.top)
+        })
+        return next
+      })
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)

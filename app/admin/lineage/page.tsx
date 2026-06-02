@@ -127,14 +127,27 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
 
-  // Passive wheel listener so e.preventDefault() actually works
+  // Passive wheel listener — zoom toward the cursor position
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
     const handler = (e: WheelEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      setZoom(z => Math.min(2.5, Math.max(0.2, z - e.deltaY * 0.001)))
+      setZoom(prev => {
+        const next = Math.min(2.5, Math.max(0.2, prev - e.deltaY * 0.001))
+        if (next === prev) return prev
+        const rect = el.getBoundingClientRect()
+        // נקודה (בקואורדינטות לא-משוקללות) שמתחת לעכבר כרגע
+        const pointerX = (el.scrollLeft + (e.clientX - rect.left)) / prev
+        const pointerY = (el.scrollTop + (e.clientY - rect.top)) / prev
+        // אחרי שינוי ה-zoom, מזיזים את הגלילה כך שאותה נקודה תישאר מתחת לעכבר
+        requestAnimationFrame(() => {
+          el.scrollLeft = pointerX * next - (e.clientX - rect.left)
+          el.scrollTop = pointerY * next - (e.clientY - rect.top)
+        })
+        return next
+      })
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
