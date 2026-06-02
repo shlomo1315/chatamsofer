@@ -138,7 +138,7 @@ function LineageTreePicker({
     fetch('/api/lineage?all=1')
       .then(r => r.json())
       .then(d => {
-        const nodes: LineageNode[] = d.nodes ?? []
+        const nodes: LineageNode[] = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
         setAllNodes(nodes)
         if (initialNodeId && nodes.length > 0) {
           const path = buildNodePath(initialNodeId, nodes)
@@ -158,7 +158,7 @@ function LineageTreePicker({
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.2, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        const next = Math.min(2.5, Math.max(0.5, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left

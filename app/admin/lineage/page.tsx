@@ -635,10 +635,17 @@ export default function LineagePage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/admin/lineage')
+      const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
       setNodes((await r.json()).nodes ?? [])
     } catch {}
     setLoading(false)
+  }, [])
+
+  const softRefresh = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
+      setNodes((await r.json()).nodes ?? [])
+    } catch {}
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
@@ -700,15 +707,13 @@ export default function LineagePage() {
               <button onClick={() => setStatusFilter(f => f === 'pending' ? null : 'pending')}
                 className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                 style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer' }}>
-                ⏳ {pendingCount} ממתינים
+                ⏳ {pendingCount} ממתינים לאימות
               </button>
-              {rejectedCount > 0 && (
-                <button onClick={() => setStatusFilter(f => f === 'rejected' ? null : 'rejected')}
-                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
-                  style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#991B1B', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : 'transparent'}`, cursor: 'pointer' }}>
-                  ✗ {rejectedCount} לא מאושרים
-                </button>
-              )}
+              <button onClick={() => setStatusFilter(f => f === 'rejected' ? null : 'rejected')}
+                className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#DC2626', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : '#FECACA'}`, cursor: 'pointer' }}>
+                ✗ {rejectedCount} נדחים
+              </button>
             </>
           )}
         </div>
@@ -759,7 +764,7 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={loadAll} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} statusFilter={statusFilter} generationFilter={generationFilter} />
+        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} statusFilter={statusFilter} generationFilter={generationFilter} />
       ) : (
         <TableView
           nodes={nodes}
