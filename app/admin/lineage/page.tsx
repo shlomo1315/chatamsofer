@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, RefreshCw, Loader2, ChevronRight, ChevronDown,
-  GitBranch, Pencil, Trash2, X, Check, Users,
+  Pencil, Trash2, X, Check, Users,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -415,58 +415,53 @@ export default function LineagePage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F3F0F8', fontFamily: 'system-ui,-apple-system,Arial,sans-serif' }} dir="rtl">
+    <div dir="rtl">
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
-      {/* ── Page header ── */}
-      <div style={{ padding: '24px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(140deg,#7C3AED,#4C1D95)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(109,40,217,0.35)' }}>
-                <GitBranch size={17} color="#fff" />
-              </div>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#1E1035' }}>עץ הדורות</h1>
-            </div>
-            <div style={{ fontSize: 13, color: '#94A3B8' }}>{nodes.length} רשומות · {maxGen + 1} דורות</div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* view toggle */}
-            <div style={{ display: 'flex', background: '#fff', borderRadius: 12, border: '1px solid #E2D9F5', padding: 3, gap: 2 }}>
-              {(['tree', 'table'] as View[]).map(v => (
-                <button key={v} onClick={() => setView(v)} style={{ padding: '6px 14px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 700, cursor: 'pointer', background: view === v ? 'linear-gradient(140deg,#7C3AED,#4C1D95)' : 'transparent', color: view === v ? '#fff' : '#94A3B8', transition: 'all .15s' }}>
-                  {v === 'tree' ? '🌳 עץ' : '📋 טבלה'}
-                </button>
-              ))}
-            </div>
-            {/* refresh */}
-            <button onClick={loadAll} disabled={loading} title="רענן" style={{ width: 38, height: 38, borderRadius: 10, background: '#fff', border: '1px solid #E2D9F5', color: '#7C3AED', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <RefreshCw size={15} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            </button>
-            {/* add */}
-            <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(140deg,#7C3AED,#4C1D95)', color: '#fff', border: 'none', borderRadius: 12, padding: '9px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 14px rgba(109,40,217,0.35)' }}>
-              <Plus size={15} /> הוסף רשומה
-            </button>
-          </div>
+      {/* ── toolbar ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-gray-800">עץ הדורות</h1>
+          <span className="text-sm text-gray-400">{nodes.length} רשומות · {maxGen + 1} דורות</span>
         </div>
-
-        {/* generation legend pills */}
-        {nodes.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            {Array.from({ length: maxGen + 1 }, (_, i) => i).map(g => (
-              <div key={g} style={{ display: 'flex', alignItems: 'center', gap: 6, background: pal(g).light, border: `1px solid ${pal(g).ring}33`, borderRadius: 20, padding: '4px 12px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: pal(g).ring }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: pal(g).text }}>דור {g + 1}</span>
-                <span style={{ fontSize: 11, color: '#94A3B8' }}>· {genCounts[g] ?? 0}</span>
-              </div>
+        <div className="flex items-center gap-2">
+          {/* view toggle */}
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+            {(['tree', 'table'] as View[]).map(v => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${view === v ? 'bg-white shadow text-violet-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                {v === 'tree' ? '🌳 עץ' : '📋 טבלה'}
+              </button>
             ))}
           </div>
-        )}
+          {/* refresh */}
+          <button onClick={loadAll} disabled={loading} title="רענן"
+            className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-gray-50 transition-colors">
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+          {/* add */}
+          <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }}
+            className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors shadow-sm">
+            <Plus size={14} /> הוסף רשומה
+          </button>
+        </div>
       </div>
 
+      {/* generation legend */}
+      {nodes.length > 0 && (
+        <div className="flex gap-2 flex-wrap mb-4">
+          {Array.from({ length: maxGen + 1 }, (_, i) => i).map(g => (
+            <div key={g} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border"
+              style={{ background: pal(g).light, borderColor: `${pal(g).ring}44`, color: pal(g).text }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: pal(g).ring }} />
+              דור {g + 1} · {genCounts[g] ?? 0}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── Content ── */}
-      <div style={{ padding: '0 24px 40px' }}>
+      <div>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, gap: 10, color: '#7C3AED' }}>
             <Loader2 size={22} style={{ animation: 'spin 1s linear infinite' }} />
