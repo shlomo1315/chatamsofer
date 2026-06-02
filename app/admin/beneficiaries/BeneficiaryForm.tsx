@@ -131,6 +131,7 @@ function LineageTreePicker({
   const [zoom, setZoom] = useState(0.65)
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
+  const tpDragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
 
   useEffect(() => {
     fetch('/api/lineage?all=1')
@@ -159,6 +160,36 @@ function LineageTreePicker({
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  // Drag-to-pan
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      tpDragRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop }
+      el.style.cursor = 'grabbing'
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!tpDragRef.current) return
+      const dx = e.clientX - tpDragRef.current.startX
+      const dy = e.clientY - tpDragRef.current.startY
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        e.preventDefault()
+        el.scrollLeft = tpDragRef.current.scrollX - dx
+        el.scrollTop  = tpDragRef.current.scrollY - dy
+      }
+    }
+    const onUp = () => { tpDragRef.current = null; el.style.cursor = 'grab' }
+    el.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
   }, [])
 
   const positions = useMemo(() => tpLayout(tpBuildTree(allNodes)), [allNodes])
@@ -216,6 +247,7 @@ function LineageTreePicker({
           backgroundSize: '24px 24px',
           backgroundPosition: '12px 12px',
           height: 380,
+          cursor: 'grab',
         }}
       >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
