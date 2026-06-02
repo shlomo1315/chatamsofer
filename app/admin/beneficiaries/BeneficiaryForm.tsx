@@ -173,7 +173,7 @@ function LineageTreePicker({
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
-  }, [])
+  }, [loading])
 
   // תיקון גלילה אחרי שינוי zoom — שמירת הנקודה מתחת לעכבר
   useLayoutEffect(() => {
@@ -213,7 +213,7 @@ function LineageTreePicker({
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [])
+  }, [loading])
 
   const positions = useMemo(() => tpLayout(tpBuildTree(allNodes)), [allNodes])
   const edges = useMemo(() => tpEdges(positions), [positions])
@@ -261,8 +261,10 @@ function LineageTreePicker({
       {/* tree canvas */}
       <div
         ref={canvasRef}
+        dir="ltr"
         style={{
           overflow: 'auto',
+          overflowAnchor: 'none',
           borderRadius: 14,
           background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
           border: '1.5px solid #E8E0F5',

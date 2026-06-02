@@ -152,7 +152,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
-  }, [])
+  }, [nodes.length])
 
   // אחרי שה-DOM גדל/הצטמצם לפי ה-zoom החדש — מתקנים את הגלילה כך
   // שהנקודה שהייתה מתחת לעכבר תישאר מתחת לעכבר
@@ -196,7 +196,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
-  }, [])
+  }, [nodes.length])
 
   // Center the view horizontally on first load (after layout paints)
   useEffect(() => {
@@ -275,8 +275,10 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
       {/* canvas – only this div zooms with wheel */}
       <div
         ref={canvasRef}
+        dir="ltr"
         style={{
           overflow: 'auto',
+          overflowAnchor: 'none',
           borderRadius: 18,
           background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
           border: '1.5px solid #E8E0F5',
