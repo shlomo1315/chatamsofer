@@ -71,11 +71,14 @@ export async function POST(request: NextRequest) {
     if (parent) generation = parent.generation + 1
   }
 
+  const nodeStatus = generation >= 5 ? 'pending' : 'verified'
+
   const { data, error } = await admin.from('lineage_nodes').insert({
     name: name.trim(),
     parent_id: parent_id || null,
     generation,
     notes: notes?.trim() || null,
+    status: nodeStatus,
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -100,6 +103,12 @@ export async function PATCH(request: NextRequest) {
     updates.name = name.trim()
   }
   if (notes !== undefined) updates.notes = notes?.trim() || null
+  if (body.status !== undefined) {
+    if (!['verified', 'pending'].includes(body.status)) {
+      return NextResponse.json({ error: 'סטטוס לא תקין' }, { status: 400 })
+    }
+    updates.status = body.status
+  }
 
   if (parent_id !== undefined) {
     const newParent: string | null = parent_id || null

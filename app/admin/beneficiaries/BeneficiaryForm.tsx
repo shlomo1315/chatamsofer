@@ -1,9 +1,9 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
-import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2 } from 'lucide-react'
+import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId } from '@/lib/validation'
 
 const MARITAL_OPTIONS = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
@@ -48,128 +48,259 @@ interface LineageNode {
   parent_id: string | null
 }
 
-function LineageCascade({
+// ─── Tree layout for picker ───
+
+interface TreePickerNode extends LineageNode { children: TreePickerNode[] }
+interface TreePickerPos { node: TreePickerNode; x: number; y: number; cx: number; cy: number }
+
+const TP_NW = 172, TP_NH = 58, TP_HGAP = 48, TP_VGAP = 96, TP_PAD = 72
+
+const TP_PALETTE = [
+  { bg: 'linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%)', ring: '#7C3AED', shadow: 'rgba(124,58,237,0.38)' },
+  { bg: 'linear-gradient(135deg,#2563EB 0%,#1E40AF 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.32)'  },
+  { bg: 'linear-gradient(135deg,#0891B2 0%,#0E7490 100%)', ring: '#0891B2', shadow: 'rgba(8,145,178,0.32)'  },
+  { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', ring: '#059669', shadow: 'rgba(5,150,105,0.32)'  },
+  { bg: 'linear-gradient(135deg,#D97706 0%,#B45309 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.32)'  },
+  { bg: 'linear-gradient(135deg,#DB2777 0%,#BE185D 100%)', ring: '#DB2777', shadow: 'rgba(219,39,119,0.32)' },
+]
+const tpPal = (g: number) => TP_PALETTE[g % TP_PALETTE.length]
+
+function tpBuildTree(flat: LineageNode[]): TreePickerNode[] {
+  const map = new Map<string, TreePickerNode>()
+  flat.forEach(n => map.set(n.id, { ...n, children: [] }))
+  const roots: TreePickerNode[] = []
+  flat.forEach(n => {
+    const node = map.get(n.id)!
+    if (n.parent_id && map.has(n.parent_id)) map.get(n.parent_id)!.children.push(node)
+    else roots.push(node)
+  })
+  return roots
+}
+
+function tpSubtreeW(n: TreePickerNode): number {
+  return n.children.length ? n.children.reduce((s, c) => s + tpSubtreeW(c), 0) : TP_NW + TP_HGAP
+}
+
+function tpLayout(roots: TreePickerNode[]): TreePickerPos[] {
+  const result: TreePickerPos[] = []
+  function place(n: TreePickerNode, x: number, y: number) {
+    const sw = tpSubtreeW(n), cx = x + sw / 2
+    result.push({ node: n, x: cx - TP_NW / 2, y, cx, cy: y + TP_NH / 2 })
+    let cx2 = x
+    n.children.forEach(c => { place(c, cx2, y + TP_NH + TP_VGAP); cx2 += tpSubtreeW(c) })
+  }
+  let sx = TP_PAD
+  roots.forEach(r => { place(r, sx, TP_PAD); sx += tpSubtreeW(r) })
+  return result
+}
+
+function tpCanvasSize(pos: TreePickerPos[]) {
+  if (!pos.length) return { w: 800, h: 400 }
+  return { w: Math.max(...pos.map(p => p.x + TP_NW)) + TP_PAD, h: Math.max(...pos.map(p => p.y + TP_NH)) + TP_PAD }
+}
+
+function tpEdges(positions: TreePickerPos[]) {
+  const byId = new Map(positions.map(p => [p.node.id, p]))
+  return positions.flatMap(p =>
+    p.node.children.map(c => { const cp = byId.get(c.id); return cp ? { from: p, to: cp } : null })
+      .filter(Boolean) as { from: TreePickerPos; to: TreePickerPos }[]
+  )
+}
+
+function buildNodePath(nodeId: string, allNodes: LineageNode[]): string[] {
+  const nodeMap = new Map(allNodes.map(n => [n.id, n]))
+  const path: string[] = []
+  let curr = nodeMap.get(nodeId)
+  while (curr) {
+    path.unshift(curr.name)
+    curr = curr.parent_id ? nodeMap.get(curr.parent_id) : undefined
+  }
+  return path
+}
+
+function LineageTreePicker({
   initialNodeId,
   onSelect,
 }: {
   initialNodeId?: string
   onSelect: (nodeId: string, path: string[]) => void
 }) {
-  const [levels, setLevels] = useState<
-    { nodes: LineageNode[]; selected: string | null; selectedName: string }[]
-  >([])
-  const [loading, setLoading] = useState(false)
+  const [allNodes, setAllNodes] = useState<LineageNode[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<string>(initialNodeId ?? '')
+  const [zoom, setZoom] = useState(0.65)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const didCenter = useRef(false)
 
-  const loadLevel = useCallback(async (parentId: string | null, levelIdx: number) => {
-    setLoading(true)
-    try {
-      const url = parentId ? `/api/lineage?parent_id=${parentId}` : '/api/lineage'
-      const res = await fetch(url)
-      const data = await res.json()
-      setLevels(prev => {
-        const next = prev.slice(0, levelIdx)
-        if ((data.nodes ?? []).length > 0) {
-          next.push({ nodes: data.nodes, selected: null, selectedName: '' })
-        }
-        return next
-      })
-    } catch { /* ignore */ }
-    setLoading(false)
-  }, [])
-
-  // טעינה ראשונית: אם קיים שיוך שמור (עריכה) — שחזר את כל מסלול הדורות שנבחר;
-  // אחרת טען את דור 1 בלבד (רישום חדש).
-  const didInit = useRef(false)
   useEffect(() => {
-    if (didInit.current) return
-    didInit.current = true
-    if (initialNodeId) {
-      (async () => {
-        setLoading(true)
-        try {
-          const res = await fetch(`/api/lineage?node_id=${initialNodeId}`)
-          const data = await res.json()
-          const path: { selectedId: string; nodes: LineageNode[] }[] = data.path ?? []
-          if (path.length > 0) {
-            const rebuilt = path.map(lvl => ({
-              nodes: lvl.nodes,
-              selected: lvl.selectedId,
-              selectedName: lvl.nodes.find(n => n.id === lvl.selectedId)?.name ?? '',
-            }))
-            setLevels(rebuilt)
-            onSelect(initialNodeId, rebuilt.map(l => l.selectedName))
-            setLoading(false)
-            return
-          }
-        } catch { /* ignore */ }
-        loadLevel(null, 0)
-      })()
-    } else {
-      loadLevel(null, 0)
-    }
+    fetch('/api/lineage?all=1')
+      .then(r => r.json())
+      .then(d => {
+        const nodes: LineageNode[] = d.nodes ?? []
+        setAllNodes(nodes)
+        if (initialNodeId && nodes.length > 0) {
+          const path = buildNodePath(initialNodeId, nodes)
+          if (path.length > 0) onSelect(initialNodeId, path)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleSelect = async (levelIdx: number, node: LineageNode) => {
-    const currentPath = levels.slice(0, levelIdx).map(l => l.selectedName).concat(node.name)
-    setLevels(prev =>
-      prev.slice(0, levelIdx + 1).map((l, i) =>
-        i === levelIdx ? { ...l, selected: node.id, selectedName: node.name } : l
-      )
-    )
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/lineage?parent_id=${node.id}`)
-      const data = await res.json()
-      const children: LineageNode[] = data.nodes ?? []
-      setLevels(prev => {
-        const next = prev.slice(0, levelIdx + 1)
-        if (children.length > 0) {
-          next.push({ nodes: children, selected: null, selectedName: '' })
-          onSelect('', currentPath)
-        } else {
-          onSelect(node.id, currentPath)
-        }
-        return next
-      })
-    } catch {
-      onSelect(node.id, currentPath)
+  // Passive wheel — zoom only this frame, not the page
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setZoom(z => Math.min(2.5, Math.max(0.2, z - e.deltaY * 0.001)))
     }
-    setLoading(false)
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  const positions = useMemo(() => tpLayout(tpBuildTree(allNodes)), [allNodes])
+  const edges = useMemo(() => tpEdges(positions), [positions])
+  const { w, h } = useMemo(() => tpCanvasSize(positions), [positions])
+
+  // Center horizontally on first load
+  useEffect(() => {
+    if (!positions.length || didCenter.current) return
+    const el = canvasRef.current
+    if (!el) return
+    didCenter.current = true
+    requestAnimationFrame(() => {
+      if (!canvasRef.current) return
+      const scrollTo = (w * zoom - canvasRef.current.clientWidth) / 2
+      if (scrollTo > 0) canvasRef.current.scrollLeft = scrollTo
+    })
+  }, [positions.length, w, zoom])
+
+  function handleNodeClick(pos: TreePickerPos) {
+    const nodeId = pos.node.id
+    setSelected(nodeId)
+    onSelect(nodeId, buildNodePath(nodeId, allNodes))
   }
 
-  if (levels.length === 0 && loading) {
-    return <div className="text-sm text-slate-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" />טוען...</div>
-  }
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#7C3AED' }}>
+      <Loader2 size={16} className="animate-spin" />
+      <span style={{ fontSize: 13 }}>טוען עץ דורות...</span>
+    </div>
+  )
+
+  if (!allNodes.length) return (
+    <div style={{ padding: 16, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>לא נמצאו נתוני שושלת</div>
+  )
 
   return (
-    <div className="flex flex-col gap-3">
-      {levels.map((level, idx) => (
-        <div key={idx}>
-          <p className="text-xs font-medium text-slate-500 mb-1.5">
-            {idx === 0 ? 'דור ראשון:' : `המשך דור ${idx + 1}:`}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {level.nodes.map(node => (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => handleSelect(idx, node)}
-                className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
-                  level.selected === node.id
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                }`}
-              >
-                {node.name}
-              </button>
-            ))}
-            {loading && idx === levels.length - 1 && (
-              <Loader2 size={14} className="animate-spin text-slate-400 self-center" />
-            )}
-          </div>
+    <div style={{ direction: 'rtl' }}>
+      {/* zoom controls */}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 8, justifyContent: 'flex-end' }}>
+        <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
+        <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+        <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+      </div>
+
+      {/* tree canvas */}
+      <div
+        ref={canvasRef}
+        style={{
+          overflow: 'auto',
+          borderRadius: 14,
+          background: '#FAFBFF',
+          border: '1.5px solid #E8E0F5',
+          backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)',
+          backgroundSize: '24px 24px',
+          backgroundPosition: '12px 12px',
+          height: 380,
+        }}
+      >
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
+            <defs>
+              {TP_PALETTE.map((p, i) => (
+                <linearGradient key={i} id={`tp-eg-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={p.ring} stopOpacity="0.45" />
+                  <stop offset="100%" stopColor={TP_PALETTE[(i + 1) % TP_PALETTE.length].ring} stopOpacity="0.25" />
+                </linearGradient>
+              ))}
+            </defs>
+            {edges.map((e, i) => {
+              const x1 = e.from.cx * zoom, y1 = (e.from.y + TP_NH) * zoom
+              const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+              const mid = (y1 + y2) / 2
+              return <path key={i} d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke={`url(#tp-eg-${e.from.node.generation % TP_PALETTE.length})`} strokeWidth={2} strokeLinecap="round" />
+            })}
+          </svg>
+
+          {positions.map(pos => {
+            const p = tpPal(pos.node.generation)
+            const isSel = selected === pos.node.id
+            return (
+              <div
+                key={pos.node.id}
+                onClick={() => handleNodeClick(pos)}
+                style={{
+                  position: 'absolute',
+                  left: pos.x * zoom, top: pos.y * zoom,
+                  width: TP_NW * zoom, height: TP_NH * zoom,
+                  borderRadius: 16 * zoom,
+                  background: p.bg,
+                  boxShadow: isSel
+                    ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 10px 28px ${p.shadow}`
+                    : `0 4px 16px ${p.shadow}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
+                  transition: 'box-shadow .2s, transform .2s',
+                  zIndex: isSel ? 20 : 2, userSelect: 'none',
+                }}>
+                {/* generation badge */}
+                <div style={{
+                  position: 'absolute', top: -10 * zoom, right: 6 * zoom,
+                  background: '#fff', color: p.ring,
+                  fontSize: Math.max(7, 9 * zoom), fontWeight: 900,
+                  width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: `1.5px solid ${p.ring}`,
+                }}>{pos.node.generation}</div>
+
+                {/* selected checkmark */}
+                {isSel && (
+                  <div style={{
+                    position: 'absolute', top: -10 * zoom, left: 6 * zoom,
+                    width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
+                    background: '#22C55E', border: '2px solid #fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Check size={9 * zoom} color="#fff" strokeWidth={3} />
+                  </div>
+                )}
+
+                {/* name */}
+                <span style={{
+                  color: '#fff', fontWeight: 700,
+                  fontSize: Math.max(8, (pos.node.name.length > 14 ? 10 : pos.node.name.length > 10 ? 12 : 13) * zoom),
+                  textAlign: 'center', direction: 'rtl',
+                  padding: `0 ${12 * zoom}px`, lineHeight: 1.3,
+                  textShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  maxWidth: (TP_NW - 14) * zoom,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                }}>{pos.node.name}</span>
+              </div>
+            )
+          })}
         </div>
-      ))}
+      </div>
+      <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 5, textAlign: 'center' }}>
+        לחץ על שם לבחירה · גלגל עכבר להגדלה/הקטנה
+      </p>
     </div>
   )
 }
@@ -879,7 +1010,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           </div>
         )}
 
-        <LineageCascade
+        <LineageTreePicker
           initialNodeId={form.lineage_node_id}
           onSelect={(nodeId, path) => {
             setForm(f => ({ ...f, lineage_node_id: nodeId }))

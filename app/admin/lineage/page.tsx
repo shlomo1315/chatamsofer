@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
 
 // ─── Types ───
 
@@ -9,6 +9,7 @@ interface LineageNode {
   name: string
   generation: number
   parent_id: string | null
+  status: 'verified' | 'pending'
 }
 
 interface TreeNode extends LineageNode {
@@ -118,15 +119,36 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [zoom, setZoom] = useState(1)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const didCenter = useRef(false)
 
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
 
-  function handleWheel(e: React.WheelEvent) {
-    e.preventDefault()
-    setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001)))
-  }
+  // Passive wheel listener so e.preventDefault() actually works
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setZoom(z => Math.min(2.5, Math.max(0.2, z - e.deltaY * 0.001)))
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
+  // Center the view horizontally on first load
+  useEffect(() => {
+    if (!positions.length || didCenter.current) return
+    const el = canvasRef.current
+    if (!el) return
+    didCenter.current = true
+    const totalW = w * zoom
+    const scrollTo = (totalW - el.clientWidth) / 2
+    if (scrollTo > 0) el.scrollLeft = scrollTo
+  }, [positions.length, w, zoom])
 
   function close() { setModal(null); setSaveErr('') }
 
@@ -155,6 +177,16 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     setSaving(false)
   }
 
+  async function handleToggleStatus(node: LineageNode) {
+    const newStatus = node.status === 'verified' ? 'pending' : 'verified'
+    await fetch('/api/admin/lineage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, status: newStatus }),
+    })
+    onRefresh()
+  }
+
   const selPos = selected ? positions.find(p => p.node.id === selected) ?? null : null
 
   if (!nodes.length) return (
@@ -173,14 +205,28 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
     <>
       {/* zoom controls */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
-        <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
-        <button onClick={() => setZoom(1)} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+        <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
+        <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+        <button onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
       </div>
 
-      {/* canvas */}
-      <div onWheel={handleWheel} style={{ overflow: 'auto', borderRadius: 18, background: '#FAFBFF', border: '1.5px solid #E8E0F5', boxShadow: '0 4px 32px rgba(109,40,217,0.07)', backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)', backgroundSize: '26px 26px', backgroundPosition: '13px 13px', minHeight: 280 }}>
-        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%', transformOrigin: 'top right' }}>
+      {/* canvas – only this div zooms with wheel */}
+      <div
+        ref={canvasRef}
+        style={{
+          overflow: 'auto',
+          borderRadius: 18,
+          background: '#FAFBFF',
+          border: '1.5px solid #E8E0F5',
+          boxShadow: '0 4px 32px rgba(109,40,217,0.07)',
+          backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)',
+          backgroundSize: '26px 26px',
+          backgroundPosition: '13px 13px',
+          height: 'calc(100vh - 260px)',
+          minHeight: 400,
+        }}
+      >
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             <defs>
               {PALETTE.map((p, i) => (
@@ -197,10 +243,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
               return (
                 <path key={i}
                   d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`}
-                  fill="none"
-                  stroke={`url(#${gradId})`}
-                  strokeWidth={2}
-                  strokeLinecap="round"
+                  fill="none" stroke={`url(#${gradId})`} strokeWidth={2} strokeLinecap="round"
                 />
               )
             })}
@@ -209,6 +252,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
           {positions.map(pos => {
             const p = pal(pos.node.generation)
             const isSel = selected === pos.node.id
+            const isVerified = pos.node.status === 'verified'
             return (
               <div
                 key={pos.node.id}
@@ -225,7 +269,9 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
                   transition: 'box-shadow .2s, transform .2s',
                   zIndex: isSel ? 20 : 2, userSelect: 'none',
+                  opacity: isVerified ? 1 : 0.82,
                 }}>
+
                 {/* generation badge */}
                 <div style={{
                   position: 'absolute', top: -10 * zoom, right: 6 * zoom,
@@ -236,6 +282,23 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                   boxShadow: `0 2px 8px ${p.shadow}`,
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
+
+                {/* status indicator */}
+                <div
+                  onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
+                  title={isVerified ? 'מאומת — לחץ לביטול' : 'ממתין — לחץ לאימות'}
+                  style={{
+                    position: 'absolute', top: -10 * zoom, left: 6 * zoom,
+                    width: 18 * zoom, height: 18 * zoom, borderRadius: '50%',
+                    background: isVerified ? '#22C55E' : '#F97316',
+                    border: `2px solid #fff`,
+                    boxShadow: `0 1px 4px rgba(0,0,0,0.25)`,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 25,
+                  }}>
+                  {isVerified && zoom >= 0.6 && <Check size={9 * zoom} color="#fff" strokeWidth={3} />}
+                </div>
 
                 {/* name */}
                 <span style={{
@@ -266,7 +329,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                 {/* actions strip */}
                 {isSel && (
                   <div onClick={e => e.stopPropagation()} style={{
-                    position: 'absolute', bottom: -50,
+                    position: 'absolute', bottom: -54,
                     display: 'flex', gap: 6,
                     background: '#fff', borderRadius: 22,
                     padding: '6px 10px',
@@ -276,9 +339,10 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                     {[
                       { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) } },
                       { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) } },
-                      { icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => setModal({ type: 'delete', node: pos.node }) },
+                      { icon: isVerified ? <X size={11} /> : <Check size={11} />, color: isVerified ? '#F97316' : '#22C55E', bg: isVerified ? '#FFF7ED' : '#F0FDF4', fn: () => handleToggleStatus(pos.node), title: isVerified ? 'בטל אימות' : 'אמת' },
+                      { icon: <Trash2 size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => setModal({ type: 'delete', node: pos.node }) },
                     ].map((b, i) => (
-                      <button key={i} onClick={b.fn} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
+                      <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
                     ))}
                   </div>
                 )}
@@ -295,16 +359,20 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
             <div>
               <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>צומת נבחר</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>{selPos.node.name}</div>
-              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 10 }}>
+              <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation}</span>
                 <span>{selPos.node.children.length} ילדים</span>
+                <span style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 700, background: selPos.node.status === 'verified' ? '#DCFCE7' : '#FEF3C7', color: selPos.node.status === 'verified' ? '#166534' : '#92400E' }}>
+                  {selPos.node.status === 'verified' ? '✓ מאומת' : '⏳ ממתין'}
+                </span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { label: 'עריכה',     fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
+                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
                 { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
-                { label: 'מחיקה',     fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#DC2626', bg: '#FEF2F2' },
+                { label: selPos.node.status === 'verified' ? 'בטל אימות' : 'אמת', fn: () => handleToggleStatus(selPos.node), color: selPos.node.status === 'verified' ? '#F97316' : '#22C55E', bg: selPos.node.status === 'verified' ? '#FFF7ED' : '#F0FDF4' },
+                { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#DC2626', bg: '#FEF2F2' },
               ].map(b => (
                 <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
               ))}
@@ -374,8 +442,9 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
 
 // ─── Table view ───
 
-function TableView({ nodes, onAdd, onEdit, onDelete }: {
+function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete }: {
   nodes: LineageNode[]
+  onRefresh: () => void
   onAdd: (parentId: string | null, parentName: string) => void
   onEdit: (node: LineageNode) => void
   onDelete: (node: LineageNode) => void
@@ -388,6 +457,16 @@ function TableView({ nodes, onAdd, onEdit, onDelete }: {
     return map
   }, [nodes])
 
+  async function handleToggleStatus(node: LineageNode) {
+    const newStatus = node.status === 'verified' ? 'pending' : 'verified'
+    await fetch('/api/admin/lineage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: node.id, status: newStatus }),
+    })
+    onRefresh()
+  }
+
   function toggle(id: string) {
     setExpanded(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
   }
@@ -396,26 +475,32 @@ function TableView({ nodes, onAdd, onEdit, onDelete }: {
     const p = pal(node.generation)
     const hasChildren = node.children.length > 0
     const isExpanded = expanded.has(node.id)
+    const isVerified = node.status === 'verified'
     return (
       <div key={node.id}>
         <div
-          style={{ display: 'flex', alignItems: 'center', padding: '11px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 10, background: '#fff', transition: 'background .12s' }}
+          style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'background .12s', minWidth: 0 }}
           onMouseEnter={e => (e.currentTarget.style.background = '#FAFAFE')}
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-          <div style={{ width: depth * 26, flexShrink: 0 }} />
+          <div style={{ width: depth * 22, flexShrink: 0 }} />
           <button onClick={() => toggle(node.id)} style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasChildren ? p.light : 'none', border: 'none', cursor: hasChildren ? 'pointer' : 'default', color: p.ring, flexShrink: 0, borderRadius: 6 }}>
             {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span style={{ width: 13 }} />}
           </button>
-          <div style={{ width: 9, height: 9, borderRadius: '50%', background: p.ring, flexShrink: 0, boxShadow: `0 0 0 3px ${p.light}` }} />
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{node.name}</span>
-          <div style={{ padding: '3px 12px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>דור {node.generation}</div>
-          <div style={{ minWidth: 64, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
-            {childCount.get(node.id) ? `${childCount.get(node.id)} ילדים` : '—'}
+          {/* status dot */}
+          <button
+            onClick={() => handleToggleStatus(node)}
+            title={isVerified ? 'מאומת — לחץ לביטול' : 'ממתין — לחץ לאימות'}
+            style={{ width: 14, height: 14, borderRadius: '50%', background: isVerified ? '#22C55E' : '#F97316', border: 'none', cursor: 'pointer', flexShrink: 0, boxShadow: isVerified ? '0 0 0 3px #DCFCE7' : '0 0 0 3px #FEF3C7' }}
+          />
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{node.name}</span>
+          <div style={{ padding: '3px 10px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>דור {node.generation}</div>
+          <div style={{ minWidth: 56, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
+            {childCount.get(node.id) ? `${childCount.get(node.id)}` : '—'}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 30, height: 30, borderRadius: 8, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={13} /></button>
-            <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 30, height: 30, borderRadius: 8, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={12} /></button>
-            <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 30, height: 30, borderRadius: 8, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={12} /></button>
+          <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+            <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>
+            <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
+            <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 28, height: 28, borderRadius: 7, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
           </div>
         </div>
         {isExpanded && node.children.map(c => renderRows(c, depth + 1))}
@@ -424,13 +509,14 @@ function TableView({ nodes, onAdd, onEdit, onDelete }: {
   }
 
   return (
-    <div style={{ borderRadius: 18, border: '1.5px solid #E8E0F5', overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(109,40,217,0.06)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', padding: '11px 18px', background: 'linear-gradient(135deg,#F8F6FF,#F0EDFF)', borderBottom: '1px solid #E8E0F5', direction: 'rtl', gap: 10 }}>
-        <div style={{ width: 48, flexShrink: 0 }} />
-        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.04em' }}>שם</span>
-        <span style={{ minWidth: 80, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>דור</span>
-        <span style={{ minWidth: 64, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>ילדים</span>
-        <span style={{ width: 104, flexShrink: 0 }} />
+    <div style={{ borderRadius: 18, border: '1.5px solid #E8E0F5', overflow: 'hidden', background: '#fff', boxShadow: '0 4px 24px rgba(109,40,217,0.06)', width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', background: 'linear-gradient(135deg,#F8F6FF,#F0EDFF)', borderBottom: '1px solid #E8E0F5', direction: 'rtl', gap: 8 }}>
+        <div style={{ width: 22, flexShrink: 0 }} />
+        <div style={{ width: 14, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: 12, fontWeight: 800, color: '#7C3AED', letterSpacing: '0.04em', minWidth: 0 }}>שם</span>
+        <span style={{ width: 80, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>דור</span>
+        <span style={{ minWidth: 56, textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#7C3AED', flexShrink: 0 }}>ילדים</span>
+        <span style={{ width: 96, flexShrink: 0 }} />
       </div>
       {roots.length === 0
         ? <div style={{ padding: 48, textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>אין נתונים</div>
@@ -452,7 +538,6 @@ export default function LineagePage() {
   const [formName, setFormName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
-
   const [formParentId, setFormParentId] = useState<string | null>(null)
 
   function close() { setModal(null); setSaveErr(''); setFormParentId(null) }
@@ -468,12 +553,15 @@ export default function LineagePage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : -1
+  const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
     const counts: Record<number, number> = {}
     nodes.forEach(n => { counts[n.generation] = (counts[n.generation] ?? 0) + 1 })
     return counts
   }, [nodes])
+
+  const verifiedCount = useMemo(() => nodes.filter(n => n.status === 'verified').length, [nodes])
+  const pendingCount = useMemo(() => nodes.filter(n => n.status === 'pending').length, [nodes])
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
@@ -505,11 +593,17 @@ export default function LineagePage() {
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
       {/* toolbar */}
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">עץ הדורות</h1>
           {!loading && (
-            <span className="text-sm text-gray-400 font-medium">{nodes.length} רשומות · {maxGen + 1} דורות</span>
+            <span className="text-sm text-gray-400 font-medium">{nodes.length} רשומות</span>
+          )}
+          {!loading && verifiedCount > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: '#DCFCE7', color: '#166534' }}>✓ {verifiedCount} מאומתים</span>
+          )}
+          {!loading && pendingCount > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-full font-bold" style={{ background: '#FEF3C7', color: '#92400E' }}>⏳ {pendingCount} ממתינים</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -556,6 +650,7 @@ export default function LineagePage() {
       ) : (
         <TableView
           nodes={nodes}
+          onRefresh={loadAll}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
           onEdit={node => { setFormName(node.name); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
