@@ -266,12 +266,9 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
         style={{
           overflow: 'auto',
           borderRadius: 18,
-          background: '#FAFBFF',
+          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
           border: '1.5px solid #E8E0F5',
           boxShadow: '0 4px 32px rgba(109,40,217,0.07)',
-          backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)',
-          backgroundSize: '26px 26px',
-          backgroundPosition: '13px 13px',
           height: 'calc(100vh - 260px)',
           minHeight: 400,
           cursor: 'grab',

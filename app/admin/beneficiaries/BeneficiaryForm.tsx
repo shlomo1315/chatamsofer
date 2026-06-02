@@ -252,11 +252,8 @@ function LineageTreePicker({
         style={{
           overflow: 'auto',
           borderRadius: 14,
-          background: '#FAFBFF',
+          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
           border: '1.5px solid #E8E0F5',
-          backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)',
-          backgroundSize: '24px 24px',
-          backgroundPosition: '12px 12px',
           height: 380,
           cursor: 'grab',
         }}
