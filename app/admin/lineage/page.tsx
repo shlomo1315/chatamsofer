@@ -117,10 +117,16 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
   const [formName, setFormName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
+  const [zoom, setZoom] = useState(1)
 
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
+
+  function handleWheel(e: React.WheelEvent) {
+    e.preventDefault()
+    setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.001)))
+  }
 
   function close() { setModal(null); setSaveErr('') }
 
@@ -165,10 +171,17 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
 
   return (
     <>
+      {/* zoom controls */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginBottom: 8 }}>
+        <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
+        <button onClick={() => setZoom(1)} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+        <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+      </div>
+
       {/* canvas */}
-      <div style={{ overflowX: 'auto', overflowY: 'auto', borderRadius: 18, background: '#FAFBFF', border: '1.5px solid #E8E0F5', boxShadow: '0 4px 32px rgba(109,40,217,0.07)', backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)', backgroundSize: '26px 26px', backgroundPosition: '13px 13px', minHeight: 280 }}>
-        <div style={{ position: 'relative', width: w, height: h + 60, minWidth: '100%' }}>
-          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w} height={h + 60}>
+      <div onWheel={handleWheel} style={{ overflow: 'auto', borderRadius: 18, background: '#FAFBFF', border: '1.5px solid #E8E0F5', boxShadow: '0 4px 32px rgba(109,40,217,0.07)', backgroundImage: 'radial-gradient(circle,#D8D0EE 1px,transparent 1px)', backgroundSize: '26px 26px', backgroundPosition: '13px 13px', minHeight: 280 }}>
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%', transformOrigin: 'top right' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             <defs>
               {PALETTE.map((p, i) => (
                 <linearGradient key={i} id={`edge-grad-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -178,7 +191,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
               ))}
             </defs>
             {edges.map((e, i) => {
-              const x1 = e.from.cx, y1 = e.from.y + NH, x2 = e.to.cx, y2 = e.to.y
+              const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
               const mid = (y1 + y2) / 2
               const gradId = `edge-grad-${e.from.node.generation % PALETTE.length}`
               return (
@@ -201,8 +214,8 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                 key={pos.node.id}
                 onClick={() => setSelected(prev => prev === pos.node.id ? null : pos.node.id)}
                 style={{
-                  position: 'absolute', left: pos.x, top: pos.y,
-                  width: NW, height: NH, borderRadius: 16,
+                  position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
+                  width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
                   background: p.bg,
                   boxShadow: isSel
                     ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
@@ -215,23 +228,23 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                 }}>
                 {/* generation badge */}
                 <div style={{
-                  position: 'absolute', top: -10, right: 6,
+                  position: 'absolute', top: -10 * zoom, right: 6 * zoom,
                   background: '#fff', color: p.ring,
-                  fontSize: 10, fontWeight: 900,
-                  width: 22, height: 22, borderRadius: '50%',
+                  fontSize: Math.max(8, 10 * zoom), fontWeight: 900,
+                  width: 22 * zoom, height: 22 * zoom, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   boxShadow: `0 2px 8px ${p.shadow}`,
                   border: `2px solid ${p.ring}`,
-                }}>{pos.node.generation + 1}</div>
+                }}>{pos.node.generation}</div>
 
                 {/* name */}
                 <span style={{
                   color: '#fff', fontWeight: 700,
-                  fontSize: pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14,
+                  fontSize: Math.max(9, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom),
                   textAlign: 'center', direction: 'rtl',
-                  padding: '0 16px', lineHeight: 1.35,
+                  padding: `0 ${14 * zoom}px`, lineHeight: 1.35,
                   textShadow: '0 1px 4px rgba(0,0,0,0.3)',
-                  maxWidth: NW - 16,
+                  maxWidth: (NW - 16) * zoom,
                   overflow: 'hidden',
                   display: '-webkit-box',
                   WebkitLineClamp: 2,
@@ -239,14 +252,14 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
                 }}>{pos.node.name}</span>
 
                 {/* children count chip */}
-                {pos.node.children.length > 0 && (
+                {pos.node.children.length > 0 && zoom >= 0.6 && (
                   <div style={{
-                    position: 'absolute', bottom: -10, left: 6,
-                    background: 'rgba(255,255,255,0.2)',
-                    border: '1.5px solid rgba(255,255,255,0.5)',
-                    color: '#fff', fontSize: 9, fontWeight: 800,
-                    padding: '1px 7px', borderRadius: 20,
-                    backdropFilter: 'blur(4px)',
+                    position: 'absolute', bottom: -11 * zoom, left: 6 * zoom,
+                    background: '#fff',
+                    border: `1.5px solid ${p.ring}44`,
+                    color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
+                    padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20,
+                    boxShadow: `0 1px 4px ${p.shadow}`,
                   }}>{pos.node.children.length} ילדים</div>
                 )}
 
@@ -283,7 +296,7 @@ function TreeView({ nodes, onRefresh }: { nodes: LineageNode[]; onRefresh: () =>
               <div style={{ fontSize: 11, color: '#94A3B8', marginBottom: 4, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase' }}>צומת נבחר</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>{selPos.node.name}</div>
               <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, display: 'flex', gap: 10 }}>
-                <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation + 1}</span>
+                <span style={{ background: pal(selPos.node.generation).light, color: pal(selPos.node.generation).text, padding: '2px 10px', borderRadius: 20, fontWeight: 700 }}>דור {selPos.node.generation}</span>
                 <span>{selPos.node.children.length} ילדים</span>
               </div>
             </div>
@@ -395,7 +408,7 @@ function TableView({ nodes, onAdd, onEdit, onDelete }: {
           </button>
           <div style={{ width: 9, height: 9, borderRadius: '50%', background: p.ring, flexShrink: 0, boxShadow: `0 0 0 3px ${p.light}` }} />
           <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A' }}>{node.name}</span>
-          <div style={{ padding: '3px 12px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>דור {node.generation + 1}</div>
+          <div style={{ padding: '3px 12px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>דור {node.generation}</div>
           <div style={{ minWidth: 64, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
             {childCount.get(node.id) ? `${childCount.get(node.id)} ילדים` : '—'}
           </div>
@@ -523,11 +536,10 @@ export default function LineagePage() {
       {/* generation legend */}
       {nodes.length > 0 && !loading && (
         <div className="flex gap-2 flex-wrap mb-4">
-          {Array.from({ length: maxGen + 1 }, (_, i) => i).map(g => (
-            <div key={g} className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+          {Array.from({ length: maxGen }, (_, i) => i + 1).map(g => (
+            <div key={g} className="flex items-center px-3 py-1 rounded-full text-xs font-bold border"
               style={{ background: pal(g).light, borderColor: `${pal(g).ring}33`, color: pal(g).text }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: pal(g).ring }} />
-              דור {g + 1} · {genCounts[g] ?? 0}
+              דור {g} · {genCounts[g] ?? 0}
             </div>
           ))}
         </div>
