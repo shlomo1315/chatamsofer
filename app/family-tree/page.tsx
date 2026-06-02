@@ -231,7 +231,7 @@ export default function FamilyTreePage() {
   const [modal, setModal] = useState<
     | { type: 'edit'; node: LineageNode }
     | { type: 'add'; parentId: string | null; parentName: string }
-    | { type: 'delete'; node: LineageNode }
+    | { type: 'delete'; node: TreeNode }
     | null
   >(null)
 
@@ -282,7 +282,7 @@ export default function FamilyTreePage() {
     setModal({ type: 'add', parentId, parentName })
   }
 
-  function openDelete(node: LineageNode) {
+  function openDelete(node: TreeNode) {
     setSaveError('')
     setModal({ type: 'delete', node })
   }
