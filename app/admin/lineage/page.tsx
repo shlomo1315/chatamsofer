@@ -142,14 +142,12 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
-  // עוגן זום-לעכבר: הנקודה הלא-משוקללת שמתחת לסמן + ההיסט שלו מקצה הקנבס
   const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
 
-  // Passive wheel listener — שומר עוגן ומשנה zoom
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -174,8 +172,6 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
     return () => el.removeEventListener('wheel', handler)
   }, [nodes.length])
 
-  // אחרי שה-DOM גדל/הצטמצם לפי ה-zoom החדש — מתקנים את הגלילה כך
-  // שהנקודה שהייתה מתחת לעכבר תישאר מתחת לעכבר
   useLayoutEffect(() => {
     const el = canvasRef.current
     const a = zoomAnchor.current
@@ -185,7 +181,6 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
     zoomAnchor.current = null
   }, [zoom])
 
-  // Drag-to-pan with left mouse button
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -218,7 +213,6 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
     }
   }, [nodes.length])
 
-  // Center the view horizontally on first load (after layout paints)
   useEffect(() => {
     if (!positions.length || didCenter.current) return
     const el = canvasRef.current
@@ -292,7 +286,7 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
         <button onClick={() => setZoom(z => Math.max(0.8, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
       </div>
 
-      {/* canvas – only this div zooms with wheel */}
+      {/* canvas */}
       <div
         ref={canvasRef}
         dir="ltr"
@@ -317,7 +311,6 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
               const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
               return (
                 <g key={i}>
-                  {/* halo so the line stands out over the dotted background */}
                   <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
                   <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" opacity={0.85} />
                 </g>
@@ -365,7 +358,7 @@ function TreeView({ nodes, onRefresh, statusFilter }: { nodes: LineageNode[]; on
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
 
-                {/* status indicator dot — לחץ לשינוי סטטוס */}
+                {/* status indicator dot */}
                 <div
                   onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
                   title={nodeStatus === 'verified' ? 'מאומת → לחץ לממתין' : nodeStatus === 'pending' ? 'ממתין → לחץ ללא מאושר' : 'לא מאושר → לחץ לאימות'}

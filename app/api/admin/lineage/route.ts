@@ -8,8 +8,6 @@ export const revalidate = 0
 
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' }
 
-// Prefer the service-role key (full access for writes); fall back to the public
-// anon key so reads still work even if the service key isn't configured on the host.
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -71,7 +69,6 @@ export async function POST(request: NextRequest) {
     if (parent) generation = parent.generation + 1
   }
 
-  // כל צומת חדש שנוסף — ברירת מחדל "ממתין לאימות" (כתום), עד שמסמנים אותו כירוק
   const { data, error } = await admin.from('lineage_nodes').insert({
     name: name.trim(),
     parent_id: parent_id || null,
