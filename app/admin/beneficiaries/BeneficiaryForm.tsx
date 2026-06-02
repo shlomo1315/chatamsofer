@@ -219,6 +219,17 @@ function LineageTreePicker({
   const edges = useMemo(() => tpEdges(positions), [positions])
   const { w, h } = useMemo(() => tpCanvasSize(positions), [positions])
 
+  // הנתיב שנבחר: מהצומת הנבחר ועד השורש — כל הצמתים האלו יודגשו ויוגדלו
+  const branch = useMemo(() => {
+    const s = new Set<string>()
+    if (!selected) return s
+    const map = new Map(allNodes.map(n => [n.id, n]))
+    let cur = map.get(selected)
+    let guard = 0
+    while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+    return s
+  }, [selected, allNodes])
+
   // Center horizontally on first load
   useEffect(() => {
     if (!positions.length || didCenter.current) return
@@ -278,12 +289,13 @@ function LineageTreePicker({
               const x1 = e.from.cx * zoom, y1 = (e.from.y + TP_NH) * zoom
               const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
               const mid = (y1 + y2) / 2
-              const col = tpPal(e.from.node.generation).ring
+              const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
+              const col = onBranch ? tpPal(e.from.node.generation).ring : '#CBD5E1'
               const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
               return (
                 <g key={i}>
                   <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
-                  <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" opacity={0.85} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={onBranch ? 3 : 2} strokeLinecap="round" opacity={onBranch ? 0.95 : 0.5} />
                 </g>
               )
             })}
@@ -291,7 +303,8 @@ function LineageTreePicker({
 
           {positions.map(pos => {
             const p = tpPal(pos.node.generation)
-            const isSel = selected === pos.node.id
+            const isSel = selected === pos.node.id   // הצומת האחרון שנבחר
+            const onBranch = branch.has(pos.node.id)  // כל הצמתים בנתיב הנבחר
             return (
               <div
                 key={pos.node.id}
@@ -302,14 +315,15 @@ function LineageTreePicker({
                   width: TP_NW * zoom, height: TP_NH * zoom,
                   borderRadius: 16 * zoom,
                   background: p.bg,
-                  boxShadow: isSel
-                    ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 10px 28px ${p.shadow}`
+                  boxShadow: onBranch
+                    ? `0 0 0 3px #fff, 0 0 0 ${isSel ? 6 : 5}px ${isSel ? '#22C55E' : p.ring}, 0 10px 28px ${p.shadow}`
                     : `0 4px 16px ${p.shadow}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
-                  transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                  transition: 'box-shadow .2s, transform .2s',
-                  zIndex: isSel ? 20 : 2, userSelect: 'none',
+                  transform: isSel ? 'scale(1.12) translateY(-2px)' : onBranch ? 'scale(1.06)' : 'scale(1)',
+                  transition: 'box-shadow .2s, transform .2s, opacity .2s',
+                  zIndex: isSel ? 21 : onBranch ? 15 : 2, userSelect: 'none',
+                  opacity: !selected || onBranch ? 1 : 0.4,
                 }}>
                 {/* generation badge */}
                 <div style={{
@@ -321,8 +335,8 @@ function LineageTreePicker({
                   border: `1.5px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
 
-                {/* selected checkmark */}
-                {isSel && (
+                {/* checkmark on every node along the selected branch */}
+                {onBranch && (
                   <div style={{
                     position: 'absolute', top: -10 * zoom, left: 6 * zoom,
                     width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',

@@ -71,14 +71,13 @@ export async function POST(request: NextRequest) {
     if (parent) generation = parent.generation + 1
   }
 
-  const nodeStatus = generation >= 5 ? 'pending' : 'verified'
-
+  // כל צומת חדש שנוסף — ברירת מחדל "ממתין לאימות" (כתום), עד שמסמנים אותו כירוק
   const { data, error } = await admin.from('lineage_nodes').insert({
     name: name.trim(),
     parent_id: parent_id || null,
     generation,
     notes: notes?.trim() || null,
-    status: nodeStatus,
+    status: 'pending',
   }).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
