@@ -8,9 +8,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Deploy to Vercel Production
-        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        run: npx vercel deploy --prod --yes
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: team_RuVq1FOWc4Q4wtwxRIoF3r1W
           VERCEL_PROJECT_ID: prj_AAWDOckFhWEa00P8q4zSm3qPfNYa
