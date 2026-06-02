@@ -140,6 +140,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
   const draggedRef = useRef(false)
+  const downBgRef = useRef(false)
   const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   // clear node-path selection whenever a top filter changes, so the filter takes over
@@ -189,6 +190,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       if (e.button !== 0) return
       dragRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop }
       draggedRef.current = false
+      // did the press start on empty canvas (not on a node)?
+      downBgRef.current = !(e.target as HTMLElement)?.closest?.('[data-lin-node]')
       el.style.cursor = 'grabbing'
     }
     const onMove = (e: MouseEvent) => {
@@ -203,8 +206,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       }
     }
     const onUp = () => {
+      const wasDown = dragRef.current !== null
+      const dragged = draggedRef.current
+      const onBg = downBgRef.current
       dragRef.current = null
       el.style.cursor = 'grab'
+      // plain click on empty canvas → clear selection
+      if (wasDown && !dragged && onBg) setSelected(null)
     }
     el.addEventListener('mousedown', onDown)
     window.addEventListener('mousemove', onMove)
@@ -390,7 +398,6 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       <div
         ref={canvasRef}
         dir="ltr"
-        onClick={() => { if (!draggedRef.current) setSelected(null) }}
         style={{
           overflow: 'auto',
           overflowAnchor: 'none',
@@ -434,6 +441,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
             return (
               <div
                 key={pos.node.id}
+                data-lin-node="1"
                 onClick={e => { e.stopPropagation(); setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
@@ -504,7 +512,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
                     border: `1.5px solid ${p.ring}44`,
                     color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
                     padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20,
-                    boxShadow: `0 1px 4px ${p.shadow}`,
+                    boxShadow: `0 1px 4px ${p.shadow}`, direction: 'rtl',
                   }}>{pos.node.children.length} ילדים</div>
                 )}
 
