@@ -1,9 +1,9 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Building2, Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
-  Users, GitBranch, Heart, ArrowRight, Clock, Shield,
+  Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -114,9 +114,214 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   )
 }
 
-// ─── Lineage cascade ───
+// ─── Types ───
 
-interface LineageNode { id: string; name: string; generation: number; parent_id: string | null }
+interface LineageNode { id: string; name: string; generation: number; parent_id: string | null; status?: string }
+
+interface ChildEntry {
+  name: string; id_number: string; gender: string; birth_date: string; marital_status: string
+}
+function emptyChild(): ChildEntry { return { name: '', id_number: '', gender: '', birth_date: '', marital_status: '' } }
+function maritalFor(g: string) {
+  if (g === 'male')   return [{ v: 'נשוי', l: 'נשוי' }, { v: 'לא נשוי', l: 'לא נשוי' }]
+  if (g === 'female') return [{ v: 'נשואה', l: 'נשואה' }, { v: 'לא נשואה', l: 'לא נשואה' }]
+  return []
+}
+
+// ─── Lineage tree picker (full graphical) ───
+
+const TP_NW = 160, TP_NH = 54, TP_HGAP = 44, TP_VGAP = 88, TP_PAD = 64
+const TP_PAL = [
+  { bg: 'linear-gradient(135deg,#7C3AED,#5B21B6)', ring: '#7C3AED', shadow: 'rgba(124,58,237,.35)', light: '#F5F0FF' },
+  { bg: 'linear-gradient(135deg,#2563EB,#1E40AF)', ring: '#2563EB', shadow: 'rgba(37,99,235,.30)',   light: '#EFF6FF' },
+  { bg: 'linear-gradient(135deg,#0891B2,#0E7490)', ring: '#0891B2', shadow: 'rgba(8,145,178,.30)',   light: '#F0F9FF' },
+  { bg: 'linear-gradient(135deg,#059669,#047857)', ring: '#059669', shadow: 'rgba(5,150,105,.30)',   light: '#F0FDF4' },
+  { bg: 'linear-gradient(135deg,#D97706,#B45309)', ring: '#D97706', shadow: 'rgba(217,119,6,.30)',   light: '#FFFBEB' },
+  { bg: 'linear-gradient(135deg,#DB2777,#BE185D)', ring: '#DB2777', shadow: 'rgba(219,39,119,.30)', light: '#FDF2F8' },
+]
+const tpPal = (g: number) => TP_PAL[g % TP_PAL.length]
+
+interface TPNode extends LineageNode { children: TPNode[] }
+interface TPPos { node: TPNode; x: number; y: number; cx: number; cy: number }
+
+function tpBuild(flat: LineageNode[]): TPNode[] {
+  const map = new Map<string, TPNode>()
+  flat.forEach(n => map.set(n.id, { ...n, children: [] }))
+  const roots: TPNode[] = []
+  flat.forEach(n => {
+    const nd = map.get(n.id)!
+    if (n.parent_id && map.has(n.parent_id)) map.get(n.parent_id)!.children.push(nd)
+    else roots.push(nd)
+  })
+  return roots
+}
+function tpW(n: TPNode): number { return n.children.length ? n.children.reduce((s, c) => s + tpW(c), 0) : TP_NW + TP_HGAP }
+function tpLayout(roots: TPNode[]): TPPos[] {
+  const res: TPPos[] = []
+  function place(n: TPNode, x: number, y: number) {
+    const sw = tpW(n), cx = x + sw / 2
+    res.push({ node: n, x: cx - TP_NW / 2, y, cx, cy: y + TP_NH / 2 })
+    let cx2 = x; n.children.forEach(c => { place(c, cx2, y + TP_NH + TP_VGAP); cx2 += tpW(c) })
+  }
+  let sx = TP_PAD; roots.forEach(r => { place(r, sx, TP_PAD); sx += tpW(r) })
+  return res
+}
+function tpSize(pos: TPPos[]) {
+  if (!pos.length) return { w: 800, h: 400 }
+  return { w: Math.max(...pos.map(p => p.x + TP_NW)) + TP_PAD, h: Math.max(...pos.map(p => p.y + TP_NH)) + TP_PAD }
+}
+function tpEdges(pos: TPPos[]) {
+  const byId = new Map(pos.map(p => [p.node.id, p]))
+  return pos.flatMap(p => p.node.children.map(c => { const cp = byId.get(c.id); return cp ? { from: p, to: cp } : null }).filter(Boolean) as { from: TPPos; to: TPPos }[])
+}
+function buildPath(nodeId: string, all: LineageNode[]): string[] {
+  const map = new Map(all.map(n => [n.id, n])); const path: string[] = []
+  let cur = map.get(nodeId)
+  while (cur) { path.unshift(cur.name); cur = cur.parent_id ? map.get(cur.parent_id) : undefined }
+  return path
+}
+
+function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string; onSelect: (id: string, path: string[]) => void }) {
+  const [allNodes, setAllNodes] = useState<LineageNode[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<string>(initialNodeId ?? '')
+  const [zoom, setZoom] = useState(0.65)
+  const [q, setQ] = useState('')
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const didCenter = useRef(false)
+  const dragRef = useRef<{ sx: number; sy: number; slx: number; sly: number } | null>(null)
+  const zoomAnchor = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
+      const nodes = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
+      setAllNodes(nodes)
+      if (initialNodeId && nodes.length > 0) { const p = buildPath(initialNodeId, nodes); if (p.length) onSelect(initialNodeId, p) }
+    }).catch(() => {}).finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const el = canvasRef.current; if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      setZoom(prev => {
+        const next = Math.min(2.5, Math.max(0.5, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        if (next === prev) return prev
+        const r = el.getBoundingClientRect(), ox = e.clientX - r.left, oy = e.clientY - r.top
+        zoomAnchor.current = { px: (el.scrollLeft + ox) / prev, py: (el.scrollTop + oy) / prev, ox, oy }
+        return next
+      })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [loading])
+
+  useLayoutEffect(() => {
+    const el = canvasRef.current, a = zoomAnchor.current; if (!el || !a) return
+    el.scrollLeft = a.px * zoom - a.ox; el.scrollTop = a.py * zoom - a.oy; zoomAnchor.current = null
+  }, [zoom])
+
+  useEffect(() => {
+    const el = canvasRef.current; if (!el) return
+    const onDown = (e: MouseEvent) => { if (e.button !== 0) return; dragRef.current = { sx: e.clientX, sy: e.clientY, slx: el.scrollLeft, sly: el.scrollTop }; el.style.cursor = 'grabbing' }
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current) return
+      const dx = e.clientX - dragRef.current.sx, dy = e.clientY - dragRef.current.sy
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { e.preventDefault(); el.scrollLeft = dragRef.current.slx - dx; el.scrollTop = dragRef.current.sly - dy }
+    }
+    const onUp = () => { dragRef.current = null; el.style.cursor = 'grab' }
+    el.addEventListener('mousedown', onDown); window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp)
+    return () => { el.removeEventListener('mousedown', onDown); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [loading])
+
+  const positions = useMemo(() => tpLayout(tpBuild(allNodes)), [allNodes])
+  const edges = useMemo(() => tpEdges(positions), [positions])
+  const { w, h } = useMemo(() => tpSize(positions), [positions])
+  const nodeById = useMemo(() => new Map(allNodes.map(n => [n.id, n])), [allNodes])
+  const branch = useMemo(() => {
+    const s = new Set<string>(); if (!selected) return s
+    const map = new Map(allNodes.map(n => [n.id, n])); let cur = map.get(selected); let g = 0
+    while (cur && g < 60) { s.add(cur.id); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; g++ }
+    return s
+  }, [selected, allNodes])
+  const results = useMemo(() => { const lq = q.trim().toLowerCase(); if (!lq) return []; return allNodes.filter(n => n.name.toLowerCase().includes(lq)).slice(0, 8) }, [q, allNodes])
+
+  useEffect(() => {
+    if (!positions.length || didCenter.current) return
+    const el = canvasRef.current; if (!el) return
+    didCenter.current = true
+    requestAnimationFrame(() => { if (!canvasRef.current) return; const sc = (w * zoom - canvasRef.current.clientWidth) / 2; if (sc > 0) canvasRef.current.scrollLeft = sc })
+  }, [positions.length, w, zoom])
+
+  function scrollTo(nodeId: string) {
+    const pos = positions.find(p => p.node.id === nodeId); if (!pos || !canvasRef.current) return
+    const el = canvasRef.current
+    el.scrollTo({ left: Math.max(0, pos.cx * zoom - el.clientWidth / 2), top: Math.max(0, pos.y * zoom - el.clientHeight / 3), behavior: 'smooth' })
+  }
+  function pick(nodeId: string) { setSelected(nodeId); onSelect(nodeId, buildPath(nodeId, allNodes)); setQ(''); setTimeout(() => scrollTo(nodeId), 50) }
+
+  if (loading) return <div className="flex items-center gap-2 py-4 text-indigo-600"><Loader2 size={16} className="animate-spin" /><span className="text-sm">טוען עץ דורות...</span></div>
+  if (!allNodes.length) return <div className="py-4 text-center text-slate-400 text-sm">לא נמצאו נתוני שושלת</div>
+
+  return (
+    <div style={{ direction: 'rtl' }}>
+      {/* search + zoom */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 240 }}>
+          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 חיפוש שם בשושלת..."
+            style={{ width: '100%', height: 30, borderRadius: 8, border: '1px solid #E2E8F0', padding: '0 10px', fontSize: 12, color: '#334155', outline: 'none', direction: 'rtl', fontFamily: 'inherit', background: '#fff', boxSizing: 'border-box' }} />
+          {results.length > 0 && (
+            <div style={{ position: 'absolute', top: 34, right: 0, left: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden', maxHeight: 240, overflowY: 'auto' }}>
+              {results.map(n => { const par = n.parent_id ? nodeById.get(n.parent_id) : null; return (
+                <button key={n.id} type="button" onClick={() => pick(n.id)} style={{ display: 'block', width: '100%', textAlign: 'right', padding: '7px 11px', border: 'none', borderBottom: '1px solid #F1F5F9', background: '#fff', cursor: 'pointer', direction: 'rtl', fontFamily: 'inherit' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1E293B' }}>{n.name}</div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>דור {n.generation + 1}{par ? ` · ${par.name}` : ''}</div>
+                </button>
+              )})}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+          <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
+          <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+        </div>
+      </div>
+
+      {/* canvas */}
+      <div ref={canvasRef} dir="ltr" style={{ overflow: 'auto', overflowAnchor: 'none', borderRadius: 14, background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)', border: '1px solid #E8E0F5', height: 380, cursor: 'grab' }}>
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
+            {edges.map((e, i) => {
+              const x1 = e.from.cx * zoom, y1 = (e.from.y + TP_NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom, mid = (y1 + y2) / 2
+              const col = tpPal(e.from.node.generation).ring
+              const isPath = selected && branch.has(e.from.node.id) && branch.has(e.to.node.id)
+              return (<g key={i}>
+                <path d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke="#fff" strokeWidth={isPath ? 7 : 4} strokeLinecap="round" opacity={selected && !isPath ? 0.1 : 0.9} />
+                <path d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke={col} strokeWidth={isPath ? 3.5 : 2} strokeLinecap="round" opacity={selected && !isPath ? 0.08 : 0.85} />
+              </g>)
+            })}
+          </svg>
+          {positions.map(pos => {
+            const isSel = selected === pos.node.id
+            const isDim = selected ? !branch.has(pos.node.id) : false
+            const p = tpPal(pos.node.generation)
+            return (
+              <div key={pos.node.id} onClick={() => pick(pos.node.id)}
+                style={{ position: 'absolute', left: pos.x * zoom, top: pos.y * zoom, width: TP_NW * zoom, height: TP_NH * zoom, borderRadius: 14 * zoom, background: p.bg, boxShadow: isSel ? `0 0 0 3px #fff, 0 0 0 5px ${p.ring}, 0 10px 28px ${p.shadow}` : `0 4px 16px ${p.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: isSel ? 'scale(1.07)' : 'scale(1)', transition: 'all .2s', opacity: isDim ? 0.22 : 1, zIndex: isSel ? 20 : 2, userSelect: 'none' }}>
+                <div style={{ position: 'absolute', top: -9 * zoom, right: 5 * zoom, background: '#fff', color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800, width: 19 * zoom, height: 19 * zoom, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${p.ring}` }}>{pos.node.generation + 1}</div>
+                {isSel && <div style={{ position: 'absolute', top: -9 * zoom, left: 5 * zoom, width: 19 * zoom, height: 19 * zoom, borderRadius: '50%', background: '#22C55E', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 25 }}><Check size={10 * zoom} color="#fff" strokeWidth={3} /></div>}
+                <span style={{ color: '#fff', fontWeight: 700, fontSize: Math.max(9, (pos.node.name.length > 12 ? 10 : 12) * zoom), textAlign: 'center', direction: 'rtl', padding: `0 ${10 * zoom}px`, lineHeight: 1.3, maxWidth: (TP_NW - 14) * zoom, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{pos.node.name}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {selected && <p className="text-xs text-indigo-600 font-medium mt-2">✓ נבחר: {allNodes.find(n => n.id === selected)?.name}</p>}
+    </div>
+  )
+}
 
 function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[]) => void }) {
   const [levels, setLevels] = useState<{ nodes: LineageNode[]; selected: string | null; selectedName: string }[]>([])
@@ -215,6 +420,7 @@ export default function PublicPortalPage() {
   })
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
+  const [children, setChildren] = useState<ChildEntry[]>([])
   const [declaredReg, setDeclaredReg] = useState(false)
 
   // Birth request form
@@ -289,7 +495,8 @@ export default function PublicPortalPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...regForm,
-          children_count: parseInt(regForm.children_count || '0', 10),
+          children_count: children.length,
+          children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
           lineage_node_id: lineageNodeId || null,
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
@@ -662,34 +869,114 @@ export default function PublicPortalPage() {
                   ))}
                 </div>
               )}
-              <LineageCascade onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
+              <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
               {lineageNodeId && (
                 <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]) }}
                   className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
               )}
             </Card>
 
-            {/* Children & Notes */}
+            {/* Children */}
+            <Card>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">ילדים</h3>
+                  {children.length > 0 && (
+                    <span style={{ direction: 'rtl' }} className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">{children.length} ילדים</span>
+                  )}
+                </div>
+                <button type="button" onClick={() => setChildren(cs => [...cs, emptyChild()])}
+                  className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
+                  <Plus size={14} /> הוסף ילד
+                </button>
+              </div>
+
+              {children.length === 0 && (
+                <p className="text-sm text-slate-400 text-center py-3">לחץ &quot;הוסף ילד&quot; להוספת פרטי ילד</p>
+              )}
+
+              <div className="flex flex-col gap-4">
+                {children.map((child, idx) => (
+                  <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
+                      <button type="button" onClick={() => setChildren(cs => cs.filter((_, i) => i !== idx))}
+                        className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2 sm:col-span-1">
+                        <Field label="שם הילד/ה">
+                          <TextInput value={child.name} placeholder="שם מלא"
+                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
+                        </Field>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <Field label="תעודת זהות">
+                          <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr"
+                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value } : c))} />
+                        </Field>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <Field label="תאריך לידה">
+                          <TextInput type="date" value={child.birth_date}
+                            max={new Date().toISOString().split('T')[0]}
+                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: e.target.value } : c))} />
+                        </Field>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <Field label="מין">
+                          <div className="flex gap-2">
+                            {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
+                              <button key={v} type="button"
+                                onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
+                                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                  child.gender === v
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                                }`}
+                              >{l}</button>
+                            ))}
+                          </div>
+                        </Field>
+                      </div>
+                      {child.gender && (
+                        <div className="col-span-2">
+                          <Field label="מצב משפחתי">
+                            <div className="flex gap-2 flex-wrap">
+                              {maritalFor(child.gender).map(({ v, l }) => (
+                                <button key={v} type="button"
+                                  onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                    child.marital_status === v
+                                      ? 'bg-indigo-600 text-white border-indigo-600'
+                                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                                  }`}
+                                >{l}</button>
+                              ))}
+                            </div>
+                          </Field>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Notes */}
             <Card>
               <div className="flex items-center gap-2 mb-4">
-                <Users size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">ילדים והערות</h3>
+                <h3 className="font-semibold text-slate-900">הערות</h3>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="מספר ילדים">
-                    <TextInput type="number" min="0" max="30" value={regForm.children_count} onChange={setReg('children_count')} />
-                  </Field>
-                </div>
-                <div className="col-span-2">
-                  <Field label="הערות" hint="כל מידע נוסף">
-                    <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
-                      placeholder="תאר את המצב המשפחתי..."
-                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                    />
-                  </Field>
-                </div>
-              </div>
+              <Field label="הערות" hint="כל מידע נוסף">
+                <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
+                  placeholder="תאר את המצב המשפחתי..."
+                  className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                />
+              </Field>
             </Card>
 
             {/* Declaration */}

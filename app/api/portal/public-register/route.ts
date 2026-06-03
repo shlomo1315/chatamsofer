@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, children_count, notes, lineage_node_id,
+    spouse_name, spouse_id_number, children, children_count, notes, lineage_node_id,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -60,7 +60,8 @@ export async function POST(request: NextRequest) {
     marital_status: marital_status ? String(marital_status) : null,
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
-    children_count: typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10),
+    children_count: Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10)),
+    children: Array.isArray(children) && children.length > 0 ? children : null,
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     eligibility_status: 'pending',
