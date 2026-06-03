@@ -32,8 +32,6 @@ interface FoundBeneficiary {
 // ─── Constants ───
 
 const MARITAL_OPTIONS = [
-  { value: 'רווק', label: 'רווק' },
-  { value: 'רווקה', label: 'רווקה' },
   { value: 'נשוי', label: 'נשוי' },
   { value: 'נשואה', label: 'נשואה' },
   { value: 'גרוש', label: 'גרוש' },
@@ -41,7 +39,7 @@ const MARITAL_OPTIONS = [
   { value: 'אלמן', label: 'אלמן' },
   { value: 'אלמנה', label: 'אלמנה' },
 ]
-const MARRIED_STATUSES = ['נשוי', 'נשואה', 'אלמן', 'אלמנה']
+const MARRIED_STATUSES = ['נשוי', 'נשואה']
 
 const LOAN_PURPOSES = [
   { value: 'נישואי הבן/הבת', desc: 'מומלץ לצרף הזמנה' },
