@@ -126,7 +126,7 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; statusFilter: StatusFilter; generationFilter: number | null }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
@@ -211,8 +211,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, statusFilter, generationFi
       const onBg = downBgRef.current
       dragRef.current = null
       el.style.cursor = 'grab'
-      // plain click on empty canvas → clear selection
-      if (wasDown && !dragged && onBg) setSelected(null)
+      // plain click on empty canvas → clear node selection and any active filter
+      if (wasDown && !dragged && onBg) { setSelected(null); onClearFilters() }
     }
     el.addEventListener('mousedown', onDown)
     window.addEventListener('mousemove', onMove)
@@ -807,17 +807,17 @@ export default function LineagePage() {
           )}
           {!loading && (
             <>
-              <button onClick={() => setStatusFilter(f => f === 'verified' ? null : 'verified')}
+              <button onClick={() => { setGenerationFilter(null); setStatusFilter(f => f === 'verified' ? null : 'verified') }}
                 className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                 style={{ background: statusFilter === 'verified' ? '#166534' : '#DCFCE7', color: statusFilter === 'verified' ? '#fff' : '#166534', border: `2px solid ${statusFilter === 'verified' ? '#166534' : 'transparent'}`, cursor: 'pointer' }}>
                 ✓ {verifiedCount} מאומתים
               </button>
-              <button onClick={() => setStatusFilter(f => f === 'pending' ? null : 'pending')}
+              <button onClick={() => { setGenerationFilter(null); setStatusFilter(f => f === 'pending' ? null : 'pending') }}
                 className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                 style={{ background: statusFilter === 'pending' ? '#92400E' : '#FEF3C7', color: statusFilter === 'pending' ? '#fff' : '#92400E', border: `2px solid ${statusFilter === 'pending' ? '#92400E' : 'transparent'}`, cursor: 'pointer' }}>
                 ⏳ {pendingCount} ממתינים לאימות
               </button>
-              <button onClick={() => setStatusFilter(f => f === 'rejected' ? null : 'rejected')}
+              <button onClick={() => { setGenerationFilter(null); setStatusFilter(f => f === 'rejected' ? null : 'rejected') }}
                 className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
                 style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#DC2626', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : '#FECACA'}`, cursor: 'pointer' }}>
                 ✗ {rejectedCount} נדחים
@@ -850,7 +850,7 @@ export default function LineagePage() {
       {nodes.length > 0 && !loading && (
         <div className="flex gap-2 flex-wrap mb-4">
           {Array.from({ length: maxGen }, (_, i) => i + 1).map(g => (
-            <button key={g} onClick={() => setGenerationFilter(f => f === g ? null : g)}
+            <button key={g} onClick={() => { setStatusFilter(null); setGenerationFilter(f => f === g ? null : g) }}
               className="flex items-center px-3 py-1 rounded-full text-xs font-bold border transition-all"
               style={{
                 background: generationFilter === g ? pal(g).ring : pal(g).light,
@@ -872,7 +872,7 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} statusFilter={statusFilter} generationFilter={generationFilter} />
+        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} />
       ) : (
         <TableView
           nodes={nodes}
