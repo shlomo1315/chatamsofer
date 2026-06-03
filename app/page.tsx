@@ -607,7 +607,6 @@ export default function PublicPortalPage() {
           </div>
           <div className="flex-1">
             <h1 className="font-bold text-slate-900 text-base leading-tight">היכל החתם סופר</h1>
-            <p className="text-xs text-slate-500">פורטל שירותים לציבור</p>
           </div>
           {(step === 'dashboard' || step === 'new-birth' || step === 'new-loan' || step === 'request-sent') && (
             <button onClick={backToHome} className="text-xs text-slate-400 hover:text-indigo-600 underline">
@@ -631,15 +630,6 @@ export default function PublicPortalPage() {
             </div>
 
             <Card>
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
-                  <Search size={20} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">כניסה לפורטל</h3>
-                  <p className="text-sm text-slate-500">הזן את תעודת הזהות שלך</p>
-                </div>
-              </div>
               <form onSubmit={handleLookup} className="flex flex-col gap-4">
                 <Field label='מספר תעודת זהות' required hint="הזן 9 ספרות">
                   <TextInput
@@ -660,7 +650,7 @@ export default function PublicPortalPage() {
                   className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
                 >
                   {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-                  {loading ? 'מחפש...' : 'כניסה'}
+                  {loading ? 'מחפש...' : 'כניסה למערכת'}
                 </button>
               </form>
             </Card>
