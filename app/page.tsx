@@ -1211,14 +1211,8 @@ export default function PublicPortalPage() {
               <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל!</h2>
               <p className="text-slate-600 mb-6 leading-relaxed">
                 בקשת הרישום שלך נשלחה בהצלחה.<br />
-                צוות העמותה יעיין בבקשתך ויצור עמך קשר.
+                צוות המערכת יעיין בבקשתך ויצור עמך קשר.
               </p>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 text-right mb-6">
-                <p className="flex items-center gap-2">
-                  <Clock size={14} className="flex-shrink-0" />
-                  <span>הסטטוס כרגע: <strong>ממתין לאישור</strong>. לאחר האישור תוכל להגיש בקשות.</span>
-                </p>
-              </div>
               <button onClick={backToHome}
                 className="flex items-center justify-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm mx-auto">
                 <ArrowRight size={16} /> חזרה לדף הכניסה
