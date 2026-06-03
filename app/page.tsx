@@ -446,6 +446,9 @@ export default function PublicPortalPage() {
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [children, setChildren] = useState<ChildEntry[]>([])
   const [editingChildIdx, setEditingChildIdx] = useState<number | null>(null)
+  const [idFieldError, setIdFieldError] = useState('')
+  const [spouseIdError, setSpouseIdError] = useState('')
+  const [childIdErrors, setChildIdErrors] = useState<Record<number, string>>({})
   const [declaredReg, setDeclaredReg] = useState(false)
 
   // Birth request form
@@ -524,6 +527,12 @@ export default function PublicPortalPage() {
     if (!regForm.full_name || !regForm.family_name || !regForm.phone) {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
+    }
+    if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
+      setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
+    }
+    if (showSpouseFields && regForm.spouse_id_number && !validateIsraeliId(regForm.spouse_id_number)) {
+      setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
     if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
     setError('')
@@ -640,7 +649,7 @@ export default function PublicPortalPage() {
 
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-white border border-slate-200">
             <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-cover" />
           </div>
@@ -655,7 +664,7 @@ export default function PublicPortalPage() {
         </div>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-8">
+      <main className="max-w-2xl mx-auto px-4 py-8">
 
         {/* ─── Step: ID Lookup ─── */}
         {step === 'id-lookup' && (
@@ -857,7 +866,18 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Field label='תעודת זהות' required>
-                      <TextInput value={regForm.id_number} onChange={setReg('id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required />
+                      <TextInput
+                        value={regForm.id_number}
+                        onChange={e => { setReg('id_number')(e); setIdFieldError('') }}
+                        onBlur={() => {
+                          if (regForm.id_number && !validateIsraeliId(regForm.id_number))
+                            setIdFieldError('תעודת הזהות שהזנתם אינה תקינה')
+                          else setIdFieldError('')
+                        }}
+                        placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                        className={idFieldError ? 'border-red-400 focus:ring-red-400' : ''}
+                      />
+                      {idFieldError && <p className="text-xs text-red-600 mt-1">{idFieldError}</p>}
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
@@ -874,13 +894,24 @@ export default function PublicPortalPage() {
                       פרטי האשה
                     </p>
                     <div className="col-span-2 sm:col-span-1">
-                      <Field label="שם פרטי">
-                        <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" />
+                      <Field label="שם פרטי" required>
+                        <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" required />
                       </Field>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <Field label='תעודת זהות'>
-                        <TextInput value={regForm.spouse_id_number} onChange={setReg('spouse_id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" />
+                      <Field label='תעודת זהות' required>
+                        <TextInput
+                          value={regForm.spouse_id_number}
+                          onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
+                          onBlur={() => {
+                            if (regForm.spouse_id_number && !validateIsraeliId(regForm.spouse_id_number))
+                              setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה')
+                            else setSpouseIdError('')
+                          }}
+                          placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                          className={spouseIdError ? 'border-red-400 focus:ring-red-400' : ''}
+                        />
+                        {spouseIdError && <p className="text-xs text-red-600 mt-1">{spouseIdError}</p>}
                       </Field>
                     </div>
                   </div>
@@ -1004,26 +1035,33 @@ export default function PublicPortalPage() {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="שם הילד/ה">
-                              <TextInput value={child.name} placeholder="שם מלא"
+                            <Field label="שם הילד/ה" required>
+                              <TextInput value={child.name} placeholder="שם מלא" required
                                 onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="תעודת זהות">
-                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr"
-                                onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value } : c))} />
+                            <Field label="תעודת זהות" required>
+                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                                className={childIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
+                                onChange={e => { setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value.replace(/\D/g,'') } : c)); setChildIdErrors(e => ({ ...e, [idx]: '' })) }}
+                                onBlur={() => {
+                                  if (child.id_number && !validateIsraeliId(child.id_number))
+                                    setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' }))
+                                  else setChildIdErrors(e => ({ ...e, [idx]: '' }))
+                                }} />
+                              {childIdErrors[idx] && <p className="text-xs text-red-600 mt-1">{childIdErrors[idx]}</p>}
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="תאריך לידה">
-                              <TextInput type="date" value={child.birth_date}
+                            <Field label="תאריך לידה" required>
+                              <TextInput type="date" value={child.birth_date} required
                                 max={new Date().toISOString().split('T')[0]}
                                 onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: e.target.value } : c))} />
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="מין">
+                            <Field label="מין" required>
                               <div className="flex gap-2">
                                 {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
                                   <button key={v} type="button"
@@ -1038,26 +1076,32 @@ export default function PublicPortalPage() {
                               </div>
                             </Field>
                           </div>
-                          {child.gender && (
-                            <div className="col-span-2">
-                              <Field label="מצב משפחתי">
-                                <div className="flex gap-2 flex-wrap">
-                                  {maritalFor(child.gender).map(({ v, l }) => (
-                                    <button key={v} type="button"
-                                      onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
-                                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                        child.marital_status === v
-                                          ? 'bg-indigo-600 text-white border-indigo-600'
-                                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                                      }`}
-                                    >{l}</button>
-                                  ))}
-                                </div>
-                              </Field>
-                            </div>
-                          )}
+                          <div className="col-span-2">
+                            <Field label="מצב משפחתי" required>
+                              <div className="flex gap-2 flex-wrap">
+                                {maritalFor(child.gender || 'male').map(({ v, l }) => (
+                                  <button key={v} type="button"
+                                    onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                      child.marital_status === v
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                                    }`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                            </Field>
+                          </div>
                         </div>
-                        <button type="button" onClick={() => setEditingChildIdx(null)}
+                        <button type="button" onClick={() => {
+                          if (!child.name || !child.id_number || !child.birth_date || !child.gender || !child.marital_status) {
+                            alert('אנא מלא את כל שדות הילד'); return
+                          }
+                          if (!validateIsraeliId(child.id_number)) {
+                            setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
+                          }
+                          setEditingChildIdx(null)
+                        }}
                           className="mt-4 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm transition-colors">
                           <Check size={14} /> שמור
                         </button>
@@ -1091,18 +1135,6 @@ export default function PublicPortalPage() {
               </Card>
             )}
 
-            {/* Notes */}
-            {regForm.marital_status && (
-              <Card>
-                <Field label="הערות" hint="כל מידע נוסף">
-                  <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
-                    placeholder="תאר את המצב המשפחתי..."
-                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                  />
-                </Field>
-              </Card>
-            )}
-
             {/* Declaration */}
             {regForm.marital_status && (
               <Card>
@@ -1113,7 +1145,7 @@ export default function PublicPortalPage() {
                     className="mt-0.5 w-4 h-4 accent-indigo-600"
                   />
                   <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
-                    הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול העמותה.
+                    הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול המערכת.
                   </label>
                 </div>
               </Card>
@@ -1124,7 +1156,7 @@ export default function PublicPortalPage() {
             {regForm.marital_status && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
                 <p className="font-medium mb-1">שים לב</p>
-                <p>הטופס ייבדק על ידי צוות העמותה. תקבל עדכון על סטטוס הבקשה שלך.</p>
+                <p>הטופס ייבדק על ידי צוות המערכת. תקבל עדכון על סטטוס הבקשה שלך.</p>
               </div>
             )}
 
