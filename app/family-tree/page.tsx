@@ -151,8 +151,9 @@ export default function FamilyTreePage() {
     try {
       const r = await fetch('/api/lineage?all=1')
       const d = await r.json()
-      const verified = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
-      setNodes(verified)
+      const raw = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
+      const minGen = raw.length ? Math.min(...raw.map((n: LineageNode) => n.generation)) : 0
+      setNodes(raw.map((n: LineageNode) => ({ ...n, generation: n.generation - minGen })))
     } catch { setError('שגיאה בטעינת הנתונים') }
     setLoading(false)
   }, [])

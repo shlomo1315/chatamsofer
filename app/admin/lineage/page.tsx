@@ -744,7 +744,9 @@ export default function LineagePage() {
     setLoading(true)
     try {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
-      setNodes((await r.json()).nodes ?? [])
+      const raw: LineageNode[] = (await r.json()).nodes ?? []
+      const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
+      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen })))
     } catch {}
     setLoading(false)
   }, [])

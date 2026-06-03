@@ -202,7 +202,9 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
 
   useEffect(() => {
     fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
-      const nodes = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
+      const raw = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
+      const minGen = raw.length ? Math.min(...raw.map((n: LineageNode) => n.generation)) : 0
+      const nodes = raw.map((n: LineageNode) => ({ ...n, generation: n.generation - minGen }))
       setAllNodes(nodes)
       if (initialNodeId && nodes.length > 0) { const p = buildPath(initialNodeId, nodes); if (p.length) onSelect(initialNodeId, p) }
     }).catch(() => {}).finally(() => setLoading(false))
