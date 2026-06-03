@@ -400,11 +400,26 @@ function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[
   )
 }
 
+// ─── Israeli ID validation ───
+
+function validateIsraeliId(raw: string): boolean {
+  const id = raw.replace(/\D/g, '').padStart(9, '0')
+  if (id.length !== 9) return false
+  let sum = 0
+  for (let i = 0; i < 9; i++) {
+    let v = parseInt(id[i]) * (i % 2 === 0 ? 1 : 2)
+    if (v > 9) v -= 9
+    sum += v
+  }
+  return sum % 10 === 0
+}
+
 // ─── Main page ───
 
 export default function PublicPortalPage() {
   const [step, setStep] = useState<Step>('id-lookup')
   const [idInput, setIdInput] = useState('')
+  const [docType, setDocType] = useState<'id' | 'passport'>('id')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
@@ -458,25 +473,34 @@ export default function PublicPortalPage() {
   // ── Lookup ──
   const handleLookup = async (e: React.FormEvent) => {
     e.preventDefault()
-    const id = idInput.replace(/\D/g, '')
-    if (!id || id.length < 5) { setError('אנא הזן מספר תעודת זהות תקין'); return }
-    setError('')
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/portal/lookup?id=${encodeURIComponent(id)}`)
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
-      if (data.found) {
-        setBeneficiary(data.beneficiary)
-        setStep('dashboard')
-      } else {
-        setRegForm(f => ({ ...f, id_number: id }))
-        setStep('not-found')
-      }
-    } catch {
-      setError('שגיאת רשת. אנא נסה שוב.')
+    const raw = idInput.trim()
+    if (docType === 'id') {
+      const digits = raw.replace(/\D/g, '')
+      if (!digits || digits.length < 5) { setError('אנא הזן מספר תעודת זהות'); return }
+      if (!validateIsraeliId(digits)) { setError('תעודת הזהות שהזנתם אינה תקינה'); return }
+      setError('')
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/portal/lookup?id=${encodeURIComponent(digits)}`)
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
+        if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
+        else { setRegForm(f => ({ ...f, id_number: digits })); setStep('not-found') }
+      } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+      setLoading(false)
+    } else {
+      if (!raw || raw.length < 5) { setError('אנא הזן מספר דרכון'); return }
+      setError('')
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/portal/lookup?passport=${encodeURIComponent(raw)}`)
+        const data = await res.json()
+        if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
+        if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
+        else { setError('מספר הדרכון אינו רשום במערכת. לרישום יש לפנות לגבאי.') }
+      } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // ── Registration ──
@@ -631,18 +655,42 @@ export default function PublicPortalPage() {
 
             <Card>
               <form onSubmit={handleLookup} className="flex flex-col gap-4">
-                <Field label='מספר תעודת זהות' required hint="הזן 9 ספרות">
-                  <TextInput
-                    value={idInput}
-                    onChange={e => setIdInput(e.target.value)}
-                    placeholder="000000000"
-                    inputMode="numeric"
-                    maxLength={9}
-                    dir="ltr"
-                    autoComplete="off"
-                    className="text-center text-lg font-semibold tracking-widest"
-                  />
-                </Field>
+                {/* doc-type toggle */}
+                <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+                  {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                    <button key={v} type="button"
+                      onClick={() => { setDocType(v); setIdInput(''); setError('') }}
+                      className={`flex-1 py-2 text-sm font-medium transition-colors ${docType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                    >{l}</button>
+                  ))}
+                </div>
+
+                {docType === 'id' ? (
+                  <Field label='מספר תעודת זהות' required hint="הזן 9 ספרות כולל ספרת ביקורת">
+                    <TextInput
+                      value={idInput}
+                      onChange={e => setIdInput(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000000"
+                      inputMode="numeric"
+                      maxLength={9}
+                      dir="ltr"
+                      autoComplete="off"
+                      className="text-center text-lg font-semibold tracking-widest"
+                    />
+                  </Field>
+                ) : (
+                  <Field label='מספר דרכון' required>
+                    <TextInput
+                      value={idInput}
+                      onChange={e => setIdInput(e.target.value.toUpperCase())}
+                      placeholder="12345678"
+                      dir="ltr"
+                      autoComplete="off"
+                      className="text-center text-lg font-semibold tracking-widest"
+                    />
+                  </Field>
+                )}
+
                 {error && <ErrorBox message={error} />}
                 <button
                   type="submit"
