@@ -720,9 +720,6 @@ export default function PublicPortalPage() {
                   <span className="font-semibold text-slate-800" dir="ltr">{idInput}</span>
                   {' '}אינו רשום במערכת שלנו.
                 </p>
-                <p className="text-slate-500 text-sm mt-1">
-                  כדי ליהנות משירותי העמותה יש להירשם תחילה.
-                </p>
               </div>
               <div className="flex flex-col gap-3">
                 <button
