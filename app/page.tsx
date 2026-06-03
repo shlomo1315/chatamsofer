@@ -1,7 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
-  Building2, Search, AlertCircle, Loader2, CheckCircle2, User,
+  Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X,
 } from 'lucide-react'
@@ -602,8 +602,8 @@ export default function PublicPortalPage() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Building2 size={20} className="text-white" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-white border border-slate-200">
+            <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-cover" />
           </div>
           <div className="flex-1">
             <h1 className="font-bold text-slate-900 text-base leading-tight">היכל החתם סופר</h1>
@@ -623,8 +623,8 @@ export default function PublicPortalPage() {
         {step === 'id-lookup' && (
           <div className="flex flex-col gap-6">
             <div className="text-center">
-              <div className="w-20 h-20 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <Building2 size={36} className="text-white" />
+              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 shadow-lg bg-white border border-slate-200">
+                <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-cover" />
               </div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
               <p className="text-slate-500">פורטל שירותים — היכל החתם סופר</p>
@@ -665,18 +665,6 @@ export default function PublicPortalPage() {
               </form>
             </Card>
 
-            <div className="grid grid-cols-3 gap-3 text-center">
-              {[
-                { icon: Baby, label: 'בקשת לידה' },
-                { icon: CreditCard, label: 'הלוואה' },
-                { icon: Gift, label: 'חלוקה' },
-              ].map(({ icon: Icon, label }) => (
-                <div key={label} className="bg-white rounded-xl border border-slate-200 p-3">
-                  <Icon size={22} className="text-indigo-400 mx-auto mb-1" />
-                  <p className="text-xs text-slate-500">{label}</p>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 
