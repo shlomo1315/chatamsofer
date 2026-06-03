@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, children, children_count, notes, lineage_node_id,
+    spouse_name, spouse_id_number, children, children_count, notes, lineage_node_id, lineage_manual,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     children: childrenJson,
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
+    lineage_manual: Array.isArray(lineage_manual) && lineage_manual.length > 0 ? lineage_manual : null,
     eligibility_status: 'pending',
     is_active: true,
   }

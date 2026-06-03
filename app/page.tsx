@@ -453,6 +453,7 @@ export default function PublicPortalPage() {
   })
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
+  const [manualLineage, setManualLineage] = useState<string[]>([])
   const [children, setChildren] = useState<ChildEntry[]>([])
   const [editingChildIdx, setEditingChildIdx] = useState<number | null>(null)
   const [idFieldError, setIdFieldError] = useState('')
@@ -539,6 +540,10 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
+    if (!lineageNodeId) {
+      setError('אנא בחר שיוך שושלת')
+      return
+    }
     if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
@@ -563,6 +568,7 @@ export default function PublicPortalPage() {
           children_count: children.length,
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
           lineage_node_id: lineageNodeId || null,
+          lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
         }),
@@ -1002,7 +1008,7 @@ export default function PublicPortalPage() {
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <GitBranch size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">שיוך שושלת</h3>
+                  <h3 className="font-semibold text-slate-900">שיוך שושלת <span className="text-red-500">*</span></h3>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">בחר את הענף שאתה שייך אליו.</p>
                 {lineagePath.length > 0 && (
@@ -1020,8 +1026,38 @@ export default function PublicPortalPage() {
                 )}
                 <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
                 {lineageNodeId && (
-                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]) }}
+                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]) }}
                     className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
+                )}
+
+                {/* Manual generations */}
+                {lineageNodeId && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs font-medium text-slate-600 mb-1">
+                      המשך דורות (דור {lineagePath.length + 1} ומעלה)
+                    </p>
+                    <p className="text-xs text-slate-400 mb-3">
+                      אם אתה שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {manualLineage.map((val, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 w-16 flex-shrink-0">דור {lineagePath.length + 1 + idx}</span>
+                          <TextInput value={val} placeholder="שם"
+                            onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
+                          <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-300 hover:text-red-500 flex-shrink-0">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => setManualLineage(prev => [...prev, ''])}
+                      className="mt-3 flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 rounded-lg px-3 py-1.5 transition-colors">
+                      <Plus size={14} />
+                      הוסף דור {lineagePath.length + 1 + manualLineage.length}
+                    </button>
+                  </div>
                 )}
               </Card>
             )}
