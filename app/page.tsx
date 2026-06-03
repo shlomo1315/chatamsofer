@@ -1348,19 +1348,21 @@ export default function PublicPortalPage() {
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
                 </button>
 
-                <button
-                  onClick={() => alert('לבקשת חלוקה, אנא פנה ישירות לצוות העמותה')}
-                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                >
-                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
-                    <Gift size={22} className="text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">חלוקה</p>
-                    <p className="text-xs text-slate-500 mt-0.5">קבלת מוצרים / חבילות מהעמותה</p>
-                  </div>
-                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                </button>
+                {!isPending && (
+                  <button
+                    onClick={() => alert('לבקשת חלוקה, אנא פנה ישירות לצוות המערכת')}
+                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                      <Gift size={22} className="text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">חלוקה</p>
+                      <p className="text-xs text-slate-500 mt-0.5">קבלת מוצרים / חבילות</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                  </button>
+                )}
               </div>
             )}
 
