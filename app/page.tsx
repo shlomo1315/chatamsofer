@@ -422,6 +422,15 @@ function validateIsraeliId(raw: string): boolean {
   return sum % 10 === 0
 }
 
+function validatePhone(p: string): boolean {
+  const d = p.replace(/\D/g, '')
+  return d.length === 10 && d.startsWith('05')
+}
+
+function validateEmail(e: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+}
+
 // ─── Main page ───
 
 export default function PublicPortalPage() {
@@ -449,6 +458,8 @@ export default function PublicPortalPage() {
   const [idFieldError, setIdFieldError] = useState('')
   const [spouseIdError, setSpouseIdError] = useState('')
   const [childIdErrors, setChildIdErrors] = useState<Record<number, string>>({})
+  const [phoneError, setPhoneError] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [declaredReg, setDeclaredReg] = useState(false)
 
   // Birth request form
@@ -533,6 +544,12 @@ export default function PublicPortalPage() {
     }
     if (showSpouseFields && regForm.spouse_id_number && !validateIsraeliId(regForm.spouse_id_number)) {
       setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
+    }
+    if (regForm.phone && !validatePhone(regForm.phone)) {
+      setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
+    }
+    if (regForm.email && !validateEmail(regForm.email)) {
+      setEmailError('אנא הזן כתובת מייל תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
     if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
     setError('')
@@ -928,18 +945,30 @@ export default function PublicPortalPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="טלפון ראשי" required>
-                      <TextInput type="tel" value={regForm.phone} onChange={setReg('phone')} placeholder="050-0000000" dir="ltr" required />
+                    <Field label="טלפון ראשי" required hint="מספר נייד ישראלי המתחיל ב-05">
+                      <TextInput type="tel" value={regForm.phone}
+                        onChange={e => { setReg('phone')(e); setPhoneError('') }}
+                        onBlur={() => { if (regForm.phone && !validatePhone(regForm.phone)) setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); else setPhoneError('') }}
+                        placeholder="0500000000" dir="ltr" maxLength={11} required
+                        className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
+                      />
+                      {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="טלפון נוסף">
-                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="050-0000000" dir="ltr" />
+                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
                     </Field>
                   </div>
                   <div className="col-span-2">
                     <Field label="דואר אלקטרוני" required>
-                      <TextInput type="email" value={regForm.email} onChange={setReg('email')} placeholder="your@email.com" dir="ltr" required />
+                      <TextInput type="email" value={regForm.email}
+                        onChange={e => { setReg('email')(e); setEmailError('') }}
+                        onBlur={() => { if (regForm.email && !validateEmail(regForm.email)) setEmailError('אנא הזן כתובת מייל תקינה'); else setEmailError('') }}
+                        placeholder="your@email.com" dir="ltr" required
+                        className={emailError ? 'border-red-400 focus:ring-red-400' : ''}
+                      />
+                      {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
                     </Field>
                   </div>
                 </div>
