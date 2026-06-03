@@ -127,6 +127,11 @@ function maritalFor(g: string) {
   if (g === 'female') return [{ v: 'נשואה', l: 'נשואה' }, { v: 'לא נשואה', l: 'לא נשואה' }]
   return []
 }
+function genderFromMarital(status: string): 'male' | 'female' | '' {
+  if (['נשוי', 'גרוש', 'אלמן', 'רווק'].includes(status)) return 'male'
+  if (['נשואה', 'גרושה', 'אלמנה', 'רווקה'].includes(status)) return 'female'
+  return ''
+}
 
 // ─── Lineage tree picker (full graphical) ───
 
@@ -436,6 +441,7 @@ export default function PublicPortalPage() {
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [children, setChildren] = useState<ChildEntry[]>([])
+  const [editingChildIdx, setEditingChildIdx] = useState<number | null>(null)
   const [declaredReg, setDeclaredReg] = useState(false)
 
   // Birth request form
@@ -462,6 +468,7 @@ export default function PublicPortalPage() {
       setLoanForm(f => ({ ...f, [k]: e.target.value }))
 
   const showSpouseFields = MARRIED_STATUSES.includes(regForm.marital_status)
+  const regGender = genderFromMarital(regForm.marital_status)
 
   // Load recovery homes
   useEffect(() => {
@@ -752,56 +759,17 @@ export default function PublicPortalPage() {
               <h2 className="font-bold text-slate-900 text-lg">טופס רישום</h2>
             </div>
 
-            {/* Personal */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <User size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">פרטים אישיים</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="שם פרטי" required>
-                    <TextInput value={regForm.full_name} onChange={setReg('full_name')} placeholder="ישראל" required />
-                  </Field>
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="שם משפחה" required>
-                    <TextInput value={regForm.family_name} onChange={setReg('family_name')} placeholder="ישראלי" required />
-                  </Field>
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label='תעודת זהות' required>
-                    <TextInput value={regForm.id_number} onChange={setReg('id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required />
-                  </Field>
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="תאריך לידה">
-                    <TextInput type="date" value={regForm.birth_date} onChange={setReg('birth_date')} max={new Date().toISOString().split('T')[0]} />
-                  </Field>
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="מין">
-                    <SelectInput value={regForm.gender} onChange={setReg('gender')}>
-                      <option value="">בחר...</option>
-                      <option value="male">זכר</option>
-                      <option value="female">נקבה</option>
-                    </SelectInput>
-                  </Field>
-                </div>
-              </div>
-            </Card>
-
-            {/* Marital */}
+            {/* Marital — FIRST */}
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <Heart size={18} className="text-indigo-600" />
                 <h3 className="font-semibold text-slate-900">מצב משפחתי</h3>
               </div>
-              <div className="flex flex-wrap gap-2 mb-4">
+              <div className="flex flex-wrap gap-2">
                 {MARITAL_OPTIONS.map(opt => (
                   <button
                     key={opt.value} type="button"
-                    onClick={() => setRegForm(f => ({ ...f, marital_status: opt.value }))}
+                    onClick={() => setRegForm(f => ({ ...f, marital_status: opt.value, gender: genderFromMarital(opt.value) }))}
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
                       regForm.marital_status === opt.value
                         ? 'bg-indigo-600 text-white border-indigo-600'
@@ -810,226 +778,312 @@ export default function PublicPortalPage() {
                   >{opt.label}</button>
                 ))}
               </div>
-              {showSpouseFields && (
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                  <p className="col-span-2 text-xs text-slate-500 font-medium">פרטי בן/בת הזוג</p>
+            </Card>
+
+            {/* Personal — only after marital chosen */}
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <User size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">
+                    {showSpouseFields
+                      ? (regGender === 'male' ? 'פרטי הבעל' : 'פרטי האשה')
+                      : 'פרטים אישיים'}
+                  </h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="שם בן/בת הזוג">
-                      <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" />
+                    <Field label="שם פרטי" required>
+                      <TextInput value={regForm.full_name} onChange={setReg('full_name')} placeholder="ישראל" required />
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label='ת"ז בן/בת הזוג'>
-                      <TextInput value={regForm.spouse_id_number} onChange={setReg('spouse_id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" />
+                    <Field label="שם משפחה" required>
+                      <TextInput value={regForm.family_name} onChange={setReg('family_name')} placeholder="ישראלי" required />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label='תעודת זהות' required>
+                      <TextInput value={regForm.id_number} onChange={setReg('id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="תאריך לידה">
+                      <TextInput type="date" value={regForm.birth_date} onChange={setReg('birth_date')} max={new Date().toISOString().split('T')[0]} />
                     </Field>
                   </div>
                 </div>
-              )}
-            </Card>
+
+                {/* Spouse — only if married */}
+                {showSpouseFields && (
+                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                    <p className="col-span-2 text-sm font-semibold text-slate-700">
+                      {regGender === 'male' ? 'פרטי האשה' : 'פרטי הבעל'}
+                    </p>
+                    <div className="col-span-2 sm:col-span-1">
+                      <Field label="שם פרטי">
+                        <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" />
+                      </Field>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <Field label='תעודת זהות'>
+                        <TextInput value={regForm.spouse_id_number} onChange={setReg('spouse_id_number')} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" />
+                      </Field>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
 
             {/* Contact */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Phone size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="טלפון ראשי" required>
-                    <TextInput type="tel" value={regForm.phone} onChange={setReg('phone')} placeholder="050-0000000" dir="ltr" required />
-                  </Field>
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <Phone size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="טלפון נוסף">
-                    <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="050-0000000" dir="ltr" />
-                  </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="טלפון ראשי" required>
+                      <TextInput type="tel" value={regForm.phone} onChange={setReg('phone')} placeholder="050-0000000" dir="ltr" required />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="טלפון נוסף">
+                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="050-0000000" dir="ltr" />
+                    </Field>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label="דואר אלקטרוני" required>
+                      <TextInput type="email" value={regForm.email} onChange={setReg('email')} placeholder="your@email.com" dir="ltr" required />
+                    </Field>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <Field label="דואר אלקטרוני">
-                    <TextInput type="email" value={regForm.email} onChange={setReg('email')} placeholder="your@email.com" dir="ltr" />
-                  </Field>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
             {/* Address */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <MapPin size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">כתובת</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Field label="רחוב ומספר בית">
-                    <TextInput value={regForm.address} onChange={setReg('address')} placeholder="הרב קוק 12" />
-                  </Field>
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <MapPin size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">כתובת</h3>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="עיר">
-                    <TextInput value={regForm.city} onChange={setReg('city')} placeholder="בני ברק" />
-                  </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <Field label="רחוב ומספר בית" required>
+                      <TextInput value={regForm.address} onChange={setReg('address')} placeholder="הרב קוק 12" required />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="עיר" required>
+                      <TextInput value={regForm.city} onChange={setReg('city')} placeholder="בני ברק" required />
+                    </Field>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
             {/* Lineage */}
-            <Card>
-              <div className="flex items-center gap-2 mb-1">
-                <GitBranch size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">שיוך שושלת</h3>
-              </div>
-              <p className="text-xs text-slate-500 mb-4">בחר את הענף שאתה שייך אליו.</p>
-              {lineagePath.length > 0 && (
-                <div className="flex items-center gap-1 flex-wrap mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                  <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
-                  {lineagePath.map((name, i) => (
-                    <span key={i} className="flex items-center gap-1">
-                      {i > 0 && <ChevronLeft size={12} className="text-indigo-300" />}
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        i === lineagePath.length - 1 ? 'bg-indigo-600 text-white font-semibold' : 'bg-indigo-100 text-indigo-700'
-                      }`}>{name}</span>
-                    </span>
-                  ))}
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center gap-2 mb-1">
+                  <GitBranch size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">שיוך שושלת</h3>
                 </div>
-              )}
-              <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
-              {lineageNodeId && (
-                <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]) }}
-                  className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
-              )}
-            </Card>
+                <p className="text-xs text-slate-500 mb-4">בחר את הענף שאתה שייך אליו.</p>
+                {lineagePath.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
+                    {lineagePath.map((name, i) => (
+                      <span key={i} className="flex items-center gap-1">
+                        {i > 0 && <ChevronLeft size={12} className="text-indigo-300" />}
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          i === lineagePath.length - 1 ? 'bg-indigo-600 text-white font-semibold' : 'bg-indigo-100 text-indigo-700'
+                        }`}>{name}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
+                {lineageNodeId && (
+                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]) }}
+                    className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
+                )}
+              </Card>
+            )}
 
             {/* Children */}
-            <Card>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Users size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">ילדים</h3>
-                  {children.length > 0 && (
-                    <span style={{ direction: 'rtl' }} className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">{children.length} ילדים</span>
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Users size={18} className="text-indigo-600" />
+                    <h3 className="font-semibold text-slate-900">ילדים</h3>
+                    {children.length > 0 && (
+                      <span style={{ direction: 'rtl' }} className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">{children.length} ילדים</span>
+                    )}
+                  </div>
+                  {editingChildIdx === null && (
+                    <button type="button"
+                      onClick={() => { setChildren(cs => [...cs, emptyChild()]); setEditingChildIdx(children.length) }}
+                      className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
+                      <Plus size={14} /> הוסף ילד
+                    </button>
                   )}
                 </div>
-                <button type="button" onClick={() => setChildren(cs => [...cs, emptyChild()])}
-                  className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
-                  <Plus size={14} /> הוסף ילד
-                </button>
-              </div>
 
-              {children.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-3">לחץ &quot;הוסף ילד&quot; להוספת פרטי ילד</p>
-              )}
+                {children.length === 0 && editingChildIdx === null && (
+                  <p className="text-sm text-slate-400 text-center py-3">לחץ &quot;הוסף ילד&quot; להוספת פרטי ילד</p>
+                )}
 
-              <div className="flex flex-col gap-4">
-                {children.map((child, idx) => (
-                  <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-slate-50 relative">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
-                      <button type="button" onClick={() => setChildren(cs => cs.filter((_, i) => i !== idx))}
-                        className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2 sm:col-span-1">
-                        <Field label="שם הילד/ה">
-                          <TextInput value={child.name} placeholder="שם מלא"
-                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
-                        </Field>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <Field label="תעודת זהות">
-                          <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr"
-                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value } : c))} />
-                        </Field>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <Field label="תאריך לידה">
-                          <TextInput type="date" value={child.birth_date}
-                            max={new Date().toISOString().split('T')[0]}
-                            onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: e.target.value } : c))} />
-                        </Field>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <Field label="מין">
-                          <div className="flex gap-2">
-                            {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
-                              <button key={v} type="button"
-                                onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
-                                className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                  child.gender === v
-                                    ? 'bg-indigo-600 text-white border-indigo-600'
-                                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
-                                }`}
-                              >{l}</button>
-                            ))}
-                          </div>
-                        </Field>
-                      </div>
-                      {child.gender && (
-                        <div className="col-span-2">
-                          <Field label="מצב משפחתי">
-                            <div className="flex gap-2 flex-wrap">
-                              {maritalFor(child.gender).map(({ v, l }) => (
-                                <button key={v} type="button"
-                                  onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
-                                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                                    child.marital_status === v
-                                      ? 'bg-indigo-600 text-white border-indigo-600'
-                                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                                  }`}
-                                >{l}</button>
-                              ))}
-                            </div>
-                          </Field>
+                <div className="flex flex-col gap-2">
+                  {children.map((child, idx) => (
+                    editingChildIdx === idx ? (
+                      /* Expanded edit form */
+                      <div key={idx} className="border border-indigo-200 rounded-xl p-4 bg-indigo-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
+                          <button type="button" onClick={() => { setChildren(cs => cs.filter((_, i) => i !== idx)); setEditingChildIdx(null) }}
+                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors">
+                            <Trash2 size={14} />
+                          </button>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="שם הילד/ה">
+                              <TextInput value={child.name} placeholder="שם מלא"
+                                onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="תעודת זהות">
+                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr"
+                                onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value } : c))} />
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="תאריך לידה">
+                              <TextInput type="date" value={child.birth_date}
+                                max={new Date().toISOString().split('T')[0]}
+                                onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: e.target.value } : c))} />
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="מין">
+                              <div className="flex gap-2">
+                                {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
+                                  <button key={v} type="button"
+                                    onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
+                                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                      child.gender === v
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                                    }`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                            </Field>
+                          </div>
+                          {child.gender && (
+                            <div className="col-span-2">
+                              <Field label="מצב משפחתי">
+                                <div className="flex gap-2 flex-wrap">
+                                  {maritalFor(child.gender).map(({ v, l }) => (
+                                    <button key={v} type="button"
+                                      onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                        child.marital_status === v
+                                          ? 'bg-indigo-600 text-white border-indigo-600'
+                                          : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                                      }`}
+                                    >{l}</button>
+                                  ))}
+                                </div>
+                              </Field>
+                            </div>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => setEditingChildIdx(null)}
+                          className="mt-4 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm transition-colors">
+                          <Check size={14} /> שמור
+                        </button>
+                      </div>
+                    ) : (
+                      /* Collapsed row */
+                      <div key={idx} className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                            <span className="text-xs font-bold text-indigo-600">{idx + 1}</span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{child.name || `ילד ${idx + 1}`}</p>
+                            <p className="text-xs text-slate-500">
+                              {[child.gender === 'male' ? 'זכר' : child.gender === 'female' ? 'נקבה' : '', child.birth_date, child.marital_status].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={() => setEditingChildIdx(idx)}
+                            className="text-xs text-indigo-500 hover:text-indigo-700 px-2 py-1 rounded-lg hover:bg-indigo-50">עריכה</button>
+                          <button type="button" onClick={() => setChildren(cs => cs.filter((_, i) => i !== idx))}
+                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50">
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </Card>
+            )}
 
             {/* Notes */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="font-semibold text-slate-900">הערות</h3>
-              </div>
-              <Field label="הערות" hint="כל מידע נוסף">
-                <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
-                  placeholder="תאר את המצב המשפחתי..."
-                  className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                />
-              </Field>
-            </Card>
+            {regForm.marital_status && (
+              <Card>
+                <Field label="הערות" hint="כל מידע נוסף">
+                  <textarea value={regForm.notes} onChange={setReg('notes')} rows={3}
+                    placeholder="תאר את המצב המשפחתי..."
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                  />
+                </Field>
+              </Card>
+            )}
 
             {/* Declaration */}
-            <Card>
-              <div className="flex items-start gap-3">
-                <input
-                  type="checkbox" id="decl" checked={declaredReg}
-                  onChange={e => setDeclaredReg(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 accent-indigo-600"
-                />
-                <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
-                  הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול העמותה.
-                </label>
-              </div>
-            </Card>
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox" id="decl" checked={declaredReg}
+                    onChange={e => setDeclaredReg(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-indigo-600"
+                  />
+                  <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
+                    הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול העמותה.
+                  </label>
+                </div>
+              </Card>
+            )}
 
             {error && <ErrorBox message={error} />}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
-              <p className="font-medium mb-1">שים לב</p>
-              <p>הטופס ייבדק על ידי צוות העמותה. תקבל עדכון על סטטוס הבקשה שלך.</p>
-            </div>
+            {regForm.marital_status && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+                <p className="font-medium mb-1">שים לב</p>
+                <p>הטופס ייבדק על ידי צוות העמותה. תקבל עדכון על סטטוס הבקשה שלך.</p>
+              </div>
+            )}
 
-            <button
-              type="submit" disabled={loading}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
-            >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
-              {loading ? 'שולח...' : 'שלח בקשת רישום'}
-            </button>
+            {regForm.marital_status && (
+              <button
+                type="submit" disabled={loading}
+                className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+              >
+                {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+                {loading ? 'שולח...' : 'שלח בקשת רישום'}
+              </button>
+            )}
           </form>
         )}
 
