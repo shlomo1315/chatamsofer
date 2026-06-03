@@ -100,7 +100,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     const handler = (e: WheelEvent) => {
       e.preventDefault(); e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.2, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        const next = Math.min(2.5, Math.max(0.35, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left, offY = e.clientY - rect.top
@@ -183,7 +183,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
       <div style={{ display: 'flex', gap: 5, marginBottom: 8, justifyContent: 'flex-end' }}>
         <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
         <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-        <button type="button" onClick={() => setZoom(z => Math.max(0.2, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
+        <button type="button" onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
       </div>
 
       <div
