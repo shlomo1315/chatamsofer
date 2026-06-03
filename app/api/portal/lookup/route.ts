@@ -22,10 +22,42 @@ export async function GET(request: NextRequest) {
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
+
+    // 1. Check main beneficiaries table
     const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', idParam).maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (!data) return NextResponse.json({ found: false })
-    return NextResponse.json({ found: true, beneficiary: data })
+    if (data) return NextResponse.json({ found: true, beneficiary: data })
+
+    // 2. Search inside children JSONB array
+    const { data: rows, error: err2 } = await admin
+      .from('beneficiaries')
+      .select('id, full_name, family_name, children')
+      .not('children', 'is', null)
+    if (err2) return NextResponse.json({ error: err2.message }, { status: 500 })
+
+    if (rows) {
+      for (const row of rows) {
+        const kids: Record<string, string>[] = Array.isArray(row.children) ? row.children : []
+        const match = kids.find((k) => (k.id_number ?? '').replace(/\D/g, '') === idParam)
+        if (match) {
+          const parentName = [row.family_name, row.full_name].filter(Boolean).join(' ')
+          return NextResponse.json({
+            found: false,
+            foundAsChild: true,
+            parentName,
+            childData: {
+              name: match.name ?? '',
+              id_number: idParam,
+              birth_date: match.birth_date ?? '',
+              gender: match.gender ?? '',
+              marital_status: match.marital_status ?? '',
+            },
+          })
+        }
+      }
+    }
+
+    return NextResponse.json({ found: false })
   }
 
   if (passportParam) {

@@ -11,12 +11,18 @@ import {
 type Step =
   | 'id-lookup'
   | 'not-found'
+  | 'found-as-child'
   | 'register'
   | 'register-success'
   | 'dashboard'
   | 'new-birth'
   | 'new-loan'
   | 'request-sent'
+
+interface ChildMatchData {
+  parentName: string
+  childData: { name: string; id_number: string; birth_date: string; gender: string; marital_status: string }
+}
 
 interface FoundBeneficiary {
   id: string
@@ -32,14 +38,13 @@ interface FoundBeneficiary {
 // ─── Constants ───
 
 const MARITAL_OPTIONS = [
-  { value: 'נשוי', label: 'נשוי' },
-  { value: 'נשואה', label: 'נשואה' },
+  { value: 'נשואים', label: 'נשואים' },
   { value: 'גרוש', label: 'גרוש' },
   { value: 'גרושה', label: 'גרושה' },
   { value: 'אלמן', label: 'אלמן' },
   { value: 'אלמנה', label: 'אלמנה' },
 ]
-const MARRIED_STATUSES = ['נשוי', 'נשואה']
+const MARRIED_STATUSES = ['נשואים']
 
 const LOAN_PURPOSES = [
   { value: 'נישואי הבן/הבת', desc: 'מומלץ לצרף הזמנה' },
@@ -126,8 +131,8 @@ function maritalFor(g: string) {
   return []
 }
 function genderFromMarital(status: string): 'male' | 'female' | '' {
-  if (['נשוי', 'גרוש', 'אלמן', 'רווק'].includes(status)) return 'male'
-  if (['נשואה', 'גרושה', 'אלמנה', 'רווקה'].includes(status)) return 'female'
+  if (['גרוש', 'אלמן'].includes(status)) return 'male'
+  if (['גרושה', 'אלמנה'].includes(status)) return 'female'
   return ''
 }
 
@@ -426,6 +431,7 @@ export default function PublicPortalPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
+  const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
 
@@ -490,6 +496,10 @@ export default function PublicPortalPage() {
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
+        else if (data.foundAsChild) {
+          setChildMatch({ parentName: data.parentName, childData: data.childData })
+          setStep('found-as-child')
+        }
         else { setRegForm(f => ({ ...f, id_number: digits })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }
       setLoading(false)
@@ -746,6 +756,53 @@ export default function PublicPortalPage() {
           </div>
         )}
 
+        {/* ─── Step: Found as Child ─── */}
+        {step === 'found-as-child' && childMatch && (
+          <div className="flex flex-col gap-4">
+            <Card>
+              <div className="text-center mb-5">
+                <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users size={28} className="text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mb-3">שים לב</h2>
+                <p className="text-slate-600 text-sm leading-relaxed mb-1">
+                  אתה רשום אצלינו במערכת בתור ילד של
+                </p>
+                <p className="text-lg font-bold text-indigo-700 mb-4">{childMatch.parentName}</p>
+                <p className="text-slate-500 text-sm">
+                  כדי שתירשם אתה בעצמך, עבור לרישום מהיר — הפרטים שלך כבר ימולאו אוטומטית.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    const cd = childMatch.childData
+                    setRegForm(f => ({
+                      ...f,
+                      id_number: cd.id_number,
+                      full_name: cd.name,
+                      birth_date: cd.birth_date,
+                      gender: cd.gender,
+                      marital_status: cd.marital_status,
+                    }))
+                    setError('')
+                    setStep('register')
+                  }}
+                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                >
+                  <User size={18} />
+                  רישום מהיר
+                </button>
+                <button onClick={backToHome}
+                  className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm">
+                  <ArrowRight size={16} />
+                  חזרה לכניסה
+                </button>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* ─── Step: Register ─── */}
         {step === 'register' && (
           <form onSubmit={handleRegister} className="flex flex-col gap-4">
@@ -784,9 +841,7 @@ export default function PublicPortalPage() {
                 <div className="flex items-center gap-2 mb-4">
                   <User size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900">
-                    {showSpouseFields
-                      ? (regGender === 'male' ? 'פרטי הבעל' : 'פרטי האשה')
-                      : 'פרטים אישיים'}
+                    {showSpouseFields ? 'פרטי הבעל' : (regGender === 'female' ? 'פרטי האשה' : 'פרטים אישיים')}
                   </h3>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -816,7 +871,7 @@ export default function PublicPortalPage() {
                 {showSpouseFields && (
                   <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
                     <p className="col-span-2 text-sm font-semibold text-slate-700">
-                      {regGender === 'male' ? 'פרטי האשה' : 'פרטי הבעל'}
+                      פרטי האשה
                     </p>
                     <div className="col-span-2 sm:col-span-1">
                       <Field label="שם פרטי">
