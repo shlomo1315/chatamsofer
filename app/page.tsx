@@ -1067,26 +1067,36 @@ export default function PublicPortalPage() {
             {/* Children */}
             {regForm.marital_status && (
               <Card>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Users size={18} className="text-indigo-600" />
-                    <h3 className="font-semibold text-slate-900">ילדים</h3>
-                    {children.length > 0 && (
-                      <span style={{ direction: 'rtl' }} className="text-xs bg-indigo-100 text-indigo-700 font-semibold px-2 py-0.5 rounded-full">{children.length} ילדים</span>
-                    )}
-                  </div>
-                  {editingChildIdx === null && (
-                    <button type="button"
-                      onClick={() => { setChildren(cs => [...cs, emptyChild()]); setEditingChildIdx(children.length) }}
-                      className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors">
-                      <Plus size={14} /> הוסף ילד
-                    </button>
-                  )}
+                <div className="flex items-center gap-2 mb-4">
+                  <Users size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">ילדים</h3>
                 </div>
 
-                {children.length === 0 && editingChildIdx === null && (
-                  <p className="text-sm text-slate-400 text-center py-3">לחץ &quot;הוסף ילד&quot; להוספת פרטי ילד</p>
-                )}
+                {/* Count field */}
+                <div className="mb-4">
+                  <Field label="כמות ילדים">
+                    <TextInput
+                      type="number" min="0" max="20"
+                      value={children.length === 0 && regForm.children_count === '0' ? '' : String(children.length)}
+                      placeholder="0"
+                      inputMode="numeric"
+                      className="w-28"
+                      onChange={e => {
+                        const n = Math.max(0, Math.min(20, parseInt(e.target.value || '0', 10) || 0))
+                        setRegForm(f => ({ ...f, children_count: String(n) }))
+                        setChildren(cs => {
+                          if (n > cs.length) {
+                            const added = [...cs, ...Array.from({ length: n - cs.length }, emptyChild)]
+                            setEditingChildIdx(cs.length)
+                            return added
+                          }
+                          if (n < cs.length) { setEditingChildIdx(null); return cs.slice(0, n) }
+                          return cs
+                        })
+                      }}
+                    />
+                  </Field>
+                </div>
 
                 <div className="flex flex-col gap-2">
                   {children.map((child, idx) => (
