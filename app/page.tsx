@@ -602,6 +602,9 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    if (!birthForm.baby_name) { setError('אנא הזן שם הנולד/ת'); return }
+    if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
+    if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
     setError('')
@@ -1600,17 +1603,17 @@ export default function PublicPortalPage() {
                   </Field>
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <Field label="שם הנולד/ת">
-                    <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')} placeholder="שם הילד/ה" />
+                  <Field label="שם הנולד/ת" required>
+                    <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')} placeholder="שם הילד/ה" required />
                   </Field>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="מין הנולד/ת">
+                <div className="col-span-2">
+                  <Field label="מין הנולד/ת" required>
                     <div className="flex gap-2">
-                      {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
+                      {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
                         <button key={v} type="button"
                           onClick={() => setBirthForm(f => ({ ...f, baby_gender: v }))}
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                             birthForm.baby_gender === v
                               ? 'bg-indigo-600 text-white border-indigo-600'
                               : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
@@ -1620,16 +1623,24 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="בית החלמה מבוקש">
-                    <SelectInput value={birthForm.recovery_home} onChange={setBirth('recovery_home')}>
-                      <option value="">בחר / לא רלוונטי</option>
-                      {recoveryHomes.map(h => <option key={h} value={h}>{h}</option>)}
-                    </SelectInput>
+                <div className="col-span-2">
+                  <Field label="בית החלמה" required>
+                    <div className="flex flex-wrap gap-2">
+                      {recoveryHomes.map(h => (
+                        <button key={h} type="button"
+                          onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                            birthForm.recovery_home === h
+                              ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-pink-400 hover:bg-pink-50'
+                          }`}
+                        >{h}</button>
+                      ))}
+                    </div>
                   </Field>
                 </div>
                 <div className="col-span-2">
-                  <Field label="הערות נוספות">
+                  <Field label="הערות">
                     <textarea value={birthForm.notes} onChange={setBirth('notes')} rows={3}
                       placeholder="כל מידע רלוונטי נוסף..."
                       className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
