@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, X, Clock, ChevronDown, Loader2 } from 'lucide-react'
+import { Check, X, Clock, ChevronDown, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 
@@ -12,6 +12,7 @@ const STYLES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
   approved: 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
   rejected: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
+  docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
 }
 
 export default function StatusControl({ id, status }: { id: string; status: EligibilityStatus }) {
@@ -30,9 +31,9 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   }, [])
 
   const isPending = PENDING_SET.includes(status)
-  const styleKey = isPending ? 'pending' : status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending'
-  const label = isPending ? 'ממתין לאישור' : ELIGIBILITY_LABELS[status] || status
-  const Icon = isPending ? Clock : status === 'approved' ? Check : X
+  const styleKey = isPending ? 'pending' : status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : status === 'docs_pending' ? 'docs_pending' : 'pending'
+  const label = ELIGIBILITY_LABELS[status] || status
+  const Icon = isPending ? Clock : status === 'approved' ? Check : status === 'docs_pending' ? FileText : X
 
   const setStatus = async (next: EligibilityStatus) => {
     setSaving(true)
@@ -50,6 +51,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
 
   const options: { value: EligibilityStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'approved', label: 'אשר זכאות', cls: 'text-green-700 hover:bg-green-50', icon: Check },
+    { value: 'docs_pending', label: 'השלמת מסמכים', cls: 'text-blue-700 hover:bg-blue-50', icon: FileText },
     { value: 'rejected', label: 'דחה', cls: 'text-red-600 hover:bg-red-50', icon: X },
     { value: 'pending', label: 'החזר לממתין', cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]

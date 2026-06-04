@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
-  Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X,
+  Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -15,6 +15,7 @@ type Step =
   | 'register'
   | 'register-success'
   | 'dashboard'
+  | 'docs-needed'
   | 'new-birth'
   | 'new-loan'
   | 'request-sent'
@@ -56,10 +57,11 @@ const LOAN_PURPOSES = [
 ]
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  pending:  { label: 'ממתין לאישור', color: 'text-amber-800',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  review:   { label: 'בבדיקה',       color: 'text-blue-800',   bg: 'bg-blue-50',   border: 'border-blue-200' },
-  approved: { label: 'מאושר',         color: 'text-green-800',  bg: 'bg-green-50',  border: 'border-green-200' },
-  rejected: { label: 'לא מאושר',      color: 'text-red-800',    bg: 'bg-red-50',    border: 'border-red-200' },
+  pending:      { label: 'ממתין לאישור',   color: 'text-amber-800',  bg: 'bg-amber-50',  border: 'border-amber-200' },
+  review:       { label: 'בבדיקה',          color: 'text-blue-800',   bg: 'bg-blue-50',   border: 'border-blue-200' },
+  approved:     { label: 'מאושר',            color: 'text-green-800',  bg: 'bg-green-50',  border: 'border-green-200' },
+  rejected:     { label: 'לא מאושר',         color: 'text-red-800',    bg: 'bg-red-50',    border: 'border-red-200' },
+  docs_pending: { label: 'השלמת מסמכים',    color: 'text-indigo-800', bg: 'bg-indigo-50', border: 'border-indigo-200' },
 }
 
 const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
@@ -464,11 +466,22 @@ export default function PublicPortalPage() {
   const [phoneError, setPhoneError] = useState('')
   const [emailError, setEmailError] = useState('')
   const [declaredReg, setDeclaredReg] = useState(false)
+  const [regSuccess, setRegSuccess] = useState(false)
+
+  // Docs upload (for pending users)
+  const [husbandIdFile, setHusbandIdFile] = useState<File | null>(null)
+  const [wifeIdFile, setWifeIdFile] = useState<File | null>(null)
+  const [docsUploading, setDocsUploading] = useState(false)
+  const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
+
+  // Loan modal
+  const [loanModalOpen, setLoanModalOpen] = useState(false)
 
   // Birth request form
   const [birthForm, setBirthForm] = useState({
     birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '',
   })
+  const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
 
   // Loan request form
@@ -577,6 +590,7 @@ export default function PublicPortalPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשמירת הנתונים'); return }
+      setRegSuccess(true)
       setStep('register-success')
     } catch {
       setError('שגיאת רשת. אנא נסה שוב.')
@@ -588,14 +602,25 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
     setError('')
     setLoading(true)
     try {
+      // Upload birth certificate first
+      let certUrl = ''
+      const fd = new FormData()
+      fd.append('file', birthCertFile)
+      fd.append('beneficiary_id', beneficiary.id)
+      fd.append('doc_type', 'birth_cert')
+      const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const upData = await upRes.json()
+      if (upRes.ok) certUrl = upData.url ?? ''
+
       const res = await fetch('/api/portal/birth-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -625,6 +650,7 @@ export default function PublicPortalPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      setLoanModalOpen(false)
       setRequestType('loan')
       setStep('request-sent')
     } catch {
@@ -636,24 +662,57 @@ export default function PublicPortalPage() {
   // ─── Status badge ───
   const statusMeta = beneficiary ? (STATUS_META[beneficiary.eligibility_status] ?? STATUS_META.pending) : null
   const isPending = beneficiary?.eligibility_status === 'pending' || beneficiary?.eligibility_status === 'review'
+  const isDocsPending = beneficiary?.eligibility_status === 'docs_pending'
+  const isApproved = beneficiary?.eligibility_status === 'approved'
   const isRejected = beneficiary?.eligibility_status === 'rejected'
+
+  // Which documents are required based on marital status
+  const requiredDocs: string[] = (() => {
+    const ms = beneficiary?.marital_status ?? ''
+    if (ms === 'נשואים') return ['id_husband', 'id_wife']
+    if (['גרוש', 'אלמן'].includes(ms)) return ['id_husband']
+    if (['גרושה', 'אלמנה'].includes(ms)) return ['id_wife']
+    return ['id_husband']
+  })()
   const displayName = beneficiary
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
     : ''
 
   const goToBirthForm = () => {
-    if (isPending && !pendingConfirmed) { setPendingConfirmed(true); return }
+    if (isPending) { setDocsPendingReason('birth'); setStep('docs-needed'); return }
+    if (isDocsPending) { setError('המסמכים שלך נמצאים בבדיקה. נעדכן אותך בקרוב.'); return }
     setError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' })
+    setBirthCertFile(null)
     setStep('new-birth')
-    setPendingConfirmed(false)
   }
   const goToLoanForm = () => {
-    if (isPending && !pendingConfirmed) { setPendingConfirmed(true); return }
+    if (isPending) { setDocsPendingReason('loan'); setStep('docs-needed'); return }
+    if (isDocsPending) { setError('המסמכים שלך נמצאים בבדיקה. נעדכן אותך בקרוב.'); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
-    setStep('new-loan')
-    setPendingConfirmed(false)
+    setLoanModalOpen(true)
+  }
+
+  const handleDocsUpload = async () => {
+    if (!beneficiary) return
+    const needsHusband = requiredDocs.includes('id_husband')
+    const needsWife = requiredDocs.includes('id_wife')
+    if (needsHusband && !husbandIdFile) { setError('אנא העלה תעודת זהות של הבעל'); return }
+    if (needsWife && !wifeIdFile) { setError('אנא העלה תעודת זהות של האשה'); return }
+    setError(''); setDocsUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('beneficiary_id', beneficiary.id)
+      if (husbandIdFile) fd.append('id_husband', husbandIdFile)
+      if (wifeIdFile) fd.append('id_wife', wifeIdFile)
+      const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בהעלאת המסמכים'); return }
+      setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_pending' } : b)
+      setStep('dashboard')
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setDocsUploading(false)
   }
 
   const backToDashboard = () => {
@@ -1251,22 +1310,43 @@ export default function PublicPortalPage() {
 
         {/* ─── Step: Register Success ─── */}
         {step === 'register-success' && (
-          <Card>
-            <div className="text-center py-4">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <CheckCircle2 size={38} className="text-green-600" />
+          <>
+            {/* Confetti overlay */}
+            {regSuccess && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm pointer-events-none">
+                <div className="relative">
+                  {Array.from({ length: 60 }).map((_, i) => (
+                    <div key={i} style={{
+                      position: 'absolute',
+                      width: Math.random() * 8 + 4,
+                      height: Math.random() * 8 + 4,
+                      borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+                      background: ['#6366F1','#EC4899','#F59E0B','#10B981','#3B82F6','#8B5CF6'][i % 6],
+                      left: `${Math.random() * 400 - 200}px`,
+                      top: `${Math.random() * -100}px`,
+                      animation: `confetti-fall ${1.5 + Math.random() * 2}s linear ${Math.random() * 0.8}s forwards`,
+                    }} />
+                  ))}
+                </div>
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל!</h2>
-              <p className="text-slate-600 mb-6 leading-relaxed">
-                בקשת הרישום שלך נשלחה בהצלחה.<br />
-                צוות המערכת יעיין בבקשתך ויצור עמך קשר.
-              </p>
-              <button onClick={backToHome}
-                className="flex items-center justify-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm mx-auto">
-                <ArrowRight size={16} /> חזרה לדף הכניסה
-              </button>
-            </div>
-          </Card>
+            )}
+            <Card>
+              <div className="text-center py-4">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                  <CheckCircle2 size={38} className="text-green-600" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל!</h2>
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  בקשת הרישום שלך נשלחה בהצלחה.<br />
+                  צוות המערכת יעיין בבקשתך ויצור עמך קשר.
+                </p>
+                <button onClick={backToHome}
+                  className="flex items-center justify-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm mx-auto">
+                  <ArrowRight size={16} /> חזרה לדף הכניסה
+                </button>
+              </div>
+            </Card>
+          </>
         )}
 
         {/* ─── Step: Dashboard ─── */}
@@ -1306,50 +1386,33 @@ export default function PublicPortalPage() {
             </Card>
 
             {/* Status banners */}
-            {isPending && !pendingConfirmed && (
+            {isPending && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 text-sm text-amber-800">
                 <div className="flex items-start gap-3">
                   <Clock size={18} className="flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold mb-1">הסטטוס שלך: ממתין לאישור</p>
                     <p className="leading-relaxed">
-                      ניתן להגיש בקשה גם בשלב זה. הבקשה תועבר לאישור גורם מוסמך ותטופל בהתאם.
+                      כדי להגיש בקשה יש לצרף תעודת זהות. לחץ על אחת מהאפשרויות למטה כדי להעלות מסמכים.
                     </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {pendingConfirmed && (
-              <div className="bg-amber-50 border border-amber-300 rounded-2xl px-4 py-4 text-sm text-amber-900">
+            {isDocsPending && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-4 text-sm text-indigo-800">
                 <div className="flex items-start gap-3">
-                  <Shield size={18} className="flex-shrink-0 mt-0.5" />
+                  <FileText size={18} className="flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold mb-1">שים לב — הגשת בקשה ראשונה</p>
-                    <p className="leading-relaxed mb-3">
-                      הנך עומד להגיש בקשה בפעם הראשונה. הסטטוס שלך הוא &quot;ממתין לאישור&quot;.<br />
-                      הבקשה תועבר לבדיקת הגורם המוסמך.
-                    </p>
-                    <div className="flex gap-2">
-                      <button onClick={() => { setError(''); setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' }); setStep('new-birth'); setPendingConfirmed(false) }}
-                        className="text-xs bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800">
-                        המשך לבקשת לידה
-                      </button>
-                      <button onClick={() => { setError(''); setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' }); setStep('new-loan'); setPendingConfirmed(false) }}
-                        className="text-xs bg-amber-700 text-white px-3 py-1.5 rounded-lg hover:bg-amber-800">
-                        המשך לבקשת הלוואה
-                      </button>
-                      <button onClick={() => setPendingConfirmed(false)}
-                        className="text-xs text-amber-700 underline px-2 py-1.5">
-                        ביטול
-                      </button>
-                    </div>
+                    <p className="font-semibold mb-1">המסמכים שלך התקבלו</p>
+                    <p className="leading-relaxed">הצוות בודק את המסמכים ויאשר את חשבונך בקרוב.</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {beneficiary.eligibility_status === 'approved' && (
+            {isApproved && (
               <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-sm text-green-800 flex items-center gap-2">
                 <CheckCircle2 size={16} className="flex-shrink-0" />
                 <span>חשבונך מאושר — ניתן להגיש בקשות ישירות.</span>
@@ -1359,12 +1422,14 @@ export default function PublicPortalPage() {
             {isRejected && (
               <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-800 flex items-center gap-2">
                 <AlertCircle size={16} className="flex-shrink-0" />
-                <span>חשבונך אינו מאושר. לבירורים פנה לצוות העמותה.</span>
+                <span>חשבונך אינו מאושר. לבירורים פנה לצוות המערכת.</span>
               </div>
             )}
 
+            {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+
             {/* Action buttons */}
-            {!isRejected && !pendingConfirmed && (
+            {!isRejected && !isDocsPending && (
               <div className="flex flex-col gap-3">
                 <h3 className="font-semibold text-slate-700 text-sm px-1">הגשת בקשה</h3>
 
@@ -1419,6 +1484,94 @@ export default function PublicPortalPage() {
                 נרשמת ב-{new Date(beneficiary.created_at).toLocaleDateString('he-IL')}
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ─── Step: Docs Needed ─── */}
+        {step === 'docs-needed' && beneficiary && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 mb-1">
+              <button type="button" onClick={() => { setStep('dashboard'); setError('') }} className="text-slate-400 hover:text-slate-600">
+                <ArrowRight size={20} />
+              </button>
+              <h2 className="font-bold text-slate-900 text-lg">השלמת מסמכים</h2>
+            </div>
+
+            <Card>
+              <div className="flex items-start gap-3 mb-5">
+                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <FileText size={20} className="text-indigo-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900 mb-1">נדרשת העלאת מסמכים</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    כדי להגיש בקשה יש לאמת את זהותך. אנא העלה את המסמכים הבאים:
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                {requiredDocs.includes('id_husband') && (
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-slate-700 mb-3">
+                      {beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך'}
+                    </p>
+                    {husbandIdFile ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        <span className="text-sm text-green-700 flex items-center gap-2">
+                          <CheckCircle2 size={14} /> {husbandIdFile.name}
+                        </span>
+                        <button type="button" onClick={() => setHusbandIdFile(null)} className="text-red-400 hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
+                        <Upload size={16} className="text-slate-400" />
+                        <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          onChange={e => setHusbandIdFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {requiredDocs.includes('id_wife') && (
+                  <div className="border border-slate-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-slate-700 mb-3">תעודת זהות — האשה</p>
+                    {wifeIdFile ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        <span className="text-sm text-green-700 flex items-center gap-2">
+                          <CheckCircle2 size={14} /> {wifeIdFile.name}
+                        </span>
+                        <button type="button" onClick={() => setWifeIdFile(null)} className="text-red-400 hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
+                        <Upload size={16} className="text-slate-400" />
+                        <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          onChange={e => setWifeIdFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+
+              <button type="button" onClick={handleDocsUpload} disabled={docsUploading}
+                className="mt-5 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors">
+                {docsUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                {docsUploading ? 'שולח מסמכים...' : 'שלח מסמכים לאישור'}
+              </button>
+
+              <p className="text-xs text-slate-400 text-center mt-3">
+                לאחר בדיקת המסמכים תוכל להגיש בקשות. הצוות יעדכן אותך.
+              </p>
+            </Card>
           </div>
         )}
 
@@ -1483,15 +1636,29 @@ export default function PublicPortalPage() {
                     />
                   </Field>
                 </div>
+                <div className="col-span-2">
+                  <Field label="אישור לידה" required hint="צרף תמונה או PDF של אישור הלידה מבית החולים">
+                    {birthCertFile ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        <span className="text-sm text-green-700 flex items-center gap-2">
+                          <CheckCircle2 size={14} /> {birthCertFile.name}
+                        </span>
+                        <button type="button" onClick={() => setBirthCertFile(null)} className="text-red-400 hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-pink-50 border-2 border-dashed border-slate-300 hover:border-pink-400 rounded-xl px-4 py-3 transition-colors">
+                        <Upload size={16} className="text-slate-400" />
+                        <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה (תמונה / PDF)</span>
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          onChange={e => setBirthCertFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    )}
+                  </Field>
+                </div>
               </div>
             </Card>
-
-            {isPending && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
-                <Shield size={15} className="mt-0.5 flex-shrink-0" />
-                <span>הסטטוס שלך ממתין לאישור. הבקשה תועבר לבדיקת הגורם המוסמך.</span>
-              </div>
-            )}
 
             {error && <ErrorBox message={error} />}
 
@@ -1504,116 +1671,118 @@ export default function PublicPortalPage() {
           </form>
         )}
 
-        {/* ─── Step: New Loan ─── */}
-        {step === 'new-loan' && (
-          <form onSubmit={handleLoanRequest} className="flex flex-col gap-4">
-            <div className="flex items-center gap-3 mb-1">
-              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
-                <ArrowRight size={20} />
-              </button>
-              <h2 className="font-bold text-slate-900 text-lg">בקשת הלוואה</h2>
-            </div>
-
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <CreditCard size={18} className="text-blue-500" />
-                <h3 className="font-semibold text-slate-900">פרטי ההלוואה</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <Field label="מטרת ההלוואה" required>
-                    <SelectInput value={loanForm.purpose} onChange={setLoan('purpose')} required>
-                      <option value="">בחר מטרה...</option>
-                      {LOAN_PURPOSES.map(p => (
-                        <option key={p.value} value={p.value}>{p.value}</option>
-                      ))}
-                    </SelectInput>
-                    {loanForm.purpose && LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc && (
-                      <p className="text-xs text-indigo-600 mt-1">
-                        {LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc}
-                      </p>
-                    )}
-                  </Field>
+        {/* ─── Loan Modal ─── */}
+        {loanModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
+                <div className="flex items-center gap-2">
+                  <CreditCard size={18} className="text-blue-600" />
+                  <h3 className="font-bold text-slate-900">בקשת הלוואה</h3>
                 </div>
-                {loanForm.purpose === 'אחר' && (
+                <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Modal body */}
+              <form onSubmit={handleLoanRequest} className="p-6 flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <Field label="פרט את מטרת ההלוואה" required>
-                      <TextInput value={loanForm.purpose_details} onChange={setLoan('purpose_details')} placeholder="תאר את מטרת ההלוואה..." required />
+                    <Field label="מטרת ההלוואה" required>
+                      <SelectInput value={loanForm.purpose} onChange={setLoan('purpose')} required>
+                        <option value="">בחר מטרה...</option>
+                        {LOAN_PURPOSES.map(p => (
+                          <option key={p.value} value={p.value}>{p.value}</option>
+                        ))}
+                      </SelectInput>
+                      {loanForm.purpose && LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc && (
+                        <p className="text-xs text-indigo-600 mt-1">
+                          {LOAN_PURPOSES.find(p => p.value === loanForm.purpose)?.desc}
+                        </p>
+                      )}
                     </Field>
                   </div>
-                )}
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
-                    <TextInput
-                      type="number" min="100" max="30000" step="100"
-                      value={loanForm.amount} onChange={setLoan('amount')}
-                      placeholder="5000" required
-                    />
-                  </Field>
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="מספר תשלומים" required>
-                    <TextInput
-                      type="number" min="1" max="60"
-                      value={loanForm.installments} onChange={setLoan('installments')}
-                      placeholder="12" required
-                    />
-                  </Field>
-                </div>
-                {loanForm.amount && loanForm.installments && (
-                  <div className="col-span-2">
-                    <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
-                      תשלום חודשי משוער:{' '}
-                      <strong>
-                        {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
-                          .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
-                      </strong>
+                  {loanForm.purpose === 'אחר' && (
+                    <div className="col-span-2">
+                      <Field label="פרט את מטרת ההלוואה" required>
+                        <TextInput value={loanForm.purpose_details} onChange={setLoan('purpose_details')} placeholder="תאר את מטרת ההלוואה..." required />
+                      </Field>
                     </div>
+                  )}
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
+                      <TextInput
+                        type="number" min="100" max="30000" step="100"
+                        value={loanForm.amount} onChange={setLoan('amount')}
+                        placeholder="5000" required
+                      />
+                    </Field>
                   </div>
-                )}
-                <div className="col-span-2">
-                  <Field label='האם פנית בעבר לגמ"ח חתם סופר?' required>
-                    <div className="flex flex-col gap-2">
-                      {['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי'].map(opt => (
-                        <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                          <input type="radio" name="declaration" value={opt}
-                            checked={loanForm.declaration === opt}
-                            onChange={setLoan('declaration')}
-                            className="accent-indigo-600"
-                          />
-                          {opt}
-                        </label>
-                      ))}
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="מספר תשלומים" required>
+                      <TextInput
+                        type="number" min="1" max="60"
+                        value={loanForm.installments} onChange={setLoan('installments')}
+                        placeholder="12" required
+                      />
+                    </Field>
+                  </div>
+                  {loanForm.amount && loanForm.installments && (
+                    <div className="col-span-2">
+                      <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
+                        תשלום חודשי משוער:{' '}
+                        <strong>
+                          {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
+                            .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
+                        </strong>
+                      </div>
                     </div>
-                  </Field>
+                  )}
+                  <div className="col-span-2">
+                    <Field label='האם פנית בעבר לגמ"ח חתם סופר?' required>
+                      <div className="flex flex-col gap-2">
+                        {['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי'].map(opt => (
+                          <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                            <input type="radio" name="declaration" value={opt}
+                              checked={loanForm.declaration === opt}
+                              onChange={setLoan('declaration')}
+                              className="accent-indigo-600"
+                            />
+                            {opt}
+                          </label>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label="הערות נוספות">
+                      <textarea value={loanForm.notes} onChange={setLoan('notes')} rows={3}
+                        placeholder="כל מידע רלוונטי נוסף..."
+                        className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
+                      />
+                    </Field>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <Field label="הערות נוספות">
-                    <textarea value={loanForm.notes} onChange={setLoan('notes')} rows={3}
-                      placeholder="כל מידע רלוונטי נוסף..."
-                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
-                    />
-                  </Field>
+
+                {error && <ErrorBox message={error} />}
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
+                    className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+                    ביטול
+                  </button>
+                  <button type="submit" disabled={loading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+                    {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                    {loading ? 'שולח...' : 'שלח בקשה'}
+                  </button>
                 </div>
-              </div>
-            </Card>
-
-            {isPending && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
-                <Shield size={15} className="mt-0.5 flex-shrink-0" />
-                <span>הסטטוס שלך ממתין לאישור. הבקשה תועבר לבדיקת הגורם המוסמך.</span>
-              </div>
-            )}
-
-            {error && <ErrorBox message={error} />}
-
-            <button type="submit" disabled={loading}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
-            >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
-              {loading ? 'שולח...' : 'שלח בקשה'}
-            </button>
-          </form>
+              </form>
+            </div>
+          </div>
         )}
 
         {/* ─── Step: Request Sent ─── */}
