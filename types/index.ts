@@ -211,6 +211,49 @@ export interface Notification {
   created_at: string
 }
 
+export type MailDirection = 'inbound' | 'outbound'
+export type MailStatus = 'received' | 'sent' | 'failed' | 'draft'
+export type MailFolder = 'inbox' | 'sent' | 'drafts'
+
+export interface MailAttachment {
+  id: string
+  message_id: string
+  file_url: string
+  file_name?: string
+  content_type?: string
+  size?: number
+  created_at: string
+}
+
+export interface MailMessage {
+  id: string
+  direction: MailDirection
+  from_email: string
+  from_name?: string
+  to_emails: string[]
+  cc_emails?: string[]
+  subject?: string
+  body_text?: string
+  body_html?: string
+  status: MailStatus
+  is_read: boolean
+  thread_id?: string
+  in_reply_to?: string
+  provider_id?: string
+  has_attachments: boolean
+  error?: string
+  sent_by?: string
+  created_at: string
+  sent_at?: string
+  attachments?: MailAttachment[]
+}
+
+export const MAIL_FOLDER_LABELS: Record<MailFolder, string> = {
+  inbox: 'דואר נכנס',
+  sent: 'נשלח',
+  drafts: 'טיוטות',
+}
+
 export interface DashboardStats {
   total_beneficiaries: number
   pending_approvals: number

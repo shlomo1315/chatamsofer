@@ -14,6 +14,7 @@ import {
   X,
   Building2,
   Trees,
+  Mail,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { UserPermissions, SectionKey } from '@/types'
@@ -37,7 +38,7 @@ function LogoBadge() {
   )
 }
 
-const navItems: { href: string; label: string; icon: React.ElementType; section?: SectionKey }[] = [
+const navItems: { href: string; label: string; icon: React.ElementType; section?: SectionKey; adminOnly?: boolean }[] = [
   { href: '/admin/dashboard',      label: 'לוח בקרה',  icon: LayoutDashboard },
   { href: '/admin/beneficiaries',  label: 'נתמכים',    icon: Users,       section: 'beneficiaries' },
   { href: '/admin/lineage',        label: 'עץ הדורות', icon: Trees,       section: 'lineage' },
@@ -45,6 +46,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; section?
   { href: '/admin/loans',          label: 'הלוואות',   icon: CreditCard,  section: 'loans' },
   { href: '/admin/distributions',  label: 'חלוקות',    icon: Gift,        section: 'distributions' },
   { href: '/admin/reports',        label: 'דוחות',     icon: BarChart3,   section: 'reports' },
+  { href: '/admin/mailbox',        label: 'תיבת דואר', icon: Mail,        adminOnly: true },
   { href: '/admin/settings',       label: 'הגדרות',    icon: Settings },
 ]
 
@@ -53,6 +55,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const visibleItems = navItems.filter(item => {
+    if (item.adminOnly) return !!isAdmin     // תיבת דואר — מנהל בלבד
     if (!item.section) return true           // dashboard & settings always visible
     if (isAdmin) return true                 // admin sees everything
     const level = permissions?.[item.section] ?? 'view'
