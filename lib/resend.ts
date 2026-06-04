@@ -33,6 +33,36 @@ interface ResendResponse {
   error?: string
 }
 
+// ----- קבלת מייל נכנס -----
+// ה-webhook של Resend (email.received) מכיל מטא-דאטה בלבד; הגוף, ה-HTML והקבצים
+// נשלפים בקריאת REST נפרדת לפי מזהה המייל.
+export interface ReceivedEmail {
+  from?: unknown
+  to?: unknown
+  cc?: unknown
+  subject?: string
+  html?: string
+  text?: string
+  headers?: Record<string, unknown>
+  attachments?: { id?: string; filename?: string; content_type?: string; size?: number }[]
+}
+
+// שליפת תוכן מלא של מייל נכנס. מחזיר null אם אין מפתח/השליפה נכשלה
+// (במקרה כזה נשמרת לפחות המטא-דאטה שהגיעה ב-webhook).
+export async function getReceivedEmail(emailId: string): Promise<ReceivedEmail | null> {
+  const key = process.env.RESEND_API_KEY
+  if (!key) return null
+  try {
+    const res = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    })
+    if (!res.ok) return null
+    return (await res.json()) as ReceivedEmail
+  } catch {
+    return null
+  }
+}
+
 export async function sendMail(params: SendMailParams): Promise<{ id: string }> {
   const key = process.env.RESEND_API_KEY
   if (!key) throw new Error('שירות המייל אינו מוגדר (RESEND_API_KEY חסר)')

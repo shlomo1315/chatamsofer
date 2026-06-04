@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getReceivedEmail, type ReceivedEmail } from '@/lib/resend'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,15 +68,32 @@ export async function POST(request: NextRequest) {
   const root = (payload && typeof payload === 'object') ? (payload as Record<string, unknown>) : {}
   const d = (root.data && typeof root.data === 'object') ? (root.data as Record<string, unknown>) : root
 
-  const from = extractFrom(d.from)
-  if (!from.email) return NextResponse.json({ error: 'missing sender' }, { status: 400 })
+  // התעלמות מאירועי מצב שליחה (email.sent/delivered/…) אם הופנו בטעות לכאן
+  const eventType = asString(root.type)
+  if (eventType && eventType !== 'email.received') {
+    return NextResponse.json({ ok: true, ignored: eventType })
+  }
 
   const headers = (d.headers && typeof d.headers === 'object') ? (d.headers as Record<string, unknown>) : {}
   const providerId =
     asString(d.email_id) ?? asString(d.id) ?? asString(d.message_id) ?? asString(headers['message-id']) ?? null
-  const inReplyTo = asString(d.in_reply_to) ?? asString(headers['in-reply-to']) ?? null
 
-  const attachmentsRaw = Array.isArray(d.attachments) ? (d.attachments as unknown[]) : []
+  // Resend שולח ב-webhook מטא-דאטה בלבד — משלימים את הגוף/HTML/הקבצים מה-API.
+  // אם ה-payload כבר כולל גוף (ספק אחר או webhook עתידי) — מדלגים על הקריאה.
+  let full: ReceivedEmail | null = null
+  if (providerId && !asString(d.text) && !asString(d.html)) {
+    full = await getReceivedEmail(providerId)
+  }
+
+  const from = extractFrom(full?.from ?? d.from)
+  if (!from.email) return NextResponse.json({ error: 'missing sender' }, { status: 400 })
+
+  const fullHeaders = (full?.headers && typeof full.headers === 'object') ? full.headers : headers
+  const inReplyTo = asString(d.in_reply_to) ?? asString(fullHeaders['in-reply-to']) ?? null
+
+  const attachmentsRaw: unknown[] = Array.isArray(full?.attachments)
+    ? (full!.attachments as unknown[])
+    : Array.isArray(d.attachments) ? (d.attachments as unknown[]) : []
 
   const { data: inserted, error } = await admin
     .from('mail_messages')
@@ -83,11 +101,11 @@ export async function POST(request: NextRequest) {
       direction: 'inbound',
       from_email: from.email,
       from_name: from.name ?? null,
-      to_emails: normalizeAddrs(d.to),
-      cc_emails: normalizeAddrs(d.cc),
-      subject: asString(d.subject) ?? '',
-      body_text: asString(d.text) ?? asString(d['body-plain']) ?? null,
-      body_html: asString(d.html) ?? asString(d['body-html']) ?? null,
+      to_emails: normalizeAddrs(full?.to ?? d.to),
+      cc_emails: normalizeAddrs(full?.cc ?? d.cc),
+      subject: full?.subject ?? asString(d.subject) ?? '',
+      body_text: full?.text ?? asString(d.text) ?? asString(d['body-plain']) ?? null,
+      body_html: full?.html ?? asString(d.html) ?? asString(d['body-html']) ?? null,
       status: 'received',
       is_read: false,
       thread_id: inReplyTo ?? providerId,
