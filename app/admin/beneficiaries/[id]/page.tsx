@@ -105,7 +105,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   if (!beneficiary) {
     return (
-      <div className="flex flex-col gap-5 max-w-3xl">
+      <div className="flex flex-col gap-5 max-w-5xl">
         <div className="flex items-center gap-3">
           <Link href="/admin/beneficiaries" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
           <h1 className="text-xl font-bold text-slate-900">פרטי נתמך</h1>
@@ -301,7 +301,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   )
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex flex-col gap-5 max-w-5xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/beneficiaries" />

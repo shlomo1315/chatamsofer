@@ -710,7 +710,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       if (!c.gender) ce.gender = 'שדה חובה'
       if (!c.marital_status) ce.marital_status = 'שדה חובה'
       if (!c.birth_date) ce.birth_date = 'שדה חובה'
-      if (c.id_number.trim() && c.doc_type === 'id' && !validateIsraeliId(c.id_number)) {
+      if (!c.id_number.trim()) ce.id_number = 'שדה חובה'
+      else if (c.doc_type === 'id' && !validateIsraeliId(c.id_number)) {
         ce.id_number = 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
       }
       return ce
@@ -954,7 +955,12 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 value={form.spouse_id_number}
                 error={errors.spouse_id_number}
                 onDocType={t => setForm(f => ({ ...f, spouse_doc_type: t }))}
-                onValue={v => setForm(f => ({ ...f, spouse_id_number: v }))}
+                onValue={v => { setForm(f => ({ ...f, spouse_id_number: v })); setErrors(prev => ({ ...prev, spouse_id_number: undefined })) }}
+                onBlur={() => {
+                  if (form.spouse_doc_type === 'id' && form.spouse_id_number.trim() && !validateIsraeliId(form.spouse_id_number))
+                    setErrors(prev => ({ ...prev, spouse_id_number: 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)' }))
+                  else setErrors(prev => ({ ...prev, spouse_id_number: undefined }))
+                }}
               />
               <Field label="תאריך לידה האישה" required error={errors.spouse_birth_date}>
                 <FInput type="date" value={form.spouse_birth_date} onChange={set('spouse_birth_date')} dir="ltr" required />
@@ -1031,7 +1037,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                   </Field>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-600">
-                      מסמך זיהוי <span className="font-normal text-slate-400">(לא חובה)</span>
+                      מסמך זיהוי <span className="text-red-500 mr-1">*</span>
                     </label>
                     <div className="flex gap-2">
                       <button
@@ -1059,11 +1065,22 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                     </div>
                     <FInput
                       value={child.id_number}
-                      onChange={e => setChild(idx, 'id_number', e.target.value)}
+                      onChange={e => { setChild(idx, 'id_number', e.target.value); setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: undefined } : ce)) }}
+                      onBlur={() => {
+                        const val = child.id_number.trim()
+                        if (!val) {
+                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: 'שדה חובה' } : ce))
+                        } else if (child.doc_type === 'id' && !validateIsraeliId(val)) {
+                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)' } : ce))
+                        } else {
+                          setChildErrors(prev => prev.map((ce, i) => i === idx ? { ...ce, id_number: undefined } : ce))
+                        }
+                      }}
                       placeholder={child.doc_type === 'id' ? '123456789' : 'מספר דרכון'}
                       dir="ltr"
                       inputMode={child.doc_type === 'id' ? 'numeric' : 'text'}
                       maxLength={child.doc_type === 'id' ? 9 : 20}
+                      required
                     />
                     {childErrors[idx]?.id_number && (
                       <p className="text-xs text-red-500">{childErrors[idx].id_number}</p>

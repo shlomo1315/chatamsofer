@@ -57,7 +57,7 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
     : undefined
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
+    <div className="flex flex-col gap-5 max-w-5xl">
       <div className="flex items-center gap-3">
         <Link href={`/admin/beneficiaries/${id}`} className="text-slate-400 hover:text-slate-600">
           <ArrowRight size={20} />
