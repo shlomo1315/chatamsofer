@@ -504,6 +504,9 @@ export default function PublicPortalPage() {
   const showSpouseFields = MARRIED_STATUSES.includes(regForm.marital_status)
   const regGender = genderFromMarital(regForm.marital_status)
 
+  // Set page title
+  useEffect(() => { document.title = 'היכל החתם סופר' }, [])
+
   // Load recovery homes
   useEffect(() => {
     if (step === 'new-birth') {
