@@ -781,7 +781,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
         updated_at: new Date().toISOString(),
       }
 
-      const familyName = [payload.family_name, payload.spouse_name || payload.full_name].filter(Boolean).join(' ')
+      const familyName = payload.family_name || payload.full_name || ''
       const details = [
         `ת.ז. ${payload.id_number}`,
         payload.phone ? `טלפון ${payload.phone}` : '',
