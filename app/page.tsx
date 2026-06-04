@@ -545,7 +545,7 @@ export default function PublicPortalPage() {
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
-        else { setError('מספר הדרכון אינו רשום במערכת. לרישום יש לפנות לגבאי.') }
+        else { setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }
       setLoading(false)
     }
@@ -764,7 +764,6 @@ export default function PublicPortalPage() {
                 <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-cover" />
               </div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
-              <p className="text-slate-500">פורטל שירותים — היכל החתם סופר</p>
             </div>
 
             <Card>
