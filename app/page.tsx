@@ -1339,8 +1339,8 @@ export default function PublicPortalPage() {
                                     onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
                                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                                       child.gender === v
-                                        ? 'bg-indigo-600 text-white border-indigo-600'
-                                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                                        ? v === 'male' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-pink-100 text-pink-800 border-pink-400'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
                                     }`}
                                   >{l}</button>
                                 ))}
@@ -1749,8 +1749,8 @@ export default function PublicPortalPage() {
                           onClick={() => setBirthForm(f => ({ ...f, baby_gender: v }))}
                           className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                             birthForm.baby_gender === v
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                              ? v === 'male' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-pink-100 text-pink-800 border-pink-400'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
                           }`}
                         >{l}</button>
                       ))}

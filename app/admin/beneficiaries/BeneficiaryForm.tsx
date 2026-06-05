@@ -1065,8 +1065,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                           onClick={() => { setChild(idx, 'gender', v); setChild(idx, 'marital_status', '') }}
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                             child.gender === v
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                              ? v === 'male' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-pink-100 text-pink-800 border-pink-400'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
                           }`}
                         >{l}</button>
                       ))}
