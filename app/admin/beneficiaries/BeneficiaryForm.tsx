@@ -7,6 +7,12 @@ import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, Fil
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 
+const GENDER_BTN_SEL: Record<string, string> = {
+  male: 'bg-blue-100 text-blue-800 border-blue-400',
+  female: 'bg-pink-100 text-pink-800 border-pink-400',
+}
+const GENDER_BTN_UNSEL = 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+
 const MARITAL_OPTIONS = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
 const WIFE_PRIMARY_STATUSES = ['גרושה', 'אלמנה']
 const MARRIED_STATUS = 'נשואים'
@@ -1065,9 +1071,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                         <button key={v} type="button"
                           onClick={() => { setChild(idx, 'gender', v); setChild(idx, 'marital_status', '') }}
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                            child.gender === v
-                              ? v === 'male' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-pink-100 text-pink-800 border-pink-400'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+                            child.gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
                           }`}
                         >{l}</button>
                       ))}
