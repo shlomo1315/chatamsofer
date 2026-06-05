@@ -12,8 +12,16 @@ export async function GET() {
   }
   try {
     const res = await fetch(
-      'https://data.gov.il/api/3/action/datastore_search?resource_id=5c78e9fa-c2e2-4771-93ff-7f400a12f7ba&limit=2000',
-      { signal: AbortSignal.timeout(8000) }
+      'https://data.gov.il/api/3/action/datastore_search',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resource_id: '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba',
+          limit: 2000,
+          fields: ['שם_ישוב'],
+        }),
+      }
     )
     const data = await res.json()
     const cities: string[] = (data?.result?.records ?? [])

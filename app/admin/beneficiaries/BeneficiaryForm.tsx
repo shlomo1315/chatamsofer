@@ -595,10 +595,15 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     eligibility_status: defaultValues?.eligibility_status ?? 'pending',
   })
   const [lineagePath, setLineagePath] = useState<string[]>([])
-  // Manual generations beyond the tree (דור 5 ומעלה) — free text the user adds himself
   const [manualLineage, setManualLineage] = useState<string[]>(
     Array.isArray(defaultValues?.lineage_manual) ? defaultValues!.lineage_manual : []
   )
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestName, setSuggestName] = useState('')
+  const [suggestParentId, setSuggestParentId] = useState('')
+  const [suggestSubmitting, setSuggestSubmitting] = useState(false)
+  const [suggestError, setSuggestError] = useState('')
+  const [allLineageNodes, setAllLineageNodes] = useState<{ id: string; name: string; generation: number }[]>([])
   const [children, setChildren] = useState<ChildEntry[]>(
     Array.isArray(defaultValues?.children) ? defaultValues!.children : []
   )
@@ -731,6 +736,26 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
     setErrors(errs)
     return Object.keys(errs).length === 0 && !hasChildErrors
+  }
+
+  const handleSuggestLineage = async () => {
+    if (!suggestName.trim()) { setSuggestError('נא להזין שם'); return }
+    setSuggestSubmitting(true); setSuggestError('')
+    try {
+      const res = await fetch('/api/portal/suggest-lineage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: suggestName.trim(), parent_id: suggestParentId || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSuggestError(data.error || 'שגיאה'); return }
+      const node = data.node
+      const parent = allLineageNodes.find(n => n.id === suggestParentId)
+      setForm(f => ({ ...f, lineage_node_id: node.id }))
+      setLineagePath([...(parent ? [`דור ${parent.generation} — ${parent.name}`] : []), `${node.name} (ממתין לאימות)`])
+      setSuggestOpen(false); setSuggestName(''); setSuggestParentId('')
+    } catch { setSuggestError('שגיאת רשת') }
+    finally { setSuggestSubmitting(false) }
   }
 
   const onSubmit = async (e: React.FormEvent) => {
@@ -1200,6 +1225,57 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             נקה בחירה
           </button>
         )}
+
+        {/* Suggest new node */}
+        <div className="mt-3 pt-3 border-t border-slate-100">
+          {!suggestOpen ? (
+            <button type="button"
+              onClick={() => {
+                setSuggestOpen(true)
+                if (allLineageNodes.length === 0) {
+                  fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
+                    setAllLineageNodes((d.nodes ?? []).filter((n: { status?: string }) => (n.status ?? 'verified') === 'verified'))
+                  }).catch(() => {})
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <Plus size={13} />
+              הדור לא מופיע בעץ — הצע צומת חדש
+            </button>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
+              <p className="text-xs font-semibold text-amber-800">הצע דור חדש לעץ השושלת</p>
+              <p className="text-xs text-amber-700">הצומת ייכנס לעץ בסטטוס "ממתין לאימות" עד שיאושר.</p>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">שם האדם *</label>
+                <FInput value={suggestName} onChange={e => setSuggestName(e.target.value)} placeholder="שם מלא" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">הורה בעץ (הדור שמעליו)</label>
+                <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                  <option value="">— ללא הורה (שורש) —</option>
+                  {allLineageNodes
+                    .slice().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
+                    .map(n => (
+                      <option key={n.id} value={n.id}>דור {n.generation} — {n.name}</option>
+                    ))}
+                </select>
+              </div>
+              {suggestError && <p className="text-xs text-red-600">{suggestError}</p>}
+              <div className="flex gap-2">
+                <Button type="button" size="sm" onClick={handleSuggestLineage} loading={suggestSubmitting}>
+                  שלח לאישור
+                </Button>
+                <Button type="button" size="sm" variant="ghost"
+                  onClick={() => { setSuggestOpen(false); setSuggestName(''); setSuggestParentId(''); setSuggestError('') }}>
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Manual generations (דור 5 ומעלה) — appear after a branch is fully selected */}
         {form.lineage_node_id && (

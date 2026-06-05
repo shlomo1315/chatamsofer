@@ -459,6 +459,13 @@ export default function PublicPortalPage() {
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>([])
+  // Suggest new lineage node
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [suggestName, setSuggestName] = useState('')
+  const [suggestParentId, setSuggestParentId] = useState('')
+  const [suggestSubmitting, setSuggestSubmitting] = useState(false)
+  const [suggestError, setSuggestError] = useState('')
+  const [allLineageNodes, setAllLineageNodes] = useState<{ id: string; name: string; generation: number }[]>([])
   const [children, setChildren] = useState<ChildEntry[]>([])
   const [editingChildIdx, setEditingChildIdx] = useState<number | null>(null)
   const [idFieldError, setIdFieldError] = useState('')
@@ -623,6 +630,29 @@ export default function PublicPortalPage() {
       setError('שגיאת רשת. אנא נסה שוב.')
     }
     setLoading(false)
+  }
+
+  // ── Suggest lineage node ──
+  const handleSuggestLineage = async () => {
+    if (!suggestName.trim()) { setSuggestError('נא להזין שם'); return }
+    setSuggestSubmitting(true); setSuggestError('')
+    try {
+      const res = await fetch('/api/portal/suggest-lineage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: suggestName.trim(), parent_id: suggestParentId || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSuggestError(data.error || 'שגיאה'); return }
+      // Select the new pending node automatically
+      const node = data.node
+      setLineageNodeId(node.id)
+      setLineagePath([...allLineageNodes.find(n => n.id === suggestParentId)
+        ? [`דור ${node.generation - 1} — ${allLineageNodes.find(n => n.id === suggestParentId)?.name ?? ''}`]
+        : [], `${node.name} (ממתין לאימות)`])
+      setSuggestOpen(false); setSuggestName(''); setSuggestParentId('')
+    } catch { setSuggestError('שגיאת רשת') }
+    finally { setSuggestSubmitting(false) }
   }
 
   // ── Birth request ──
@@ -1138,11 +1168,63 @@ export default function PublicPortalPage() {
                     ))}
                   </div>
                 )}
-                <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path) }} />
+                <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path); setSuggestOpen(false) }} />
                 {lineageNodeId && (
                   <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]) }}
                     className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
                 )}
+
+                {/* Suggest new node */}
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  {!suggestOpen ? (
+                    <button type="button"
+                      onClick={() => {
+                        setSuggestOpen(true)
+                        if (allLineageNodes.length === 0) {
+                          fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
+                            setAllLineageNodes((d.nodes ?? []).filter((n: { status?: string }) => (n.status ?? 'verified') === 'verified'))
+                          }).catch(() => {})
+                        }
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors">
+                      <Plus size={13} />
+                      הדור שלי לא מופיע בעץ — הצע צומת חדש
+                    </button>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
+                      <p className="text-xs font-semibold text-amber-800">הצע דור חדש לעץ השושלת</p>
+                      <p className="text-xs text-amber-700">הצומת ייכנס לעץ בסטטוס "ממתין לאימות" עד שהצוות יאשר אותו.</p>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-medium text-slate-700">שם האדם <span className="text-red-500">*</span></label>
+                        <TextInput value={suggestName} onChange={e => setSuggestName(e.target.value)} placeholder='שם מלא' />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-medium text-slate-700">הורה בעץ (הדור שמעליו)</label>
+                        <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                          <option value="">— ללא הורה (שורש) —</option>
+                          {allLineageNodes
+                            .slice().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
+                            .map(n => (
+                              <option key={n.id} value={n.id}>דור {n.generation} — {n.name}</option>
+                            ))}
+                        </select>
+                      </div>
+                      {suggestError && <p className="text-xs text-red-600">{suggestError}</p>}
+                      <div className="flex gap-2">
+                        <button type="button" onClick={handleSuggestLineage} disabled={suggestSubmitting}
+                          className="flex items-center gap-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 rounded-lg px-4 py-2 transition-colors">
+                          {suggestSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                          שלח לאישור
+                        </button>
+                        <button type="button" onClick={() => { setSuggestOpen(false); setSuggestName(''); setSuggestParentId(''); setSuggestError('') }}
+                          className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">
+                          ביטול
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Manual generations */}
                 {lineageNodeId && (
