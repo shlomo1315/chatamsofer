@@ -164,9 +164,9 @@ export default function CityStreetPicker({
               const v = e.target.value
               setStreetInput(v)
               emitAddress(v, houseNum)
-              if (city && streets.length > 0) setShowStreet(true)
+              if (city) setShowStreet(true)
             }}
-            onFocus={() => { if (city && streets.length > 0) setShowStreet(true) }}
+            onFocus={() => { if (city) setShowStreet(true) }}
             placeholder={city ? 'שם הרחוב' : 'בחר עיר תחילה'}
             disabled={!city}
             autoComplete="off"
