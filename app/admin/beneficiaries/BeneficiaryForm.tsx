@@ -1059,16 +1059,18 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                     />
                   </Field>
                   <Field label="מין" required error={childErrors[idx]?.gender}>
-                    <select
-                      value={child.gender}
-                      onChange={e => { setChild(idx, 'gender', e.target.value); setChild(idx, 'marital_status', '') }}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full"
-                      required
-                    >
-                      <option value="">בחר...</option>
-                      <option value="male">בן</option>
-                      <option value="female">בת</option>
-                    </select>
+                    <div className="flex gap-2">
+                      {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
+                        <button key={v} type="button"
+                          onClick={() => { setChild(idx, 'gender', v); setChild(idx, 'marital_status', '') }}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            child.gender === v
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                          }`}
+                        >{l}</button>
+                      ))}
+                    </div>
                   </Field>
                   <Field label="תאריך לידה" required error={childErrors[idx]?.birth_date}>
                     <FInput
@@ -1079,20 +1081,22 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                       required
                     />
                   </Field>
-                  <Field label="סטטוס" required error={childErrors[idx]?.marital_status}>
-                    <select
-                      value={child.marital_status}
-                      onChange={e => setChild(idx, 'marital_status', e.target.value)}
-                      disabled={!child.gender}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full disabled:bg-slate-100 disabled:text-slate-400"
-                      required
-                    >
-                      <option value="">{child.gender ? 'בחר...' : 'בחר מין תחילה'}</option>
+                  {child.gender && (
+                  <Field label="מצב משפחתי" required error={childErrors[idx]?.marital_status}>
+                    <div className="flex gap-2">
                       {maritalOptionsFor(child.gender).map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                        <button key={o.value} type="button"
+                          onClick={() => setChild(idx, 'marital_status', o.value)}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                            child.marital_status === o.value
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400'
+                          }`}
+                        >{o.label}</button>
                       ))}
-                    </select>
+                    </div>
                   </Field>
+                  )}
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-slate-600">
                       מסמך זיהוי <span className="text-red-500 mr-1">*</span>
