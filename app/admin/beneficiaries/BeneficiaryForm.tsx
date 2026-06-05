@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
-import { validateIsraeliId } from '@/lib/validation'
+import { validateIsraeliId, validatePhone } from '@/lib/validation'
 
 const MARITAL_OPTIONS = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
 const WIFE_PRIMARY_STATUSES = ['גרושה', 'אלמנה']
@@ -551,6 +551,7 @@ interface FormState {
   spouse_id_number: string
   spouse_doc_type: 'id' | 'passport'
   spouse_birth_date: string
+  spouse_phone: string
   children_count: string
   notes: string
   lineage_node_id: string
@@ -586,6 +587,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     spouse_id_number: defaultValues?.spouse_id_number ?? '',
     spouse_doc_type: defaultValues?.spouse_doc_type ?? 'id',
     spouse_birth_date: defaultValues?.spouse_birth_date ?? '',
+    spouse_phone: defaultValues?.spouse_phone ?? '',
     children_count: String(defaultValues?.children_count ?? '0'),
     notes: defaultValues?.notes ?? '',
     lineage_node_id: defaultValues?.lineage_node_id ?? '',
@@ -691,8 +693,15 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       if (!form.spouse_id_number.trim()) errs.spouse_id_number = 'שדה חובה'
       else if (form.spouse_doc_type === 'id' && !validateIsraeliId(form.spouse_id_number)) {
         errs.spouse_id_number = 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
+      } else if (form.id_doc_type === 'id' && form.spouse_doc_type === 'id' && form.spouse_id_number.replace(/\D/g, '') === form.id_number.replace(/\D/g, '')) {
+        errs.spouse_id_number = 'תעודת הזהות של האישה זהה לתעודת הזהות של הבעל'
       }
       if (!form.spouse_birth_date) errs.spouse_birth_date = 'שדה חובה'
+      if (form.spouse_phone && !validatePhone(form.spouse_phone)) {
+        errs.spouse_phone = 'אנא הזן מספר נייד תקין המתחיל ב-05'
+      } else if (form.spouse_phone && form.phone && form.spouse_phone.replace(/\D/g, '') === form.phone.replace(/\D/g, '')) {
+        errs.spouse_phone = 'מספר הטלפון של האישה זהה למספר הטלפון של הבעל'
+      }
     }
 
     if (!form.phone.trim()) errs.phone = 'שדה חובה'
@@ -760,6 +769,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           : null,
         spouse_doc_type: showWifeFields ? form.spouse_doc_type : null,
         spouse_birth_date: showWifeFields ? (form.spouse_birth_date || null) : null,
+        spouse_phone: showWifeFields ? (form.spouse_phone || null) : null,
         children_count: children.length,
         children: children.map(c => ({
           name: c.name.trim(),
@@ -957,13 +967,35 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 onDocType={t => setForm(f => ({ ...f, spouse_doc_type: t }))}
                 onValue={v => { setForm(f => ({ ...f, spouse_id_number: v })); setErrors(prev => ({ ...prev, spouse_id_number: undefined })) }}
                 onBlur={() => {
-                  if (form.spouse_doc_type === 'id' && form.spouse_id_number.trim() && !validateIsraeliId(form.spouse_id_number))
+                  const sid = form.spouse_id_number.trim()
+                  if (!sid) { setErrors(prev => ({ ...prev, spouse_id_number: undefined })); return }
+                  if (form.spouse_doc_type === 'id' && !validateIsraeliId(sid)) {
                     setErrors(prev => ({ ...prev, spouse_id_number: 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)' }))
-                  else setErrors(prev => ({ ...prev, spouse_id_number: undefined }))
+                  } else if (form.id_doc_type === 'id' && form.spouse_doc_type === 'id' && sid.replace(/\D/g, '') === form.id_number.replace(/\D/g, '')) {
+                    setErrors(prev => ({ ...prev, spouse_id_number: 'תעודת הזהות של האישה זהה לתעודת הזהות של הבעל' }))
+                  } else {
+                    setErrors(prev => ({ ...prev, spouse_id_number: undefined }))
+                  }
                 }}
               />
               <Field label="תאריך לידה האישה" required error={errors.spouse_birth_date}>
                 <FInput type="date" value={form.spouse_birth_date} onChange={set('spouse_birth_date')} dir="ltr" required />
+              </Field>
+              <Field label="טלפון האישה" error={errors.spouse_phone}>
+                <FInput type="tel" value={form.spouse_phone}
+                  onChange={e => { setForm(f => ({ ...f, spouse_phone: e.target.value })); setErrors(prev => ({ ...prev, spouse_phone: undefined })) }}
+                  onBlur={() => {
+                    const sp = form.spouse_phone.trim()
+                    if (!sp) { setErrors(prev => ({ ...prev, spouse_phone: undefined })); return }
+                    if (!validatePhone(sp)) {
+                      setErrors(prev => ({ ...prev, spouse_phone: 'אנא הזן מספר נייד תקין המתחיל ב-05' }))
+                    } else if (form.phone && sp.replace(/\D/g, '') === form.phone.replace(/\D/g, '')) {
+                      setErrors(prev => ({ ...prev, spouse_phone: 'מספר הטלפון של האישה זהה למספר הטלפון של הבעל' }))
+                    } else {
+                      setErrors(prev => ({ ...prev, spouse_phone: undefined }))
+                    }
+                  }}
+                  placeholder="0500000000" dir="ltr" maxLength={11} />
               </Field>
             </div>
           )}

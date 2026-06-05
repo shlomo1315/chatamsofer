@@ -452,7 +452,7 @@ export default function PublicPortalPage() {
   const [regForm, setRegForm] = useState({
     id_number: '', full_name: '', family_name: '', phone: '', phone2: '',
     email: '', address: '', city: '', birth_date: '', gender: '',
-    marital_status: '', spouse_name: '', spouse_id_number: '',
+    marital_status: '', spouse_name: '', spouse_id_number: '', spouse_phone: '',
     children_count: '0', notes: '',
   })
   const [lineageNodeId, setLineageNodeId] = useState('')
@@ -462,6 +462,7 @@ export default function PublicPortalPage() {
   const [editingChildIdx, setEditingChildIdx] = useState<number | null>(null)
   const [idFieldError, setIdFieldError] = useState('')
   const [spouseIdError, setSpouseIdError] = useState('')
+  const [spousePhoneError, setSpousePhoneError] = useState('')
   const [childIdErrors, setChildIdErrors] = useState<Record<number, string>>({})
   const [phoneError, setPhoneError] = useState('')
   const [emailError, setEmailError] = useState('')
@@ -565,8 +566,29 @@ export default function PublicPortalPage() {
     if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
-    if (showSpouseFields && regForm.spouse_id_number && !validateIsraeliId(regForm.spouse_id_number)) {
-      setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
+    if (showSpouseFields && regForm.spouse_id_number) {
+      if (!validateIsraeliId(regForm.spouse_id_number)) {
+        setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
+      }
+      if (regForm.spouse_id_number.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
+        setSpouseIdError('תעודת הזהות של האישה זהה לתעודת הזהות של הבעל'); setError('אנא תקן את שגיאות הטופס'); return
+      }
+      // Check if spouse ID already exists in DB
+      try {
+        const chkRes = await fetch(`/api/portal/lookup?id=${regForm.spouse_id_number.replace(/\D/g, '')}`)
+        const chkData = await chkRes.json()
+        if (chkData.found) {
+          setSpouseIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב'); setError('אנא תקן את שגיאות הטופס'); return
+        }
+      } catch { /* network error — continue */ }
+    }
+    if (showSpouseFields && regForm.spouse_phone) {
+      if (!validatePhone(regForm.spouse_phone)) {
+        setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
+      }
+      if (regForm.phone && regForm.spouse_phone.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) {
+        setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל'); setError('אנא תקן את שגיאות הטופס'); return
+      }
     }
     if (regForm.phone && !validatePhone(regForm.phone)) {
       setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
@@ -589,6 +611,7 @@ export default function PublicPortalPage() {
           lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
+          spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
         }),
       })
       const data = await res.json()
@@ -993,14 +1016,42 @@ export default function PublicPortalPage() {
                           value={regForm.spouse_id_number}
                           onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
                           onBlur={() => {
-                            if (regForm.spouse_id_number && !validateIsraeliId(regForm.spouse_id_number))
+                            const sid = regForm.spouse_id_number.trim()
+                            if (!sid) { setSpouseIdError(''); return }
+                            if (!validateIsraeliId(sid)) {
                               setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה')
-                            else setSpouseIdError('')
+                            } else if (sid.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
+                              setSpouseIdError('תעודת הזהות של האישה זהה לתעודת הזהות של הבעל')
+                            } else {
+                              setSpouseIdError('')
+                            }
                           }}
                           placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
                           className={spouseIdError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spouseIdError && <p className="text-xs text-red-600 mt-1">{spouseIdError}</p>}
+                      </Field>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <Field label="טלפון האשה">
+                        <TextInput type="tel"
+                          value={regForm.spouse_phone}
+                          onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
+                          onBlur={() => {
+                            const sp = regForm.spouse_phone.trim()
+                            if (!sp) { setSpousePhoneError(''); return }
+                            if (!validatePhone(sp)) {
+                              setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05')
+                            } else if (regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) {
+                              setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
+                            } else {
+                              setSpousePhoneError('')
+                            }
+                          }}
+                          placeholder="0500000000" dir="ltr" maxLength={11}
+                          className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
+                        />
+                        {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
                       </Field>
                     </div>
                   </div>

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, children, children_count, notes, lineage_node_id, lineage_manual,
+    spouse_name, spouse_id_number, spouse_phone, children, children_count, notes, lineage_node_id, lineage_manual,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
     gender: isMarried ? 'male' : (gender || null),
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
+    spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
     ...sharedFields,
   }]
 
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
           gender: 'female',
           spouse_name: String(full_name).trim(),
           spouse_id_number: cleanId,
+          spouse_phone: phone ? String(phone).trim() : null,
           ...sharedFields,
         })
       }

@@ -51,6 +51,7 @@ export interface Beneficiary {
   spouse_id_number?: string
   spouse_doc_type?: string
   spouse_birth_date?: string
+  spouse_phone?: string
   lineage_node_id?: string
   lineage_manual?: string[]
   children_count: number

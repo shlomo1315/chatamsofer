@@ -10,3 +10,8 @@ export function validateIsraeliId(raw: string): boolean {
   }
   return sum % 10 === 0
 }
+
+export function validatePhone(p: string): boolean {
+  const d = p.replace(/\D/g, '')
+  return d.length === 10 && d.startsWith('05')
+}
