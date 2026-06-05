@@ -740,6 +740,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
   const handleSuggestLineage = async () => {
     if (!suggestName.trim()) { setSuggestError('נא להזין שם'); return }
+    if (!suggestParentId) { setSuggestError('נא לבחור הורה בעץ'); return }
     setSuggestSubmitting(true); setSuggestError('')
     try {
       const res = await fetch('/api/portal/suggest-lineage', {
@@ -1259,7 +1260,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 <label className="text-xs font-medium text-slate-600">הורה בעץ (הדור שמעליו)</label>
                 <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                  <option value="">— ללא הורה (שורש) —</option>
+                  <option value="">— בחר הורה —</option>
                   {allLineageNodes
                     .slice().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
                     .map(n => (
