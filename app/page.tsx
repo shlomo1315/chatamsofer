@@ -1334,7 +1334,7 @@ export default function PublicPortalPage() {
                           <div className="col-span-2 sm:col-span-1">
                             <Field label="מין" required>
                               <div className="flex gap-2">
-                                {[{ v: 'male', l: 'זכר' }, { v: 'female', l: 'נקבה' }].map(({ v, l }) => (
+                                {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
                                   <button key={v} type="button"
                                     onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
                                     className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
@@ -1347,10 +1347,11 @@ export default function PublicPortalPage() {
                               </div>
                             </Field>
                           </div>
+                          {child.gender && (
                           <div className="col-span-2">
                             <Field label="מצב משפחתי" required>
                               <div className="flex gap-2 flex-wrap">
-                                {maritalFor(child.gender || 'male').map(({ v, l }) => (
+                                {maritalFor(child.gender).map(({ v, l }) => (
                                   <button key={v} type="button"
                                     onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
                                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
@@ -1363,6 +1364,7 @@ export default function PublicPortalPage() {
                               </div>
                             </Field>
                           </div>
+                          )}
                         </div>
                         <button type="button" onClick={() => {
                           if (!child.name || !child.id_number || !child.birth_date || !child.gender || !child.marital_status) {
@@ -1387,7 +1389,7 @@ export default function PublicPortalPage() {
                           <div>
                             <p className="text-sm font-semibold text-slate-800">{child.name || `ילד ${idx + 1}`}</p>
                             <p className="text-xs text-slate-500">
-                              {[child.gender === 'male' ? 'זכר' : child.gender === 'female' ? 'נקבה' : '', child.birth_date, child.marital_status].filter(Boolean).join(' · ')}
+                              {[child.gender === 'male' ? 'בן' : child.gender === 'female' ? 'בת' : '', child.birth_date, child.marital_status].filter(Boolean).join(' · ')}
                             </p>
                           </div>
                         </div>
