@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
 
     const raw = records.map(r => (r['שם_רחוב'] ?? '').trim()).filter(Boolean)
     const streets = [...new Set(raw)].sort((a, b) => a.localeCompare(b, 'he'))
-    console.log(`[streets] city="${city}" records=${records.length} streets=${streets.length} sample=${JSON.stringify(streets.slice(0, 3))}`)
     cache.set(city, { streets, at: Date.now() })
     return NextResponse.json({ streets })
   } catch {
