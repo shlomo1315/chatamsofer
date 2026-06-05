@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -1105,18 +1106,14 @@ export default function PublicPortalPage() {
                   <MapPin size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900">כתובת</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
-                    <Field label="רחוב ומספר בית" required>
-                      <TextInput value={regForm.address} onChange={setReg('address')} placeholder="הרב קוק 12" required />
-                    </Field>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <Field label="עיר" required>
-                      <TextInput value={regForm.city} onChange={setReg('city')} placeholder="בני ברק" required />
-                    </Field>
-                  </div>
-                </div>
+                <CityStreetPicker
+                  city={regForm.city}
+                  address={regForm.address}
+                  onCityChange={v => setRegForm(f => ({ ...f, city: v }))}
+                  onAddressChange={v => setRegForm(f => ({ ...f, address: v }))}
+                  cityRequired
+                  addressRequired
+                />
               </Card>
             )}
 

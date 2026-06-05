@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
+import CityStreetPicker from '@/components/ui/CityStreetPicker'
 
 const MARITAL_OPTIONS = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
 const WIFE_PRIMARY_STATUSES = ['גרושה', 'אלמנה']
@@ -1142,14 +1143,17 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
       {/* ── Address ── */}
       <Section title="כתובת" icon={MapPin}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="רחוב ומספר" required error={errors.address}>
-            <FInput value={form.address} onChange={set('address')} placeholder="הרב קוק 12" required />
-          </Field>
-          <Field label="עיר" required error={errors.city}>
-            <FInput value={form.city} onChange={set('city')} placeholder="בני ברק" required />
-          </Field>
-        </div>
+        <CityStreetPicker
+          city={form.city}
+          address={form.address}
+          onCityChange={v => setForm(f => ({ ...f, city: v }))}
+          onAddressChange={v => setForm(f => ({ ...f, address: v }))}
+          cityError={errors.city}
+          addressError={errors.address}
+          cityRequired
+          addressRequired
+          labelSize="xs"
+        />
       </Section>
 
       {/* ── Lineage ── */}
