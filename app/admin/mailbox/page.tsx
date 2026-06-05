@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { getGoogleStatus } from '@/lib/google'
 import { MailMessage } from '@/types'
 import MailboxClient from './MailboxClient'
 
@@ -29,5 +30,14 @@ export default async function MailboxPage() {
     .order('created_at', { ascending: false })
     .limit(300)
 
-  return <MailboxClient initialMessages={(data ?? []) as MailMessage[]} configured />
+  const google = await getGoogleStatus()
+
+  return (
+    <MailboxClient
+      initialMessages={(data ?? []) as MailMessage[]}
+      configured
+      googleConnected={google.connected}
+      googleEmail={google.email ?? undefined}
+    />
+  )
 }

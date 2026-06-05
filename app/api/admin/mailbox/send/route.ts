@@ -1,31 +1,11 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
-import { sendMail, isResendConfigured } from '@/lib/resend'
+import { getAuthedAdmin } from '@/lib/admin-auth'
+import { gmailSend, getGoogleStatus, type GmailAttachment } from '@/lib/google'
 
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-// מאמת שהמשתמש מחובר ומשמש כמנהל, ומחזיר את הקליינט והמשתמש לשימוש חוזר
-async function getAuthedAdmin() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(list) { try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch { /* server component */ } },
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false as const }
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'admin') return { ok: false as const }
-  return { ok: true as const, supabase, user }
-}
+const MAX_ATTACH_BYTES = 25 * 1024 * 1024 // מגבלת Gmail בפועל ~25MB
 
 interface AttachmentInput {
   file_url?: string
@@ -39,8 +19,10 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) {
     return NextResponse.json({ error: 'אין הרשאה — תיבת הדואר זמינה למנהל בלבד' }, { status: 403 })
   }
-  if (!isResendConfigured()) {
-    return NextResponse.json({ error: 'שירות המייל (Resend) אינו מוגדר עדיין בשרת' }, { status: 503 })
+
+  const status = await getGoogleStatus()
+  if (!status.connected || !status.email) {
+    return NextResponse.json({ error: 'Gmail אינו מחובר — חבר את החשבון תחילה' }, { status: 503 })
   }
 
   let body: {
@@ -70,21 +52,50 @@ export async function POST(request: NextRequest) {
   if (!subject) return NextResponse.json({ error: 'נושא חובה' }, { status: 400 })
   if (!text && !html) return NextResponse.json({ error: 'גוף ההודעה חסר' }, { status: 400 })
 
-  const attachments = (body.attachments ?? []).filter((a): a is AttachmentInput & { file_url: string } => !!a?.file_url)
+  const attachmentsInput = (body.attachments ?? []).filter((a): a is AttachmentInput & { file_url: string } => !!a?.file_url)
 
-  // שליחה דרך Resend
+  // שליפת תוכן הקבצים המצורפים (הועלו מראש ל-Storage) לצורך הטמעה ב-MIME
+  const attachments: GmailAttachment[] = []
+  let totalBytes = 0
+  for (const a of attachmentsInput) {
+    try {
+      const r = await fetch(a.file_url)
+      if (!r.ok) continue
+      const buf = Buffer.from(await r.arrayBuffer())
+      totalBytes += buf.length
+      if (totalBytes > MAX_ATTACH_BYTES) {
+        return NextResponse.json({ error: 'הקבצים המצורפים גדולים מדי (מעל 25MB)' }, { status: 400 })
+      }
+      attachments.push({
+        filename: a.file_name || 'attachment',
+        contentType: a.content_type,
+        content: buf,
+      })
+    } catch {
+      return NextResponse.json({ error: `שגיאה בצירוף הקובץ ${a.file_name ?? ''}` }, { status: 502 })
+    }
+  }
+
+  const fromName = process.env.MAILBOX_FROM_NAME ?? 'היכל החתם סופר'
+
+  // שליחה דרך Gmail
   let providerId = ''
+  let threadId = body.thread_id ?? ''
   try {
-    const sent = await sendMail({
+    const sent = await gmailSend({
+      fromEmail: status.email,
+      fromName,
       to,
       cc,
       subject,
       text,
       html,
-      headers: body.in_reply_to ? { 'In-Reply-To': body.in_reply_to } : undefined,
-      attachments: attachments.map((a) => ({ filename: a.file_name || 'attachment', path: a.file_url })),
+      inReplyTo: body.in_reply_to,
+      threadId: body.thread_id,
+      attachments,
     })
     providerId = sent.id
+    threadId = sent.threadId
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'שגיאה בשליחת המייל'
     return NextResponse.json({ error: msg }, { status: 502 })
@@ -95,8 +106,8 @@ export async function POST(request: NextRequest) {
     .from('mail_messages')
     .insert({
       direction: 'outbound',
-      from_email: process.env.MAILBOX_FROM_ADDRESS,
-      from_name: process.env.MAILBOX_FROM_NAME ?? null,
+      from_email: status.email,
+      from_name: fromName,
       to_emails: to,
       cc_emails: cc,
       subject,
@@ -104,10 +115,10 @@ export async function POST(request: NextRequest) {
       body_html: html ?? null,
       status: 'sent',
       is_read: true,
-      thread_id: body.thread_id ?? providerId ?? null,
+      thread_id: threadId || providerId || null,
       in_reply_to: body.in_reply_to ?? null,
       provider_id: providerId || null,
-      has_attachments: attachments.length > 0,
+      has_attachments: attachmentsInput.length > 0,
       sent_by: auth.user.id,
       sent_at: new Date().toISOString(),
     })
@@ -119,9 +130,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, provider_id: providerId, warning: 'נשלח אך לא נשמר בלוג' })
   }
 
-  if (inserted && attachments.length > 0) {
+  if (inserted && attachmentsInput.length > 0) {
     await auth.supabase.from('mail_attachments').insert(
-      attachments.map((a) => ({
+      attachmentsInput.map((a) => ({
         message_id: inserted.id,
         file_url: a.file_url,
         file_name: a.file_name ?? null,

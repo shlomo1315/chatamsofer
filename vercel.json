@@ -3,6 +3,10 @@
     {
       "path": "/api/nedarim/unload-expired",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/admin/mailbox/google/sync",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

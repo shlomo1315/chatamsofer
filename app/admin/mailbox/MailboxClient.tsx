@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Mail, Inbox, Send, FileText, Plus, Search, RefreshCw,
-  Reply, Forward, Trash2, Paperclip, Clock, AlertTriangle, ChevronRight,
+  Reply, Forward, Trash2, Paperclip, Clock, AlertTriangle, ChevronRight, CheckCircle2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -30,9 +30,13 @@ const FOLDER_ICON: Record<MailFolder, typeof Inbox> = {
 export default function MailboxClient({
   initialMessages,
   configured = true,
+  googleConnected = false,
+  googleEmail,
 }: {
   initialMessages: MailMessage[]
   configured?: boolean
+  googleConnected?: boolean
+  googleEmail?: string
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [messages, setMessages] = useState<MailMessage[]>(initialMessages)
@@ -41,6 +45,24 @@ export default function MailboxClient({
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [compose, setCompose] = useState<ComposeInit | null>(null)
+  const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
+  // הודעת חזרה מתהליך החיבור ל-Gmail (?google=connected|error|notconfigured).
+  // קריאה חד-פעמית מה-URL אחרי טעינה — setState ב-effect נדרש כדי למנוע אי-התאמת hydration.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const g = params.get('google')
+    if (!g) return
+    const next: { type: 'ok' | 'err'; text: string } =
+      g === 'connected'
+        ? { type: 'ok', text: `Gmail חובר בהצלחה${params.get('email') ? ` (${params.get('email')})` : ''}` }
+        : g === 'notconfigured'
+          ? { type: 'err', text: 'חיבור Google אינו מוגדר בשרת (חסרים GOOGLE_CLIENT_ID / SECRET)' }
+          : { type: 'err', text: `חיבור Gmail נכשל: ${params.get('msg') || 'שגיאה'}` }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNotice(next)
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
 
   // קבלת מייל נכנס בזמן אמת
   useEffect(() => {
@@ -62,6 +84,10 @@ export default function MailboxClient({
   const refresh = useCallback(async () => {
     if (!configured) return
     setLoading(true)
+    // משיכת מיילים חדשים מ-Gmail לפני הרענון מה-DB
+    if (googleConnected) {
+      try { await fetch('/api/admin/mailbox/google/sync', { method: 'POST' }) } catch { /* רענון יציג את הקיים */ }
+    }
     const { data } = await supabase
       .from('mail_messages')
       .select('*, attachments:mail_attachments(*)')
@@ -69,7 +95,7 @@ export default function MailboxClient({
       .limit(300)
     if (data) setMessages(data as MailMessage[])
     setLoading(false)
-  }, [supabase, configured])
+  }, [supabase, configured, googleConnected])
 
   const markRead = useCallback(async (id: string) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, is_read: true } : m)))
@@ -163,6 +189,42 @@ export default function MailboxClient({
           <AlertTriangle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-amber-800">חיבור Supabase נדרש לשימוש בתיבת הדואר.</p>
         </div>
+      )}
+
+      {notice && (
+        <div className={`flex items-start gap-3 p-3 rounded-lg border ${
+          notice.type === 'ok' ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
+        }`}>
+          {notice.type === 'ok'
+            ? <CheckCircle2 size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+            : <AlertTriangle size={16} className="text-red-600 mt-0.5 flex-shrink-0" />}
+          <p className={`text-sm ${notice.type === 'ok' ? 'text-emerald-800' : 'text-red-800'}`}>{notice.text}</p>
+        </div>
+      )}
+
+      {configured && !googleConnected && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+          <div className="flex items-start gap-3">
+            <Mail size={18} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-indigo-900">חבר את חשבון ה-Gmail כדי לשלוח ולקבל מיילים</p>
+              <p className="text-xs text-indigo-700 mt-0.5">המערכת תשלח ותקבל דרך תיבת ה-Google Workspace שלך. ללא חיבור — לא ניתן לשלוח.</p>
+            </div>
+          </div>
+          <a
+            href="/api/admin/mailbox/google/connect"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors flex-shrink-0"
+          >
+            התחבר ל-Gmail
+          </a>
+        </div>
+      )}
+
+      {configured && googleConnected && googleEmail && (
+        <p className="flex items-center gap-1.5 text-xs text-slate-500">
+          <CheckCircle2 size={13} className="text-emerald-500" />
+          מחובר ל-Gmail: <span className="font-medium ltr-num">{googleEmail}</span>
+        </p>
       )}
 
       {/* תיקיות + חיפוש */}
