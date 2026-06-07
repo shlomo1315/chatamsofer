@@ -1,14 +1,14 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Eye, Phone, MapPin, Baby, Clock, Check, X } from 'lucide-react'
+import { Eye, MapPin, Baby, Clock, Check, X, Users, CheckCircle2 } from 'lucide-react'
 import { Beneficiary, WidowRequest, WIDOW_REQUEST_TYPE_LABELS, WIDOW_REQUEST_STATUS_LABELS, WIDOW_REQUEST_STATUS_COLORS } from '@/types'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
 
 const TABS = [
-  { key: 'widows', label: 'רשימת אלמנות/אלמנים' },
-  { key: 'orphans', label: 'ילדים יתומים' },
+  { key: 'widows',   label: 'רשימת אלמנות/אלמנים' },
+  { key: 'orphans',  label: 'ילדים יתומים' },
   { key: 'requests', label: 'בקשות' },
 ]
 
@@ -27,12 +27,43 @@ const STATUS_LBL: Record<string, string> = {
 export default function WidowsDashboard({ widows, requests }: { widows: Beneficiary[]; requests: WidowRequest[] }) {
   const [tab, setTab] = useState<'widows' | 'orphans' | 'requests'>('widows')
 
+  const totalOrphans = widows.reduce((sum, w) => sum + (w.children_count ?? 0), 0)
+  const pendingReqs  = requests.filter(r => r.status === 'pending').length
+  const approvedReqs = requests.filter(r => r.status === 'approved').length
+
+  const tiles = [
+    { label: 'אלמנות ואלמנים',  value: widows.length, icon: Users,        color: 'bg-purple-50 text-purple-600', border: 'border-purple-100', active: 'ring-purple-400', tab: 'widows'   },
+    { label: 'ילדים יתומים',    value: totalOrphans,   icon: Baby,         color: 'bg-pink-50 text-pink-600',     border: 'border-pink-100',   active: 'ring-pink-400',   tab: 'orphans'  },
+    { label: 'בקשות ממתינות',   value: pendingReqs,    icon: Clock,        color: 'bg-amber-50 text-amber-600',   border: 'border-amber-100',  active: 'ring-amber-400',  tab: 'requests' },
+    { label: 'בקשות שאושרו',    value: approvedReqs,   icon: CheckCircle2, color: 'bg-green-50 text-green-600',   border: 'border-green-100',  active: 'ring-green-400',  tab: 'requests' },
+  ] as const
+
   // Collect all orphans from children JSONB
   const orphans = widows.flatMap(w =>
     (w.children ?? []).map(c => ({ ...c, parentName: fullName(w), parentId: w.id }))
   )
 
   return (
+    <div className="flex flex-col gap-4">
+      {/* Stat tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {tiles.map(t => (
+          <button
+            key={t.label}
+            onClick={() => setTab(t.tab)}
+            className={`bg-white rounded-2xl border ${t.border} p-4 flex items-center gap-3 shadow-sm text-right transition-all hover:shadow-md hover:scale-[1.02] ${tab === t.tab ? `ring-2 ${t.active}` : ''}`}
+          >
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${t.color}`}>
+              <t.icon size={18} />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{t.value}</p>
+              <p className="text-xs text-slate-500">{t.label}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Tab bar */}
       <div className="flex border-b border-slate-200 bg-slate-50">
@@ -198,6 +229,7 @@ export default function WidowsDashboard({ widows, requests }: { widows: Benefici
           </table>
         )}
       </div>
+    </div>
     </div>
   )
 }
