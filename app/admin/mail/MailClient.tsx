@@ -497,13 +497,37 @@ export default function MailClient() {
   // Forward
   const [forwardMsg, setForwardMsg] = useState<ParsedMessage | null>(null)
 
+  // Current user profile (for label-based filtering)
+  const [myProfile, setMyProfile] = useState<Profile | null>(null)
+
+  // Fetch current user profile on mount
+  useEffect(() => {
+    fetch('/api/admin/me')
+      .then(r => r.json())
+      .then(d => setMyProfile(d.profile ?? null))
+      .catch(() => {})
+  }, [])
+
   const load = useCallback(async (f: string, q?: string) => {
     setLoading(true)
     setSelected(null)
     const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
     const data = await res.json()
     if (data.notConnected) { setNotConnected(true); setLoading(false); return }
-    const msgs: ParsedMessage[] = data.messages ?? []
+    let msgs: ParsedMessage[] = data.messages ?? []
+
+    // Filter messages by assigned label IDs for non-admin users
+    if (myProfile && myProfile.role !== 'admin' && myProfile.mail_label_ids && myProfile.mail_label_ids.length > 0) {
+      // We need the assignments to filter — fetch them first (they're loaded separately via labels endpoint)
+      // Use a local fetch to get current assignments at load time
+      const labelsRes = await fetch('/api/admin/mail/labels')
+      const labelsData = await labelsRes.json()
+      const currentAssignments: Record<string, string[]> = labelsData.assignments ?? {}
+      msgs = msgs.filter(msg =>
+        (currentAssignments[msg.id] ?? []).some(labelId => myProfile.mail_label_ids!.includes(labelId))
+      )
+    }
+
     setMessages(msgs)
 
     // batch resolve sender names
@@ -517,7 +541,7 @@ export default function MailClient() {
     }
 
     setLoading(false)
-  }, [])
+  }, [myProfile])
 
   // Load labels on mount
   useEffect(() => {
@@ -579,8 +603,19 @@ export default function MailClient() {
               <Mail size={14} className="text-indigo-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-700 truncate">משרד ראשי</p>
-              <p className="text-[10px] text-slate-400 truncate">office@chasamsofer.info</p>
+              {myProfile && myProfile.role !== 'admin' && myProfile.mail_account ? (
+                <>
+                  <p className="text-xs font-semibold text-slate-700 truncate">
+                    {internalEmails.find(ie => ie.email === myProfile.mail_account)?.name ?? myProfile.mail_account}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate">{myProfile.mail_account}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-semibold text-slate-700 truncate">משרד ראשי</p>
+                  <p className="text-[10px] text-slate-400 truncate">office@chasamsofer.info</p>
+                </>
+              )}
             </div>
           </div>
           <button
