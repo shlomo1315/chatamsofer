@@ -43,6 +43,7 @@ function ComposeModal({ onClose, replyTo }: { onClose: () => void; replyTo?: Par
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
+  const [sentInfo, setSentInfo] = useState<{ to: string; subject: string; body: string } | null>(null)
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
 
@@ -67,7 +68,32 @@ function ComposeModal({ onClose, replyTo }: { onClose: () => void; replyTo?: Par
       }),
     })
     setSending(false)
-    onClose()
+    setSentInfo({ to, subject, body })
+    setTimeout(onClose, 2000)
+  }
+
+  if (sentInfo) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col items-center gap-4 px-8 py-10">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle2 size={32} className="text-green-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900">המייל נשלח בהצלחה</h3>
+          <div className="w-full bg-slate-50 rounded-xl p-4 flex flex-col gap-2 text-sm text-right">
+            <p className="text-slate-500 text-xs font-medium uppercase tracking-wide">אל:</p>
+            <p className="font-medium text-slate-800">{sentInfo.to}</p>
+            {sentInfo.body && (
+              <>
+                <p className="text-slate-500 text-xs font-medium uppercase tracking-wide mt-2">תוכן:</p>
+                <p className="text-slate-600 line-clamp-4 whitespace-pre-wrap">{sentInfo.body}</p>
+              </>
+            )}
+          </div>
+          <p className="text-xs text-slate-400">חלון זה ייסגר אוטומטית</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -243,16 +269,25 @@ export default function MailClient() {
 
       {/* Sidebar */}
       <div className="w-48 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
-        <div className="p-3">
+        <div className="px-3 pt-3 pb-2 border-b border-slate-200">
+          <div className="flex items-center gap-2 px-1 py-1.5 mb-2">
+            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+              <Mail size={14} className="text-indigo-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-700 truncate">משרד ראשי</p>
+              <p className="text-[10px] text-slate-400 truncate">office@chasamsofer.info</p>
+            </div>
+          </div>
           <button
             onClick={() => { setCompose(true); setReplyMsg(undefined) }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
           >
             <PenSquare size={15} />
             מייל חדש
           </button>
         </div>
-        <nav className="flex-1 px-2 pb-2">
+        <nav className="flex-1 px-2 py-2">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}

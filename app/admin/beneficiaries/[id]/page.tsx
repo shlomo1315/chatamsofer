@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip } from 'lucide-react'
+import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
@@ -12,6 +12,7 @@ import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
+import BeneficiaryMailThread from './BeneficiaryMailThread'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
@@ -322,6 +323,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
+        ...(beneficiary.email ? [{
+          key: 'mail',
+          label: 'הודעות מיילים',
+          accent: 'rose' as const,
+          icon: <Mail size={15} />,
+          content: <BeneficiaryMailThread email={beneficiary.email} name={fullName} />,
+        }] : []),
       ]} />
     </div>
   )
