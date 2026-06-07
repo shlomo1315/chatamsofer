@@ -675,6 +675,12 @@ export default function MailClient() {
     }
   }
 
+  const trashMessage = async (id: string) => {
+    await fetch('/api/admin/gmail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    setMessages(ms => ms.filter(m => m.id !== id))
+    if (selected?.id === id) setSelected(null)
+  }
+
   const toggleLabel = async (messageId: string, labelId: string, add: boolean) => {
     const action = add ? 'assign' : 'unassign'
     await fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -810,7 +816,13 @@ export default function MailClient() {
                       {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
                     </div>
                   </button>
-                  <div className="absolute top-2 left-2">
+                  <div className="absolute top-2 left-2 flex items-center gap-0.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
+                      className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                      title="מחק">
+                      <Trash2 size={12} />
+                    </button>
                     <div className="relative">
                       <button
                         onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
@@ -857,6 +869,11 @@ export default function MailClient() {
               <button onClick={() => setForwardMsg(selected)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 <Forward size={14} /> העבר
+              </button>
+              <button onClick={() => trashMessage(selected.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                title="העבר לאשפה">
+                <Trash2 size={14} /> מחק
               </button>
               <button onClick={() => setSelected(null)} className="p-1.5 text-slate-400 hover:text-slate-700">
                 <ChevronLeft size={18} />
