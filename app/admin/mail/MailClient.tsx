@@ -628,7 +628,7 @@ export default function MailClient() {
         </div>
         <nav className="flex-1 px-2 py-2">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => setFolder(key)}
+            <button key={key} onClick={() => { setFolder(key); setSelected(null) }}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right ${folder === key ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
@@ -770,12 +770,6 @@ export default function MailClient() {
         </div>
       )}
 
-      {!selected && !loading && (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
-          <Mail size={40} className="text-slate-300" />
-          <p className="text-sm">בחר מייל לצפייה</p>
-        </div>
-      )}
 
       {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} />}
       {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
