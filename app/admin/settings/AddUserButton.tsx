@@ -1,8 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Loader2, UserPlus, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { ROLE_LABELS, type UserRole, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
+
+interface MailLabel { id: string; name: string; color: string }
+interface InternalEmail { name: string; email: string }
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
@@ -40,6 +43,21 @@ export default function AddUserButton() {
   const [role, setRole] = useState<UserRole>('secretary')
   const [permissions, setPermissions] = useState<UserPermissions>(defaultPerms())
 
+  // Mail state
+  const [mailLabels, setMailLabels] = useState<MailLabel[]>([])
+  const [mailInternalEmails, setMailInternalEmails] = useState<InternalEmail[]>([])
+  const [mailAccount, setMailAccount] = useState<string>('')
+  const [mailLabelIds, setMailLabelIds] = useState<string[]>([])
+
+  useEffect(() => {
+    fetch('/api/admin/mail/labels')
+      .then(r => r.json())
+      .then(d => {
+        setMailLabels(d.labels ?? [])
+        setMailInternalEmails(d.internalEmails ?? [])
+      })
+  }, [])
+
   const setSection = (key: SectionKey, level: PermissionLevel) =>
     setPermissions(p => ({ ...p, [key]: level }))
 
@@ -52,6 +70,7 @@ export default function AddUserButton() {
     setFullName(''); setEmail(''); setPhone(''); setPassword(''); setRole('secretary')
     setPermissions(defaultPerms())
     setError(''); setDone(false); setShowPw(false)
+    setMailAccount(''); setMailLabelIds([])
   }
 
   const close = () => { if (!saving) { setOpen(false); reset() } }
@@ -63,7 +82,12 @@ export default function AddUserButton() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, email, phone, password, role, permissions: isAdmin ? {} : permissions }),
+        body: JSON.stringify({
+          full_name: fullName, email, phone, password, role,
+          permissions: isAdmin ? {} : permissions,
+          mail_account: mailAccount || null,
+          mail_label_ids: mailLabelIds,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'שגיאה ביצירת המשתמש'); setSaving(false); return }
@@ -183,6 +207,52 @@ export default function AddUserButton() {
                     מנהל מערכת — גישה מלאה לכל המחלקות ללא הגבלה
                   </div>
                 )}
+
+                {/* Mail permissions */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold text-slate-700">הרשאות מייל</label>
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200 p-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-600">חשבון מייל אחראי</label>
+                      <select
+                        value={mailAccount}
+                        onChange={e => setMailAccount(e.target.value)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="">ללא</option>
+                        {mailInternalEmails.map(ie => (
+                          <option key={ie.email} value={ie.email}>{ie.name} ({ie.email})</option>
+                        ))}
+                      </select>
+                    </div>
+                    {mailLabels.length > 0 && (
+                      <div className="flex flex-col gap-1 pt-1">
+                        <label className="text-xs font-medium text-slate-600">תוויות מחלקות מנוהלות</label>
+                        <div className="flex flex-col gap-1 mt-0.5">
+                          {mailLabels.map(l => (
+                            <label key={l.id} className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={mailLabelIds.includes(l.id)}
+                                onChange={e => {
+                                  setMailLabelIds(prev =>
+                                    e.target.checked ? [...new Set([...prev, l.id])] : prev.filter(id => id !== l.id)
+                                  )
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                              {l.name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {mailLabels.length === 0 && (
+                      <p className="text-xs text-slate-400">אין תוויות מחלקות מוגדרות. הוסף בהגדרות המייל.</p>
+                    )}
+                  </div>
+                </div>
 
                 {error && (
                   <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">

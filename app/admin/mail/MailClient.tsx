@@ -7,7 +7,7 @@ import {
   CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings,
 } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
-import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
+import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

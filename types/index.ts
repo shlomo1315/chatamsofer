@@ -22,6 +22,8 @@ export interface Profile {
   phone?: string
   is_active: boolean
   permissions?: UserPermissions
+  mail_label_ids?: string[]
+  mail_account?: string
   created_at: string
 }
 
