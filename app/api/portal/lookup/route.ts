@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const select = 'id, full_name, family_name, eligibility_status, is_active, phone, city, marital_status, created_at'
+  const select = 'id, full_name, family_name, eligibility_status, is_active, phone, city, marital_status, children, created_at'
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })

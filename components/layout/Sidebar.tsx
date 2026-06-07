@@ -14,6 +14,7 @@ import {
   X,
   Building2,
   Trees,
+  HeartHandshake,
 } from 'lucide-react'
 import { useState } from 'react'
 import type { UserPermissions, SectionKey } from '@/types'
@@ -43,8 +44,9 @@ const navItems: { href: string; label: string; icon: React.ElementType; section?
   { href: '/admin/lineage',        label: 'עץ הדורות', icon: Trees,       section: 'lineage' },
   { href: '/admin/maternity',      label: 'יולדות',    icon: Baby,        section: 'maternity' },
   { href: '/admin/loans',          label: 'הלוואות',   icon: CreditCard,  section: 'loans' },
-  { href: '/admin/distributions',  label: 'חלוקות',    icon: Gift,        section: 'distributions' },
-  { href: '/admin/reports',        label: 'דוחות',     icon: BarChart3,   section: 'reports' },
+  { href: '/admin/distributions',  label: 'חלוקות',    icon: Gift,           section: 'distributions' },
+  { href: '/admin/widows',         label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
+  { href: '/admin/reports',        label: 'דוחות',     icon: BarChart3,      section: 'reports' },
   { href: '/admin/settings',       label: 'הגדרות',    icon: Settings },
 ]
 

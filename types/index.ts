@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
-export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'loans' | 'distributions' | 'reports'
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'loans' | 'distributions' | 'reports' | 'widows'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
@@ -11,6 +11,8 @@ export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloade
 export type DistributionStatus = 'planning' | 'active' | 'completed' | 'cancelled'
 export type DistributionRecipientStatus = 'pending' | 'received' | 'not_received'
 export type NotificationType = 'info' | 'warning' | 'urgent' | 'reminder'
+export type WidowRequestType = 'financial' | 'food' | 'general'
+export type WidowRequestStatus = 'pending' | 'in_progress' | 'approved' | 'rejected'
 
 export interface Profile {
   id: string
@@ -219,6 +221,41 @@ export interface DashboardStats {
   maternity_active: number
   distributions_planned: number
   total_loan_amount: number
+}
+
+export interface WidowRequest {
+  id: string
+  beneficiary_id: string
+  request_type: WidowRequestType
+  description?: string
+  amount?: number
+  status: WidowRequestStatus
+  notes?: string
+  reviewed_by?: string
+  reviewed_at?: string
+  created_at: string
+  updated_at: string
+  beneficiary?: Beneficiary
+}
+
+export const WIDOW_REQUEST_TYPE_LABELS: Record<WidowRequestType, string> = {
+  financial: 'קרן סיוע כספי',
+  food: 'סיוע במזון / שוברים',
+  general: 'בקשת עזרה כללית',
+}
+
+export const WIDOW_REQUEST_STATUS_LABELS: Record<WidowRequestStatus, string> = {
+  pending: 'ממתין לטיפול',
+  in_progress: 'בטיפול',
+  approved: 'אושר',
+  rejected: 'נדחה',
+}
+
+export const WIDOW_REQUEST_STATUS_COLORS: Record<WidowRequestStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

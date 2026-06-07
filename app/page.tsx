@@ -17,6 +17,7 @@ type Step =
   | 'register-success'
   | 'dashboard'
   | 'docs-needed'
+  | 'widow-dashboard'
   | 'new-birth'
   | 'new-loan'
   | 'request-sent'
@@ -34,6 +35,7 @@ interface FoundBeneficiary {
   phone?: string
   city?: string
   marital_status?: string
+  children?: Array<{ name?: string; birth_date?: string; gender?: string }>
   created_at: string
 }
 
@@ -442,6 +444,193 @@ function validateEmail(e: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 }
 
+// ─── Widow Portal Component ───
+
+const WIDOW_REQUEST_TYPES = [
+  { value: 'financial', label: 'קרן סיוע כספי', icon: '💰', desc: 'מענק או הלוואה לסיוע כלכלי' },
+  { value: 'food',      label: 'סיוע במזון / שוברים', icon: '🛒', desc: 'חבילות מזון ושוברי קנייה' },
+  { value: 'general',   label: 'בקשת עזרה כללית', icon: '🤝', desc: 'פנייה חופשית לצוות' },
+] as const
+
+function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; onBack: () => void }) {
+  const [tab, setTab] = useState<'children' | 'requests'>('requests')
+  const [showForm, setShowForm] = useState(false)
+  const [reqType, setReqType] = useState<string>('')
+  const [reqDesc, setReqDesc] = useState('')
+  const [reqAmount, setReqAmount] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+
+  const children = (beneficiary as FoundBeneficiary & { children?: unknown[] }).children ?? []
+  const name = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!reqType) { setError('בחר סוג בקשה'); return }
+    setSubmitting(true); setError('')
+    try {
+      const res = await fetch('/api/portal/widow-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, request_type: reqType, description: reqDesc, amount: reqAmount ? Number(reqAmount) : undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחה'); return }
+      setSubmitted(true); setShowForm(false); setReqType(''); setReqDesc(''); setReqAmount('')
+    } catch { setError('שגיאת רשת') }
+    setSubmitting(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-1">
+        <button type="button" onClick={onBack} className="text-slate-400 hover:text-slate-600">
+          <ArrowRight size={20} />
+        </button>
+        <div>
+          <h2 className="font-bold text-slate-900 text-lg">שלום, {name}</h2>
+          <p className="text-xs text-slate-500">אגף אלמנות ויתומים — אזור אישי</p>
+        </div>
+      </div>
+
+      {submitted && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800 text-sm">
+          <Check size={16} className="text-green-600 flex-shrink-0" />
+          הבקשה נשלחה בהצלחה. הצוות יחזור אליך בהקדם.
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1">
+        {[{ key: 'requests', label: 'בקשות' }, { key: 'children', label: 'ילדים' }].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key as typeof tab)}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === t.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Requests tab */}
+      {tab === 'requests' && (
+        <div className="flex flex-col gap-3">
+          {!showForm && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="w-full py-3 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <Plus size={16} /> הגש בקשה חדשה
+            </button>
+          )}
+
+          {showForm && (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4 bg-white rounded-2xl border border-slate-200 p-5">
+              <h3 className="font-semibold text-slate-800">בקשה חדשה</h3>
+
+              <div className="grid grid-cols-1 gap-2">
+                {WIDOW_REQUEST_TYPES.map(t => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setReqType(t.value)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
+                      reqType === t.value
+                        ? 'border-indigo-400 bg-indigo-50'
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <span className="text-xl">{t.icon}</span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{t.label}</p>
+                      <p className="text-xs text-slate-500">{t.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {reqType === 'financial' && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-slate-600">סכום מבוקש (₪)</label>
+                  <input
+                    type="number"
+                    value={reqAmount}
+                    onChange={e => setReqAmount(e.target.value)}
+                    placeholder="לדוגמה: 1500"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-slate-600">פרטים נוספים</label>
+                <textarea
+                  value={reqDesc}
+                  onChange={e => setReqDesc(e.target.value)}
+                  placeholder="תאר את הבקשה בקצרה..."
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+
+              {error && <p className="text-xs text-red-500">{error}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  {submitting ? 'שולח...' : 'שלח בקשה'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowForm(false); setError('') }}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  ביטול
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="bg-slate-50 rounded-xl p-4 text-center text-sm text-slate-500">
+            כל הבקשות נבדקות על ידי צוות העמותה. נחזור אליך בהקדם.
+          </div>
+        </div>
+      )}
+
+      {/* Children tab */}
+      {tab === 'children' && (
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          {children.length === 0 ? (
+            <p className="text-center text-slate-400 py-8 text-sm">אין ילדים רשומים</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {(children as Array<{ name?: string; birth_date?: string; gender?: string }>).map((c, i) => (
+                <li key={i} className="flex items-center gap-3 px-4 py-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${c.gender === 'female' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {c.gender === 'female' ? 'בת' : 'בן'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{c.name || 'ללא שם'}</p>
+                    {c.birth_date && <p className="text-xs text-slate-500">{c.birth_date}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ───
 
 export default function PublicPortalPage() {
@@ -543,7 +732,11 @@ export default function PublicPortalPage() {
         const res = await fetch(`/api/portal/lookup?id=${encodeURIComponent(digits)}`)
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
-        if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
+        if (data.found) {
+          setBeneficiary(data.beneficiary)
+          const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
+          setStep(isWidow ? 'widow-dashboard' : 'dashboard')
+        }
         else if (data.foundAsChild) {
           setChildMatch({ parentName: data.parentName, childData: data.childData })
           setStep('found-as-child')
@@ -559,7 +752,11 @@ export default function PublicPortalPage() {
         const res = await fetch(`/api/portal/lookup?passport=${encodeURIComponent(raw)}`)
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
-        if (data.found) { setBeneficiary(data.beneficiary); setStep('dashboard') }
+        if (data.found) {
+          setBeneficiary(data.beneficiary)
+          const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
+          setStep(isWidow ? 'widow-dashboard' : 'dashboard')
+        }
         else { setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }
       setLoading(false)
@@ -1627,6 +1824,11 @@ export default function PublicPortalPage() {
               </p>
             </div>
           </div>
+        )}
+
+        {/* ─── Step: Widow Dashboard ─── */}
+        {step === 'widow-dashboard' && beneficiary && (
+          <WidowPortal beneficiary={beneficiary} onBack={backToHome} />
         )}
 
         {/* ─── Step: Docs Needed ─── */}
