@@ -595,6 +595,9 @@ export default function MailClient() {
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
+  const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
+  const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
+  const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
 
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
@@ -744,30 +747,53 @@ export default function MailClient() {
             מייל חדש
           </button>
         </div>
-        <nav className="flex-1 px-2 py-2">
+        <nav className="px-2 py-2">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => { setFolder(key); setSelected(null) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right ${folder === key ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <button key={key} onClick={() => { setFolder(key); setSelected(null); setActiveLabel(null) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right ${folder === key && !activeLabel ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
             </button>
           ))}
         </nav>
+
+        {/* Labels section */}
+        <div className="flex-1 overflow-y-auto px-2 pb-2">
+          {labels.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase px-2 pt-1 pb-1.5 tracking-wide">תוויות</p>
+              <div className="flex flex-col gap-0.5">
+                {labels.map(l => (
+                  <button
+                    key={l.id}
+                    draggable
+                    onDragStart={() => setDragLabelId(l.id)}
+                    onDragEnd={() => setDragLabelId(null)}
+                    onClick={() => {
+                      setActiveLabel(activeLabel === l.id ? null : l.id)
+                      setSelected(null)
+                    }}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right cursor-grab active:cursor-grabbing
+                      ${activeLabel === l.id ? 'font-semibold' : 'text-slate-700 hover:bg-slate-100'}`}
+                    style={activeLabel === l.id ? { backgroundColor: l.color + '22', color: l.color } : {}}
+                  >
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                    <span className="truncate">{l.name}</span>
+                    {activeLabel === l.id && (
+                      <span className="mr-auto text-[10px] font-medium opacity-70">✕</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="px-2 pb-2 border-t border-slate-200 pt-2">
           <button onClick={() => setShowManageLabels(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <Settings size={13} /> הגדרות מייל
           </button>
-          {labels.length > 0 && (
-            <div className="px-2 pt-2 flex flex-col gap-0.5">
-              {labels.map(l => (
-                <button key={l.id} className="flex items-center gap-1.5 py-0.5 text-xs text-slate-600 hover:text-slate-900 w-full text-right">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                  {l.name}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -785,65 +811,92 @@ export default function MailClient() {
           </button>
         </div>
 
+        {/* Active label filter banner */}
+        {activeLabel && (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50">
+            {(() => { const l = labels.find(x => x.id === activeLabel); return l ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                <span className="text-xs font-medium text-slate-700 flex-1">מסונן: {l.name}</span>
+                <button onClick={() => setActiveLabel(null)} className="text-xs text-slate-400 hover:text-slate-700">נקה</button>
+              </>
+            ) : null })()}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 gap-2 text-slate-400 text-sm">
               <Loader2 size={16} className="animate-spin" /> טוען מיילים...
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
-              <Mail size={24} /><span className="text-sm">אין הודעות</span>
-            </div>
           ) : (
-            messages.map(msg => {
-              const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
-              return (
-                <div key={msg.id}
-                  className={`relative border-b border-slate-100 hover:bg-slate-50 transition-colors ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : ''}`}>
-                  <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
-                    <div className="flex items-start justify-between gap-2 mb-0.5">
-                      <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-                        {folder === 'SENT' ? msg.to : senderDisplay(msg)}
-                      </span>
-                      <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
-                    </div>
-                    <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {msgLabels.map(l => (
-                        <span key={l.id} className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
-                          style={{ backgroundColor: l.color }}>{l.name}</span>
-                      ))}
-                      {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
-                    </div>
-                  </button>
-                  <div className="absolute top-2 left-2 flex items-center gap-0.5">
-                    <button
-                      onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
-                      className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
-                      title="מחק">
-                      <Trash2 size={12} />
+            (() => {
+              const filtered = activeLabel
+                ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
+                : messages
+              return filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
+                  <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>
+                </div>
+              ) : filtered.map(msg => {
+                const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
+                const isDragTarget = dragOverMsgId === msg.id && dragLabelId
+                return (
+                  <div key={msg.id}
+                    onDragOver={e => { if (dragLabelId) { e.preventDefault(); setDragOverMsgId(msg.id) } }}
+                    onDragLeave={() => setDragOverMsgId(null)}
+                    onDrop={e => {
+                      e.preventDefault()
+                      if (dragLabelId) { toggleLabel(msg.id, dragLabelId, true); setDragOverMsgId(null) }
+                    }}
+                    className={`relative border-b border-slate-100 transition-colors
+                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
+                      ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
+                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                      <div className="flex items-start justify-between gap-2 mb-0.5">
+                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                          {folder === 'SENT' ? msg.to : senderDisplay(msg)}
+                        </span>
+                        <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
+                      </div>
+                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {msgLabels.map(l => (
+                          <span key={l.id} className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: l.color }}>{l.name}</span>
+                        ))}
+                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
+                      </div>
                     </button>
-                    <div className="relative">
+                    <div className="absolute top-2 left-2 flex items-center gap-0.5">
                       <button
-                        onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                        className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
-                        title="תוויות">
-                        <Tag size={12} />
+                        onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
+                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                        title="מחק">
+                        <Trash2 size={12} />
                       </button>
-                      {openLabelFor === msg.id && (
-                        <LabelDropdown
-                          messageId={msg.id}
-                          labels={labels}
-                          assigned={assignments[msg.id] ?? []}
-                          onAssign={(labelId, add) => toggleLabel(msg.id, labelId, add)}
-                          onClose={() => setOpenLabelFor(null)}
-                        />
-                      )}
+                      <div className="relative">
+                        <button
+                          onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
+                          className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
+                          title="תוויות">
+                          <Tag size={12} />
+                        </button>
+                        {openLabelFor === msg.id && (
+                          <LabelDropdown
+                            messageId={msg.id}
+                            labels={labels}
+                            assigned={assignments[msg.id] ?? []}
+                            onAssign={(labelId, add) => toggleLabel(msg.id, labelId, add)}
+                            onClose={() => setOpenLabelFor(null)}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })
+                )
+              })
+            })()
           )}
         </div>
       </div>
