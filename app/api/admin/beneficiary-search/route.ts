@@ -16,9 +16,17 @@ export async function GET(request: NextRequest) {
 
   let query = admin.from('beneficiaries').select('id,full_name,family_name,email,phone,city,eligibility_status,children_count').limit(limit)
 
+  const idNumber = request.nextUrl.searchParams.get('id_number')?.trim() ?? ''
+
   if (emails) {
     const list = emails.split(',').map(e => e.trim()).filter(Boolean)
     query = (query as any).in('email', list).limit(list.length + 10)
+  } else if (idNumber) {
+    // search by beneficiary id_number OR spouse_id_number
+    query = admin.from('beneficiaries')
+      .select('id,full_name,family_name,email,phone,city,eligibility_status,children_count,spouse_name,spouse_id_number')
+      .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
+      .limit(5)
   } else if (email && exact) {
     query = query.eq('email', email)
   } else if (email) {

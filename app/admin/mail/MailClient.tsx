@@ -51,21 +51,62 @@ function formatDate(raw: string) {
 
 // ─── Compose Modal ────────────────────────────────────────────────────────────
 
+interface FoundBeneficiary { id: string; name: string; email: string; matchedAs?: 'husband' | 'wife' }
+
 function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; replyTo?: ParsedMessage; initialTo?: string }) {
-  const [to, setTo] = useState(initialTo ?? (replyTo ? replyTo.fromEmail : ''))
+  const [idQuery, setIdQuery]       = useState('')          // ת.ז. search input
+  const [nameQuery, setNameQuery]   = useState('')          // name / email search input
+  const [found, setFound]           = useState<FoundBeneficiary | null | undefined>(undefined) // undefined=idle, null=not found
+  const [searching, setSearching]   = useState(false)
+
+  const [to, setTo]           = useState(initialTo ?? (replyTo ? replyTo.fromEmail : ''))
+  const [toName, setToName]   = useState('')                // display name of selected recipient
+  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail)) // lock "to" once selected from search
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
-  const [body, setBody] = useState('')
+  const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)
-  const [sentInfo, setSentInfo] = useState<{ to: string; body: string } | null>(null)
+  const [sentInfo, setSentInfo] = useState<{ to: string; toName: string; body: string } | null>(null)
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
 
-  const searchBeneficiary = useCallback(async (q: string) => {
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+  const canSend = !locked
+    ? (isValidEmail(to) && !!subject)          // manual entry: must be valid email
+    : (!!to && !!subject)                      // selected from system: trust the email
+
+  // Search by ת.ז.
+  const searchById = useCallback(async (id: string) => {
+    if (id.length < 5) { setFound(undefined); return }
+    setSearching(true)
+    const res  = await fetch(`/api/admin/beneficiary-search?id_number=${encodeURIComponent(id)}&limit=3`)
+    const data = await res.json()
+    const results: BeneficiarySuggestion[] = data.results ?? []
+    if (results.length === 0) {
+      setFound(null)
+    } else {
+      const b = results[0] as BeneficiarySuggestion & { spouse_id_number?: string }
+      setFound({ id: b.id, name: b.name, email: b.email ?? '', matchedAs: (b as any).spouse_id_number === id ? 'wife' : 'husband' })
+    }
+    setSearching(false)
+  }, [])
+
+  // Autocomplete search by name/email
+  const searchByName = useCallback(async (q: string) => {
     if (q.length < 2) { setSuggestions([]); return }
     const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=6`)
     const data = await res.json()
     setSuggestions(data.results ?? [])
   }, [])
+
+  const selectBeneficiary = (name: string, email: string) => {
+    setTo(email); setToName(name); setLocked(true)
+    setSuggestions([]); setShowSug(false); setFound(undefined)
+  }
+
+  const clearRecipient = () => {
+    setTo(''); setToName(''); setLocked(false)
+    setFound(undefined); setIdQuery(''); setNameQuery('')
+  }
 
   const send = async () => {
     if (!to || !subject) return
@@ -76,7 +117,7 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
       body: JSON.stringify({ to, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
     })
     setSending(false)
-    setSentInfo({ to, body })
+    setSentInfo({ to, toName, body })
     setTimeout(onClose, 2000)
   }
 
@@ -90,7 +131,8 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
           <h3 className="text-lg font-bold text-slate-900">המייל נשלח בהצלחה</h3>
           <div className="w-full bg-slate-50 rounded-xl p-4 flex flex-col gap-2 text-sm text-right">
             <p className="text-slate-500 text-xs font-medium uppercase">אל:</p>
-            <p className="font-medium text-slate-800">{sentInfo.to}</p>
+            <p className="font-medium text-slate-800">{sentInfo.toName || sentInfo.to}</p>
+            <p className="text-xs text-slate-400">{sentInfo.toName ? sentInfo.to : ''}</p>
             {sentInfo.body && (
               <>
                 <p className="text-slate-500 text-xs font-medium uppercase mt-2">תוכן:</p>
@@ -113,34 +155,104 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
         </div>
 
         <div className="flex flex-col gap-0 flex-1 overflow-hidden">
-          <div className="relative border-b border-slate-100">
-            <div className="flex items-center gap-2 px-5 py-3">
-              <span className="text-xs text-slate-400 w-10 flex-shrink-0">אל:</span>
-              <input
-                className="flex-1 text-sm outline-none"
-                value={to}
-                onChange={e => { setTo(e.target.value); searchBeneficiary(e.target.value); setShowSug(true) }}
-                onFocus={() => setShowSug(true)}
-                placeholder="שם נתמך או כתובת מייל..."
-                autoComplete="off"
-              />
-            </div>
-            {showSug && suggestions.length > 0 && (
-              <div className="absolute z-10 top-full right-0 left-0 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                {suggestions.map(s => (
-                  <button key={s.id} type="button"
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
-                    onMouseDown={e => { e.preventDefault(); setTo(s.email); setSuggestions([]); setShowSug(false) }}
-                  >
+
+          {/* ── Recipient section ── */}
+          <div className="border-b border-slate-100 px-5 py-3 flex flex-col gap-2">
+            <span className="text-xs font-medium text-slate-500">אל:</span>
+
+            {/* Selected recipient chip */}
+            {locked && to ? (
+              <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
+                <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                  {(toName || to).charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  {toName && <p className="text-sm font-medium text-slate-800">{toName}</p>}
+                  <p className="text-xs text-slate-500">{to}</p>
+                </div>
+                <button onClick={clearRecipient} className="text-slate-400 hover:text-red-500 flex-shrink-0"><X size={14} /></button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {/* Row 1: search by ID */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1 border border-slate-200 rounded-lg px-3 py-2">
+                    <span className="text-xs text-slate-400 flex-shrink-0">ת.ז.:</span>
+                    <input
+                      className="flex-1 text-sm outline-none"
+                      value={idQuery}
+                      onChange={e => { setIdQuery(e.target.value); searchById(e.target.value) }}
+                      placeholder="חפש לפי ת.ז. (בעל או אשה)..."
+                      autoComplete="off"
+                    />
+                    {searching && <Loader2 size={13} className="animate-spin text-slate-400 flex-shrink-0" />}
+                  </div>
+                </div>
+
+                {/* ID search result */}
+                {found === null && idQuery.length >= 5 && (
+                  <p className="text-xs text-amber-600 px-1">ת.ז. זו לא נמצאה במערכת — ניתן להזין מייל ידנית</p>
+                )}
+                {found && (
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                     <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                      {s.name.charAt(0)}
+                      {found.name.charAt(0)}
                     </div>
-                    <div className="min-w-0 text-right">
-                      <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{s.email}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800">{found.name}</p>
+                      <p className="text-xs text-slate-400">{found.email || 'אין מייל רשום'}</p>
                     </div>
-                  </button>
-                ))}
+                    {found.email ? (
+                      <button onClick={() => selectBeneficiary(found.name, found.email)}
+                        className="flex-shrink-0 px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">
+                        בחר
+                      </button>
+                    ) : (
+                      <span className="text-xs text-red-500 flex-shrink-0">אין מייל</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Row 2: search by name or direct email */}
+                <div className="relative">
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
+                    <span className="text-xs text-slate-400 flex-shrink-0">מייל:</span>
+                    <input
+                      className="flex-1 text-sm outline-none"
+                      value={nameQuery || to}
+                      onChange={e => {
+                        const v = e.target.value
+                        setNameQuery(v); setTo(v)
+                        searchByName(v); setShowSug(true)
+                      }}
+                      onFocus={() => setShowSug(true)}
+                      placeholder="שם נתמך או כתובת מייל..."
+                      autoComplete="off"
+                    />
+                  </div>
+                  {showSug && suggestions.length > 0 && (
+                    <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                      {suggestions.map(s => (
+                        <button key={s.id} type="button"
+                          className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
+                          onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
+                        >
+                          <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                            {s.name.charAt(0)}
+                          </div>
+                          <div className="min-w-0 text-right">
+                            <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
+                            <p className="text-xs text-slate-400 truncate">{s.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {/* validation hint for manual email */}
+                  {to && !isValidEmail(to) && !suggestions.length && (
+                    <p className="text-xs text-red-500 px-1 pt-1">יש להזין כתובת מייל תקינה</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -162,7 +274,7 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>
           <button
             onClick={send}
-            disabled={sending || !to || !subject}
+            disabled={sending || !canSend}
             className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
