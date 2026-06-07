@@ -92,8 +92,22 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { error } = await admin.from('beneficiaries').insert(records)
+  let { error } = await admin.from('beneficiaries').insert(records)
+
+  // Retry without optional columns that may not exist in DB yet (pending migrations)
+  if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
+    console.error('[public-register] column missing, retrying without optional fields:', error.message)
+    const stripped = records.map(r => {
+      const { spouse_phone, children, lineage_manual, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void children; void lineage_manual
+      return rest
+    })
+    const retry = await admin.from('beneficiaries').insert(stripped)
+    error = retry.error
+  }
+
   if (error) {
+    console.error('[public-register] insert error:', error.code, error.message, error.details)
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
