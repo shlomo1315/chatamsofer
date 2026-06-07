@@ -22,7 +22,7 @@ export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; e
   try {
     const transporter = getTransporter()
     await transporter.sendMail({
-      from: process.env.SMTP_FROM ?? 'היכל החתם סופר <office@chasamsofer.info>',
+      from: process.env.SMTP_FROM ?? 'היכל החתם סופר משרד ראשי <office@chasamsofer.info>',
       to: payload.to,
       subject: payload.subject,
       html: payload.html,
