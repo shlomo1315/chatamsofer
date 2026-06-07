@@ -14,15 +14,15 @@ export async function GET(request: NextRequest) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
   const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 
-  let query = admin.from('beneficiaries').select('id,full_name,family_name,email,phone,city,eligibility_status,children_count').limit(limit)
-
   const idNumber = request.nextUrl.searchParams.get('id_number')?.trim() ?? ''
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query: any = admin.from('beneficiaries').select('id,full_name,family_name,email,phone,city,eligibility_status,children_count').limit(limit)
 
   if (emails) {
     const list = emails.split(',').map(e => e.trim()).filter(Boolean)
-    query = (query as any).in('email', list).limit(list.length + 10)
+    query = admin.from('beneficiaries').select('id,full_name,family_name,email,phone,city,eligibility_status,children_count').in('email', list).limit(list.length + 10)
   } else if (idNumber) {
-    // search by beneficiary id_number OR spouse_id_number
     query = admin.from('beneficiaries')
       .select('id,full_name,family_name,email,phone,city,eligibility_status,children_count,spouse_name,spouse_id_number')
       .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
   }
 
   const { data } = await query
-  const results = (data ?? []).map(b => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const results = (data ?? []).map((b: any) => ({
     ...b,
     name: [b.family_name, b.full_name].filter(Boolean).join(' '),
   }))
