@@ -38,8 +38,37 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   const setStatus = async (next: EligibilityStatus) => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('beneficiaries').update({ eligibility_status: next, updated_at: new Date().toISOString() }).eq('id', id)
+      const { data: ben, error } = await supabase
+        .from('beneficiaries')
+        .update({ eligibility_status: next, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select('full_name, family_name, email')
+        .single()
       if (error) throw error
+
+      // Send automatic email if beneficiary has an email address
+      if (ben?.email) {
+        const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
+        let subject = '', html = ''
+        if (next === 'approved') {
+          subject = 'בקשתך אושרה — היכל החתם סופר'
+          html = `<p>שלום ${name}, בקשתך <strong>אושרה</strong>. לפרטים צור קשר עם המשרד.</p>`
+        } else if (next === 'rejected') {
+          subject = 'עדכון בקשה — היכל החתם סופר'
+          html = `<p>שלום ${name}, לצערנו בקשתך לא אושרה בשלב זה. לפרטים צור קשר עם המשרד.</p>`
+        } else if (next === 'docs_pending') {
+          subject = 'נדרשים מסמכים נוספים — היכל החתם סופר'
+          html = `<p>שלום ${name}, נדרשים מסמכים נוספים להמשך הטיפול בבקשתך. אנא פנה למשרד.</p>`
+        }
+        if (subject) {
+          await fetch('/api/admin/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: ben.email, subject, html }),
+          })
+        }
+      }
+
       setOpen(false)
       router.refresh()
     } catch (err: unknown) {
