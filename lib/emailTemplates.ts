@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// תבניות מייל מעוצבות (HTML) — inline styles לתאימות מרבית עם תוכנות מייל.
+// תבניות מייל מעוצבות — inline styles לתאימות מרבית עם תוכנות מייל
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface BuiltEmail {
@@ -7,21 +7,17 @@ export interface BuiltEmail {
   html: string
 }
 
-const OFFICE_EMAIL = 'office@chasamsofer.info'
-const PORTAL_BASE_DEFAULT = 'https://chasamsofer.co.il'
+const OFFICE_EMAIL  = 'office@chasamsofer.info'
+const PORTAL_BASE_DEFAULT = 'https://my-app-gamma-pearl-29.vercel.app'
+const LOGO_URL = 'https://my-app-gamma-pearl-29.vercel.app/logo.jpg'
 
-// ─── Logo SVG (inline, works in all email clients) ────────────────────────────
-const LOGO_SVG = `<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-  <rect width="48" height="48" rx="12" fill="#4f46e5"/>
-  <text x="24" y="33" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="800" fill="#ffffff">ח"ס</text>
-</svg>`
-
-// כפתור "bullet-proof" תואם לכל תוכנות המייל
-function btn(href: string, label: string, bg: string, color = '#ffffff'): string {
-  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-    <tr><td align="center" style="border-radius:10px;background:${bg};">
+// ─── כפתור bullet-proof ───────────────────────────────────────────────────────
+function btn(href: string, label: string, bg: string): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+    <tr><td align="center" style="border-radius:12px;background:${bg};box-shadow:0 4px 14px rgba(0,0,0,0.15);">
       <a href="${href}" target="_blank"
-         style="display:inline-block;padding:13px 28px;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:${color};text-decoration:none;border-radius:10px;letter-spacing:-0.2px;">
+         style="display:inline-block;padding:16px 36px;font-family:Arial,sans-serif;font-size:16px;font-weight:800;color:#ffffff;text-decoration:none;border-radius:12px;letter-spacing:-0.2px;">
         ${label}
       </a>
     </td></tr>
@@ -31,20 +27,20 @@ function btn(href: string, label: string, bg: string, color = '#ffffff'): string
 function detailRow(label: string, value?: string | null): string {
   if (!value) return ''
   return `<tr>
-    <td style="padding:8px 12px;color:#64748b;font-size:13px;width:40%;border-bottom:1px solid #f1f5f9;">${label}</td>
-    <td style="padding:8px 12px;color:#0f172a;font-size:14px;font-weight:600;border-bottom:1px solid #f1f5f9;">${value}</td>
+    <td style="padding:10px 16px;color:#64748b;font-size:13px;width:38%;border-bottom:1px solid #f1f5f9;font-weight:500;">${label}</td>
+    <td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;border-bottom:1px solid #f1f5f9;">${value}</td>
   </tr>`
 }
 
-// ─── מעטפת בסיסית ─────────────────────────────────────────────────────────────
+// ─── מעטפת ───────────────────────────────────────────────────────────────────
 function shell(opts: {
   preheader?: string
-  accentColor: string
+  accent: string      // hex colour for top bar + buttons
   title: string
   subtitle: string
   body: string
 }): string {
-  const { preheader = '', accentColor, title, subtitle, body } = opts
+  const { preheader = '', accent, title, subtitle, body } = opts
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
@@ -52,83 +48,96 @@ function shell(opts: {
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,'Segoe UI',sans-serif;direction:rtl;">
-  <span style="display:none;font-size:1px;color:#f8fafc;max-height:0;overflow:hidden;">${preheader}</span>
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:28px 16px;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(15,23,42,0.08);">
+<body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,'Segoe UI',sans-serif;direction:rtl;">
+  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${preheader}</span>
 
-        <!-- Header -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
+    <tr><td align="center">
+      <table width="620" cellpadding="0" cellspacing="0"
+             style="max-width:620px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;
+                    box-shadow:0 4px 24px rgba(15,23,42,0.10);">
+
+        <!-- Accent top bar -->
+        <tr><td style="background:${accent};height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
+
+        <!-- Header: logo + title -->
         <tr>
-          <td style="background:linear-gradient(135deg,${accentColor} 0%,${accentColor}cc 100%);padding:32px 32px 28px;text-align:center;">
-            <div style="margin-bottom:12px;">${LOGO_SVG}</div>
-            <h1 style="margin:0 0 4px;color:#ffffff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">${title}</h1>
-            <p style="margin:0;color:rgba(255,255,255,0.82);font-size:13px;">${subtitle}</p>
+          <td style="padding:40px 40px 32px;text-align:center;background:#ffffff;">
+            <img src="${LOGO_URL}" alt="היכל החתם סופר" width="80" height="80"
+                 style="border-radius:16px;display:inline-block;margin-bottom:20px;border:3px solid ${accent}22;box-shadow:0 2px 12px rgba(0,0,0,0.10);"/>
+            <h1 style="margin:0 0 8px;color:#0f172a;font-size:26px;font-weight:900;letter-spacing:-0.5px;">${title}</h1>
+            <p style="margin:0;color:#64748b;font-size:15px;">${subtitle}</p>
           </td>
         </tr>
 
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;"><div style="border-top:1px solid #f1f5f9;"></div></td></tr>
+
         <!-- Body -->
-        <tr><td style="padding:32px 36px 24px;">${body}</td></tr>
+        <tr><td style="padding:36px 40px 32px;">${body}</td></tr>
 
         <!-- Footer -->
         <tr>
-          <td style="background:#f8fafc;padding:20px 32px;text-align:center;border-top:1px solid #e2e8f0;">
-            <p style="margin:0 0 3px;color:#334155;font-size:13px;font-weight:700;">היכל החתם סופר</p>
-            <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">
+          <td style="background:#f8fafc;padding:24px 40px;text-align:center;border-top:2px solid ${accent}22;">
+            <img src="${LOGO_URL}" alt="לוגו" width="36" height="36"
+                 style="border-radius:8px;display:inline-block;margin-bottom:10px;opacity:0.7;"/>
+            <p style="margin:0 0 4px;color:#334155;font-size:13px;font-weight:700;">היכל החתם סופר</p>
+            <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.7;">
               מייל זה נשלח אוטומטית ממערכת היכל החתם סופר.<br/>
-              לפרטים: <a href="mailto:${OFFICE_EMAIL}" style="color:#4f46e5;text-decoration:none;">${OFFICE_EMAIL}</a>
+              לפרטים ויצירת קשר: <a href="mailto:${OFFICE_EMAIL}" style="color:${accent};text-decoration:none;font-weight:600;">${OFFICE_EMAIL}</a>
             </p>
           </td>
         </tr>
 
       </table>
-      <p style="margin:14px 0 0;color:#cbd5e1;font-size:11px;">© ${new Date().getFullYear()} היכל החתם סופר</p>
+      <p style="margin:16px 0 0;color:#cbd5e1;font-size:11px;">© ${new Date().getFullYear()} היכל החתם סופר — כל הזכויות שמורות</p>
     </td></tr>
   </table>
 </body>
 </html>`
 }
 
-// ─── אילו מסמכים נדרשים לפי מצב משפחתי ────────────────────────────────────────
+// ─── עזרים ────────────────────────────────────────────────────────────────────
 export function requiredDocLabels(maritalStatus?: string | null): string[] {
   if (maritalStatus === 'נשואים') return ['תעודת זהות של הבעל', 'תעודת זהות של האשה']
   return ['תעודת זהות']
 }
 
-// ─── מייל אישור רישום ──────────────────────────────────────────────────────────
+// ─── אישור רישום ──────────────────────────────────────────────────────────────
 export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const body = `
-    <h2 style="margin:0 0 12px;color:#0f172a;font-size:19px;font-weight:800;">שלום ${name}, מזל טוב!</h2>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.7;">
-      אנו שמחים לבשר לך כי הרישום שלך ב<strong>היכל החתם סופר</strong> אושר בהצלחה.
-      מעתה ניתן להגיש בקשות דרך הפורטל האישי.
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, הרישום שלך אושר 🎉</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
+      אנו שמחים לבשר לך כי הרישום שלך ב<strong>היכל החתם סופר</strong> הושלם בהצלחה ואושר.
+      מעתה ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-      <tr><td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;">
-        <p style="margin:0;color:#15803d;font-size:14px;font-weight:700;">✅ הסטטוס שלך: מאושר</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ הסטטוס שלך: <span style="color:#16a34a;">מאושר</span></p>
       </td></tr>
     </table>
 
-    <p style="margin:0 0 14px;color:#334155;font-size:14px;font-weight:700;text-align:center;">להגשת בקשה:</p>
+    <p style="margin:0 0 20px;color:#334155;font-size:15px;font-weight:700;text-align:center;">מה תרצה/י לעשות עכשיו?</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr><td align="center" style="padding-bottom:10px;">
-        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#ec4899')}
+      <tr><td align="center" style="padding-bottom:14px;">
+        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#db2777')}
       </td></tr>
       <tr><td align="center">
         ${btn(`${base}/?action=loan`, '💳  בקשת הלוואה', '#4f46e5')}
       </td></tr>
     </table>
 
-    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
+    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות שלך לאימות.
     </p>
   `
   return {
     subject: '✅ הרישום אושר — היכל החתם סופר',
-    html: shell({ preheader: 'הרישום שלך אושר! ניתן כעת להגיש בקשות.', accentColor: '#16a34a', title: 'הרישום אושר בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
+    html: shell({ preheader: 'הרישום שלך אושר! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הרישום אושר בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
   }
 }
 
@@ -153,16 +162,28 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
   const statusHe = STATUS_LABELS_HE[b.eligibility_status ?? ''] ?? (b.eligibility_status ?? '—')
   const isApproved = b.eligibility_status === 'approved'
 
+  const statusColor = isApproved ? '#22c55e' : '#f59e0b'
+  const statusBg    = isApproved ? '#f0fdf4' : '#fffbeb'
+  const statusBorder = isApproved ? '#22c55e' : '#f59e0b'
+
   const body = `
-    <h2 style="margin:0 0 12px;color:#0f172a;font-size:19px;font-weight:800;">שלום ${b.name},</h2>
-    <p style="margin:0 0 18px;color:#475569;font-size:15px;line-height:1.7;">
-      קיבלנו את פנייתך. הנה הפרטים הרשומים אצלנו:
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.name},</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
+      תודה שפנית אלינו. ריכזנו עבורך את הפרטים הרשומים במערכת:
     </p>
 
+    <!-- Details card -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
-           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin:0 0 22px;overflow:hidden;">
+           style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;margin:0 0 24px;overflow:hidden;">
       ${detailRow('שם', b.name)}
-      ${detailRow('סטטוס', statusHe)}
+      <tr>
+        <td style="padding:10px 16px;color:#64748b;font-size:13px;width:38%;border-bottom:1px solid #f1f5f9;font-weight:500;">סטטוס</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">
+          <span style="display:inline-block;background:${statusBg};color:${statusColor};border:1px solid ${statusBorder}33;
+                       font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;">${statusHe}</span>
+        </td>
+      </tr>
       ${detailRow('תעודת זהות', b.id_number)}
       ${detailRow('טלפון', b.phone)}
       ${detailRow('עיר', b.city)}
@@ -170,82 +191,88 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
       ${b.children_count != null ? detailRow('מספר ילדים', String(b.children_count)) : ''}
     </table>
 
-    <p style="margin:0 0 14px;color:#334155;font-size:14px;font-weight:700;text-align:center;">
-      ${isApproved ? 'להגשת בקשה דרך הפורטל:' : 'לפרטים נוספים ולהגשת בקשות:'}
+    <p style="margin:0 0 20px;color:#334155;font-size:15px;font-weight:700;text-align:center;">
+      ${isApproved ? 'ניתן להגיש בקשה ישירות דרך הפורטל:' : 'לטיפול בבקשתך:'}
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr><td align="center" style="padding-bottom:10px;">
-        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#ec4899')}
+      <tr><td align="center" style="padding-bottom:14px;">
+        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#db2777')}
       </td></tr>
       <tr><td align="center">
         ${btn(`${base}/?action=loan`, '💳  בקשת הלוואה', '#4f46e5')}
       </td></tr>
     </table>
 
-    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
+    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות לאימות.<br/>
       אם נדרש טיפול אישי — נחזור אליך בהקדם.
     </p>
   `
   return {
     subject: 'קיבלנו את פנייתך — היכל החתם סופר',
-    html: shell({ preheader: 'קיבלנו את פנייתך. הנה הפרטים שלך.', accentColor: '#4f46e5', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר — משרד ראשי', body }),
+    html: shell({ preheader: 'קיבלנו את פנייתך. הנה הפרטים שלך.', accent: '#4f46e5', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר — משרד ראשי', body }),
   }
 }
 
-// ─── הזמנה להרשמה לפונה חדש ───────────────────────────────────────────────────
+// ─── הזמנה להרשמה ─────────────────────────────────────────────────────────────
 export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const body = `
-    <h2 style="margin:0 0 12px;color:#0f172a;font-size:19px;font-weight:800;">שלום וברכה,</h2>
-    <p style="margin:0 0 14px;color:#475569;font-size:15px;line-height:1.7;">
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">הצטרפות למערכת</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום וברכה,</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       תודה על פנייתך ל<strong>היכל החתם סופר</strong>.<br/>
-      לא מצאנו אותך עדיין במערכת שלנו — כדי שנוכל לסייע, יש להירשם תחילה. ההרשמה פשוטה ולוקחת דקה.
+      לא מצאנו אותך רשום/ה במערכת שלנו — כדי שנוכל לסייע ולטפל בבקשות, יש להירשם תחילה.
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
-      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 16px;">
-        <p style="margin:0;color:#3730a3;font-size:14px;font-weight:600;">
-          📝 יש להזין מספר תעודת זהות ולמלא פרטים קצרים — וזהו!
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 6px;color:#3730a3;font-size:15px;font-weight:800;">📝 ההרשמה פשוטה ומהירה</p>
+        <p style="margin:0;color:#4338ca;font-size:13px;line-height:1.6;">
+          יש להזין מספר תעודת זהות ולמלא כמה פרטים קצרים — וזהו!<br/>
+          לאחר אישור הזכאות תוכל/י להגיש בקשות לתמיכה ישירות דרך הפורטל.
         </p>
       </td></tr>
     </table>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
       <tr><td align="center">
         ${btn(`${base}/`, '✍️  להרשמה למערכת', '#4f46e5')}
       </td></tr>
     </table>
 
-    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
-      לאחר ההרשמה ואישור הזכאות תוכל/י להגיש בקשות ישירות דרך הפורטל.
+    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
+      לחיצה על הכפתור תפתח את דף ההרשמה של היכל החתם סופר.<br/>
+      לאחר ההרשמה ואישור הזכאות תוכל/י להגיש בקשות ישירות.
     </p>
   `
   return {
     subject: 'הרשמה למערכת — היכל החתם סופר',
-    html: shell({ preheader: 'לא נמצאת רשום/ה — הרשמה פשוטה ומהירה.', accentColor: '#4f46e5', title: 'ברוכים הבאים', subtitle: 'היכל החתם סופר', body }),
+    html: shell({ preheader: 'לא נמצאת רשום/ה — הרשמה מהירה ופשוטה.', accent: '#4f46e5', title: 'ברוכים הבאים', subtitle: 'היכל החתם סופר', body }),
   }
 }
 
-// ─── מייל השלמת מסמכים ─────────────────────────────────────────────────────────
+// ─── השלמת מסמכים ─────────────────────────────────────────────────────────────
 export function docsPendingEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, maritalStatus?: string | null): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const docs = requiredDocLabels(maritalStatus)
   const docsList = docs.map(d =>
-    `<li style="margin:0 0 6px;color:#92400e;font-size:14px;font-weight:600;">${d}</li>`
+    `<li style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:700;">${d}</li>`
   ).join('')
 
   const body = `
-    <h2 style="margin:0 0 12px;color:#0f172a;font-size:19px;font-weight:800;">שלום ${name},</h2>
-    <p style="margin:0 0 14px;color:#475569;font-size:15px;line-height:1.7;">
-      כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>:
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">פעולה נדרשת</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
+      כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.
+      ניתן להעלות אותם ישירות דרך הפורטל — מהמחשב או מהנייד.
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
-      <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:14px 18px;">
-        <p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:800;">📄 מסמכים נדרשים:</p>
-        <ul style="margin:0;padding-right:18px;">${docsList}</ul>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:800;">📄 מסמכים נדרשים:</p>
+        <ul style="margin:0;padding-right:20px;">${docsList}</ul>
       </td></tr>
     </table>
 
@@ -255,12 +282,13 @@ export function docsPendingEmail(name: string, portalBase = PORTAL_BASE_DEFAULT,
       </td></tr>
     </table>
 
-    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
-      בלחיצה תתבקש/י להזין את מספר תעודת הזהות, ואז תועבר/י ישירות להעלאת המסמכים.
+    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
+      בלחיצה על הכפתור תתבקש/י להזין את מספר תעודת הזהות,<br/>
+      ואז תועבר/י ישירות למסך העלאת המסמכים.
     </p>
   `
   return {
     subject: '📄 נדרשת השלמת מסמכים — היכל החתם סופר',
-    html: shell({ preheader: 'נדרשת השלמת מסמכים להמשך הטיפול.', accentColor: '#d97706', title: 'נדרשת השלמת מסמכים', subtitle: 'עוד צעד אחד להשלמת התהליך', body }),
+    html: shell({ preheader: 'נדרשת השלמת מסמכים להמשך הטיפול.', accent: '#d97706', title: 'נדרשת השלמת מסמכים', subtitle: 'עוד צעד אחד להשלמת התהליך', body }),
   }
 }
