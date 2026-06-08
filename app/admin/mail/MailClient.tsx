@@ -53,11 +53,10 @@ function formatDate(raw: string) {
 function formatDateFull(raw: string) {
   try {
     const d = new Date(raw)
-    const now = new Date()
-    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    if (d.toDateString() === now.toDateString()) return time
-    const date = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
-    return `${date} · ${time}`
+    const day   = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year  = d.getFullYear()
+    return `${day}/${month}/${year}`
   } catch { return raw }
 }
 
@@ -1144,20 +1143,59 @@ export default function MailClient() {
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
                       ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
 
-                    {/* Action buttons — visible on hover */}
-                    <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    {/* Clickable message body */}
+                    <button className="w-full text-right px-4 pt-3 pb-2" onClick={() => openMessage(msg)}>
+                      {/* Row 1: sender + date — always unobstructed */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`flex-1 text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+                          {folder === 'SENT'
+                            ? (emailToInfo[msg.toEmail]?.name ?? msg.to)
+                            : senderDisplay(msg)}
+                        </span>
+                        <span className="text-xs text-slate-500 flex-shrink-0 font-semibold whitespace-nowrap">
+                          {formatDateFull(msg.date)}
+                        </span>
+                      </div>
+
+                      {/* Row 2: subject */}
+                      <p className={`text-xs truncate mb-1.5 ${!msg.isRead ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>
+                        {msg.subject}
+                      </p>
+
+                      {/* Row 3: labels or snippet */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {msgLabels.map(l => (
+                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: l.color }}>
+                            {l.name}
+                            <button
+                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
+                              className="opacity-70 hover:opacity-100 leading-none"
+                              title="הסר תווית">
+                              <X size={9} />
+                            </button>
+                          </span>
+                        ))}
+                        {msgLabels.length === 0 && (
+                          <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* Row 4: action buttons — shown on hover, below content, far left */}
+                    <div className="flex items-center gap-1.5 px-4 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
-                        className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
                         title="מחק">
-                        <Trash2 size={14} />
+                        <Trash2 size={13} /> מחק
                       </button>
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                          className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors"
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-colors"
                           title="תוויות">
-                          <Tag size={14} />
+                          <Tag size={13} /> תווית
                         </button>
                         {openLabelFor === msg.id && (
                           <LabelDropdown
@@ -1170,39 +1208,6 @@ export default function MailClient() {
                         )}
                       </div>
                     </div>
-
-                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
-                          {folder === 'SENT'
-                            ? (emailToInfo[msg.toEmail]
-                                ? `${emailToInfo[msg.toEmail].name}`
-                                : msg.to)
-                            : senderDisplay(msg)}
-                        </span>
-                        {/* Date/time — always readable */}
-                        <span className="text-xs text-slate-500 flex-shrink-0 font-semibold whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded">
-                          {formatDateFull(msg.date)}
-                        </span>
-                      </div>
-                      <p className={`text-xs truncate mb-1 ${!msg.isRead ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {msgLabels.map(l => (
-                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: l.color }}>
-                            {l.name}
-                            <button
-                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
-                              className="opacity-70 hover:opacity-100 leading-none"
-                              title="הסר תווית"
-                            >
-                              <X size={9} />
-                            </button>
-                          </span>
-                        ))}
-                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
-                      </div>
-                    </button>
                   </div>
                 )
               })
