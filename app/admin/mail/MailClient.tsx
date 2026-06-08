@@ -44,8 +44,20 @@ function formatDate(raw: string) {
   try {
     const d = new Date(raw)
     const now = new Date()
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+    if (d.toDateString() === now.toDateString())
+      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  } catch { return raw }
+}
+
+function formatDateFull(raw: string) {
+  try {
+    const d = new Date(raw)
+    const now = new Date()
+    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    if (d.toDateString() === now.toDateString()) return time
+    const date = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+    return `${date} · ${time}`
   } catch { return raw }
 }
 
@@ -655,8 +667,22 @@ export default function MailClient() {
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
+  // Auto-reply tracking
+  const knownMsgIds = useRef<Set<string>>(new Set())
+  const isFirstLoad = useRef(true)
+
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
+
+  const triggerAutoReply = useCallback(async (msg: ParsedMessage) => {
+    try {
+      await fetch('/api/admin/gmail/auto-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromEmail: msg.fromEmail, fromName: msg.from, threadId: msg.threadId }),
+      })
+    } catch { /* silent — auto-reply failure should not surface to UI */ }
+  }, [])
 
   // Labels
   const [labels, setLabels] = useState<MailLabel[]>([])
@@ -701,6 +727,18 @@ export default function MailClient() {
 
     setMessages(msgs)
 
+    // Detect new incoming messages and send auto-replies
+    if (f === 'INBOX' && !isFirstLoad.current) {
+      for (const msg of msgs) {
+        if (!msg.isRead && !knownMsgIds.current.has(msg.id)) {
+          triggerAutoReply(msg)
+        }
+      }
+    }
+    // Update known IDs after first load
+    for (const msg of msgs) knownMsgIds.current.add(msg.id)
+    isFirstLoad.current = false
+
     // batch resolve sender + recipient names
     const uniqueEmails = [...new Set([
       ...msgs.map(m => m.fromEmail),
@@ -715,7 +753,7 @@ export default function MailClient() {
     }
 
     setLoading(false)
-  }, [myProfile])
+  }, [myProfile, triggerAutoReply])
 
   // Load labels on mount
   useEffect(() => {
@@ -726,7 +764,14 @@ export default function MailClient() {
     })
   }, [])
 
-  useEffect(() => { load(folder) }, [folder, load])
+  useEffect(() => {
+    // Reset auto-reply state when folder changes
+    knownMsgIds.current = new Set()
+    isFirstLoad.current = true
+    load(folder)
+    const interval = setInterval(() => load(folder), 15_000)
+    return () => clearInterval(interval)
+  }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
     setSelected(msg)
@@ -960,7 +1005,7 @@ export default function MailClient() {
                                 : msg.to)
                             : senderDisplay(msg)}
                         </span>
-                        <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
+                        <span className="text-[11px] text-slate-500 flex-shrink-0 font-medium">{formatDateFull(msg.date)}</span>
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
