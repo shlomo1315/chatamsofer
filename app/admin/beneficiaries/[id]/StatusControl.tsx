@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Check, X, Clock, ChevronDown, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
+import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 
 // Statuses that mean "waiting for a decision"
 const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
@@ -42,23 +43,22 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
         .from('beneficiaries')
         .update({ eligibility_status: next, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .select('full_name, family_name, email')
+        .select('full_name, family_name, email, marital_status')
         .single()
       if (error) throw error
 
       // Send automatic email if beneficiary has an email address
       if (ben?.email) {
         const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
+        const portalBase = window.location.origin
         let subject = '', html = ''
         if (next === 'approved') {
-          subject = 'בקשתך אושרה — היכל החתם סופר'
-          html = `<p>שלום ${name}, בקשתך <strong>אושרה</strong>. לפרטים צור קשר עם המשרד.</p>`
+          ({ subject, html } = approvalEmail(name, portalBase))
         } else if (next === 'rejected') {
           subject = 'עדכון בקשה — היכל החתם סופר'
           html = `<p>שלום ${name}, לצערנו בקשתך לא אושרה בשלב זה. לפרטים צור קשר עם המשרד.</p>`
         } else if (next === 'docs_pending') {
-          subject = 'נדרשים מסמכים נוספים — היכל החתם סופר'
-          html = `<p>שלום ${name}, נדרשים מסמכים נוספים להמשך הטיפול בבקשתך. אנא פנה למשרד.</p>`
+          ({ subject, html } = docsPendingEmail(name, portalBase, ben.marital_status))
         }
         if (subject) {
           await fetch('/api/admin/send-email', {
