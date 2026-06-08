@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import EmailInput from '@/components/ui/EmailInput'
+import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -431,6 +432,8 @@ export default function PublicPortalPage() {
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
+  const [showRegSuccess, setShowRegSuccess] = useState(false)
+  const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
   // Registration form
   const [regForm, setRegForm] = useState({
@@ -536,7 +539,19 @@ export default function PublicPortalPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשמירת הנתונים'); return }
+
+      // Show confetti popup with registrant details
+      const fullName = [regForm.family_name, regForm.full_name].filter(Boolean).join(' ')
+      setRegSuccessDetails({ name: fullName, idNumber: regForm.id_number, phone: regForm.phone, email: regForm.email })
+      setShowRegSuccess(true)
       setStep('register-success')
+
+      // Auto-reset after 5s
+      setTimeout(() => {
+        setShowRegSuccess(false)
+        setRegSuccessDetails(null)
+        backToHome()
+      }, 5000)
     } catch {
       setError('שגיאת רשת. אנא נסה שוב.')
     }
@@ -630,6 +645,20 @@ export default function PublicPortalPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+
+      {/* Registration success popup */}
+      {showRegSuccess && regSuccessDetails && (
+        <ConfettiSuccess
+          title="הרישום התקבל בהצלחה!"
+          subtitle="הפרטים הועברו לטיפול המזכירות — תקבל עדכון בהקדם."
+          details={[
+            `שם: ${regSuccessDetails.name}`,
+            `ת.ז.: ${regSuccessDetails.idNumber}`,
+            ...(regSuccessDetails.phone ? [`טלפון: ${regSuccessDetails.phone}`] : []),
+            ...(regSuccessDetails.email ? [`מייל: ${regSuccessDetails.email}`] : []),
+          ]}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
