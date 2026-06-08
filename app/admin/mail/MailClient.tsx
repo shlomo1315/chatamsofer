@@ -710,35 +710,62 @@ function ThreadView({
       {/* Thread replies */}
       {threadLoading && (
         <div className="flex items-center gap-2 px-6 py-3 text-xs text-slate-400">
-          <Loader2 size={13} className="animate-spin" /> טוען שרשרת...
+          <Loader2 size={13} className="animate-spin" /> טוען שירשור מיילים...
         </div>
       )}
 
       {!threadLoading && threadMsgs.length > 0 && (
-        <div className="border-t border-slate-100 mt-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-6 pt-3 pb-1">
-            שרשרת ({threadMsgs.length})
-          </p>
-          {threadMsgs.map(msg => (
-            <div key={msg.id} className={`mx-4 mb-3 rounded-xl border overflow-hidden ${isSent(msg) ? 'border-indigo-100 bg-indigo-50/40' : 'border-slate-200 bg-white'}`}>
-              <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isSent(msg) ? 'border-indigo-100 bg-indigo-50' : 'border-slate-100 bg-slate-50'}`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${isSent(msg) ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-                    {(isSent(msg) ? 'ח' : (emailToInfo[msg.fromEmail]?.name ?? msg.from).charAt(0))}
+        <div className="border-t-2 border-indigo-100 mt-4 pt-2 pb-6">
+
+          {/* Header */}
+          <div className="flex items-center gap-2 px-6 py-3">
+            <div className="w-1 h-5 rounded-full bg-indigo-400 flex-shrink-0" />
+            <p className="text-sm font-bold text-slate-700">
+              שירשור מיילים
+            </p>
+            <span className="text-xs bg-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-full">
+              {threadMsgs.length}
+            </span>
+          </div>
+
+          {/* Thread messages */}
+          <div className="px-4 flex flex-col gap-4">
+            {threadMsgs.map(msg => (
+              <div key={msg.id}
+                className={`rounded-2xl border overflow-hidden shadow-sm ${
+                  isSent(msg)
+                    ? 'border-indigo-200 bg-gradient-to-b from-indigo-50 to-white'
+                    : 'border-slate-200 bg-white'
+                }`}>
+
+                {/* Message header */}
+                <div className={`flex items-center justify-between px-5 py-3 border-b ${
+                  isSent(msg) ? 'border-indigo-100 bg-indigo-50' : 'border-slate-100 bg-slate-50'
+                }`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                      isSent(msg) ? 'bg-indigo-500 text-white' : 'bg-slate-300 text-slate-700'
+                    }`}>
+                      {isSent(msg) ? 'ח' : (emailToInfo[msg.fromEmail]?.name ?? msg.from).charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800 truncate">
+                        {isSent(msg) ? 'מענה אוטומטי — היכל החתם סופר' : (emailToInfo[msg.fromEmail]?.name ?? msg.from)}
+                      </p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {isSent(msg) ? `אל: ${msg.to}` : msg.fromEmail}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate">
-                      {isSent(msg) ? 'מענה אוטומטי — היכל החתם סופר' : (emailToInfo[msg.fromEmail]?.name ?? msg.from)}
-                    </p>
-                    <p className="text-[10px] text-slate-400">{isSent(msg) ? msg.to : msg.fromEmail}</p>
-                  </div>
+                  <span className="text-xs text-slate-400 flex-shrink-0 mr-3 font-medium">{formatDateFull(msg.date)}</span>
                 </div>
-                <span className="text-[10px] text-slate-400 flex-shrink-0 mr-2">{formatDateFull(msg.date)}</span>
+
+                {/* Message body — no height cap, shows full content */}
+                <div className="px-5 py-4 text-sm text-slate-700 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: msg.body || msg.snippet }} />
               </div>
-              <div className="px-4 py-3 text-xs text-slate-700 leading-relaxed max-h-48 overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: msg.body || msg.snippet }} />
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>

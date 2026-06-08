@@ -215,41 +215,50 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
   }
 }
 
-// ─── הזמנה להרשמה ─────────────────────────────────────────────────────────────
+// ─── הזמנה להרשמה / מייל לא מזוהה ───────────────────────────────────────────
 export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">הצטרפות למערכת</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום וברכה,</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       תודה על פנייתך ל<strong>היכל החתם סופר</strong>.<br/>
-      לא מצאנו אותך רשום/ה במערכת שלנו — כדי שנוכל לסייע ולטפל בבקשות, יש להירשם תחילה.
+      חיפשנו את כתובת המייל שממנה פנית — ולא מצאנו אותה רשומה במערכת שלנו.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
-      <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:18px 20px;">
-        <p style="margin:0 0 6px;color:#3730a3;font-size:15px;font-weight:800;">📝 ההרשמה פשוטה ומהירה</p>
+      <tr><td style="background:#fefce8;border-right:4px solid #eab308;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 8px;color:#854d0e;font-size:14px;font-weight:800;">💡 אם אתה/את כבר רשום/ה אצלנו:</p>
+        <p style="margin:0;color:#713f12;font-size:13px;line-height:1.7;">
+          ייתכן שכתובת המייל שלך במערכת שונה מהכתובת שממנה שלחת הודעה זו.<br/>
+          ניתן להיכנס לפורטל ולהזין את מספר תעודת הזהות — אם אתה/את רשום/ה, הכניסה תצליח מיד.
+        </p>
+      </td></tr>
+    </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 6px;color:#3730a3;font-size:14px;font-weight:800;">📋 אם עדיין לא נרשמת:</p>
         <p style="margin:0;color:#4338ca;font-size:13px;line-height:1.6;">
-          יש להזין מספר תעודת זהות ולמלא כמה פרטים קצרים — וזהו!<br/>
-          לאחר אישור הזכאות תוכל/י להגיש בקשות לתמיכה ישירות דרך הפורטל.
+          ההרשמה פשוטה ומהירה — מזינים מספר תעודת זהות ומספר פרטים.<br/>
+          לאחר אישור הזכאות תוכל/י להגיש בקשות ישירות דרך הפורטל.
         </p>
       </td></tr>
     </table>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
       <tr><td align="center">
-        ${btn(`${base}/`, '✍️  להרשמה למערכת', '#4f46e5')}
+        ${btn(`${base}/`, 'כניסה לפורטל', '#4f46e5')}
       </td></tr>
     </table>
 
     <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      לחיצה על הכפתור תפתח את דף ההרשמה של היכל החתם סופר.<br/>
-      לאחר ההרשמה ואישור הזכאות תוכל/י להגיש בקשות ישירות.
+      בלחיצה תגיע לפורטל — הזן/י תעודת זהות לכניסה, או מלא/י פרטים להרשמה חדשה.
     </p>
   `
   return {
-    subject: 'הרשמה למערכת — היכל החתם סופר',
-    html: shell({ preheader: 'לא נמצאת רשום/ה — הרשמה מהירה ופשוטה.', accent: '#4f46e5', title: 'ברוכים הבאים', subtitle: 'היכל החתם סופר', body }),
+    subject: 'קיבלנו את פנייתך — היכל החתם סופר',
+    html: shell({ preheader: 'כתובת המייל שלך לא נמצאה — כנס לפורטל לבדיקה.', accent: '#6366f1', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר', body }),
   }
 }
 
