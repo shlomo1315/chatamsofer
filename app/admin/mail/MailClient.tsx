@@ -830,6 +830,9 @@ export default function MailClient() {
   const [threadMsgs, setThreadMsgs] = useState<ParsedMessage[]>([])
   const [threadLoading, setThreadLoading] = useState(false)
 
+  // Email open tracking (SENT folder)
+  const [trackingStatus, setTrackingStatus] = useState<Record<string, { opened: boolean; openedAt: string | null; openCount: number }>>({})
+
   // Handled messages (in-session tracking)
   const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
 
@@ -891,6 +894,15 @@ export default function MailClient() {
     }
 
     setMessages(msgs)
+
+    // Fetch open-tracking status for SENT messages
+    if (f === 'SENT' && msgs.length > 0) {
+      const ids = msgs.map(m => m.id).join(',')
+      fetch(`/api/admin/mail/tracking-status?messageIds=${encodeURIComponent(ids)}`)
+        .then(r => r.json())
+        .then(d => setTrackingStatus(d))
+        .catch(() => {})
+    }
 
     // batch resolve sender + recipient names
     const uniqueEmails = [...new Set([
@@ -1165,6 +1177,11 @@ export default function MailClient() {
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
+                        {folder === 'SENT' && trackingStatus[msg.id]?.opened && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <CheckCircle2 size={9} /> נפתח
+                          </span>
+                        )}
                         {msgLabels.map(l => (
                           <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
                             style={{ backgroundColor: l.color }}>

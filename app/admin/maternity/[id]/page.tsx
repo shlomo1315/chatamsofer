@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, ExternalLink } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
@@ -18,7 +18,7 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, id_number, spouse_name, spouse_id_number, children, children_count)')
+      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, phone2, email, address, city, id_number, marital_status, gender, eligibility_status, spouse_name, spouse_id_number, children, children_count, lineage_node_id)')
       .eq('id', id)
       .single()
     return data
@@ -58,8 +58,11 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   }
 
   const beneficiary = aid.beneficiary as {
-    full_name: string; family_name?: string; phone?: string; id_number: string
+    id: string; full_name: string; family_name?: string; phone?: string; phone2?: string
+    email?: string; address?: string; city?: string; id_number: string
+    marital_status?: string; gender?: string; eligibility_status?: string
     spouse_name?: string; spouse_id_number?: string
+    children_count?: number
   } | undefined
 
   // שם היולדת (האישה) = שם משפחה + שם האישה. נפילה לשם הרשומה אם חסר
@@ -87,6 +90,33 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <MaternityActions aid={aid} />
         </div>
       </div>
+
+      {/* Beneficiary quick panel */}
+      {beneficiary && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <User size={16} />
+              <span className="text-xs font-semibold text-slate-500 uppercase">כרטסת הנתמך</span>
+            </div>
+            <Link href={`/admin/beneficiaries/${beneficiary.id}`}
+              className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+              פתח כרטסת מלאה <ExternalLink size={12} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+            <p><span className="text-slate-500">שם הבעל: </span><span className="font-medium text-slate-800">{[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')}</span></p>
+            <p><span className="text-slate-500">ת.ז. בעל: </span><span className="font-mono text-xs ltr-num">{beneficiary.id_number}</span></p>
+            {beneficiary.spouse_name && <p><span className="text-slate-500">שם האשה: </span><span className="font-medium text-slate-800">{[beneficiary.family_name, beneficiary.spouse_name].filter(Boolean).join(' ')}</span></p>}
+            {beneficiary.spouse_id_number && <p><span className="text-slate-500">ת.ז. אשה: </span><span className="font-mono text-xs ltr-num">{beneficiary.spouse_id_number}</span></p>}
+            {beneficiary.phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{beneficiary.phone}</span></p>}
+            {beneficiary.phone2 && <p><span className="text-slate-500">טלפון 2: </span><span className="ltr-num">{beneficiary.phone2}</span></p>}
+            {beneficiary.email && <p><span className="text-slate-500">מייל: </span><a href={`mailto:${beneficiary.email}`} className="text-indigo-600 hover:underline ltr-num">{beneficiary.email}</a></p>}
+            {beneficiary.address && <p><span className="text-slate-500">כתובת: </span><span>{beneficiary.address}{beneficiary.city ? `, ${beneficiary.city}` : ''}</span></p>}
+            {beneficiary.children_count !== undefined && <p><span className="text-slate-500">מספר ילדים: </span><span className="font-medium">{beneficiary.children_count}</span></p>}
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="flex flex-col gap-1">
