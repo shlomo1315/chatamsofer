@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import EmailInput from '@/components/ui/EmailInput'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -855,7 +856,7 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2">
                     <Field label="דואר אלקטרוני" required>
-                      <TextInput type="email" value={regForm.email} onChange={setReg('email')} placeholder="your@email.com" dir="ltr" required />
+                      <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
                     </Field>
                   </div>
                 </div>

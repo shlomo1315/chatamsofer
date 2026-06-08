@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Users, Trash2, MoreVertical } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
+import EmailInput from '@/components/ui/EmailInput'
 import Select from '@/components/ui/Select'
 import { Profile, ROLE_LABELS, UserRole } from '@/types'
 
@@ -218,14 +219,12 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
         }
       >
         <form id="add-user-form" onSubmit={handleAdd} className="flex flex-col gap-4">
-          <Input
+          <EmailInput
             label="כתובת אימייל"
-            type="email"
             required
             placeholder="user@example.com"
             value={form.email}
-            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            dir="ltr"
+            onChange={v => setForm(f => ({ ...f, email: v }))}
           />
           <Input
             label="שם מלא"

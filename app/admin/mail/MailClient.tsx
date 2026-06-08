@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
+import EmailInput from '@/components/ui/EmailInput'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -474,8 +475,8 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
                 <p className="text-xs font-semibold text-slate-500">הוסף מייל פנימי:</p>
                 <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                   value={newEmailName} onChange={e => setNewEmailName(e.target.value)} placeholder="שם המחלקה..." />
-                <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newEmailAddr} onChange={e => setNewEmailAddr(e.target.value)} placeholder="כתובת מייל..." type="email" />
+                <EmailInput value={newEmailAddr} onChange={setNewEmailAddr} placeholder="כתובת מייל..."
+                  inputClassName="border-slate-200 outline-none" />
                 <button onClick={addEmail} disabled={!newEmailName.trim() || !newEmailAddr.trim()}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
                   <Plus size={14} /> הוסף
