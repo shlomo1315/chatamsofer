@@ -731,40 +731,44 @@ export default function MailClient() {
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
       {/* Sidebar */}
-      <div className="w-48 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
-        <div className="px-3 pt-3 pb-2 border-b border-slate-200">
-          <div className="flex items-center gap-2 px-1 py-1.5 mb-2">
-            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-              <Mail size={14} className="text-indigo-600" />
+      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
+
+        {/* Account header */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-200 bg-white">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Mail size={16} className="text-white" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {myProfile && myProfile.role !== 'admin' && myProfile.mail_account ? (
                 <>
-                  <p className="text-xs font-semibold text-slate-700 truncate">
+                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">
                     {internalEmails.find(ie => ie.email === myProfile.mail_account)?.name ?? myProfile.mail_account}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">{myProfile.mail_account}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{myProfile.mail_account}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-xs font-semibold text-slate-700 truncate">משרד ראשי</p>
-                  <p className="text-[10px] text-slate-400 truncate">office@chasamsofer.info</p>
+                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">משרד ראשי</p>
+                  <p className="text-[11px] text-indigo-500 truncate font-medium">office@chasamsofer.info</p>
                 </>
               )}
             </div>
           </div>
           <button
             onClick={() => { setCompose(true); setReplyMsg(undefined) }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <PenSquare size={15} />
             מייל חדש
           </button>
         </div>
-        <nav className="px-2 py-2">
+
+        {/* Folders */}
+        <nav className="px-2 py-2 border-b border-slate-100">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => { setFolder(key); setSelected(null); setActiveLabel(null) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right ${folder === key && !activeLabel ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key && !activeLabel ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
             </button>
@@ -772,11 +776,11 @@ export default function MailClient() {
         </nav>
 
         {/* Labels section */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
+        <div className="flex-1 overflow-y-auto px-2 py-2">
           {labels.length > 0 && (
             <>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase px-2 pt-1 pb-1.5 tracking-wide">תוויות</p>
-              <div className="flex flex-col gap-0.5">
+              <p className="text-[11px] font-bold text-slate-400 uppercase px-2 pt-1 pb-2 tracking-widest">תוויות</p>
+              <div className="flex flex-col gap-1">
                 {labels.map(l => (
                   <button
                     key={l.id}
@@ -787,14 +791,14 @@ export default function MailClient() {
                       setActiveLabel(activeLabel === l.id ? null : l.id)
                       setSelected(null)
                     }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right cursor-grab active:cursor-grabbing
-                      ${activeLabel === l.id ? 'font-semibold' : 'text-slate-700 hover:bg-slate-100'}`}
-                    style={activeLabel === l.id ? { backgroundColor: l.color + '22', color: l.color } : {}}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
+                      ${activeLabel === l.id ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
+                    style={activeLabel === l.id ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
                   >
-                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                    <span className="truncate">{l.name}</span>
+                    <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
+                    <span className="truncate flex-1">{l.name}</span>
                     {activeLabel === l.id && (
-                      <span className="mr-auto text-[10px] font-medium opacity-70">✕</span>
+                      <X size={12} className="opacity-60 flex-shrink-0" />
                     )}
                   </button>
                 ))}
