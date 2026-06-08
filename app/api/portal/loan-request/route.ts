@@ -44,8 +44,9 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
-  if (ben.eligibility_status === 'rejected') {
-    return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
+  // רק נתמך בסטטוס "מאושר" רשאי להגיש בקשת הלוואה — בהתאמה לממשק הניהול
+  if (ben.eligibility_status !== 'approved') {
+    return NextResponse.json({ error: 'ניתן להגיש בקשת הלוואה רק עבור נתמך בסטטוס "מאושר"' }, { status: 403 })
   }
 
   const monthly_payment = parsedAmount / parsedInstallments

@@ -46,8 +46,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   }
 
   const b = loan.beneficiary as { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string } | undefined
-  // הלווה = הבעל (שם משפחה + שם פרטי, ת.ז. הבעל)
-  const borrower = b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name) : undefined
+  // הלווה = הבעל (full_name); אם אין בעל, האישה (spouse_name)
+  const borrower = b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name) : undefined
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
