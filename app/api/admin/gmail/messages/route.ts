@@ -9,12 +9,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const gmail = await getGmailClient()
-    const labelIds = folder === 'SENT' ? ['SENT'] : folder === 'INBOX' ? ['INBOX'] : [folder]
+    // folder=ALL → search all mail (no label filter), used for beneficiary threads
+    const labelIds = folder === 'ALL' ? undefined
+      : folder === 'SENT' ? ['SENT']
+      : folder === 'INBOX' ? ['INBOX']
+      : [folder]
 
     const list = await gmail.users.messages.list({
       userId: 'me',
       maxResults: 50,
-      labelIds,
+      ...(labelIds ? { labelIds } : {}),
       q: q || undefined,
     })
 

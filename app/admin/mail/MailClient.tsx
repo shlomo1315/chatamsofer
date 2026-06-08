@@ -54,58 +54,54 @@ function formatDate(raw: string) {
 interface FoundBeneficiary { id: string; name: string; email: string; matchedAs?: 'husband' | 'wife' }
 
 function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; replyTo?: ParsedMessage; initialTo?: string }) {
-  const [idQuery, setIdQuery]       = useState('')          // ת.ז. search input
-  const [nameQuery, setNameQuery]   = useState('')          // name / email search input
-  const [found, setFound]           = useState<FoundBeneficiary | null | undefined>(undefined) // undefined=idle, null=not found
-  const [searching, setSearching]   = useState(false)
+  const [query, setQuery]     = useState('')          // unified search (name / email / ID)
+  const [searching, setSearching] = useState(false)
 
   const [to, setTo]           = useState(initialTo ?? (replyTo ? replyTo.fromEmail : ''))
-  const [toName, setToName]   = useState('')                // display name of selected recipient
-  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail)) // lock "to" once selected from search
+  const [toName, setToName]   = useState('')
+  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail))
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
   const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)
   const [sentInfo, setSentInfo] = useState<{ to: string; toName: string; body: string } | null>(null)
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
   const canSend = !locked
-    ? (isValidEmail(to) && !!subject)          // manual entry: must be valid email
-    : (!!to && !!subject)                      // selected from system: trust the email
+    ? (isValidEmail(to) && !!subject)
+    : (!!to && !!subject)
 
-  // Search by ת.ז.
-  const searchById = useCallback(async (id: string) => {
-    if (id.length < 5) { setFound(undefined); return }
+  // Unified search: detect digits-only → search by ID, else by name/email
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) { setSuggestions([]); return }
     setSearching(true)
-    const res  = await fetch(`/api/admin/beneficiary-search?id_number=${encodeURIComponent(id)}&limit=3`)
+    const isId = /^\d+$/.test(q)
+    const url = isId
+      ? `/api/admin/beneficiary-search?id_number=${encodeURIComponent(q)}&limit=5`
+      : `/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=6`
+    const res = await fetch(url)
     const data = await res.json()
-    const results: BeneficiarySuggestion[] = data.results ?? []
-    if (results.length === 0) {
-      setFound(null)
-    } else {
-      const b = results[0] as BeneficiarySuggestion & { spouse_id_number?: string }
-      setFound({ id: b.id, name: b.name, email: b.email ?? '', matchedAs: (b as any).spouse_id_number === id ? 'wife' : 'husband' })
-    }
+    setSuggestions(data.results ?? [])
     setSearching(false)
   }, [])
 
-  // Autocomplete search by name/email
-  const searchByName = useCallback(async (q: string) => {
-    if (q.length < 2) { setSuggestions([]); return }
-    const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=6`)
-    const data = await res.json()
-    setSuggestions(data.results ?? [])
-  }, [])
+  const handleQueryChange = (v: string) => {
+    setQuery(v)
+    setTo(v)          // allow typing a raw email address too
+    setShowSug(true)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => doSearch(v), 250)
+  }
 
   const selectBeneficiary = (name: string, email: string) => {
     setTo(email); setToName(name); setLocked(true)
-    setSuggestions([]); setShowSug(false); setFound(undefined)
+    setSuggestions([]); setShowSug(false); setQuery('')
   }
 
   const clearRecipient = () => {
-    setTo(''); setToName(''); setLocked(false)
-    setFound(undefined); setIdQuery(''); setNameQuery('')
+    setTo(''); setToName(''); setLocked(false); setQuery('')
   }
 
   const send = async () => {
@@ -160,7 +156,6 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
           <div className="border-b border-slate-100 px-5 py-3 flex flex-col gap-2">
             <span className="text-xs font-medium text-slate-500">אל:</span>
 
-            {/* Selected recipient chip */}
             {locked && to ? (
               <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
                 <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
@@ -173,86 +168,47 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
                 <button onClick={clearRecipient} className="text-slate-400 hover:text-red-500 flex-shrink-0"><X size={14} /></button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
-                {/* Row 1: search by ID */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 flex-1 border border-slate-200 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-400 flex-shrink-0">ת.ז.:</span>
-                    <input
-                      className="flex-1 text-sm outline-none"
-                      value={idQuery}
-                      onChange={e => { setIdQuery(e.target.value); searchById(e.target.value) }}
-                      placeholder="חפש לפי ת.ז. (בעל או אשה)..."
-                      autoComplete="off"
-                    />
-                    {searching && <Loader2 size={13} className="animate-spin text-slate-400 flex-shrink-0" />}
-                  </div>
+              <div className="relative">
+                <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-indigo-400">
+                  {searching
+                    ? <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />
+                    : <Search size={14} className="text-slate-400 flex-shrink-0" />}
+                  <input
+                    className="flex-1 text-sm outline-none"
+                    value={query}
+                    onChange={e => handleQueryChange(e.target.value)}
+                    onFocus={() => query.length >= 2 && setShowSug(true)}
+                    placeholder="שם, מייל או ת.ז. (בעל / אשה)..."
+                    autoFocus
+                    autoComplete="off"
+                  />
+                  {query && <button onClick={() => { setQuery(''); setTo(''); setSuggestions([]) }} className="text-slate-300 hover:text-slate-600"><X size={13} /></button>}
                 </div>
 
-                {/* ID search result */}
-                {found === null && idQuery.length >= 5 && (
-                  <p className="text-xs text-amber-600 px-1">ת.ז. זו לא נמצאה במערכת — ניתן להזין מייל ידנית</p>
-                )}
-                {found && (
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                      {found.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">{found.name}</p>
-                      <p className="text-xs text-slate-400">{found.email || 'אין מייל רשום'}</p>
-                    </div>
-                    {found.email ? (
-                      <button onClick={() => selectBeneficiary(found.name, found.email)}
-                        className="flex-shrink-0 px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">
-                        בחר
+                {showSug && suggestions.length > 0 && (
+                  <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                    {suggestions.map(s => (
+                      <button key={s.id} type="button"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
+                        onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                          {s.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 text-right flex-1">
+                          <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
+                          <p className="text-xs text-slate-400 truncate">{s.email || 'אין מייל'}</p>
+                        </div>
+                        {!s.email && <span className="text-xs text-red-400 flex-shrink-0">אין מייל</span>}
                       </button>
-                    ) : (
-                      <span className="text-xs text-red-500 flex-shrink-0">אין מייל</span>
-                    )}
+                    ))}
                   </div>
                 )}
 
-                {/* Row 2: search by name or direct email */}
-                <div className="relative">
-                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-400 flex-shrink-0">מייל:</span>
-                    <input
-                      className="flex-1 text-sm outline-none"
-                      value={nameQuery || to}
-                      onChange={e => {
-                        const v = e.target.value
-                        setNameQuery(v); setTo(v)
-                        searchByName(v); setShowSug(true)
-                      }}
-                      onFocus={() => setShowSug(true)}
-                      placeholder="שם נתמך או כתובת מייל..."
-                      autoComplete="off"
-                    />
-                  </div>
-                  {showSug && suggestions.length > 0 && (
-                    <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                      {suggestions.map(s => (
-                        <button key={s.id} type="button"
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
-                          onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
-                        >
-                          <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                            {s.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 text-right">
-                            <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
-                            <p className="text-xs text-slate-400 truncate">{s.email}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* validation hint for manual email */}
-                  {to && !isValidEmail(to) && !suggestions.length && (
-                    <p className="text-xs text-red-500 px-1 pt-1">יש להזין כתובת מייל תקינה</p>
-                  )}
-                </div>
+                {/* Show validation hint only when no suggestions */}
+                {to && !isValidEmail(to) && suggestions.length === 0 && query.length > 3 && !searching && (
+                  <p className="text-xs text-amber-600 px-1 pt-1">לא נמצא במערכת — ניתן להזין כתובת מייל ישירות</p>
+                )}
               </div>
             )}
           </div>
@@ -414,7 +370,15 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
   const [newEmailName, setNewEmailName] = useState('')
   const [newEmailAddr, setNewEmailAddr] = useState('')
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'labels' | 'emails'>('labels')
+  const [tab, setTab] = useState<'labels' | 'emails' | 'accounts'>('labels')
+  const [domainAccounts, setDomainAccounts] = useState<{ name: string; email: string; isMain: boolean }[]>([])
+
+  useEffect(() => {
+    fetch('/api/admin/mail/accounts')
+      .then(r => r.json())
+      .then(d => setDomainAccounts(d.accounts ?? []))
+      .catch(() => {})
+  }, [])
 
   const addLabel = () => {
     if (!newName.trim()) return
@@ -455,9 +419,9 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
         </div>
 
         <div className="flex border-b border-slate-100">
-          {([['labels', 'תוויות מחלקות'], ['emails', 'מיילים פנימיים']] as const).map(([k, l]) => (
+          {([['labels', 'תוויות'], ['emails', 'מיילים פנימיים'], ['accounts', 'חשבונות מייל']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === k ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === k ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
               {l}
             </button>
           ))}
@@ -519,6 +483,40 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
               </div>
             </>
           )}
+
+          {tab === 'accounts' && (
+            <>
+              <p className="text-xs text-slate-500 mb-3">כל חשבונות המייל שזוהו אוטומטית ממשתמשי המערכת עם דומיין הארגון.</p>
+              <div className="flex flex-col gap-2">
+                {domainAccounts.map(acc => (
+                  <div key={acc.email} className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold
+                      ${acc.isMain ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {acc.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800">{acc.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{acc.email}</p>
+                    </div>
+                    {acc.isMain ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium flex-shrink-0">מחובר</span>
+                    ) : (
+                      <a href="/api/auth/gmail" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0 font-medium">
+                        חבר
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {domainAccounts.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-6">לא נמצאו חשבונות מייל בדומיין הארגון</p>
+                )}
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
+                <p className="font-semibold mb-1">כיצד להוסיף חשבון?</p>
+                <p>הוסף משתמש מערכת עם כתובת מייל מהדומיין (למשל: name@chasamsofer.info) — החשבון יופיע כאן אוטומטית.</p>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-200">
@@ -535,6 +533,11 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
 }
 
 // ─── Beneficiary Card ──────────────────────────────────────────────────────────
+
+const MARITAL_STATUS_LABELS: Record<string, string> = {
+  married: 'נשוי/נשואה', single: 'רווק/רווקה', divorced: 'גרוש/גרושה',
+  widowed: 'אלמן/אלמנה', other: 'אחר',
+}
 
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
@@ -554,9 +557,12 @@ function BeneficiaryCard({ email }: { email: string }) {
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
   const statusColor = STATUS_COLORS[ben.eligibility_status] ?? 'bg-slate-100 text-slate-600'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const b = ben as any
 
   return (
-    <div className="border-t border-slate-100 bg-slate-50 p-4 flex flex-col gap-3">
+    <div className="border-t border-slate-200 bg-slate-50 p-4 flex flex-col gap-3">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">נתמך מזוהה</span>
         <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
@@ -564,22 +570,71 @@ function BeneficiaryCard({ email }: { email: string }) {
           פתח כרטיס <ExternalLink size={11} />
         </Link>
       </div>
+
+      {/* Name + avatar */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
+        <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-base flex-shrink-0">
           {name.charAt(0)}
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-slate-800 text-sm truncate">{name}</p>
+          <p className="font-bold text-slate-800 text-sm">{name}</p>
+          {b.id_number && <p className="text-[11px] text-slate-400">ת.ז. {b.id_number}</p>}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
             {ELIGIBILITY_LABELS[ben.eligibility_status]}
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
-        {ben.phone && <span className="flex items-center gap-1"><Phone size={11} className="text-slate-400" />{ben.phone}</span>}
-        {ben.city  && <span className="flex items-center gap-1"><MapPin size={11} className="text-slate-400" />{ben.city}</span>}
-        {ben.children_count > 0 && <span className="flex items-center gap-1"><User size={11} className="text-slate-400" />{ben.children_count} ילדים</span>}
+
+      {/* Details grid */}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-slate-600">
+        {ben.phone && (
+          <span className="flex items-center gap-1.5 col-span-1">
+            <Phone size={11} className="text-slate-400 flex-shrink-0" />{ben.phone}
+          </span>
+        )}
+        {(b.city || b.address) && (
+          <span className="flex items-center gap-1.5 col-span-1 truncate">
+            <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+            {[b.address, b.city].filter(Boolean).join(', ')}
+          </span>
+        )}
+        {ben.children_count > 0 && (
+          <span className="flex items-center gap-1.5">
+            <User size={11} className="text-slate-400 flex-shrink-0" />{ben.children_count} ילדים
+          </span>
+        )}
+        {b.marital_status && (
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-400 text-[10px]">♦</span>
+            {MARITAL_STATUS_LABELS[b.marital_status] ?? b.marital_status}
+          </span>
+        )}
       </div>
+
+      {/* Spouse */}
+      {b.spouse_name && (
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+          <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-600 flex-shrink-0">
+            {b.spouse_name.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-slate-400">בן/בת זוג</p>
+            <p className="text-xs font-medium text-slate-700">{b.spouse_name}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Lineage */}
+      {Array.isArray(b.lineage_manual) && b.lineage_manual.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">ייחוס</p>
+          <div className="flex flex-wrap gap-1">
+            {(b.lineage_manual as string[]).map((node, i) => (
+              <span key={i} className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full">{node}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -595,6 +650,10 @@ export default function MailClient() {
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
+  const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
+  const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
+  const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
+  const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
@@ -642,10 +701,13 @@ export default function MailClient() {
 
     setMessages(msgs)
 
-    // batch resolve sender names
-    const uniqueEmails = [...new Set(msgs.map(m => m.fromEmail).filter(Boolean))]
+    // batch resolve sender + recipient names
+    const uniqueEmails = [...new Set([
+      ...msgs.map(m => m.fromEmail),
+      ...msgs.map(m => m.toEmail),
+    ].filter(Boolean))]
     if (uniqueEmails.length > 0) {
-      const r = await fetch(`/api/admin/beneficiary-search?emails=${encodeURIComponent(uniqueEmails.join(','))}&limit=50`)
+      const r = await fetch(`/api/admin/beneficiary-search?emails=${encodeURIComponent(uniqueEmails.join(','))}&limit=100`)
       const d = await r.json()
       const map: Record<string, { name: string; id: string }> = {}
       for (const b of d.results ?? []) if (b.email) map[b.email] = { name: b.name, id: b.id }
@@ -673,6 +735,12 @@ export default function MailClient() {
       await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
+  }
+
+  const trashMessage = async (id: string) => {
+    await fetch('/api/admin/gmail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    setMessages(ms => ms.filter(m => m.id !== id))
+    if (selected?.id === id) setSelected(null)
   }
 
   const toggleLabel = async (messageId: string, labelId: string, add: boolean) => {
@@ -708,60 +776,114 @@ export default function MailClient() {
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
       {/* Sidebar */}
-      <div className="w-48 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
-        <div className="px-3 pt-3 pb-2 border-b border-slate-200">
-          <div className="flex items-center gap-2 px-1 py-1.5 mb-2">
-            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-              <Mail size={14} className="text-indigo-600" />
+      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
+
+        {/* Account header */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-200 bg-white">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Mail size={16} className="text-white" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               {myProfile && myProfile.role !== 'admin' && myProfile.mail_account ? (
                 <>
-                  <p className="text-xs font-semibold text-slate-700 truncate">
+                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">
                     {internalEmails.find(ie => ie.email === myProfile.mail_account)?.name ?? myProfile.mail_account}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">{myProfile.mail_account}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{myProfile.mail_account}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-xs font-semibold text-slate-700 truncate">משרד ראשי</p>
-                  <p className="text-[10px] text-slate-400 truncate">office@chasamsofer.info</p>
+                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">משרד ראשי</p>
+                  <p className="text-[11px] text-indigo-500 truncate font-medium">office@chasamsofer.info</p>
                 </>
               )}
             </div>
           </div>
           <button
             onClick={() => { setCompose(true); setReplyMsg(undefined) }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm"
           >
             <PenSquare size={15} />
             מייל חדש
           </button>
         </div>
-        <nav className="flex-1 px-2 py-2">
+
+        {/* Folders */}
+        <nav className="px-2 py-2 border-b border-slate-100">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => { setFolder(key); setSelected(null) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right ${folder === key ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <button key={key} onClick={() => { setFolder(key); setSelected(null); setActiveLabel(null) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key && !activeLabel ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
             </button>
           ))}
         </nav>
+
+        {/* Labels section */}
+        <div className="flex-1 overflow-y-auto px-2 py-2">
+          {labels.length > 0 && (
+            <>
+              <p className="text-[11px] font-bold text-slate-400 uppercase px-2 pt-1 pb-2 tracking-widest">תוויות</p>
+              <div className="flex flex-col gap-1">
+                {labels.map(l => {
+                  const labelMsgs = messages.filter(m => (assignments[m.id] ?? []).includes(l.id))
+                  const count = Object.values(assignments).filter(ids => ids.includes(l.id)).length
+                  const isOpen = activeLabel === l.id
+                  return (
+                    <div key={l.id}>
+                      <button
+                        draggable
+                        onDragStart={() => setDragLabelId(l.id)}
+                        onDragEnd={() => setDragLabelId(null)}
+                        onClick={() => { setActiveLabel(isOpen ? null : l.id); setSelected(null) }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
+                          ${isOpen ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
+                        style={isOpen ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
+                      >
+                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
+                        <span className="truncate flex-1">{l.name}</span>
+                        {count > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: l.color + '25', color: l.color }}>
+                            {count}
+                          </span>
+                        )}
+                        {isOpen && <X size={11} className="opacity-60 flex-shrink-0 mr-0.5" />}
+                      </button>
+
+                      {/* Accordion: list of message subjects under this label */}
+                      {isOpen && labelMsgs.length > 0 && (
+                        <div className="mx-1 mb-1 rounded-xl overflow-hidden border border-slate-100 bg-white">
+                          {labelMsgs.map(msg => (
+                            <button
+                              key={msg.id}
+                              onClick={() => openMessage(msg)}
+                              className={`w-full text-right px-3 py-2 text-xs border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors
+                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}
+                            >
+                              <p className={`truncate ${!msg.isRead ? 'font-semibold' : ''}`}>{msg.subject}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{formatDate(msg.date)}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isOpen && labelMsgs.length === 0 && (
+                        <p className="text-[11px] text-slate-400 text-center py-2">אין מיילים טעונים עם תווית זו</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="px-2 pb-2 border-t border-slate-200 pt-2">
           <button onClick={() => setShowManageLabels(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <Settings size={13} /> הגדרות מייל
           </button>
-          {labels.length > 0 && (
-            <div className="px-2 pt-2 flex flex-col gap-0.5">
-              {labels.map(l => (
-                <button key={l.id} className="flex items-center gap-1.5 py-0.5 text-xs text-slate-600 hover:text-slate-900 w-full text-right">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                  {l.name}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -779,59 +901,114 @@ export default function MailClient() {
           </button>
         </div>
 
+        {/* Active label filter banner */}
+        {activeLabel && (
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50">
+            {(() => { const l = labels.find(x => x.id === activeLabel); return l ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                <span className="text-xs font-medium text-slate-700 flex-1">מסונן: {l.name}</span>
+                <button onClick={() => setActiveLabel(null)} className="text-xs text-slate-400 hover:text-slate-700">נקה</button>
+              </>
+            ) : null })()}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 gap-2 text-slate-400 text-sm">
               <Loader2 size={16} className="animate-spin" /> טוען מיילים...
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
-              <Mail size={24} /><span className="text-sm">אין הודעות</span>
-            </div>
           ) : (
-            messages.map(msg => {
-              const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
-              return (
-                <div key={msg.id}
-                  className={`relative border-b border-slate-100 hover:bg-slate-50 transition-colors ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : ''}`}>
-                  <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
-                    <div className="flex items-start justify-between gap-2 mb-0.5">
-                      <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-                        {folder === 'SENT' ? msg.to : senderDisplay(msg)}
-                      </span>
-                      <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
-                    </div>
-                    <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {msgLabels.map(l => (
-                        <span key={l.id} className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
-                          style={{ backgroundColor: l.color }}>{l.name}</span>
-                      ))}
-                      {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
-                    </div>
-                  </button>
-                  <div className="absolute top-2 left-2">
-                    <div className="relative">
+            (() => {
+              const filtered = activeLabel
+                ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
+                : messages
+              return filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
+                  <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>
+                </div>
+              ) : filtered.map(msg => {
+                const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
+                const isDragTarget = dragOverMsgId === msg.id && dragLabelId
+                return (
+                  <div key={msg.id}
+                    onDragOver={e => { if (dragLabelId) { e.preventDefault(); setDragOverMsgId(msg.id) } }}
+                    onDragLeave={() => setDragOverMsgId(null)}
+                    onDrop={e => {
+                      e.preventDefault()
+                      if (dragLabelId) {
+                        const existing = assignments[msg.id] ?? []
+                        setDragOverMsgId(null)
+                        if (existing.length > 0 && !existing.includes(dragLabelId)) {
+                          // Ask: add alongside existing or replace?
+                          setPendingDrop({ msgId: msg.id, labelId: dragLabelId })
+                        } else {
+                          toggleLabel(msg.id, dragLabelId, true)
+                        }
+                      }
+                    }}
+                    className={`relative border-b border-slate-100 transition-colors
+                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
+                      ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
+                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                      <div className="flex items-start justify-between gap-2 mb-0.5">
+                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+                          {folder === 'SENT'
+                            ? (emailToInfo[msg.toEmail]
+                                ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
+                                : msg.to)
+                            : senderDisplay(msg)}
+                        </span>
+                        <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
+                      </div>
+                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {msgLabels.map(l => (
+                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: l.color }}>
+                            {l.name}
+                            <button
+                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
+                              className="opacity-70 hover:opacity-100 leading-none"
+                              title="הסר תווית"
+                            >
+                              <X size={9} />
+                            </button>
+                          </span>
+                        ))}
+                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
+                      </div>
+                    </button>
+                    <div className="absolute top-2 left-2 flex items-center gap-0.5">
                       <button
-                        onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                        className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
-                        title="תוויות">
-                        <Tag size={12} />
+                        onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
+                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                        title="מחק">
+                        <Trash2 size={12} />
                       </button>
-                      {openLabelFor === msg.id && (
-                        <LabelDropdown
-                          messageId={msg.id}
-                          labels={labels}
-                          assigned={assignments[msg.id] ?? []}
-                          onAssign={(labelId, add) => toggleLabel(msg.id, labelId, add)}
-                          onClose={() => setOpenLabelFor(null)}
-                        />
-                      )}
+                      <div className="relative">
+                        <button
+                          onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
+                          className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
+                          title="תוויות">
+                          <Tag size={12} />
+                        </button>
+                        {openLabelFor === msg.id && (
+                          <LabelDropdown
+                            messageId={msg.id}
+                            labels={labels}
+                            assigned={assignments[msg.id] ?? []}
+                            onAssign={(labelId, add) => toggleLabel(msg.id, labelId, add)}
+                            onClose={() => setOpenLabelFor(null)}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })
+                )
+              })
+            })()
           )}
         </div>
       </div>
@@ -842,12 +1019,20 @@ export default function MailClient() {
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold text-slate-900 text-base truncate">{selected.subject}</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {emailToInfo[selected.fromEmail]
-                  ? <><span className="font-medium text-slate-700">{emailToInfo[selected.fromEmail].name}</span> · {selected.fromEmail}</>
-                  : selected.from
-                } · {formatDate(selected.date)}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {emailToInfo[selected.fromEmail] ? (
+                  <>
+                    <Link href={`/admin/beneficiaries/${emailToInfo[selected.fromEmail].id}`} target="_blank"
+                      className="text-sm font-semibold text-indigo-700 hover:underline">
+                      {emailToInfo[selected.fromEmail].name}
+                    </Link>
+                    <span className="text-xs text-slate-400">{selected.fromEmail}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-500">{selected.from}</span>
+                )}
+                <span className="text-xs text-slate-400">· {formatDate(selected.date)}</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
@@ -857,6 +1042,11 @@ export default function MailClient() {
               <button onClick={() => setForwardMsg(selected)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 <Forward size={14} /> העבר
+              </button>
+              <button onClick={() => trashMessage(selected.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                title="העבר לאשפה">
+                <Trash2 size={14} /> מחק
               </button>
               <button onClick={() => setSelected(null)} className="p-1.5 text-slate-400 hover:text-slate-700">
                 <ChevronLeft size={18} />
@@ -871,7 +1061,14 @@ export default function MailClient() {
                 {(assignments[selected.id] ?? []).map(id => {
                   const l = labels.find(x => x.id === id)
                   if (!l) return null
-                  return <span key={id} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>{l.name}</span>
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
+                      {l.name}
+                      <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )
                 })}
               </div>
             )}
@@ -885,6 +1082,52 @@ export default function MailClient() {
 
       {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} />}
       {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
+
+      {/* Add-or-Replace label popup */}
+      {pendingDrop && (() => {
+        const newLabel = labels.find(l => l.id === pendingDrop.labelId)
+        const existingLabels = (assignments[pendingDrop.msgId] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+              <h3 className="font-semibold text-slate-900 text-center">הוסף תווית</h3>
+              <p className="text-sm text-slate-600 text-center">
+                להודעה כבר משויכת תווית{existingLabels.length > 1 ? 'ות' : ''}{' '}
+                <span className="font-medium">{existingLabels.map(l => l.name).join(', ')}</span>.<br/>
+                מה לעשות עם התווית{' '}
+                {newLabel && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-medium" style={{ backgroundColor: newLabel.color }}>{newLabel.name}</span>}?
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={async () => {
+                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
+                    setPendingDrop(null)
+                  }}
+                  className="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
+                >
+                  הוסף לצד הקיים
+                </button>
+                <button
+                  onClick={async () => {
+                    // Remove all existing labels then add new one
+                    for (const l of existingLabels) {
+                      await toggleLabel(pendingDrop.msgId, l.id, false)
+                    }
+                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
+                    setPendingDrop(null)
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200 transition-colors"
+                >
+                  החלף את {existingLabels.length > 1 ? 'כל התוויות' : 'התווית'}
+                </button>
+                <button onClick={() => setPendingDrop(null)} className="text-xs text-slate-400 hover:text-slate-600 text-center py-1">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       {showManageLabels && (
         <ManageLabelsModal
           labels={labels}
