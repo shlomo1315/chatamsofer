@@ -8,12 +8,17 @@ export const dynamic = 'force-dynamic'
 const AUTO_LABEL = 'Auto-Replied'
 const MAX_PER_RUN = 25
 
-// אימות מול CRON_SECRET — דרך Authorization: Bearer <secret> או ?secret=<secret>
+// אימות הקריאה. עובד "מהקופסה" על Vercel Cron (כותרת x-vercel-cron),
+// וגם תומך ב-CRON_SECRET ידני (Authorization: Bearer <secret> או ?secret=<secret>) לבדיקות.
 function authorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
-  if (request.headers.get('authorization') === `Bearer ${secret}`) return true
-  return new URL(request.url).searchParams.get('secret') === secret
+  if (secret) {
+    if (request.headers.get('authorization') === `Bearer ${secret}`) return true
+    if (new URL(request.url).searchParams.get('secret') === secret) return true
+  }
+  // קריאות מתוזמנות של Vercel נושאות כותרת זו
+  if (request.headers.get('x-vercel-cron')) return true
+  return false
 }
 
 function getAdminDb() {
@@ -64,6 +69,9 @@ async function run(request: NextRequest) {
     return NextResponse.json({ error: 'Gmail לא מחובר' }, { status: 503 })
   }
 
+  // מצב בדיקה — סורק ומדווח מה היה נשלח, בלי לשלוח ובלי לסמן
+  const dry = new URL(request.url).searchParams.get('dry') === '1'
+
   const labelId = await ensureLabel(gmail, AUTO_LABEL)
 
   // הודעות נכנסות חדשות שטרם נענו אוטומטית
@@ -76,6 +84,7 @@ async function run(request: NextRequest) {
 
   let replied = 0, skipped = 0
   const seenSenders = new Set<string>()
+  const plan: { from: string; action: string }[] = []
 
   for (const ref of ids) {
     try {
@@ -94,6 +103,7 @@ async function run(request: NextRequest) {
         seenSenders.has(fromEmail)
 
       if (skip) {
+        if (dry) { plan.push({ from: fromEmail || '(ריק)', action: 'דילוג' }); skipped++; continue }
         // מסמנים כמטופל כדי לא לבדוק שוב בכל הרצה
         await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { addLabelIds: [labelId] } })
         skipped++
@@ -108,6 +118,12 @@ async function run(request: NextRequest) {
         .eq('email', fromEmail)
         .limit(1)
       const ben = rows?.[0]
+
+      if (dry) {
+        plan.push({ from: fromEmail, action: ben ? 'מענה לנתמך קיים' : 'הזמנה להרשמה' })
+        replied++
+        continue
+      }
 
       const email = ben
         ? existingContactEmail({
@@ -137,7 +153,7 @@ async function run(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, scanned: ids.length, replied, skipped })
+  return NextResponse.json({ ok: true, dry, scanned: ids.length, replied, skipped, ...(dry ? { plan } : {}) })
 }
 
 export async function GET(request: NextRequest) { return run(request) }
