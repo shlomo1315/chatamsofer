@@ -47,18 +47,11 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
 
-  // Fetch mail accounts and current user profile
+  // Fetch mail accounts from dedicated endpoint
   useEffect(() => {
-    fetch('/api/admin/mail/labels')
+    fetch('/api/admin/mail/accounts')
       .then(r => r.json())
-      .then(d => {
-        const internal: MailAccount[] = d.internalEmails ?? []
-        // Always include the main account first
-        setMailAccounts([
-          { name: 'משרד ראשי', email: 'office@chasamsofer.info' },
-          ...internal,
-        ])
-      })
+      .then(d => setMailAccounts(d.accounts ?? [{ name: 'משרד ראשי', email: 'office@chasamsofer.info' }]))
       .catch(() => setMailAccounts([{ name: 'משרד ראשי', email: 'office@chasamsofer.info' }]))
 
     fetch('/api/admin/me')

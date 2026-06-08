@@ -370,7 +370,15 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
   const [newEmailName, setNewEmailName] = useState('')
   const [newEmailAddr, setNewEmailAddr] = useState('')
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'labels' | 'emails'>('labels')
+  const [tab, setTab] = useState<'labels' | 'emails' | 'accounts'>('labels')
+  const [domainAccounts, setDomainAccounts] = useState<{ name: string; email: string; isMain: boolean }[]>([])
+
+  useEffect(() => {
+    fetch('/api/admin/mail/accounts')
+      .then(r => r.json())
+      .then(d => setDomainAccounts(d.accounts ?? []))
+      .catch(() => {})
+  }, [])
 
   const addLabel = () => {
     if (!newName.trim()) return
@@ -411,9 +419,9 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
         </div>
 
         <div className="flex border-b border-slate-100">
-          {([['labels', 'תוויות מחלקות'], ['emails', 'מיילים פנימיים']] as const).map(([k, l]) => (
+          {([['labels', 'תוויות'], ['emails', 'מיילים פנימיים'], ['accounts', 'חשבונות מייל']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === k ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === k ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
               {l}
             </button>
           ))}
@@ -472,6 +480,40 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
                   <Plus size={14} /> הוסף
                 </button>
+              </div>
+            </>
+          )}
+
+          {tab === 'accounts' && (
+            <>
+              <p className="text-xs text-slate-500 mb-3">כל חשבונות המייל שזוהו אוטומטית ממשתמשי המערכת עם דומיין הארגון.</p>
+              <div className="flex flex-col gap-2">
+                {domainAccounts.map(acc => (
+                  <div key={acc.email} className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold
+                      ${acc.isMain ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {acc.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-800">{acc.name}</p>
+                      <p className="text-xs text-slate-400 truncate">{acc.email}</p>
+                    </div>
+                    {acc.isMain ? (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium flex-shrink-0">מחובר</span>
+                    ) : (
+                      <a href="/api/auth/gmail" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0 font-medium">
+                        חבר
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {domainAccounts.length === 0 && (
+                  <p className="text-sm text-slate-400 text-center py-6">לא נמצאו חשבונות מייל בדומיין הארגון</p>
+                )}
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
+                <p className="font-semibold mb-1">כיצד להוסיף חשבון?</p>
+                <p>הוסף משתמש מערכת עם כתובת מייל מהדומיין (למשל: name@chasamsofer.info) — החשבון יופיע כאן אוטומטית.</p>
               </div>
             </>
           )}
