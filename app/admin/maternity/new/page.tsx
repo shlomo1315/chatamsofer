@@ -9,6 +9,7 @@ import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { Beneficiary } from '@/types'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
+import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
 
 const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
@@ -330,6 +331,19 @@ export default function NewMaternityPage() {
           </div>
         )}
       </div>
+
+      {/* ── Lineage visual tree ─────────────────────────────────────────── */}
+      {mother && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+            <GitBranch size={15} className="text-indigo-500" />
+            <span className="text-sm font-semibold text-slate-700">עץ הדורות</span>
+          </div>
+          <div className="h-64 overflow-hidden">
+            <LineageBranchView nodeId={mother.lineage_node_id ?? null} />
+          </div>
+        </div>
+      )}
 
       {/* ── Step 2: Baby details (shown only after mother found) ────────── */}
       {mother && (
