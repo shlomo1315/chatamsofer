@@ -784,27 +784,54 @@ export default function MailClient() {
             <>
               <p className="text-[11px] font-bold text-slate-400 uppercase px-2 pt-1 pb-2 tracking-widest">תוויות</p>
               <div className="flex flex-col gap-1">
-                {labels.map(l => (
-                  <button
-                    key={l.id}
-                    draggable
-                    onDragStart={() => setDragLabelId(l.id)}
-                    onDragEnd={() => setDragLabelId(null)}
-                    onClick={() => {
-                      setActiveLabel(activeLabel === l.id ? null : l.id)
-                      setSelected(null)
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
-                      ${activeLabel === l.id ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
-                    style={activeLabel === l.id ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
-                  >
-                    <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
-                    <span className="truncate flex-1">{l.name}</span>
-                    {activeLabel === l.id && (
-                      <X size={12} className="opacity-60 flex-shrink-0" />
-                    )}
-                  </button>
-                ))}
+                {labels.map(l => {
+                  const labelMsgs = messages.filter(m => (assignments[m.id] ?? []).includes(l.id))
+                  const count = Object.values(assignments).filter(ids => ids.includes(l.id)).length
+                  const isOpen = activeLabel === l.id
+                  return (
+                    <div key={l.id}>
+                      <button
+                        draggable
+                        onDragStart={() => setDragLabelId(l.id)}
+                        onDragEnd={() => setDragLabelId(null)}
+                        onClick={() => { setActiveLabel(isOpen ? null : l.id); setSelected(null) }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
+                          ${isOpen ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
+                        style={isOpen ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
+                      >
+                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
+                        <span className="truncate flex-1">{l.name}</span>
+                        {count > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: l.color + '25', color: l.color }}>
+                            {count}
+                          </span>
+                        )}
+                        {isOpen && <X size={11} className="opacity-60 flex-shrink-0 mr-0.5" />}
+                      </button>
+
+                      {/* Accordion: list of message subjects under this label */}
+                      {isOpen && labelMsgs.length > 0 && (
+                        <div className="mx-1 mb-1 rounded-xl overflow-hidden border border-slate-100 bg-white">
+                          {labelMsgs.map(msg => (
+                            <button
+                              key={msg.id}
+                              onClick={() => openMessage(msg)}
+                              className={`w-full text-right px-3 py-2 text-xs border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors
+                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}
+                            >
+                              <p className={`truncate ${!msg.isRead ? 'font-semibold' : ''}`}>{msg.subject}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{formatDate(msg.date)}</p>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {isOpen && labelMsgs.length === 0 && (
+                        <p className="text-[11px] text-slate-400 text-center py-2">אין מיילים טעונים עם תווית זו</p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </>
           )}
