@@ -202,6 +202,7 @@ type Filter = 'all' | 'pending' | 'approved' | 'rejected' | 'docs_pending'
 const matchesFilter = (row: Beneficiary, f: Filter) => {
   if (f === 'all') return true
   if (f === 'pending') return row.eligibility_status === 'pending' || row.eligibility_status === 'review'
+  if (f === 'docs_pending') return row.eligibility_status === 'docs_pending'
   return row.eligibility_status === f
 }
 

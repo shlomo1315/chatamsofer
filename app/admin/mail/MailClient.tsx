@@ -4,10 +4,13 @@ import Link from 'next/link'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
-  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings,
+  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
+  Paperclip, Download, FolderOpen, FileText,
 } from 'lucide-react'
-import { ParsedMessage } from '@/lib/gmail'
+import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
+import EmailInput from '@/components/ui/EmailInput'
+import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,19 +47,8 @@ function formatDate(raw: string) {
   try {
     const d = new Date(raw)
     const now = new Date()
-    if (d.toDateString() === now.toDateString())
-      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
-  } catch { return raw }
-}
-
-function formatDateFull(raw: string) {
-  try {
-    const d = new Date(raw)
-    const day   = String(d.getDate()).padStart(2, '0')
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const year  = d.getFullYear()
-    return `${day}/${month}/${year}`
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
   } catch { return raw }
 }
 
@@ -485,8 +477,8 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
                 <p className="text-xs font-semibold text-slate-500">הוסף מייל פנימי:</p>
                 <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                   value={newEmailName} onChange={e => setNewEmailName(e.target.value)} placeholder="שם המחלקה..." />
-                <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newEmailAddr} onChange={e => setNewEmailAddr(e.target.value)} placeholder="כתובת מייל..." type="email" />
+                <EmailInput value={newEmailAddr} onChange={setNewEmailAddr} placeholder="כתובת מייל..."
+                  inputClassName="border-slate-200 outline-none" />
                 <button onClick={addEmail} disabled={!newEmailName.trim() || !newEmailAddr.trim()}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
                   <Plus size={14} /> הוסף
@@ -548,6 +540,166 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
 const MARITAL_STATUS_LABELS: Record<string, string> = {
   married: 'נשוי/נשואה', single: 'רווק/רווקה', divorced: 'גרוש/גרושה',
   widowed: 'אלמן/אלמנה', other: 'אחר',
+}
+
+const DOC_TYPES = [
+  { value: 'id_husband',     label: 'ת.ז. בעל' },
+  { value: 'id_wife',        label: 'ת.ז. אשה' },
+  { value: 'marriage_cert',  label: 'תעודת נישואין' },
+  { value: 'birth_cert',     label: 'אישור לידה' },
+  { value: 'address_proof',  label: 'אישור כתובת' },
+  { value: 'other',          label: 'אחר' },
+]
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AssignAttachmentModal({ attachment, messageId, onClose }: {
+  attachment: Attachment; messageId: string; onClose: () => void
+}) {
+  const [query, setQuery]           = useState('')
+  const [results, setResults]       = useState<{ id: string; full_name: string }[]>([])
+  const [selected, setSelected]     = useState<{ id: string; full_name: string } | null>(null)
+  const [docType, setDocType]       = useState('id_husband')
+  const [saving, setSaving]         = useState(false)
+  const [done, setDone]             = useState(false)
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(query)}&limit=6`)
+      const data = await res.json()
+      setResults(data.beneficiaries ?? [])
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const save = async () => {
+    if (!selected) return
+    setSaving(true)
+    try {
+      await fetch('/api/admin/assign-attachment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId,
+          attachmentId: attachment.attachmentId,
+          inlineData: attachment.inlineData,
+          beneficiaryId: selected.id,
+          docType,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+        }),
+      })
+      setDone(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        {done ? (
+          <div className="text-center py-4">
+            <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+            <p className="font-bold text-slate-900">הקובץ שויך בהצלחה!</p>
+            <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הנתמך.</p>
+            <button onClick={onClose} className="mt-4 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium">סגור</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <FolderOpen size={18} className="text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">שייך קובץ לנתמך</h2>
+                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{attachment.filename}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">סוג מסמך</label>
+                <select value={docType} onChange={e => setDocType(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div className="relative">
+                <label className="text-xs font-semibold text-slate-600 block mb-1">חפש נתמך</label>
+                <input value={selected ? selected.full_name : query}
+                  onChange={e => { setSelected(null); setQuery(e.target.value) }}
+                  placeholder="שם, ת.ז. או מייל..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                {results.length > 0 && !selected && (
+                  <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                    {results.map(r => (
+                      <li key={r.id} onClick={() => { setSelected(r); setResults([]); setQuery('') }}
+                        className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 text-slate-800">
+                        {r.full_name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ביטול</button>
+              <button disabled={!selected || saving} onClick={save}
+                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                שמור
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AttachmentBar({ attachments, messageId }: { attachments: Attachment[]; messageId: string }) {
+  const [assigning, setAssigning] = useState<Attachment | null>(null)
+  if (!attachments.length) return null
+
+  return (
+    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/60">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Paperclip size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-500">{attachments.length} קבצים מצורפים</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {attachments.map(att => (
+          <div key={att.attachmentId}
+            className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
+            <FileText size={13} className="text-slate-400 flex-shrink-0" />
+            <span className="truncate max-w-[140px]">{att.filename}</span>
+            <span className="text-slate-400">{formatBytes(att.size)}</span>
+            <a href={att.inlineData
+                ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+                : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+              }
+              download={att.filename}
+              className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+              <Download size={13} />
+            </a>
+            <button onClick={() => setAssigning(att)}
+              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לנתמך">
+              <FolderOpen size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} onClose={() => setAssigning(null)} />}
+    </div>
+  )
 }
 
 function BeneficiaryCard({ email }: { email: string }) {
@@ -650,128 +802,6 @@ function BeneficiaryCard({ email }: { email: string }) {
   )
 }
 
-// ─── Thread View ──────────────────────────────────────────────────────────────
-
-function ThreadView({
-  selected, folder, assignments, labels, emailToInfo, toggleLabel,
-  threadMsgs, threadLoading, setThreadMsgs, setThreadLoading,
-}: {
-  selected: ParsedMessage
-  folder: string
-  assignments: Record<string, string[]>
-  labels: MailLabel[]
-  emailToInfo: Record<string, { name: string; id: string }>
-  toggleLabel: (msgId: string, labelId: string, add: boolean) => void
-  threadMsgs: ParsedMessage[]
-  threadLoading: boolean
-  setThreadMsgs: (msgs: ParsedMessage[]) => void
-  setThreadLoading: (v: boolean) => void
-}) {
-  useEffect(() => {
-    setThreadMsgs([])
-    setThreadLoading(true)
-    fetch(`/api/admin/gmail/thread?id=${selected.threadId}`)
-      .then(r => r.json())
-      .then(d => setThreadMsgs((d.messages ?? []).filter((m: ParsedMessage) => m.id !== selected.id)))
-      .catch(() => {})
-      .finally(() => setThreadLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected.id])
-
-  const isSent = (msg: ParsedMessage) => msg.labelIds?.includes('SENT')
-
-  return (
-    <div className="flex-1 overflow-y-auto">
-      {/* Label chips */}
-      {(assignments[selected.id] ?? []).length > 0 && (
-        <div className="flex items-center gap-1.5 px-6 pt-3 flex-wrap">
-          {(assignments[selected.id] ?? []).map(id => {
-            const l = labels.find(x => x.id === id)
-            if (!l) return null
-            return (
-              <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
-                {l.name}
-                <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
-                  <X size={10} />
-                </button>
-              </span>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Main message body */}
-      <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
-
-      {/* Beneficiary card (inbox only) */}
-      {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
-
-      {/* Thread replies */}
-      {threadLoading && (
-        <div className="flex items-center gap-2 px-6 py-3 text-xs text-slate-400">
-          <Loader2 size={13} className="animate-spin" /> טוען שירשור מיילים...
-        </div>
-      )}
-
-      {!threadLoading && threadMsgs.length > 0 && (
-        <div className="border-t-2 border-indigo-100 mt-4 pt-2 pb-6">
-
-          {/* Header */}
-          <div className="flex items-center gap-2 px-6 py-3">
-            <div className="w-1 h-5 rounded-full bg-indigo-400 flex-shrink-0" />
-            <p className="text-sm font-bold text-slate-700">
-              שירשור מיילים
-            </p>
-            <span className="text-xs bg-indigo-100 text-indigo-600 font-bold px-2 py-0.5 rounded-full">
-              {threadMsgs.length}
-            </span>
-          </div>
-
-          {/* Thread messages */}
-          <div className="px-4 flex flex-col gap-4">
-            {threadMsgs.map(msg => (
-              <div key={msg.id}
-                className={`rounded-2xl border overflow-hidden shadow-sm ${
-                  isSent(msg)
-                    ? 'border-indigo-200 bg-gradient-to-b from-indigo-50 to-white'
-                    : 'border-slate-200 bg-white'
-                }`}>
-
-                {/* Message header */}
-                <div className={`flex items-center justify-between px-5 py-3 border-b ${
-                  isSent(msg) ? 'border-indigo-100 bg-indigo-50' : 'border-slate-100 bg-slate-50'
-                }`}>
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                      isSent(msg) ? 'bg-indigo-500 text-white' : 'bg-slate-300 text-slate-700'
-                    }`}>
-                      {isSent(msg) ? 'ח' : (emailToInfo[msg.fromEmail]?.name ?? msg.from).charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-800 truncate">
-                        {isSent(msg) ? 'מענה אוטומטי — היכל החתם סופר' : (emailToInfo[msg.fromEmail]?.name ?? msg.from)}
-                      </p>
-                      <p className="text-xs text-slate-400 truncate">
-                        {isSent(msg) ? `אל: ${msg.to}` : msg.fromEmail}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-slate-400 flex-shrink-0 mr-3 font-medium">{formatDateFull(msg.date)}</span>
-                </div>
-
-                {/* Message body — no height cap, shows full content */}
-                <div className="px-5 py-4 text-sm text-slate-700 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: msg.body || msg.snippet }} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export default function MailClient() {
@@ -788,28 +818,8 @@ export default function MailClient() {
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
-  // Auto-reply tracking
-  const knownMsgIds = useRef<Set<string>>(new Set())
-  const isFirstLoad = useRef(true)
-
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
-
-  const triggerAutoReply = useCallback(async (msg: ParsedMessage) => {
-    try {
-      await fetch('/api/admin/gmail/auto-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromEmail: msg.fromEmail,
-          fromName: msg.from,
-          threadId: msg.threadId,
-          messageId: msg.id,
-          subject: msg.subject,
-        }),
-      })
-    } catch { /* silent */ }
-  }, [])
 
   // Labels
   const [labels, setLabels] = useState<MailLabel[]>([])
@@ -825,6 +835,38 @@ export default function MailClient() {
   const [threadMsgs, setThreadMsgs] = useState<ParsedMessage[]>([])
   const [threadLoading, setThreadLoading] = useState(false)
 
+  // Email open tracking (SENT folder)
+  const [trackingStatus, setTrackingStatus] = useState<Record<string, { opened: boolean; openedAt: string | null; openCount: number }>>({})
+
+  // New mail toast notifications
+  const [mailToasts, setMailToasts] = useState<MailToast[]>([])
+  const knownMsgIdsRef = useRef<Set<string>>(new Set())
+  const isFirstMailLoad = useRef(true)
+
+  // Handled messages (in-session tracking)
+  const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
+
+  const recordEvent = useCallback(async (
+    msg: ParsedMessage,
+    eventType: 'read' | 'handled' | 'replied',
+  ) => {
+    try {
+      await fetch('/api/admin/mail/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: msg.id,
+          thread_id: msg.threadId,
+          event_type: eventType,
+          user_id: myProfileRef.current?.id ?? null,
+          label_ids: assignments[msg.id] ?? [],
+          from_email: msg.fromEmail,
+          subject: msg.subject,
+        }),
+      })
+    } catch { /* silent */ }
+  }, [assignments])
+
   // Current user profile (for label-based filtering) — kept in a ref so load() stays stable
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const myProfileRef = useRef<Profile | null>(null)
@@ -833,43 +875,58 @@ export default function MailClient() {
   useEffect(() => {
     fetch('/api/admin/me')
       .then(r => r.json())
-      .then(d => { myProfileRef.current = d.profile ?? null; setMyProfile(d.profile ?? null) })
+      .then(d => {
+        const p = d.profile ?? null
+        setMyProfile(p)
+        myProfileRef.current = p
+      })
       .catch(() => {})
   }, [])
 
-  const load = useCallback(async (f: string, q?: string, background = false) => {
-    if (!background) { setLoading(true); setSelected(null) }
+  const load = useCallback(async (f: string, q?: string) => {
+    setLoading(true)
+    setSelected(null)
     const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
     const data = await res.json()
-    if (data.notConnected) { setNotConnected(true); if (!background) setLoading(false); return }
+    if (data.notConnected) { setNotConnected(true); setLoading(false); return }
     let msgs: ParsedMessage[] = data.messages ?? []
 
     // Filter messages by assigned label IDs for non-admin users
-    const profile = myProfileRef.current
-    if (profile && profile.role !== 'admin' && profile.mail_label_ids && profile.mail_label_ids.length > 0) {
+    if (myProfile && myProfile.role !== 'admin' && myProfile.mail_label_ids && myProfile.mail_label_ids.length > 0) {
       // We need the assignments to filter — fetch them first (they're loaded separately via labels endpoint)
       // Use a local fetch to get current assignments at load time
       const labelsRes = await fetch('/api/admin/mail/labels')
       const labelsData = await labelsRes.json()
       const currentAssignments: Record<string, string[]> = labelsData.assignments ?? {}
       msgs = msgs.filter(msg =>
-        (currentAssignments[msg.id] ?? []).some(labelId => profile.mail_label_ids!.includes(labelId))
+        (currentAssignments[msg.id] ?? []).some(labelId => myProfile.mail_label_ids!.includes(labelId))
       )
     }
 
     setMessages(msgs)
 
-    // Detect new incoming messages and send auto-replies
-    if (f === 'INBOX' && !isFirstLoad.current) {
-      for (const msg of msgs) {
-        if (!msg.isRead && !knownMsgIds.current.has(msg.id)) {
-          triggerAutoReply(msg)
-        }
+    // Detect new INBOX messages for toast notifications
+    if (f === 'INBOX') {
+      const newMsgs = msgs.filter(m => !knownMsgIdsRef.current.has(m.id))
+      msgs.forEach(m => knownMsgIdsRef.current.add(m.id))
+      if (!isFirstMailLoad.current && newMsgs.length > 0) {
+        playMailSound()
+        setMailToasts(prev => [
+          ...prev,
+          ...newMsgs.map(m => ({ id: m.id, from: m.from, subject: m.subject, snippet: m.snippet })),
+        ])
       }
+      if (isFirstMailLoad.current) isFirstMailLoad.current = false
     }
-    // Update known IDs after first load
-    for (const msg of msgs) knownMsgIds.current.add(msg.id)
-    isFirstLoad.current = false
+
+    // Fetch open-tracking status for SENT messages
+    if (f === 'SENT' && msgs.length > 0) {
+      const ids = msgs.map(m => m.id).join(',')
+      fetch(`/api/admin/mail/tracking-status?messageIds=${encodeURIComponent(ids)}`)
+        .then(r => r.json())
+        .then(d => setTrackingStatus(d))
+        .catch(() => {})
+    }
 
     // batch resolve sender + recipient names
     const uniqueEmails = [...new Set([
@@ -884,8 +941,8 @@ export default function MailClient() {
       setEmailToInfo(map)
     }
 
-    if (!background) setLoading(false)
-  }, [triggerAutoReply])
+    setLoading(false)
+  }, [myProfile])
 
   // Load labels on mount
   useEffect(() => {
@@ -896,55 +953,14 @@ export default function MailClient() {
     })
   }, [])
 
-  // SSE stream for real-time inbox updates
+  useEffect(() => { load(folder) }, [folder, load])
+
+  // Background poll every 60s for new INBOX mail (for toast notifications)
   useEffect(() => {
-    if (folder !== 'INBOX') return // SSE only for inbox
-    let es: EventSource | null = null
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-
-    const connect = () => {
-      es = new EventSource(`/api/admin/gmail/stream?folder=${folder}`)
-
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          if (data.type === 'new') load(folder, undefined, true)
-          else if (data.type === 'reconnect') {
-            es?.close()
-            reconnectTimer = setTimeout(connect, 500)
-          }
-        } catch {}
-      }
-
-      es.onerror = () => {
-        es?.close()
-        reconnectTimer = setTimeout(connect, 5_000)
-      }
-    }
-
-    connect()
-    return () => {
-      es?.close()
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-    }
-  }, [folder, load])
-
-  useEffect(() => {
-    // Reset auto-reply state when folder changes
-    knownMsgIds.current = new Set()
-    isFirstLoad.current = true
-    load(folder)
-    // Fallback polling (30s) — covers SENT folder and SSE gaps
-    const interval = setInterval(() => load(folder, undefined, true), 30_000)
-
-    // Reload immediately when user comes back to the tab
-    const onVisible = () => { if (document.visibilityState === 'visible') load(folder, undefined, true) }
-    document.addEventListener('visibilitychange', onVisible)
-
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
+    const interval = setInterval(() => {
+      if (folder === 'INBOX') load('INBOX')
+    }, 60_000)
+    return () => clearInterval(interval)
   }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
@@ -954,6 +970,12 @@ export default function MailClient() {
       await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
+    recordEvent(msg, 'read')
+  }
+
+  const markHandled = (msg: ParsedMessage) => {
+    setHandledIds(prev => new Set([...prev, msg.id]))
+    recordEvent(msg, 'handled')
   }
 
   const trashMessage = async (id: string) => {
@@ -1098,7 +1120,11 @@ export default function MailClient() {
           )}
         </div>
 
-        <div className="px-2 pb-2 border-t border-slate-200 pt-2">
+        <div className="px-2 pb-2 border-t border-slate-200 pt-2 flex flex-col gap-0.5">
+          <Link href="/admin/mail/stats"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
+            <BarChart2 size={13} /> ניטור וסטטיסטיקות
+          </Link>
           <button onClick={() => setShowManageLabels(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <Settings size={13} /> הגדרות מייל
@@ -1160,37 +1186,34 @@ export default function MailClient() {
                         const existing = assignments[msg.id] ?? []
                         setDragOverMsgId(null)
                         if (existing.length > 0 && !existing.includes(dragLabelId)) {
+                          // Ask: add alongside existing or replace?
                           setPendingDrop({ msgId: msg.id, labelId: dragLabelId })
                         } else {
                           toggleLabel(msg.id, dragLabelId, true)
                         }
                       }
                     }}
-                    className={`group relative border-b border-slate-100 transition-colors
+                    className={`relative border-b border-slate-100 transition-colors
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
                       ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
-
-                    {/* Clickable message body */}
-                    <button className="w-full text-right px-4 pt-3 pb-2" onClick={() => openMessage(msg)}>
-                      {/* Row 1: sender + date — always unobstructed */}
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`flex-1 text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
+                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                      <div className="flex items-start justify-between gap-2 mb-0.5">
+                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
                           {folder === 'SENT'
-                            ? (emailToInfo[msg.toEmail]?.name ?? msg.to)
+                            ? (emailToInfo[msg.toEmail]
+                                ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
+                                : msg.to)
                             : senderDisplay(msg)}
                         </span>
-                        <span className="text-xs text-slate-500 flex-shrink-0 font-semibold whitespace-nowrap">
-                          {formatDateFull(msg.date)}
-                        </span>
+                        <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
                       </div>
-
-                      {/* Row 2: subject */}
-                      <p className={`text-xs truncate mb-1.5 ${!msg.isRead ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>
-                        {msg.subject}
-                      </p>
-
-                      {/* Row 3: labels or snippet */}
+                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
+                        {folder === 'SENT' && trackingStatus[msg.id]?.opened && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <CheckCircle2 size={9} /> נפתח
+                          </span>
+                        )}
                         {msgLabels.map(l => (
                           <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
                             style={{ backgroundColor: l.color }}>
@@ -1198,31 +1221,28 @@ export default function MailClient() {
                             <button
                               onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
                               className="opacity-70 hover:opacity-100 leading-none"
-                              title="הסר תווית">
+                              title="הסר תווית"
+                            >
                               <X size={9} />
                             </button>
                           </span>
                         ))}
-                        {msgLabels.length === 0 && (
-                          <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>
-                        )}
+                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
                       </div>
                     </button>
-
-                    {/* Row 4: action buttons — shown on hover, below content, far left */}
-                    <div className="flex items-center gap-1.5 px-4 pb-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-2 left-2 flex items-center gap-0.5">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
+                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
                         title="מחק">
-                        <Trash2 size={13} /> מחק
+                        <Trash2 size={12} />
                       </button>
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-colors"
+                          className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
                           title="תוויות">
-                          <Tag size={13} /> תווית
+                          <Tag size={12} />
                         </button>
                         {openLabelFor === msg.id && (
                           <LabelDropdown
@@ -1265,6 +1285,17 @@ export default function MailClient() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Handled toggle */}
+              {handledIds.has(selected.id) ? (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg font-semibold">
+                  <CheckCircle2 size={14} className="text-green-500" /> טופל
+                </span>
+              ) : (
+                <button onClick={() => markHandled(selected)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors font-semibold">
+                  <CheckCircle2 size={14} /> סמן כטופל
+                </button>
+              )}
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
                 <Reply size={14} /> השב
@@ -1284,18 +1315,29 @@ export default function MailClient() {
             </div>
           </div>
 
-          <ThreadView
-            selected={selected}
-            folder={folder}
-            assignments={assignments}
-            labels={labels}
-            emailToInfo={emailToInfo}
-            toggleLabel={toggleLabel}
-            threadMsgs={threadMsgs}
-            threadLoading={threadLoading}
-            setThreadMsgs={setThreadMsgs}
-            setThreadLoading={setThreadLoading}
-          />
+          <div className="flex-1 overflow-y-auto">
+            {/* Label chips on selected message */}
+            {(assignments[selected.id] ?? []).length > 0 && (
+              <div className="flex items-center gap-1.5 px-6 pt-3 flex-wrap">
+                {(assignments[selected.id] ?? []).map(id => {
+                  const l = labels.find(x => x.id === id)
+                  if (!l) return null
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
+                      {l.name}
+                      <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
+            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} />
+            {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
+          </div>
         </div>
       )}
 
@@ -1356,6 +1398,22 @@ export default function MailClient() {
           onClose={() => setShowManageLabels(false)}
         />
       )}
+
+      {/* New mail toast notifications — bottom-left */}
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
+        {mailToasts.map(t => (
+          <NewMailToast
+            key={t.id}
+            toast={t}
+            onClick={() => {
+              const msg = messages.find(m => m.id === t.id)
+              if (msg) { setFolder('INBOX'); openMessage(msg) }
+              setMailToasts(p => p.filter(x => x.id !== t.id))
+            }}
+            onClose={() => setMailToasts(p => p.filter(x => x.id !== t.id))}
+          />
+        ))}
+      </div>
     </div>
   )
 }

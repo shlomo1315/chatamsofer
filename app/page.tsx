@@ -1,6 +1,8 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
+import EmailInput from '@/components/ui/EmailInput'
+import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -645,6 +647,8 @@ export default function PublicPortalPage() {
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
+  const [showRegSuccess, setShowRegSuccess] = useState(false)
+  const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
   // Registration form
   const [regForm, setRegForm] = useState({
@@ -842,7 +846,19 @@ export default function PublicPortalPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשמירת הנתונים'); return }
       setRegSuccess(true)
+
+      // Show confetti popup with registrant details
+      const fullName = [regForm.family_name, regForm.full_name].filter(Boolean).join(' ')
+      setRegSuccessDetails({ name: fullName, idNumber: regForm.id_number, phone: regForm.phone, email: regForm.email })
+      setShowRegSuccess(true)
       setStep('register-success')
+
+      // Auto-reset after 5s
+      setTimeout(() => {
+        setShowRegSuccess(false)
+        setRegSuccessDetails(null)
+        backToHome()
+      }, 5000)
     } catch {
       setError('שגיאת רשת. אנא נסה שוב.')
     }
@@ -1096,6 +1112,20 @@ export default function PublicPortalPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+
+      {/* Registration success popup */}
+      {showRegSuccess && regSuccessDetails && (
+        <ConfettiSuccess
+          title="הרישום התקבל בהצלחה!"
+          subtitle="הפרטים הועברו לטיפול המזכירות — תקבל עדכון בהקדם."
+          details={[
+            `שם: ${regSuccessDetails.name}`,
+            `ת.ז.: ${regSuccessDetails.idNumber}`,
+            ...(regSuccessDetails.phone ? [`טלפון: ${regSuccessDetails.phone}`] : []),
+            ...(regSuccessDetails.email ? [`מייל: ${regSuccessDetails.email}`] : []),
+          ]}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
@@ -1450,13 +1480,7 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2">
                     <Field label="דואר אלקטרוני" required>
-                      <TextInput type="email" value={regForm.email}
-                        onChange={e => { setReg('email')(e); setEmailError('') }}
-                        onBlur={() => { if (regForm.email && !validateEmail(regForm.email)) setEmailError('אנא הזן כתובת מייל תקינה'); else setEmailError('') }}
-                        placeholder="your@email.com" dir="ltr" required
-                        className={emailError ? 'border-red-400 focus:ring-red-400' : ''}
-                      />
-                      {emailError && <p className="text-xs text-red-600 mt-1">{emailError}</p>}
+                      <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
                     </Field>
                   </div>
                 </div>

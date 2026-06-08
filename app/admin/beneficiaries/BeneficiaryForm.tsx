@@ -3,6 +3,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
+import EmailInput from '@/components/ui/EmailInput'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
@@ -1170,7 +1171,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             <FInput type="tel" value={form.phone2} onChange={set('phone2')} placeholder="050-0000000" dir="ltr" />
           </Field>
           <Field label="אימייל" required error={errors.email}>
-            <FInput type="email" value={form.email} onChange={set('email')} placeholder="name@example.com" dir="ltr" required />
+            <EmailInput value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="name@example.com" required />
           </Field>
         </div>
       </Section>

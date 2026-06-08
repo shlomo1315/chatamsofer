@@ -11,6 +11,8 @@ export interface BuildOptions {
   replyTo?: string
   /** Message-ID of the original message — adds In-Reply-To + References for proper threading */
   inReplyTo?: string
+  /** UUID token for open-tracking pixel — injected before </body> */
+  trackingToken?: string
 }
 
 function encodeHeader(text: string): string {
@@ -79,11 +81,16 @@ function randomId(): string {
 }
 
 export function buildRawEmail(opts: BuildOptions): string {
-  const { from, fromName, to, subject, html, replyTo, inReplyTo } = opts
+  const { from, fromName, to, subject, html, replyTo, inReplyTo, trackingToken } = opts
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-app-gamma-pearl-29.vercel.app'
+  const pixel = trackingToken
+    ? `<img src="${appUrl}/api/track/open?t=${trackingToken}" width="1" height="1" style="display:none;border:0;" alt="" />`
+    : ''
+  const finalHtml = trackingToken ? html.replace(/<\/body>/i, `${pixel}</body>`) || html + pixel : html
   const boundary = `----=_Part_${randomId()}`
   const domain = from.split('@')[1] ?? 'mail'
   const messageId = `<${randomId()}.${Date.now()}@${domain}>`
-  const plain = htmlToPlain(html)
+  const plain = htmlToPlain(finalHtml)
 
   const parts: string[] = [
     `From: ${encodeHeader(fromName)} <${from}>`,
@@ -106,7 +113,7 @@ export function buildRawEmail(opts: BuildOptions): string {
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
-    wrapBase64(Buffer.from(html, 'utf8').toString('base64')),
+    wrapBase64(Buffer.from(finalHtml, 'utf8').toString('base64')),
     '',
     `--${boundary}--`,
   ]

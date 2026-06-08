@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
+import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 
 function verifyNonce(nonce: string, email: string): boolean {
   try {
@@ -119,6 +120,10 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
+
+  // Send confirmation email (non-blocking)
+  sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: String(email).toLowerCase().trim() })
+    .catch(e => console.error('[register] confirmation email failed:', e))
 
   return NextResponse.json({ ok: true })
 }

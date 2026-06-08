@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Building2, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Button from '@/components/ui/Button'
+import EmailInput from '@/components/ui/EmailInput'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -86,18 +87,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <label htmlFor="email" className="text-sm font-medium text-slate-700">
-                אימייל
-              </label>
-              <input
+              <label className="text-sm font-medium text-slate-700">אימייל</label>
+              <EmailInput
                 id="email"
-                type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={setEmail}
                 placeholder="your@email.com"
                 required={!isPlaceholder}
-                className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                dir="ltr"
+                inputClassName="py-2.5"
               />
             </div>
 

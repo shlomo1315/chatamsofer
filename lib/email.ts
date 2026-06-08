@@ -155,3 +155,33 @@ export function templateWidowRequestApproved(name: string): EmailPayload {
     `),
   }
 }
+
+export function templateRegistrationConfirmed(name: string): EmailPayload {
+  return {
+    subject: 'קיבלנו את בקשתך — היכל החתם סופר',
+    html: baseTemplate('בקשתך התקבלה', `
+      <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
+      <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
+        תודה על פנייתך! בקשתך להירשם במערכת היכל החתם סופר <strong>התקבלה בהצלחה</strong> ותועברה לטיפול המשרד.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
+        <p style="margin:0;color:#1e40af;font-size:14px;font-weight:600;">📋 הבקשה בטיפול — נעדכן אותך בהקדם על המשך התהליך.</p>
+      </div>
+      <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו בכתובת <a href="mailto:office@chasamsofer.info" style="color:#6366f1;">office@chasamsofer.info</a></p>
+    `),
+  }
+}
+
+export function templateDocsPendingWithNotes(name: string, notes?: string): EmailPayload {
+  return {
+    subject: 'נדרשים מסמכים נוספים — היכל החתם סופר',
+    html: baseTemplate('השלמת מסמכים', `
+      <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
+      <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
+        קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
+      </p>
+      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך הפורטל האישי שלך.</p></div>'}
+      <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
+    `),
+  }
+}

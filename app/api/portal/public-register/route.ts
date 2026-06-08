@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,13 @@ export async function POST(request: NextRequest) {
     console.error('[public-register] insert error:', error.code, error.message, error.details)
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
+  }
+
+  // Send confirmation email (non-blocking)
+  if (email) {
+    const displayName = [String(family_name ?? ''), String(full_name ?? '')].filter(Boolean).join(' ')
+    sendEmail({ ...templateRegistrationConfirmed(displayName), to: String(email) })
+      .catch(e => console.error('[public-register] confirmation email failed:', e))
   }
 
   return NextResponse.json({ ok: true })

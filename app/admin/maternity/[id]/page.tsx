@@ -83,8 +83,11 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   }
 
   const beneficiary = aid.beneficiary as {
-    full_name: string; family_name?: string; phone?: string; id_number: string
+    id: string; full_name: string; family_name?: string; phone?: string; phone2?: string
+    email?: string; address?: string; city?: string; id_number: string
+    marital_status?: string; gender?: string; eligibility_status?: string
     spouse_name?: string; spouse_id_number?: string
+    children_count?: number
   } | undefined
 
   // שם היולדת (האישה) = שם משפחה + שם האישה. נפילה לשם הרשומה אם חסר

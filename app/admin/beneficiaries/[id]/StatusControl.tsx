@@ -1,26 +1,35 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, X, Clock, ChevronDown, Loader2, FileText } from 'lucide-react'
+import { Check, X, Clock, ChevronDown, Loader2, FileText, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 
-// Statuses that mean "waiting for a decision"
 const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
 
 const STYLES: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
-  approved: 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
-  rejected: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
+  pending:      'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
+  approved:     'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
+  rejected:     'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
   docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
 }
 
 export default function StatusControl({ id, status }: { id: string; status: EligibilityStatus }) {
-  const router = useRouter()
+  const router  = useRouter()
   const supabase = createClient()
-  const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
+
+  const [open, setOpen]       = useState(false)
+  const [saving, setSaving]   = useState(false)
+
+  // Rejection modal
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState('')
+
+  // docs_pending modal
+  const [showDocsModal, setShowDocsModal] = useState(false)
+  const [docsNotes, setDocsNotes]         = useState('')
+
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,50 +41,23 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   }, [])
 
   const isPending = PENDING_SET.includes(status)
-  const styleKey = isPending ? 'pending' : status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : status === 'docs_pending' ? 'docs_pending' : 'pending'
-  const label = ELIGIBILITY_LABELS[status] || status
-  const Icon = isPending ? Clock : status === 'approved' ? Check : status === 'docs_pending' ? FileText : X
+  const styleKey  = isPending ? 'pending' : (STYLES[status] ? status : 'pending')
+  const label     = isPending ? 'ממתין לאישור' : ELIGIBILITY_LABELS[status] || status
+  const Icon      = isPending ? Clock : status === 'approved' ? Check : status === 'rejected' ? X : FileText
 
-  const setStatus = async (next: EligibilityStatus) => {
+  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string }) => {
     setSaving(true)
     try {
-      const { data: ben, error } = await supabase
-        .from('beneficiaries')
-        .update({ eligibility_status: next, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select('full_name, family_name, email, marital_status')
-        .single()
+      const update: Record<string, unknown> = { eligibility_status: next, updated_at: new Date().toISOString(), ...extra }
+      const { error } = await supabase.from('beneficiaries').update(update).eq('id', id)
       if (error) throw error
 
-      // Send automatic email if beneficiary has an email address
-      if (ben?.email) {
-        const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
-        const portalBase = window.location.origin
-        let subject = '', html = ''
-        if (next === 'approved') {
-          ({ subject, html } = approvalEmail(name, portalBase))
-        } else if (next === 'rejected') {
-          subject = 'עדכון בקשה — היכל החתם סופר'
-          html = `<p>שלום ${name}, לצערנו בקשתך לא אושרה בשלב זה. לפרטים צור קשר עם המשרד.</p>`
-        } else if (next === 'docs_pending') {
-          ({ subject, html } = docsPendingEmail(name, portalBase, ben.marital_status))
-        }
-        if (subject) {
-          // נשלח דרך חשבון ה-Gmail של המשרד (אותו נתיב שעובד בממשק המייל)
-          const r = await fetch('/api/admin/gmail/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: ben.email, subject, body: html }),
-          })
-          if (!r.ok) {
-            const d = await r.json().catch(() => ({}))
-            alert(`הסטטוס עודכן, אך שליחת המייל נכשלה: ${d?.error || 'שגיאה לא ידועה'}`)
-          }
-        }
-      } else if (['approved', 'rejected', 'docs_pending'].includes(next)) {
-        // אין כתובת מייל לנתמך — אין למי לשלוח
-        alert('הסטטוס עודכן. לא נשלח מייל כיוון שלא קיימת כתובת מייל לנתמך.')
-      }
+      // Send email notification
+      await fetch('/api/admin/send-status-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
+      })
 
       setOpen(false)
       router.refresh()
@@ -86,44 +68,129 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
     }
   }
 
+  const handleOptionClick = (next: EligibilityStatus) => {
+    setOpen(false)
+    if (next === 'rejected') { setShowRejectModal(true); return }
+    if (next === 'docs_pending') { setShowDocsModal(true); return }
+    applyStatus(next)
+  }
+
   const options: { value: EligibilityStatus; label: string; cls: string; icon: typeof Check }[] = [
-    { value: 'approved', label: 'אשר זכאות', cls: 'text-green-700 hover:bg-green-50', icon: Check },
-    { value: 'docs_pending', label: 'השלמת מסמכים', cls: 'text-blue-700 hover:bg-blue-50', icon: FileText },
-    { value: 'rejected', label: 'דחה', cls: 'text-red-600 hover:bg-red-50', icon: X },
-    { value: 'pending', label: 'החזר לממתין', cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
+    { value: 'approved',     label: 'אשר זכאות',       cls: 'text-green-700 hover:bg-green-50',  icon: Check    },
+    { value: 'rejected',     label: 'דחה',              cls: 'text-red-600 hover:bg-red-50',      icon: X        },
+    { value: 'docs_pending', label: 'השלמת מסמכים',    cls: 'text-blue-600 hover:bg-blue-50',    icon: FileText },
+    { value: 'pending',      label: 'החזר לממתין',      cls: 'text-amber-700 hover:bg-amber-50',  icon: Clock    },
   ]
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        disabled={saving}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${STYLES[styleKey]}`}
-      >
-        {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
-        {label}
-        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+    <>
+      <div className="relative" ref={ref}>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          disabled={saving}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${STYLES[styleKey]}`}
+        >
+          {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
+          {label}
+          <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
 
-      {open && (
-        <div className="absolute z-20 mt-1 left-0 w-44 bg-white rounded-xl border border-slate-200 shadow-lg py-1">
-          {options
-            .filter((o) => o.value !== status && !(o.value === 'pending' && isPending))
-            .map((o) => {
-              const OIcon = o.icon
-              return (
-                <button
-                  key={o.value}
-                  onClick={() => setStatus(o.value)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-right transition-colors ${o.cls}`}
-                >
-                  <OIcon size={15} />
-                  {o.label}
-                </button>
-              )
-            })}
+        {open && (
+          <div className="absolute z-20 mt-1 left-0 w-48 bg-white rounded-xl border border-slate-200 shadow-lg py-1">
+            {options
+              .filter((o) => o.value !== status && !(o.value === 'pending' && isPending))
+              .map((o) => {
+                const OIcon = o.icon
+                return (
+                  <button
+                    key={o.value}
+                    onClick={() => handleOptionClick(o.value)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-right transition-colors ${o.cls}`}
+                  >
+                    <OIcon size={15} />
+                    {o.label}
+                  </button>
+                )
+              })}
+          </div>
+        )}
+      </div>
+
+      {/* Rejection modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-red-600" />
+              </div>
+              <h2 className="text-base font-bold text-slate-900">אשר דחייה</h2>
+            </div>
+            <p className="text-sm text-slate-500 mb-3">סיבת הדחייה תופיע במייל שישלח לנתמך.</p>
+            <textarea
+              value={rejectionReason}
+              onChange={e => setRejectionReason(e.target.value)}
+              placeholder="הזן סיבת דחייה (אופציונלי)..."
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => { setShowRejectModal(false); setRejectionReason('') }}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                ביטול
+              </button>
+              <button
+                disabled={saving}
+                onClick={() => {
+                  setShowRejectModal(false)
+                  applyStatus('rejected', { rejection_reason: rejectionReason })
+                }}
+                className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                אשר דחייה
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+
+      {/* Docs pending modal */}
+      {showDocsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+                <FileText size={18} className="text-blue-600" />
+              </div>
+              <h2 className="text-base font-bold text-slate-900">השלמת מסמכים</h2>
+            </div>
+            <p className="text-sm text-slate-500 mb-3">פרט אילו מסמכים / פרטים חסרים. הם יופיעו במייל שישלח לנתמך.</p>
+            <textarea
+              value={docsNotes}
+              onChange={e => setDocsNotes(e.target.value)}
+              placeholder="לדוגמה: נדרשת תעודת זהות של הבעל + אישור מגורים..."
+              rows={4}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => { setShowDocsModal(false); setDocsNotes('') }}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                ביטול
+              </button>
+              <button
+                disabled={saving}
+                onClick={() => {
+                  setShowDocsModal(false)
+                  applyStatus('docs_pending', { docs_notes: docsNotes })
+                }}
+                className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                שלח ועדכן סטטוס
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
