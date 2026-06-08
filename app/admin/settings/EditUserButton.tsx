@@ -1,8 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Loader2, Check, AlertTriangle, Pencil, Trash2 } from 'lucide-react'
 import { ROLE_LABELS, type UserRole, type Profile, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
+
+interface MailLabel { id: string; name: string; color: string }
+interface MailAccount { name: string; email: string }
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
@@ -44,6 +47,21 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
       : defaultPerms()
   )
 
+  // Mail state
+  const [mailLabels, setMailLabels] = useState<MailLabel[]>([])
+  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
+  const [mailAccount, setMailAccount] = useState<string>(profile.mail_account ?? '')
+  const [mailLabelIds, setMailLabelIds] = useState<string[]>(profile.mail_label_ids ?? [])
+
+  useEffect(() => {
+    fetch('/api/admin/mail/labels')
+      .then(r => r.json())
+      .then(d => setMailLabels(d.labels ?? []))
+    fetch('/api/admin/mail/accounts')
+      .then(r => r.json())
+      .then(d => setMailAccounts(d.accounts ?? []))
+  }, [])
+
   const setSection = (key: SectionKey, level: PermissionLevel) =>
     setPermissions(p => ({ ...p, [key]: level }))
 
@@ -63,6 +81,8 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setIsActive(profile.is_active)
     setPermissions(profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions : defaultPerms())
+    setMailAccount(profile.mail_account ?? '')
+    setMailLabelIds(profile.mail_label_ids ?? [])
   }
 
   const submit = async () => {
@@ -76,6 +96,8 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
         body: JSON.stringify({
           id: profile.id, full_name: fullName, phone, role, is_active: isActive,
           permissions: isAdmin ? {} : permissions,
+          mail_account: mailAccount || null,
+          mail_label_ids: mailLabelIds,
         }),
       })
       const data = await res.json()
@@ -218,6 +240,52 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                     מנהל מערכת — גישה מלאה לכל המחלקות ללא הגבלה
                   </div>
                 )}
+
+                {/* Mail permissions */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold text-slate-700">הרשאות מייל</label>
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200 p-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-slate-600">חשבון מייל אחראי</label>
+                      <select
+                        value={mailAccount}
+                        onChange={e => setMailAccount(e.target.value)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="">ללא</option>
+                        {mailAccounts.map(acc => (
+                          <option key={acc.email} value={acc.email}>{acc.name} ({acc.email})</option>
+                        ))}
+                      </select>
+                    </div>
+                    {mailLabels.length > 0 && (
+                      <div className="flex flex-col gap-1 pt-1">
+                        <label className="text-xs font-medium text-slate-600">תוויות מחלקות מנוהלות</label>
+                        <div className="flex flex-col gap-1 mt-0.5">
+                          {mailLabels.map(l => (
+                            <label key={l.id} className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={mailLabelIds.includes(l.id)}
+                                onChange={e => {
+                                  setMailLabelIds(prev =>
+                                    e.target.checked ? [...new Set([...prev, l.id])] : prev.filter(id => id !== l.id)
+                                  )
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                              {l.name}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {mailLabels.length === 0 && (
+                      <p className="text-xs text-slate-400">אין תוויות מחלקות מוגדרות. הוסף בהגדרות המייל.</p>
+                    )}
+                  </div>
+                </div>
 
                 {/* Active toggle */}
                 <div className="flex items-center justify-between py-2 border border-slate-200 rounded-lg px-3">
