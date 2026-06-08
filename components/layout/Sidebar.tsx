@@ -34,7 +34,10 @@ const navItems: { href: string; label: string; icon: React.ElementType; section?
   { href: '/admin/distributions', label: 'חלוקות',           icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',        label: 'אלמנות ויתומים',   icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',            icon: BarChart3,      section: 'reports' },
-  { href: '/admin/settings',      label: 'הגדרות',           icon: Settings },
+]
+
+const bottomItems: { href: string; label: string; icon: React.ElementType }[] = [
+  { href: '/admin/settings', label: 'הגדרות', icon: Settings },
 ]
 
 export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; permissions?: UserPermissions }) {
@@ -104,7 +107,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         })}
 
         {/* ── Mail accordion ── */}
-        <div>
+        <div className="pt-1">
           <button
             onClick={() => setMailOpen(o => !o)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
@@ -134,6 +137,19 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             </div>
           )}
         </div>
+
+        {/* ── Bottom items (הגדרות) below mail ── */}
+        {bottomItems.map(({ href, label, icon: Icon }) => {
+          const active = pathname.startsWith(href)
+          return (
+            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+              <Icon size={18} className="flex-shrink-0" />
+              <span>{label}</span>
+            </Link>
+          )
+        })}
       </nav>
 
       <div className="px-4 py-4 border-t border-slate-800">
