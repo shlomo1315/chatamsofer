@@ -678,6 +678,9 @@ export default function PublicPortalPage() {
   const [docsUploading, setDocsUploading] = useState(false)
   const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
 
+  // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
+  const intendedAction = useRef<'birth' | 'loan' | 'docs' | null>(null)
+
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
 
@@ -957,6 +960,23 @@ export default function PublicPortalPage() {
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setLoanModalOpen(true)
   }
+
+  // Read the intended action from the URL once on mount (from the festive email buttons)
+  useEffect(() => {
+    const a = new URLSearchParams(window.location.search).get('action')
+    if (a === 'birth' || a === 'loan' || a === 'docs') intendedAction.current = a
+  }, [])
+
+  // Once the beneficiary reaches their dashboard, jump straight to the intended form
+  useEffect(() => {
+    if (!intendedAction.current || !beneficiary || step !== 'dashboard') return
+    const a = intendedAction.current
+    intendedAction.current = null
+    if (a === 'birth') goToBirthForm()
+    else if (a === 'loan') goToLoanForm()
+    else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, beneficiary])
 
   const handleDocsUpload = async () => {
     if (!beneficiary) return
