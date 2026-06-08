@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
 import StatusBadge from '@/components/ui/StatusBadge'
+import QuickEmailModal from '@/components/QuickEmailModal'
 import { Beneficiary } from '@/types'
 
 const fullName = (row: Beneficiary) =>
@@ -37,7 +38,7 @@ const MARITAL_TINT: Record<string, string> = {
   'אלמנה': 'bg-amber-50 text-amber-700',
 }
 
-const columns: Column<Beneficiary>[] = [
+const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[] => [
   {
     key: 'full_name',
     header: 'שם מלא',
@@ -116,15 +117,16 @@ const columns: Column<Beneficiary>[] = [
     sortable: true,
     render: (row) =>
       row.email ? (
-        <a
-          href={`mailto:${row.email}`}
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
           dir="ltr"
+          title="שליחת מייל מתוך המערכת"
           className="inline-flex items-center justify-end gap-1.5 text-xs text-slate-600 hover:text-indigo-600 hover:underline text-left"
         >
           <Mail size={12} className="text-slate-400 flex-shrink-0" />
           <span className="truncate max-w-[200px]">{row.email}</span>
-        </a>
+        </button>
       ) : (
         <span className="text-slate-300">—</span>
       ),
@@ -221,6 +223,12 @@ const CARD_DEFS: CardDef[] = [
 
 export default function BeneficiariesTable({ data, initialFilter = 'all' }: { data: Beneficiary[], initialFilter?: Filter }) {
   const [filter, setFilter] = useState<Filter>(initialFilter)
+  const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
+
+  const columns = useMemo(
+    () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
+    []
+  )
 
   const counts = useMemo(() => ({
     all: data.length,
@@ -274,6 +282,14 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
           </Link>
         )}
       />
+
+      {emailTarget && (
+        <QuickEmailModal
+          to={emailTarget.email}
+          toName={emailTarget.name}
+          onClose={() => setEmailTarget(null)}
+        />
+      )}
     </div>
   )
 }
