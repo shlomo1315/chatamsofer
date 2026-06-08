@@ -5,7 +5,7 @@ import { X, Loader2, UserPlus, Check, AlertTriangle, Eye, EyeOff } from 'lucide-
 import { ROLE_LABELS, type UserRole, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
 
 interface MailLabel { id: string; name: string; color: string }
-interface InternalEmail { name: string; email: string }
+interface MailAccount { name: string; email: string }
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
@@ -45,17 +45,17 @@ export default function AddUserButton() {
 
   // Mail state
   const [mailLabels, setMailLabels] = useState<MailLabel[]>([])
-  const [mailInternalEmails, setMailInternalEmails] = useState<InternalEmail[]>([])
+  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
   const [mailAccount, setMailAccount] = useState<string>('')
   const [mailLabelIds, setMailLabelIds] = useState<string[]>([])
 
   useEffect(() => {
     fetch('/api/admin/mail/labels')
       .then(r => r.json())
-      .then(d => {
-        setMailLabels(d.labels ?? [])
-        setMailInternalEmails(d.internalEmails ?? [])
-      })
+      .then(d => setMailLabels(d.labels ?? []))
+    fetch('/api/admin/mail/accounts')
+      .then(r => r.json())
+      .then(d => setMailAccounts(d.accounts ?? []))
   }, [])
 
   const setSection = (key: SectionKey, level: PermissionLevel) =>
@@ -82,12 +82,7 @@ export default function AddUserButton() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: fullName, email, phone, password, role,
-          permissions: isAdmin ? {} : permissions,
-          mail_account: mailAccount || null,
-          mail_label_ids: mailLabelIds,
-        }),
+        body: JSON.stringify({ full_name: fullName, email, phone, password, role, permissions: isAdmin ? {} : permissions, mail_account: mailAccount || null, mail_label_ids: mailLabelIds }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'שגיאה ביצירת המשתמש'); setSaving(false); return }
@@ -220,8 +215,8 @@ export default function AddUserButton() {
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                       >
                         <option value="">ללא</option>
-                        {mailInternalEmails.map(ie => (
-                          <option key={ie.email} value={ie.email}>{ie.name} ({ie.email})</option>
+                        {mailAccounts.map(acc => (
+                          <option key={acc.email} value={acc.email}>{acc.name} ({acc.email})</option>
                         ))}
                       </select>
                     </div>
