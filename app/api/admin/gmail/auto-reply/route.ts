@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail, type ContactBeneficiary } from '@/lib/emailTemplates'
+import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,39 +14,6 @@ function getClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-function encodeHeader(text: string): string {
-  return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`
-}
-
-async function sendReply(to: string, subject: string, html: string, threadId?: string) {
-  const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
-  const fromName = 'היכל החתם סופר משרד ראשי'
-  const bodyB64 = Buffer.from(html, 'utf8').toString('base64')
-
-  const raw = [
-    `From: ${encodeHeader(fromName)} <${from}>`,
-    `To: ${to}`,
-    `Subject: ${encodeHeader(subject)}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    bodyB64,
-  ].join('\r\n')
-
-  const encoded = Buffer.from(raw)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-
-  const gmail = await getGmailClient()
-  await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encoded, threadId: threadId || undefined },
-  })
 }
 
 export async function POST(request: NextRequest) {
@@ -61,11 +29,11 @@ export async function POST(request: NextRequest) {
   const client = getClient()
   if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
 
-  // Look up beneficiary by email (also check spouse_email if it exists)
+  // Look up beneficiary by email
   const { data: rows } = await client
     .from('beneficiaries')
-    .select('id,full_name,family_name,eligibility_status,id_number,phone,city,marital_status,children_count,email,spouse_phone')
-    .or(`email.eq.${fromEmail},spouse_phone.eq.${fromEmail}`)
+    .select('full_name,family_name,eligibility_status,id_number,phone,city,marital_status,children_count')
+    .eq('email', fromEmail)
     .limit(1)
 
   let email: { subject: string; html: string }
@@ -86,8 +54,23 @@ export async function POST(request: NextRequest) {
     email = registrationInviteEmail(PORTAL_BASE)
   }
 
+  const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
+  const raw = buildRawEmail({
+    from,
+    fromName: 'היכל החתם סופר',
+    to: fromEmail,
+    subject: email.subject,
+    html: email.html,
+    replyTo: from,
+  })
+  const encoded = encodeForGmail(raw)
+
   try {
-    await sendReply(fromEmail, email.subject, email.html, threadId)
+    const gmail = await getGmailClient()
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encoded, threadId: threadId || undefined },
+    })
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
