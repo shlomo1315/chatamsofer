@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
 
   const from     = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const fromName = 'היכל החתם סופר משרד ראשי'
-  const bodyB64  = Buffer.from(body ?? '', 'utf8').toString('base64')
+  const htmlBody = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head><body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1e293b;">${body ?? ''}</body></html>`
+  const bodyB64  = Buffer.from(htmlBody, 'utf8').toString('base64')
 
   const raw = [
     `From: ${encodeHeader(fromName)} <${from}>`,
