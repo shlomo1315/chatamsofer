@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
     is_active: true,
   }
 
+  // נשואים = משפחה אחת = כרטסת אחת. הבעל והאשה נשמרים על אותה רשומה
+  // (full_name + spouse_name), ולא כשתי רשומות נפרדות.
   const records: Record<string, unknown>[] = [{
     id_number: cleanId,
     full_name: String(full_name).trim(),
@@ -69,28 +71,6 @@ export async function POST(request: NextRequest) {
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
     ...sharedFields,
   }]
-
-  // For נשואים: also insert spouse as a separate beneficiary record
-  if (isMarried && spouse_name && spouse_id_number) {
-    const cleanSpouseId = String(spouse_id_number).replace(/\D/g, '')
-    if (cleanSpouseId.length >= 5) {
-      const { data: existingSpouse } = await admin.from('beneficiaries').select('id').eq('id_number', cleanSpouseId).maybeSingle()
-      if (!existingSpouse) {
-        const spouseParts = String(spouse_name).trim().split(' ')
-        records.push({
-          id_number: cleanSpouseId,
-          full_name: spouseParts[0] ?? String(spouse_name).trim(),
-          family_name: spouseParts.slice(1).join(' ') || String(family_name ?? '').trim(),
-          birth_date: null,
-          gender: 'female',
-          spouse_name: String(full_name).trim(),
-          spouse_id_number: cleanId,
-          spouse_phone: phone ? String(phone).trim() : null,
-          ...sharedFields,
-        })
-      }
-    }
-  }
 
   let { error } = await admin.from('beneficiaries').insert(records)
 

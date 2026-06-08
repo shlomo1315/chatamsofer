@@ -26,7 +26,23 @@ export async function GET(request: NextRequest) {
     // 1. Check main beneficiaries table
     const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', idParam).maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (data) return NextResponse.json({ found: true, beneficiary: data })
+    if (data) {
+      // מסמכי זהות שכבר הועלו — כדי להציגם בעת כניסה חוזרת במקום לבקש העלאה מחדש
+      const { data: docs } = await admin
+        .from('documents')
+        .select('doc_type, file_url, file_name, uploaded_at')
+        .eq('beneficiary_id', data.id)
+        .in('doc_type', ['id_husband', 'id_wife'])
+        .order('uploaded_at', { ascending: false })
+      const documents: Record<string, { url: string; name: string }> = {}
+      for (const d of docs ?? []) {
+        // שומרים רק את העדכני ביותר לכל סוג (כבר ממוין יורד)
+        if (!documents[d.doc_type] && d.file_url) {
+          documents[d.doc_type] = { url: d.file_url, name: d.file_name ?? 'מסמך' }
+        }
+      }
+      return NextResponse.json({ found: true, beneficiary: data, documents })
+    }
 
     // 2. Search inside children JSONB array
     const { data: rows, error: err2 } = await admin

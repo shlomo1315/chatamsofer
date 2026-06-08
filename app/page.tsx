@@ -54,6 +54,8 @@ const MARITAL_OPTIONS = [
   { value: 'אלמן', label: 'אלמן' },
   { value: 'אלמנה', label: 'אלמנה' },
 ]
+// תחת "אחר" — כל מצבי המשפחה שאינם "נשואים"
+const OTHER_MARITAL_OPTIONS = MARITAL_OPTIONS.filter(o => o.value !== 'נשואים')
 const MARRIED_STATUSES = ['נשואים']
 
 const LOAN_PURPOSES = [
@@ -677,6 +679,11 @@ export default function PublicPortalPage() {
   const [wifeIdFile, setWifeIdFile] = useState<File | null>(null)
   const [docsUploading, setDocsUploading] = useState(false)
   const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
+  // מסמכים שכבר הועלו בעבר (מוצגים בעת כניסה חוזרת לקישור השלמת המסמכים)
+  const [existingDocs, setExistingDocs] = useState<Record<string, { url: string; name: string }>>({})
+  const [replaceDoc, setReplaceDoc] = useState<Record<string, boolean>>({})
+  // בורר מצב משפחתי — "אחר" פותח את שאר האפשרויות
+  const [showOtherMarital, setShowOtherMarital] = useState(false)
 
   // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
   const intendedAction = useRef<'birth' | 'loan' | 'docs' | null>(null)
@@ -737,6 +744,8 @@ export default function PublicPortalPage() {
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) {
           setBeneficiary(data.beneficiary)
+          setExistingDocs(data.documents ?? {})
+          setReplaceDoc({})
           const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
           setStep(isWidow ? 'widow-dashboard' : 'dashboard')
         }
@@ -757,6 +766,8 @@ export default function PublicPortalPage() {
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) {
           setBeneficiary(data.beneficiary)
+          setExistingDocs(data.documents ?? {})
+          setReplaceDoc({})
           const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
           setStep(isWidow ? 'widow-dashboard' : 'dashboard')
         }
@@ -982,10 +993,17 @@ export default function PublicPortalPage() {
     if (!beneficiary) return
     const needsHusband = requiredDocs.includes('id_husband')
     const needsWife = requiredDocs.includes('id_wife')
-    if (needsHusband && !husbandIdFile) { setError('אנא העלה תעודת זהות של הבעל'); return }
-    if (needsWife && !wifeIdFile) { setError('אנא העלה תעודת זהות של האשה'); return }
+    // מסמך נחשב קיים אם הועלה קובץ חדש או שכבר התקבל בעבר במערכת
+    if (needsHusband && !husbandIdFile && !existingDocs.id_husband) { setError('אנא העלה תעודת זהות של הבעל'); return }
+    if (needsWife && !wifeIdFile && !existingDocs.id_wife) { setError('אנא העלה תעודת זהות של האשה'); return }
     setError(''); setDocsUploading(true)
     try {
+      // אין קבצים חדשים — כל הנדרש כבר קיים במערכת. אין צורך בהעלאה חוזרת.
+      if (!husbandIdFile && !wifeIdFile) {
+        setStep('dashboard')
+        setDocsUploading(false)
+        return
+      }
       const fd = new FormData()
       fd.append('beneficiary_id', beneficiary.id)
       if (husbandIdFile) fd.append('id_husband', husbandIdFile)
@@ -993,10 +1011,71 @@ export default function PublicPortalPage() {
       const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בהעלאת המסמכים'); return }
+      // עדכון מקומי של המסמכים שהוחלפו, כדי שיוצגו ככבר-קיימים
+      setExistingDocs(prev => ({
+        ...prev,
+        ...(husbandIdFile ? { id_husband: { url: data.url ?? '', name: husbandIdFile.name } } : {}),
+        ...(wifeIdFile ? { id_wife: { url: data.url ?? '', name: wifeIdFile.name } } : {}),
+      }))
+      setHusbandIdFile(null); setWifeIdFile(null); setReplaceDoc({})
       setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_pending' } : b)
       setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setDocsUploading(false)
+  }
+
+  // הצגת שדה מסמך זהות: קובץ חדש שנבחר / קובץ שכבר התקבל (עם אפשרות החלפה) / שדה העלאה
+  const renderIdDocSlot = (
+    docType: 'id_husband' | 'id_wife',
+    label: string,
+    file: File | null,
+    setFile: (f: File | null) => void,
+  ) => {
+    const existing = existingDocs[docType]
+    const replacing = !!replaceDoc[docType]
+    return (
+      <div className="border border-slate-200 rounded-xl p-4">
+        <p className="text-sm font-semibold text-slate-700 mb-3">{label}</p>
+        {file ? (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <span className="text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle2 size={14} /> {file.name}
+            </span>
+            <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-600">
+              <X size={14} />
+            </button>
+          </div>
+        ) : existing && !replacing ? (
+          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+            <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
+              <CheckCircle2 size={14} className="flex-shrink-0" />
+              <span className="truncate">הקובץ כבר התקבל במערכת</span>
+            </span>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {existing.url && (
+                <a href={existing.url} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-indigo-600 hover:text-indigo-800 underline">צפייה</a>
+              )}
+              <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: true }))}
+                className="text-xs text-slate-500 hover:text-slate-700 underline">החלף קובץ</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
+              <Upload size={16} className="text-slate-400" />
+              <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
+              <input type="file" accept="image/*,application/pdf" className="hidden"
+                onChange={e => setFile(e.target.files?.[0] ?? null)} />
+            </label>
+            {existing && replacing && (
+              <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: false }))}
+                className="text-xs text-slate-400 hover:text-slate-600 self-start">ביטול — השאר את הקובץ הקיים</button>
+            )}
+          </div>
+        )}
+      </div>
+    )
   }
 
   const backToDashboard = () => {
@@ -1010,6 +1089,9 @@ export default function PublicPortalPage() {
     setError('')
     setBeneficiary(null)
     setPendingConfirmed(false)
+    setExistingDocs({})
+    setReplaceDoc({})
+    setShowOtherMarital(false)
   }
 
   return (
@@ -1196,19 +1278,47 @@ export default function PublicPortalPage() {
                 <Heart size={18} className="text-indigo-600" />
                 <h3 className="font-semibold text-slate-900">מצב משפחתי</h3>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {MARITAL_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value} type="button"
-                    onClick={() => setRegForm(f => ({ ...f, marital_status: opt.value, gender: genderFromMarital(opt.value) }))}
-                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                      regForm.marital_status === opt.value
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                    }`}
-                  >{opt.label}</button>
-                ))}
-              </div>
+              {(() => {
+                const otherActive = showOtherMarital || OTHER_MARITAL_OPTIONS.some(o => o.value === regForm.marital_status)
+                const btnCls = (active: boolean) =>
+                  `px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                  }`
+                return (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowOtherMarital(false); setRegForm(f => ({ ...f, marital_status: 'נשואים', gender: genderFromMarital('נשואים') })) }}
+                        className={btnCls(regForm.marital_status === 'נשואים')}
+                      >נשואים</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowOtherMarital(true)
+                          if (!OTHER_MARITAL_OPTIONS.some(o => o.value === regForm.marital_status)) {
+                            setRegForm(f => ({ ...f, marital_status: '', gender: '' }))
+                          }
+                        }}
+                        className={btnCls(otherActive)}
+                      >אחר</button>
+                    </div>
+                    {otherActive && (
+                      <div className="flex flex-wrap gap-2 mt-2 pr-1 border-r-2 border-indigo-100">
+                        {OTHER_MARITAL_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value} type="button"
+                            onClick={() => setRegForm(f => ({ ...f, marital_status: opt.value, gender: genderFromMarital(opt.value) }))}
+                            className={btnCls(regForm.marital_status === opt.value)}
+                          >{opt.label}</button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </Card>
 
             {/* Personal — only after marital chosen */}
@@ -1690,20 +1800,55 @@ export default function PublicPortalPage() {
               </div>
             )}
             <Card>
-              <div className="text-center py-4">
+              <div className="text-center py-2">
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                   <CheckCircle2 size={38} className="text-green-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל!</h2>
-                <p className="text-slate-600 mb-6 leading-relaxed">
-                  בקשת הרישום שלך נשלחה בהצלחה.<br />
-                  צוות המערכת יעיין בבקשתך ויצור עמך קשר.
+                <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל בהצלחה!</h2>
+                <p className="text-slate-600 mb-5 leading-relaxed">
+                  הפרטים התקבלו בהצלחה במערכת ומועברים לטיפול המזכירות.<br />
+                  תקבלו על כך עדכון בהמשך.
                 </p>
-                <button onClick={backToHome}
-                  className="flex items-center justify-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm mx-auto">
-                  <ArrowRight size={16} /> חזרה לדף הכניסה
-                </button>
               </div>
+
+              {(() => {
+                const rows: { label: string; value: string }[] = [
+                  { label: 'שם פרטי', value: regForm.full_name },
+                  { label: 'שם משפחה', value: regForm.family_name },
+                  { label: 'תעודת זהות', value: regForm.id_number },
+                  { label: 'מצב משפחתי', value: regForm.marital_status },
+                  ...(showSpouseFields ? [
+                    { label: 'שם בן/בת הזוג', value: regForm.spouse_name },
+                    { label: 'ת"ז בן/בת הזוג', value: regForm.spouse_id_number },
+                  ] : []),
+                  { label: 'טלפון', value: regForm.phone },
+                  { label: 'טלפון נוסף', value: regForm.phone2 },
+                  { label: 'דוא"ל', value: regForm.email },
+                  { label: 'כתובת', value: [regForm.address, regForm.city].filter(Boolean).join(', ') },
+                  { label: 'תאריך לידה', value: regForm.birth_date },
+                  { label: 'מספר ילדים', value: children.length ? String(children.length) : '' },
+                  { label: 'שיוך (יוחסין)', value: [...lineagePath, ...manualLineage].join(' ← ') },
+                  { label: 'הערות', value: regForm.notes },
+                ].filter(r => r.value && r.value.trim() !== '')
+                return rows.length > 0 ? (
+                  <div className="mb-5">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">הפרטים שנקלטו:</p>
+                    <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                      {rows.map((r, i) => (
+                        <div key={i} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+                          <span className="text-slate-500 flex-shrink-0">{r.label}</span>
+                          <span className="text-slate-900 font-medium text-left break-words">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null
+              })()}
+
+              <button onClick={backToHome}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl py-3 text-sm transition-colors">
+                <ArrowRight size={16} /> חזרה לדף הכניסה
+              </button>
             </Card>
           </>
         )}
@@ -1867,70 +2012,47 @@ export default function PublicPortalPage() {
                   <FileText size={20} className="text-indigo-600" />
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-900 mb-1">נדרשת העלאת מסמכים</p>
-                  <p className="text-sm text-slate-600 leading-relaxed">
-                    כדי להגיש בקשה יש לאמת את זהותך. אנא העלה את המסמכים הבאים:
-                  </p>
+                  {(() => {
+                    const allExist = requiredDocs.every(d => existingDocs[d])
+                    return (
+                      <>
+                        <p className="font-semibold text-slate-900 mb-1">
+                          {allExist ? 'המסמכים שלך כבר התקבלו' : 'נדרשת העלאת מסמכים'}
+                        </p>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                          {allExist
+                            ? 'הקבצים שהעלית כבר נמצאים במערכת ומוצגים למטה. אם תרצה ניתן להחליף אותם — אחרת אין צורך בפעולה נוספת.'
+                            : 'כדי להגיש בקשה יש לאמת את זהותך. אנא העלה את המסמכים הבאים:'}
+                        </p>
+                      </>
+                    )
+                  })()}
                 </div>
               </div>
 
               <div className="flex flex-col gap-4">
-                {requiredDocs.includes('id_husband') && (
-                  <div className="border border-slate-200 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-slate-700 mb-3">
-                      {beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך'}
-                    </p>
-                    {husbandIdFile ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <span className="text-sm text-green-700 flex items-center gap-2">
-                          <CheckCircle2 size={14} /> {husbandIdFile.name}
-                        </span>
-                        <button type="button" onClick={() => setHusbandIdFile(null)} className="text-red-400 hover:text-red-600">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
-                        <Upload size={16} className="text-slate-400" />
-                        <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
-                        <input type="file" accept="image/*,application/pdf" className="hidden"
-                          onChange={e => setHusbandIdFile(e.target.files?.[0] ?? null)} />
-                      </label>
-                    )}
-                  </div>
-                )}
-
-                {requiredDocs.includes('id_wife') && (
-                  <div className="border border-slate-200 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-slate-700 mb-3">תעודת זהות — האשה</p>
-                    {wifeIdFile ? (
-                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                        <span className="text-sm text-green-700 flex items-center gap-2">
-                          <CheckCircle2 size={14} /> {wifeIdFile.name}
-                        </span>
-                        <button type="button" onClick={() => setWifeIdFile(null)} className="text-red-400 hover:text-red-600">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
-                        <Upload size={16} className="text-slate-400" />
-                        <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
-                        <input type="file" accept="image/*,application/pdf" className="hidden"
-                          onChange={e => setWifeIdFile(e.target.files?.[0] ?? null)} />
-                      </label>
-                    )}
-                  </div>
-                )}
+                {requiredDocs.includes('id_husband') &&
+                  renderIdDocSlot('id_husband', beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך', husbandIdFile, setHusbandIdFile)}
+                {requiredDocs.includes('id_wife') &&
+                  renderIdDocSlot('id_wife', 'תעודת זהות — האשה', wifeIdFile, setWifeIdFile)}
               </div>
 
               {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
-              <button type="button" onClick={handleDocsUpload} disabled={docsUploading}
-                className="mt-5 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors">
-                {docsUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
-                {docsUploading ? 'שולח מסמכים...' : 'שלח מסמכים לאישור'}
-              </button>
+              {(() => {
+                const allExist = requiredDocs.every(d => existingDocs[d])
+                const hasNew = !!husbandIdFile || !!wifeIdFile
+                const label = docsUploading
+                  ? (hasNew ? 'שולח מסמכים...' : 'מעבד...')
+                  : hasNew ? 'שלח מסמכים לאישור' : (allExist ? 'המשך' : 'שלח מסמכים לאישור')
+                return (
+                  <button type="button" onClick={handleDocsUpload} disabled={docsUploading}
+                    className="mt-5 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors">
+                    {docsUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                    {label}
+                  </button>
+                )
+              })()}
 
               <p className="text-xs text-slate-400 text-center mt-3">
                 לאחר בדיקת המסמכים תוכל להגיש בקשות. הצוות יעדכן אותך.

@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { MaternityAid, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
+import { MaternityAid, Beneficiary, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
 import Card from '@/components/ui/Card'
 import { StatusControl } from '../MaternityTable'
 import MaternityActions from './MaternityActions'
@@ -18,12 +18,34 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, id_number, spouse_name, spouse_id_number, children, children_count)')
+      .select('*, beneficiary:beneficiaries(*)')
       .eq('id', id)
       .single()
     return data
   } catch {
     return null
+  }
+}
+
+// סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
+async function getLineagePath(nodeId?: string | null): Promise<string[]> {
+  if (!nodeId || !isSupabaseConfigured()) return []
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id')
+    if (!data) return []
+    const map = new Map(data.map(n => [n.id, n]))
+    const path: string[] = []
+    let cur = map.get(nodeId)
+    let guard = 0
+    while (cur && guard < 50) {
+      path.unshift(cur.name)
+      cur = cur.parent_id ? map.get(cur.parent_id) : undefined
+      guard++
+    }
+    return path
+  } catch {
+    return []
   }
 }
 
@@ -42,6 +64,9 @@ const fmtCur = (n: number) =>
 export default async function MaternityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const aid = await getAid(id)
+  const ben = aid?.beneficiary as Beneficiary | undefined
+  const lineagePath = await getLineagePath(ben?.lineage_node_id)
+  const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
 
   if (!aid && isSupabaseConfigured()) notFound()
 
@@ -87,6 +112,72 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <MaternityActions aid={aid} />
         </div>
       </div>
+
+      {/* כרטסת המשפחה — כל הפרטים, סדר הדורות וקישור לכרטסת המלאה */}
+      {ben && (
+        <Card className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-indigo-600">
+              <User size={16} />
+              <span className="text-xs font-semibold text-slate-500 uppercase">כרטסת המשפחה</span>
+            </div>
+            <Link
+              href={`/admin/beneficiaries/${ben.id}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+            >
+              לכרטסת המלאה <ExternalLink size={13} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
+              <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
+              <DetailRow label="ת.ז." value={ben.id_number ?? '—'} ltr />
+              <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
+              <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-400">פרטי קשר</p>
+              <DetailRow label="טלפון" value={ben.phone ?? '—'} ltr icon={<Phone size={12} />} />
+              <DetailRow label="טלפון נוסף" value={ben.phone2 ?? '—'} ltr />
+              <DetailRow label="אימייל" value={ben.email ?? '—'} ltr />
+              <DetailRow label="כתובת" value={[ben.address, ben.city].filter(Boolean).join(', ') || '—'} icon={<MapPin size={12} />} />
+            </div>
+            {ben.spouse_name && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400">פרטי האישה</p>
+                <DetailRow label="שם" value={ben.spouse_name} />
+                {ben.spouse_id_number && <DetailRow label="ת.ז." value={ben.spouse_id_number} ltr />}
+                {ben.spouse_birth_date && <DetailRow label="תאריך לידה" value={fmtDate(ben.spouse_birth_date)} />}
+              </div>
+            )}
+          </div>
+
+          {(lineagePath.length > 0 || lineageManual.length > 0) && (
+            <div className="pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <GitBranch size={14} className="text-violet-500" />
+                <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {lineagePath.map((name, i) => (
+                  <span key={`l-${i}`} className="flex items-center gap-1.5">
+                    {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
+                  </span>
+                ))}
+                {lineageManual.map((name, i) => (
+                  <span key={`m-${i}`} className="flex items-center gap-1.5">
+                    <ChevronLeft size={12} className="text-slate-300" />
+                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Card className="flex flex-col gap-1">
@@ -181,6 +272,15 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{aid.notes}</p>
         </Card>
       )}
+    </div>
+  )
+}
+
+function DetailRow({ label, value, ltr, icon }: { label: string; value: string; ltr?: boolean; icon?: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <span className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">{icon}{label}</span>
+      <span className={`text-sm text-slate-800 ${ltr ? 'ltr-num text-left' : ''}`}>{value}</span>
     </div>
   )
 }
