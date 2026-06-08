@@ -5,7 +5,7 @@ import { X, Loader2, Check, AlertTriangle, Pencil, Trash2 } from 'lucide-react'
 import { ROLE_LABELS, type UserRole, type Profile, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
 
 interface MailLabel { id: string; name: string; color: string }
-interface InternalEmail { name: string; email: string }
+interface MailAccount { name: string; email: string }
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
@@ -49,17 +49,20 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
 
   // Mail state
   const [mailLabels, setMailLabels] = useState<MailLabel[]>([])
-  const [mailInternalEmails, setMailInternalEmails] = useState<InternalEmail[]>([])
-  const [mailAccount, setMailAccount] = useState<string>(profile.mail_account ?? '')
+  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
+  const DOMAIN = 'chasamsofer.info'
+  const [mailAccount, setMailAccount] = useState<string>(
+    profile.mail_account || (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : '')
+  )
   const [mailLabelIds, setMailLabelIds] = useState<string[]>(profile.mail_label_ids ?? [])
 
   useEffect(() => {
     fetch('/api/admin/mail/labels')
       .then(r => r.json())
-      .then(d => {
-        setMailLabels(d.labels ?? [])
-        setMailInternalEmails(d.internalEmails ?? [])
-      })
+      .then(d => setMailLabels(d.labels ?? []))
+    fetch('/api/admin/mail/accounts')
+      .then(r => r.json())
+      .then(d => setMailAccounts(d.accounts ?? []))
   }, [])
 
   const setSection = (key: SectionKey, level: PermissionLevel) =>
@@ -81,7 +84,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setIsActive(profile.is_active)
     setPermissions(profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions : defaultPerms())
-    setMailAccount(profile.mail_account ?? '')
+    setMailAccount(profile.mail_account || (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : ''))
     setMailLabelIds(profile.mail_label_ids ?? [])
   }
 
@@ -253,8 +256,11 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                       >
                         <option value="">ללא</option>
-                        {mailInternalEmails.map(ie => (
-                          <option key={ie.email} value={ie.email}>{ie.name} ({ie.email})</option>
+                        {mailAccounts.length === 0 && mailAccount && (
+                          <option value={mailAccount}>{mailAccount}</option>
+                        )}
+                        {mailAccounts.map(acc => (
+                          <option key={acc.email} value={acc.email}>{acc.name} ({acc.email})</option>
                         ))}
                       </select>
                     </div>
