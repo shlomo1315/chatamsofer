@@ -13,6 +13,7 @@ import StatusControl from './StatusControl'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
+import EmailRow from './EmailRow'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
@@ -151,7 +152,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <div className="space-y-2.5">
             <DetailRow label="טלפון ראשי" value={beneficiary.phone ?? '—'} ltr icon={<Phone size={13} />} />
             <DetailRow label="טלפון משני" value={beneficiary.phone2 ?? '—'} ltr />
-            <DetailRow label="אימייל" value={beneficiary.email ?? '—'} ltr />
+            <EmailRow email={beneficiary.email} name={fullName} />
             <DetailRow label="כתובת" value={beneficiary.address ?? '—'} icon={<MapPin size={13} />} />
             <DetailRow label="עיר" value={beneficiary.city ?? '—'} />
           </div>
