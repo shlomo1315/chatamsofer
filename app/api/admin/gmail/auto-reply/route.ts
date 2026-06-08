@@ -7,9 +7,9 @@ import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 export const dynamic = 'force-dynamic'
 
 const INTERNAL_DOMAIN = 'chasamsofer.info'
-const PORTAL_BASE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://chatamsofer.vercel.app'
+const PORTAL_BASE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://chasamsofer.co.il'
 
-function getClient() {
+function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return null
@@ -17,17 +17,30 @@ function getClient() {
 }
 
 export async function POST(request: NextRequest) {
-  const { fromEmail, fromName, threadId } = await request.json()
+  const { fromEmail, fromName, threadId, messageId: gmailMsgId, subject: origSubject } = await request.json()
 
   if (!fromEmail) return NextResponse.json({ error: 'missing fromEmail' }, { status: 400 })
 
-  // Don't auto-reply to internal domain
-  if (fromEmail.endsWith(`@${INTERNAL_DOMAIN}`)) {
-    return NextResponse.json({ skipped: true, reason: 'internal' })
+  // Don't auto-reply to internal domain or no-reply addresses
+  if (
+    fromEmail.endsWith(`@${INTERNAL_DOMAIN}`) ||
+    fromEmail.startsWith('noreply') ||
+    fromEmail.startsWith('no-reply') ||
+    fromEmail.startsWith('mailer-daemon')
+  ) {
+    return NextResponse.json({ skipped: true, reason: 'internal or noreply' })
   }
 
-  const client = getClient()
+  const client = getSupabase()
   if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
+
+  // Fetch the original Gmail message to get its Message-ID header for proper threading
+  let originalMessageId: string | undefined
+  try {
+    const gmail = await getGmailClient()
+    const orig = await gmail.users.messages.get({ userId: 'me', id: gmailMsgId, format: 'metadata', metadataHeaders: ['Message-ID'] })
+    originalMessageId = orig.data.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
+  } catch { /* best-effort */ }
 
   // Look up beneficiary by email
   const { data: rows } = await client
@@ -54,22 +67,27 @@ export async function POST(request: NextRequest) {
     email = registrationInviteEmail(PORTAL_BASE)
   }
 
+  // Use original subject with Re: prefix for natural threading
+  const replySubject = origSubject
+    ? (origSubject.startsWith('Re:') ? origSubject : `Re: ${origSubject}`)
+    : email.subject
+
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const raw = buildRawEmail({
     from,
     fromName: 'היכל החתם סופר',
     to: fromEmail,
-    subject: email.subject,
+    subject: replySubject,
     html: email.html,
     replyTo: from,
+    inReplyTo: originalMessageId,
   })
-  const encoded = encodeForGmail(raw)
 
   try {
     const gmail = await getGmailClient()
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: { raw: encoded, threadId: threadId || undefined },
+      requestBody: { raw: encodeForGmail(raw), threadId: threadId || undefined },
     })
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {

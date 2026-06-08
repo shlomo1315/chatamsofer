@@ -9,6 +9,8 @@ export interface BuildOptions {
   html: string
   threadId?: string
   replyTo?: string
+  /** Message-ID of the original message — adds In-Reply-To + References for proper threading */
+  inReplyTo?: string
 }
 
 function encodeHeader(text: string): string {
@@ -77,7 +79,7 @@ function randomId(): string {
 }
 
 export function buildRawEmail(opts: BuildOptions): string {
-  const { from, fromName, to, subject, html, replyTo } = opts
+  const { from, fromName, to, subject, html, replyTo, inReplyTo } = opts
   const boundary = `----=_Part_${randomId()}`
   const domain = from.split('@')[1] ?? 'mail'
   const messageId = `<${randomId()}.${Date.now()}@${domain}>`
@@ -90,6 +92,7 @@ export function buildRawEmail(opts: BuildOptions): string {
     `Subject: ${encodeHeader(subject)}`,
     `Message-ID: ${messageId}`,
     `Date: ${new Date().toUTCString()}`,
+    ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     '',
