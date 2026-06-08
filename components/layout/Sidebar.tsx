@@ -2,23 +2,14 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard,
-  Users,
-  GitBranch,
-  Baby,
-  CreditCard,
-  Gift,
-  BarChart3,
-  Settings,
-  Menu,
-  X,
-  Building2,
-  Trees,
-  HeartHandshake,
-  Mail,
+  LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
+  BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
+  Mail, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import { useState } from 'react'
-import type { UserPermissions, SectionKey } from '@/types'
+import { useState, useEffect } from 'react'
+import type { UserPermissions, SectionKey, Profile } from '@/types'
+
+interface MailAccount { name: string; email: string }
 
 function LogoBadge() {
   const [error, setError] = useState(false)
@@ -28,40 +19,66 @@ function LogoBadge() {
         <Building2 size={18} className="text-indigo-600" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src="/logo.jpg"
-          alt="היכל החתם סופר"
-          className="w-full h-full object-contain"
-          onError={() => setError(true)}
-        />
+        <img src="/logo.jpg" alt="היכל החתם סופר" className="w-full h-full object-contain" onError={() => setError(true)} />
       )}
     </div>
   )
 }
 
 const navItems: { href: string; label: string; icon: React.ElementType; section?: SectionKey }[] = [
-  { href: '/admin/dashboard',      label: 'לוח בקרה',  icon: LayoutDashboard },
-  { href: '/admin/beneficiaries',  label: 'נתמכים',    icon: Users,       section: 'beneficiaries' },
-  { href: '/admin/lineage',        label: 'עץ הדורות', icon: Trees,       section: 'lineage' },
-  { href: '/admin/maternity',      label: 'יולדות',    icon: Baby,        section: 'maternity' },
-  { href: '/admin/loans',          label: 'הלוואות',   icon: CreditCard,  section: 'loans' },
-  { href: '/admin/distributions',  label: 'חלוקות',    icon: Gift,           section: 'distributions' },
-  { href: '/admin/widows',         label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
-  { href: '/admin/mail',           label: 'מייל ראשי',      icon: Mail },
-  { href: '/admin/reports',        label: 'דוחות',     icon: BarChart3,      section: 'reports' },
-  { href: '/admin/settings',       label: 'הגדרות',    icon: Settings },
+  { href: '/admin/dashboard',     label: 'לוח בקרה',        icon: LayoutDashboard },
+  { href: '/admin/beneficiaries', label: 'נתמכים',           icon: Users,          section: 'beneficiaries' },
+  { href: '/admin/lineage',       label: 'עץ הדורות',        icon: Trees,          section: 'lineage' },
+  { href: '/admin/maternity',     label: 'יולדות',           icon: Baby,           section: 'maternity' },
+  { href: '/admin/loans',         label: 'הלוואות',          icon: CreditCard,     section: 'loans' },
+  { href: '/admin/distributions', label: 'חלוקות',           icon: Gift,           section: 'distributions' },
+  { href: '/admin/widows',        label: 'אלמנות ויתומים',   icon: HeartHandshake, section: 'widows' },
+  { href: '/admin/reports',       label: 'דוחות',            icon: BarChart3,      section: 'reports' },
+  { href: '/admin/settings',      label: 'הגדרות',           icon: Settings },
 ]
 
 export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; permissions?: UserPermissions }) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
+  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
+  const [myProfile, setMyProfile] = useState<Profile | null>(null)
+
+  // Fetch mail accounts and current user profile
+  useEffect(() => {
+    fetch('/api/admin/mail/labels')
+      .then(r => r.json())
+      .then(d => {
+        const internal: MailAccount[] = d.internalEmails ?? []
+        // Always include the main account first
+        setMailAccounts([
+          { name: 'משרד ראשי', email: 'office@chasamsofer.info' },
+          ...internal,
+        ])
+      })
+      .catch(() => setMailAccounts([{ name: 'משרד ראשי', email: 'office@chasamsofer.info' }]))
+
+    fetch('/api/admin/me')
+      .then(r => r.json())
+      .then(d => setMyProfile(d.profile ?? null))
+      .catch(() => {})
+  }, [])
+
+  // Filter accounts by role: non-admin only sees their assigned account
+  const visibleAccounts = isAdmin
+    ? mailAccounts
+    : mailAccounts.filter(a =>
+        !myProfile || !myProfile.mail_account || a.email === myProfile.mail_account
+      )
 
   const visibleItems = navItems.filter(item => {
-    if (!item.section) return true           // dashboard & settings always visible
-    if (isAdmin) return true                 // admin sees everything
+    if (!item.section) return true
+    if (isAdmin) return true
     const level = permissions?.[item.section] ?? 'view'
     return level !== 'none'
   })
+
+  const mailActive = pathname.startsWith('/admin/mail')
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -75,29 +92,48 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {visibleItems.map(({ href, label, icon: Icon }) => {
-          const active =
-            href === '/admin/dashboard'
-              ? pathname === '/admin/dashboard'
-              : pathname.startsWith(href)
-
+          const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
           return (
-            <Link
-              key={href}
-              href={href}
-              onClick={() => setMobileOpen(false)}
-              className={`
-                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${active
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }
-              `}
-            >
+            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
               <Icon size={18} className="flex-shrink-0" />
               <span>{label}</span>
             </Link>
           )
         })}
+
+        {/* ── Mail accordion ── */}
+        <div>
+          <button
+            onClick={() => setMailOpen(o => !o)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+              ${mailActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}
+          >
+            <Mail size={18} className="flex-shrink-0" />
+            <span className="flex-1 text-right">מייל</span>
+            {mailOpen
+              ? <ChevronUp size={14} className="flex-shrink-0 opacity-70" />
+              : <ChevronDown size={14} className="flex-shrink-0 opacity-70" />}
+          </button>
+
+          {mailOpen && (
+            <div className="mt-1 mr-4 border-r border-slate-700 pr-2 flex flex-col gap-0.5">
+              {visibleAccounts.map(acc => (
+                <Link
+                  key={acc.email}
+                  href="/admin/mail"
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-colors
+                    ${mailActive ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                >
+                  <span className="font-medium text-slate-200 leading-tight">{acc.name}</span>
+                  <span className="text-[10px] text-slate-500 truncate">{acc.email}</span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
 
       <div className="px-4 py-4 border-t border-slate-800">
@@ -108,28 +144,20 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
   return (
     <>
-      {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-56 bg-slate-900 flex-shrink-0">
         <SidebarContent />
       </aside>
 
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-4 left-4 z-40 bg-indigo-600 text-white p-3 rounded-full shadow-lg"
-      >
+      <button onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed bottom-4 left-4 z-40 bg-indigo-600 text-white p-3 rounded-full shadow-lg">
         <Menu size={20} />
       </button>
 
-      {/* Mobile drawer */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <aside className="relative w-56 bg-slate-900 flex flex-col">
-            <button
-              onClick={() => setMobileOpen(false)}
-              className="absolute top-4 left-4 text-slate-400 hover:text-white"
-            >
+            <button onClick={() => setMobileOpen(false)} className="absolute top-4 left-4 text-slate-400 hover:text-white">
               <X size={20} />
             </button>
             <SidebarContent />
