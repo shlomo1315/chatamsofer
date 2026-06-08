@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Mail, Send, Loader2, PenSquare, Reply, CheckCircle2, X, ChevronRight } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
 
@@ -79,24 +79,36 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   )
 }
 
+const POLL_INTERVAL = 20_000 // 20 seconds
+
 export default function BeneficiaryMailThread({ email, name }: Props) {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [notConnected, setNotConnected] = useState(false)
   const [selected, setSelected] = useState<ParsedMessage | null>(null)
   const [composing, setComposing] = useState(false)
   const [replyTo, setReplyTo] = useState<ParsedMessage | undefined>()
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch(`/api/admin/gmail/messages?folder=INBOX&q=${encodeURIComponent(`from:${email} OR to:${email}`)}`)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
+    // folder=ALL to include both INBOX and SENT
+    const res = await fetch(`/api/admin/gmail/messages?folder=ALL&q=${encodeURIComponent(`from:${email} OR to:${email}`)}`)
     const data = await res.json()
-    if (data.notConnected) { setNotConnected(true); setLoading(false); return }
+    if (data.notConnected) { setNotConnected(true); setLoading(false); setRefreshing(false); return }
     setMessages(data.messages ?? [])
     setLoading(false)
+    setRefreshing(false)
   }, [email])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    // Poll every 20s for new messages
+    pollRef.current = setInterval(() => load(true), POLL_INTERVAL)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [load])
 
   const openMessage = async (msg: ParsedMessage) => {
     setSelected(msg)
@@ -190,7 +202,10 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">התכתבות עם <span className="font-medium text-slate-700">{email}</span></p>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-slate-500">התכתבות עם <span className="font-medium text-slate-700">{email}</span></p>
+          {refreshing && <Loader2 size={11} className="animate-spin text-slate-400" />}
+        </div>
         <button
           onClick={() => { setReplyTo(undefined); setComposing(true) }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
