@@ -301,21 +301,21 @@ export default function NewMaternityPage() {
             </div>
 
             {/* שרשרת הדורות (עץ הדורות) של המשפחה */}
-            {lineagePath.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 text-xs border-t border-green-200/70 pt-2 mt-1">
-                <span className="inline-flex items-center gap-1 text-green-700/80 font-medium">
-                  <GitBranch size={12} /> שרשרת הדורות:
-                </span>
-                {lineagePath.map((name, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5">
-                    <span className="bg-white border border-green-200 rounded-full px-2 py-0.5 text-green-800">
-                      <span className="text-green-500">דור {i + 1}</span> {name}
-                    </span>
-                    {i < lineagePath.length - 1 && <ChevronLeft size={12} className="text-green-400" />}
+            <div className="flex flex-wrap items-center gap-1.5 text-xs border-t border-green-200/70 pt-2 mt-1">
+              <span className="inline-flex items-center gap-1 text-green-700/80 font-medium">
+                <GitBranch size={12} /> שרשרת הדורות:
+              </span>
+              {lineagePath.length > 0 ? lineagePath.map((name, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5">
+                  <span className="bg-white border border-green-200 rounded-full px-2 py-0.5 text-green-800">
+                    <span className="text-green-500">דור {i + 1}</span> {name}
                   </span>
-                ))}
-              </div>
-            )}
+                  {i < lineagePath.length - 1 && <ChevronLeft size={12} className="text-green-400" />}
+                </span>
+              )) : (
+                <span className="text-slate-400 italic">לא משויך לעץ הדורות</span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-green-700 mt-1">
               <span>ת.ז. האישה: <span className="ltr-num font-mono">{mother.spouse_id_number ?? mother.id_number}</span></span>
               <span>ת.ז. הבעל: <span className="ltr-num font-mono">{mother.id_number}</span></span>
