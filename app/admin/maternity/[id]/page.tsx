@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
@@ -9,6 +9,8 @@ import MaternityActions from './MaternityActions'
 import LoadCardButton from './LoadCardButton'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
+import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
+import BeneficiaryMailThread from '@/app/admin/beneficiaries/[id]/BeneficiaryMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -157,28 +159,47 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
             )}
           </div>
 
-          {(lineagePath.length > 0 || lineageManual.length > 0) && (
+          {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
             <div className="pt-3 border-t border-slate-100">
               <div className="flex items-center gap-2 mb-2">
                 <GitBranch size={14} className="text-violet-500" />
                 <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {lineagePath.map((name, i) => (
-                  <span key={`l-${i}`} className="flex items-center gap-1.5">
-                    {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
-                  </span>
-                ))}
-                {lineageManual.map((name, i) => (
-                  <span key={`m-${i}`} className="flex items-center gap-1.5">
-                    <ChevronLeft size={12} className="text-slate-300" />
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
-                  </span>
-                ))}
-              </div>
+              {(lineagePath.length > 0 || lineageManual.length > 0) && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {lineagePath.map((name, i) => (
+                    <span key={`l-${i}`} className="flex items-center gap-1.5">
+                      {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
+                    </span>
+                  ))}
+                  {lineageManual.map((name, i) => (
+                    <span key={`m-${i}`} className="flex items-center gap-1.5">
+                      <ChevronLeft size={12} className="text-slate-300" />
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {ben.lineage_node_id && (
+                <div className="mt-3">
+                  <LineageBranchView nodeId={ben.lineage_node_id} />
+                </div>
+              )}
             </div>
           )}
+        </Card>
+      )}
+
+      {/* תכתובות מייל עם המשפחה */}
+      {ben?.email && (
+        <Card className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-indigo-600">
+            <Mail size={16} />
+            <span className="text-xs font-semibold text-slate-500 uppercase">תכתובות מייל</span>
+            <span className="text-xs text-slate-400 ltr-num" dir="ltr">{ben.email}</span>
+          </div>
+          <BeneficiaryMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />
         </Card>
       )}
 

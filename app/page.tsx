@@ -1801,29 +1801,31 @@ export default function PublicPortalPage() {
           </form>
         )}
 
-        {/* ─── Step: Register Success ─── */}
+        {/* ─── Step: Register Success (פופאפ מודאלי) ─── */}
         {step === 'register-success' && (
-          <>
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
             {/* Confetti overlay */}
-            {regSuccess && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm pointer-events-none">
-                <div className="relative">
-                  {Array.from({ length: 60 }).map((_, i) => (
-                    <div key={i} style={{
-                      position: 'absolute',
-                      width: Math.random() * 8 + 4,
-                      height: Math.random() * 8 + 4,
-                      borderRadius: Math.random() > 0.5 ? '50%' : '2px',
-                      background: ['#6366F1','#EC4899','#F59E0B','#10B981','#3B82F6','#8B5CF6'][i % 6],
-                      left: `${Math.random() * 400 - 200}px`,
-                      top: `${Math.random() * -100}px`,
-                      animation: `confetti-fall ${1.5 + Math.random() * 2}s linear ${Math.random() * 0.8}s forwards`,
-                    }} />
-                  ))}
-                </div>
+            <div className="pointer-events-none absolute inset-0 overflow-hidden flex items-start justify-center">
+              <div className="relative">
+                {Array.from({ length: 60 }).map((_, i) => (
+                  <div key={i} style={{
+                    position: 'absolute',
+                    width: Math.random() * 8 + 4,
+                    height: Math.random() * 8 + 4,
+                    borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+                    background: ['#6366F1','#EC4899','#F59E0B','#10B981','#3B82F6','#8B5CF6'][i % 6],
+                    left: `${Math.random() * 400 - 200}px`,
+                    top: `${Math.random() * -100}px`,
+                    animation: `confetti-fall ${1.5 + Math.random() * 2}s linear ${Math.random() * 0.8}s forwards`,
+                  }} />
+                ))}
               </div>
-            )}
-            <Card>
+            </div>
+
+            <div
+              className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto p-6"
+              style={{ animation: 'pop-in 0.25s ease-out' }}
+            >
               <div className="text-center py-2">
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                   <CheckCircle2 size={38} className="text-green-600" />
@@ -1873,8 +1875,8 @@ export default function PublicPortalPage() {
                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl py-3 text-sm transition-colors">
                 <ArrowRight size={16} /> חזרה לדף הכניסה
               </button>
-            </Card>
-          </>
+            </div>
+          </div>
         )}
 
         {/* ─── Step: Dashboard ─── */}
