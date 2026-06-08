@@ -47,7 +47,7 @@ const navItems: { href: string; label: string; icon: React.ElementType; section?
   { href: '/admin/loans',          label: 'הלוואות',   icon: CreditCard,  section: 'loans' },
   { href: '/admin/distributions',  label: 'חלוקות',    icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',         label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
-  { href: '/admin/mail',           label: 'מייל',           icon: Mail },
+  { href: '/admin/mail',           label: 'מייל ראשי',      icon: Mail },
   { href: '/admin/reports',        label: 'דוחות',     icon: BarChart3,      section: 'reports' },
   { href: '/admin/settings',       label: 'הגדרות',    icon: Settings },
 ]

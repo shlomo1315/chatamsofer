@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { Mail, Send, Loader2, PenSquare, Reply, CheckCircle2, X, ExternalLink } from 'lucide-react'
+import { Mail, Send, Loader2, PenSquare, Reply, CheckCircle2, X, ChevronRight } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
 
 interface Props { email: string; name: string; beneficiaryId: string }
@@ -10,7 +9,8 @@ function formatDate(raw: string) {
   try {
     const d = new Date(raw)
     const now = new Date()
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    if (d.toDateString() === now.toDateString())
+      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
     return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
   } catch { return raw }
 }
@@ -21,7 +21,7 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
-  const [sentInfo, setSentInfo] = useState<{ body: string } | null>(null)
+  const [sent, setSent] = useState(false)
 
   const send = async () => {
     if (!subject) return
@@ -32,16 +32,15 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
       body: JSON.stringify({ to: toEmail, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
     })
     setSending(false)
-    setSentInfo({ body })
-    setTimeout(() => { onSent() }, 2000)
+    setSent(true)
+    setTimeout(() => onSent(), 2000)
   }
 
-  if (sentInfo) {
+  if (sent) {
     return (
-      <div className="border border-slate-200 rounded-xl bg-green-50 p-6 flex flex-col items-center gap-3 text-center">
+      <div className="border border-green-200 rounded-xl bg-green-50 p-6 flex flex-col items-center gap-3 text-center">
         <CheckCircle2 size={28} className="text-green-600" />
         <p className="font-semibold text-slate-800">המייל נשלח בהצלחה ל-{toName}</p>
-        {sentInfo.body && <p className="text-sm text-slate-500 line-clamp-3 whitespace-pre-wrap">{sentInfo.body}</p>}
       </div>
     )
   }
@@ -49,7 +48,9 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   return (
     <div className="border border-indigo-200 rounded-xl bg-white overflow-hidden shadow-sm">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-indigo-50">
-        <span className="text-sm font-medium text-indigo-700">{replyTo ? `השב ל: ${replyTo.subject}` : `מייל חדש → ${toName}`}</span>
+        <span className="text-sm font-medium text-indigo-700">
+          {replyTo ? `השב: ${replyTo.subject}` : `מייל חדש → ${toName}`}
+        </span>
         <button onClick={onCancel} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
       </div>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100">
@@ -78,8 +79,7 @@ function ComposePane({ toEmail, toName, replyTo, onSent, onCancel }: {
   )
 }
 
-export default function BeneficiaryMailThread({ email, name, beneficiaryId }: Props) {
-  const router = useRouter()
+export default function BeneficiaryMailThread({ email, name }: Props) {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [notConnected, setNotConnected] = useState(false)
@@ -99,18 +99,15 @@ export default function BeneficiaryMailThread({ email, name, beneficiaryId }: Pr
   useEffect(() => { load() }, [load])
 
   const openMessage = async (msg: ParsedMessage) => {
-    setSelected(prev => prev?.id === msg.id ? null : msg)
+    setSelected(msg)
+    setComposing(false)
+    setReplyTo(undefined)
     if (!msg.isRead) {
-      await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
+      await fetch('/api/admin/gmail/mark-read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }),
+      })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
-  }
-
-  const startReply = (msg: ParsedMessage) => {
-    setReplyTo(msg)
-    setComposing(true)
-    // scroll compose into view
-    setTimeout(() => document.getElementById('compose-pane')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
   if (notConnected) {
@@ -123,10 +120,77 @@ export default function BeneficiaryMailThread({ email, name, beneficiaryId }: Pr
     )
   }
 
+  // ── Message detail view ──────────────────────────────────────────────────
+  if (selected && !composing) {
+    return (
+      <div className="flex flex-col gap-0 border border-slate-200 rounded-xl overflow-hidden">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+          <button
+            onClick={() => setSelected(null)}
+            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium"
+          >
+            <ChevronRight size={16} />
+            חזור לרשימה
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setReplyTo(selected); setComposing(true) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+            >
+              <Reply size={13} /> השב
+            </button>
+          </div>
+        </div>
+
+        {/* Subject + meta */}
+        <div className="px-5 pt-4 pb-3 border-b border-slate-100">
+          <h3 className="font-bold text-slate-900 text-base mb-1">{selected.subject}</h3>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">{selected.from.replace(/<.*>/, '').trim() || selected.fromEmail}</span>
+            <span>·</span>
+            <span>{selected.fromEmail}</span>
+            <span>·</span>
+            <span>{formatDate(selected.date)}</span>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div
+          className="px-5 py-4 text-sm text-slate-800 leading-relaxed overflow-auto min-h-[200px]"
+          dir="auto"
+          dangerouslySetInnerHTML={{ __html: selected.body || `<p style="color:#94a3b8">אין תוכן להצגה</p>` }}
+        />
+      </div>
+    )
+  }
+
+  // ── Compose view ──────────────────────────────────────────────────────────
+  if (composing) {
+    return (
+      <div className="flex flex-col gap-3">
+        <button
+          onClick={() => { setComposing(false); setReplyTo(undefined) }}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 self-start"
+        >
+          <ChevronRight size={15} /> חזור
+        </button>
+        <ComposePane
+          toEmail={email}
+          toName={name}
+          replyTo={replyTo}
+          onSent={() => { setComposing(false); setReplyTo(undefined); load() }}
+          onCancel={() => { setComposing(false); setReplyTo(undefined) }}
+        />
+      </div>
+    )
+  }
+
+  // ── Message list ──────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">כל ההתכתבות עם <span className="font-medium text-slate-700">{email}</span></p>
+        <p className="text-xs text-slate-500">התכתבות עם <span className="font-medium text-slate-700">{email}</span></p>
         <button
           onClick={() => { setReplyTo(undefined); setComposing(true) }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
@@ -146,67 +210,34 @@ export default function BeneficiaryMailThread({ email, name, beneficiaryId }: Pr
           <p className="text-sm">אין התכתבות עם נתמך זה</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
           {messages.map(msg => (
-            <div key={msg.id} className={`border rounded-xl overflow-hidden transition-colors ${selected?.id === msg.id ? 'border-indigo-300 shadow-sm' : 'border-slate-200'}`}>
-              {/* Message header row */}
-              <button
-                className="w-full text-right px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
-                onClick={() => openMessage(msg)}
-              >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${msg.fromEmail === email ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {msg.fromEmail === email ? name.charAt(0) : 'מ'}
-                  </div>
-                  <div className="min-w-0 flex-1 text-right">
-                    <p className={`text-sm truncate ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{msg.subject}</p>
-                    <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>
-                  </div>
+            <button
+              key={msg.id}
+              onClick={() => openMessage(msg)}
+              className="w-full text-right px-4 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors group"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold
+                  ${msg.fromEmail === email ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {msg.fromEmail === email ? name.charAt(0) : 'מ'}
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[11px] text-slate-400">{formatDate(msg.date)}</span>
-                  {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500" />}
+                <div className="min-w-0 flex-1 text-right">
+                  <p className={`text-sm truncate ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-600'}`}>
+                    {msg.subject}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate">
+                    {msg.fromEmail === email ? name : 'משרד ראשי'}
+                  </p>
                 </div>
-              </button>
-
-              {/* Expanded message body */}
-              {selected?.id === msg.id && (
-                <div className="border-t border-slate-100">
-                  <div
-                    className="px-4 py-4 text-sm text-slate-800 leading-relaxed overflow-auto max-h-96"
-                    dangerouslySetInnerHTML={{ __html: msg.body || `<p>${msg.snippet}</p>` }}
-                  />
-                  <div className="px-4 pb-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <button
-                      onClick={() => router.push(`/admin/mail`)}
-                      className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      <ExternalLink size={12} /> פתח בממשק המייל
-                    </button>
-                    <button
-                      onClick={() => startReply(msg)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
-                    >
-                      <Reply size={13} /> השב
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-[11px] text-slate-400">{formatDate(msg.date)}</span>
+                {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500" />}
+                <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
+              </div>
+            </button>
           ))}
-        </div>
-      )}
-
-      {/* Compose pane — shown below messages */}
-      {composing && (
-        <div id="compose-pane">
-          <ComposePane
-            toEmail={email}
-            toName={name}
-            replyTo={replyTo}
-            onSent={() => { setComposing(false); setReplyTo(undefined); load() }}
-            onCancel={() => { setComposing(false); setReplyTo(undefined) }}
-          />
         </div>
       )}
     </div>

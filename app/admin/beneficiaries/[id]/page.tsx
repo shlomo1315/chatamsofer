@@ -326,7 +326,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         ...(beneficiary.email ? [{
           key: 'mail',
           label: 'הודעות מיילים',
-          accent: 'sky' as const,
+          accent: 'indigo' as const,
           icon: <Mail size={15} />,
           content: <BeneficiaryMailThread email={beneficiary.email} name={fullName} beneficiaryId={id} />,
         }] : []),
