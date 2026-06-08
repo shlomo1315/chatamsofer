@@ -11,6 +11,18 @@ const OFFICE_EMAIL  = 'office@chasamsofer.info'
 const PORTAL_BASE_DEFAULT = 'https://my-app-gamma-pearl-29.vercel.app'
 const LOGO_URL = 'https://my-app-gamma-pearl-29.vercel.app/logo.jpg'
 
+// ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
+function autoReplyNote(): string {
+  return `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+    <tr><td style="background:#f1f5f9;border-radius:10px;padding:11px 16px;text-align:center;">
+      <p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">
+        📩 הודעה זו נשלחה <strong>באופן אוטומטי</strong> ממערכת היכל החתם סופר בעקבות פנייתך.
+      </p>
+    </td></tr>
+  </table>`
+}
+
 // ─── כפתור בודד (רוחב מלא) ───────────────────────────────────────────────────
 function btn(href: string, label: string, bg: string, textColor = '#ffffff'): string {
   return `
@@ -196,6 +208,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
   const statusBorder = isApproved ? '#22c55e' : '#f59e0b'
 
   const body = `
+    ${autoReplyNote()}
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.name},</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
@@ -244,6 +257,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
 export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const body = `
+    ${autoReplyNote()}
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום וברכה,</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">

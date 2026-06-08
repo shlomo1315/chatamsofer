@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
@@ -10,7 +10,7 @@ import LoadCardButton from './LoadCardButton'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
-import BeneficiaryMailThread from '@/app/admin/beneficiaries/[id]/BeneficiaryMailThread'
+import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -191,16 +191,9 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
         </Card>
       )}
 
-      {/* תכתובות מייל עם המשפחה */}
+      {/* תכתובות מייל — לשונית מתקפלת שנפתחת בלחיצה */}
       {ben?.email && (
-        <Card className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-indigo-600">
-            <Mail size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">תכתובות מייל</span>
-            <span className="text-xs text-slate-400 ltr-num" dir="ltr">{ben.email}</span>
-          </div>
-          <BeneficiaryMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />
-        </Card>
+        <CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />
       )}
 
       <div className="grid grid-cols-2 gap-4">
