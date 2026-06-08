@@ -43,6 +43,13 @@ export async function saveRefreshToken(token: string) {
   await db.from('app_settings').upsert({ key: 'gmail_refresh_token', value: token, updated_at: new Date().toISOString() })
 }
 
+export interface Attachment {
+  attachmentId: string
+  filename: string
+  mimeType: string
+  size: number
+}
+
 export interface ParsedMessage {
   id: string
   threadId: string
@@ -56,6 +63,7 @@ export interface ParsedMessage {
   body: string
   isRead: boolean
   labelIds: string[]
+  attachments: Attachment[]
 }
 
 function decodeBase64(data: string) {
@@ -83,6 +91,28 @@ function getBody(payload: any): string {
     }
   }
   return ''
+}
+
+function getAttachments(payload: any): Attachment[] {
+  const attachments: Attachment[] = []
+  if (!payload) return attachments
+
+  const scanParts = (parts: any[]) => {
+    for (const part of parts) {
+      if (part.filename && part.body?.attachmentId) {
+        attachments.push({
+          attachmentId: part.body.attachmentId,
+          filename: part.filename,
+          mimeType: part.mimeType ?? 'application/octet-stream',
+          size: part.body.size ?? 0,
+        })
+      }
+      if (part.parts) scanParts(part.parts)
+    }
+  }
+
+  if (payload.parts) scanParts(payload.parts)
+  return attachments
 }
 
 function getHeader(headers: any[], name: string) {
@@ -123,5 +153,6 @@ export function parseMessage(msg: any): ParsedMessage {
     body: getBody(msg.payload),
     isRead: !msg.labelIds?.includes('UNREAD'),
     labelIds: msg.labelIds ?? [],
+    attachments: getAttachments(msg.payload),
   }
 }

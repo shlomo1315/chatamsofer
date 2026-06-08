@@ -5,8 +5,9 @@ import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
+  Paperclip, Download, FolderOpen, FileText,
 } from 'lucide-react'
-import { ParsedMessage } from '@/lib/gmail'
+import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import EmailInput from '@/components/ui/EmailInput'
 
@@ -538,6 +539,162 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
 const MARITAL_STATUS_LABELS: Record<string, string> = {
   married: 'נשוי/נשואה', single: 'רווק/רווקה', divorced: 'גרוש/גרושה',
   widowed: 'אלמן/אלמנה', other: 'אחר',
+}
+
+const DOC_TYPES = [
+  { value: 'id_husband',     label: 'ת.ז. בעל' },
+  { value: 'id_wife',        label: 'ת.ז. אשה' },
+  { value: 'marriage_cert',  label: 'תעודת נישואין' },
+  { value: 'birth_cert',     label: 'אישור לידה' },
+  { value: 'address_proof',  label: 'אישור כתובת' },
+  { value: 'other',          label: 'אחר' },
+]
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AssignAttachmentModal({ attachment, messageId, onClose }: {
+  attachment: Attachment; messageId: string; onClose: () => void
+}) {
+  const [query, setQuery]           = useState('')
+  const [results, setResults]       = useState<{ id: string; full_name: string }[]>([])
+  const [selected, setSelected]     = useState<{ id: string; full_name: string } | null>(null)
+  const [docType, setDocType]       = useState('id_husband')
+  const [saving, setSaving]         = useState(false)
+  const [done, setDone]             = useState(false)
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(query)}&limit=6`)
+      const data = await res.json()
+      setResults(data.beneficiaries ?? [])
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const save = async () => {
+    if (!selected) return
+    setSaving(true)
+    try {
+      await fetch('/api/admin/assign-attachment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId,
+          attachmentId: attachment.attachmentId,
+          beneficiaryId: selected.id,
+          docType,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+        }),
+      })
+      setDone(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        {done ? (
+          <div className="text-center py-4">
+            <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+            <p className="font-bold text-slate-900">הקובץ שויך בהצלחה!</p>
+            <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הנתמך.</p>
+            <button onClick={onClose} className="mt-4 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium">סגור</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <FolderOpen size={18} className="text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">שייך קובץ לנתמך</h2>
+                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{attachment.filename}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">סוג מסמך</label>
+                <select value={docType} onChange={e => setDocType(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div className="relative">
+                <label className="text-xs font-semibold text-slate-600 block mb-1">חפש נתמך</label>
+                <input value={selected ? selected.full_name : query}
+                  onChange={e => { setSelected(null); setQuery(e.target.value) }}
+                  placeholder="שם, ת.ז. או מייל..."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                {results.length > 0 && !selected && (
+                  <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                    {results.map(r => (
+                      <li key={r.id} onClick={() => { setSelected(r); setResults([]); setQuery('') }}
+                        className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 text-slate-800">
+                        {r.full_name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ביטול</button>
+              <button disabled={!selected || saving} onClick={save}
+                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                שמור
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AttachmentBar({ attachments, messageId }: { attachments: Attachment[]; messageId: string }) {
+  const [assigning, setAssigning] = useState<Attachment | null>(null)
+  if (!attachments.length) return null
+
+  return (
+    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/60">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Paperclip size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-500">{attachments.length} קבצים מצורפים</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {attachments.map(att => (
+          <div key={att.attachmentId}
+            className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
+            <FileText size={13} className="text-slate-400 flex-shrink-0" />
+            <span className="truncate max-w-[140px]">{att.filename}</span>
+            <span className="text-slate-400">{formatBytes(att.size)}</span>
+            <a href={`/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`}
+              download={att.filename}
+              className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+              <Download size={13} />
+            </a>
+            <button onClick={() => setAssigning(att)}
+              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לנתמך">
+              <FolderOpen size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} onClose={() => setAssigning(null)} />}
+    </div>
+  )
 }
 
 function BeneficiaryCard({ email }: { email: string }) {
@@ -1129,6 +1286,7 @@ export default function MailClient() {
             )}
             <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
+            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} />
             {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
           </div>
         </div>
