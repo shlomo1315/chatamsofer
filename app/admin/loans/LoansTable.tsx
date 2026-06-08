@@ -13,8 +13,9 @@ const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he
 const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 type BenRef = { full_name?: string; family_name?: string; id_number?: string; spouse_name?: string; spouse_id_number?: string }
+// שם הלווה — שם הבעל (full_name); אם אין בעל, שם האישה (spouse_name)
 const borrowerName = (b?: BenRef) =>
-  b ? ([b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
+  b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 
 type Filter = 'all' | 'pending' | 'approved' | 'rejected'
 const isApproved = (l: Loan) => l.status === 'approved' || l.status === 'active' || l.status === 'completed'

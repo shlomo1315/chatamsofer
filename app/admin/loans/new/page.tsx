@@ -31,10 +31,9 @@ const ELIGIBILITY_LABEL: Record<string, string> = {
   pending: 'ממתין לאישור', review: 'בבדיקה', approved: 'מאושר', rejected: 'לא מאושר',
 }
 
+// שם הלווה — שם הבעל (full_name); אם אין בעל, שם האישה (spouse_name)
 const familyTitle = (b: Beneficiary) =>
-  b.spouse_name
-    ? `${[b.family_name].filter(Boolean).join(' ')} ${b.spouse_name}`.trim()
-    : [b.family_name, b.full_name].filter(Boolean).join(' ')
+  [b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ')
 
 export default function NewLoanPage() {
   const router = useRouter()

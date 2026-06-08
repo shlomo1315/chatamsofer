@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Eye, Phone, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
+import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { Beneficiary } from '@/types'
@@ -106,6 +106,25 @@ const columns: Column<Beneficiary>[] = [
           <Phone size={12} className="text-slate-400 flex-shrink-0" />
           <span>{row.phone}</span>
         </div>
+      ) : (
+        <span className="text-slate-300">—</span>
+      ),
+  },
+  {
+    key: 'email',
+    header: 'מייל',
+    sortable: true,
+    render: (row) =>
+      row.email ? (
+        <a
+          href={`mailto:${row.email}`}
+          onClick={(e) => e.stopPropagation()}
+          dir="ltr"
+          className="inline-flex items-center justify-end gap-1.5 text-xs text-slate-600 hover:text-indigo-600 hover:underline text-left"
+        >
+          <Mail size={12} className="text-slate-400 flex-shrink-0" />
+          <span className="truncate max-w-[200px]">{row.email}</span>
+        </a>
       ) : (
         <span className="text-slate-300">—</span>
       ),
