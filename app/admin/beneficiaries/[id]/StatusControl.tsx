@@ -61,12 +61,20 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
           ({ subject, html } = docsPendingEmail(name, portalBase, ben.marital_status))
         }
         if (subject) {
-          await fetch('/api/admin/send-email', {
+          // נשלח דרך חשבון ה-Gmail של המשרד (אותו נתיב שעובד בממשק המייל)
+          const r = await fetch('/api/admin/gmail/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: ben.email, subject, html }),
+            body: JSON.stringify({ to: ben.email, subject, body: html }),
           })
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({}))
+            alert(`הסטטוס עודכן, אך שליחת המייל נכשלה: ${d?.error || 'שגיאה לא ידועה'}`)
+          }
         }
+      } else if (['approved', 'rejected', 'docs_pending'].includes(next)) {
+        // אין כתובת מייל לנתמך — אין למי לשלוח
+        alert('הסטטוס עודכן. לא נשלח מייל כיוון שלא קיימת כתובת מייל לנתמך.')
       }
 
       setOpen(false)
