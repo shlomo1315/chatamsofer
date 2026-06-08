@@ -43,6 +43,55 @@ export async function saveRefreshToken(token: string) {
   await db.from('app_settings').upsert({ key: 'gmail_refresh_token', value: token, updated_at: new Date().toISOString() })
 }
 
+function encodeHeader(text: string): string {
+  // RFC 2047 encoded-word for non-ASCII header values
+  return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`
+}
+
+// שליחת מייל HTML דרך חשבון ה-Gmail של המשרד (משמש גם את ה-API וגם את ה-cron).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function sendGmailMessage(gmail: any, opts: { to: string; subject: string; html: string; threadId?: string }) {
+  const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
+  const fromName = 'היכל החתם סופר משרד ראשי'
+  const bodyB64 = Buffer.from(opts.html ?? '', 'utf8').toString('base64')
+
+  const raw = [
+    `From: ${encodeHeader(fromName)} <${from}>`,
+    `To: ${opts.to}`,
+    `Subject: ${encodeHeader(opts.subject)}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    bodyB64,
+  ].join('\r\n')
+
+  const encoded = Buffer.from(raw)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encoded, threadId: opts.threadId || undefined },
+  })
+}
+
+// מאתר/יוצר תווית Gmail לפי שם ומחזיר את ה-id שלה (לסימון הודעות שטופלו).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function ensureLabel(gmail: any, name: string): Promise<string> {
+  const list = await gmail.users.labels.list({ userId: 'me' })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existing = (list.data.labels ?? []).find((l: any) => l.name === name)
+  if (existing?.id) return existing.id
+  const created = await gmail.users.labels.create({
+    userId: 'me',
+    requestBody: { name, labelListVisibility: 'labelHide', messageListVisibility: 'show' },
+  })
+  return created.data.id as string
+}
+
 export interface ParsedMessage {
   id: string
   threadId: string
