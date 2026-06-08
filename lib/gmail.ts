@@ -88,6 +88,18 @@ function getHeader(headers: any[], name: string) {
   return headers?.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? ''
 }
 
+function decodeRFC2047(str: string): string {
+  return str.replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=/g, (_, _charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        return Buffer.from(text, 'base64').toString('utf8')
+      } else {
+        return text.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, (_: string, h: string) => String.fromCharCode(parseInt(h, 16)))
+      }
+    } catch { return str }
+  })
+}
+
 function extractEmail(from: string) {
   const m = from.match(/<(.+?)>/)
   return m ? m[1] : from
@@ -95,14 +107,14 @@ function extractEmail(from: string) {
 
 export function parseMessage(msg: any): ParsedMessage {
   const headers = msg.payload?.headers ?? []
-  const from = getHeader(headers, 'from')
+  const from = decodeRFC2047(getHeader(headers, 'from'))
   return {
     id: msg.id,
     threadId: msg.threadId,
-    subject: getHeader(headers, 'subject') || '(ללא נושא)',
+    subject: decodeRFC2047(getHeader(headers, 'subject')) || '(ללא נושא)',
     from,
     fromEmail: extractEmail(from),
-    to: getHeader(headers, 'to'),
+    to: decodeRFC2047(getHeader(headers, 'to')),
     date: getHeader(headers, 'date'),
     snippet: msg.snippet ?? '',
     body: getBody(msg.payload),

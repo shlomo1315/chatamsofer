@@ -611,6 +611,7 @@ export default function MailClient() {
   const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
   const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
+  const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
@@ -860,7 +861,16 @@ export default function MailClient() {
                     onDragLeave={() => setDragOverMsgId(null)}
                     onDrop={e => {
                       e.preventDefault()
-                      if (dragLabelId) { toggleLabel(msg.id, dragLabelId, true); setDragOverMsgId(null) }
+                      if (dragLabelId) {
+                        const existing = assignments[msg.id] ?? []
+                        setDragOverMsgId(null)
+                        if (existing.length > 0 && !existing.includes(dragLabelId)) {
+                          // Ask: add alongside existing or replace?
+                          setPendingDrop({ msgId: msg.id, labelId: dragLabelId })
+                        } else {
+                          toggleLabel(msg.id, dragLabelId, true)
+                        }
+                      }
                     }}
                     className={`relative border-b border-slate-100 transition-colors
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
@@ -875,8 +885,17 @@ export default function MailClient() {
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
                         {msgLabels.map(l => (
-                          <span key={l.id} className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: l.color }}>{l.name}</span>
+                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: l.color }}>
+                            {l.name}
+                            <button
+                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
+                              className="opacity-70 hover:opacity-100 leading-none"
+                              title="הסר תווית"
+                            >
+                              <X size={9} />
+                            </button>
+                          </span>
                         ))}
                         {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
                       </div>
@@ -920,12 +939,20 @@ export default function MailClient() {
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold text-slate-900 text-base truncate">{selected.subject}</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {emailToInfo[selected.fromEmail]
-                  ? <><span className="font-medium text-slate-700">{emailToInfo[selected.fromEmail].name}</span> · {selected.fromEmail}</>
-                  : selected.from
-                } · {formatDate(selected.date)}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                {emailToInfo[selected.fromEmail] ? (
+                  <>
+                    <Link href={`/admin/beneficiaries/${emailToInfo[selected.fromEmail].id}`} target="_blank"
+                      className="text-sm font-semibold text-indigo-700 hover:underline">
+                      {emailToInfo[selected.fromEmail].name}
+                    </Link>
+                    <span className="text-xs text-slate-400">{selected.fromEmail}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-500">{selected.from}</span>
+                )}
+                <span className="text-xs text-slate-400">· {formatDate(selected.date)}</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
@@ -975,6 +1002,52 @@ export default function MailClient() {
 
       {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} />}
       {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
+
+      {/* Add-or-Replace label popup */}
+      {pendingDrop && (() => {
+        const newLabel = labels.find(l => l.id === pendingDrop.labelId)
+        const existingLabels = (assignments[pendingDrop.msgId] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+              <h3 className="font-semibold text-slate-900 text-center">הוסף תווית</h3>
+              <p className="text-sm text-slate-600 text-center">
+                להודעה כבר משויכת תווית{existingLabels.length > 1 ? 'ות' : ''}{' '}
+                <span className="font-medium">{existingLabels.map(l => l.name).join(', ')}</span>.<br/>
+                מה לעשות עם התווית{' '}
+                {newLabel && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-medium" style={{ backgroundColor: newLabel.color }}>{newLabel.name}</span>}?
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={async () => {
+                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
+                    setPendingDrop(null)
+                  }}
+                  className="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
+                >
+                  הוסף לצד הקיים
+                </button>
+                <button
+                  onClick={async () => {
+                    // Remove all existing labels then add new one
+                    for (const l of existingLabels) {
+                      await toggleLabel(pendingDrop.msgId, l.id, false)
+                    }
+                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
+                    setPendingDrop(null)
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200 transition-colors"
+                >
+                  החלף את {existingLabels.length > 1 ? 'כל התוויות' : 'התווית'}
+                </button>
+                <button onClick={() => setPendingDrop(null)} className="text-xs text-slate-400 hover:text-slate-600 text-center py-1">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
       {showManageLabels && (
         <ManageLabelsModal
           labels={labels}
