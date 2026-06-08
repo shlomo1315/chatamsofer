@@ -28,10 +28,10 @@ export async function GET(request: NextRequest) {
 
     // walk up from nodeId to root
     const path: { id: string; name: string; generation: number }[] = []
-    let cur = map[nodeId]
+    let cur: { id: string; name: string; parent_id: string | null; generation: number } | undefined = map[nodeId]
     while (cur) {
       path.unshift({ id: cur.id, name: cur.name, generation: cur.generation })
-      cur = cur.parent_id ? map[cur.parent_id] : null
+      cur = cur.parent_id ? map[cur.parent_id] : undefined
     }
     return NextResponse.json({ path })
   }
