@@ -10,6 +10,7 @@ import {
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import EmailInput from '@/components/ui/EmailInput'
+import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -837,6 +838,11 @@ export default function MailClient() {
   // Email open tracking (SENT folder)
   const [trackingStatus, setTrackingStatus] = useState<Record<string, { opened: boolean; openedAt: string | null; openCount: number }>>({})
 
+  // New mail toast notifications
+  const [mailToasts, setMailToasts] = useState<MailToast[]>([])
+  const knownMsgIdsRef = useRef<Set<string>>(new Set())
+  const isFirstMailLoad = useRef(true)
+
   // Handled messages (in-session tracking)
   const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
 
@@ -899,6 +905,20 @@ export default function MailClient() {
 
     setMessages(msgs)
 
+    // Detect new INBOX messages for toast notifications
+    if (f === 'INBOX') {
+      const newMsgs = msgs.filter(m => !knownMsgIdsRef.current.has(m.id))
+      msgs.forEach(m => knownMsgIdsRef.current.add(m.id))
+      if (!isFirstMailLoad.current && newMsgs.length > 0) {
+        playMailSound()
+        setMailToasts(prev => [
+          ...prev,
+          ...newMsgs.map(m => ({ id: m.id, from: m.from, subject: m.subject, snippet: m.snippet })),
+        ])
+      }
+      if (isFirstMailLoad.current) isFirstMailLoad.current = false
+    }
+
     // Fetch open-tracking status for SENT messages
     if (f === 'SENT' && msgs.length > 0) {
       const ids = msgs.map(m => m.id).join(',')
@@ -934,6 +954,14 @@ export default function MailClient() {
   }, [])
 
   useEffect(() => { load(folder) }, [folder, load])
+
+  // Background poll every 60s for new INBOX mail (for toast notifications)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (folder === 'INBOX') load('INBOX')
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
     setSelected(msg)
@@ -1370,6 +1398,22 @@ export default function MailClient() {
           onClose={() => setShowManageLabels(false)}
         />
       )}
+
+      {/* New mail toast notifications — bottom-left */}
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
+        {mailToasts.map(t => (
+          <NewMailToast
+            key={t.id}
+            toast={t}
+            onClick={() => {
+              const msg = messages.find(m => m.id === t.id)
+              if (msg) { setFolder('INBOX'); openMessage(msg) }
+              setMailToasts(p => p.filter(x => x.id !== t.id))
+            }}
+            onClose={() => setMailToasts(p => p.filter(x => x.id !== t.id))}
+          />
+        ))}
+      </div>
     </div>
   )
 }
