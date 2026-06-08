@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
-  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings,
+  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
 } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
@@ -668,14 +668,47 @@ export default function MailClient() {
   // Forward
   const [forwardMsg, setForwardMsg] = useState<ParsedMessage | null>(null)
 
-  // Current user profile (for label-based filtering)
+  // Thread view
+  const [threadMsgs, setThreadMsgs] = useState<ParsedMessage[]>([])
+  const [threadLoading, setThreadLoading] = useState(false)
+
+  // Handled messages (in-session tracking)
+  const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
+
+  const recordEvent = useCallback(async (
+    msg: ParsedMessage,
+    eventType: 'read' | 'handled' | 'replied',
+  ) => {
+    try {
+      await fetch('/api/admin/mail/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: msg.id,
+          thread_id: msg.threadId,
+          event_type: eventType,
+          user_id: myProfileRef.current?.id ?? null,
+          label_ids: assignments[msg.id] ?? [],
+          from_email: msg.fromEmail,
+          subject: msg.subject,
+        }),
+      })
+    } catch { /* silent */ }
+  }, [assignments])
+
+  // Current user profile (for label-based filtering) — kept in a ref so load() stays stable
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
+  const myProfileRef = useRef<Profile | null>(null)
 
   // Fetch current user profile on mount
   useEffect(() => {
     fetch('/api/admin/me')
       .then(r => r.json())
-      .then(d => setMyProfile(d.profile ?? null))
+      .then(d => {
+        const p = d.profile ?? null
+        setMyProfile(p)
+        myProfileRef.current = p
+      })
       .catch(() => {})
   }, [])
 
@@ -735,6 +768,12 @@ export default function MailClient() {
       await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
+    recordEvent(msg, 'read')
+  }
+
+  const markHandled = (msg: ParsedMessage) => {
+    setHandledIds(prev => new Set([...prev, msg.id]))
+    recordEvent(msg, 'handled')
   }
 
   const trashMessage = async (id: string) => {
@@ -879,7 +918,11 @@ export default function MailClient() {
           )}
         </div>
 
-        <div className="px-2 pb-2 border-t border-slate-200 pt-2">
+        <div className="px-2 pb-2 border-t border-slate-200 pt-2 flex flex-col gap-0.5">
+          <Link href="/admin/mail/stats"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
+            <BarChart2 size={13} /> ניטור וסטטיסטיקות
+          </Link>
           <button onClick={() => setShowManageLabels(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <Settings size={13} /> הגדרות מייל
@@ -1035,6 +1078,17 @@ export default function MailClient() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Handled toggle */}
+              {handledIds.has(selected.id) ? (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg font-semibold">
+                  <CheckCircle2 size={14} className="text-green-500" /> טופל
+                </span>
+              ) : (
+                <button onClick={() => markHandled(selected)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors font-semibold">
+                  <CheckCircle2 size={14} /> סמן כטופל
+                </button>
+              )}
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
                 <Reply size={14} /> השב
