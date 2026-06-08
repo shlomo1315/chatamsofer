@@ -50,7 +50,10 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   // Mail state
   const [mailLabels, setMailLabels] = useState<MailLabel[]>([])
   const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
-  const [mailAccount, setMailAccount] = useState<string>(profile.mail_account ?? '')
+  const DOMAIN = 'chasamsofer.info'
+  const [mailAccount, setMailAccount] = useState<string>(
+    profile.mail_account ?? (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : '')
+  )
   const [mailLabelIds, setMailLabelIds] = useState<string[]>(profile.mail_label_ids ?? [])
 
   useEffect(() => {
@@ -81,7 +84,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setIsActive(profile.is_active)
     setPermissions(profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions : defaultPerms())
-    setMailAccount(profile.mail_account ?? '')
+    setMailAccount(profile.mail_account ?? (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : ''))
     setMailLabelIds(profile.mail_label_ids ?? [])
   }
 
