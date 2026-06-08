@@ -48,6 +48,7 @@ export interface Attachment {
   filename: string
   mimeType: string
   size: number
+  inlineData?: string  // base64url — present for small attachments (< 25KB) that Gmail embeds inline
 }
 
 export interface ParsedMessage {
@@ -93,18 +94,43 @@ function getBody(payload: any): string {
   return ''
 }
 
+function getPartFilename(part: any): string {
+  // filename may be on the part directly, or inside Content-Type / Content-Disposition headers
+  if (part.filename) return part.filename
+  const headers: { name: string; value: string }[] = part.headers ?? []
+  for (const h of headers) {
+    const val = h.value ?? ''
+    // Content-Disposition: attachment; filename="foo.pdf"
+    const cdMatch = /filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i.exec(val)
+    if (cdMatch) return decodeURIComponent(cdMatch[1].trim())
+    // Content-Type: application/pdf; name="foo.pdf"
+    const ctMatch = /name\*?=(?:UTF-8'')?["']?([^"';\n]+)/i.exec(val)
+    if (ctMatch) return decodeURIComponent(ctMatch[1].trim())
+  }
+  return ''
+}
+
+function isAttachmentPart(part: any): boolean {
+  const filename = getPartFilename(part)
+  if (!filename) return false
+  // Must have either an attachmentId (large) or body.data (small inline)
+  return !!(part.body?.attachmentId || part.body?.data)
+}
+
 function getAttachments(payload: any): Attachment[] {
   const attachments: Attachment[] = []
   if (!payload) return attachments
 
   const scanParts = (parts: any[]) => {
     for (const part of parts) {
-      if (part.filename && part.body?.attachmentId) {
+      if (isAttachmentPart(part)) {
         attachments.push({
-          attachmentId: part.body.attachmentId,
-          filename: part.filename,
+          attachmentId: part.body?.attachmentId ?? '',
+          filename: getPartFilename(part),
           mimeType: part.mimeType ?? 'application/octet-stream',
-          size: part.body.size ?? 0,
+          size: part.body?.size ?? (part.body?.data ? Buffer.from(part.body.data, 'base64').length : 0),
+          // inline data for small attachments (< 25KB)
+          inlineData: part.body?.attachmentId ? undefined : part.body?.data,
         })
       }
       if (part.parts) scanParts(part.parts)

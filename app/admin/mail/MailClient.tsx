@@ -586,6 +586,7 @@ function AssignAttachmentModal({ attachment, messageId, onClose }: {
         body: JSON.stringify({
           messageId,
           attachmentId: attachment.attachmentId,
+          inlineData: attachment.inlineData,
           beneficiaryId: selected.id,
           docType,
           filename: attachment.filename,
@@ -680,7 +681,10 @@ function AttachmentBar({ attachments, messageId }: { attachments: Attachment[]; 
             <FileText size={13} className="text-slate-400 flex-shrink-0" />
             <span className="truncate max-w-[140px]">{att.filename}</span>
             <span className="text-slate-400">{formatBytes(att.size)}</span>
-            <a href={`/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`}
+            <a href={att.inlineData
+                ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+                : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+              }
               download={att.filename}
               className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
               <Download size={13} />

@@ -14,6 +14,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'missing params' }, { status: 400 })
   }
 
+  // inlineData: small attachment already embedded in the message (no extra API call needed)
+  const inlineData = searchParams.get('inlineData')
+  if (inlineData) {
+    const buffer = Buffer.from(inlineData.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    return new Response(buffer, {
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+        'Content-Length': String(buffer.length),
+      },
+    })
+  }
+
+  if (!attachmentId) return NextResponse.json({ error: 'missing attachmentId' }, { status: 400 })
+
   try {
     const gmail = await getGmailClient()
     const res = await gmail.users.messages.attachments.get({

@@ -13,24 +13,30 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  const { messageId, attachmentId, beneficiaryId, docType, filename, mimeType } = await request.json()
+  const { messageId, attachmentId, inlineData, beneficiaryId, docType, filename, mimeType } = await request.json()
 
-  if (!messageId || !attachmentId || !beneficiaryId || !docType) {
+  if (!messageId || !beneficiaryId || !docType) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 })
   }
 
   try {
-    // Fetch attachment data from Gmail
-    const gmail = await getGmailClient()
-    const res = await gmail.users.messages.attachments.get({
-      userId: 'me',
-      messageId,
-      id: attachmentId,
-    })
-    const data = res.data.data
-    if (!data) return NextResponse.json({ error: 'empty attachment' }, { status: 404 })
+    let buffer: Buffer
 
-    const buffer = Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    if (inlineData) {
+      // Small attachment already embedded inline
+      buffer = Buffer.from(inlineData.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    } else {
+      // Fetch from Gmail API
+      const gmail = await getGmailClient()
+      const res = await gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId,
+        id: attachmentId,
+      })
+      const data = res.data.data
+      if (!data) return NextResponse.json({ error: 'empty attachment' }, { status: 404 })
+      buffer = Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    }
 
     // Upload to Supabase storage
     const supabase = getAdminClient()
