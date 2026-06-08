@@ -11,16 +11,49 @@ const OFFICE_EMAIL  = 'office@chasamsofer.info'
 const PORTAL_BASE_DEFAULT = 'https://my-app-gamma-pearl-29.vercel.app'
 const LOGO_URL = 'https://my-app-gamma-pearl-29.vercel.app/logo.jpg'
 
-// ─── כפתור bullet-proof ───────────────────────────────────────────────────────
-function btn(href: string, label: string, bg: string): string {
+// ─── כפתור בודד (רוחב מלא) ───────────────────────────────────────────────────
+function btn(href: string, label: string, bg: string, textColor = '#ffffff'): string {
   return `
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-    <tr><td align="center" style="border-radius:12px;background:${bg};box-shadow:0 4px 14px rgba(0,0,0,0.15);">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;width:100%;">
+    <tr><td align="center" style="border-radius:14px;background:${bg};">
       <a href="${href}" target="_blank"
-         style="display:inline-block;padding:16px 36px;font-family:Arial,sans-serif;font-size:16px;font-weight:800;color:#ffffff;text-decoration:none;border-radius:12px;letter-spacing:-0.2px;">
+         style="display:block;padding:15px 24px;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:${textColor};text-decoration:none;border-radius:14px;text-align:center;">
         ${label}
       </a>
     </td></tr>
+  </table>`
+}
+
+// ─── זוג כפתורים סימטריים זה לצד זה ─────────────────────────────────────────
+function btnPair(
+  href1: string, label1: string, bg1: string, text1: string,
+  href2: string, label2: string, bg2: string, text2: string,
+): string {
+  return `
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td width="48%" style="padding-left:6px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+          <tr><td align="center" style="border-radius:14px;background:${bg1};">
+            <a href="${href1}" target="_blank"
+               style="display:block;padding:14px 12px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:${text1};text-decoration:none;border-radius:14px;text-align:center;">
+              ${label1}
+            </a>
+          </td></tr>
+        </table>
+      </td>
+      <td width="4%"></td>
+      <td width="48%" style="padding-right:6px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+          <tr><td align="center" style="border-radius:14px;background:${bg2};">
+            <a href="${href2}" target="_blank"
+               style="display:block;padding:14px 12px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:${text2};text-decoration:none;border-radius:14px;text-align:center;">
+              ${label2}
+            </a>
+          </td></tr>
+        </table>
+      </td>
+    </tr>
   </table>`
 }
 
@@ -120,18 +153,14 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT): B
       </td></tr>
     </table>
 
-    <p style="margin:0 0 20px;color:#334155;font-size:15px;font-weight:700;text-align:center;">מה תרצה/י לעשות עכשיו?</p>
+    <p style="margin:0 0 18px;color:#334155;font-size:15px;font-weight:700;text-align:center;">מה תרצה/י לעשות עכשיו?</p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr><td align="center" style="padding-bottom:14px;">
-        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#db2777')}
-      </td></tr>
-      <tr><td align="center">
-        ${btn(`${base}/?action=loan`, '💳  בקשת הלוואה', '#4f46e5')}
-      </td></tr>
-    </table>
+    ${btnPair(
+      `${base}/?action=birth`, '👶  בקשת לידה', '#fce7f3', '#9d174d',
+      `${base}/?action=loan`,  '💳  בקשת הלוואה', '#e0e7ff', '#3730a3',
+    )}
 
-    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
+    <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות שלך לאימות.
     </p>
   `
@@ -191,20 +220,16 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
       ${b.children_count != null ? detailRow('מספר ילדים', String(b.children_count)) : ''}
     </table>
 
-    <p style="margin:0 0 20px;color:#334155;font-size:15px;font-weight:700;text-align:center;">
+    <p style="margin:0 0 18px;color:#334155;font-size:15px;font-weight:700;text-align:center;">
       ${isApproved ? 'ניתן להגיש בקשה ישירות דרך הפורטל:' : 'לטיפול בבקשתך:'}
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-      <tr><td align="center" style="padding-bottom:14px;">
-        ${btn(`${base}/?action=birth`, '👶  בקשת תמיכה ללידה', '#db2777')}
-      </td></tr>
-      <tr><td align="center">
-        ${btn(`${base}/?action=loan`, '💳  בקשת הלוואה', '#4f46e5')}
-      </td></tr>
-    </table>
+    ${btnPair(
+      `${base}/?action=birth`, '👶  בקשת לידה', '#fce7f3', '#9d174d',
+      `${base}/?action=loan`,  '💳  בקשת הלוואה', '#e0e7ff', '#3730a3',
+    )}
 
-    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
+    <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות לאימות.<br/>
       אם נדרש טיפול אישי — נחזור אליך בהקדם.
     </p>
