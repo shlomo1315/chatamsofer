@@ -6,7 +6,7 @@ export interface TabDef {
   key: string
   label: string
   icon?: ReactNode
-  accent?: 'indigo' | 'emerald' | 'violet' | 'amber' | 'sky'
+  accent?: 'indigo' | 'emerald' | 'violet' | 'amber' | 'sky' | 'rose'
   content: ReactNode
 }
 
@@ -16,6 +16,7 @@ const ACCENTS: Record<string, { active: string; idle: string }> = {
   violet:  { active: 'bg-violet-600 text-white border-violet-600',   idle: 'bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100' },
   amber:   { active: 'bg-amber-500 text-white border-amber-500',     idle: 'bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100' },
   sky:     { active: 'bg-sky-600 text-white border-sky-600',         idle: 'bg-sky-50 text-sky-700 border-sky-100 hover:bg-sky-100' },
+  rose:    { active: 'bg-rose-600 text-white border-rose-600',       idle: 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100' },
 }
 
 export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: string }) {

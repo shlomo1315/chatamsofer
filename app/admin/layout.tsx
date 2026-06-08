@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const metadata = { title: 'היכל החתם סופר - מערכת ניהול' }
 
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'

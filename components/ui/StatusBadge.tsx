@@ -7,6 +7,7 @@ const statusConfig: Record<string, { label: string; classes: string }> = {
   approved: { label: 'מאושר', classes: 'bg-green-100 text-green-800 ring-green-200' },
   rejected: { label: 'נדחה', classes: 'bg-red-100 text-red-800 ring-red-200' },
   review: { label: 'בבדיקה', classes: 'bg-blue-100 text-blue-800 ring-blue-200' },
+  docs_pending: { label: 'השלמת מסמכים', classes: 'bg-indigo-100 text-indigo-800 ring-indigo-200' },
   active: { label: 'פעיל', classes: 'bg-green-100 text-green-800 ring-green-200' },
   completed: { label: 'הושלם', classes: 'bg-slate-100 text-slate-700 ring-slate-200' },
   cancelled: { label: 'בוטל', classes: 'bg-red-100 text-red-800 ring-red-200' },
