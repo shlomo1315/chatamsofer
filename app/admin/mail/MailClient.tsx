@@ -705,12 +705,11 @@ export default function MailClient() {
       .catch(() => {})
   }, [])
 
-  const load = useCallback(async (f: string, q?: string) => {
-    setLoading(true)
-    setSelected(null)
+  const load = useCallback(async (f: string, q?: string, background = false) => {
+    if (!background) { setLoading(true); setSelected(null) }
     const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
     const data = await res.json()
-    if (data.notConnected) { setNotConnected(true); setLoading(false); return }
+    if (data.notConnected) { setNotConnected(true); if (!background) setLoading(false); return }
     let msgs: ParsedMessage[] = data.messages ?? []
 
     // Filter messages by assigned label IDs for non-admin users
@@ -752,7 +751,7 @@ export default function MailClient() {
       setEmailToInfo(map)
     }
 
-    setLoading(false)
+    if (!background) setLoading(false)
   }, [myProfile, triggerAutoReply])
 
   // Load labels on mount
@@ -764,13 +763,55 @@ export default function MailClient() {
     })
   }, [])
 
+  // SSE stream for real-time inbox updates
+  useEffect(() => {
+    if (folder !== 'INBOX') return // SSE only for inbox
+    let es: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+    const connect = () => {
+      es = new EventSource(`/api/admin/gmail/stream?folder=${folder}`)
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.type === 'new') load(folder, undefined, true)
+          else if (data.type === 'reconnect') {
+            es?.close()
+            reconnectTimer = setTimeout(connect, 500)
+          }
+        } catch {}
+      }
+
+      es.onerror = () => {
+        es?.close()
+        reconnectTimer = setTimeout(connect, 5_000)
+      }
+    }
+
+    connect()
+    return () => {
+      es?.close()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+    }
+  }, [folder, load])
+
   useEffect(() => {
     // Reset auto-reply state when folder changes
     knownMsgIds.current = new Set()
     isFirstLoad.current = true
     load(folder)
-    const interval = setInterval(() => load(folder), 15_000)
-    return () => clearInterval(interval)
+    // Fallback polling (30s) — covers SENT folder and SSE gaps
+    const interval = setInterval(() => load(folder, undefined, true), 30_000)
+
+    // Reload immediately when user comes back to the tab
+    const onVisible = () => { if (document.visibilityState === 'visible') load(folder, undefined, true) }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
