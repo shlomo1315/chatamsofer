@@ -13,9 +13,28 @@ function getClient() {
 export async function GET(request: NextRequest) {
   const parentId = request.nextUrl.searchParams.get('parent_id')
   const all = request.nextUrl.searchParams.get('all')
+  const nodeId = request.nextUrl.searchParams.get('node_id')
 
   const client = getClient()
   if (!client) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // node_id mode: return path from root to this node
+  if (nodeId) {
+    const { data: allNodes } = await client
+      .from('lineage_nodes')
+      .select('id,name,parent_id,generation')
+    const nodes: { id: string; name: string; parent_id: string | null; generation: number }[] = allNodes ?? []
+    const map = Object.fromEntries(nodes.map(n => [n.id, n]))
+
+    // walk up from nodeId to root
+    const path: { id: string; name: string; generation: number }[] = []
+    let cur = map[nodeId]
+    while (cur) {
+      path.unshift({ id: cur.id, name: cur.name, generation: cur.generation })
+      cur = cur.parent_id ? map[cur.parent_id] : null
+    }
+    return NextResponse.json({ path })
+  }
 
   let query = client
     .from('lineage_nodes')

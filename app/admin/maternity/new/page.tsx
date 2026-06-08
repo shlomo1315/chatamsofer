@@ -58,9 +58,8 @@ export default function NewMaternityPage() {
       try {
         const res = await fetch(`/api/lineage?node_id=${lineageNodeId}`)
         const j = await res.json()
-        for (const lvl of (j.path ?? [])) {
-          const sel = (lvl.nodes ?? []).find((n: { id: string }) => n.id === lvl.selectedId)
-          if (sel) names.push(sel.name)
+        for (const node of (j.path ?? [])) {
+          if (node.name) names.push(node.name)
         }
       } catch { /* ignore */ }
     }
