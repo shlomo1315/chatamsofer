@@ -659,10 +659,13 @@ export default function MailClient() {
 
     setMessages(msgs)
 
-    // batch resolve sender names
-    const uniqueEmails = [...new Set(msgs.map(m => m.fromEmail).filter(Boolean))]
+    // batch resolve sender + recipient names
+    const uniqueEmails = [...new Set([
+      ...msgs.map(m => m.fromEmail),
+      ...msgs.map(m => m.toEmail),
+    ].filter(Boolean))]
     if (uniqueEmails.length > 0) {
-      const r = await fetch(`/api/admin/beneficiary-search?emails=${encodeURIComponent(uniqueEmails.join(','))}&limit=50`)
+      const r = await fetch(`/api/admin/beneficiary-search?emails=${encodeURIComponent(uniqueEmails.join(','))}&limit=100`)
       const d = await r.json()
       const map: Record<string, { name: string; id: string }> = {}
       for (const b of d.results ?? []) if (b.email) map[b.email] = { name: b.name, id: b.id }
@@ -882,7 +885,11 @@ export default function MailClient() {
                     <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
                       <div className="flex items-start justify-between gap-2 mb-0.5">
                         <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-                          {folder === 'SENT' ? msg.to : senderDisplay(msg)}
+                          {folder === 'SENT'
+                            ? (emailToInfo[msg.toEmail]
+                                ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
+                                : msg.to)
+                            : senderDisplay(msg)}
                         </span>
                         <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
                       </div>

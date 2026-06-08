@@ -50,6 +50,7 @@ export interface ParsedMessage {
   from: string
   fromEmail: string
   to: string
+  toEmail: string
   date: string
   snippet: string
   body: string
@@ -108,13 +109,15 @@ function extractEmail(from: string) {
 export function parseMessage(msg: any): ParsedMessage {
   const headers = msg.payload?.headers ?? []
   const from = decodeRFC2047(getHeader(headers, 'from'))
+  const to   = decodeRFC2047(getHeader(headers, 'to'))
   return {
     id: msg.id,
     threadId: msg.threadId,
     subject: decodeRFC2047(getHeader(headers, 'subject')) || '(ללא נושא)',
     from,
     fromEmail: extractEmail(from),
-    to: decodeRFC2047(getHeader(headers, 'to')),
+    to,
+    toEmail: extractEmail(to),
     date: getHeader(headers, 'date'),
     snippet: msg.snippet ?? '',
     body: getBody(msg.payload),
