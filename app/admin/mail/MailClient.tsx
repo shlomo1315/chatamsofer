@@ -54,58 +54,54 @@ function formatDate(raw: string) {
 interface FoundBeneficiary { id: string; name: string; email: string; matchedAs?: 'husband' | 'wife' }
 
 function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; replyTo?: ParsedMessage; initialTo?: string }) {
-  const [idQuery, setIdQuery]       = useState('')          // ת.ז. search input
-  const [nameQuery, setNameQuery]   = useState('')          // name / email search input
-  const [found, setFound]           = useState<FoundBeneficiary | null | undefined>(undefined) // undefined=idle, null=not found
-  const [searching, setSearching]   = useState(false)
+  const [query, setQuery]     = useState('')          // unified search (name / email / ID)
+  const [searching, setSearching] = useState(false)
 
   const [to, setTo]           = useState(initialTo ?? (replyTo ? replyTo.fromEmail : ''))
-  const [toName, setToName]   = useState('')                // display name of selected recipient
-  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail)) // lock "to" once selected from search
+  const [toName, setToName]   = useState('')
+  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail))
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
   const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)
   const [sentInfo, setSentInfo] = useState<{ to: string; toName: string; body: string } | null>(null)
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
   const canSend = !locked
-    ? (isValidEmail(to) && !!subject)          // manual entry: must be valid email
-    : (!!to && !!subject)                      // selected from system: trust the email
+    ? (isValidEmail(to) && !!subject)
+    : (!!to && !!subject)
 
-  // Search by ת.ז.
-  const searchById = useCallback(async (id: string) => {
-    if (id.length < 5) { setFound(undefined); return }
+  // Unified search: detect digits-only → search by ID, else by name/email
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) { setSuggestions([]); return }
     setSearching(true)
-    const res  = await fetch(`/api/admin/beneficiary-search?id_number=${encodeURIComponent(id)}&limit=3`)
+    const isId = /^\d+$/.test(q)
+    const url = isId
+      ? `/api/admin/beneficiary-search?id_number=${encodeURIComponent(q)}&limit=5`
+      : `/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=6`
+    const res = await fetch(url)
     const data = await res.json()
-    const results: BeneficiarySuggestion[] = data.results ?? []
-    if (results.length === 0) {
-      setFound(null)
-    } else {
-      const b = results[0] as BeneficiarySuggestion & { spouse_id_number?: string }
-      setFound({ id: b.id, name: b.name, email: b.email ?? '', matchedAs: (b as any).spouse_id_number === id ? 'wife' : 'husband' })
-    }
+    setSuggestions(data.results ?? [])
     setSearching(false)
   }, [])
 
-  // Autocomplete search by name/email
-  const searchByName = useCallback(async (q: string) => {
-    if (q.length < 2) { setSuggestions([]); return }
-    const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=6`)
-    const data = await res.json()
-    setSuggestions(data.results ?? [])
-  }, [])
+  const handleQueryChange = (v: string) => {
+    setQuery(v)
+    setTo(v)          // allow typing a raw email address too
+    setShowSug(true)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => doSearch(v), 250)
+  }
 
   const selectBeneficiary = (name: string, email: string) => {
     setTo(email); setToName(name); setLocked(true)
-    setSuggestions([]); setShowSug(false); setFound(undefined)
+    setSuggestions([]); setShowSug(false); setQuery('')
   }
 
   const clearRecipient = () => {
-    setTo(''); setToName(''); setLocked(false)
-    setFound(undefined); setIdQuery(''); setNameQuery('')
+    setTo(''); setToName(''); setLocked(false); setQuery('')
   }
 
   const send = async () => {
@@ -160,7 +156,6 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
           <div className="border-b border-slate-100 px-5 py-3 flex flex-col gap-2">
             <span className="text-xs font-medium text-slate-500">אל:</span>
 
-            {/* Selected recipient chip */}
             {locked && to ? (
               <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2">
                 <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
@@ -173,86 +168,47 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
                 <button onClick={clearRecipient} className="text-slate-400 hover:text-red-500 flex-shrink-0"><X size={14} /></button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
-                {/* Row 1: search by ID */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 flex-1 border border-slate-200 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-400 flex-shrink-0">ת.ז.:</span>
-                    <input
-                      className="flex-1 text-sm outline-none"
-                      value={idQuery}
-                      onChange={e => { setIdQuery(e.target.value); searchById(e.target.value) }}
-                      placeholder="חפש לפי ת.ז. (בעל או אשה)..."
-                      autoComplete="off"
-                    />
-                    {searching && <Loader2 size={13} className="animate-spin text-slate-400 flex-shrink-0" />}
-                  </div>
+              <div className="relative">
+                <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-indigo-400">
+                  {searching
+                    ? <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />
+                    : <Search size={14} className="text-slate-400 flex-shrink-0" />}
+                  <input
+                    className="flex-1 text-sm outline-none"
+                    value={query}
+                    onChange={e => handleQueryChange(e.target.value)}
+                    onFocus={() => query.length >= 2 && setShowSug(true)}
+                    placeholder="שם, מייל או ת.ז. (בעל / אשה)..."
+                    autoFocus
+                    autoComplete="off"
+                  />
+                  {query && <button onClick={() => { setQuery(''); setTo(''); setSuggestions([]) }} className="text-slate-300 hover:text-slate-600"><X size={13} /></button>}
                 </div>
 
-                {/* ID search result */}
-                {found === null && idQuery.length >= 5 && (
-                  <p className="text-xs text-amber-600 px-1">ת.ז. זו לא נמצאה במערכת — ניתן להזין מייל ידנית</p>
-                )}
-                {found && (
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-                    <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                      {found.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">{found.name}</p>
-                      <p className="text-xs text-slate-400">{found.email || 'אין מייל רשום'}</p>
-                    </div>
-                    {found.email ? (
-                      <button onClick={() => selectBeneficiary(found.name, found.email)}
-                        className="flex-shrink-0 px-3 py-1 bg-indigo-600 text-white text-xs rounded-lg hover:bg-indigo-700">
-                        בחר
+                {showSug && suggestions.length > 0 && (
+                  <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                    {suggestions.map(s => (
+                      <button key={s.id} type="button"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
+                        onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                          {s.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 text-right flex-1">
+                          <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
+                          <p className="text-xs text-slate-400 truncate">{s.email || 'אין מייל'}</p>
+                        </div>
+                        {!s.email && <span className="text-xs text-red-400 flex-shrink-0">אין מייל</span>}
                       </button>
-                    ) : (
-                      <span className="text-xs text-red-500 flex-shrink-0">אין מייל</span>
-                    )}
+                    ))}
                   </div>
                 )}
 
-                {/* Row 2: search by name or direct email */}
-                <div className="relative">
-                  <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2">
-                    <span className="text-xs text-slate-400 flex-shrink-0">מייל:</span>
-                    <input
-                      className="flex-1 text-sm outline-none"
-                      value={nameQuery || to}
-                      onChange={e => {
-                        const v = e.target.value
-                        setNameQuery(v); setTo(v)
-                        searchByName(v); setShowSug(true)
-                      }}
-                      onFocus={() => setShowSug(true)}
-                      placeholder="שם נתמך או כתובת מייל..."
-                      autoComplete="off"
-                    />
-                  </div>
-                  {showSug && suggestions.length > 0 && (
-                    <div className="absolute z-10 top-full right-0 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
-                      {suggestions.map(s => (
-                        <button key={s.id} type="button"
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-right hover:bg-indigo-50"
-                          onMouseDown={e => { e.preventDefault(); selectBeneficiary(s.name, s.email) }}
-                        >
-                          <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
-                            {s.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0 text-right">
-                            <p className="text-sm font-medium text-slate-800 truncate">{s.name}</p>
-                            <p className="text-xs text-slate-400 truncate">{s.email}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* validation hint for manual email */}
-                  {to && !isValidEmail(to) && !suggestions.length && (
-                    <p className="text-xs text-red-500 px-1 pt-1">יש להזין כתובת מייל תקינה</p>
-                  )}
-                </div>
+                {/* Show validation hint only when no suggestions */}
+                {to && !isValidEmail(to) && suggestions.length === 0 && query.length > 3 && !searching && (
+                  <p className="text-xs text-amber-600 px-1 pt-1">לא נמצא במערכת — ניתן להזין כתובת מייל ישירות</p>
+                )}
               </div>
             )}
           </div>
@@ -536,6 +492,11 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
 
 // ─── Beneficiary Card ──────────────────────────────────────────────────────────
 
+const MARITAL_STATUS_LABELS: Record<string, string> = {
+  married: 'נשוי/נשואה', single: 'רווק/רווקה', divorced: 'גרוש/גרושה',
+  widowed: 'אלמן/אלמנה', other: 'אחר',
+}
+
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -554,9 +515,12 @@ function BeneficiaryCard({ email }: { email: string }) {
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
   const statusColor = STATUS_COLORS[ben.eligibility_status] ?? 'bg-slate-100 text-slate-600'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const b = ben as any
 
   return (
-    <div className="border-t border-slate-100 bg-slate-50 p-4 flex flex-col gap-3">
+    <div className="border-t border-slate-200 bg-slate-50 p-4 flex flex-col gap-3">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">נתמך מזוהה</span>
         <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
@@ -564,22 +528,71 @@ function BeneficiaryCard({ email }: { email: string }) {
           פתח כרטיס <ExternalLink size={11} />
         </Link>
       </div>
+
+      {/* Name + avatar */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 flex-shrink-0">
+        <div className="w-11 h-11 rounded-full bg-indigo-100 flex items-center justify-center font-bold text-indigo-700 text-base flex-shrink-0">
           {name.charAt(0)}
         </div>
         <div className="min-w-0">
-          <p className="font-semibold text-slate-800 text-sm truncate">{name}</p>
+          <p className="font-bold text-slate-800 text-sm">{name}</p>
+          {b.id_number && <p className="text-[11px] text-slate-400">ת.ז. {b.id_number}</p>}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor}`}>
             {ELIGIBILITY_LABELS[ben.eligibility_status]}
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
-        {ben.phone && <span className="flex items-center gap-1"><Phone size={11} className="text-slate-400" />{ben.phone}</span>}
-        {ben.city  && <span className="flex items-center gap-1"><MapPin size={11} className="text-slate-400" />{ben.city}</span>}
-        {ben.children_count > 0 && <span className="flex items-center gap-1"><User size={11} className="text-slate-400" />{ben.children_count} ילדים</span>}
+
+      {/* Details grid */}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-slate-600">
+        {ben.phone && (
+          <span className="flex items-center gap-1.5 col-span-1">
+            <Phone size={11} className="text-slate-400 flex-shrink-0" />{ben.phone}
+          </span>
+        )}
+        {(b.city || b.address) && (
+          <span className="flex items-center gap-1.5 col-span-1 truncate">
+            <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+            {[b.address, b.city].filter(Boolean).join(', ')}
+          </span>
+        )}
+        {ben.children_count > 0 && (
+          <span className="flex items-center gap-1.5">
+            <User size={11} className="text-slate-400 flex-shrink-0" />{ben.children_count} ילדים
+          </span>
+        )}
+        {b.marital_status && (
+          <span className="flex items-center gap-1.5">
+            <span className="text-slate-400 text-[10px]">♦</span>
+            {MARITAL_STATUS_LABELS[b.marital_status] ?? b.marital_status}
+          </span>
+        )}
       </div>
+
+      {/* Spouse */}
+      {b.spouse_name && (
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+          <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-600 flex-shrink-0">
+            {b.spouse_name.charAt(0)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-slate-400">בן/בת זוג</p>
+            <p className="text-xs font-medium text-slate-700">{b.spouse_name}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Lineage */}
+      {Array.isArray(b.lineage_manual) && b.lineage_manual.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">ייחוס</p>
+          <div className="flex flex-wrap gap-1">
+            {(b.lineage_manual as string[]).map((node, i) => (
+              <span key={i} className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full">{node}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -941,7 +954,14 @@ export default function MailClient() {
                 {(assignments[selected.id] ?? []).map(id => {
                   const l = labels.find(x => x.id === id)
                   if (!l) return null
-                  return <span key={id} className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>{l.name}</span>
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
+                      {l.name}
+                      <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )
                 })}
               </div>
             )}
