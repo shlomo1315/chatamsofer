@@ -52,7 +52,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
   const DOMAIN = 'chasamsofer.info'
   const [mailAccount, setMailAccount] = useState<string>(
-    profile.mail_account ?? (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : '')
+    profile.mail_account || (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : '')
   )
   const [mailLabelIds, setMailLabelIds] = useState<string[]>(profile.mail_label_ids ?? [])
 
@@ -84,7 +84,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setIsActive(profile.is_active)
     setPermissions(profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions : defaultPerms())
-    setMailAccount(profile.mail_account ?? (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : ''))
+    setMailAccount(profile.mail_account || (profile.email?.endsWith(`@${DOMAIN}`) ? profile.email : ''))
     setMailLabelIds(profile.mail_label_ids ?? [])
   }
 
@@ -256,6 +256,9 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                       >
                         <option value="">ללא</option>
+                        {mailAccounts.length === 0 && mailAccount && (
+                          <option value={mailAccount}>{mailAccount}</option>
+                        )}
                         {mailAccounts.map(acc => (
                           <option key={acc.email} value={acc.email}>{acc.name} ({acc.email})</option>
                         ))}
