@@ -3,9 +3,22 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, FileCheck } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
-import StatusBadge from '@/components/ui/StatusBadge'
 import QuickEmailModal from '@/components/QuickEmailModal'
-import { Beneficiary } from '@/types'
+import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
+
+// תווית סטטוס מלאה לטבלה
+const STATUS_CHIP: Record<string, string> = {
+  pending:      'bg-amber-100 text-amber-800 ring-amber-200',
+  review:       'bg-violet-100 text-violet-800 ring-violet-200',
+  docs_pending: 'bg-blue-100 text-blue-800 ring-blue-200',
+  approved:     'bg-green-100 text-green-800 ring-green-200',
+  rejected:     'bg-red-100 text-red-800 ring-red-200',
+}
+const StatusChip = ({ status }: { status: string }) => (
+  <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${STATUS_CHIP[status] ?? 'bg-slate-100 text-slate-700 ring-slate-200'}`}>
+    {ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
+  </span>
+)
 
 const fullName = (row: Beneficiary) =>
   [row.family_name, row.full_name].filter(Boolean).join(' ') || row.full_name
@@ -175,7 +188,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'eligibility_status',
     header: 'סטטוס',
     sortable: true,
-    render: (row) => <StatusBadge status={row.eligibility_status} />,
+    render: (row) => <StatusChip status={row.eligibility_status} />,
   },
   {
     key: 'is_active',
@@ -247,7 +260,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
   return (
     <div className="flex flex-col gap-5">
       {/* Status filter cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
           const isActive = filter === c.key
