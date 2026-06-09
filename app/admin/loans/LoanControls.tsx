@@ -38,6 +38,13 @@ export function LoanStatusControl({ loan }: { loan: Loan }) {
     try {
       const { error } = await supabase.from('loans').update({ status: next }).eq('id', loan.id)
       if (error) throw error
+      // באישור הבקשה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      if (next === 'approved') {
+        await fetch('/api/admin/request-approved', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'loan', id: loan.id }),
+        }).catch(() => {})
+      }
       setOpen(false)
       router.refresh()
     } catch (err: unknown) {

@@ -118,6 +118,19 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
         </div>
       </div>
 
+      {/* חיווי למזכיר: משפחה מאושרת / טרם אושרה */}
+      {beneficiary?.eligibility_status === 'approved' ? (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+          <span className="font-semibold">✅ משפחה מאושרת</span>
+          <span className="text-green-700">— ניתן לאשר את הבקשה ללא בדיקת יחוס נוספת.</span>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+          <span className="font-semibold">⏳ משפחה טרם אושרה</span>
+          <span className="text-amber-700">— יש לבדוק את הייחוס לפני אישור הבקשה. אישור הבקשה יהפוך את המשפחה למאושרת אוטומטית.</span>
+        </div>
+      )}
+
       {/* כרטסת המשפחה — כל הפרטים, סדר הדורות וקישור לכרטסת המלאה */}
       {ben && (
         <Card className="flex flex-col gap-4">

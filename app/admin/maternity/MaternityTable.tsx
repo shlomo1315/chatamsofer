@@ -69,6 +69,14 @@ export function StatusControl({ aid }: { aid: MaternityAid }) {
       // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
       await syncBabyStatusInFamily(supabase, aid, next)
 
+      // באישור הלידה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      if (next === 'active') {
+        await fetch('/api/admin/request-approved', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'maternity', id: aid.id }),
+        }).catch(() => {})
+      }
+
       // באישור הלידה — סנכרון המשפחה לנדרים פלוס (כרטיס נדרים). נכשל בשקט אם לא מוגדר.
       if (next === 'active') {
         const mother = aid.beneficiary as MotherRef | undefined
