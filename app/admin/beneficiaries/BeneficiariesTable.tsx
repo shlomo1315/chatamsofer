@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, FileCheck } from 'lucide-react'
+import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
 import QuickEmailModal from '@/components/QuickEmailModal'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
@@ -232,7 +232,6 @@ const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Users, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לאישור ראשוני', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
   { key: 'docs_pending', label: 'השלמת מסמכים', icon: FileText, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
-  { key: 'review', label: 'ממתין לאישור מסמכים', icon: FileCheck, base: 'border-violet-200 hover:border-violet-300', active: 'border-violet-400 ring-2 ring-violet-200 bg-violet-50', iconCls: 'bg-violet-100 text-violet-700' },
   { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -260,7 +259,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
   return (
     <div className="flex flex-col gap-5">
       {/* Status filter cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
           const isActive = filter === c.key

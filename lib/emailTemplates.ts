@@ -377,3 +377,42 @@ export function docsPendingEmail(
     html: shell({ preheader: 'נדרשת השלמת מסמכים להמשך הטיפול.', accent: '#d97706', title: 'נדרשת השלמת מסמכים', subtitle: 'עוד צעד אחד להשלמת התהליך', body }),
   }
 }
+
+// ─── אישור קבלת בקשה (לידה / הלוואה) ────────────────────────────────────────
+export function requestReceivedEmail(
+  name: string,
+  type: 'birth' | 'loan',
+  firstTime: boolean,
+): BuiltEmail {
+  const reqLabel = type === 'birth' ? 'בקשת הבראה ליולדת' : 'בקשת הלוואה'
+  const accent   = type === 'birth' ? '#db2777' : '#4f46e5'
+  const firstTimeNote = firstTime ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#92400e;font-size:14px;font-weight:800;">⏳ שים/י לב — טרם אושרת סופית</p>
+        <p style="margin:0;color:#92400e;font-size:13px;line-height:1.7;">
+          הבקשה שלך וצילומי תעודת הזהות שצירפת התקבלו והועברו לבדיקת המזכירות.
+          לאחר אישור ראשוני של המשפחה תטופל גם הבקשה עצמה. נעדכן אותך בהמשך.
+        </p>
+      </td></tr>
+    </table>` : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#15803d;font-size:14px;font-weight:700;">✅ הבקשה התקבלה והועברה לטיפול המזכירות.</p>
+      </td></tr>
+    </table>`
+
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אישור קבלה</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">
+      <strong>${reqLabel}</strong> שלך התקבלה במערכת היכל החתם סופר ומועברת לטיפול המזכירות.
+    </p>
+    ${firstTimeNote}
+    <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;">תקבל/י עדכון על המשך הטיפול בהמשך.</p>
+  `
+  return {
+    subject: `התקבלה ${reqLabel} — היכל החתם סופר`,
+    html: shell({ preheader: `${reqLabel} התקבלה ומועברת לטיפול.`, accent, title: 'הבקשה התקבלה', subtitle: reqLabel, body }),
+  }
+}

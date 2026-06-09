@@ -906,6 +906,22 @@ export default function PublicPortalPage() {
   }
 
   // ── Birth request ──
+  // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בנתמך שטרם אושר). מחזיר false בשגיאה.
+  const uploadRequiredIdDocs = async (): Promise<boolean> => {
+    if (!beneficiary) return false
+    const fd = new FormData()
+    fd.append('beneficiary_id', beneficiary.id)
+    let any = false
+    for (const d of requiredDocs) {
+      if (!existingDocs[d] && docFiles[d]) { fd.append(d, docFiles[d] as File); any = true }
+    }
+    if (!any) return true
+    const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+    return res.ok
+  }
+  // המסמכים שעדיין חסרים להגשת הבקשה (לא קיימים וגם לא נבחר קובץ)
+  const missingRequestIdDocs = () => requiredDocs.filter(d => !existingDocs[d] && !docFiles[d])
+
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
@@ -914,9 +930,17 @@ export default function PublicPortalPage() {
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
+    if (needsIdWithRequest) {
+      const miss = missingRequestIdDocs()
+      if (miss.length) { setError(`לאישור ראשוני אנא צרף גם: ${miss.map(docLabel).join(', ')}`); return }
+    }
     setError('')
     setLoading(true)
     try {
+      // צירוף צילומי ת.ז (בקשה ראשונה לפני אישור)
+      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
+        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      }
       // Upload birth certificate first
       let certUrl = ''
       const fd = new FormData()
@@ -950,9 +974,16 @@ export default function PublicPortalPage() {
       return
     }
     if (!beneficiary) return
+    if (needsIdWithRequest) {
+      const miss = missingRequestIdDocs()
+      if (miss.length) { setError(`לאישור ראשוני אנא צרף גם: ${miss.map(docLabel).join(', ')}`); return }
+    }
     setError('')
     setLoading(true)
     try {
+      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
+        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      }
       const res = await fetch('/api/portal/loan-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -990,19 +1021,22 @@ export default function PublicPortalPage() {
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
     : ''
 
+  // נתמך שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
+  const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
+
   const goToBirthForm = () => {
-    if (isPending) { setDocsPendingReason('birth'); setStep('docs-needed'); return }
-    if (isDocsPending) { setError('המסמכים שלך נמצאים בבדיקה. נעדכן אותך בקרוב.'); return }
+    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' })
     setBirthCertFile(null)
+    setDocFiles({})
     setStep('new-birth')
   }
   const goToLoanForm = () => {
-    if (isPending) { setDocsPendingReason('loan'); setStep('docs-needed'); return }
-    if (isDocsPending) { setError('המסמכים שלך נמצאים בבדיקה. נעדכן אותך בקרוב.'); return }
+    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
+    setDocFiles({})
     setLoanModalOpen(true)
   }
 
@@ -1051,9 +1085,10 @@ export default function PublicPortalPage() {
         return next
       })
       setDocFiles({}); setReplaceDoc({})
-      // אם השלים בקשת מסמכים — עובר ל"ממתין לאישור מסמכים" (review); אחרת אימות זהות ראשוני → "השלמת מסמכים"
-      const nextStatus = beneficiary.eligibility_status === 'docs_pending' ? 'review' : 'docs_pending'
-      setBeneficiary(b => b ? { ...b, eligibility_status: nextStatus, required_docs: nextStatus === 'review' ? '' : b.required_docs } : b)
+      // השלמת בקשת מסמכים ידנית → חזרה ל"ממתין לאישור" וניקוי הרשימה
+      if (beneficiary.eligibility_status === 'docs_pending') {
+        setBeneficiary(b => b ? { ...b, eligibility_status: 'pending', required_docs: '' } : b)
+      }
       setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setDocsUploading(false)
@@ -1940,7 +1975,7 @@ export default function PublicPortalPage() {
                   <div>
                     <p className="font-semibold mb-1">הסטטוס שלך: ממתין לאישור</p>
                     <p className="leading-relaxed">
-                      כדי להגיש בקשה יש לצרף תעודת זהות. לחץ על אחת מהאפשרויות למטה כדי להעלות מסמכים.
+                      ניתן להגיש בקשה כבר עכשיו. בהגשה הראשונה תתבקש/י לצרף גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
                     </p>
                   </div>
                 </div>
@@ -2201,6 +2236,27 @@ export default function PublicPortalPage() {
               </div>
             </Card>
 
+            {needsIdWithRequest && (
+              <Card>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <FileText size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900 mb-1">אימות זהות לאישור ראשוני</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      טרם אושרת סופית. כדי שנוכל לטפל בבקשה, אנא צרף/י גם צילומי תעודת זהות. הבקשה והמסמכים יישלחו יחד לאישור.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-4">
+                  {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+                    <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {error && <ErrorBox message={error} />}
 
             <button type="submit" disabled={loading}
@@ -2307,6 +2363,20 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                 </div>
+
+                {needsIdWithRequest && (
+                  <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
+                    <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות לאישור ראשוני</p>
+                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
+                      טרם אושרת סופית. אנא צרף/י גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+                        <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {error && <ErrorBox message={error} />}
 

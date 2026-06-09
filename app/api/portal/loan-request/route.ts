@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { deliverMail } from '@/lib/sendMail'
+import { requestReceivedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status')
+    .select('id, eligibility_status, email, full_name')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
@@ -66,6 +68,13 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
+  }
+
+  // אישור קבלה לנתמך (לא חוסם את הבקשה אם המייל נכשל)
+  if (ben.email) {
+    const firstTime = ben.eligibility_status !== 'approved'
+    const mail = requestReceivedEmail(ben.full_name || '', 'loan', firstTime)
+    deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
   }
 
   return NextResponse.json({ ok: true })
