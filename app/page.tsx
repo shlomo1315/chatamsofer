@@ -1884,8 +1884,8 @@ export default function PublicPortalPage() {
                 </div>
                 <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל בהצלחה!</h2>
                 <p className="text-slate-600 mb-5 leading-relaxed">
-                  הפרטים התקבלו בהצלחה במערכת ומועברים לטיפול המזכירות.<br />
-                  תקבלו על כך עדכון בהמשך.
+                  מעכשיו ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.<br />
+                  בהגשה הראשונה יתבקשו ממך גם צילומי תעודת זהות.
                 </p>
               </div>
 
@@ -1944,7 +1944,8 @@ export default function PublicPortalPage() {
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-900 text-lg truncate">{displayName || beneficiary.full_name}</h2>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {statusMeta && (
+                    {/* בצד הלקוח לא מציגים סטטוס "ממתין לאישור" — רק מאושר / השלמת מסמכים / לא מאושר */}
+                    {statusMeta && !isPending && (
                       <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusMeta.color} ${statusMeta.bg} ${statusMeta.border}`}>
                         {statusMeta.label}
                       </span>
@@ -1969,13 +1970,13 @@ export default function PublicPortalPage() {
 
             {/* Status banners */}
             {isPending && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-4 text-sm text-amber-800">
+              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-4 text-sm text-indigo-800">
                 <div className="flex items-start gap-3">
-                  <Clock size={18} className="flex-shrink-0 mt-0.5" />
+                  <FileText size={18} className="flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold mb-1">הסטטוס שלך: ממתין לאישור</p>
+                    <p className="font-semibold mb-1">ברוכים הבאים לפורטל האישי</p>
                     <p className="leading-relaxed">
-                      ניתן להגיש בקשה כבר עכשיו. בהגשה הראשונה תתבקש/י לצרף גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
+                      ניתן להגיש בקשה כבר עכשיו. בהגשה הראשונה תתבקש/י לצרף גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לטיפול המזכירות.
                     </p>
                   </div>
                 </div>
