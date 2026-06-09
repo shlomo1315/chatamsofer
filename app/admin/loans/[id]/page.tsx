@@ -15,7 +15,7 @@ async function getLoan(id: string): Promise<Loan | null> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('loans')
-      .select('*, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone)')
+      .select('*, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone, eligibility_status)')
       .eq('id', id)
       .single()
     return data
@@ -45,7 +45,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
     )
   }
 
-  const b = loan.beneficiary as { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string } | undefined
+  const b = loan.beneficiary as { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string; eligibility_status?: string } | undefined
+  const familyApproved = b?.eligibility_status === 'approved'
   // הלווה = הבעל (full_name); אם אין בעל, האישה (spouse_name)
   const borrower = b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name) : undefined
 
@@ -69,6 +70,19 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           <DeleteLoanButton loanId={loan.id} redirect />
         </div>
       </div>
+
+      {/* חיווי למזכיר: האם המשפחה כבר אושרה (לבקשות הבאות) או טרם אושרה (נדרשת בדיקת יחוס) */}
+      {familyApproved ? (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+          <span className="font-semibold">✅ משפחה מאושרת</span>
+          <span className="text-green-700">— ניתן לאשר את הבקשה ללא בדיקת יחוס נוספת.</span>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+          <span className="font-semibold">⏳ משפחה טרם אושרה</span>
+          <span className="text-amber-700">— יש לבדוק את הייחוס לפני אישור הבקשה. אישור הבקשה יהפוך את המשפחה למאושרת אוטומטית.</span>
+        </div>
+      )}
 
       <Card>
           <div className="flex items-center gap-2 text-indigo-600 mb-3">

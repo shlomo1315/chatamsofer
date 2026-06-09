@@ -416,3 +416,96 @@ export function requestReceivedEmail(
     html: shell({ preheader: `${reqLabel} התקבלה ומועברת לטיפול.`, accent, title: 'הבקשה התקבלה', subtitle: reqLabel, body }),
   }
 }
+
+// ─── אישור בקשה (לידה / הלוואה) — מייל מעוצב עם פרטי הנרשם ופרטי הבקשה ──────────
+export interface RequestApprovedBeneficiary {
+  family_name?: string | null
+  full_name?: string | null
+  id_number?: string | null
+  spouse_name?: string | null
+  marital_status?: string | null
+  phone?: string | null
+  city?: string | null
+  children_count?: number | null
+}
+
+export function loanApprovedEmail(
+  b: RequestApprovedBeneficiary,
+  loan: { amount?: number | null; installments?: number | null; monthly_payment?: number | null; purpose?: string | null },
+): BuiltEmail {
+  const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
+  const fmt = (n?: number | null) => (n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '')
+  const benRows = [
+    detailRow('שם מלא', fullName),
+    detailRow('מספר זהות', b.id_number),
+    detailRow('בן/בת זוג', b.spouse_name),
+    detailRow('מצב משפחתי', b.marital_status),
+    detailRow('טלפון', b.phone),
+    detailRow('עיר', b.city),
+    detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
+  ].join('')
+  const loanRows = [
+    detailRow('סכום ההלוואה', fmt(loan.amount)),
+    detailRow('מספר תשלומים', loan.installments != null ? String(loan.installments) : ''),
+    detailRow('תשלום חודשי', fmt(loan.monthly_payment)),
+    detailRow('מטרת ההלוואה', loan.purpose),
+  ].join('')
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההלוואה שלך אושרה 🎉</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ בקשת ההלוואה שלך טופלה ואושרה.</p>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי ההלוואה:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${loanRows}</table>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
+  `
+  return {
+    subject: '✅ בקשת ההלוואה אושרה — היכל החתם סופר',
+    html: shell({ preheader: 'בקשת ההלוואה שלך אושרה.', accent: '#4f46e5', title: 'בקשת ההלוואה אושרה', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
+export function birthApprovedEmail(
+  b: RequestApprovedBeneficiary,
+  birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
+): BuiltEmail {
+  const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
+  const genderLabel = birth.baby_gender === 'male' ? 'בן' : birth.baby_gender === 'female' ? 'בת' : ''
+  const nameLabel = birth.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'
+  const birthRows = [
+    detailRow(nameLabel, birth.baby_name),
+    detailRow('מין', genderLabel),
+    detailRow('תאריך הלידה', birth.birth_date),
+    detailRow('בית החלמה', birth.recovery_home),
+  ].join('')
+  const benRows = [
+    detailRow('שם מלא', fullName),
+    detailRow('מספר זהות', b.id_number),
+    detailRow('בן/בת זוג', b.spouse_name),
+    detailRow('מצב משפחתי', b.marital_status),
+    detailRow('טלפון', b.phone),
+    detailRow('עיר', b.city),
+    detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
+  ].join('')
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההבראה ליולדת אושרה 🎉</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הלידה:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${birthRows}</table>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
+  `
+  return {
+    subject: '✅ בקשת ההבראה ליולדת אושרה — היכל החתם סופר',
+    html: shell({ preheader: 'בקשת ההבראה ליולדת שלך אושרה.', accent: '#db2777', title: 'הבקשה אושרה', subtitle: 'היכל החתם סופר', body }),
+  }
+}
