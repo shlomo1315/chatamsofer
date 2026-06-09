@@ -79,16 +79,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
   }
 
-  // עדכון סטטוס לאחר העלאת מסמכי זהות (העלאת אישור לידה בלבד אינה משנה סטטוס):
-  // • אם הנתמך השלים בקשת מסמכים (docs_pending) — עובר ל"ממתין לאישור מסמכים" (review) + ניקוי הרשימה.
-  // • אחרת (אימות זהות ראשוני) — נכנס ל"השלמת מסמכים" לבדיקת המזכירות, כמו קודם.
+  // עדכון סטטוס לאחר העלאת מסמכים:
+  // • אם הנתמך השלים בקשת מסמכים (docs_pending) — כל העלאה מעבירה ל"ממתין לאישור מסמכים" (review) + ניקוי הרשימה.
+  // • אחרת (אימות זהות ראשוני, העלאת ת.ז) — נכנס ל"השלמת מסמכים" לבדיקת המזכירות.
   const hasIdDoc = uploaded.some(d => d === 'id_husband' || d === 'id_wife' || d === 'id_child')
-  if (hasIdDoc) {
-    const update = ben.eligibility_status === 'docs_pending'
-      ? { eligibility_status: 'review', required_docs: '', updated_at: new Date().toISOString() }
-      : { eligibility_status: 'docs_pending', updated_at: new Date().toISOString() }
-    await admin.from('beneficiaries').update(update).eq('id', beneficiaryId)
+  let update: Record<string, unknown> | null = null
+  if (ben.eligibility_status === 'docs_pending') {
+    update = { eligibility_status: 'review', required_docs: '', updated_at: new Date().toISOString() }
+  } else if (hasIdDoc) {
+    update = { eligibility_status: 'docs_pending', updated_at: new Date().toISOString() }
   }
+  if (update) await admin.from('beneficiaries').update(update).eq('id', beneficiaryId)
 
   return NextResponse.json({ ok: true, uploaded, url: lastUrl })
 }
