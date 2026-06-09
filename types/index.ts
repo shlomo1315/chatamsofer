@@ -58,6 +58,7 @@ export interface Beneficiary {
   spouse_phone?: string
   lineage_node_id?: string
   lineage_manual?: string[]
+  lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
   children_count: number
   children?: {
     name: string

@@ -673,6 +673,10 @@ export default function PublicPortalPage() {
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>([])
+  // הצהרת ייחוס (חובה בטופס הציבורי לפני בחירת סדר הדורות) + סימון בן/חתן לכל דור
+  const [lineageDeclared, setLineageDeclared] = useState(false)
+  const [declModalOpen, setDeclModalOpen] = useState(false)
+  const [lineageRelations, setLineageRelations] = useState<Record<string, 'son' | 'son_in_law'>>({})
   // Suggest new lineage node
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestName, setSuggestName] = useState('')
@@ -797,6 +801,44 @@ export default function PublicPortalPage() {
     }
   }
 
+  // ── סדר הדורות המלא: דור 1 (החתם סופר, נעול) → נתיב מהעץ → דורות ידניים → הנרשם עצמו ──
+  // לכל דור אחרי הראשון יש סימון בן/חתן (relKey). השם של הנרשם נכנס אוטומטית כדור האחרון.
+  const selfDisplayName = [regForm.family_name, regForm.full_name].filter(Boolean).join(' ')
+  const buildLineageChain = () => {
+    const chain: { generation: number; name: string; relKey: string | null; relation: 'son' | 'son_in_law' | null }[] = []
+    lineagePath.forEach((name, i) => {
+      const relKey = i === 0 ? null : `p${i}`
+      chain.push({ generation: i + 1, name, relKey, relation: relKey ? (lineageRelations[relKey] ?? null) : null })
+    })
+    manualLineage.forEach((name, i) => {
+      if (!name.trim()) return
+      const relKey = `m${i}`
+      chain.push({ generation: lineagePath.length + 1 + i, name: name.trim(), relKey, relation: lineageRelations[relKey] ?? null })
+    })
+    chain.push({
+      generation: lineagePath.length + manualLineage.filter(s => s.trim()).length + 1,
+      name: selfDisplayName, relKey: 'self', relation: lineageRelations['self'] ?? null,
+    })
+    return chain
+  }
+
+  // בורר בן/חתן לדור מסוים
+  const renderRelToggle = (relKey: string) => (
+    <div className="flex gap-1.5 flex-shrink-0">
+      {(['son', 'son_in_law'] as const).map(r => (
+        <button type="button" key={r}
+          onClick={() => setLineageRelations(prev => ({ ...prev, [relKey]: r }))}
+          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+            lineageRelations[relKey] === r
+              ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
+              : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+          }`}>
+          {r === 'son' ? 'בן' : 'חתן'}
+        </button>
+      ))}
+    </div>
+  )
+
   // ── Registration ──
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -804,8 +846,16 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
+    if (!lineageDeclared) {
+      setError('יש לאשר את הצהרת הייחוס לפני בחירת סדר הדורות')
+      return
+    }
     if (!lineageNodeId) {
       setError('אנא בחר שיוך שושלת')
+      return
+    }
+    if (buildLineageChain().some(c => c.relKey && !c.relation)) {
+      setError('יש לסמן בכל דור (אחרי החתם סופר) האם הוא בן או חתן')
       return
     }
     if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
@@ -854,6 +904,7 @@ export default function PublicPortalPage() {
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
           lineage_node_id: lineageNodeId || null,
           lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
+          lineage_chain: buildLineageChain().map(({ generation, name, relation }) => ({ generation, name, relation })),
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
@@ -1164,6 +1215,36 @@ export default function PublicPortalPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+
+      {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
+      {declModalOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
+            style={{ animation: 'pop-in 0.25s ease-out' }}>
+            <h2 className="text-2xl font-extrabold text-center text-indigo-900 mb-4">שלום וברכה!</h2>
+            <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 mb-5">
+              <p className="text-base font-bold text-amber-900 mb-3 text-center leading-relaxed">
+                הרישום מיועד אך ורק לנכדי רבינו החתם סופר!
+              </p>
+              <p className="text-sm text-amber-900 leading-relaxed">
+                אך ורק למי שיש בידו יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
+                ולא על חצאי עדויות. גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס.
+                ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
+              </p>
+            </div>
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-colors">
+              <input type="checkbox" checked={lineageDeclared}
+                onChange={e => setLineageDeclared(e.target.checked)}
+                className="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0" />
+              <span className="text-sm font-semibold text-slate-800">הרינו מצהיר כי אני עומד בקריטריון הנ&quot;ל</span>
+            </label>
+            <button type="button" disabled={!lineageDeclared} onClick={() => setDeclModalOpen(false)}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 transition-colors">
+              להמשך — בחירת סדר הדורות
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Registration success popup */}
       {showRegSuccess && regSuccessDetails && (
@@ -1562,25 +1643,51 @@ export default function PublicPortalPage() {
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <GitBranch size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">שיוך שושלת <span className="text-red-500">*</span></h3>
+                  <h3 className="font-semibold text-slate-900">סדר הדורות — שיוך לחתם סופר <span className="text-red-500">*</span></h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-4">בחר את הענף שאתה שייך אליו.</p>
-                {lineagePath.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap mb-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                    <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
-                    {lineagePath.map((name, i) => (
-                      <span key={i} className="flex items-center gap-1">
-                        {i > 0 && <ChevronLeft size={12} className="text-indigo-300" />}
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          i === lineagePath.length - 1 ? 'bg-indigo-600 text-white font-semibold' : 'bg-indigo-100 text-indigo-700'
-                        }`}>{name}</span>
-                      </span>
-                    ))}
+                <p className="text-xs text-slate-500 mb-4">בנה את סדר הייחוס דור אחר דור עד רבינו החתם סופר זיע&quot;א, וסמן בכל דור בן/חתן.</p>
+
+                {!lineageDeclared ? (
+                  /* שער הצהרה — חוסם את בחירת הדורות עד אישור */
+                  <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-center">
+                    <p className="text-sm font-bold text-amber-900 mb-2">לפני בחירת סדר הדורות נדרשת הצהרה</p>
+                    <p className="text-xs text-amber-700 mb-4 leading-relaxed">הרישום מיועד אך ורק לנכדי רבינו החתם סופר בעלי יחוס ברור ומוסמך דור אחר דור.</p>
+                    <button type="button" onClick={() => setDeclModalOpen(true)}
+                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-colors">
+                      קראתי — להצהרה ובחירת הדורות
+                    </button>
+                  </div>
+                ) : (
+                <>
+                {/* דור 1 — נעול, החתם סופר */}
+                <div className="flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 mb-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-indigo-400 flex-shrink-0">דור 1</span>
+                    <span className="text-sm font-semibold text-indigo-900 truncate">רבינו החתם סופר זיע&quot;א</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-indigo-400 bg-white border border-indigo-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>
+                </div>
+
+                {/* השרשרת שנבחרה מהעץ — בן/חתן לכל דור */}
+                {lineagePath.length > 1 && (
+                  <div className="flex flex-col gap-2 mb-4">
+                    {lineagePath.slice(1).map((name, i) => {
+                      const idx = i + 1
+                      return (
+                        <div key={idx} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs font-bold text-slate-400 flex-shrink-0">דור {idx + 1}</span>
+                            <span className="text-sm font-medium text-slate-800 truncate">{name}</span>
+                          </div>
+                          {renderRelToggle(`p${idx}`)}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
                 <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path); setSuggestOpen(false) }} />
                 {lineageNodeId && (
-                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]) }}
+                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]); setLineageRelations({}) }}
                     className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
                 )}
 
@@ -1643,18 +1750,26 @@ export default function PublicPortalPage() {
                       המשך דורות (דור {lineagePath.length + 1} ומעלה)
                     </p>
                     <p className="text-xs text-slate-400 mb-3">
-                      אם אתה שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
+                      אם אתה שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית וסמן בן/חתן.
                     </p>
                     <div className="flex flex-col gap-2">
                       {manualLineage.map((val, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 w-16 flex-shrink-0">דור {lineagePath.length + 1 + idx}</span>
-                          <TextInput value={val} placeholder="שם"
-                            onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
-                          <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
-                            className="text-slate-300 hover:text-red-500 flex-shrink-0">
-                            <X size={16} />
-                          </button>
+                        <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-500 w-14 flex-shrink-0">דור {lineagePath.length + 1 + idx}</span>
+                            <TextInput value={val} placeholder="שם"
+                              onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
+                            <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-slate-300 hover:text-red-500 flex-shrink-0">
+                              <X size={16} />
+                            </button>
+                          </div>
+                          {val.trim() && (
+                            <div className="flex items-center justify-between gap-2 pr-14">
+                              <span className="text-xs text-slate-400">בן/חתן של הדור הקודם:</span>
+                              {renderRelToggle(`m${idx}`)}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1663,7 +1778,19 @@ export default function PublicPortalPage() {
                       <Plus size={14} />
                       הוסף דור {lineagePath.length + 1 + manualLineage.length}
                     </button>
+
+                    {/* דור אחרון — הנרשם עצמו (אוטומטי) */}
+                    <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-indigo-400 flex-shrink-0">דור {lineagePath.length + manualLineage.filter(s => s.trim()).length + 1}</span>
+                        <span className="text-sm font-semibold text-indigo-900 truncate">{selfDisplayName || '(שמך)'}</span>
+                        <span className="text-[10px] font-normal text-indigo-400 flex-shrink-0">— זה אתה</span>
+                      </div>
+                      {renderRelToggle('self')}
+                    </div>
                   </div>
+                )}
+                </>
                 )}
               </Card>
             )}

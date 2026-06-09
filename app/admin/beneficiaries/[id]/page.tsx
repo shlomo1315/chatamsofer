@@ -255,21 +255,34 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
 
-      {/* breadcrumb of the selected branch */}
-      <div className="flex items-center gap-1.5 flex-wrap mb-4">
-        {lineagePath.map((name, i) => (
-          <span key={`t-${i}`} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-            <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
-          </span>
-        ))}
-        {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
-          <span key={`m-${i}`} className="flex items-center gap-1.5">
-            <ChevronLeft size={12} className="text-slate-300" />
-            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
-          </span>
-        ))}
-      </div>
+      {/* breadcrumb of the selected branch — עם בן/חתן לכל דור */}
+      {(() => {
+        const chain = Array.isArray(beneficiary.lineage_chain)
+          ? (beneficiary.lineage_chain as { generation: number; name: string; relation: string | null }[])
+          : []
+        const relByGen = new Map(chain.map(c => [c.generation, c.relation]))
+        const relTag = (gen: number) => {
+          const r = relByGen.get(gen)
+          if (r !== 'son' && r !== 'son_in_law') return null
+          return <span className="text-[10px] font-semibold bg-white/70 rounded px-1 mr-1">{r === 'son' ? 'בן' : 'חתן'}</span>
+        }
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap mb-4">
+            {lineagePath.map((name, i) => (
+              <span key={`t-${i}`} className="flex items-center gap-1.5">
+                {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}{relTag(i + 1)}</span>
+              </span>
+            ))}
+            {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
+              <span key={`m-${i}`} className="flex items-center gap-1.5">
+                <ChevronLeft size={12} className="text-slate-300" />
+                <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}{relTag(lineagePath.length + 1 + i)}</span>
+              </span>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* visual tree with this beneficiary's branch highlighted */}
       <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />
