@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { UPLOADABLE_DOC_TYPES } from '@/lib/docTypes'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   const uploaded: string[] = []
   let lastUrl = ''
-  const docTypes = ['id_husband', 'id_wife', 'marriage_cert', 'birth_cert', 'address_proof', 'other']
+  const docTypes = UPLOADABLE_DOC_TYPES
 
   for (const docType of docTypes) {
     const file = formData.get(docType) as File | null
@@ -73,13 +74,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
   }
 
-  // Only update status to docs_pending for ID documents (not for birth cert uploads)
-  const hasIdDoc = uploaded.some(d => d === 'id_husband' || d === 'id_wife')
+  // עדכון סטטוס לאחר העלאת מסמכי זהות (העלאת אישור לידה בלבד אינה משנה סטטוס):
+  // • אם הנתמך הגיע מבקשת השלמת מסמכים (docs_pending) — סיים, חוזר ל"ממתין לאישור" + ניקוי הרשימה.
+  // • אחרת (אימות זהות ראשוני) — נכנס ל"השלמת מסמכים" לבדיקת המזכירות, כמו קודם.
+  const hasIdDoc = uploaded.some(d => d === 'id_husband' || d === 'id_wife' || d === 'id_child')
   if (hasIdDoc) {
-    await admin
-      .from('beneficiaries')
-      .update({ eligibility_status: 'docs_pending', updated_at: new Date().toISOString() })
-      .eq('id', beneficiaryId)
+    const update = ben.eligibility_status === 'docs_pending'
+      ? { eligibility_status: 'pending', required_docs: '', updated_at: new Date().toISOString() }
+      : { eligibility_status: 'docs_pending', updated_at: new Date().toISOString() }
+    await admin.from('beneficiaries').update(update).eq('id', beneficiaryId)
   }
 
   return NextResponse.json({ ok: true, uploaded, url: lastUrl })

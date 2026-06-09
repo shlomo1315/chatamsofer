@@ -5,18 +5,9 @@ import { Check, X, Clock, ChevronDown, Loader2, FileText, AlertTriangle } from '
 import { createClient } from '@/lib/supabase/client'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
+import { DOC_TYPES } from '@/lib/docTypes'
 
 const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
-
-// סוגי מסמכים שניתן לסמן כחסרים (הנתמך יוכל להעלות אותם דרך הקישור במייל)
-const DOC_CHECKLIST_OPTIONS: { key: string; label: string }[] = [
-  { key: 'id_husband',    label: 'תעודת זהות — הבעל' },
-  { key: 'id_wife',       label: 'תעודת זהות — האשה' },
-  { key: 'marriage_cert', label: 'תעודת נישואין' },
-  { key: 'birth_cert',    label: 'אישור לידה' },
-  { key: 'address_proof', label: 'אישור כתובת מגורים' },
-  { key: 'other',         label: 'מסמך נוסף' },
-]
 
 const STYLES: Record<string, string> = {
   pending:      'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
@@ -185,13 +176,13 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
             </div>
             <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הנתמך יקבל מייל עם קישור להעלאתם.</p>
             <div className="flex flex-col gap-1.5 mb-3">
-              {DOC_CHECKLIST_OPTIONS.map(opt => {
-                const checked = docsChecklist.includes(opt.key)
+              {DOC_TYPES.map(opt => {
+                const checked = docsChecklist.includes(opt.value)
                 return (
-                  <label key={opt.key}
+                  <label key={opt.value}
                     className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm
                       ${checked ? 'border-blue-300 bg-blue-50 text-blue-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleDoc(opt.key)}
+                    <input type="checkbox" checked={checked} onChange={() => toggleDoc(opt.value)}
                       className="w-4 h-4 accent-blue-600" />
                     {opt.label}
                   </label>

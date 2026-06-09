@@ -8,18 +8,9 @@ import {
 import { docsPendingEmail } from '@/lib/emailTemplates'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
+import { DOC_LABELS } from '@/lib/docTypes'
 
 export const dynamic = 'force-dynamic'
-
-// מיפוי מפתחות המסמכים לתוויות בעברית (תואם לצ'קליסט במסך הניהול)
-const DOC_LABELS: Record<string, string> = {
-  id_husband:    'תעודת זהות — הבעל',
-  id_wife:       'תעודת זהות — האשה',
-  marriage_cert: 'תעודת נישואין',
-  birth_cert:    'אישור לידה',
-  address_proof: 'אישור כתובת מגורים',
-  other:         'מסמך נוסף',
-}
 
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { DOC_TYPES, docTypeLabel } from '@/lib/docTypes'
 
 const BUCKET = 'documents'
 
@@ -14,13 +15,15 @@ interface DocRow {
   uploaded_at?: string
 }
 
-const DOC_TYPES = [
-  { value: 'id_husband', label: 'ת.ז. הבעל' },
-  { value: 'id_wife', label: 'ת.ז. האישה' },
-  { value: 'id_child', label: 'ת.ז. ילד' },
-  { value: 'other', label: 'מסמך אחר' },
-]
-const typeLabel = (v: string) => DOC_TYPES.find((t) => t.value === v)?.label || v
+const typeLabel = docTypeLabel
+
+const formatUploaded = (raw?: string) => {
+  if (!raw) return ''
+  try {
+    const d = new Date(raw)
+    return `${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} · ${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+  } catch { return '' }
+}
 
 const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(name)
 
@@ -162,6 +165,9 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                   {typeLabel(doc.doc_type)}
                 </p>
                 <p className="text-xs text-slate-600 truncate mt-1" title={doc.file_name ?? ''}>{doc.file_name}</p>
+                {doc.uploaded_at && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">🕒 {formatUploaded(doc.uploaded_at)}</p>
+                )}
               </div>
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <a
