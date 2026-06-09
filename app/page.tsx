@@ -37,6 +37,7 @@ interface FoundBeneficiary {
   phone?: string
   city?: string
   marital_status?: string
+  required_docs?: string
   children?: Array<{ name?: string; birth_date?: string; gender?: string }>
   created_at: string
 }
@@ -78,6 +79,16 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string; bo
 }
 
 const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
+
+// תוויות סוגי מסמכים (לפי המפתחות שהמזכירות מסמנת בצ'קליסט)
+const DOC_LABELS: Record<string, string> = {
+  id_husband:    'תעודת זהות — הבעל',
+  id_wife:       'תעודת זהות — האשה',
+  marriage_cert: 'תעודת נישואין',
+  birth_cert:    'אישור לידה',
+  address_proof: 'אישור כתובת מגורים',
+  other:         'מסמך נוסף',
+}
 
 // ─── Shared helpers ───
 
@@ -679,8 +690,8 @@ export default function PublicPortalPage() {
   const [regSuccess, setRegSuccess] = useState(false)
 
   // Docs upload (for pending users)
-  const [husbandIdFile, setHusbandIdFile] = useState<File | null>(null)
-  const [wifeIdFile, setWifeIdFile] = useState<File | null>(null)
+  const [docFiles, setDocFiles] = useState<Record<string, File | null>>({})
+  const setDocFile = (key: string, f: File | null) => setDocFiles(prev => ({ ...prev, [key]: f }))
   const [docsUploading, setDocsUploading] = useState(false)
   const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
   // מסמכים שכבר הועלו בעבר (מוצגים בעת כניסה חוזרת לקישור השלמת המסמכים)
@@ -960,8 +971,10 @@ export default function PublicPortalPage() {
   const isApproved = beneficiary?.eligibility_status === 'approved'
   const isRejected = beneficiary?.eligibility_status === 'rejected'
 
-  // Which documents are required based on marital status
+  // Which documents are required — secretary's checklist takes priority, else by marital status
   const requiredDocs: string[] = (() => {
+    const rd = (beneficiary?.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean)
+    if (rd.length) return rd
     const ms = beneficiary?.marital_status ?? ''
     if (ms === 'נשואים') return ['id_husband', 'id_wife']
     if (['גרוש', 'אלמן'].includes(ms)) return ['id_husband']
@@ -1007,33 +1020,32 @@ export default function PublicPortalPage() {
 
   const handleDocsUpload = async () => {
     if (!beneficiary) return
-    const needsHusband = requiredDocs.includes('id_husband')
-    const needsWife = requiredDocs.includes('id_wife')
     // מסמך נחשב קיים אם הועלה קובץ חדש או שכבר התקבל בעבר במערכת
-    if (needsHusband && !husbandIdFile && !existingDocs.id_husband) { setError('אנא העלה תעודת זהות של הבעל'); return }
-    if (needsWife && !wifeIdFile && !existingDocs.id_wife) { setError('אנא העלה תעודת זהות של האשה'); return }
+    for (const d of requiredDocs) {
+      if (!docFiles[d] && !existingDocs[d]) { setError(`אנא העלה: ${DOC_LABELS[d] ?? 'מסמך'}`); return }
+    }
     setError(''); setDocsUploading(true)
     try {
+      const newDocs = requiredDocs.filter(d => docFiles[d])
       // אין קבצים חדשים — כל הנדרש כבר קיים במערכת. אין צורך בהעלאה חוזרת.
-      if (!husbandIdFile && !wifeIdFile) {
+      if (newDocs.length === 0) {
         setStep('dashboard')
         setDocsUploading(false)
         return
       }
       const fd = new FormData()
       fd.append('beneficiary_id', beneficiary.id)
-      if (husbandIdFile) fd.append('id_husband', husbandIdFile)
-      if (wifeIdFile) fd.append('id_wife', wifeIdFile)
+      for (const d of newDocs) fd.append(d, docFiles[d] as File)
       const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בהעלאת המסמכים'); return }
       // עדכון מקומי של המסמכים שהוחלפו, כדי שיוצגו ככבר-קיימים
-      setExistingDocs(prev => ({
-        ...prev,
-        ...(husbandIdFile ? { id_husband: { url: data.url ?? '', name: husbandIdFile.name } } : {}),
-        ...(wifeIdFile ? { id_wife: { url: data.url ?? '', name: wifeIdFile.name } } : {}),
-      }))
-      setHusbandIdFile(null); setWifeIdFile(null); setReplaceDoc({})
+      setExistingDocs(prev => {
+        const next = { ...prev }
+        for (const d of newDocs) next[d] = { url: data.url ?? '', name: (docFiles[d] as File).name }
+        return next
+      })
+      setDocFiles({}); setReplaceDoc({})
       setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_pending' } : b)
       setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
@@ -1041,12 +1053,9 @@ export default function PublicPortalPage() {
   }
 
   // הצגת שדה מסמך זהות: קובץ חדש שנבחר / קובץ שכבר התקבל (עם אפשרות החלפה) / שדה העלאה
-  const renderIdDocSlot = (
-    docType: 'id_husband' | 'id_wife',
-    label: string,
-    file: File | null,
-    setFile: (f: File | null) => void,
-  ) => {
+  const renderIdDocSlot = (docType: string, label: string) => {
+    const file = docFiles[docType] ?? null
+    const setFile = (f: File | null) => setDocFile(docType, f)
     const existing = existingDocs[docType]
     const replacing = !!replaceDoc[docType]
     return (
@@ -1107,6 +1116,7 @@ export default function PublicPortalPage() {
     setPendingConfirmed(false)
     setExistingDocs({})
     setReplaceDoc({})
+    setDocFiles({})
     setShowOtherMarital(false)
   }
 
@@ -2057,17 +2067,23 @@ export default function PublicPortalPage() {
               </div>
 
               <div className="flex flex-col gap-4">
-                {requiredDocs.includes('id_husband') &&
-                  renderIdDocSlot('id_husband', beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך', husbandIdFile, setHusbandIdFile)}
-                {requiredDocs.includes('id_wife') &&
-                  renderIdDocSlot('id_wife', 'תעודת זהות — האשה', wifeIdFile, setWifeIdFile)}
+                {requiredDocs.map(d => (
+                  <div key={d}>
+                    {renderIdDocSlot(
+                      d,
+                      d === 'id_husband'
+                        ? (beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך')
+                        : (DOC_LABELS[d] ?? 'מסמך'),
+                    )}
+                  </div>
+                ))}
               </div>
 
               {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
               {(() => {
                 const allExist = requiredDocs.every(d => existingDocs[d])
-                const hasNew = !!husbandIdFile || !!wifeIdFile
+                const hasNew = requiredDocs.some(d => docFiles[d])
                 const label = docsUploading
                   ? (hasNew ? 'שולח מסמכים...' : 'מעבד...')
                   : hasNew ? 'שלח מסמכים לאישור' : (allExist ? 'המשך' : 'שלח מסמכים לאישור')

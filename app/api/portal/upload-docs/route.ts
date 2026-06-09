@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   const uploaded: string[] = []
   let lastUrl = ''
-  const docTypes = ['id_husband', 'id_wife', 'birth_cert']
+  const docTypes = ['id_husband', 'id_wife', 'marriage_cert', 'birth_cert', 'address_proof', 'other']
 
   for (const docType of docTypes) {
     const file = formData.get(docType) as File | null

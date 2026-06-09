@@ -8,8 +8,9 @@ export interface BuiltEmail {
 }
 
 const OFFICE_EMAIL  = 'office@chasamsofer.info'
-const PORTAL_BASE_DEFAULT = 'https://my-app-gamma-pearl-29.vercel.app'
-const LOGO_URL = 'https://my-app-gamma-pearl-29.vercel.app/logo.jpg'
+const PORTAL_BASE_DEFAULT =
+  process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
+const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.jpg`
 
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
 function autoReplyNote(): string {
@@ -302,9 +303,15 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
 }
 
 // ─── השלמת מסמכים ─────────────────────────────────────────────────────────────
-export function docsPendingEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, maritalStatus?: string | null): BuiltEmail {
+export function docsPendingEmail(
+  name: string,
+  portalBase = PORTAL_BASE_DEFAULT,
+  maritalStatus?: string | null,
+  explicitDocs?: string[],
+  extraNote?: string,
+): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
-  const docs = requiredDocLabels(maritalStatus)
+  const docs = (explicitDocs && explicitDocs.length) ? explicitDocs : requiredDocLabels(maritalStatus)
   const docsList = docs.map(d =>
     `<li style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:700;">${d}</li>`
   ).join('')
@@ -323,6 +330,7 @@ export function docsPendingEmail(name: string, portalBase = PORTAL_BASE_DEFAULT,
         <ul style="margin:0;padding-right:20px;">${docsList}</ul>
       </td></tr>
     </table>
+    ${extraNote && extraNote.trim() ? `<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;background:#f8fafc;border-radius:10px;padding:14px 18px;">${extraNote}</p>` : ''}
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr><td align="center">

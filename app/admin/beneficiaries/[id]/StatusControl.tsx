@@ -8,6 +8,16 @@ import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 
 const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
 
+// סוגי מסמכים שניתן לסמן כחסרים (הנתמך יוכל להעלות אותם דרך הקישור במייל)
+const DOC_CHECKLIST_OPTIONS: { key: string; label: string }[] = [
+  { key: 'id_husband',    label: 'תעודת זהות — הבעל' },
+  { key: 'id_wife',       label: 'תעודת זהות — האשה' },
+  { key: 'marriage_cert', label: 'תעודת נישואין' },
+  { key: 'birth_cert',    label: 'אישור לידה' },
+  { key: 'address_proof', label: 'אישור כתובת מגורים' },
+  { key: 'other',         label: 'מסמך נוסף' },
+]
+
 const STYLES: Record<string, string> = {
   pending:      'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
   approved:     'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
@@ -29,6 +39,9 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   // docs_pending modal
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsNotes, setDocsNotes]         = useState('')
+  const [docsChecklist, setDocsChecklist] = useState<string[]>([])
+  const toggleDoc = (key: string) =>
+    setDocsChecklist(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
 
   const ref = useRef<HTMLDivElement>(null)
 
@@ -45,10 +58,16 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   const label     = isPending ? 'ממתין לאישור' : ELIGIBILITY_LABELS[status] || status
   const Icon      = isPending ? Clock : status === 'approved' ? Check : status === 'rejected' ? X : FileText
 
-  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string }) => {
+  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string }) => {
     setSaving(true)
     try {
-      const update: Record<string, unknown> = { eligibility_status: next, updated_at: new Date().toISOString(), ...extra }
+      // כשעוברים לסטטוס שאינו "השלמת מסמכים" — מנקים את רשימת המסמכים הנדרשים
+      const update: Record<string, unknown> = {
+        eligibility_status: next,
+        updated_at: new Date().toISOString(),
+        ...(next === 'docs_pending' ? {} : { required_docs: '' }),
+        ...extra,
+      }
       const { error } = await supabase.from('beneficiaries').update(update).eq('id', id)
       if (error) throw error
 
@@ -164,24 +183,39 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
               </div>
               <h2 className="text-base font-bold text-slate-900">השלמת מסמכים</h2>
             </div>
-            <p className="text-sm text-slate-500 mb-3">פרט אילו מסמכים / פרטים חסרים. הם יופיעו במייל שישלח לנתמך.</p>
+            <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הנתמך יקבל מייל עם קישור להעלאתם.</p>
+            <div className="flex flex-col gap-1.5 mb-3">
+              {DOC_CHECKLIST_OPTIONS.map(opt => {
+                const checked = docsChecklist.includes(opt.key)
+                return (
+                  <label key={opt.key}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm
+                      ${checked ? 'border-blue-300 bg-blue-50 text-blue-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleDoc(opt.key)}
+                      className="w-4 h-4 accent-blue-600" />
+                    {opt.label}
+                  </label>
+                )
+              })}
+            </div>
             <textarea
               value={docsNotes}
               onChange={e => setDocsNotes(e.target.value)}
-              placeholder="לדוגמה: נדרשת תעודת זהות של הבעל + אישור מגורים..."
-              rows={4}
+              placeholder="הערה נוספת לנתמך (לא חובה)..."
+              rows={2}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
             />
             <div className="flex gap-2 mt-4 justify-end">
-              <button onClick={() => { setShowDocsModal(false); setDocsNotes('') }}
+              <button onClick={() => { setShowDocsModal(false); setDocsNotes(''); setDocsChecklist([]) }}
                 className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
                 ביטול
               </button>
               <button
-                disabled={saving}
+                disabled={saving || docsChecklist.length === 0}
                 onClick={() => {
                   setShowDocsModal(false)
-                  applyStatus('docs_pending', { docs_notes: docsNotes })
+                  applyStatus('docs_pending', { docs_notes: docsNotes, required_docs: docsChecklist.join(',') })
+                  setDocsChecklist([]); setDocsNotes('')
                 }}
                 className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving && <Loader2 size={13} className="animate-spin" />}

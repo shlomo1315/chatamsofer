@@ -74,6 +74,9 @@ export interface Beneficiary {
   eligibility_status: EligibilityStatus
   is_active: boolean
   notes?: string
+  rejection_reason?: string
+  docs_notes?: string
+  required_docs?: string
   nedarim_id?: string
   created_at: string
   updated_at: string
