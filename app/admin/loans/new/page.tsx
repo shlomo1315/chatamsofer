@@ -96,10 +96,10 @@ export default function NewLoanPage() {
         .maybeSingle()
 
       if (error || !data) {
-        setLookupError('לא נמצאה משפחה עם תעודת זהות זו (בעל או אישה). יש לרשום את המשפחה תחילה בכרטסת נתמכים.')
+        setLookupError('לא נמצאה משפחה עם תעודת זהות זו (בעל או אישה). יש לרשום את המשפחה תחילה בכרטסת צאצאים.')
       } else if (data.eligibility_status !== 'approved') {
-        // רק נתמך בסטטוס מאושר רשאי להגיש בקשת הלוואה
-        setLookupError(`לא ניתן להגיש בקשת הלוואה — הנתמך בסטטוס "${ELIGIBILITY_LABEL[data.eligibility_status] ?? data.eligibility_status}". ניתן להגיש בקשה רק עבור נתמך בסטטוס "מאושר".`)
+        // רק צאצא בסטטוס מאושר רשאי להגיש בקשת הלוואה
+        setLookupError(`לא ניתן להגיש בקשת הלוואה — הצאצא בסטטוס "${ELIGIBILITY_LABEL[data.eligibility_status] ?? data.eligibility_status}". ניתן להגיש בקשה רק עבור צאצא בסטטוס "מאושר".`)
       } else {
         setBeneficiary(data)
       }
@@ -181,7 +181,7 @@ export default function NewLoanPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
         <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
           <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">1</span>
-          איתור הנתמך
+          איתור הצאצא
         </h2>
         <div className="flex gap-2">
           <input

@@ -11,7 +11,7 @@ interface MailAccount { name: string; email: string }
 const ROLES: UserRole[] = ['admin', 'secretary']
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'beneficiaries', label: 'נתמכים' },
+  { key: 'beneficiaries', label: 'צאצאים' },
   { key: 'maternity',     label: 'יולדות' },
   { key: 'loans',         label: 'הלוואות' },
   { key: 'distributions', label: 'חלוקות' },

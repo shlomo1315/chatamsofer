@@ -1194,7 +1194,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       {/* ── Lineage ── */}
       <Section title="שיוך שושלת *" icon={GitBranch}>
         <p className="text-xs text-slate-500 mb-3">
-          בחר את הענף שהנתמך שייך אליו. לחץ על שם ואז המשך לבחור את הדור הבא.
+          בחר את הענף שהצאצא שייך אליו. לחץ על שם ואז המשך לבחור את הדור הבא.
         </p>
         {errors.lineage_node_id && (
           <p className="text-xs text-red-500 mb-3">{errors.lineage_node_id}</p>
@@ -1294,7 +1294,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               המשך דורות (דור {lineagePath.length + 1} ומעלה)
             </p>
             <p className="text-xs text-slate-400 mb-3">
-              אם הנתמך שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
+              אם הצאצא שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
             </p>
 
             <div className="flex flex-col gap-2">
@@ -1354,7 +1354,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       <div className="flex gap-3 justify-end">
         <Button type="button" variant="secondary" onClick={() => router.back()}>ביטול</Button>
         <Button type="submit" loading={saving}>
-          {isEdit ? 'שמור שינויים' : 'רישום נתמך'}
+          {isEdit ? 'שמור שינויים' : 'רישום צאצא'}
         </Button>
       </div>
     </form>

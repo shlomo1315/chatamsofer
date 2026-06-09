@@ -86,7 +86,7 @@ export default function NewMaternityPage() {
         .maybeSingle()
 
       if (error || !data) {
-        setLookupError('לא נמצאה אישה עם תעודת זהות זו במערכת. יש לרשום את המשפחה תחילה בכרטסת נתמכים (כולל פרטי האישה).')
+        setLookupError('לא נמצאה אישה עם תעודת זהות זו במערכת. יש לרשום את המשפחה תחילה בכרטסת צאצאים (כולל פרטי האישה).')
       } else if (data.marital_status !== 'נשואים') {
         // גרושה / אלמנה — אין אפשרות לפתוח תיק יולדת
         setLookupError(`נמצאה רשומה אך הסטטוס המשפחתי הוא "${data.marital_status || 'לא ידוע'}". ניתן לפתוח תיק יולדת רק עבור סטטוס "נשואים".`)
@@ -325,7 +325,7 @@ export default function NewMaternityPage() {
             {statusWarning && (
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                 <AlertTriangle size={13} />
-                שים לב: הנתמכת בסטטוס "{mother.eligibility_status === 'pending' || mother.eligibility_status === 'review' ? 'ממתין לאישור' : 'לא מאושר'}" — ניתן להמשיך אך מומלץ לאשר קודם.
+                שים לב: הצאצא בסטטוס "{mother.eligibility_status === 'pending' || mother.eligibility_status === 'review' ? 'ממתין לאישור' : 'לא מאושר'}" — ניתן להמשיך אך מומלץ לאשר קודם.
               </div>
             )}
           </div>

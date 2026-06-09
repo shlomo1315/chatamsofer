@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   let body: { beneficiaryId?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
-  if (!body.beneficiaryId) return NextResponse.json({ error: 'חסר מזהה נתמך' }, { status: 400 })
+  if (!body.beneficiaryId) return NextResponse.json({ error: 'חסר מזהה צאצא' }, { status: 400 })
 
   // שליפת פרטי המשפחה
   const { data: b, error: bErr } = await admin
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
     .eq('id', body.beneficiaryId)
     .maybeSingle()
-  if (bErr || !b) return NextResponse.json({ error: 'הנתמך לא נמצא' }, { status: 404 })
+  if (bErr || !b) return NextResponse.json({ error: 'הצאצא לא נמצא' }, { status: 404 })
 
   // בניית גוף הבקשה לנדרים פלוס — Action=SaveClientCard
   const form = new URLSearchParams()

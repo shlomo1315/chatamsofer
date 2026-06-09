@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
 
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
-  // בממשק הציבורי גם נתמך בסטטוס "ממתין לאישור" רשאי להגיש — הבקשה עוברת לבדיקת המזכיר.
-  // רק נתמך שנדחה אינו רשאי להגיש.
+  // בממשק הציבורי גם צאצא בסטטוס "ממתין לאישור" רשאי להגיש — הבקשה עוברת לבדיקת המזכיר.
+  // רק צאצא שנדחה אינו רשאי להגיש.
   if (ben.eligibility_status === 'rejected') {
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
   }
 
-  // אישור קבלה לנתמך (לא חוסם את הבקשה אם המייל נכשל)
+  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל)
   if (ben.email) {
     const firstTime = ben.eligibility_status !== 'approved'
     const mail = requestReceivedEmail(ben.full_name || '', 'loan', firstTime)

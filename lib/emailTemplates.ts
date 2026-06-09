@@ -187,7 +187,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
       </td></tr>
     </table>
 
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הנתמך שלך:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הצאצא שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
            style="margin:0 0 28px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       ${detailsRows}
@@ -212,7 +212,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
   }
 }
 
-// ─── מענה אוטומטי לנתמך קיים ──────────────────────────────────────────────────
+// ─── מענה אוטומטי לצאצא קיים ──────────────────────────────────────────────────
 const STATUS_LABELS_HE: Record<string, string> = {
   pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר',
   rejected: 'לא מאושר', docs_pending: 'השלמת מסמכים',

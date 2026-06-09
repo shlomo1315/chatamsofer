@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
-  if (!ben) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
+  if (!ben) return NextResponse.json({ error: 'צאצא לא נמצא' }, { status: 404 })
   if (!['אלמן', 'אלמנה'].includes(ben.marital_status ?? '')) {
     return NextResponse.json({ error: 'לא רשאי להגיש בקשה זו' }, { status: 403 })
   }

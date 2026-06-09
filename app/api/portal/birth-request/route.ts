@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
   }
 
-  // אישור קבלה לנתמך (לא חוסם את הבקשה אם המייל נכשל)
+  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל)
   if (ben.email) {
     const firstTime = ben.eligibility_status !== 'approved'
     const mail = requestReceivedEmail(ben.full_name || '', 'birth', firstTime)

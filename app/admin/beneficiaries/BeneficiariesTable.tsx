@@ -288,7 +288,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
         searchable
         searchPlaceholder="חיפוש חופשי בכל השדות..."
         searchKeys={['full_name', 'family_name', 'id_number', 'phone', 'phone2', 'email', 'address', 'city', 'marital_status', 'spouse_name', 'spouse_id_number', 'nedarim_id', 'notes']}
-        emptyMessage="לא נמצאו נתמכים. לחץ על 'רישום נתמך חדש' להוספה."
+        emptyMessage="לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."
         actions={(row) => (
           <Link href={`/admin/beneficiaries/${row.id}`}>
             <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">

@@ -33,13 +33,13 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => [value, 'נתמכים']} />
+            <Tooltip formatter={(value) => [value, 'צאצאים']} />
           </PieChart>
         </ResponsiveContainer>
       </Card>
 
       <Card>
-        <h2 className="text-sm font-semibold text-slate-700 mb-4">נתמכים לפי עיר</h2>
+        <h2 className="text-sm font-semibold text-slate-700 mb-4">צאצאים לפי עיר</h2>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={byCity} layout="vertical" margin={{ top: 0, right: 20, left: 40, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -55,7 +55,7 @@ export default function ReportsCharts({ byEligibility, byCity }: Props) {
             <Tooltip
               contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
             />
-            <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} name="נתמכים" />
+            <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} name="צאצאים" />
           </BarChart>
         </ResponsiveContainer>
       </Card>

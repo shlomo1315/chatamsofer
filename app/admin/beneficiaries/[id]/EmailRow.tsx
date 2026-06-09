@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Mail } from 'lucide-react'
 import QuickEmailModal from '@/components/QuickEmailModal'
 
-// שורת פרטי "אימייל" בכרטיס הנתמך — לחיצה פותחת חלונית שליחת מייל מתוך המערכת.
+// שורת פרטי "אימייל" בכרטיס הצאצא — לחיצה פותחת חלונית שליחת מייל מתוך המערכת.
 export default function EmailRow({ email, name }: { email?: string | null; name: string }) {
   const [open, setOpen] = useState(false)
 
