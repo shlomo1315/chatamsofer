@@ -8,6 +8,7 @@ import {
   Paperclip, Download, FolderOpen, FileText,
 } from 'lucide-react'
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
+import { DOC_TYPES } from '@/lib/docTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import EmailInput from '@/components/ui/EmailInput'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
@@ -552,15 +553,6 @@ const MARITAL_STATUS_LABELS: Record<string, string> = {
   widowed: 'אלמן/אלמנה', other: 'אחר',
 }
 
-const DOC_TYPES = [
-  { value: 'id_husband',     label: 'ת.ז. בעל' },
-  { value: 'id_wife',        label: 'ת.ז. אשה' },
-  { value: 'marriage_cert',  label: 'תעודת נישואין' },
-  { value: 'birth_cert',     label: 'אישור לידה' },
-  { value: 'address_proof',  label: 'אישור כתובת' },
-  { value: 'other',          label: 'אחר' },
-]
-
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
@@ -585,8 +577,8 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
     if (!autoMatched) return DOC_TYPES
     const married = !!maritalStatus && /נשוי|נשוא/.test(maritalStatus)
     const allowed = married
-      ? ['id_husband', 'id_wife', 'marriage_cert', 'other']
-      : ['id_husband', 'other']
+      ? ['id_husband', 'id_wife', 'id_child', 'other']
+      : ['id_husband', 'id_child', 'other']
     return DOC_TYPES.filter(t => allowed.includes(t.value))
   })()
 

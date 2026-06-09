@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import BeneficiaryForm from '../../BeneficiaryForm'
+import DocumentsManager from '../DocumentsManager'
 
 async function getBeneficiary(id: string) {
   if (!isSupabaseConfigured()) return null
@@ -68,6 +69,9 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
         </div>
       </div>
       <BeneficiaryForm beneficiaryId={id} defaultValues={defaultValues} />
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <DocumentsManager beneficiaryId={id} />
+      </div>
     </div>
   )
 }

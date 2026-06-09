@@ -80,10 +80,11 @@ const STATUS_META: Record<string, { label: string; color: string; bg: string; bo
 
 const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
 
-// תוויות סוגי מסמכים (לפי המפתחות שהמזכירות מסמנת בצ'קליסט)
+// תוויות סוגי מסמכים (לפי המפתחות שהמזכירות מסמנת בצ'קליסט) — מקור אמת אחד
 const DOC_LABELS: Record<string, string> = {
   id_husband:    'תעודת זהות — הבעל',
   id_wife:       'תעודת זהות — האשה',
+  id_child:      'תעודת זהות — ילד',
   marriage_cert: 'תעודת נישואין',
   birth_cert:    'אישור לידה',
   address_proof: 'אישור כתובת מגורים',
@@ -1046,7 +1047,9 @@ export default function PublicPortalPage() {
         return next
       })
       setDocFiles({}); setReplaceDoc({})
-      setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_pending' } : b)
+      // אם השלים בקשת מסמכים — חוזר ל"ממתין לאישור"; אחרת אימות זהות ראשוני → "השלמת מסמכים"
+      const nextStatus = beneficiary.eligibility_status === 'docs_pending' ? 'pending' : 'docs_pending'
+      setBeneficiary(b => b ? { ...b, eligibility_status: nextStatus, required_docs: nextStatus === 'pending' ? '' : b.required_docs } : b)
       setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setDocsUploading(false)
