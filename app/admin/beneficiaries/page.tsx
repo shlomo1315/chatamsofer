@@ -30,13 +30,13 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">נתמכים</h1>
+          <h1 className="text-xl font-bold text-slate-900">צאצאים</h1>
           <p className="text-sm text-slate-500 mt-0.5">{beneficiaries.length} רשומות</p>
         </div>
         <Link href="/admin/beneficiaries/new">
           <Button>
             <Plus size={16} />
-            רישום נתמך חדש
+            רישום צאצא חדש
           </Button>
         </Link>
       </div>

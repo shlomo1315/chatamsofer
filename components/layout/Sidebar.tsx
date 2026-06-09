@@ -27,7 +27,7 @@ function LogoBadge() {
 
 const navItems: { href: string; label: string; icon: React.ElementType; section?: SectionKey }[] = [
   { href: '/admin/dashboard',     label: 'לוח בקרה',        icon: LayoutDashboard },
-  { href: '/admin/beneficiaries', label: 'נתמכים',           icon: Users,          section: 'beneficiaries' },
+  { href: '/admin/beneficiaries', label: 'צאצאים',           icon: Users,          section: 'beneficiaries' },
   { href: '/admin/lineage',       label: 'עץ הדורות',        icon: Trees,          section: 'lineage' },
   { href: '/admin/maternity',     label: 'יולדות',           icon: Baby,           section: 'maternity' },
   { href: '/admin/loans',         label: 'הלוואות',          icon: CreditCard,     section: 'loans' },

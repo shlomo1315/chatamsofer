@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   }
 
   const beneficiaryId = formData.get('beneficiary_id') as string | null
-  if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה נתמך' }, { status: 400 })
+  if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה צאצא' }, { status: 400 })
 
   // Verify beneficiary exists
   const { data: ben, error: benErr } = await admin
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     .select('id, eligibility_status')
     .eq('id', beneficiaryId)
     .maybeSingle()
-  if (benErr || !ben) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
+  if (benErr || !ben) return NextResponse.json({ error: 'צאצא לא נמצא' }, { status: 404 })
 
   const uploaded: string[] = []
   let lastUrl = ''
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
   }
 
-  // אם הנתמך השלים בקשת השלמת מסמכים ידנית (docs_pending) — חוזר ל"ממתין לאישור" + ניקוי הרשימה.
+  // אם הצאצא השלים בקשת השלמת מסמכים ידנית (docs_pending) — חוזר ל"ממתין לאישור" + ניקוי הרשימה.
   // בכל מקרה אחר (כולל העלאת ת.ז כחלק מהגשת בקשה) — הסטטוס נשאר כפי שהוא (ממתין/מאושר).
   if (ben.eligibility_status === 'docs_pending') {
     await admin.from('beneficiaries')

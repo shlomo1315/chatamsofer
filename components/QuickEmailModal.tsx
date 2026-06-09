@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { X, Send, Loader2, CheckCircle2, Mail } from 'lucide-react'
 
 // חלונית שליחת מייל מהירה מתוך המערכת — נשלחת דרך חשבון המייל של המשרד (Gmail).
-// משמשת בלחיצה על כתובת מייל בטבלאות (למשל כרטסת נתמכים).
+// משמשת בלחיצה על כתובת מייל בטבלאות (למשל כרטסת צאצאים).
 export default function QuickEmailModal({
   to,
   toName,

@@ -906,7 +906,7 @@ export default function PublicPortalPage() {
   }
 
   // ── Birth request ──
-  // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בנתמך שטרם אושר). מחזיר false בשגיאה.
+  // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בצאצא שטרם אושר). מחזיר false בשגיאה.
   const uploadRequiredIdDocs = async (): Promise<boolean> => {
     if (!beneficiary) return false
     const fd = new FormData()
@@ -1021,7 +1021,7 @@ export default function PublicPortalPage() {
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
     : ''
 
-  // נתמך שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
+  // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
   const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
 
   const goToBirthForm = () => {

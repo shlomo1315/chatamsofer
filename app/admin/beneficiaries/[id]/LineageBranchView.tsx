@@ -249,7 +249,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         </div>
       </div>
       <p style={{ fontSize: 11, color: '#94A3B8', marginTop: 5, textAlign: 'center' }}>
-        הענף של הנתמך מודגש · גלגל עכבר להגדלה · גרירה להזזה
+        הענף של הצאצא מודגש · גלגל עכבר להגדלה · גרירה להזזה
       </p>
     </div>
   )

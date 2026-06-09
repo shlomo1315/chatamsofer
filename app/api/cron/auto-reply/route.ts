@@ -111,7 +111,7 @@ async function run(request: NextRequest) {
       }
       seenSenders.add(fromEmail)
 
-      // חיפוש הפונה בכרטסת הנתמכים לפי כתובת מייל מדויקת
+      // חיפוש הפונה בכרטסת הצאצאים לפי כתובת מייל מדויקת
       const { data: rows } = await db
         .from('beneficiaries')
         .select('full_name, family_name, eligibility_status, id_number, phone, city, marital_status, children_count')
@@ -120,7 +120,7 @@ async function run(request: NextRequest) {
       const ben = rows?.[0]
 
       if (dry) {
-        plan.push({ from: fromEmail, action: ben ? 'מענה לנתמך קיים' : 'הזמנה להרשמה' })
+        plan.push({ from: fromEmail, action: ben ? 'מענה לצאצא קיים' : 'הזמנה להרשמה' })
         replied++
         continue
       }

@@ -110,10 +110,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       <div className="flex flex-col gap-5 max-w-5xl">
         <div className="flex items-center gap-3">
           <Link href="/admin/beneficiaries" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
-          <h1 className="text-xl font-bold text-slate-900">פרטי נתמך</h1>
+          <h1 className="text-xl font-bold text-slate-900">פרטי צאצא</h1>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
-          נתמך זה אינו זמין. הגדר Supabase כדי לראות נתונים אמיתיים.
+          צאצא זה אינו זמין. הגדר Supabase כדי לראות נתונים אמיתיים.
         </div>
       </div>
     )

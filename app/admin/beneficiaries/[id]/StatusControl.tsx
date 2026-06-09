@@ -138,7 +138,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
               </div>
               <h2 className="text-base font-bold text-slate-900">אשר דחייה</h2>
             </div>
-            <p className="text-sm text-slate-500 mb-3">סיבת הדחייה תופיע במייל שישלח לנתמך.</p>
+            <p className="text-sm text-slate-500 mb-3">סיבת הדחייה תופיע במייל שישלח לצאצא.</p>
             <textarea
               value={rejectionReason}
               onChange={e => setRejectionReason(e.target.value)}
@@ -176,7 +176,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
               </div>
               <h2 className="text-base font-bold text-slate-900">השלמת מסמכים</h2>
             </div>
-            <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הנתמך יקבל מייל עם קישור להעלאתם.</p>
+            <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הצאצא יקבל מייל עם קישור להעלאתם.</p>
             <div className="flex flex-col gap-1.5 mb-3">
               {docTypes.map(opt => {
                 const checked = docsChecklist.includes(opt.value)
@@ -194,7 +194,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
             <textarea
               value={docsNotes}
               onChange={e => setDocsNotes(e.target.value)}
-              placeholder="הערה נוספת לנתמך (לא חובה)..."
+              placeholder="הערה נוספת לצאצא (לא חובה)..."
               rows={2}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
             />

@@ -568,12 +568,12 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
   const [docType, setDocType]       = useState('id_husband')
   const [saving, setSaving]         = useState(false)
   const [done, setDone]             = useState(false)
-  const [autoMatched, setAutoMatched] = useState(false)   // נתמך זוהה אוטומטית לפי מייל השולח
+  const [autoMatched, setAutoMatched] = useState(false)   // צאצא זוהה אוטומטית לפי מייל השולח
   const [lookingUp, setLookingUp]   = useState(!!senderEmail?.trim())
   const [maritalStatus, setMaritalStatus] = useState<string | null>(null)
   const { docTypes: allDocTypes } = useDocTypes()
 
-  // רק המסמכים הנדרשים לפי הרכב המשפחה בכרטסת. כשהנתמך לא מזוהה — מציגים הכל.
+  // רק המסמכים הנדרשים לפי הרכב המשפחה בכרטסת. כשהצאצא לא מזוהה — מציגים הכל.
   const docTypes = (() => {
     if (!autoMatched) return allDocTypes
     const married = !!maritalStatus && /נשוי|נשוא/.test(maritalStatus)
@@ -583,7 +583,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
     return allDocTypes.filter(t => allowed.includes(t.value))
   })()
 
-  // זיהוי אוטומטי של הנתמך לפי כתובת המייל של השולח
+  // זיהוי אוטומטי של הצאצא לפי כתובת המייל של השולח
   useEffect(() => {
     const email = senderEmail?.trim()
     if (!email) { setLookingUp(false); return }
@@ -649,7 +649,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
           <div className="text-center py-4">
             <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
             <p className="font-bold text-slate-900">הקובץ שויך בהצלחה!</p>
-            <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הנתמך.</p>
+            <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הצאצא.</p>
             <button onClick={onClose} className="mt-4 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium">סגור</button>
           </div>
         ) : (
@@ -659,7 +659,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
                 <FolderOpen size={18} className="text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-900">שייך קובץ לנתמך</h2>
+                <h2 className="text-base font-bold text-slate-900">שייך קובץ לצאצא</h2>
                 <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{attachment.filename}</p>
               </div>
             </div>
@@ -675,11 +675,11 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
 
               {lookingUp ? (
                 <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
-                  <Loader2 size={15} className="animate-spin" /> מזהה את הנתמך לפי כתובת המייל...
+                  <Loader2 size={15} className="animate-spin" /> מזהה את הצאצא לפי כתובת המייל...
                 </div>
               ) : autoMatched && selected ? (
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">נתמך</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">צאצא</label>
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
@@ -692,7 +692,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
                 </div>
               ) : (
                 <div className="relative">
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">חפש נתמך</label>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">חפש צאצא</label>
                   <input value={selected ? selected.full_name : query}
                     onChange={e => { setSelected(null); setQuery(e.target.value) }}
                     placeholder="שם, ת.ז. או מייל..."
@@ -752,7 +752,7 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
               <Download size={13} />
             </a>
             <button onClick={() => setAssigning(att)}
-              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לנתמך">
+              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
               <FolderOpen size={13} />
             </button>
           </div>
@@ -776,7 +776,7 @@ function BeneficiaryCard({ email }: { email: string }) {
       .finally(() => setLoading(false))
   }, [email])
 
-  if (loading) return <div className="p-4 flex items-center gap-2 text-xs text-slate-400"><Loader2 size={13} className="animate-spin" />מחפש נתמך...</div>
+  if (loading) return <div className="p-4 flex items-center gap-2 text-xs text-slate-400"><Loader2 size={13} className="animate-spin" />מחפש צאצא...</div>
   if (!ben) return null
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
@@ -788,7 +788,7 @@ function BeneficiaryCard({ email }: { email: string }) {
     <div className="border-t border-slate-200 bg-slate-50 p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">נתמך מזוהה</span>
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">צאצא מזוהה</span>
         <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
           className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
           פתח כרטיס <ExternalLink size={11} />

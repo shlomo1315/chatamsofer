@@ -222,7 +222,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
       ) : messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
           <Mail size={28} />
-          <p className="text-sm">אין התכתבות עם נתמך זה</p>
+          <p className="text-sm">אין התכתבות עם צאצא זה</p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">

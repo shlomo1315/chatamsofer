@@ -68,8 +68,8 @@ export default async function ReportsPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'סה״כ נתמכים', value: data.beneficiaries.length, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'נתמכים מאושרים', value: data.beneficiaries.filter((b: { eligibility_status: string }) => b.eligibility_status === 'approved').length, color: 'text-green-600', bg: 'bg-green-50' },
+          { label: 'סה״כ צאצאים', value: data.beneficiaries.length, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+          { label: 'צאצאים מאושרים', value: data.beneficiaries.filter((b: { eligibility_status: string }) => b.eligibility_status === 'approved').length, color: 'text-green-600', bg: 'bg-green-50' },
           { label: 'סכום הלוואות כולל', value: fmtCur(totalLoanAmount), color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'הלוואות פעילות', value: fmtCur(activeLoanAmount), color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map(({ label, value, color, bg }) => (
