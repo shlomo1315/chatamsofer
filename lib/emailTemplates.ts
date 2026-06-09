@@ -150,20 +150,47 @@ export function requiredDocLabels(maritalStatus?: string | null): string[] {
 }
 
 // ─── אישור רישום ──────────────────────────────────────────────────────────────
-export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
+export interface ApprovedDetails {
+  family_name?: string | null
+  id_number?: string | null
+  phone?: string | null
+  city?: string | null
+  marital_status?: string | null
+  spouse_name?: string | null
+  children_count?: number | null
+}
+
+export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, details: ApprovedDetails = {}): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
+  const fullName = [details.family_name, name].filter(Boolean).join(' ') || name
+  const detailsRows = [
+    detailRow('שם מלא', fullName),
+    detailRow('מספר זהות', details.id_number),
+    detailRow('בן/בת זוג', details.spouse_name),
+    detailRow('מצב משפחתי', details.marital_status),
+    detailRow('טלפון', details.phone),
+    detailRow('עיר', details.city),
+    detailRow('מספר ילדים', details.children_count != null ? String(details.children_count) : ''),
+  ].join('')
+
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, הרישום שלך אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, בקשתך אושרה 🎉</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
-      אנו שמחים לבשר לך כי הרישום שלך ב<strong>היכל החתם סופר</strong> הושלם בהצלחה ואושר.
+      אנו שמחים לבשר לך כי בקשתך ב<strong>היכל החתם סופר</strong> אושרה.
       מעתה ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ הסטטוס שלך: <span style="color:#16a34a;">מאושר</span></p>
       </td></tr>
+    </table>
+
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הנתמך שלך:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="margin:0 0 28px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      ${detailsRows}
     </table>
 
     <p style="margin:0 0 18px;color:#334155;font-size:15px;font-weight:700;text-align:center;">מה תרצה/י לעשות עכשיו?</p>
@@ -172,14 +199,16 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT): B
       `${base}/?action=birth`, '👶  בקשת לידה', '#fce7f3', '#9d174d',
       `${base}/?action=loan`,  '💳  בקשת הלוואה', '#e0e7ff', '#3730a3',
     )}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/`, '🏠  כניסה לפורטל האישי', '#0f172a')}
 
     <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות שלך לאימות.
     </p>
   `
   return {
-    subject: '✅ הרישום אושר — היכל החתם סופר',
-    html: shell({ preheader: 'הרישום שלך אושר! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הרישום אושר בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
+    subject: '✅ בקשתך אושרה — היכל החתם סופר',
+    html: shell({ preheader: 'בקשתך אושרה! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הבקשה אושרה בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
   }
 }
 

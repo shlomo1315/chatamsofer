@@ -2,10 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import {
   sendEmail,
-  templateStatusApproved,
   templateStatusRejected,
 } from '@/lib/email'
-import { docsPendingEmail } from '@/lib/emailTemplates'
+import { docsPendingEmail, approvalEmail } from '@/lib/emailTemplates'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 import { getDocTypes } from '@/lib/serverDocTypes'
@@ -40,7 +39,7 @@ export async function POST(request: NextRequest) {
   const client = getClient()
   const { data: ben, error } = await client
     .from('beneficiaries')
-    .select('email, full_name, marital_status, required_docs')
+    .select('email, full_name, family_name, id_number, phone, city, marital_status, spouse_name, children_count, required_docs')
     .eq('id', id)
     .maybeSingle()
 
@@ -49,7 +48,15 @@ export async function POST(request: NextRequest) {
 
   let payload
   if (status === 'approved') {
-    payload = templateStatusApproved(ben.full_name)
+    payload = approvalEmail(ben.full_name, undefined, {
+      family_name: ben.family_name,
+      id_number: ben.id_number,
+      phone: ben.phone,
+      city: ben.city,
+      marital_status: ben.marital_status,
+      spouse_name: ben.spouse_name,
+      children_count: ben.children_count,
+    })
   } else if (status === 'rejected') {
     payload = templateStatusRejected(ben.full_name, reason)
   } else if (status === 'docs_pending') {
