@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
-  ChevronLeft, Loader2, Reply, User, Phone, MapPin,
+  ChevronLeft, ChevronDown, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
   Paperclip, Download, FolderOpen, FileText,
 } from 'lucide-react'
@@ -1133,8 +1133,14 @@ export default function MailClient() {
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {labels.length > 0 && (
             <>
-              <p className="text-[11px] font-bold text-slate-400 uppercase px-2 pt-1 pb-2 tracking-widest">תוויות</p>
-              <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between px-2 pt-1 pb-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">תוויות</p>
+                <button onClick={() => setShowManageLabels(true)}
+                  className="text-slate-300 hover:text-indigo-500 transition-colors" title="נהל תוויות">
+                  <Settings size={13} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-0.5">
                 {labels.map(l => {
                   const labelMsgs = messages.filter(m => (assignments[m.id] ?? []).includes(l.id))
                   const count = Object.values(assignments).filter(ids => ids.includes(l.id)).length
@@ -1146,39 +1152,38 @@ export default function MailClient() {
                         onDragStart={() => setDragLabelId(l.id)}
                         onDragEnd={() => setDragLabelId(null)}
                         onClick={() => { setActiveLabel(isOpen ? null : l.id); setSelected(null) }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
-                          ${isOpen ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
-                        style={isOpen ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
+                        className={`group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right cursor-pointer
+                          ${isOpen ? 'font-semibold' : 'text-slate-600 hover:bg-slate-100 font-medium'}`}
+                        style={isOpen ? { backgroundColor: l.color + '14', color: l.color } : {}}
                       >
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
                         <span className="truncate flex-1">{l.name}</span>
                         {count > 0 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: l.color + '25', color: l.color }}>
+                          <span className={`text-[11px] font-semibold flex-shrink-0 ${isOpen ? '' : 'text-slate-400'}`}>
                             {count}
                           </span>
                         )}
-                        {isOpen && <X size={11} className="opacity-60 flex-shrink-0 mr-0.5" />}
+                        <ChevronDown size={13} className={`flex-shrink-0 transition-transform ${isOpen ? 'rotate-180 opacity-70' : 'opacity-0 group-hover:opacity-40'}`} />
                       </button>
 
                       {/* Accordion: list of message subjects under this label */}
                       {isOpen && labelMsgs.length > 0 && (
-                        <div className="mx-1 mb-1 rounded-xl overflow-hidden border border-slate-100 bg-white">
+                        <div className="mr-4 ml-1 mt-0.5 mb-1 border-r-2 pr-2" style={{ borderColor: l.color + '40' }}>
                           {labelMsgs.map(msg => (
                             <button
                               key={msg.id}
                               onClick={() => openMessage(msg)}
-                              className={`w-full text-right px-3 py-2 text-xs border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors
-                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}
+                              className={`w-full text-right px-2 py-1.5 rounded-md text-xs hover:bg-slate-50 transition-colors
+                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'}`}
                             >
-                              <p className={`truncate ${!msg.isRead ? 'font-semibold' : ''}`}>{msg.subject}</p>
+                              <p className={`truncate ${!msg.isRead ? 'font-semibold text-slate-800' : ''}`}>{msg.subject || '(ללא נושא)'}</p>
                               <p className="text-[10px] text-slate-400 truncate">{formatDate(msg.date)}</p>
                             </button>
                           ))}
                         </div>
                       )}
                       {isOpen && labelMsgs.length === 0 && (
-                        <p className="text-[11px] text-slate-400 text-center py-2">אין מיילים טעונים עם תווית זו</p>
+                        <p className="text-[11px] text-slate-400 text-center py-1.5">אין מיילים טעונים עם תווית זו</p>
                       )}
                     </div>
                   )
