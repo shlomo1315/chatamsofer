@@ -28,7 +28,7 @@ const fmtCur = (n: number) =>
   new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 
 const ELIGIBILITY_LABEL: Record<string, string> = {
-  pending: 'ממתין לאישור', review: 'בבדיקה', approved: 'מאושר', rejected: 'לא מאושר',
+  pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר', rejected: 'לא מאושר',
 }
 
 // שם הלווה — שם הבעל (full_name); אם אין בעל, שם האישה (spouse_name)

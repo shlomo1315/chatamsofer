@@ -185,7 +185,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT): B
 
 // ─── מענה אוטומטי לנתמך קיים ──────────────────────────────────────────────────
 const STATUS_LABELS_HE: Record<string, string> = {
-  pending: 'ממתין לאישור', review: 'בבדיקה', approved: 'מאושר',
+  pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר',
   rejected: 'לא מאושר', docs_pending: 'השלמת מסמכים',
 }
 

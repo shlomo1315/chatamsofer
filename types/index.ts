@@ -271,10 +271,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
-  pending: 'ממתין לאישור',
+  pending: 'ממתין לאישור ראשוני',
   approved: 'מאושר',
   rejected: 'נדחה',
-  review: 'בבדיקה',
+  review: 'ממתין לאישור מסמכים',
   docs_pending: 'השלמת מסמכים',
 }
 

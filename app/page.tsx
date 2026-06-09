@@ -72,8 +72,8 @@ const LOAN_PURPOSES = [
 ]
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  pending:      { label: 'ממתין לאישור',   color: 'text-amber-800',  bg: 'bg-amber-50',  border: 'border-amber-200' },
-  review:       { label: 'בבדיקה',          color: 'text-blue-800',   bg: 'bg-blue-50',   border: 'border-blue-200' },
+  pending:      { label: 'ממתין לאישור ראשוני',  color: 'text-amber-800',  bg: 'bg-amber-50',    border: 'border-amber-200' },
+  review:       { label: 'ממתין לאישור מסמכים',  color: 'text-violet-800', bg: 'bg-violet-50',   border: 'border-violet-200' },
   approved:     { label: 'מאושר',            color: 'text-green-800',  bg: 'bg-green-50',  border: 'border-green-200' },
   rejected:     { label: 'לא מאושר',         color: 'text-red-800',    bg: 'bg-red-50',    border: 'border-red-200' },
   docs_pending: { label: 'השלמת מסמכים',    color: 'text-indigo-800', bg: 'bg-indigo-50', border: 'border-indigo-200' },
@@ -1051,9 +1051,9 @@ export default function PublicPortalPage() {
         return next
       })
       setDocFiles({}); setReplaceDoc({})
-      // אם השלים בקשת מסמכים — חוזר ל"ממתין לאישור"; אחרת אימות זהות ראשוני → "השלמת מסמכים"
-      const nextStatus = beneficiary.eligibility_status === 'docs_pending' ? 'pending' : 'docs_pending'
-      setBeneficiary(b => b ? { ...b, eligibility_status: nextStatus, required_docs: nextStatus === 'pending' ? '' : b.required_docs } : b)
+      // אם השלים בקשת מסמכים — עובר ל"ממתין לאישור מסמכים" (review); אחרת אימות זהות ראשוני → "השלמת מסמכים"
+      const nextStatus = beneficiary.eligibility_status === 'docs_pending' ? 'review' : 'docs_pending'
+      setBeneficiary(b => b ? { ...b, eligibility_status: nextStatus, required_docs: nextStatus === 'review' ? '' : b.required_docs } : b)
       setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setDocsUploading(false)
