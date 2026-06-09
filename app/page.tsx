@@ -36,10 +36,19 @@ interface FoundBeneficiary {
   family_name?: string
   eligibility_status: string
   phone?: string
+  phone2?: string
   city?: string
+  address?: string
+  id_number?: string
+  spouse_name?: string
+  spouse_id_number?: string
   marital_status?: string
+  children_count?: number
   required_docs?: string
   children?: Array<{ name?: string; birth_date?: string; gender?: string }>
+  lineage_node_id?: string
+  lineage_manual?: string[]
+  lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
   created_at: string
 }
 
@@ -976,8 +985,8 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
-    if (!birthForm.baby_name) { setError('אנא הזן שם הנולד/ת'); return }
     if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
+    if (!birthForm.baby_name) { setError(birthForm.baby_gender === 'female' ? 'אנא הזן שם הנולדת' : 'אנא הזן שם הנולד'); return }
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
@@ -2088,11 +2097,48 @@ export default function PublicPortalPage() {
                 </div>
               </div>
 
-              {/* Phone */}
-              {beneficiary.phone && (
-                <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-sm text-slate-600">
-                  <Phone size={14} className="text-slate-400 flex-shrink-0" />
-                  <span dir="ltr">{beneficiary.phone}</span>
+              {/* Personal details */}
+              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+                {beneficiary.id_number && (
+                  <div><span className="text-slate-400 text-xs block">ת.ז.</span><span className="text-slate-700" dir="ltr">{beneficiary.id_number}</span></div>
+                )}
+                {beneficiary.phone && (
+                  <div><span className="text-slate-400 text-xs block">טלפון</span><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
+                )}
+                {beneficiary.marital_status && (
+                  <div><span className="text-slate-400 text-xs block">מצב משפחתי</span><span className="text-slate-700">{beneficiary.marital_status}</span></div>
+                )}
+                {beneficiary.spouse_name && (
+                  <div><span className="text-slate-400 text-xs block">שם בן/בת הזוג</span><span className="text-slate-700">{beneficiary.spouse_name}</span></div>
+                )}
+                {beneficiary.spouse_id_number && (
+                  <div><span className="text-slate-400 text-xs block">ת.ז בן/בת הזוג</span><span className="text-slate-700" dir="ltr">{beneficiary.spouse_id_number}</span></div>
+                )}
+                {(beneficiary.address || beneficiary.city) && (
+                  <div className="col-span-2"><span className="text-slate-400 text-xs block">כתובת</span><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
+                )}
+                {beneficiary.children_count != null && (
+                  <div><span className="text-slate-400 text-xs block">מספר ילדים</span><span className="text-slate-700">{beneficiary.children_count}</span></div>
+                )}
+              </div>
+
+              {/* סדר הייחוס שסומן */}
+              {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <span className="text-slate-400 text-xs block mb-1.5">סדר הייחוס</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {beneficiary.lineage_chain.map((c, i) => (
+                      <span key={i} className="flex items-center gap-1">
+                        {i > 0 && <ChevronLeft size={11} className="text-slate-300" />}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {c.name}
+                          {(c.relation === 'son' || c.relation === 'son_in_law') && (
+                            <span className="text-[10px] text-indigo-400 mr-1">({c.relation === 'son' ? 'בן' : 'חתן'})</span>
+                          )}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </Card>
@@ -2144,7 +2190,32 @@ export default function PublicPortalPage() {
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (
               <div className="flex flex-col gap-3">
-                <h3 className="font-semibold text-slate-700 text-sm px-1">הגשת בקשה</h3>
+                {/* שלב 1 — השלמת מסמכים (קודם הכל) */}
+                <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · השלמת מסמכים</h3>
+                <button
+                  onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
+                  className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+                    <FileText size={22} className="text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">העלאת מסמכים נדרשים</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {docsMissing ? 'צילומי תעודת זהות והמסמכים הנדרשים' : 'המסמכים התקבלו — ניתן לצפות או להחליף'}
+                    </p>
+                  </div>
+                  {docsMissing
+                    ? <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
+                    : <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />}
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-amber-400" />
+                </button>
+
+                {/* מפריד ניכר בין מסמכים לבקשות */}
+                <div className="border-t-2 border-dashed border-slate-200 my-3" />
+
+                {/* שלב 2 — הגשת בקשה */}
+                <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 2 · הגשת בקשה</h3>
 
                 <button
                   onClick={goToBirthForm}
@@ -2171,26 +2242,6 @@ export default function PublicPortalPage() {
                     <p className="font-semibold text-slate-900">הלוואה חדשה</p>
                     <p className="text-xs text-slate-500 mt-0.5">בקשת הלוואה מגמ&quot;ח</p>
                   </div>
-                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                </button>
-
-                {/* העלאת מסמכים נדרשים — זמין לכל נרשם (גם בממתין לאישור), בנפרד מהגשת בקשה */}
-                <button
-                  onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
-                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                >
-                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
-                    <FileText size={22} className="text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">העלאת מסמכים נדרשים</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {docsMissing ? 'צילומי תעודת זהות והמסמכים הנדרשים' : 'המסמכים התקבלו — ניתן לצפות או להחליף'}
-                    </p>
-                  </div>
-                  {docsMissing
-                    ? <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
-                    : <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />}
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
                 </button>
 
@@ -2320,11 +2371,6 @@ export default function PublicPortalPage() {
                     />
                   </Field>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label="שם הנולד/ת" required>
-                    <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')} placeholder="שם הילד/ה" required />
-                  </Field>
-                </div>
                 <div className="col-span-2">
                   <Field label="מין הנולד/ת" required>
                     <div className="flex gap-2">
@@ -2339,6 +2385,15 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
+                {/* שם — מופיע רק אחרי בחירת מין, עם תווית דינמית (שם הנולד / שם הנולדת) */}
+                {birthForm.baby_gender && (
+                  <div className="col-span-2">
+                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required>
+                      <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')}
+                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required />
+                    </Field>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Field label="בית החלמה" required>
                     <div className="flex flex-wrap gap-2">
