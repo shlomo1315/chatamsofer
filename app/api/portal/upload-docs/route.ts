@@ -79,17 +79,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
   }
 
-  // עדכון סטטוס לאחר העלאת מסמכים:
-  // • אם הנתמך השלים בקשת מסמכים (docs_pending) — כל העלאה מעבירה ל"ממתין לאישור מסמכים" (review) + ניקוי הרשימה.
-  // • אחרת (אימות זהות ראשוני, העלאת ת.ז) — נכנס ל"השלמת מסמכים" לבדיקת המזכירות.
-  const hasIdDoc = uploaded.some(d => d === 'id_husband' || d === 'id_wife' || d === 'id_child')
-  let update: Record<string, unknown> | null = null
+  // אם הנתמך השלים בקשת השלמת מסמכים ידנית (docs_pending) — חוזר ל"ממתין לאישור" + ניקוי הרשימה.
+  // בכל מקרה אחר (כולל העלאת ת.ז כחלק מהגשת בקשה) — הסטטוס נשאר כפי שהוא (ממתין/מאושר).
   if (ben.eligibility_status === 'docs_pending') {
-    update = { eligibility_status: 'review', required_docs: '', updated_at: new Date().toISOString() }
-  } else if (hasIdDoc) {
-    update = { eligibility_status: 'docs_pending', updated_at: new Date().toISOString() }
+    await admin.from('beneficiaries')
+      .update({ eligibility_status: 'pending', required_docs: '', updated_at: new Date().toISOString() })
+      .eq('id', beneficiaryId)
   }
-  if (update) await admin.from('beneficiaries').update(update).eq('id', beneficiaryId)
 
   return NextResponse.json({ ok: true, uploaded, url: lastUrl })
 }

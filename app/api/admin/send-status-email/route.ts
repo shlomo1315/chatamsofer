@@ -1,12 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import {
-  sendEmail,
-  templateStatusRejected,
-} from '@/lib/email'
+import { templateStatusRejected } from '@/lib/email'
 import { docsPendingEmail, approvalEmail } from '@/lib/emailTemplates'
-import { getGmailClient } from '@/lib/gmail'
-import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
+import { deliverMail } from '@/lib/sendMail'
 import { getDocTypes } from '@/lib/serverDocTypes'
 
 export const dynamic = 'force-dynamic'
@@ -15,21 +11,6 @@ function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// Sends via the Gmail API (configured + working), falling back to SMTP only if Gmail fails.
-async function deliver(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const from     = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
-    const fromName = 'היכל החתם סופר משרד ראשי'
-    const raw      = buildRawEmail({ from, fromName, to, subject, html })
-    const gmail    = await getGmailClient()
-    await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodeForGmail(raw) } })
-    return { ok: true }
-  } catch (gmailErr) {
-    console.error('[send-status-email] Gmail failed, trying SMTP:', gmailErr)
-    return sendEmail({ to, subject, html })
-  }
 }
 
 export async function POST(request: NextRequest) {
@@ -70,7 +51,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no template for status' })
   }
 
-  const result = await deliver(ben.email, payload.subject, payload.html)
+  const result = await deliverMail(ben.email, payload.subject, payload.html)
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

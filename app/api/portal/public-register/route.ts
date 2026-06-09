@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
+import { templateRegistrationConfirmed } from '@/lib/email'
+import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,7 +97,8 @@ export async function POST(request: NextRequest) {
   // Send confirmation email (non-blocking)
   if (email) {
     const displayName = [String(family_name ?? ''), String(full_name ?? '')].filter(Boolean).join(' ')
-    sendEmail({ ...templateRegistrationConfirmed(displayName), to: String(email) })
+    const reg = templateRegistrationConfirmed(displayName)
+    deliverMail(String(email), reg.subject, reg.html)
       .catch(e => console.error('[public-register] confirmation email failed:', e))
   }
 
