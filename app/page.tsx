@@ -156,7 +156,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 // ─── Types ───
 
-interface LineageNode { id: string; name: string; generation: number; parent_id: string | null; status?: string }
+interface LineageNode { id: string; name: string; generation: number; parent_id: string | null; status?: string; relation?: 'son' | 'son_in_law' | null }
 
 interface ChildEntry {
   name: string; id_number: string; gender: string; birth_date: string; marital_status: string
@@ -226,7 +226,15 @@ function buildPath(nodeId: string, all: LineageNode[]): string[] {
   return path
 }
 
-function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string; onSelect: (id: string, path: string[]) => void }) {
+// קשרי בן/חתן המוגדרים בעץ הניהול, מיושרים לנתיב (אינדקס 0 = השורש, ללא קשר)
+function buildPathRelations(nodeId: string, all: LineageNode[]): ('son' | 'son_in_law' | null)[] {
+  const map = new Map(all.map(n => [n.id, n])); const rels: ('son' | 'son_in_law' | null)[] = []
+  let cur = map.get(nodeId)
+  while (cur) { rels.unshift(cur.relation ?? null); cur = cur.parent_id ? map.get(cur.parent_id) : undefined }
+  return rels
+}
+
+function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string; onSelect: (id: string, path: string[], relations: ('son' | 'son_in_law' | null)[]) => void }) {
   const [allNodes, setAllNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string>(initialNodeId ?? '')
@@ -243,7 +251,7 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
       const minGen = raw.length ? Math.min(...raw.map((n: LineageNode) => n.generation)) : 0
       const nodes = raw.map((n: LineageNode) => ({ ...n, generation: n.generation - minGen }))
       setAllNodes(nodes)
-      if (initialNodeId && nodes.length > 0) { const p = buildPath(initialNodeId, nodes); if (p.length) onSelect(initialNodeId, p) }
+      if (initialNodeId && nodes.length > 0) { const p = buildPath(initialNodeId, nodes); if (p.length) onSelect(initialNodeId, p, buildPathRelations(initialNodeId, nodes)) }
     }).catch(() => {}).finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -306,7 +314,7 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
     const el = canvasRef.current
     el.scrollTo({ left: Math.max(0, pos.cx * zoom - el.clientWidth / 2), top: Math.max(0, pos.y * zoom - el.clientHeight / 3), behavior: 'smooth' })
   }
-  function pick(nodeId: string) { setSelected(nodeId); onSelect(nodeId, buildPath(nodeId, allNodes)); setQ(''); setTimeout(() => scrollTo(nodeId), 50) }
+  function pick(nodeId: string) { setSelected(nodeId); onSelect(nodeId, buildPath(nodeId, allNodes), buildPathRelations(nodeId, allNodes)); setQ(''); setTimeout(() => scrollTo(nodeId), 50) }
 
   if (loading) return <div className="flex items-center gap-2 py-4 text-indigo-600"><Loader2 size={16} className="animate-spin" /><span className="text-sm">טוען עץ דורות...</span></div>
   if (!allNodes.length) return <div className="py-4 text-center text-slate-400 text-sm">לא נמצאו נתוני שושלת</div>
@@ -685,7 +693,10 @@ export default function PublicPortalPage() {
   // הצהרת ייחוס (חובה בטופס הציבורי לפני בחירת סדר הדורות) + סימון בן/חתן לכל דור
   const [lineageDeclared, setLineageDeclared] = useState(false)
   const [declModalOpen, setDeclModalOpen] = useState(false)
+  // קשרי בן/חתן שהנרשם מסמן — רק לדורות שהוא מציע (ידני / הוא עצמו)
   const [lineageRelations, setLineageRelations] = useState<Record<string, 'son' | 'son_in_law'>>({})
+  // קשרי בן/חתן של הנתיב המאומת — מגיעים אוטומטית מהגדרת העץ בניהול
+  const [pathRelations, setPathRelations] = useState<('son' | 'son_in_law' | null)[]>([])
   // Suggest new lineage node
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestName, setSuggestName] = useState('')
@@ -816,8 +827,8 @@ export default function PublicPortalPage() {
   const buildLineageChain = () => {
     const chain: { generation: number; name: string; relKey: string | null; relation: 'son' | 'son_in_law' | null }[] = []
     lineagePath.forEach((name, i) => {
-      const relKey = i === 0 ? null : `p${i}`
-      chain.push({ generation: i + 1, name, relKey, relation: relKey ? (lineageRelations[relKey] ?? null) : null })
+      // דור 1 (שורש) ללא קשר; שאר הנתיב המאומת — קשר אוטומטי מהגדרת העץ בניהול (לא נסמן ע"י הנרשם)
+      chain.push({ generation: i + 1, name, relKey: null, relation: i === 0 ? null : (pathRelations[i] ?? null) })
     })
     manualLineage.forEach((name, i) => {
       if (!name.trim()) return
@@ -831,7 +842,7 @@ export default function PublicPortalPage() {
     return chain
   }
 
-  // בורר בן/חתן לדור מסוים
+  // בורר בן/חתן שהנרשם מסמן (לדור שהוא מציע) — בצבע ענבר, להבדיל מהקשר האוטומטי
   const renderRelToggle = (relKey: string) => (
     <div className="flex gap-1.5 flex-shrink-0">
       {(['son', 'son_in_law'] as const).map(r => (
@@ -839,13 +850,20 @@ export default function PublicPortalPage() {
           onClick={() => setLineageRelations(prev => ({ ...prev, [relKey]: r }))}
           className={`text-xs px-3 py-1 rounded-full border transition-colors ${
             lineageRelations[relKey] === r
-              ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
-              : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'
+              ? 'bg-amber-500 text-white border-amber-500 font-semibold'
+              : 'bg-white text-amber-700 border-amber-300 hover:border-amber-400'
           }`}>
           {r === 'son' ? 'בן' : 'חתן'}
         </button>
       ))}
     </div>
+  )
+
+  // תווית קשר אוטומטית (מהגדרת העץ בניהול) — קריאה בלבד, בצבע אינדיגו
+  const renderRelAuto = (r: 'son' | 'son_in_law' | null) => (
+    <span className="text-xs px-3 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold flex-shrink-0">
+      {r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : '—'}
+    </span>
   )
 
   // ── Registration ──
@@ -1240,7 +1258,7 @@ export default function PublicPortalPage() {
               <p className="text-sm text-amber-900 leading-relaxed">
                 אך ורק למי שיש בידו יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
                 ולא על חצאי עדויות. גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס.
-                ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
+                ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
               </p>
             </div>
             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-colors">
@@ -1665,7 +1683,7 @@ export default function PublicPortalPage() {
                     <p className="text-xs text-amber-700 mb-4 leading-relaxed">הרישום מיועד אך ורק לנכדי רבינו החתם סופר בעלי יחוס ברור ומוסמך דור אחר דור.</p>
                     <button type="button" onClick={() => setDeclModalOpen(true)}
                       className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-colors">
-                      קראתי — להצהרה ובחירת הדורות
+                      הקש כאן למעבר לקריאת ההצהרה ובחירת סדר הדורות
                     </button>
                   </div>
                 ) : (
@@ -1679,7 +1697,7 @@ export default function PublicPortalPage() {
                   <span className="text-[10px] font-semibold text-indigo-400 bg-white border border-indigo-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>
                 </div>
 
-                {/* השרשרת שנבחרה מהעץ — בן/חתן לכל דור */}
+                {/* השרשרת שנבחרה מהעץ — קשר בן/חתן אוטומטי לפי הגדרת הניהול (קריאה בלבד) */}
                 {lineagePath.length > 1 && (
                   <div className="flex flex-col gap-2 mb-4">
                     {lineagePath.slice(1).map((name, i) => {
@@ -1690,15 +1708,15 @@ export default function PublicPortalPage() {
                             <span className="text-xs font-bold text-slate-400 flex-shrink-0">דור {idx + 1}</span>
                             <span className="text-sm font-medium text-slate-800 truncate">{name}</span>
                           </div>
-                          {renderRelToggle(`p${idx}`)}
+                          {renderRelAuto(pathRelations[idx] ?? null)}
                         </div>
                       )
                     })}
                   </div>
                 )}
-                <LineageTreePicker onSelect={(nodeId, path) => { setLineageNodeId(nodeId); setLineagePath(path); setSuggestOpen(false) }} />
+                <LineageTreePicker onSelect={(nodeId, path, relations) => { setLineageNodeId(nodeId); setLineagePath(path); setPathRelations(relations); setSuggestOpen(false) }} />
                 {lineageNodeId && (
-                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]); setLineageRelations({}) }}
+                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]); setLineageRelations({}); setPathRelations([]) }}
                     className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
                 )}
 
