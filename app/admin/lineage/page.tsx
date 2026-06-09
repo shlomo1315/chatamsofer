@@ -10,6 +10,7 @@ interface LineageNode {
   generation: number
   parent_id: string | null
   status?: 'verified' | 'pending' | 'rejected'
+  relation?: 'son' | 'son_in_law' | null
 }
 
 type StatusFilter = 'verified' | 'pending' | 'rejected' | null
@@ -124,12 +125,30 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
   )
 }
 
+// בורר קשר בן/חתן של הצומת ביחס להורה שלו (לשורש אין קשר)
+function RelationPicker({ value, onChange }: { value: 'son' | 'son_in_law' | null; onChange: (v: 'son' | 'son_in_law' | null) => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>קשר להורה (הדור הקודם)</label>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {([['son', 'בן'], ['son_in_law', 'חתן']] as const).map(([v, l]) => (
+          <button key={v} type="button" onClick={() => onChange(value === v ? null : v)}
+            style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: value === v ? '1.5px solid #7C3AED' : '1.5px solid #E2E8F0', background: value === v ? '#7C3AED' : '#fff', color: value === v ? '#fff' : '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Tree view ───
 
 function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
+  const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -237,16 +256,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
     })
   }, [positions.length, w, zoom])
 
-  function close() { setModal(null); setSaveErr('') }
+  function close() { setModal(null); setSaveErr(''); setFormRelation(null) }
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId, relation: formRelation }) })
       }
       onRefresh(); close()
     } catch { setSaveErr('שגיאה בשמירה') }
@@ -527,7 +546,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                     border: '1px solid #E2E8F0', zIndex: 30,
                   }}>
                     {[
-                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
+                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
                       { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
                       ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אמת' }] : []),
                       ...(nodeStatus !== 'rejected' ? [{ icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
@@ -562,7 +581,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
+                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setFormRelation(selPos.node.relation ?? null); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
                 { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
                 ...((selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
                 ...((selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
@@ -590,6 +609,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
@@ -602,6 +622,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
         <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף שורש חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.parentId && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
@@ -732,13 +753,14 @@ export default function LineagePage() {
   const [view, setView] = useState<View>('tree')
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
+  const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [formParentId, setFormParentId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null)
   const [generationFilter, setGenerationFilter] = useState<number | null>(null)
 
-  function close() { setModal(null); setSaveErr(''); setFormParentId(null) }
+  function close() { setModal(null); setSaveErr(''); setFormParentId(null); setFormRelation(null) }
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -778,10 +800,10 @@ export default function LineagePage() {
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
         const parentId = modal.parentId ?? formParentId
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: parentId, relation: formRelation }) })
       }
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
@@ -884,7 +906,7 @@ export default function LineagePage() {
           statusFilter={statusFilter}
           generationFilter={generationFilter}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
-          onEdit={node => { setFormName(node.name); setModal({ type: 'edit', node }) }}
+          onEdit={node => { setFormName(node.name); setFormRelation(node.relation ?? null); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
         />
       )}
@@ -894,6 +916,7 @@ export default function LineagePage() {
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
@@ -906,6 +929,7 @@ export default function LineagePage() {
         <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף דור חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {(modal.parentId || formParentId) && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {!modal.parentId && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו?</label>

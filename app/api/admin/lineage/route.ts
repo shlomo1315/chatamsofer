@@ -52,9 +52,12 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const body = await request.json()
-  const { name, parent_id, notes } = body
+  const { name, parent_id, notes, relation } = body
 
   if (!name?.trim()) return NextResponse.json({ error: 'שם חובה' }, { status: 400 })
+  if (relation != null && !['son', 'son_in_law'].includes(relation)) {
+    return NextResponse.json({ error: 'קשר לא תקין' }, { status: 400 })
+  }
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
@@ -74,6 +77,7 @@ export async function POST(request: NextRequest) {
     parent_id: parent_id || null,
     generation,
     notes: notes?.trim() || null,
+    relation: relation ?? null,
     status: 'pending',
   }).select().single()
 
@@ -86,7 +90,7 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const body = await request.json()
-  const { id, name, notes, parent_id } = body
+  const { id, name, notes, parent_id, relation } = body
 
   if (!id) return NextResponse.json({ error: 'חסר ID' }, { status: 400 })
 
@@ -97,6 +101,12 @@ export async function PATCH(request: NextRequest) {
   if (name !== undefined) {
     if (!name.trim()) return NextResponse.json({ error: 'שם חובה' }, { status: 400 })
     updates.name = name.trim()
+  }
+  if (relation !== undefined) {
+    if (relation != null && !['son', 'son_in_law'].includes(relation)) {
+      return NextResponse.json({ error: 'קשר לא תקין' }, { status: 400 })
+    }
+    updates.relation = relation ?? null
   }
   if (notes !== undefined) updates.notes = notes?.trim() || null
   if (body.status !== undefined) {
