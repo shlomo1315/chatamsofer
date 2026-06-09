@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import EmailInput from '@/components/ui/EmailInput'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
+import { useDocTypes } from '@/lib/useDocTypes'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -693,6 +694,9 @@ export default function PublicPortalPage() {
   // Docs upload (for pending users)
   const [docFiles, setDocFiles] = useState<Record<string, File | null>>({})
   const setDocFile = (key: string, f: File | null) => setDocFiles(prev => ({ ...prev, [key]: f }))
+  const { docTypes: dynDocTypes } = useDocTypes()
+  // תווית מסמך: עדיפות לתוויות המתארות, ואז לסוגים מותאמים מההגדרות
+  const docLabel = (d: string) => DOC_LABELS[d] ?? dynDocTypes.find(t => t.value === d)?.label ?? 'מסמך'
   const [docsUploading, setDocsUploading] = useState(false)
   const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
   // מסמכים שכבר הועלו בעבר (מוצגים בעת כניסה חוזרת לקישור השלמת המסמכים)
@@ -1023,7 +1027,7 @@ export default function PublicPortalPage() {
     if (!beneficiary) return
     // מסמך נחשב קיים אם הועלה קובץ חדש או שכבר התקבל בעבר במערכת
     for (const d of requiredDocs) {
-      if (!docFiles[d] && !existingDocs[d]) { setError(`אנא העלה: ${DOC_LABELS[d] ?? 'מסמך'}`); return }
+      if (!docFiles[d] && !existingDocs[d]) { setError(`אנא העלה: ${docLabel(d)}`); return }
     }
     setError(''); setDocsUploading(true)
     try {
@@ -2076,7 +2080,7 @@ export default function PublicPortalPage() {
                       d,
                       d === 'id_husband'
                         ? (beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך')
-                        : (DOC_LABELS[d] ?? 'מסמך'),
+                        : (docLabel(d)),
                     )}
                   </div>
                 ))}

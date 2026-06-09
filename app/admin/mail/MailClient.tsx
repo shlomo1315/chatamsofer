@@ -8,7 +8,7 @@ import {
   Paperclip, Download, FolderOpen, FileText,
 } from 'lucide-react'
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
-import { DOC_TYPES } from '@/lib/docTypes'
+import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import EmailInput from '@/components/ui/EmailInput'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
@@ -571,15 +571,16 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
   const [autoMatched, setAutoMatched] = useState(false)   // נתמך זוהה אוטומטית לפי מייל השולח
   const [lookingUp, setLookingUp]   = useState(!!senderEmail?.trim())
   const [maritalStatus, setMaritalStatus] = useState<string | null>(null)
+  const { docTypes: allDocTypes } = useDocTypes()
 
   // רק המסמכים הנדרשים לפי הרכב המשפחה בכרטסת. כשהנתמך לא מזוהה — מציגים הכל.
   const docTypes = (() => {
-    if (!autoMatched) return DOC_TYPES
+    if (!autoMatched) return allDocTypes
     const married = !!maritalStatus && /נשוי|נשוא/.test(maritalStatus)
     const allowed = married
       ? ['id_husband', 'id_wife', 'id_child', 'other']
       : ['id_husband', 'id_child', 'other']
-    return DOC_TYPES.filter(t => allowed.includes(t.value))
+    return allDocTypes.filter(t => allowed.includes(t.value))
   })()
 
   // זיהוי אוטומטי של הנתמך לפי כתובת המייל של השולח

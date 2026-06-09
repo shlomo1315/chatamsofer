@@ -8,7 +8,7 @@ import {
 import { docsPendingEmail } from '@/lib/emailTemplates'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
-import { DOC_LABELS } from '@/lib/docTypes'
+import { getDocTypes } from '@/lib/serverDocTypes'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,8 +54,10 @@ export async function POST(request: NextRequest) {
     payload = templateStatusRejected(ben.full_name, reason)
   } else if (status === 'docs_pending') {
     // רשימת המסמכים מהצ'קליסט שהמזכירות סימנה (נשמרה ב-required_docs), עם נפילה לפי מצב משפחתי
+    const types = await getDocTypes()
+    const labelOf = (k: string) => types.find(t => t.value === k)?.label ?? k
     const keys = (ben.required_docs ?? '').split(',').map((s: string) => s.trim()).filter(Boolean)
-    const labels = keys.map((k: string) => DOC_LABELS[k] ?? k)
+    const labels = keys.map(labelOf)
     payload = docsPendingEmail(ben.full_name, undefined, ben.marital_status, labels, docsNotes)
   } else {
     return NextResponse.json({ ok: true, skipped: 'no template for status' })

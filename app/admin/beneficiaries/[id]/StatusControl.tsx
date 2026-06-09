@@ -5,7 +5,7 @@ import { Check, X, Clock, ChevronDown, Loader2, FileText, AlertTriangle } from '
 import { createClient } from '@/lib/supabase/client'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
-import { DOC_TYPES } from '@/lib/docTypes'
+import { useDocTypes } from '@/lib/useDocTypes'
 
 const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
 
@@ -20,6 +20,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
   const router  = useRouter()
   const supabase = createClient()
 
+  const { docTypes } = useDocTypes()
   const [open, setOpen]       = useState(false)
   const [saving, setSaving]   = useState(false)
 
@@ -176,7 +177,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
             </div>
             <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הנתמך יקבל מייל עם קישור להעלאתם.</p>
             <div className="flex flex-col gap-1.5 mb-3">
-              {DOC_TYPES.map(opt => {
+              {docTypes.map(opt => {
                 const checked = docsChecklist.includes(opt.value)
                 return (
                   <label key={opt.value}
