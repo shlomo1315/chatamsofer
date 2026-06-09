@@ -53,7 +53,6 @@ function baseTemplate(title: string, body: string) {
         <tr>
           <td style="background:#4f46e5;padding:28px 32px;text-align:center;">
             <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">היכל החתם סופר</h1>
-            <p style="margin:4px 0 0;color:#c7d2fe;font-size:13px;">מערכת ניהול נתמכים</p>
           </td>
         </tr>
         <!-- Body -->
