@@ -1074,6 +1074,8 @@ export default function PublicPortalPage() {
 
   // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
   const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
+  // האם עדיין חסרים מסמכים נדרשים (לכרטיס "העלאת מסמכים נדרשים" בדשבורד)
+  const docsMissing = !!beneficiary && requiredDocs.some(d => !existingDocs[d])
 
   const goToBirthForm = () => {
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
@@ -2101,9 +2103,10 @@ export default function PublicPortalPage() {
                 <div className="flex items-start gap-3">
                   <FileText size={18} className="flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold mb-1">ברוכים הבאים לפורטל האישי</p>
+                    <p className="font-semibold mb-1">ברוכים הבאים</p>
                     <p className="leading-relaxed">
                       ניתן להגיש בקשה כבר עכשיו. בהגשה הראשונה תתבקש/י לצרף גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לטיפול המזכירות.
+                      לאחר בדיקת המסמכים במזכירות תקבלו על כך הודעה מסודרת.
                     </p>
                   </div>
                 </div>
@@ -2168,6 +2171,26 @@ export default function PublicPortalPage() {
                     <p className="font-semibold text-slate-900">הלוואה חדשה</p>
                     <p className="text-xs text-slate-500 mt-0.5">בקשת הלוואה מגמ&quot;ח</p>
                   </div>
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                </button>
+
+                {/* העלאת מסמכים נדרשים — זמין לכל נרשם (גם בממתין לאישור), בנפרד מהגשת בקשה */}
+                <button
+                  onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
+                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+                    <FileText size={22} className="text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">העלאת מסמכים נדרשים</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {docsMissing ? 'צילומי תעודת זהות והמסמכים הנדרשים' : 'המסמכים התקבלו — ניתן לצפות או להחליף'}
+                    </p>
+                  </div>
+                  {docsMissing
+                    ? <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
+                    : <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />}
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
                 </button>
 
@@ -2267,7 +2290,7 @@ export default function PublicPortalPage() {
               })()}
 
               <p className="text-xs text-slate-400 text-center mt-3">
-                לאחר בדיקת המסמכים תוכל להגיש בקשות. הצוות יעדכן אותך.
+                לאחר בדיקת המסמכים במזכירות תקבלו על כך הודעה מסודרת.
               </p>
             </Card>
           </div>
