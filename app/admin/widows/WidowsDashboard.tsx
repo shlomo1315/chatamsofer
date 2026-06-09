@@ -21,7 +21,7 @@ const STATUS_SEL: Record<string, string> = {
 }
 const STATUS_LBL: Record<string, string> = {
   pending: 'ממתין', approved: 'מאושר', rejected: 'נדחה',
-  docs_pending: 'השלמת מסמכים', review: 'בבדיקה',
+  docs_pending: 'השלמת מסמכים', review: 'ממתין לאישור מסמכים',
 }
 
 export default function WidowsDashboard({ widows, requests }: { widows: Beneficiary[]; requests: WidowRequest[] }) {

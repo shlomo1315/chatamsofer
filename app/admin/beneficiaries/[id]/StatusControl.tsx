@@ -7,13 +7,14 @@ import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 import { useDocTypes } from '@/lib/useDocTypes'
 
-const PENDING_SET: EligibilityStatus[] = ['pending', 'review']
+const PENDING_SET: EligibilityStatus[] = ['pending']
 
 const STYLES: Record<string, string> = {
   pending:      'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200',
   approved:     'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
   rejected:     'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
   docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
+  review:       'bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200',
 }
 
 export default function StatusControl({ id, status }: { id: string; status: EligibilityStatus }) {
@@ -47,7 +48,7 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
 
   const isPending = PENDING_SET.includes(status)
   const styleKey  = isPending ? 'pending' : (STYLES[status] ? status : 'pending')
-  const label     = isPending ? 'ממתין לאישור' : ELIGIBILITY_LABELS[status] || status
+  const label     = ELIGIBILITY_LABELS[status] || status
   const Icon      = isPending ? Clock : status === 'approved' ? Check : status === 'rejected' ? X : FileText
 
   const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string }) => {

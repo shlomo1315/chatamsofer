@@ -80,12 +80,12 @@ export async function POST(request: NextRequest) {
   }
 
   // עדכון סטטוס לאחר העלאת מסמכי זהות (העלאת אישור לידה בלבד אינה משנה סטטוס):
-  // • אם הנתמך הגיע מבקשת השלמת מסמכים (docs_pending) — סיים, חוזר ל"ממתין לאישור" + ניקוי הרשימה.
+  // • אם הנתמך השלים בקשת מסמכים (docs_pending) — עובר ל"ממתין לאישור מסמכים" (review) + ניקוי הרשימה.
   // • אחרת (אימות זהות ראשוני) — נכנס ל"השלמת מסמכים" לבדיקת המזכירות, כמו קודם.
   const hasIdDoc = uploaded.some(d => d === 'id_husband' || d === 'id_wife' || d === 'id_child')
   if (hasIdDoc) {
     const update = ben.eligibility_status === 'docs_pending'
-      ? { eligibility_status: 'pending', required_docs: '', updated_at: new Date().toISOString() }
+      ? { eligibility_status: 'review', required_docs: '', updated_at: new Date().toISOString() }
       : { eligibility_status: 'docs_pending', updated_at: new Date().toISOString() }
     await admin.from('beneficiaries').update(update).eq('id', beneficiaryId)
   }
