@@ -47,8 +47,18 @@ function formatDate(raw: string) {
   try {
     const d = new Date(raw)
     const now = new Date()
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
+    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+    const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000)
+    if (dayDiff === 0) return time                       // היום → רק שעה
+    if (dayDiff === 1) return `אתמול ${time}`            // אתמול
+    if (dayDiff < 7) {                                   // השבוע → יום בשבוע
+      const day = d.toLocaleDateString('he-IL', { weekday: 'long' })
+      return `${day} ${time}`
+    }
+    if (d.getFullYear() === now.getFullYear())           // השנה → יום/חודש + שעה
+      return `${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })} ${time}`
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch { return raw }
 }
 
@@ -557,8 +567,8 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function AssignAttachmentModal({ attachment, messageId, onClose }: {
-  attachment: Attachment; messageId: string; onClose: () => void
+function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: {
+  attachment: Attachment; messageId: string; senderEmail?: string; onClose: () => void
 }) {
   const [query, setQuery]           = useState('')
   const [results, setResults]       = useState<{ id: string; full_name: string }[]>([])
@@ -566,6 +576,45 @@ function AssignAttachmentModal({ attachment, messageId, onClose }: {
   const [docType, setDocType]       = useState('id_husband')
   const [saving, setSaving]         = useState(false)
   const [done, setDone]             = useState(false)
+  const [autoMatched, setAutoMatched] = useState(false)   // נתמך זוהה אוטומטית לפי מייל השולח
+  const [lookingUp, setLookingUp]   = useState(!!senderEmail?.trim())
+  const [maritalStatus, setMaritalStatus] = useState<string | null>(null)
+
+  // רק המסמכים הנדרשים לפי הרכב המשפחה בכרטסת. כשהנתמך לא מזוהה — מציגים הכל.
+  const docTypes = (() => {
+    if (!autoMatched) return DOC_TYPES
+    const married = !!maritalStatus && /נשוי|נשוא/.test(maritalStatus)
+    const allowed = married
+      ? ['id_husband', 'id_wife', 'marriage_cert', 'other']
+      : ['id_husband', 'other']
+    return DOC_TYPES.filter(t => allowed.includes(t.value))
+  })()
+
+  // זיהוי אוטומטי של הנתמך לפי כתובת המייל של השולח
+  useEffect(() => {
+    const email = senderEmail?.trim()
+    if (!email) { setLookingUp(false); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/beneficiary-search?email=${encodeURIComponent(email)}&exact=1`)
+        const data = await res.json()
+        const match = data.beneficiaries?.[0]
+        if (!cancelled && match) {
+          setSelected({ id: match.id, full_name: match.full_name })
+          setMaritalStatus(match.marital_status ?? null)
+          setAutoMatched(true)
+        }
+      } catch { /* נתעלם — ניפול לחיפוש ידני */ }
+      finally { if (!cancelled) setLookingUp(false) }
+    })()
+    return () => { cancelled = true }
+  }, [senderEmail])
+
+  // יישור סוג המסמך לאופציה חוקית כשהרשימה מסתננת
+  useEffect(() => {
+    if (!docTypes.some(t => t.value === docType)) setDocType(docTypes[0]?.value ?? 'other')
+  }, [docTypes, docType])
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return }
@@ -627,27 +676,46 @@ function AssignAttachmentModal({ attachment, messageId, onClose }: {
                 <label className="text-xs font-semibold text-slate-600 block mb-1">סוג מסמך</label>
                 <select value={docType} onChange={e => setDocType(e.target.value)}
                   className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  {DOC_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {docTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
 
-              <div className="relative">
-                <label className="text-xs font-semibold text-slate-600 block mb-1">חפש נתמך</label>
-                <input value={selected ? selected.full_name : query}
-                  onChange={e => { setSelected(null); setQuery(e.target.value) }}
-                  placeholder="שם, ת.ז. או מייל..."
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                {results.length > 0 && !selected && (
-                  <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-                    {results.map(r => (
-                      <li key={r.id} onClick={() => { setSelected(r); setResults([]); setQuery('') }}
-                        className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 text-slate-800">
-                        {r.full_name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {lookingUp ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
+                  <Loader2 size={15} className="animate-spin" /> מזהה את הנתמך לפי כתובת המייל...
+                </div>
+              ) : autoMatched && selected ? (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">נתמך</label>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
+                      <span className="text-sm font-medium text-slate-800 truncate">{selected.full_name}</span>
+                      <span className="text-[11px] text-green-700 bg-green-100 rounded-full px-2 py-0.5 flex-shrink-0">זוהה לפי המייל</span>
+                    </div>
+                    <button onClick={() => { setAutoMatched(false); setSelected(null) }}
+                      className="text-xs text-slate-500 hover:text-indigo-600 flex-shrink-0">שנה</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">חפש נתמך</label>
+                  <input value={selected ? selected.full_name : query}
+                    onChange={e => { setSelected(null); setQuery(e.target.value) }}
+                    placeholder="שם, ת.ז. או מייל..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  {results.length > 0 && !selected && (
+                    <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                      {results.map(r => (
+                        <li key={r.id} onClick={() => { setSelected(r); setResults([]); setQuery('') }}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 text-slate-800">
+                          {r.full_name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 mt-5 justify-end">
@@ -665,7 +733,7 @@ function AssignAttachmentModal({ attachment, messageId, onClose }: {
   )
 }
 
-function AttachmentBar({ attachments, messageId }: { attachments: Attachment[]; messageId: string }) {
+function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: Attachment[]; messageId: string; senderEmail?: string }) {
   const [assigning, setAssigning] = useState<Attachment | null>(null)
   if (!attachments.length) return null
 
@@ -697,7 +765,7 @@ function AttachmentBar({ attachments, messageId }: { attachments: Attachment[]; 
           </div>
         ))}
       </div>
-      {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} onClose={() => setAssigning(null)} />}
+      {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} senderEmail={senderEmail} onClose={() => setAssigning(null)} />}
     </div>
   )
 }
@@ -1335,7 +1403,7 @@ export default function MailClient() {
             )}
             <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
-            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} />
+            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
             {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
           </div>
         </div>
