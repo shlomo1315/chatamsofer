@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { UPLOADABLE_DOC_TYPES } from '@/lib/docTypes'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,12 +37,18 @@ export async function POST(request: NextRequest) {
 
   const uploaded: string[] = []
   let lastUrl = ''
-  const docTypes = UPLOADABLE_DOC_TYPES
 
-  for (const docType of docTypes) {
-    const file = formData.get(docType) as File | null
-    // Also support generic 'file' key for single-file uploads (birth cert)
-    const singleFile = docType === 'birth_cert' ? (file ?? formData.get('file') as File | null) : file
+  // איסוף כל הקבצים שנשלחו: כל שדה File שאינו 'beneficiary_id'. שם השדה = סוג המסמך.
+  // תמיכה לאחור: השדה הגנרי 'file' נשמר כ-'birth_cert' (זרימת אישור לידה).
+  const fileEntries: { docType: string; file: File }[] = []
+  for (const [key, val] of formData.entries()) {
+    if (key === 'beneficiary_id') continue
+    if (typeof val === 'string') continue
+    const docType = key === 'file' ? 'birth_cert' : key
+    fileEntries.push({ docType, file: val as File })
+  }
+
+  for (const { docType, file: singleFile } of fileEntries) {
     if (!singleFile || typeof singleFile === 'string') continue
     if (singleFile.size > MAX_SIZE) return NextResponse.json({ error: `הקובץ ${singleFile.name} גדול מ-10MB` }, { status: 400 })
 

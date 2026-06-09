@@ -6,6 +6,7 @@ import LineageTreeManager from '@/components/admin/LineageTreeManager'
 import AddUserButton from './AddUserButton'
 import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
+import DocTypesManager from './DocTypesManager'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -112,6 +113,10 @@ export default async function SettingsPage() {
         </Card>
 
         <RecoveryHomeLinks homes={recoveryHomes} />
+
+        <Card>
+          <DocTypesManager />
+        </Card>
 
         <Card>
           <div className="flex items-center gap-2 mb-4">

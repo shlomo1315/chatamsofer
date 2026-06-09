@@ -65,7 +65,16 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
         </Link>
         <div>
           <h1 className="text-xl font-bold text-slate-900">עריכת נתמך</h1>
-          {b && <p className="text-sm text-slate-500 mt-0.5">{b.full_name}</p>}
+          {b && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-slate-500">
+              <span className="font-medium text-slate-700">{[b.family_name, b.full_name].filter(Boolean).join(' ')}</span>
+              {b.id_number && <span>· ת.ז. {b.id_number}</span>}
+              {b.spouse_name && <span>· בן/בת זוג: {b.spouse_name}</span>}
+              {b.marital_status && <span>· {b.marital_status}</span>}
+              {b.phone && <span>· {b.phone}</span>}
+              {typeof b.children_count === 'number' && <span>· {b.children_count} ילדים</span>}
+            </div>
+          )}
         </div>
       </div>
       <BeneficiaryForm beneficiaryId={id} defaultValues={defaultValues} />

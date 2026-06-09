@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { DOC_TYPES, docTypeLabel } from '@/lib/docTypes'
+import { useDocTypes } from '@/lib/useDocTypes'
 
 const BUCKET = 'documents'
 
@@ -14,8 +14,6 @@ interface DocRow {
   file_name: string | null
   uploaded_at?: string
 }
-
-const typeLabel = docTypeLabel
 
 const formatUploaded = (raw?: string) => {
   if (!raw) return ''
@@ -29,6 +27,7 @@ const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|h
 
 export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: string }) {
   const supabase = createClient()
+  const { docTypes: DOC_TYPES, label: typeLabel } = useDocTypes()
   const fileRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocRow[]>([])
   const [loading, setLoading] = useState(true)
