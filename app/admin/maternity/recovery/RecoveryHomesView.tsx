@@ -17,6 +17,7 @@ function isWithinSixWeeks(aid: MaternityAid): boolean {
 export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[]; homes: string[] }) {
   const [home, setHome] = useState<string>('all')
   const [status, setStatus] = useState<'active' | 'inactive' | 'all'>('active')
+  const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('all')
 
   // איחוד בתי החלמה מהרשימה + מה שמופיע בפועל ברשומות
   const allHomes = useMemo(() => {
@@ -32,8 +33,23 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
   }
   const matchHome = (a: MaternityAid) => home === 'all' || a.recovery_home === home
 
-  // הטבלה: גם בית החלמה וגם סטטוס
-  const filtered = useMemo(() => aids.filter(a => matchHome(a) && matchStatus(a)), [aids, home, status])
+  // היקף נוכחי לפי בית החלמה + פעילות (לפני סינון הגעה)
+  const scoped = useMemo(() => aids.filter(a => matchHome(a) && matchStatus(a)), [aids, home, status])
+
+  // פילוח הגעה על ההיקף הנוכחי
+  const arrivedCounts = {
+    all: scoped.length,
+    arrived: scoped.filter(a => a.recovery_arrived === true).length,
+    not: scoped.filter(a => a.recovery_arrived === false).length,
+    pending: scoped.filter(a => a.recovery_arrived !== true && a.recovery_arrived !== false).length,
+  }
+  const matchArrived = (a: MaternityAid) => {
+    if (arrivedFilter === 'all') return true
+    if (arrivedFilter === 'arrived') return a.recovery_arrived === true
+    if (arrivedFilter === 'not') return a.recovery_arrived === false
+    return a.recovery_arrived !== true && a.recovery_arrived !== false
+  }
+  const filtered = scoped.filter(matchArrived)
 
   // ספירת טאבי בתי החלמה — מכבדת את סינון הסטטוס הנוכחי (עקביות עם התוצאות)
   const homeCount = (h?: string) => aids.filter(a => (h ? a.recovery_home === h : true) && matchStatus(a)).length
@@ -76,6 +92,29 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
             <button key={s.key} onClick={() => setStatus(s.key)}
               className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${sel ? s.sel : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}>
               {Icon && <Icon size={13} />} {s.label} <span className="opacity-70">{s.count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* פילוח הגעה — קוביות מספר + אחוז, גם מסננות */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {([
+          { key: 'all', label: 'סה״כ בהיקף', count: arrivedCounts.all, bg: 'bg-slate-50 border-slate-200', num: 'text-slate-800', sel: 'ring-2 ring-slate-400' },
+          { key: 'arrived', label: 'הגיעו', count: arrivedCounts.arrived, bg: 'bg-green-50 border-green-200', num: 'text-green-700', sel: 'ring-2 ring-green-400' },
+          { key: 'not', label: 'לא הגיעו', count: arrivedCounts.not, bg: 'bg-red-50 border-red-200', num: 'text-red-700', sel: 'ring-2 ring-red-400' },
+          { key: 'pending', label: 'טרם סומן', count: arrivedCounts.pending, bg: 'bg-amber-50 border-amber-200', num: 'text-amber-700', sel: 'ring-2 ring-amber-400' },
+        ] as const).map(c => {
+          const pct = arrivedCounts.all ? Math.round((c.count / arrivedCounts.all) * 100) : 0
+          const active = arrivedFilter === c.key
+          return (
+            <button key={c.key} onClick={() => setArrivedFilter(c.key)}
+              className={`rounded-2xl border px-4 py-3.5 text-right transition-all ${c.bg} ${active ? c.sel : 'hover:shadow-sm'}`}>
+              <p className="text-xs text-slate-500 mb-1">{c.label}</p>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-3xl font-extrabold ${c.num}`}>{c.count}</span>
+                {c.key !== 'all' && <span className="text-sm font-semibold text-slate-400">{pct}%</span>}
+              </div>
             </button>
           )
         })}
