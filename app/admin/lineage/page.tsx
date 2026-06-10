@@ -569,35 +569,37 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
                 )}
 
-                {/* actions strip — מופיע גם בלחיצה וגם במעבר עכבר (hover) */}
+                {/* actions strip — מתחת לקובייה, גם בלחיצה וגם במעבר עכבר (hover) */}
                 {(isSel || hovered === pos.node.id) && (
                   <div onClick={e => e.stopPropagation()}
                     onMouseEnter={() => setHovered(pos.node.id)}
                     style={{
-                    position: 'absolute', bottom: -54,
-                    display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 260,
-                    background: '#fff', borderRadius: 22,
-                    padding: '6px 10px',
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.14)',
-                    border: '1px solid #E2E8F0', zIndex: 30,
-                  }}>
-                    {[
-                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
-                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
-                      // סימון בן/חתן מהיר (רק לצומת שאינו השורש)
-                      ...(pos.node.parent_id ? [
-                        { label: 'בן', color: '#1E40AF', bg: pos.node.relation === 'son' ? '#BFDBFE' : '#EFF6FF', fn: () => patchRelation(pos.node, 'son'), title: 'סמן בן' },
-                        { label: 'חתן', color: '#92400E', bg: pos.node.relation === 'son_in_law' ? '#FDE68A' : '#FFFBEB', fn: () => patchRelation(pos.node, 'son_in_law'), title: 'סמן חתן' },
-                      ] : []),
-                      ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
-                      ...(nodeStatus !== 'rejected' ? [{ icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
-                      { icon: <Trash2 size={12} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
-                    ].map((b, i) => {
-                      const bb = b as { icon?: React.ReactNode; label?: string; color: string; bg: string; fn: () => void; title?: string }
-                      return (
-                        <button key={i} onClick={bb.fn} title={bb.title} style={{ minWidth: 30, height: 30, padding: bb.label ? '0 10px' : 0, borderRadius: bb.label ? 15 : '50%', background: bb.bg, color: bb.color, border: `1.5px solid ${bb.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s', fontSize: 12, fontWeight: 800 }}>{bb.label ?? bb.icon}</button>
-                      )
-                    })}
+                      position: 'absolute', top: 'calc(100% + 10px)', left: '50%', transform: 'translateX(-50%)',
+                      display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
+                      background: '#fff', borderRadius: 16, padding: '8px 10px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0', zIndex: 40,
+                    }}>
+                    {/* שורת אייקונים */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[
+                        { icon: <Pencil size={13} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
+                        { icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
+                        ...(nodeStatus !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
+                        ...(nodeStatus !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
+                        { icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
+                      ].map((b, i) => (
+                        <button key={i} onClick={b.fn} title={b.title} style={{ width: 32, height: 32, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{b.icon}</button>
+                      ))}
+                    </div>
+                    {/* שורת בן/חתן — מתחת לכל האייקונים (רק לצומת שאינו השורש) */}
+                    {pos.node.parent_id && (
+                      <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+                        {([['son', 'בן', '#1E40AF', '#BFDBFE', '#EFF6FF'], ['son_in_law', 'חתן', '#92400E', '#FDE68A', '#FFFBEB']] as const).map(([v, l, fg, selBg, bg]) => (
+                          <button key={v} onClick={() => patchRelation(pos.node, v)} title={`סמן ${l}`}
+                            style={{ flex: 1, padding: '5px 0', borderRadius: 9, background: pos.node.relation === v ? selBg : bg, color: fg, border: `1.5px solid ${pos.node.relation === v ? fg : fg + '33'}`, cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>{l}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
