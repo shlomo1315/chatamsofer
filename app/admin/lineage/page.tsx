@@ -126,10 +126,10 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
 }
 
 // בורר קשר בן/חתן של הצומת ביחס להורה שלו (לשורש אין קשר)
-function RelationPicker({ value, onChange }: { value: 'son' | 'son_in_law' | null; onChange: (v: 'son' | 'son_in_law' | null) => void }) {
+function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_law' | null; onChange: (v: 'son' | 'son_in_law' | null) => void; required?: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>קשר להורה (הדור הקודם)</label>
+      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>קשר להורה (הדור הקודם){required && <span style={{ color: '#DC2626' }}> *</span>}</label>
       <div style={{ display: 'flex', gap: 8 }}>
         {([['son', 'בן', '#DBEAFE', '#1E40AF', '#93C5FD'], ['son_in_law', 'חתן', '#FEF3C7', '#92400E', '#FCD34D']] as const).map(([v, l, bg, fg, br]) => (
           <button key={v} type="button" onClick={() => onChange(value === v ? null : v)}
@@ -144,8 +144,9 @@ function RelationPicker({ value, onChange }: { value: 'son' | 'son_in_law' | nul
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
   const [selected, setSelected] = useState<string | null>(null)
+  const [hovered, setHovered] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
@@ -297,6 +298,18 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
       alert(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
       return
     }
+    onRefresh()
+  }
+
+  // סימון בן/חתן מהיר (מ-hover) — עדכון אופטימי + שמירה
+  async function patchRelation(node: LineageNode, relation: 'son' | 'son_in_law') {
+    const next = node.relation === relation ? null : relation
+    onRelationChange(node.id, next)
+    const res = await fetch('/api/admin/lineage', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ id: node.id, relation: next }),
+    })
+    if (!res.ok) { onRelationChange(node.id, node.relation ?? null); alert('שגיאה בשמירת בן/חתן'); return }
     onRefresh()
   }
 
@@ -467,6 +480,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
               <div
                 key={pos.node.id}
                 data-lin-node="1"
+                onMouseEnter={() => setHovered(pos.node.id)}
+                onMouseLeave={() => setHovered(prev => prev === pos.node.id ? null : prev)}
                 onClick={e => { e.stopPropagation(); setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
@@ -554,11 +569,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                   }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
                 )}
 
-                {/* actions strip */}
-                {isSel && (
-                  <div onClick={e => e.stopPropagation()} style={{
+                {/* actions strip — מופיע גם בלחיצה וגם במעבר עכבר (hover) */}
+                {(isSel || hovered === pos.node.id) && (
+                  <div onClick={e => e.stopPropagation()}
+                    onMouseEnter={() => setHovered(pos.node.id)}
+                    style={{
                     position: 'absolute', bottom: -54,
-                    display: 'flex', gap: 6,
+                    display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 260,
                     background: '#fff', borderRadius: 22,
                     padding: '6px 10px',
                     boxShadow: '0 6px 20px rgba(0,0,0,0.14)',
@@ -566,13 +583,21 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                   }}>
                     {[
                       { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
-                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
-                      ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אמת' }] : []),
+                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
+                      // סימון בן/חתן מהיר (רק לצומת שאינו השורש)
+                      ...(pos.node.parent_id ? [
+                        { label: 'בן', color: '#1E40AF', bg: pos.node.relation === 'son' ? '#BFDBFE' : '#EFF6FF', fn: () => patchRelation(pos.node, 'son'), title: 'סמן בן' },
+                        { label: 'חתן', color: '#92400E', bg: pos.node.relation === 'son_in_law' ? '#FDE68A' : '#FFFBEB', fn: () => patchRelation(pos.node, 'son_in_law'), title: 'סמן חתן' },
+                      ] : []),
+                      ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
                       ...(nodeStatus !== 'rejected' ? [{ icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
                       { icon: <Trash2 size={12} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
-                    ].map((b, i) => (
-                      <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
-                    ))}
+                    ].map((b, i) => {
+                      const bb = b as { icon?: React.ReactNode; label?: string; color: string; bg: string; fn: () => void; title?: string }
+                      return (
+                        <button key={i} onClick={bb.fn} title={bb.title} style={{ minWidth: 30, height: 30, padding: bb.label ? '0 10px' : 0, borderRadius: bb.label ? 15 : '50%', background: bb.bg, color: bb.color, border: `1.5px solid ${bb.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s', fontSize: 12, fontWeight: 800 }}>{bb.label ?? bb.icon}</button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -817,13 +842,18 @@ export default function LineagePage() {
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
+    const addParentId = modal?.type === 'add' ? (modal.parentId ?? formParentId) : null
+    // בהוספת דור חדש (כשכבר יש עץ) — אבא ובן/חתן חובה
+    if (modal?.type === 'add' && nodes.length > 0) {
+      if (!addParentId) { setSaveErr('יש לבחור את האב/האם (הדור הקודם)'); return }
+      if (!formRelation) { setSaveErr('יש לבחור האם הוא בן או חתן'); return }
+    }
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
         await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
-        const parentId = modal.parentId ?? formParentId
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: parentId, relation: formRelation }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: addParentId, relation: formRelation }) })
       }
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
@@ -918,7 +948,7 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} />
+        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} />
       ) : (
         <TableView
           nodes={nodes}
@@ -948,20 +978,23 @@ export default function LineagePage() {
       {modal?.type === 'add' && (
         <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף דור חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
-            {(modal.parentId || formParentId) && <RelationPicker value={formRelation} onChange={setFormRelation} />}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>שם <span style={{ color: '#DC2626' }}>*</span></label>
+              <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            </div>
             {!modal.parentId && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו?</label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו? <span style={{ color: '#DC2626' }}>*</span></label>
                 <select value={formParentId ?? ''} onChange={e => setFormParentId(e.target.value || null)}
                   style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF', cursor: 'pointer' }}>
-                  <option value="">— ללא הורה (שורש ראשי) —</option>
+                  <option value="">— בחר אב/אם —</option>
                   {[...nodes].filter(n => (n.status ?? 'verified') === 'verified').sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
                     <option key={n.id} value={n.id}>{n.name} (דור {n.generation})</option>
                   ))}
                 </select>
               </div>
             )}
+            {(modal.parentId || formParentId) && <RelationPicker value={formRelation} onChange={setFormRelation} required />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
