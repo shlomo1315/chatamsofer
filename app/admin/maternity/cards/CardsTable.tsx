@@ -128,14 +128,15 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
               const center = (aid as { card_center?: { name?: string } }).card_center
               const busy = busyId === aid.id
               return (
-                <tr key={aid.id} className="hover:bg-emerald-50/40 transition-colors">
+                <tr key={aid.id} onClick={() => router.push(`/admin/maternity/${aid.id}`)}
+                  className="hover:bg-emerald-50/40 transition-colors cursor-pointer">
                   <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{motherName(b)}</td>
                   <td className="px-4 py-3 text-xs font-mono text-slate-600"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
                   <td className="px-4 py-3 text-slate-700">{aid.baby_name ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-600"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
                   <td className="px-4 py-3 text-slate-600">{center?.name ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3"><span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
                     ) : approveFor === aid.id ? (

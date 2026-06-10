@@ -256,7 +256,14 @@ const searchHaystack = (a: MaternityAid) => {
 }
 
 // ── Main table ──────────────────────────────────────────────────────────────────
-export default function MaternityTable({ data }: { data: MaternityAid[] }) {
+const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
+  pending:  { label: 'ממתין', cls: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'אושר',   cls: 'bg-blue-100 text-blue-800' },
+  loaded:   { label: 'נטען',    cls: 'bg-green-100 text-green-800' },
+  rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
+}
+
+export default function MaternityTable({ data, showCard }: { data: MaternityAid[]; showCard?: boolean }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -317,14 +324,14 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'אישור לידה', 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
+                <tr><td colSpan={showCard ? 10 : 9} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -348,6 +355,11 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
+                    {showCard && (
+                      <td className="px-4 py-3 align-middle">
+                        {(() => { const cs = aid.card_status ?? 'pending'; const m = CARD_STATUS_PILL[cs]; return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${m.cls}`}>{m.label}</span> })()}
+                      </td>
+                    )}
                     <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
                     <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">

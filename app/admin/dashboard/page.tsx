@@ -63,7 +63,7 @@ async function getStats(): Promise<DashData> {
       maternityActive: m.filter(x => x.status === 'active').length,
       maternityPending: m.filter(x => x.status === 'pending').length,
       cardsLoaded: m.filter(x => x.card_status === 'loaded').length,
-      cardsPending: m.filter(x => !x.card_status || x.card_status === 'pending').length,
+      cardsPending: m.filter(x => x.status === 'active' && (!x.card_status || x.card_status === 'pending')).length,
       cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - m.filter(x => x.card_status === 'loaded').length,
       widowPending: w.filter(x => x.status === 'pending').length,
       widowInProgress: w.filter(x => x.status === 'in_progress').length,

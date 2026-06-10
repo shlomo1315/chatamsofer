@@ -1,9 +1,7 @@
-import Link from 'next/link'
-import { Plus, Baby } from 'lucide-react'
+import { Baby } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
-import Button from '@/components/ui/Button'
-import MaternityTable from './MaternityTable'
+import MaternityTable from '../MaternityTable'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -11,7 +9,7 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
+      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count)')
       .order('created_at', { ascending: false })
     return data ?? []
   } catch {
@@ -19,22 +17,17 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   }
 }
 
-export default async function MaternityPage() {
+export default async function RecoveryPage() {
   const aids = await getMaternityAids()
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Baby size={20} className="text-pink-500" />
         <div>
-          <h1 className="text-xl font-bold text-slate-900">יולדות</h1>
-          <p className="text-sm text-slate-500 mt-0.5">כל הלידות · {aids.length}</p>
+          <h1 className="text-xl font-bold text-slate-900">עזר יולדות</h1>
+          <p className="text-sm text-slate-500 mt-0.5">בית החלמה · אישור ומעקב</p>
         </div>
-        <Link href="/admin/maternity/new">
-          <Button>
-            <Plus size={16} />
-            לידה חדשה
-          </Button>
-        </Link>
       </div>
 
       {aids.length === 0 ? (
@@ -43,7 +36,7 @@ export default async function MaternityPage() {
           <p className="text-slate-400 text-sm">לא נמצאו תיקי יולדות</p>
         </div>
       ) : (
-        <MaternityTable data={aids} showCard />
+        <MaternityTable data={aids} />
       )}
     </div>
   )

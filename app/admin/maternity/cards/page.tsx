@@ -10,7 +10,8 @@ async function getAids(): Promise<MaternityAid[]> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('maternity_aids')
-      .select('id, birth_date, baby_name, baby_gender, card_status, card_center_id, card_loaded_at, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number), card_center:card_centers(name)')
+      .select('id, birth_date, baby_name, baby_gender, status, card_status, card_center_id, card_loaded_at, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number), card_center:card_centers(name)')
+      .eq('status', 'active')
       .order('created_at', { ascending: false })
     return (data ?? []) as unknown as MaternityAid[]
   } catch {
