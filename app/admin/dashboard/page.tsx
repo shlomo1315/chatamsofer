@@ -1,6 +1,6 @@
 import {
   Users, Landmark, Baby, UtensilsCrossed, HeartHandshake,
-  ClipboardList, Download, Mail, ArrowLeft, TrendingUp, CheckCircle2,
+  ClipboardList, Download, Mail, ArrowLeft, TrendingUp, CheckCircle2, HandCoins,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -23,6 +23,9 @@ interface DashData {
   widowPending: number
   widowInProgress: number
   distributionsPlanned: number
+  aidPending: number
+  aidAwaiting: number
+  aidApproved: number
 }
 
 const EMPTY: DashData = {
@@ -30,6 +33,7 @@ const EMPTY: DashData = {
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
   maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
+  aidPending: 0, aidAwaiting: 0, aidApproved: 0,
 }
 
 async function getStats(): Promise<DashData> {
@@ -37,17 +41,19 @@ async function getStats(): Promise<DashData> {
   try {
     const supabase = await createClient()
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-    const [beneficiaries, loans, maternity, widows, distributions, cardCenters] = await Promise.all([
+    const [beneficiaries, loans, maternity, widows, distributions, cardCenters, aid] = await Promise.all([
       supabase.from('beneficiaries').select('eligibility_status, created_at'),
       supabase.from('loans').select('status, amount, created_at'),
       supabase.from('maternity_aids').select('status, card_status'),
       supabase.from('widow_requests').select('status'),
       supabase.from('distributions').select('status').in('status', ['planning', 'active']),
       supabase.from('card_centers').select('stock'),
+      supabase.from('financial_aid_requests').select('status'),
     ])
     const b = beneficiaries.data ?? []
     const l = loans.data ?? []
     const m = maternity.data ?? []
+    const fa = aid.data ?? []
     const w = widows.data ?? []
 
     return {
@@ -67,6 +73,9 @@ async function getStats(): Promise<DashData> {
       cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - m.filter(x => x.card_status === 'loaded').length,
       widowPending: w.filter(x => x.status === 'pending').length,
       widowInProgress: w.filter(x => x.status === 'in_progress').length,
+      aidPending: fa.filter(x => x.status === 'pending').length,
+      aidAwaiting: fa.filter(x => x.status === 'awaiting_decision').length,
+      aidApproved: fa.filter(x => x.status === 'approved').length,
       distributionsPlanned: distributions.count ?? (distributions.data?.length ?? 0),
     }
   } catch {
@@ -125,6 +134,13 @@ export default async function DashboardPage() {
       metrics: [
         { label: 'בקשות חדשות', value: fmt(s.widowPending), tone: 'text-amber-600' },
         { label: 'בטיפול', value: fmt(s.widowInProgress), tone: 'text-blue-600' },
+      ],
+    },
+    {
+      title: 'סיוע כספי', icon: HandCoins, grad: 'from-emerald-500 to-teal-600', href: '/admin/financial-aid',
+      metrics: [
+        { label: 'ממתינות', value: fmt(s.aidPending), tone: 'text-amber-600' },
+        { label: 'נשלחו לאישור', value: fmt(s.aidAwaiting), tone: 'text-blue-600' },
       ],
     },
   ]

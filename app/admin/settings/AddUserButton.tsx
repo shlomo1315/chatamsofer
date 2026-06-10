@@ -15,6 +15,7 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'maternity',     label: 'עזר יולדות' },
   { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
   { key: 'loans',         label: 'הלוואות' },
+  { key: 'financial_aid', label: 'סיוע כספי' },
   { key: 'distributions', label: 'חלוקות' },
   { key: 'reports',       label: 'דוחות' },
   { key: 'lineage',       label: 'עץ הדורות' },
