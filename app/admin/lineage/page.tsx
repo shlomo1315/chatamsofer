@@ -131,9 +131,9 @@ function RelationPicker({ value, onChange }: { value: 'son' | 'son_in_law' | nul
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>קשר להורה (הדור הקודם)</label>
       <div style={{ display: 'flex', gap: 8 }}>
-        {([['son', 'בן'], ['son_in_law', 'חתן']] as const).map(([v, l]) => (
+        {([['son', 'בן', '#DBEAFE', '#1E40AF', '#93C5FD'], ['son_in_law', 'חתן', '#FEF3C7', '#92400E', '#FCD34D']] as const).map(([v, l, bg, fg, br]) => (
           <button key={v} type="button" onClick={() => onChange(value === v ? null : v)}
-            style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: value === v ? '1.5px solid #7C3AED' : '1.5px solid #E2E8F0', background: value === v ? '#7C3AED' : '#fff', color: value === v ? '#fff' : '#475569', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1.5px solid ${value === v ? br : '#E2E8F0'}`, background: value === v ? bg : '#fff', color: value === v ? fg : '#94A3B8', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             {l}
           </button>
         ))}
@@ -448,7 +448,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
 
           {positions.map(pos => {
             const nodeStatus = pos.node.status ?? 'verified'
-            const genPal = pal(pos.node.generation)
+            // צבע הקובייה לפי בן/חתן (גוון כחול לבן · ענבר לחתן), כדי שרואים את ההבדל על פני העץ
+            const relPal = pos.node.relation === 'son'
+              ? { bg: 'linear-gradient(135deg,#3B82F6 0%,#2563EB 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.30)', light: '#EFF6FF', text: '#1E40AF' }
+              : pos.node.relation === 'son_in_law'
+                ? { bg: 'linear-gradient(135deg,#F59E0B 0%,#D97706 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.30)', light: '#FFFBEB', text: '#92400E' }
+                : null
+            const genPal = relPal ?? pal(pos.node.generation)
             const isSel = selected === pos.node.id
             const isDimmed = selected !== null
               ? !pathBranch.has(pos.node.id)
@@ -533,6 +539,19 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                     padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20,
                     boxShadow: `0 1px 4px ${p.shadow}`, direction: 'rtl',
                   }}>{pos.node.children.length} ילדים</div>
+                )}
+
+                {/* בן/חתן badge — קשר הצומת להורה (מקור אחד: lineage_nodes.relation) */}
+                {pos.node.relation && zoom >= 0.5 && (
+                  <div style={{
+                    position: 'absolute', bottom: -11 * zoom, right: 6 * zoom,
+                    background: pos.node.relation === 'son' ? '#DBEAFE' : '#FEF3C7',
+                    color: pos.node.relation === 'son' ? '#1E40AF' : '#92400E',
+                    fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
+                    padding: `${1 * zoom}px ${8 * zoom}px`, borderRadius: 20,
+                    boxShadow: `0 1px 4px rgba(0,0,0,0.12)`, direction: 'rtl',
+                    border: `1.5px solid ${pos.node.relation === 'son' ? '#93C5FD' : '#FCD34D'}`,
+                  }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
                 )}
 
                 {/* actions strip */}
