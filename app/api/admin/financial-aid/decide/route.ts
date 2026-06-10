@@ -34,6 +34,16 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // לא ניתן לאשר בקשת סיוע למשפחה שטרם אושרה במערכת
+  if (status === 'approved') {
+    const { data: chk } = await admin
+      .from('financial_aid_requests')
+      .select('beneficiary:beneficiaries(eligibility_status)')
+      .eq('id', id).maybeSingle()
+    const elig = ((chk as Record<string, unknown> | null)?.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status
+    if (elig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
+  }
+
   const { error } = await admin.from('financial_aid_requests').update({
     status,
     amount: status === 'approved' ? (Number(amount) || 0) : null,
