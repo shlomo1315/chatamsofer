@@ -35,8 +35,8 @@ const navTop: NavItem[] = [
 
 // "יולדות" — קטגוריית אם מתקפלת עם שני תתי-אגפים
 const maternityChildren: { href: string; label: string; section: SectionKey }[] = [
-  { href: '/admin/maternity',       label: 'עזר יולדות',        section: 'maternity' },
-  { href: '/admin/maternity/cards', label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
+  { href: '/admin/maternity/recovery', label: 'עזר יולדות',        section: 'maternity' },
+  { href: '/admin/maternity/cards',    label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
 ]
 
 const navBottom: NavItem[] = [
@@ -88,8 +88,9 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 
   const mailActive = pathname.startsWith('/admin/mail')
-  const maternityActive = pathname.startsWith('/admin/maternity')
   const cardsActive = pathname.startsWith('/admin/maternity/cards')
+  const recoveryActive = pathname.startsWith('/admin/maternity/recovery')
+  const maternityRootActive = pathname === '/admin/maternity' || /^\/admin\/maternity\/[^/]+$/.test(pathname) && !cardsActive && !recoveryActive
 
   const renderLink = ({ href, label, icon: Icon }: NavItem) => {
     const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
@@ -116,24 +117,24 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {topVisible.map(renderLink)}
 
-        {/* ── יולדות accordion (עזר יולדות + כרטיסי מזון) ── */}
+        {/* ── יולדות: לחיצה → רשימת כל הלידות, וגם נפתח לתתי-אגפים ── */}
         {maternityVisible.length > 0 && (
           <div className="pt-0.5">
-            <button
-              onClick={() => setMaternityOpen(o => !o)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${maternityActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}
-            >
-              <Baby size={18} className="flex-shrink-0" />
-              <span className="flex-1 text-right">יולדות</span>
-              {maternityOpen
-                ? <ChevronUp size={14} className="flex-shrink-0 opacity-70" />
-                : <ChevronDown size={14} className="flex-shrink-0 opacity-70" />}
-            </button>
+            <div className={`flex items-center rounded-lg transition-colors
+                ${maternityRootActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+              <Link href="/admin/maternity" onClick={() => { setMobileOpen(false); setMaternityOpen(true) }}
+                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium flex-1 min-w-0">
+                <Baby size={18} className="flex-shrink-0" />
+                <span>יולדות</span>
+              </Link>
+              <button onClick={() => setMaternityOpen(o => !o)} className="px-3 py-2.5 opacity-70 hover:opacity-100" aria-label="פתח/סגור">
+                {maternityOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
             {maternityOpen && (
               <div className="mt-1 mr-4 border-r border-slate-700 pr-2 flex flex-col gap-0.5">
                 {maternityVisible.map(child => {
-                  const active = child.href === '/admin/maternity/cards' ? cardsActive : (maternityActive && !cardsActive)
+                  const active = child.href === '/admin/maternity/cards' ? cardsActive : recoveryActive
                   const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed : Baby
                   return (
                     <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
