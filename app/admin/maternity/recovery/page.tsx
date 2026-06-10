@@ -13,6 +13,7 @@ async function getData(): Promise<{ aids: MaternityAid[]; homes: string[] }> {
       supabase
         .from('maternity_aids')
         .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count)')
+        .eq('status', 'active')
         .order('created_at', { ascending: false }),
       supabase.from('recovery_homes').select('name'),
     ])
@@ -34,6 +35,10 @@ export default async function RecoveryPage() {
           <h1 className="text-xl font-bold text-slate-900">עזר יולדות</h1>
           <p className="text-sm text-slate-500 mt-0.5">בית החלמה · לפי מוקד וסטטוס פעילות</p>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
+        מוצגות כאן רק לידות שאושרו. כדי לאשר לידות חדשות יש להיכנס לשונית הראשית <strong>יולדות</strong>.
       </div>
 
       {aids.length === 0 ? (

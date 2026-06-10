@@ -16,7 +16,7 @@ function isWithinSixWeeks(aid: MaternityAid): boolean {
 
 export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[]; homes: string[] }) {
   const [home, setHome] = useState<string>('all')
-  const [status, setStatus] = useState<'active' | 'inactive' | 'all'>('all')
+  const [status, setStatus] = useState<'active' | 'inactive' | 'all'>('active')
 
   // איחוד בתי החלמה מהרשימה + מה שמופיע בפועל ברשומות
   const allHomes = useMemo(() => {
@@ -38,8 +38,8 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
 
   return (
     <div className="flex flex-col gap-4">
-      {/* טאבים לפי בית החלמה */}
-      <div className="flex gap-2 flex-wrap">
+      {/* שורה אחת: טאבי בתי החלמה | סינון פעיל/לא פעיל */}
+      <div className="flex gap-2 flex-wrap items-center">
         <button onClick={() => setHome('all')}
           className={`text-sm font-medium px-4 py-2 rounded-xl border transition-colors ${home === 'all' ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-white text-slate-600 border-slate-200 hover:border-pink-200'}`}>
           כל בתי ההחלמה <span className="opacity-70">{aids.length}</span>
@@ -53,14 +53,14 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
             </button>
           )
         })}
-      </div>
 
-      {/* פעיל / לא פעיל */}
-      <div className="flex gap-2">
+        {/* מפריד */}
+        <div className="h-7 w-px bg-slate-300 mx-2" />
+
         {([
-          { key: 'all', label: 'הכל', count: byHome.length, icon: null, sel: 'bg-slate-200 text-slate-800 border-slate-400' },
           { key: 'active', label: 'פעיל (בתוך 6 שבועות)', count: activeCount, icon: CheckCircle2, sel: 'bg-green-100 text-green-800 border-green-400' },
           { key: 'inactive', label: 'לא פעיל (עבר 6 שבועות)', count: inactiveCount, icon: Clock, sel: 'bg-red-100 text-red-800 border-red-400' },
+          { key: 'all', label: 'הכל', count: byHome.length, icon: null, sel: 'bg-slate-200 text-slate-800 border-slate-400' },
         ] as const).map(s => {
           const sel = status === s.key
           const Icon = s.icon
