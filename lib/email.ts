@@ -95,13 +95,16 @@ export function templateStatusApproved(name: string): EmailPayload {
 
 export function templateStatusRejected(name: string, reason?: string): EmailPayload {
   return {
-    subject: 'עדכון בקשה — היכל החתם סופר',
-    html: baseTemplate('עדכון בקשה', `
+    subject: 'הרישום לאיגוד הצאצאים נדחה — היכל החתם סופר',
+    html: baseTemplate('הרישום נדחה', `
       <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
-        לאחר בחינת בקשתך, לצערנו <strong>לא ניתן לאשרה</strong> בשלב זה.
+        לאחר בחינת בקשתך, הרישום ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר <strong>נדחה</strong>.
       </p>
-      ${reason ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#991b1b;font-size:14px;">${reason}</p></div>` : ''}
+      ${reason ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:16px;margin:20px 0;">
+        <p style="margin:0 0 4px;color:#991b1b;font-size:13px;font-weight:700;">סיבת הדחייה:</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.6;">${reason}</p>
+      </div>` : ''}
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }

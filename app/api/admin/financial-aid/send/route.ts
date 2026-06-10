@@ -53,9 +53,12 @@ export async function POST(request: NextRequest) {
 
   const { data: req } = await admin
     .from('financial_aid_requests')
-    .select('id, reason, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count)')
+    .select('id, reason, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count, eligibility_status)')
     .eq('id', id).maybeSingle()
   if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
+
+  const benElig = ((req as Record<string, unknown>).beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status
+  if (benElig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה לפני שליחת הבקשה לאישור.' }, { status: 400 })
 
   const { data: setting } = await admin.from('app_settings').select('value').eq('key', 'financial_aid_decision_email').maybeSingle()
   const decisionEmail = (setting?.value ?? '').trim()

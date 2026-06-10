@@ -175,9 +175,9 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, בקשתך אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, הרישום אושר 🎉</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
-      אנו שמחים לבשר לך כי בקשתך ב<strong>היכל החתם סופר</strong> אושרה.
+      אנו שמחים לבשר לך כי הרישום שלך ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבל במערכת ואושר.
       מעתה ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.
     </p>
 
@@ -207,8 +207,8 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
     </p>
   `
   return {
-    subject: '✅ בקשתך אושרה — היכל החתם סופר',
-    html: shell({ preheader: 'בקשתך אושרה! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הבקשה אושרה בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
+    subject: '✅ הרישום לאיגוד הצאצאים אושר — היכל החתם סופר',
+    html: shell({ preheader: 'הרישום לאיגוד הצאצאים התקבל ואושר! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הרישום אושר בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
   }
 }
 
