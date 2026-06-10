@@ -451,9 +451,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
             const genPal = pal(pos.node.generation)
             // הבדל עדין מאוד בתוך צבע הדור: בן = מעט בהיר יותר · חתן = מעט כהה יותר
             const relOverlay = pos.node.relation === 'son'
-              ? 'linear-gradient(rgba(255,255,255,0.22),rgba(255,255,255,0.22)), '
+              ? 'linear-gradient(rgba(255,255,255,0.42),rgba(255,255,255,0.42)), '
               : pos.node.relation === 'son_in_law'
-                ? 'linear-gradient(rgba(15,23,42,0.18),rgba(15,23,42,0.18)), '
+                ? 'linear-gradient(rgba(15,23,42,0.34),rgba(15,23,42,0.34)), '
                 : ''
             const isSel = selected === pos.node.id
             const isDimmed = selected !== null
