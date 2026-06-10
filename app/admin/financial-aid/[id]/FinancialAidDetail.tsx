@@ -2,16 +2,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Send, RefreshCw, Check, X, Clock, Loader2, Mail } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import type { FinancialAidRequest } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleString('he-IL') : '—'
+const fmtDateTime = (d?: string) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
 export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }) {
   const router = useRouter()
-  const supabase = createClient()
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [amountInput, setAmountInput] = useState('')
@@ -36,10 +35,12 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
   const setStatus = async (status: string, amount?: number | null) => {
     setBusy(status); setErr('')
     try {
-      const { error } = await supabase.from('financial_aid_requests').update({
-        status, amount: amount ?? null, updated_at: new Date().toISOString(),
-      }).eq('id', req.id)
-      if (error) throw error
+      const r = await fetch('/api/admin/financial-aid/decide', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: req.id, status, amount: amount ?? null }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'שגיאה')
       router.refresh()
     } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה') }
     setBusy(null)
@@ -53,14 +54,25 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
       </div>
 
       {req.status === 'approved' && (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          ✅ אושר סכום של <strong>₪{Number(req.amount ?? 0).toLocaleString('he-IL')}</strong>
-          {req.decision_reply && <span className="block text-xs text-green-700 mt-1">תשובת הגורם: "{req.decision_reply}"</span>}
+        <div className="rounded-xl border border-green-200 bg-green-50 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 bg-green-100/60">
+            <span className="text-sm font-bold text-green-800">✅ הבקשה אושרה</span>
+            <span className="text-lg font-extrabold text-green-700 ltr-num">₪{Number(req.amount ?? 0).toLocaleString('he-IL')}</span>
+          </div>
+          <dl className="px-4 py-2.5 text-xs text-green-800 divide-y divide-green-100">
+            <div className="flex justify-between py-1"><dt className="text-green-600">סכום מאושר</dt><dd className="font-semibold ltr-num">₪{Number(req.amount ?? 0).toLocaleString('he-IL')}</dd></div>
+            <div className="flex justify-between py-1"><dt className="text-green-600">התקבל מהגורם המאשר</dt><dd className="font-semibold ltr-num">{fmtDateTime(req.decision_replied_at)}</dd></div>
+            <div className="flex justify-between py-1"><dt className="text-green-600">הודעה למבקש</dt><dd className="font-semibold">נשלחה ✓</dd></div>
+          </dl>
         </div>
       )}
       {req.status === 'rejected' && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          ❌ הבקשה נדחתה{req.decision_reply ? ` — "${req.decision_reply}"` : ''}
+        <div className="rounded-xl border border-red-200 bg-red-50 overflow-hidden">
+          <div className="px-4 py-3 bg-red-100/60 text-sm font-bold text-red-800">❌ הבקשה נדחתה</div>
+          <dl className="px-4 py-2.5 text-xs text-red-800 divide-y divide-red-100">
+            <div className="flex justify-between py-1"><dt className="text-red-500">התקבל מהגורם המאשר</dt><dd className="font-semibold ltr-num">{fmtDateTime(req.decision_replied_at)}</dd></div>
+            <div className="flex justify-between py-1"><dt className="text-red-500">הודעה למבקש</dt><dd className="font-semibold">נשלחה ✓</dd></div>
+          </dl>
         </div>
       )}
 

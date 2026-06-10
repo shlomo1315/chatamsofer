@@ -683,7 +683,7 @@ export default function PublicPortalPage() {
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
-  const [requestType, setRequestType] = useState<'birth' | 'loan' | null>(null)
+  const [requestType, setRequestType] = useState<'birth' | 'loan' | 'financial_aid' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
   const [showRegSuccess, setShowRegSuccess] = useState(false)
   const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
@@ -1116,7 +1116,7 @@ export default function PublicPortalPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
       setAidModalOpen(false); setAidReason(''); setAidFile(null)
-      setRequestType('loan')
+      setRequestType('financial_aid')
       setStep('request-sent')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
@@ -2739,25 +2739,35 @@ export default function PublicPortalPage() {
                 <CheckCircle2 size={38} className="text-green-600" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">הבקשה נשלחה!</h2>
-              <p className="text-slate-600 mb-6 leading-relaxed">
-                {requestType === 'birth'
-                  ? 'בקשת ההבראה ליולדת התקבלה בהצלחה.'
-                  : 'בקשת ההלוואה התקבלה בהצלחה.'}
-                <br />
-                צוות העמותה יעיין בבקשתך ויצור עמך קשר.
-              </p>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 text-right mb-6">
-                <p className="flex items-center gap-2">
-                  <Clock size={14} className="text-indigo-400 flex-shrink-0" />
-                  <span>זמן טיפול ממוצע: עד 7 ימי עסקים</span>
+              {requestType === 'financial_aid' ? (
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  הבקשה הועברה לטיפול במזכירות.
+                  <br />
+                  בסיום הטיפול תישלח אליך הודעה.
                 </p>
-                {beneficiary?.phone && (
-                  <p className="flex items-center gap-2 mt-2">
-                    <Phone size={14} className="text-indigo-400 flex-shrink-0" />
-                    <span>עדכון יישלח לטלפון: <span dir="ltr">{beneficiary.phone}</span></span>
+              ) : (
+                <>
+                  <p className="text-slate-600 mb-6 leading-relaxed">
+                    {requestType === 'birth'
+                      ? 'בקשת ההבראה ליולדת התקבלה בהצלחה.'
+                      : 'בקשת ההלוואה התקבלה בהצלחה.'}
+                    <br />
+                    צוות העמותה יעיין בבקשתך ויצור עמך קשר.
                   </p>
-                )}
-              </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 text-right mb-6">
+                    <p className="flex items-center gap-2">
+                      <Clock size={14} className="text-indigo-400 flex-shrink-0" />
+                      <span>זמן טיפול ממוצע: עד 7 ימי עסקים</span>
+                    </p>
+                    {beneficiary?.phone && (
+                      <p className="flex items-center gap-2 mt-2">
+                        <Phone size={14} className="text-indigo-400 flex-shrink-0" />
+                        <span>עדכון יישלח לטלפון: <span dir="ltr">{beneficiary.phone}</span></span>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
               <div className="flex flex-col gap-2">
                 <button onClick={backToDashboard}
                   className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors text-sm"

@@ -3,8 +3,18 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
+import { deliverMail } from '@/lib/sendMail'
+import { financialAidDecisionEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
+
+// מחלץ את הטקסט החדש בלבד מתוך תשובת המייל (לפני הציטוט של ההודעה המקורית).
+function cleanReplyText(raw: string): string {
+  let t = (raw || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&gt;|&lt;|&amp;/g, ' ')
+  t = t.split(/On .*wrote:|ביום .*כתב|בתאריך .*מאת|-{3,}\s*Original|מאת:|From:|________/i)[0]
+  t = t.split('\n').filter(l => !l.trim().startsWith('>')).join(' ')
+  return t.replace(/\s+/g, ' ').trim().slice(0, 200)
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -48,7 +58,7 @@ export async function POST() {
 
   const { data: reqs } = await admin
     .from('financial_aid_requests')
-    .select('id, gmail_thread_id, gmail_message_id, decision_email')
+    .select('id, gmail_thread_id, gmail_message_id, decision_email, beneficiary:beneficiaries(full_name, family_name, email)')
     .eq('status', 'awaiting_decision')
     .not('gmail_thread_id', 'is', null)
   if (!reqs?.length) return NextResponse.json({ ok: true, updated: 0 })
@@ -68,16 +78,26 @@ export async function POST() {
         m.id !== r.gmail_message_id &&
         (!decision || m.fromEmail.toLowerCase() === decision))
       if (!reply) continue
-      const d = parseDecision(reply.snippet || reply.body)
+      const cleaned = cleanReplyText(reply.body || reply.snippet)
+      const d = parseDecision(cleaned || reply.snippet)
       if (d.kind === 'none') continue
+      const repliedAt = reply.date ? new Date(reply.date).toISOString() : new Date().toISOString()
       await admin.from('financial_aid_requests').update({
         status: d.kind === 'approved' ? 'approved' : 'rejected',
         amount: d.kind === 'approved' ? d.amount : null,
-        decision_reply: (reply.snippet || '').slice(0, 500),
-        decision_replied_at: new Date().toISOString(),
+        decision_reply: cleaned.slice(0, 200),
+        decision_replied_at: repliedAt,
         updated_at: new Date().toISOString(),
       }).eq('id', r.id)
       updated++
+
+      // הודעת החלטה למבקש
+      const ben = (r as Record<string, unknown>).beneficiary as { full_name?: string; family_name?: string; email?: string } | undefined
+      if (ben?.email) {
+        const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name || ''
+        const mail = financialAidDecisionEmail(name, d.kind === 'approved', d.kind === 'approved' ? d.amount : null)
+        deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+      }
     } catch { /* ממשיכים לבקשה הבאה */ }
   }
   return NextResponse.json({ ok: true, updated })
