@@ -263,7 +263,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
 }
 
-export default function MaternityTable({ data, showCard, hideFilters }: { data: MaternityAid[]; showCard?: boolean; hideFilters?: boolean }) {
+export default function MaternityTable({ data, showCard, showArrived, hideFilters }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -326,14 +326,14 @@ export default function MaternityTable({ data, showCard, hideFilters }: { data: 
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={showCard ? 10 : 9} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
+                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 1 : 0)} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -346,6 +346,15 @@ export default function MaternityTable({ data, showCard, hideFilters }: { data: 
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
+                    {showArrived && (
+                      <td className="px-4 py-3 align-middle">
+                        {aid.recovery_arrived === true
+                          ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">הגיעה</span>
+                          : aid.recovery_arrived === false
+                            ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-800">לא הגיעה</span>
+                            : <span className="text-slate-300">—</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 align-middle">
                       {aid.birth_certificate_url ? (
                         <a href={aid.birth_certificate_url} target="_blank" rel="noopener noreferrer"

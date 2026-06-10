@@ -73,7 +73,7 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
         })}
       </div>
 
-      <MaternityTable data={filtered} hideFilters />
+      <MaternityTable data={filtered} hideFilters showArrived />
     </div>
   )
 }
