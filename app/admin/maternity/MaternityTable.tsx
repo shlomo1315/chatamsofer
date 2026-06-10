@@ -263,7 +263,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
 }
 
-export default function MaternityTable({ data, showCard }: { data: MaternityAid[]; showCard?: boolean }) {
+export default function MaternityTable({ data, showCard, hideFilters }: { data: MaternityAid[]; showCard?: boolean; hideFilters?: boolean }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -285,6 +285,7 @@ export default function MaternityTable({ data, showCard }: { data: MaternityAid[
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
+      {!hideFilters && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
@@ -304,6 +305,7 @@ export default function MaternityTable({ data, showCard }: { data: MaternityAid[
           )
         })}
       </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
