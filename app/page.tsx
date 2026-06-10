@@ -842,16 +842,24 @@ export default function PublicPortalPage() {
     return chain
   }
 
-  // בורר בן/חתן שהנרשם מסמן (לדור שהוא מציע) — בצבע ענבר, להבדיל מהקשר האוטומטי
+  // צבעי בן/חתן — אחידים בכל המערכת: בן = כחול בהיר · חתן = ענבר בהיר
+  const REL_CLS = {
+    son: 'bg-blue-50 text-blue-700 border-blue-200',
+    son_in_law: 'bg-amber-50 text-amber-700 border-amber-200',
+  } as const
+  const REL_SEL = {
+    son: 'bg-blue-100 text-blue-800 border-blue-400',
+    son_in_law: 'bg-amber-100 text-amber-800 border-amber-400',
+  } as const
+
+  // בורר בן/חתן שהנרשם מסמן (לדור שהוא מציע)
   const renderRelToggle = (relKey: string) => (
     <div className="flex gap-1.5 flex-shrink-0">
       {(['son', 'son_in_law'] as const).map(r => (
         <button type="button" key={r}
           onClick={() => setLineageRelations(prev => ({ ...prev, [relKey]: r }))}
-          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-            lineageRelations[relKey] === r
-              ? 'bg-amber-500 text-white border-amber-500 font-semibold'
-              : 'bg-white text-amber-700 border-amber-300 hover:border-amber-400'
+          className={`text-xs px-3 py-1 rounded-full border transition-colors font-semibold ${
+            lineageRelations[relKey] === r ? REL_SEL[r] : 'bg-white text-slate-400 border-slate-300 hover:border-slate-400'
           }`}>
           {r === 'son' ? 'בן' : 'חתן'}
         </button>
@@ -859,9 +867,9 @@ export default function PublicPortalPage() {
     </div>
   )
 
-  // תווית קשר אוטומטית (מהגדרת העץ בניהול) — קריאה בלבד, בצבע אינדיגו
+  // תווית קשר אוטומטית (מהגדרת העץ בניהול) — קריאה בלבד
   const renderRelAuto = (r: 'son' | 'son_in_law' | null) => (
-    <span className="text-xs px-3 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold flex-shrink-0">
+    <span className={`text-xs px-3 py-1 rounded-full border font-semibold flex-shrink-0 ${r ? REL_CLS[r] : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
       {r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : '—'}
     </span>
   )
