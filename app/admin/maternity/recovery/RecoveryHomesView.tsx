@@ -80,7 +80,7 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
         })}
       </div>
 
-      <MaternityTable data={filtered} hideFilters showArrived />
+      <MaternityTable data={filtered} hideFilters showArrived emptyMessage="אין כרגע לידות מאושרות במצב הסינון הנוכחי" />
     </div>
   )
 }
