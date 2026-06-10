@@ -29,6 +29,7 @@ interface Aid {
   recovery_to?: string
   card_number?: string
   notes?: string
+  recovery_arrived?: boolean | null
   beneficiary?: Mother
 }
 
@@ -221,6 +222,24 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
   const [hebrewInfo, setHebrewInfo] = useState<{ hebrewDate: string; parasha: string; hebrewYear: string } | null>(null)
   const today = new Date()
 
+  // סימון הגעת היולדת — נשמר במערכת המרכזית
+  const [arrived, setArrived] = useState<Record<string, boolean | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_arrived ?? null])),
+  )
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const markArrived = async (aidId: string, value: boolean | null) => {
+    const prev = arrived[aidId] ?? null
+    setArrived(m => ({ ...m, [aidId]: value })); setSavingId(aidId)
+    try {
+      const r = await fetch('/api/portal/arrived', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home, aidId, arrived: value }),
+      })
+      if (!r.ok) setArrived(m => ({ ...m, [aidId]: prev }))
+    } catch { setArrived(m => ({ ...m, [aidId]: prev })) }
+    setSavingId(null)
+  }
+
   useEffect(() => {
     fetch('/api/portal/hebrewdate')
       .then(r => r.json())
@@ -253,7 +272,7 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
               : <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-400 leading-none">היכל החתם סופר</p>
+            <p className="text-xs text-slate-400 leading-none">היכל החתם סופר · עזר יולדות</p>
             <h1 className="text-base font-bold text-slate-800 truncate">{home}</h1>
           </div>
           <div className="text-left text-xs text-slate-400 flex-shrink-0">
@@ -302,7 +321,7 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
               <table className="w-full text-sm text-right">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', ''].map(h => (
+                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'הגעה לבית החלמה', ''].map(h => (
                       <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -317,6 +336,20 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
                         <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>
                         <td className="px-4 py-3.5 text-slate-700">{aid.baby_name ?? '—'}</td>
                         <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap">{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                          {(() => {
+                            const a = arrived[aid.id] ?? null
+                            const saving = savingId === aid.id
+                            return (
+                              <div className={`flex items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                                <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
+                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${a === true ? 'bg-green-100 text-green-800 border-green-400' : 'bg-white text-slate-500 border-slate-200 hover:border-green-300'}`}>הגיעה</button>
+                                <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
+                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${a === false ? 'bg-red-100 text-red-800 border-red-400' : 'bg-white text-slate-500 border-slate-200 hover:border-red-300'}`}>לא הגיעה</button>
+                              </div>
+                            )
+                          })()}
+                        </td>
                         <td className="px-4 py-3.5">
                           <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
                             <ChevronLeft size={13} /> פרטים
