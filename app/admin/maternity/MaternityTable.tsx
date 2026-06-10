@@ -263,7 +263,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
 }
 
-export default function MaternityTable({ data, showCard, showArrived, hideFilters }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean }) {
+export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -333,7 +333,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 1 : 0)} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
+                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 1 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (

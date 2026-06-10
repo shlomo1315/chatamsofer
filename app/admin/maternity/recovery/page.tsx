@@ -42,9 +42,6 @@ export default async function RecoveryPage() {
         מוצגות כאן רק לידות שאושרו. כדי לאשר לידות חדשות יש להיכנס לשונית הראשית <strong>יולדות</strong>.
       </div>
 
-      {/* קישור ישיר + סיסמה לכל בית החלמה (פורטל בית ההחלמה) */}
-      <RecoveryHomeLinks homes={homes} />
-
       {aids.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <Baby size={40} className="mx-auto text-slate-300 mb-3" />
@@ -53,6 +50,17 @@ export default async function RecoveryPage() {
       ) : (
         <RecoveryHomesView aids={aids} homes={homes} />
       )}
+
+      {/* קישור ישיר + סיסמה לכל בית החלמה — מכווץ, בתחתית הדף */}
+      <details className="bg-white rounded-2xl border border-slate-200 shadow-sm group">
+        <summary className="cursor-pointer list-none px-5 py-3.5 flex items-center justify-between text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-2xl">
+          <span className="flex items-center gap-2">🔗 פורטל בתי החלמה — קישורים וסיסמאות</span>
+          <span className="text-xs text-slate-400 group-open:hidden">לחץ להרחבה</span>
+        </summary>
+        <div className="px-2 pb-2">
+          <RecoveryHomeLinks homes={homes} />
+        </div>
+      </details>
     </div>
   )
 }

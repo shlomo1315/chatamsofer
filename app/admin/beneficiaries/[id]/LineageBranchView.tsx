@@ -7,6 +7,7 @@ interface LineageNode {
   name: string
   generation: number
   parent_id: string | null
+  relation?: 'son' | 'son_in_law' | null
 }
 interface TNode extends LineageNode { children: TNode[] }
 interface Pos { node: TNode; x: number; y: number; cx: number; cy: number }
@@ -216,11 +217,15 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
             const p = pal(pos.node.generation)
             const onBranch = branch.has(pos.node.id)
             const isTarget = pos.node.id === nodeId
+            // אותו עיקרון כמו בעץ הניהול: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
+            const relOverlay = pos.node.relation === 'son_in_law'
+              ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
+              : ''
             return (
               <div key={pos.node.id} style={{
                 position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                 width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
-                background: p.bg,
+                background: relOverlay + p.bg,
                 boxShadow: isTarget
                   ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                   : `0 4px 16px ${p.shadow}`,
@@ -236,6 +241,16 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                   width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
+                {pos.node.relation && (
+                  <div style={{
+                    position: 'absolute', bottom: -9 * zoom, right: 6 * zoom,
+                    background: pos.node.relation === 'son' ? '#DBEAFE' : '#FEF3C7',
+                    color: pos.node.relation === 'son' ? '#1E40AF' : '#92400E',
+                    fontSize: Math.max(7, 8 * zoom), fontWeight: 800,
+                    padding: `${0.5 * zoom}px ${7 * zoom}px`, borderRadius: 20,
+                    border: `1px solid ${pos.node.relation === 'son' ? '#93C5FD' : '#FCD34D'}`,
+                  }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
+                )}
                 <span style={{
                   color: '#fff', fontWeight: 700,
                   fontSize: Math.max(8, (pos.node.name.length > 14 ? 10 : pos.node.name.length > 10 ? 12 : 13) * zoom),
