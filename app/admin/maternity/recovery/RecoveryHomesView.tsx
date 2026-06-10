@@ -25,14 +25,21 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
     return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'he'))
   }, [homes, aids])
 
-  const byHome = useMemo(() => (home === 'all' ? aids : aids.filter(a => a.recovery_home === home)), [aids, home])
-
-  const filtered = useMemo(() => byHome.filter(a => {
+  const matchStatus = (a: MaternityAid) => {
     if (status === 'all') return true
     const active = isWithinSixWeeks(a)
     return status === 'active' ? active : !active
-  }), [byHome, status])
+  }
+  const matchHome = (a: MaternityAid) => home === 'all' || a.recovery_home === home
 
+  // הטבלה: גם בית החלמה וגם סטטוס
+  const filtered = useMemo(() => aids.filter(a => matchHome(a) && matchStatus(a)), [aids, home, status])
+
+  // ספירת טאבי בתי החלמה — מכבדת את סינון הסטטוס הנוכחי (עקביות עם התוצאות)
+  const homeCount = (h?: string) => aids.filter(a => (h ? a.recovery_home === h : true) && matchStatus(a)).length
+
+  // ספירת פעיל/לא פעיל — מכבדת את בית החלמה הנבחר
+  const byHome = useMemo(() => aids.filter(matchHome), [aids, home])
   const activeCount = byHome.filter(isWithinSixWeeks).length
   const inactiveCount = byHome.length - activeCount
 
@@ -42,10 +49,10 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
       <div className="flex gap-2 flex-wrap items-center">
         <button onClick={() => setHome('all')}
           className={`text-sm font-medium px-4 py-2 rounded-xl border transition-colors ${home === 'all' ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-white text-slate-600 border-slate-200 hover:border-pink-200'}`}>
-          כל בתי ההחלמה <span className="opacity-70">{aids.length}</span>
+          כל בתי ההחלמה <span className="opacity-70">{homeCount()}</span>
         </button>
         {allHomes.map(h => {
-          const cnt = aids.filter(a => a.recovery_home === h).length
+          const cnt = homeCount(h)
           return (
             <button key={h} onClick={() => setHome(h)}
               className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border transition-colors ${home === h ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-white text-slate-600 border-slate-200 hover:border-pink-200'}`}>
