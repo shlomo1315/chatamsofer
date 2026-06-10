@@ -462,12 +462,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
           {positions.map(pos => {
             const nodeStatus = pos.node.status ?? 'verified'
             const genPal = pal(pos.node.generation)
-            // הבדל עדין מאוד בתוך צבע הדור: בן = מעט בהיר יותר · חתן = מעט כהה יותר
-            const relOverlay = pos.node.relation === 'son'
-              ? 'linear-gradient(rgba(255,255,255,0.42),rgba(255,255,255,0.42)), '
-              : pos.node.relation === 'son_in_law'
-                ? 'linear-gradient(rgba(15,23,42,0.34),rgba(15,23,42,0.34)), '
-                : ''
+            // הבדל בתוך צבע הדור בלי להחוויר: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
+            const relOverlay = pos.node.relation === 'son_in_law'
+              ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
+              : ''
             const isSel = selected === pos.node.id
             const isDimmed = selected !== null
               ? !pathBranch.has(pos.node.id)
