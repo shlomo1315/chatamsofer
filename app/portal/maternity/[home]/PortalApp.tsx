@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Building2, Baby, CalendarDays, Search, Eye, EyeOff,
-  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft
+  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
 } from 'lucide-react'
 import { format, differenceInDays, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -215,8 +215,9 @@ function Row({ icon, label, value, ltr }: { icon: React.ReactNode; label: string
 }
 
 // ─── Data Table ───────────────────────────────────────────────────────────────
-function DataView({ home, aids }: { home: string; aids: Aid[] }) {
+function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogout: () => void }) {
   const [query, setQuery] = useState('')
+  const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('all')
   const [selected, setSelected] = useState<Aid | null>(null)
   const [logoErr, setLogoErr] = useState(false)
   const [hebrewInfo, setHebrewInfo] = useState<{ hebrewDate: string; parasha: string; hebrewYear: string } | null>(null)
@@ -247,17 +248,33 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
       .catch(() => {})
   }, [])
 
+  const matchArrived = (id: string) => {
+    if (arrivedFilter === 'all') return true
+    const a = arrived[id] ?? null
+    if (arrivedFilter === 'arrived') return a === true
+    if (arrivedFilter === 'not') return a === false
+    return a === null // pending
+  }
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return aids
     return aids.filter(a => {
+      if (!matchArrived(a.id)) return false
+      if (!q) return true
       const m = a.beneficiary
       return [
         motherName(m), m?.spouse_id_number, a.baby_name,
         fmtDate(a.birth_date), a.card_number,
       ].filter(Boolean).join(' ').toLowerCase().includes(q)
     })
-  }, [aids, query])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aids, query, arrivedFilter, arrived])
+
+  const counts = {
+    all: aids.length,
+    arrived: aids.filter(a => (arrived[a.id] ?? null) === true).length,
+    not: aids.filter(a => (arrived[a.id] ?? null) === false).length,
+    pending: aids.filter(a => (arrived[a.id] ?? null) === null).length,
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
@@ -275,7 +292,7 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
             <p className="text-xs text-slate-400 leading-none">היכל החתם סופר · עזר יולדות</p>
             <h1 className="text-base font-bold text-slate-800 truncate">{home}</h1>
           </div>
-          <div className="text-left text-xs text-slate-400 flex-shrink-0">
+          <div className="text-left text-xs text-slate-400 flex-shrink-0 hidden sm:block">
             <p>{format(today, 'EEEE', { locale: he })} · {format(today, 'd/M/yyyy')}</p>
             {hebrewInfo?.hebrewDate && (
               <p className="font-medium text-slate-700 mt-0.5">{hebrewInfo.hebrewDate}</p>
@@ -284,6 +301,10 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
               <p className="text-indigo-500 font-semibold mt-0.5">{hebrewInfo.parasha}</p>
             )}
           </div>
+          <button onClick={onLogout}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
+            <LogOut size={14} /> התנתקות
+          </button>
         </div>
       </div>
 
@@ -300,14 +321,29 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
           />
         </div>
 
-        {/* Info banner */}
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
-          <Baby size={14} className="text-indigo-500 flex-shrink-0" />
-          <p className="text-xs text-indigo-700">
-            מוצגות <strong>{filtered.length}</strong> יולדות מאושרות.
-            רשימה זו לקריאה בלבד · מתעדכנת אוטומטית.
-          </p>
+        {/* קוביות סינון + פילוח (מספר + אחוז) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {([
+            { key: 'all', label: 'סה״כ', count: counts.all, base: 'bg-white border-slate-200', sel: 'ring-2 ring-indigo-400 border-indigo-300', num: 'text-slate-800' },
+            { key: 'arrived', label: 'הגיעו', count: counts.arrived, base: 'bg-green-50 border-green-200', sel: 'ring-2 ring-green-400', num: 'text-green-700' },
+            { key: 'not', label: 'לא הגיעו', count: counts.not, base: 'bg-red-50 border-red-200', sel: 'ring-2 ring-red-400', num: 'text-red-700' },
+            { key: 'pending', label: 'טרם סומן', count: counts.pending, base: 'bg-amber-50 border-amber-200', sel: 'ring-2 ring-amber-400', num: 'text-amber-700' },
+          ] as const).map(c => {
+            const pct = counts.all ? Math.round((c.count / counts.all) * 100) : 0
+            const active = arrivedFilter === c.key
+            return (
+              <button key={c.key} onClick={() => setArrivedFilter(c.key)}
+                className={`rounded-2xl border px-4 py-3 text-right transition-all ${c.base} ${active ? c.sel : 'hover:shadow-sm'}`}>
+                <p className="text-xs text-slate-500 mb-1">{c.label}</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-extrabold ${c.num}`}>{c.count}</span>
+                  {c.key !== 'all' && <span className="text-xs font-semibold text-slate-400">{pct}%</span>}
+                </div>
+              </button>
+            )
+          })}
         </div>
+        <p className="text-xs text-slate-400 text-center">הרשימה מתעדכנת אוטומטית · סמנו הגעה לכל יולדת</p>
 
         {/* Table / empty */}
         {filtered.length === 0 ? (
@@ -407,5 +443,13 @@ export default function PortalApp({ home }: { home: string }) {
     return <LoginForm home={home} onSuccess={fetchData} />
   }
 
-  return <DataView home={home} aids={aids} />
+  const logout = async () => {
+    await fetch('/api/portal/logout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ home }),
+    }).catch(() => {})
+    setState('login')
+  }
+
+  return <DataView home={home} aids={aids} onLogout={logout} />
 }

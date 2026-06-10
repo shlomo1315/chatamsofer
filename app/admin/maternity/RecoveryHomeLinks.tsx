@@ -193,6 +193,12 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
                     onChange={e => setPw(e.target.value)}
                     placeholder="הכנס סיסמה (לפחות 10 תווים)"
                     dir="ltr"
+                    name="recovery-portal-password"
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    data-1p-ignore
+                    data-lpignore="true"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     onKeyDown={e => e.key === 'Enter' && savePassword(home)}
                   />
