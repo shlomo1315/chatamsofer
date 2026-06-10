@@ -362,11 +362,19 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
             const isSel = selected === pos.node.id
             const isDim = selected ? !branch.has(pos.node.id) : false
             const p = tpPal(pos.node.generation)
+            // אותו עיקרון כמו בניהול: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
+            const relOverlay = pos.node.relation === 'son_in_law'
+              ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
+              : ''
             return (
               <div key={pos.node.id} onClick={() => pick(pos.node.id)}
-                style={{ position: 'absolute', left: pos.x * zoom, top: pos.y * zoom, width: TP_NW * zoom, height: TP_NH * zoom, borderRadius: 14 * zoom, background: p.bg, boxShadow: isSel ? `0 0 0 3px #fff, 0 0 0 5px ${p.ring}, 0 10px 28px ${p.shadow}` : `0 4px 16px ${p.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: isSel ? 'scale(1.07)' : 'scale(1)', transition: 'all .2s', opacity: isDim ? 0.22 : 1, zIndex: isSel ? 20 : 2, userSelect: 'none' }}>
+                style={{ position: 'absolute', left: pos.x * zoom, top: pos.y * zoom, width: TP_NW * zoom, height: TP_NH * zoom, borderRadius: 14 * zoom, background: relOverlay + p.bg, boxShadow: isSel ? `0 0 0 3px #fff, 0 0 0 5px ${p.ring}, 0 10px 28px ${p.shadow}` : `0 4px 16px ${p.shadow}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transform: isSel ? 'scale(1.07)' : 'scale(1)', transition: 'all .2s', opacity: isDim ? 0.22 : 1, zIndex: isSel ? 20 : 2, userSelect: 'none' }}>
                 <div style={{ position: 'absolute', top: -9 * zoom, right: 5 * zoom, background: '#fff', color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800, width: 19 * zoom, height: 19 * zoom, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${p.ring}` }}>{pos.node.generation + 1}</div>
                 {isSel && <div style={{ position: 'absolute', top: -9 * zoom, left: 5 * zoom, width: 19 * zoom, height: 19 * zoom, borderRadius: '50%', background: '#22C55E', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 25 }}><Check size={10 * zoom} color="#fff" strokeWidth={3} /></div>}
+                {/* תווית בן/חתן */}
+                {pos.node.relation && (
+                  <div style={{ position: 'absolute', bottom: -8 * zoom, right: 5 * zoom, background: pos.node.relation === 'son' ? '#DBEAFE' : '#FEF3C7', color: pos.node.relation === 'son' ? '#1E40AF' : '#92400E', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${0.5 * zoom}px ${6 * zoom}px`, borderRadius: 20, border: `1px solid ${pos.node.relation === 'son' ? '#93C5FD' : '#FCD34D'}` }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
+                )}
                 <span style={{ color: '#fff', fontWeight: 700, fontSize: Math.max(9, (pos.node.name.length > 12 ? 10 : 12) * zoom), textAlign: 'center', direction: 'rtl', padding: `0 ${10 * zoom}px`, lineHeight: 1.3, maxWidth: (TP_NW - 14) * zoom, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>{pos.node.name}</span>
               </div>
             )
@@ -701,6 +709,7 @@ export default function PublicPortalPage() {
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [suggestName, setSuggestName] = useState('')
   const [suggestParentId, setSuggestParentId] = useState('')
+  const [suggestRelation, setSuggestRelation] = useState<'son' | 'son_in_law' | ''>('')
   const [suggestSubmitting, setSuggestSubmitting] = useState(false)
   const [suggestError, setSuggestError] = useState('')
   const [allLineageNodes, setAllLineageNodes] = useState<{ id: string; name: string; generation: number }[]>([])
@@ -971,12 +980,13 @@ export default function PublicPortalPage() {
   const handleSuggestLineage = async () => {
     if (!suggestName.trim()) { setSuggestError('נא להזין שם'); return }
     if (!suggestParentId) { setSuggestError('נא לבחור הורה בעץ'); return }
+    if (!suggestRelation) { setSuggestError('נא לסמן האם הוא בן או חתן'); return }
     setSuggestSubmitting(true); setSuggestError('')
     try {
       const res = await fetch('/api/portal/suggest-lineage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: suggestName.trim(), parent_id: suggestParentId || null }),
+        body: JSON.stringify({ name: suggestName.trim(), parent_id: suggestParentId || null, relation: suggestRelation }),
       })
       const data = await res.json()
       if (!res.ok) { setSuggestError(data.error || 'שגיאה'); return }
@@ -1753,7 +1763,7 @@ export default function PublicPortalPage() {
                         <TextInput value={suggestName} onChange={e => setSuggestName(e.target.value)} placeholder='שם מלא' />
                       </div>
                       <div className="flex flex-col gap-2">
-                        <label className="text-xs font-medium text-slate-700">הורה בעץ (הדור שמעליו)</label>
+                        <label className="text-xs font-medium text-slate-700">הורה בעץ (הדור שמעליו) <span className="text-red-500">*</span></label>
                         <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
                           className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
                           <option value="">— בחר הורה —</option>
@@ -1764,6 +1774,19 @@ export default function PublicPortalPage() {
                             ))}
                         </select>
                       </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-medium text-slate-700">האם הוא בן או חתן של הדור הקודם? <span className="text-red-500">*</span></label>
+                        <div className="flex gap-2">
+                          {(['son', 'son_in_law'] as const).map(r => (
+                            <button type="button" key={r} onClick={() => setSuggestRelation(r)}
+                              className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition-colors ${
+                                suggestRelation === r
+                                  ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400')
+                                  : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
+                              }`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                          ))}
+                        </div>
+                      </div>
                       {suggestError && <p className="text-xs text-red-600">{suggestError}</p>}
                       <div className="flex gap-2">
                         <button type="button" onClick={handleSuggestLineage} disabled={suggestSubmitting}
@@ -1771,7 +1794,7 @@ export default function PublicPortalPage() {
                           {suggestSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                           שלח לאישור
                         </button>
-                        <button type="button" onClick={() => { setSuggestOpen(false); setSuggestName(''); setSuggestParentId(''); setSuggestError('') }}
+                        <button type="button" onClick={() => { setSuggestOpen(false); setSuggestName(''); setSuggestParentId(''); setSuggestRelation(''); setSuggestError('') }}
                           className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">
                           ביטול
                         </button>
