@@ -61,9 +61,10 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
           )
         })}
 
-        {/* מפריד */}
-        <div className="h-7 w-px bg-slate-300 mx-2" />
+      </div>
 
+      {/* שורה נפרדת מתחת: פעיל / לא פעיל */}
+      <div className="flex gap-2 flex-wrap">
         {([
           { key: 'active', label: 'פעיל (בתוך 6 שבועות)', count: activeCount, icon: CheckCircle2, sel: 'bg-green-100 text-green-800 border-green-400' },
           { key: 'inactive', label: 'לא פעיל (עבר 6 שבועות)', count: inactiveCount, icon: Clock, sel: 'bg-red-100 text-red-800 border-red-400' },
