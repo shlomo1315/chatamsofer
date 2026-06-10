@@ -7,6 +7,7 @@ import AddUserButton from './AddUserButton'
 import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
+import EmailTemplatesManager from './EmailTemplatesManager'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -116,6 +117,10 @@ export default async function SettingsPage() {
 
         <Card>
           <DocTypesManager />
+        </Card>
+
+        <Card>
+          <EmailTemplatesManager />
         </Card>
 
         <Card>

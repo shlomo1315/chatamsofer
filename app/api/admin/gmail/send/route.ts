@@ -13,7 +13,7 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest) {
-  const { to, subject, body, threadId, sentBy } = await request.json()
+  const { to, subject, body, threadId, sentBy, attachments, templateUrls } = await request.json()
 
   const from     = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const fromName = 'היכל החתם סופר משרד ראשי'
@@ -23,7 +23,32 @@ export async function POST(request: NextRequest) {
   const trackingToken = crypto.randomUUID()
   const supabase = getSupabase()
 
-  const raw     = buildRawEmail({ from, fromName, to, subject, html, threadId, trackingToken })
+  // צרופות: קבצים שהועלו (base64) + קבצי טמפלט שנשלפים מה-URL
+  const allAttachments: { filename: string; mimeType: string; contentB64: string }[] = []
+  if (Array.isArray(attachments)) {
+    for (const a of attachments) {
+      if (a?.contentB64 && a?.filename) {
+        allAttachments.push({ filename: a.filename, mimeType: a.mimeType || 'application/octet-stream', contentB64: a.contentB64 })
+      }
+    }
+  }
+  if (Array.isArray(templateUrls)) {
+    for (const t of templateUrls) {
+      if (!t?.url) continue
+      try {
+        const res = await fetch(t.url)
+        if (!res.ok) continue
+        const buf = Buffer.from(await res.arrayBuffer())
+        allAttachments.push({
+          filename: t.filename || 'attachment',
+          mimeType: t.mimeType || res.headers.get('content-type') || 'application/octet-stream',
+          contentB64: buf.toString('base64'),
+        })
+      } catch { /* מדלגים על צרופה שנכשלה */ }
+    }
+  }
+
+  const raw     = buildRawEmail({ from, fromName, to, subject, html, threadId, trackingToken, attachments: allAttachments })
   const encoded = encodeForGmail(raw)
 
   try {

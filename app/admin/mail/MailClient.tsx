@@ -5,8 +5,19 @@ import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, ChevronDown, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
-  Paperclip, Download, FolderOpen, FileText,
+  Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
 } from 'lucide-react'
+
+const EMOJIS = ['😊','🙏','👍','🙌','❤️','✨','🎉','✅','📌','📞','📧','📅','⏰','💡','🔔','⚠️','😇','🤝','💪','🌟','📝','📎','🏠','👶','💳','🕯️','✡️','🍀','😀','🙂','👏','🎊']
+
+function ToolBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" title={title} onMouseDown={e => e.preventDefault()} onClick={onClick}
+      className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex items-center">
+      {children}
+    </button>
+  )
+}
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
@@ -78,6 +89,34 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
   const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)
   const [sentInfo, setSentInfo] = useState<{ to: string; toName: string; body: string } | null>(null)
+
+  // עורך עשיר + צרופות
+  const editorRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [attachments, setAttachments] = useState<{ filename: string; mimeType: string; contentB64: string }[]>([])
+  const [tplPicked, setTplPicked] = useState<{ url: string; filename: string; mimeType: string }[]>([])
+  const [templates, setTemplates] = useState<{ id: string; name: string; file_url: string; file_name: string; mime_type: string }[]>([])
+  const [showTpl, setShowTpl] = useState(false)
+  const [showEmoji, setShowEmoji] = useState(false)
+  useEffect(() => { fetch('/api/admin/email-templates').then(r => r.json()).then(d => setTemplates(d.templates ?? [])).catch(() => {}) }, [])
+
+  const syncBody = () => setBody(editorRef.current?.innerHTML ?? '')
+  const exec = (cmd: string, val?: string) => { document.execCommand(cmd, false, val); editorRef.current?.focus(); syncBody() }
+  const insertEmoji = (e: string) => { editorRef.current?.focus(); document.execCommand('insertText', false, e); setShowEmoji(false); syncBody() }
+
+  const onPickFiles = async (files: FileList | null) => {
+    if (!files) return
+    for (const f of Array.from(files)) {
+      if (f.size > 15 * 1024 * 1024) { alert(`הקובץ ${f.name} גדול מ-15MB`); continue }
+      const b64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result).split(',')[1] ?? '')
+        r.onerror = rej
+        r.readAsDataURL(f)
+      })
+      setAttachments(prev => [...prev, { filename: f.name, mimeType: f.type || 'application/octet-stream', contentB64: b64 }])
+    }
+  }
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -121,13 +160,18 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
   const send = async () => {
     if (!to || !subject) return
     setSending(true)
+    const html = editorRef.current?.innerHTML ?? body
     await fetch('/api/admin/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
+      body: JSON.stringify({
+        to, subject, body: html, threadId: replyTo?.threadId,
+        attachments,
+        templateUrls: tplPicked.map(t => ({ url: t.url, filename: t.filename, mimeType: t.mimeType })),
+      }),
     })
     setSending(false)
-    setSentInfo({ to, toName, body })
+    setSentInfo({ to, toName, body: (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() })
     setTimeout(onClose, 2000)
   }
 
@@ -232,12 +276,77 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
             <input className="flex-1 text-sm outline-none" value={subject} onChange={e => setSubject(e.target.value)} placeholder="נושא המייל..." />
           </div>
 
-          <textarea
-            className="flex-1 px-5 py-4 text-sm text-slate-800 outline-none resize-none min-h-[200px]"
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            placeholder="כתוב את ההודעה כאן..."
+          {/* סרגל עיצוב */}
+          <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-slate-100 flex-wrap relative">
+            <ToolBtn title="מודגש" onClick={() => exec('bold')}><Bold size={15} /></ToolBtn>
+            <ToolBtn title="נטוי" onClick={() => exec('italic')}><Italic size={15} /></ToolBtn>
+            <ToolBtn title="קו תחתי" onClick={() => exec('underline')}><Underline size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <ToolBtn title="רשימת תבליטים" onClick={() => exec('insertUnorderedList')}><List size={15} /></ToolBtn>
+            <ToolBtn title="רשימה ממוספרת" onClick={() => exec('insertOrderedList')}><ListOrdered size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <label className="p-1.5 rounded hover:bg-slate-100 cursor-pointer text-slate-600 flex items-center" title="צבע טקסט">
+              <Palette size={15} />
+              <input type="color" className="w-0 h-0 opacity-0 absolute" onChange={e => exec('foreColor', e.target.value)} />
+            </label>
+            <ToolBtn title="אימוג'י" onClick={() => setShowEmoji(s => !s)}><Smile size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <ToolBtn title="צרף קובץ" onClick={() => fileInputRef.current?.click()}><Paperclip size={15} /></ToolBtn>
+            <div className="relative">
+              <ToolBtn title="צרף מהטמפלטים" onClick={() => setShowTpl(s => !s)}><FileText size={15} /></ToolBtn>
+              {showTpl && (
+                <div className="absolute z-20 top-full right-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                  {templates.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">אין טמפלטים. ניתן להעלות בהגדרות.</p>
+                  ) : templates.map(t => (
+                    <button key={t.id} type="button" onMouseDown={e => { e.preventDefault(); setTplPicked(prev => prev.some(p => p.url === t.file_url) ? prev : [...prev, { url: t.file_url, filename: t.file_name, mimeType: t.mime_type }]); setShowTpl(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-right text-sm hover:bg-indigo-50">
+                      <FileText size={14} className="text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => { onPickFiles(e.target.files); e.target.value = '' }} />
+
+            {showEmoji && (
+              <div className="absolute z-20 top-full right-2 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-8 gap-0.5 w-64">
+                {EMOJIS.map(e => (
+                  <button key={e} type="button" onMouseDown={ev => { ev.preventDefault(); insertEmoji(e) }} className="text-lg hover:bg-slate-100 rounded p-0.5">{e}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* גוף ההודעה — עורך עשיר */}
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            dir="rtl"
+            onInput={syncBody}
+            data-placeholder="כתוב את ההודעה כאן..."
+            className="mail-editor flex-1 px-5 py-4 text-sm text-slate-800 outline-none overflow-y-auto min-h-[180px]"
           />
+
+          {/* צרופות שנבחרו */}
+          {(attachments.length > 0 || tplPicked.length > 0) && (
+            <div className="px-5 py-2 border-t border-slate-100 flex flex-wrap gap-2">
+              {attachments.map((a, i) => (
+                <span key={`a${i}`} className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 rounded-lg px-2.5 py-1 text-xs">
+                  <Paperclip size={12} /> <span className="truncate max-w-[140px]">{a.filename}</span>
+                  <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500"><X size={12} /></button>
+                </span>
+              ))}
+              {tplPicked.map((t, i) => (
+                <span key={`t${i}`} className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-lg px-2.5 py-1 text-xs">
+                  <FileText size={12} /> <span className="truncate max-w-[140px]">{t.filename}</span>
+                  <button onClick={() => setTplPicked(prev => prev.filter((_, j) => j !== i))} className="text-indigo-400 hover:text-red-500"><X size={12} /></button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200">
