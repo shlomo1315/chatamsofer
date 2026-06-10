@@ -326,7 +326,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <StatusControl id={id} status={beneficiary.eligibility_status} />
+          <StatusControl id={id} status={beneficiary.eligibility_status} advance />
           <BeneficiaryActions id={id} name={fullName} />
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, X, Clock, ChevronDown, Loader2, FileText, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 import { useDocTypes } from '@/lib/useDocTypes'
@@ -17,7 +18,7 @@ const STYLES: Record<string, string> = {
   review:       'bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200',
 }
 
-export default function StatusControl({ id, status }: { id: string; status: EligibilityStatus }) {
+export default function StatusControl({ id, status, advance }: { id: string; status: EligibilityStatus; advance?: boolean }) {
   const router  = useRouter()
   const supabase = createClient()
 
@@ -72,7 +73,12 @@ export default function StatusControl({ id, status }: { id: string; status: Elig
       })
 
       setOpen(false)
-      router.refresh()
+      // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא
+      if (advance && next !== 'pending') {
+        await goToNextPending(supabase, router, { table: 'beneficiaries', statusColumn: 'eligibility_status', pendingValues: ['pending'], currentId: id, detailBase: '/admin/beneficiaries', listPath: '/admin/beneficiaries' })
+      } else {
+        router.refresh()
+      }
     } catch (err: unknown) {
       alert(`שגיאה בעדכון הסטטוס: ${err instanceof Error ? err.message : String(err)}`)
     } finally {

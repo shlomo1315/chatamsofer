@@ -113,7 +113,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusControl aid={aid} />
+          <StatusControl aid={aid} advance />
           <MaternityActions aid={aid} />
         </div>
       </div>

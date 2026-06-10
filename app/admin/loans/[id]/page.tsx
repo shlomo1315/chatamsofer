@@ -61,7 +61,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <LoanStatusControl loan={loan} />
+          <LoanStatusControl loan={loan} advance />
           <Link href={`/admin/loans/${loan.id}/edit`}>
             <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה
