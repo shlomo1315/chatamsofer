@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, RefreshCw, Mail, Check, Eye, Loader2 } from 'lucide-react'
+import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
+import { createClient } from '@/lib/supabase/client'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
@@ -20,9 +21,55 @@ const FILTERS: { key: FinancialAidStatus | 'all'; label: string }[] = [
 
 export default function FinancialAidClient({ requests }: { requests: FinancialAidRequest[] }) {
   const router = useRouter()
+  const supabase = createClient()
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const [checking, setChecking] = useState(false)
+
+  // בקשה חדשה מהניהול
+  const [newOpen, setNewOpen] = useState(false)
+  const [idInput, setIdInput] = useState('')
+  const [found, setFound] = useState<{ id: string; name: string; id_number?: string } | null>(null)
+  const [lookupErr, setLookupErr] = useState('')
+  const [looking, setLooking] = useState(false)
+  const [newReason, setNewReason] = useState('')
+  const [newFile, setNewFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveErr, setSaveErr] = useState('')
+
+  const lookup = async () => {
+    const raw = idInput.trim()
+    if (!raw) return
+    setLooking(true); setLookupErr(''); setFound(null)
+    try {
+      const digits = raw.replace(/\D/g, '')
+      const variants = Array.from(new Set([raw, digits].filter(Boolean)))
+      const orFilter = variants.flatMap(v => [`id_number.eq.${v}`, `spouse_id_number.eq.${v}`]).join(',')
+      const { data } = await supabase.from('beneficiaries').select('id, full_name, family_name, id_number').or(orFilter).maybeSingle()
+      if (!data) setLookupErr('לא נמצא נתמך עם ת.ז זו')
+      else setFound({ id: data.id, name: [data.family_name, data.full_name].filter(Boolean).join(' '), id_number: data.id_number })
+    } catch { setLookupErr('שגיאת רשת') }
+    setLooking(false)
+  }
+
+  const resetNew = () => { setNewOpen(false); setIdInput(''); setFound(null); setLookupErr(''); setNewReason(''); setNewFile(null); setSaveErr('') }
+
+  const submitNew = async () => {
+    if (!found) { setSaveErr('יש לבחור נתמך'); return }
+    if (!newReason.trim()) { setSaveErr('יש לפרט את סיבת הבקשה'); return }
+    setSaving(true); setSaveErr('')
+    try {
+      const fd = new FormData()
+      fd.append('beneficiary_id', found.id)
+      fd.append('reason', newReason.trim())
+      if (newFile) fd.append('file', newFile)
+      const r = await fetch('/api/admin/financial-aid/create', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) { setSaveErr(d.error || 'שגיאה'); setSaving(false); return }
+      resetNew(); router.refresh()
+    } catch { setSaveErr('שגיאת רשת') }
+    setSaving(false)
+  }
 
   // הגדרת מייל הגורם המאשר
   const [decisionEmail, setDecisionEmail] = useState('')
@@ -89,6 +136,10 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5">
           {checking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} בדוק תשובות
         </button>
+        <button onClick={() => { resetNew(); setNewOpen(true) }}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5">
+          <Plus size={13} /> בקשה חדשה
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
@@ -129,6 +180,62 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           </table>
         </div>
       </div>
+
+      {/* מודל בקשה חדשה */}
+      {newOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900">בקשת סיוע כספי חדשה</h2>
+              <button onClick={resetNew} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              {/* בחירת נתמך לפי ת.ז */}
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1 block">תעודת זהות של הנתמך <span className="text-red-500">*</span></label>
+                <div className="flex gap-2">
+                  <input value={idInput} onChange={e => { setIdInput(e.target.value); setFound(null) }} onKeyDown={e => e.key === 'Enter' && lookup()}
+                    dir="ltr" placeholder="ת.ז (בעל/אישה)" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm ltr-num" />
+                  <button onClick={lookup} disabled={looking || !idInput.trim()}
+                    className="inline-flex items-center gap-1 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-medium rounded-lg px-3 py-2">
+                    {looking ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} חפש
+                  </button>
+                </div>
+                {lookupErr && <p className="text-xs text-red-600 mt-1">{lookupErr}</p>}
+                {found && <p className="text-sm text-green-700 mt-1.5 flex items-center gap-1"><Check size={14} /> {found.name} <span className="text-slate-400 ltr-num">({found.id_number})</span></p>}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1 block">סיבת הבקשה <span className="text-red-500">*</span></label>
+                <textarea value={newReason} onChange={e => setNewReason(e.target.value)} rows={4}
+                  placeholder="פרט/י את המקרה, הצורך והעלויות. אם רפואי — אבחנה/טיפול/עלות בקצרה."
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1 block">מסמך מצורף (לא חובה)</label>
+                {newFile ? (
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                    <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><Check size={14} className="flex-shrink-0" /><span className="truncate">{newFile.name}</span></span>
+                    <button type="button" onClick={() => setNewFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-3 text-sm text-slate-500 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40">
+                    <Upload size={16} /> העלאת מסמך
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setNewFile(e.target.files?.[0] ?? null)} />
+                  </label>
+                )}
+              </div>
+
+              {saveErr && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveErr}</div>}
+              <button onClick={submitNew} disabled={saving}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl">
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />} צור בקשה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

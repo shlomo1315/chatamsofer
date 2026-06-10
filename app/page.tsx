@@ -2703,9 +2703,9 @@ export default function PublicPortalPage() {
                 <button type="button" onClick={() => { setAidModalOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               <form onSubmit={handleFinancialAidRequest} className="p-6 flex flex-col gap-4">
-                <Field label="סיבת הבקשה" required>
-                  <textarea value={aidReason} onChange={e => setAidReason(e.target.value)} rows={4}
-                    placeholder="פרט/י מדוע נדרש הסיוע הכספי..."
+                <Field label="סיבת הבקשה" required hint="פרט/י כמה שיותר על המקרה — הרקע, הצורך והנסיבות. אם מדובר במצב רפואי או דומה, נסח/י בקצרה ובאופן ענייני (אבחנה, טיפול נדרש, עלויות).">
+                  <textarea value={aidReason} onChange={e => setAidReason(e.target.value)} rows={5}
+                    placeholder="לדוגמה: בעקבות אבחון רפואי נדרש טיפול בעלות גבוהה שאינו מכוסה... אנא פרט/י את המצב, הצרכים והעלויות המשוערות."
                     className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none w-full" />
                 </Field>
                 <Field label="מסמך מצורף" required hint="צרף מסמך תומך (תמונה / PDF)">
