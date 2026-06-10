@@ -11,7 +11,8 @@ const ROLES: UserRole[] = ['admin', 'secretary']
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'beneficiaries', label: 'צאצאים' },
-  { key: 'maternity',     label: 'יולדות' },
+  { key: 'maternity',     label: 'עזר יולדות' },
+  { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
   { key: 'loans',         label: 'הלוואות' },
   { key: 'distributions', label: 'חלוקות' },
   { key: 'reports',       label: 'דוחות' },

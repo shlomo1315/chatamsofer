@@ -317,14 +317,14 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'כרטיס נדרים', 'אישור לידה', 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'אישור לידה', 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
+                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -337,7 +337,6 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
-                    <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.card_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle">
                       {aid.birth_certificate_url ? (
                         <a href={aid.birth_certificate_url} target="_blank" rel="noopener noreferrer"

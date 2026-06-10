@@ -26,8 +26,8 @@ export default async function MaternityPage() {
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">אגף יולדות</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{aids.length} לידות</p>
+          <h1 className="text-xl font-bold text-slate-900">עזר יולדות</h1>
+          <p className="text-sm text-slate-500 mt-0.5">בית החלמה · {aids.length} לידות</p>
         </div>
         <Link href="/admin/maternity/new">
           <Button>

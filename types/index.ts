@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
-export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'loans' | 'distributions' | 'reports' | 'widows'
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
@@ -8,6 +8,7 @@ export type Gender = 'male' | 'female'
 export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
 export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloaded'
+export type CardStatus = 'pending' | 'approved' | 'rejected' | 'loaded'
 export type DistributionStatus = 'planning' | 'active' | 'completed' | 'cancelled'
 export type DistributionRecipientStatus = 'pending' | 'received' | 'not_received'
 export type NotificationType = 'info' | 'warning' | 'urgent' | 'reminder'
@@ -133,11 +134,28 @@ export interface MaternityAid {
   recovery_from?: string
   recovery_to?: string
   status: MaternityStatus
+  card_status?: CardStatus
+  card_center_id?: string
   approved_by?: string
   notes?: string
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary
+}
+
+// מוקד חלוקת כרטיסי מזון. remaining/approved/loaded מחושבים בצד שרת.
+export interface CardCenter {
+  id: string
+  name: string
+  stock: number
+  is_active: boolean
+  notes?: string
+  created_at: string
+  updated_at: string
+  approved?: number   // אושרו וטרם נטענו
+  loaded?: number     // נטענו (נוכו מהמלאי)
+  remaining?: number  // נשאר פיזית = stock - loaded
+  available?: number  // פנוי לאישור = stock - approved - loaded
 }
 
 export interface Loan {

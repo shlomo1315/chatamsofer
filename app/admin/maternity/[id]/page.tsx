@@ -2,11 +2,10 @@ import Link from 'next/link'
 import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { MaternityAid, Beneficiary, CARD_LOAD_STATUS_LABELS, type CardLoadStatus } from '@/types'
+import { MaternityAid, Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
 import { StatusControl } from '../MaternityTable'
 import MaternityActions from './MaternityActions'
-import LoadCardButton from './LoadCardButton'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
@@ -20,7 +19,7 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     const supabase = await createClient()
     const { data } = await supabase
       .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(*)')
+      .select('*, beneficiary:beneficiaries(*), card_center:card_centers(id, name)')
       .eq('id', id)
       .single()
     return data
@@ -52,16 +51,6 @@ async function getLineagePath(nodeId?: string | null): Promise<string[]> {
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
-
-const CARD_LOAD_CLS: Record<CardLoadStatus, string> = {
-  idle: 'bg-slate-100 text-slate-600',
-  pending: 'bg-amber-100 text-amber-700',
-  loaded: 'bg-green-100 text-green-700',
-  failed: 'bg-red-100 text-red-700',
-  unloaded: 'bg-slate-200 text-slate-700',
-}
-const fmtCur = (n: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 
 export default async function MaternityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -97,10 +86,6 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
     ? [beneficiary.family_name, beneficiary.spouse_name].filter(Boolean).join(' ')
     : [beneficiary?.family_name, beneficiary?.full_name].filter(Boolean).join(' ') || 'תיק יולדת'
   const motherId = beneficiary?.spouse_id_number ?? beneficiary?.id_number
-
-  const expiresIn = aid.card_expires_at
-    ? Math.ceil((new Date(aid.card_expires_at).getTime() - Date.now()) / 86400000)
-    : null
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
@@ -237,40 +222,33 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
         </Card>
 
         <Card className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-indigo-600 mb-2">
+          <div className="flex items-center gap-2 text-emerald-600 mb-2">
             <CreditCard size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">נדרים קארד</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase">כרטיס מזון</span>
           </div>
-          <p className="text-sm"><span className="text-slate-500">מספר כרטיס: </span><span className="ltr-num font-mono text-xs">{aid.card_number ?? '—'}</span></p>
-          <p className="text-sm"><span className="text-slate-500">יתרה: </span><span className="text-green-700 font-bold">{fmtCur(aid.card_balance)}</span></p>
-          {expiresIn !== null && (
-            <p className={`text-xs font-medium mt-1 ${expiresIn <= 7 ? 'text-red-600' : 'text-slate-500'}`}>
-              {expiresIn > 0 ? `פג תוקף בעוד ${expiresIn} ימים` : 'תוקף הכרטיס פג'}
-            </p>
-          )}
-          {aid.card_expires_at && (
-            <p className="text-xs text-slate-400 ltr-num">
-              תאריך פקיעה: {fmtDate(aid.card_expires_at)}
-            </p>
-          )}
-
-          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100">
-            <span className="text-slate-500 text-sm">סטטוס הטענה:</span>
-            <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${CARD_LOAD_CLS[aid.card_load_status ?? 'idle']}`}>
-              {CARD_LOAD_STATUS_LABELS[aid.card_load_status ?? 'idle']}
-            </span>
-          </div>
-          {aid.card_loaded_at && (
-            <p className="text-xs text-slate-400 ltr-num">הוטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>
-          )}
-          {aid.card_unloaded_at && (
-            <p className="text-xs text-slate-400 ltr-num">נפרק בתאריך: {fmtDate(aid.card_unloaded_at)}</p>
-          )}
-          {aid.card_load_status === 'failed' && aid.card_load_error && (
-            <p className="text-xs text-red-600">{aid.card_load_error}</p>
-          )}
-
-          <LoadCardButton aid={aid} />
+          {(() => {
+            const cs = aid.card_status ?? 'pending'
+            const meta: Record<string, { label: string; cls: string }> = {
+              pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-800' },
+              approved: { label: 'אושר',          cls: 'bg-blue-100 text-blue-800' },
+              loaded:   { label: 'נטען',           cls: 'bg-green-100 text-green-800' },
+              rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-800' },
+            }
+            const center = (aid as { card_center?: { name?: string } }).card_center
+            return (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 text-sm">סטטוס:</span>
+                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${meta[cs].cls}`}>{meta[cs].label}</span>
+                </div>
+                {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
+                {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
+              </>
+            )
+          })()}
+          <Link href="/admin/maternity/cards" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5 transition-colors self-start">
+            לניהול כרטיסי מזון
+          </Link>
         </Card>
       </div>
 
