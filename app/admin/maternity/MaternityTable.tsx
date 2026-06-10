@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { MaternityAid, MaternityStatus } from '@/types'
@@ -49,7 +50,7 @@ const STATUS_PILL: Record<string, { label: string; cls: string; icon: typeof Clo
 }
 
 // ── Clickable status control ────────────────────────────────────────────────────
-export function StatusControl({ aid }: { aid: MaternityAid }) {
+export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
@@ -91,7 +92,12 @@ export function StatusControl({ aid }: { aid: MaternityAid }) {
         }
       }
       setOpen(false)
-      router.refresh()
+      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → קפיצה לבקשה הממתינה הבאה
+      if (advance && next !== 'pending') {
+        await goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
+      } else {
+        router.refresh()
+      }
     } catch (err: unknown) {
       alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {

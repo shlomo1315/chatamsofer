@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, ChevronDown, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 import type { Loan, LoanStatus } from '@/types'
 
 // סטטוס זכאות להלוואה: ממתין / זכאי (מאושר) / לא זכאי (לא מאושר)
@@ -15,7 +16,7 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
   defaulted: { label: 'לא מאושר',     cls: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200', icon: X },
 }
 
-export function LoanStatusControl({ loan }: { loan: Loan }) {
+export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -46,7 +47,12 @@ export function LoanStatusControl({ loan }: { loan: Loan }) {
         }).catch(() => {})
       }
       setOpen(false)
-      router.refresh()
+      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → קפיצה לבקשה הממתינה הבאה
+      if (advance && next !== 'pending') {
+        await goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
+      } else {
+        router.refresh()
+      }
     } catch (err: unknown) {
       alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
