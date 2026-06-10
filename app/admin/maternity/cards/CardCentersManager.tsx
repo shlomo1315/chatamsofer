@@ -65,14 +65,14 @@ export default function CardCentersManager() {
       {/* סיכום מלאי */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         {[
-          { label: 'סה״כ מלאי', value: totStock, cls: 'text-slate-800' },
-          { label: 'אושרו', value: totApproved, cls: 'text-blue-700' },
-          { label: 'נטענו', value: totLoaded, cls: 'text-green-700' },
-          { label: 'נשאר', value: totRemaining, cls: 'text-emerald-700' },
+          { label: 'סה״כ מלאי', value: totStock, cls: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
+          { label: 'אושרו', value: totApproved, cls: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+          { label: 'נטענו', value: totLoaded, cls: 'text-green-700', bg: 'bg-green-50 border-green-200' },
+          { label: 'נשאר', value: totRemaining, cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
         ].map(s => (
-          <div key={s.label} className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-center">
+          <div key={s.label} className={`rounded-2xl border px-4 py-3.5 text-center ${s.bg}`}>
             <p className="text-xs text-slate-500 mb-0.5">{s.label}</p>
-            <p className={`text-2xl font-extrabold ${s.cls}`}>{s.value}</p>
+            <p className={`text-3xl font-extrabold ${s.cls}`}>{s.value}</p>
           </div>
         ))}
       </div>

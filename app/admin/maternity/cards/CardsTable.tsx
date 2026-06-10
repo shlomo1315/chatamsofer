@@ -153,11 +153,11 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                         {s === 'pending' && (
                           <button onClick={() => { setErr(''); if (noStock) { setErr('אין מלאי כרטיסים פנוי'); return } setApproveFor(aid.id) }}
                             disabled={noStock}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 disabled:opacity-40 rounded-lg px-2.5 py-1.5"><Check size={13} /> אשר כרטיס</button>
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-3 py-1.5 shadow-sm"><Check size={14} /> אשר כרטיס</button>
                         )}
                         {s === 'approved' && (
                           <button onClick={() => act(aid.id, 'load')}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-green-700 border border-green-200 hover:bg-green-50 rounded-lg px-2.5 py-1.5"><CreditCard size={13} /> סמן כנטען</button>
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 shadow-sm"><CreditCard size={14} /> סמן כנטען</button>
                         )}
                         {(s === 'approved' || s === 'loaded' || s === 'rejected') && (
                           <button onClick={() => act(aid.id, 'pending')}

@@ -25,16 +25,25 @@ function LogoBadge() {
   )
 }
 
-const navItems: { href: string; label: string; icon: React.ElementType; section?: SectionKey }[] = [
-  { href: '/admin/dashboard',     label: 'לוח בקרה',        icon: LayoutDashboard },
-  { href: '/admin/beneficiaries', label: 'צאצאים',           icon: Users,          section: 'beneficiaries' },
-  { href: '/admin/lineage',       label: 'עץ הדורות',        icon: Trees,          section: 'lineage' },
-  { href: '/admin/maternity',     label: 'עזר יולדות',       icon: Baby,           section: 'maternity' },
-  { href: '/admin/maternity/cards', label: 'כרטיסי מזון יולדות', icon: UtensilsCrossed, section: 'maternity_cards' },
-  { href: '/admin/loans',         label: 'הלוואות',          icon: CreditCard,     section: 'loans' },
-  { href: '/admin/distributions', label: 'חלוקות',           icon: Gift,           section: 'distributions' },
-  { href: '/admin/widows',        label: 'אלמנות ויתומים',   icon: HeartHandshake, section: 'widows' },
-  { href: '/admin/reports',       label: 'דוחות',            icon: BarChart3,      section: 'reports' },
+type NavItem = { href: string; label: string; icon: React.ElementType; section?: SectionKey }
+
+const navTop: NavItem[] = [
+  { href: '/admin/dashboard',     label: 'לוח בקרה',   icon: LayoutDashboard },
+  { href: '/admin/beneficiaries', label: 'צאצאים',      icon: Users,  section: 'beneficiaries' },
+  { href: '/admin/lineage',       label: 'עץ הדורות',   icon: Trees,  section: 'lineage' },
+]
+
+// "יולדות" — קטגוריית אם מתקפלת עם שני תתי-אגפים
+const maternityChildren: { href: string; label: string; section: SectionKey }[] = [
+  { href: '/admin/maternity',       label: 'עזר יולדות',        section: 'maternity' },
+  { href: '/admin/maternity/cards', label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
+]
+
+const navBottom: NavItem[] = [
+  { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
+  { href: '/admin/distributions', label: 'חלוקות',         icon: Gift,           section: 'distributions' },
+  { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
+  { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },
 ]
 
 const bottomItems: { href: string; label: string; icon: React.ElementType }[] = [
@@ -45,6 +54,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
+  const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
   const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
 
@@ -68,14 +78,30 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         !myProfile || !myProfile.mail_account || a.email === myProfile.mail_account
       )
 
-  const visibleItems = navItems.filter(item => {
-    if (!item.section) return true
+  const canSee = (section?: SectionKey) => {
+    if (!section) return true
     if (isAdmin) return true
-    const level = permissions?.[item.section] ?? 'view'
-    return level !== 'none'
-  })
+    return (permissions?.[section] ?? 'view') !== 'none'
+  }
+  const topVisible = navTop.filter(i => canSee(i.section))
+  const bottomVisible = navBottom.filter(i => canSee(i.section))
+  const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 
   const mailActive = pathname.startsWith('/admin/mail')
+  const maternityActive = pathname.startsWith('/admin/maternity')
+  const cardsActive = pathname.startsWith('/admin/maternity/cards')
+
+  const renderLink = ({ href, label, icon: Icon }: NavItem) => {
+    const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
+    return (
+      <Link key={href} href={href} onClick={() => setMobileOpen(false)}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+          ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+        <Icon size={18} className="flex-shrink-0" />
+        <span>{label}</span>
+      </Link>
+    )
+  }
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -88,17 +114,42 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {visibleItems.map(({ href, label, icon: Icon }) => {
-          const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
-          return (
-            <Link key={href} href={href} onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
-              <Icon size={18} className="flex-shrink-0" />
-              <span>{label}</span>
-            </Link>
-          )
-        })}
+        {topVisible.map(renderLink)}
+
+        {/* ── יולדות accordion (עזר יולדות + כרטיסי מזון) ── */}
+        {maternityVisible.length > 0 && (
+          <div className="pt-0.5">
+            <button
+              onClick={() => setMaternityOpen(o => !o)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                ${maternityActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}
+            >
+              <Baby size={18} className="flex-shrink-0" />
+              <span className="flex-1 text-right">יולדות</span>
+              {maternityOpen
+                ? <ChevronUp size={14} className="flex-shrink-0 opacity-70" />
+                : <ChevronDown size={14} className="flex-shrink-0 opacity-70" />}
+            </button>
+            {maternityOpen && (
+              <div className="mt-1 mr-4 border-r border-slate-700 pr-2 flex flex-col gap-0.5">
+                {maternityVisible.map(child => {
+                  const active = child.href === '/admin/maternity/cards' ? cardsActive : (maternityActive && !cardsActive)
+                  const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed : Baby
+                  return (
+                    <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors
+                        ${active ? 'bg-indigo-500/90 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                      <Icon size={15} className="flex-shrink-0" />
+                      <span>{child.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {bottomVisible.map(renderLink)}
 
         {/* ── Mail accordion ── */}
         <div className="pt-1">
