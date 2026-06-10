@@ -453,8 +453,53 @@ export function financialAidInquiryEmail(
     </table>
   `
   return {
-    subject: `בקשת סיוע כספי — ${fullName}`,
+    subject: `בקשת סיוע כספי — ${fullName}${b.id_number ? ` (ת.ז ${b.id_number})` : ''}`,
     html: shell({ preheader: 'בקשת סיוע כספי להחלטתך — השב בסכום או X.', accent: '#6366f1', title: 'בקשת סיוע כספי', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
+// ─── סיוע כספי — אישור קבלה למבקש (בעת הגשה) ──────────────────────────────────
+export function financialAidReceivedEmail(name: string): BuiltEmail {
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">
+      בקשתך ל<strong>סיוע כספי</strong> התקבלה במערכת היכל החתם סופר והועברה לטיפול המזכירות.
+    </p>
+    <p style="margin:0;color:#334155;font-size:15px;line-height:1.8;">בסיום הטיפול תישלח אליך הודעה.</p>
+  `
+  return {
+    subject: 'בקשתך לסיוע כספי התקבלה — היכל החתם סופר',
+    html: shell({ preheader: 'בקשתך לסיוע כספי התקבלה והועברה לטיפול המזכירות.', accent: '#10b981', title: 'הבקשה התקבלה', subtitle: 'סיוע כספי', body }),
+  }
+}
+
+// ─── סיוע כספי — הודעת החלטה למבקש (אושר/נדחה) ────────────────────────────────
+export function financialAidDecisionEmail(name: string, approved: boolean, amount?: number | null): BuiltEmail {
+  const body = approved ? `
+    <p style="margin:0 0 8px;color:#059669;font-size:13px;font-weight:700;letter-spacing:0.5px;">בשורה משמחת</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <p style="margin:0 0 18px;color:#334155;font-size:15px;line-height:1.8;">
+      שמחים לבשר כי בקשתך לסיוע כספי <strong>אושרה</strong>.
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:18px 22px;text-align:center;">
+        <p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">הסכום שאושר</p>
+        <p style="margin:6px 0 0;color:#047857;font-size:30px;font-weight:900;" dir="ltr">₪${Number(amount ?? 0).toLocaleString('he-IL')}</p>
+      </td></tr>
+    </table>
+    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">צוות המזכירות יצור עמך קשר להמשך התהליך. בברכה, היכל החתם סופר.</p>
+  ` : `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">עדכון בנוגע לבקשתך</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">
+      בקשתך לסיוע כספי נבדקה, ולצערנו לא אושרה בשלב זה.
+    </p>
+    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">לפרטים נוספים ניתן לפנות למזכירות. בברכה, היכל החתם סופר.</p>
+  `
+  return {
+    subject: approved ? 'בקשת הסיוע הכספי אושרה — היכל החתם סופר' : 'עדכון בנוגע לבקשת הסיוע הכספי',
+    html: shell({ preheader: approved ? `בקשתך אושרה על סך ₪${Number(amount ?? 0).toLocaleString('he-IL')}` : 'עדכון בנוגע לבקשתך', accent: approved ? '#10b981' : '#64748b', title: approved ? 'הבקשה אושרה' : 'עדכון בקשה', subtitle: 'סיוע כספי', body }),
   }
 }
 
