@@ -417,6 +417,47 @@ export function requestReceivedEmail(
   }
 }
 
+// ─── סיוע כספי — פנייה מעוצבת לגורם המאשר ─────────────────────────────────────
+// הגורם המאשר משיב באותו שרשור: מספר = סכום מאושר · X = נדחה.
+export function financialAidInquiryEmail(
+  b: { family_name?: string | null; full_name?: string | null; id_number?: string | null; spouse_name?: string | null; marital_status?: string | null; phone?: string | null; city?: string | null; children_count?: number | null },
+  reason?: string | null,
+): BuiltEmail {
+  const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
+  const rows = [
+    detailRow('שם מלא', fullName),
+    detailRow('מספר זהות', b.id_number),
+    detailRow('בן/בת זוג', b.spouse_name),
+    detailRow('מצב משפחתי', b.marital_status),
+    detailRow('טלפון', b.phone),
+    detailRow('עיר', b.city),
+    detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
+  ].join('')
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בקשת סיוע כספי</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">בקשה לאישור סיוע כספי</h2>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי המבקש:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
+    ${reason ? `
+    <p style="margin:0 0 8px;color:#334155;font-size:14px;font-weight:700;">סיבת הבקשה:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#f8fafc;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:14px 18px;color:#334155;font-size:14px;line-height:1.7;white-space:pre-wrap;">${reason}</td></tr>
+    </table>` : ''}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">להחלטתך:</p>
+        <p style="margin:6px 0 0;color:#1e3a8a;font-size:14px;line-height:1.7;">
+          להשיב למייל זה <strong>בסכום לאישור</strong> (מספר בלבד, למשל 1000), או באות <strong>X</strong> לדחיית הבקשה.
+        </p>
+      </td></tr>
+    </table>
+  `
+  return {
+    subject: `בקשת סיוע כספי — ${fullName}`,
+    html: shell({ preheader: 'בקשת סיוע כספי להחלטתך — השב בסכום או X.', accent: '#6366f1', title: 'בקשת סיוע כספי', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
 // ─── אישור בקשה (לידה / הלוואה) — מייל מעוצב עם פרטי הנרשם ופרטי הבקשה ──────────
 export interface RequestApprovedBeneficiary {
   family_name?: string | null

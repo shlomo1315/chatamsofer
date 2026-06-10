@@ -7,7 +7,7 @@ import { useDocTypes } from '@/lib/useDocTypes'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
-  Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText,
+  Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -744,6 +744,11 @@ export default function PublicPortalPage() {
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
 
+  // Financial aid modal
+  const [aidModalOpen, setAidModalOpen] = useState(false)
+  const [aidReason, setAidReason] = useState('')
+  const [aidFile, setAidFile] = useState<File | null>(null)
+
   // Birth request form
   const [birthForm, setBirthForm] = useState({
     birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '',
@@ -1093,6 +1098,27 @@ export default function PublicPortalPage() {
     } catch {
       setError('שגיאת רשת. אנא נסה שוב.')
     }
+    setLoading(false)
+  }
+
+  const handleFinancialAidRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!aidReason.trim()) { setError('אנא פרט את סיבת הבקשה'); return }
+    if (!aidFile) { setError('אנא צרף מסמך'); return }
+    if (!beneficiary) return
+    setError(''); setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('beneficiary_id', beneficiary.id)
+      fd.append('reason', aidReason.trim())
+      fd.append('file', aidFile)
+      const res = await fetch('/api/portal/financial-aid-request', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      setAidModalOpen(false); setAidReason(''); setAidFile(null)
+      setRequestType('loan')
+      setStep('request-sent')
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
   }
 
@@ -2294,6 +2320,20 @@ export default function PublicPortalPage() {
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
                 </button>
 
+                <button
+                  onClick={() => { setError(''); setAidReason(''); setAidFile(null); setAidModalOpen(true) }}
+                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                >
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
+                    <HandCoins size={22} className="text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">בקשת סיוע כספי</p>
+                    <p className="text-xs text-slate-500 mt-0.5">פירוט הבקשה + צירוף מסמך</p>
+                  </div>
+                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                </button>
+
                 {!isPending && (
                   <button
                     onClick={() => alert('לבקשת חלוקה, אנא פנה ישירות לצוות המערכת')}
@@ -2646,6 +2686,46 @@ export default function PublicPortalPage() {
                     {loading ? 'שולח...' : 'שלח בקשה'}
                   </button>
                 </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Financial Aid modal ─── */}
+        {aidModalOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+            <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <HandCoins size={20} className="text-emerald-600" />
+                  <h2 className="font-bold text-slate-900">בקשת סיוע כספי</h2>
+                </div>
+                <button type="button" onClick={() => { setAidModalOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+              <form onSubmit={handleFinancialAidRequest} className="p-6 flex flex-col gap-4">
+                <Field label="סיבת הבקשה" required>
+                  <textarea value={aidReason} onChange={e => setAidReason(e.target.value)} rows={4}
+                    placeholder="פרט/י מדוע נדרש הסיוע הכספי..."
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none w-full" />
+                </Field>
+                <Field label="מסמך מצורף" required hint="צרף מסמך תומך (תמונה / PDF)">
+                  {aidFile ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                      <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{aidFile.name}</span></span>
+                      <button type="button" onClick={() => setAidFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40">
+                      <Upload size={16} /> לחץ להעלאת מסמך
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setAidFile(e.target.files?.[0] ?? null)} />
+                    </label>
+                  )}
+                </Field>
+                {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+                <button type="submit" disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors">
+                  {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שלח בקשה
+                </button>
               </form>
             </div>
           </div>

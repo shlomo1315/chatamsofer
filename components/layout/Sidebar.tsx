@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, Profile } from '@/types'
@@ -41,6 +41,7 @@ const maternityChildren: { href: string; label: string; section: SectionKey }[] 
 
 const navBottom: NavItem[] = [
   { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
+  { href: '/admin/financial-aid', label: 'סיוע כספי',      icon: HandCoins,      section: 'financial_aid' },
   { href: '/admin/distributions', label: 'חלוקות',         icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },

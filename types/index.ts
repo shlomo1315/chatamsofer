@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
-export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows'
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
@@ -281,6 +281,44 @@ export const WIDOW_REQUEST_STATUS_LABELS: Record<WidowRequestStatus, string> = {
 export const WIDOW_REQUEST_STATUS_COLORS: Record<WidowRequestStatus, string> = {
   pending: 'bg-amber-100 text-amber-700',
   in_progress: 'bg-blue-100 text-blue-700',
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+}
+
+// ─── סיוע כספי ───
+export type FinancialAidStatus = 'pending' | 'awaiting_decision' | 'approved' | 'rejected'
+
+export interface FinancialAidRequest {
+  id: string
+  beneficiary_id: string
+  reason?: string
+  document_url?: string
+  document_name?: string
+  status: FinancialAidStatus
+  amount?: number
+  decision_email?: string
+  gmail_thread_id?: string
+  gmail_message_id?: string
+  sent_to_decision_at?: string
+  decision_reply?: string
+  decision_replied_at?: string
+  reviewed_by?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  beneficiary?: Beneficiary
+}
+
+export const FINANCIAL_AID_STATUS_LABELS: Record<FinancialAidStatus, string> = {
+  pending: 'ממתין',
+  awaiting_decision: 'נשלח לגורם מאשר',
+  approved: 'מאושר',
+  rejected: 'נדחה',
+}
+
+export const FINANCIAL_AID_STATUS_COLORS: Record<FinancialAidStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  awaiting_decision: 'bg-blue-100 text-blue-700',
   approved: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-700',
 }
