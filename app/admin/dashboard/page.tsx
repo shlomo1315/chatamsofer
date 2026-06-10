@@ -19,6 +19,7 @@ interface DashData {
   maternityPending: number
   cardsLoaded: number
   cardsPending: number
+  cardsRemaining: number
   widowPending: number
   widowInProgress: number
   distributionsPlanned: number
@@ -27,7 +28,7 @@ interface DashData {
 const EMPTY: DashData = {
   totalBeneficiaries: 0, newBeneficiariesWeek: 0, approved: 0, pending: 0,
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
-  maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0,
+  maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
 }
 
@@ -36,12 +37,13 @@ async function getStats(): Promise<DashData> {
   try {
     const supabase = await createClient()
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-    const [beneficiaries, loans, maternity, widows, distributions] = await Promise.all([
+    const [beneficiaries, loans, maternity, widows, distributions, cardCenters] = await Promise.all([
       supabase.from('beneficiaries').select('eligibility_status, created_at'),
       supabase.from('loans').select('status, amount, created_at'),
-      supabase.from('maternity_aids').select('status, card_load_status'),
+      supabase.from('maternity_aids').select('status, card_status'),
       supabase.from('widow_requests').select('status'),
       supabase.from('distributions').select('status').in('status', ['planning', 'active']),
+      supabase.from('card_centers').select('stock'),
     ])
     const b = beneficiaries.data ?? []
     const l = loans.data ?? []
@@ -60,8 +62,9 @@ async function getStats(): Promise<DashData> {
       totalLoanAmount: l.filter(x => x.status === 'active').reduce((s, x) => s + (Number(x.amount) || 0), 0),
       maternityActive: m.filter(x => x.status === 'active').length,
       maternityPending: m.filter(x => x.status === 'pending').length,
-      cardsLoaded: m.filter(x => x.card_load_status === 'loaded').length,
-      cardsPending: m.filter(x => x.card_load_status === 'pending').length,
+      cardsLoaded: m.filter(x => x.card_status === 'loaded').length,
+      cardsPending: m.filter(x => !x.card_status || x.card_status === 'pending').length,
+      cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - m.filter(x => x.card_status === 'loaded').length,
       widowPending: w.filter(x => x.status === 'pending').length,
       widowInProgress: w.filter(x => x.status === 'in_progress').length,
       distributionsPlanned: distributions.count ?? (distributions.data?.length ?? 0),
@@ -111,10 +114,10 @@ export default async function DashboardPage() {
       ],
     },
     {
-      title: 'כרטיסי מזון יולדות', icon: UtensilsCrossed, grad: 'from-emerald-500 to-green-600', href: '/admin/maternity',
+      title: 'כרטיסי מזון יולדות', icon: UtensilsCrossed, grad: 'from-emerald-500 to-green-600', href: '/admin/maternity/cards',
       metrics: [
-        { label: 'כרטיסים טעונים', value: fmt(s.cardsLoaded), tone: 'text-slate-900' },
-        { label: 'ממתינים להטענה', value: fmt(s.cardsPending), tone: 'text-amber-600' },
+        { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: 'text-amber-600' },
+        { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: 'text-emerald-600' },
       ],
     },
     {

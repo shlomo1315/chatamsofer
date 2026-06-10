@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, Profile } from '@/types'
@@ -29,7 +29,8 @@ const navItems: { href: string; label: string; icon: React.ElementType; section?
   { href: '/admin/dashboard',     label: 'לוח בקרה',        icon: LayoutDashboard },
   { href: '/admin/beneficiaries', label: 'צאצאים',           icon: Users,          section: 'beneficiaries' },
   { href: '/admin/lineage',       label: 'עץ הדורות',        icon: Trees,          section: 'lineage' },
-  { href: '/admin/maternity',     label: 'יולדות',           icon: Baby,           section: 'maternity' },
+  { href: '/admin/maternity',     label: 'עזר יולדות',       icon: Baby,           section: 'maternity' },
+  { href: '/admin/maternity/cards', label: 'כרטיסי מזון יולדות', icon: UtensilsCrossed, section: 'maternity_cards' },
   { href: '/admin/loans',         label: 'הלוואות',          icon: CreditCard,     section: 'loans' },
   { href: '/admin/distributions', label: 'חלוקות',           icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',        label: 'אלמנות ויתומים',   icon: HeartHandshake, section: 'widows' },
