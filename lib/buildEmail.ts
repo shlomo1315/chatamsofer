@@ -13,6 +13,8 @@ export interface BuildOptions {
   inReplyTo?: string
   /** UUID token for open-tracking pixel — injected before </body> */
   trackingToken?: string
+  /** קבצים מצורפים — תוכן ב-base64 רגיל */
+  attachments?: { filename: string; mimeType: string; contentB64: string }[]
 }
 
 function encodeHeader(text: string): string {
@@ -81,18 +83,35 @@ function randomId(): string {
 }
 
 export function buildRawEmail(opts: BuildOptions): string {
-  const { from, fromName, to, subject, html, replyTo, inReplyTo, trackingToken } = opts
+  const { from, fromName, to, subject, html, replyTo, inReplyTo, trackingToken, attachments } = opts
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://my-app-gamma-pearl-29.vercel.app'
   const pixel = trackingToken
     ? `<img src="${appUrl}/api/track/open?t=${trackingToken}" width="1" height="1" style="display:none;border:0;" alt="" />`
     : ''
   const finalHtml = trackingToken ? html.replace(/<\/body>/i, `${pixel}</body>`) || html + pixel : html
-  const boundary = `----=_Part_${randomId()}`
+  const altBoundary = `----=_Alt_${randomId()}`
   const domain = from.split('@')[1] ?? 'mail'
   const messageId = `<${randomId()}.${Date.now()}@${domain}>`
   const plain = htmlToPlain(finalHtml)
 
-  const parts: string[] = [
+  // גוף ההודעה (multipart/alternative: טקסט + HTML)
+  const altBody = [
+    `--${altBoundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: quoted-printable',
+    '',
+    encodeQP(plain),
+    '',
+    `--${altBoundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    wrapBase64(Buffer.from(finalHtml, 'utf8').toString('base64')),
+    '',
+    `--${altBoundary}--`,
+  ]
+
+  const headers = [
     `From: ${encodeHeader(fromName)} <${from}>`,
     `To: ${to}`,
     `Reply-To: ${replyTo ?? from}`,
@@ -101,23 +120,43 @@ export function buildRawEmail(opts: BuildOptions): string {
     `Date: ${new Date().toUTCString()}`,
     ...(inReplyTo ? [`In-Reply-To: ${inReplyTo}`, `References: ${inReplyTo}`] : []),
     'MIME-Version: 1.0',
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: quoted-printable',
-    '',
-    encodeQP(plain),
-    '',
-    `--${boundary}`,
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    wrapBase64(Buffer.from(finalHtml, 'utf8').toString('base64')),
-    '',
-    `--${boundary}--`,
   ]
 
+  // ללא צרופות — multipart/alternative בלבד
+  if (!attachments?.length) {
+    return [
+      ...headers,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      '',
+      ...altBody,
+    ].join('\r\n')
+  }
+
+  // עם צרופות — עוטפים ב-multipart/mixed
+  const mixedBoundary = `----=_Mix_${randomId()}`
+  const parts: string[] = [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+    '',
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+    '',
+    ...altBody,
+    '',
+  ]
+  for (const att of attachments) {
+    const fn = encodeHeader(att.filename)
+    parts.push(
+      `--${mixedBoundary}`,
+      `Content-Type: ${att.mimeType || 'application/octet-stream'}; name="${fn}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${fn}"`,
+      '',
+      wrapBase64(att.contentB64.replace(/\s/g, '')),
+      '',
+    )
+  }
+  parts.push(`--${mixedBoundary}--`)
   return parts.join('\r\n')
 }
 

@@ -78,3 +78,13 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* עורך מייל עשיר — placeholder + רשימות */
+.mail-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+.mail-editor ul { list-style: disc; padding-inline-start: 1.5rem; }
+.mail-editor ol { list-style: decimal; padding-inline-start: 1.5rem; }
+.mail-editor a { color: #4f46e5; text-decoration: underline; }
