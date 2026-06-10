@@ -448,13 +448,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
 
           {positions.map(pos => {
             const nodeStatus = pos.node.status ?? 'verified'
-            // צבע הקובייה לפי בן/חתן (גוון כחול לבן · ענבר לחתן), כדי שרואים את ההבדל על פני העץ
-            const relPal = pos.node.relation === 'son'
-              ? { bg: 'linear-gradient(135deg,#3B82F6 0%,#2563EB 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.30)', light: '#EFF6FF', text: '#1E40AF' }
+            const genPal = pal(pos.node.generation)
+            // הבדל עדין מאוד בתוך צבע הדור: בן = מעט בהיר יותר · חתן = מעט כהה יותר
+            const relOverlay = pos.node.relation === 'son'
+              ? 'linear-gradient(rgba(255,255,255,0.22),rgba(255,255,255,0.22)), '
               : pos.node.relation === 'son_in_law'
-                ? { bg: 'linear-gradient(135deg,#F59E0B 0%,#D97706 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.30)', light: '#FFFBEB', text: '#92400E' }
-                : null
-            const genPal = relPal ?? pal(pos.node.generation)
+                ? 'linear-gradient(rgba(15,23,42,0.18),rgba(15,23,42,0.18)), '
+                : ''
             const isSel = selected === pos.node.id
             const isDimmed = selected !== null
               ? !pathBranch.has(pos.node.id)
@@ -471,7 +471,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
-                  background: p.bg,
+                  background: relOverlay + p.bg,
                   boxShadow: isSel
                     ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                     : `0 4px 18px ${p.shadow}`,
@@ -787,7 +787,8 @@ export default function LineagePage() {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
       const raw: LineageNode[] = (await r.json()).nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
-      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen })))
+      // החתם סופר (הדור הנמוך ביותר) תמיד דור 1, וממשיך משם
+      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
     } catch {}
     setLoading(false)
   }, [])
@@ -797,7 +798,7 @@ export default function LineagePage() {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
       const raw: LineageNode[] = (await r.json()).nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
-      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen })))
+      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
     } catch {}
   }, [])
 
