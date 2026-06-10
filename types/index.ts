@@ -61,6 +61,7 @@ export interface Beneficiary {
   lineage_manual?: string[]
   lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
   children_count: number
+  monthly_support?: number
   children?: {
     name: string
     id_number: string | null
@@ -283,6 +284,28 @@ export const WIDOW_REQUEST_STATUS_COLORS: Record<WidowRequestStatus, string> = {
   in_progress: 'bg-blue-100 text-blue-700',
   approved: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-700',
+}
+
+// ─── תמיכות אלמנות (לוג תשלומים לתיק משפחה) ───
+export type WidowSupportType = 'one_time' | 'monthly' | 'holiday' | 'medical' | 'food' | 'other'
+
+export interface WidowSupportPayment {
+  id: string
+  beneficiary_id: string
+  amount: number
+  paid_at: string
+  type: WidowSupportType
+  note?: string
+  created_at: string
+}
+
+export const WIDOW_SUPPORT_TYPE_LABELS: Record<WidowSupportType, string> = {
+  one_time: 'חד-פעמי',
+  monthly: 'קצבה חודשית',
+  holiday: 'חג',
+  medical: 'רפואי',
+  food: 'מזון',
+  other: 'אחר',
 }
 
 // ─── סיוע כספי ───
