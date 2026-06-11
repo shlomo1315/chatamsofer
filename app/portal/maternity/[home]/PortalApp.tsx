@@ -343,7 +343,14 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
             )
           })}
         </div>
-        <p className="text-xs text-slate-400 text-center">הרשימה מתעדכנת אוטומטית · סמנו הגעה לכל יולדת</p>
+        <div className="flex items-center justify-center gap-2 my-1">
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5">
+            <Check size={15} className="text-indigo-500" />
+            סמנו הגעה לכל יולדת
+            <span className="text-indigo-300">·</span>
+            <span className="font-normal text-indigo-400">הרשימה מתעדכנת אוטומטית</span>
+          </span>
+        </div>
 
         {/* Table / empty */}
         {filtered.length === 0 ? (
@@ -366,7 +373,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                   {filtered.map(aid => {
                     const m = aid.beneficiary
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle"
                         onClick={() => setSelected(aid)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
                         <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>
@@ -379,12 +386,12 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                             return (
                               <div className={`flex items-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                  className={`flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl border-2 transition-all ${a === true ? 'bg-green-600 text-white border-green-600 shadow-md scale-105' : 'bg-white text-green-700 border-green-300 hover:bg-green-50'}`}>
-                                  <Check size={17} /> הגיעה
+                                  className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                  <Check size={15} /> הגיעה
                                 </button>
                                 <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                  className={`flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl border-2 transition-all ${a === false ? 'bg-red-600 text-white border-red-600 shadow-md scale-105' : 'bg-white text-red-600 border-red-300 hover:bg-red-50'}`}>
-                                  <X size={17} /> לא הגיעה
+                                  className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+                                  <X size={15} /> לא הגיעה
                                 </button>
                               </div>
                             )
