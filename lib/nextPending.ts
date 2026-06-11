@@ -4,8 +4,9 @@ type Nav = { push: (href: string) => void; refresh: () => void }
 
 // אחרי טיפול בבקשה ממתינה — קפיצה לבקשה הממתינה הבאה (לפי סדר כניסה),
 // ואם אין עוד — חזרה לרשימה הכללית של האגף.
+// החיפוש מתבצע ב-endpoint עם service-role כדי שלא ייחסם ע"י RLS בצד-הדפדפן.
 export async function goToNextPending(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   router: Nav,
   opts: {
     table: string
@@ -17,15 +18,14 @@ export async function goToNextPending(
   },
 ) {
   try {
-    const { data } = await supabase
-      .from(opts.table)
-      .select('id')
-      .in(opts.statusColumn, opts.pendingValues)
-      .neq('id', opts.currentId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-    const next = data?.[0] as { id?: string } | undefined
-    if (next?.id) { router.push(`${opts.detailBase}/${next.id}`); return }
+    const params = new URLSearchParams({
+      table: opts.table,
+      currentId: opts.currentId,
+      pending: opts.pendingValues.join(','),
+    })
+    const res = await fetch(`/api/admin/next-pending?${params.toString()}`, { cache: 'no-store' })
+    const data = await res.json()
+    if (data?.id) { router.push(`${opts.detailBase}/${data.id}`); return }
   } catch { /* נופלים לרשימה */ }
   router.push(opts.listPath)
 }
