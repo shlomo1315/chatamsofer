@@ -1380,7 +1380,7 @@ export default function MailClient() {
                                 : msg.to)
                             : senderDisplay(msg)}
                         </span>
-                        <span className="text-xs text-slate-500 font-medium flex-shrink-0 tabular-nums">{formatDate(msg.date)}</span>
+                        <span className="text-sm text-slate-500 font-medium flex-shrink-0 tabular-nums transition-opacity group-hover:opacity-0">{formatDate(msg.date)}</span>
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -1405,7 +1405,7 @@ export default function MailClient() {
                         {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
                       </div>
                     </button>
-                    <div className="absolute bottom-2 left-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-lg shadow-sm border border-slate-100 px-0.5">
+                    <div className="absolute top-2 left-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg shadow-sm border border-slate-100 px-0.5">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
                         className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
