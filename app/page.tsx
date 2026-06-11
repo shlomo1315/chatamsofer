@@ -407,77 +407,167 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
   )
 }
 
-type CascadeLevel = { nodes: LineageNode[]; selected: string | null; selectedName: string; selectedRelation: 'son' | 'son_in_law' | null }
-function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[], relations: ('son' | 'son_in_law' | null)[]) => void }) {
-  const [levels, setLevels] = useState<CascadeLevel[]>([])
-  const [loadingLevel, setLoadingLevel] = useState<number | null>(null)
+export interface LineageResult {
+  valid: boolean
+  nodeId: string | null
+  ancestors: { id: string | null; name: string; relation: 'son' | 'son_in_law' | null; isNew: boolean }[]
+  selfRelation: 'son' | 'son_in_law' | null
+}
+function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r: LineageResult) => void }) {
   const [root, setRoot] = useState<{ id: string; name: string } | null>(null)
+  const [chain, setChain] = useState<{ id: string | null; name: string; relation: 'son' | 'son_in_law' | null; isNew: boolean }[]>([])
+  const [options, setOptions] = useState<LineageNode[]>([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newRel, setNewRel] = useState<'son' | 'son_in_law' | null>(null)
+  const [newErr, setNewErr] = useState('')
+  const [selfAdded, setSelfAdded] = useState(false)
+  const [selfRel, setSelfRel] = useState<'son' | 'son_in_law' | null>(null)
+
+  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
   useEffect(() => {
     (async () => {
-      setLoadingLevel(0)
       try {
-        const rootRes = await fetch('/api/lineage')
-        const rootData = await rootRes.json()
-        const rootNode = (rootData.nodes ?? [])[0]
-        if (rootNode) {
-          setRoot({ id: rootNode.id, name: rootNode.name })
-          const chRes = await fetch(`/api/lineage?parent_id=${rootNode.id}`)
-          const chData = await chRes.json()
-          if ((chData.nodes ?? []).length > 0) setLevels([{ nodes: chData.nodes, selected: null, selectedName: '', selectedRelation: null }])
-        }
+        const r = await fetch('/api/lineage'); const d = await r.json(); const rn = (d.nodes ?? [])[0]
+        if (rn) { setRoot({ id: rn.id, name: rn.name }); setOptions(await fetchChildren(rn.id)) }
       } catch { /* ignore */ }
-      setLoadingLevel(null)
+      setLoading(false)
     })()
   }, [])
 
-  const handleSelect = async (levelIdx: number, nodeId: string) => {
-    const node = levels[levelIdx]?.nodes.find(n => n.id === nodeId)
-    if (!node || !root) return
-    const path = [root.name, ...levels.slice(0, levelIdx).map(l => l.selectedName), node.name]
-    const relations = [null as 'son' | 'son_in_law' | null, ...levels.slice(0, levelIdx).map(l => l.selectedRelation), node.relation ?? null]
-    setLevels(prev => prev.slice(0, levelIdx + 1).map((l, i) =>
-      i === levelIdx ? { ...l, selected: node.id, selectedName: node.name, selectedRelation: node.relation ?? null } : l
-    ))
-    setLoadingLevel(levelIdx + 1)
-    try {
-      const res = await fetch(`/api/lineage?parent_id=${node.id}`)
-      const data = await res.json()
-      const children: LineageNode[] = data.nodes ?? []
-      setLevels(prev => {
-        const next = prev.slice(0, levelIdx + 1)
-        if (children.length > 0) next.push({ nodes: children, selected: null, selectedName: '', selectedRelation: null })
-        return next
-      })
-      onSelect(node.id, path, relations)
-    } catch { onSelect(node.id, path, relations) }
-    setLoadingLevel(null)
+  useEffect(() => {
+    const deepestVerified = [...chain].reverse().find(c => !c.isNew && c.id)
+    const valid = chain.length >= 1 && selfAdded && !!selfRel && chain.every(c => c.relation)
+    onChange({ valid, nodeId: deepestVerified?.id ?? null, ancestors: chain, selfRelation: selfRel })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chain, selfAdded, selfRel])
+
+  const pickVerified = async (node: LineageNode) => {
+    setSelfAdded(false)
+    setChain(c => [...c, { id: node.id, name: node.name, relation: node.relation ?? null, isNew: false }])
+    setOptions(await fetchChildren(node.id))
+  }
+  const confirmNew = () => {
+    const nm = newName.trim()
+    if (nm.split(/\s+/).filter(Boolean).length < 2) { setNewErr('יש להזין שם פרטי מלא ושם משפחה מלא (לדוגמה: "משה כהן")'); return }
+    if (!newRel) { setNewErr('יש לסמן בן או חתן'); return }
+    setSelfAdded(false)
+    setChain(c => [...c, { id: null, name: nm, relation: newRel, isNew: true }])
+    setOptions([]); setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('')
+  }
+  const removeLast = async () => {
+    const prev = chain[chain.length - 2]
+    setChain(c => c.slice(0, -1))
+    setSelfAdded(false); setAddOpen(false)
+    if (prev && !prev.isNew && prev.id) setOptions(await fetchChildren(prev.id))
+    else if (!prev && root) setOptions(await fetchChildren(root.id))
+    else setOptions([])
   }
 
-  const selCls = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500'
+  const relBadge = (r: 'son' | 'son_in_law' | null) => (r === 'son' || r === 'son_in_law') ? (
+    <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${r === 'son' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{r === 'son' ? 'בן' : 'חתן'}</span>
+  ) : null
+
+  if (loading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-3"><Loader2 size={14} className="animate-spin" /> טוען דורות…</div>
+
+  const canAddSelf = chain.length >= 1 && !selfAdded
+  const lastIsNew = chain.length > 0 && chain[chain.length - 1].isNew
 
   return (
     <div className="flex flex-col">
-      {levels.map((level, idx) => (
-        <div key={idx} className="flex items-stretch gap-2">
-          {/* עמודת חיבור — נקודה + קו לדור הבא */}
-          <div className="flex flex-col items-center w-5 flex-shrink-0">
-            <span className={`w-2.5 h-2.5 rounded-full mt-3 ${level.selected ? 'bg-indigo-500' : 'bg-slate-300'}`} />
-            {idx < levels.length - 1 && <span className="w-0.5 flex-1 bg-indigo-200 my-0.5" />}
+      {/* סיכום הדורות שנבחרו — דור 1 קבוע ואז השרשרת */}
+      {[{ name: root?.name ?? 'רבינו החתם סופר זיע״א', relation: null as 'son' | 'son_in_law' | null, fixed: true, isNew: false }, ...chain.map(c => ({ ...c, fixed: false }))].map((row, i, arr) => {
+        const col = GEN_COLORS[i % GEN_COLORS.length]
+        return (
+          <div key={i} className="flex items-stretch gap-3">
+            <div className="flex flex-col items-center w-5 flex-shrink-0">
+              <span className={`w-3 h-3 rounded-full mt-2.5 ${col.dot}`} />
+              <span className="w-0.5 flex-1 bg-slate-200 my-0.5" />
+            </div>
+            <div className={`flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2 ${col.bg} ${col.border}`}>
+              <span className={`text-[10px] font-bold flex-shrink-0 ${col.text} opacity-70`}>דור {i + 1}</span>
+              <span className={`text-sm font-semibold flex-1 truncate ${col.text}`}>{row.name}</span>
+              {row.fixed && <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>}
+              {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
+              {relBadge(row.relation)}
+              {!row.fixed && i === arr.length - 1 && !selfAdded && (
+                <button type="button" onClick={removeLast} className="text-slate-300 hover:text-red-500 flex-shrink-0" title="הסר"><X size={15} /></button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-1 pb-3">
-            <span className="text-xs font-bold text-indigo-400 w-12 flex-shrink-0">דור {idx + 2}</span>
-            <select className={selCls} value={level.selected ?? ''} onChange={e => e.target.value && handleSelect(idx, e.target.value)}>
-              <option value="">— בחר/י מהרשימה —</option>
-              {level.nodes.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
-                <option key={node.id} value={node.id}>{node.name}{node.relation ? ` (${node.relation === 'son' ? 'בן' : 'חתן'})` : ''}</option>
-              ))}
-            </select>
-            {loadingLevel === idx + 1 && <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />}
+        )
+      })}
+
+      {/* שורת הנרשם — אחרי שלחץ "הוסף אותי" */}
+      {selfAdded && (
+        <div className="flex items-stretch gap-3">
+          <div className="flex flex-col items-center w-5 flex-shrink-0"><span className="w-3 h-3 rounded-full mt-2.5 bg-green-600 ring-2 ring-green-200" /></div>
+          <div className="flex-1 mb-2 rounded-xl border-2 border-green-300 bg-green-600 px-3 py-2 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-green-100 flex-shrink-0">דור {chain.length + 2}</span>
+            <span className="text-sm font-semibold text-white flex-1 truncate">{selfName || '(שמך)'} (אתה)</span>
+            <span className="text-[10px] text-green-100">בן/חתן:</span>
+            {(['son', 'son_in_law'] as const).map(r => (
+              <button key={r} type="button" onClick={() => setSelfRel(r)}
+                className={`text-xs font-semibold rounded-full px-2.5 py-0.5 border transition-colors ${selfRel === r ? 'bg-white text-green-700 border-white' : 'bg-green-500/40 text-white border-green-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+            ))}
+            <button type="button" onClick={() => { setSelfAdded(false); setSelfRel(null) }} className="text-green-100 hover:text-white flex-shrink-0" title="בטל"><X size={15} /></button>
           </div>
         </div>
-      ))}
-      {loadingLevel === 0 && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={14} className="animate-spin" /> טוען דורות…</div>}
+      )}
+
+      {/* בורר הדור הבא — כפתורים + "אחר" */}
+      {!selfAdded && (
+        <div className="mr-8 mt-1">
+          {!addOpen ? (
+            <>
+              {!lastIsNew && options.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-slate-500 mb-1.5">בחר/י את דור {chain.length + 2}:</p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {options.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
+                      <button key={node.id} type="button" onClick={() => pickVerified(node)}
+                        className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
+                        {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => { setAddOpen(true); setNewErr('') }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors">
+                  <Plus size={13} /> {lastIsNew || options.length === 0 ? 'הוסף את הדור הבא' : 'הדור הבא לא ברשימה — הוסף "אחר"'}
+                </button>
+                {canAddSelf && (
+                  <button type="button" onClick={() => setSelfAdded(true)}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 transition-colors">
+                    <Check size={13} /> הוסף אותי כעת (סיימתי את האבות)
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-2">
+              <p className="text-xs font-semibold text-amber-800">הוספת דור {chain.length + 2} (ייכנס לאישור הצוות)</p>
+              <TextInput value={newName} onChange={e => { setNewName(e.target.value); setNewErr('') }} placeholder="שם פרטי מלא ושם משפחה מלא" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">בן/חתן של הדור הקודם:</span>
+                {(['son', 'son_in_law'] as const).map(r => (
+                  <button key={r} type="button" onClick={() => setNewRel(r)}
+                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${newRel === r ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400') : 'bg-white text-slate-500 border-slate-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                ))}
+              </div>
+              {newErr && <p className="text-xs text-red-600">{newErr}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={confirmNew} className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2"><Check size={12} /> הוסף</button>
+                <button type="button" onClick={() => { setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('') }} className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">ביטול</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -738,6 +828,7 @@ export default function PublicPortalPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childSelf, regForm.marital_status])
+  const [lineageResult, setLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>([])
@@ -978,23 +1069,14 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
-    // ברישום כילד רשום — השיוך אוטומטי מההורה, אין צורך בהצהרה/בחירה/סימון ידני
+    // ברישום כילד רשום — השיוך אוטומטי מההורה. אחרת — דרך בורר הדורות.
     if (!childParentLineage) {
       if (!lineageDeclared) {
         setError('יש לאשר את הצהרת הייחוס לפני בחירת סדר הדורות')
         return
       }
-      if (!lineageNodeId) {
-        setError('אנא בחר שיוך שושלת')
-        return
-      }
-      if (buildLineageChain().some(c => c.relKey && !c.relation)) {
-        setError('יש לסמן בכל דור (אחרי החתם סופר) האם הוא בן או חתן')
-        return
-      }
-      // כל דור ידני חייב שם פרטי מלא + שם משפחה מלא (לפחות שתי מילים)
-      if (manualLineage.some(n => n.trim() && n.trim().split(/\s+/).length < 2)) {
-        setError('בכל דור שהוספת יש להזין שם פרטי מלא ושם משפחה מלא (לדוגמה: "משה כהן")')
+      if (!lineageResult.valid) {
+        setError('יש להשלים את סדר הדורות עד הדור שלך, לסמן בן/חתן בכל דור וללחוץ "הוסף אותי"')
         return
       }
     }
@@ -1044,15 +1126,24 @@ export default function PublicPortalPage() {
             lineage_chain: [...pc, { generation: (pc[pc.length - 1]?.generation ?? 0) + 1, name: selfDisplayName, relation: 'son' as const }],
             lineage_new_nodes: [{ name: selfDisplayName, relation: 'son' as const }],
           }
-        : {
-            lineage_node_id: lineageNodeId || null,
-            lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
-            lineage_chain: buildLineageChain().map(({ generation, name, relation }) => ({ generation, name, relation })),
-            lineage_new_nodes: [
-              ...manualLineage.map((name, i) => ({ name: name.trim(), relation: lineageRelations[`m${i}`] ?? null })).filter(n => n.name),
-              { name: selfDisplayName, relation: lineageRelations['self'] ?? null },
-            ],
-          }
+        : (() => {
+            // מבורר הדורות: דור 1 (החתם סופר) + האבות שנבחרו + הנרשם
+            const anc = lineageResult.ancestors
+            const chainPayload = [
+              { generation: 1, name: 'רבינו החתם סופר', relation: null as 'son' | 'son_in_law' | null },
+              ...anc.map((a, i) => ({ generation: i + 2, name: a.name, relation: a.relation })),
+              { generation: anc.length + 2, name: selfDisplayName, relation: lineageResult.selfRelation },
+            ]
+            return {
+              lineage_node_id: lineageResult.nodeId,
+              lineage_manual: anc.filter(a => a.isNew).map(a => a.name),
+              lineage_chain: chainPayload,
+              lineage_new_nodes: [
+                ...anc.filter(a => a.isNew).map(a => ({ name: a.name, relation: a.relation })),
+                { name: selfDisplayName, relation: lineageResult.selfRelation },
+              ],
+            }
+          })()
       const res = await fetch('/api/portal/public-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1417,6 +1508,7 @@ export default function PublicPortalPage() {
     setChildMatch(null)
     setChildParentLineage(null)
     setChildSelf(null)
+    setLineageResult({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
   }
 
   return (
@@ -1931,87 +2023,7 @@ export default function PublicPortalPage() {
                     </button>
                   </div>
                 ) : (
-                <>
-                {/* דור 1 — נעול, החתם סופר */}
-                <div className="flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 mb-4">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-bold text-indigo-400 flex-shrink-0">דור 1</span>
-                    <span className="text-sm font-semibold text-indigo-900 truncate">רבינו החתם סופר זיע&quot;א</span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-indigo-400 bg-white border border-indigo-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>
-                </div>
-
-                {/* השרשרת שנבחרה מהעץ — קשר בן/חתן אוטומטי לפי הגדרת הניהול (קריאה בלבד) */}
-                {lineagePath.length > 1 && (
-                  <div className="flex flex-col gap-2 mb-4">
-                    {lineagePath.slice(1).map((name, i) => {
-                      const idx = i + 1
-                      return (
-                        <div key={idx} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs font-bold text-slate-400 flex-shrink-0">דור {idx + 1}</span>
-                            <span className="text-sm font-medium text-slate-800 truncate">{name}</span>
-                          </div>
-                          {renderRelAuto(pathRelations[idx] ?? null)}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <LineageCascade onSelect={(nodeId, path, relations) => { setLineageNodeId(nodeId); setLineagePath(path); setPathRelations(relations) }} />
-                <p className="text-xs text-slate-400 mt-2">בחר/י דור אחר דור מהרשימות. אם הדור הבא אינו מופיע — הוסף/י אותו ידנית בהמשך, והוא ייכנס לאישור הצוות.</p>
-
-                {/* Manual generations */}
-                {lineageNodeId && (
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <p className="text-xs font-medium text-slate-600 mb-1">
-                      המשך דורות (דור {lineagePath.length + 1} ומעלה)
-                    </p>
-                    <p className="text-xs text-slate-400 mb-2">
-                      אם אתה שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית וסמן בן/חתן.
-                    </p>
-                    <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                      ⚠️ יש להזין <strong>שם פרטי מלא ושם משפחה מלא</strong> בכל דור (לדוגמה: &quot;משה כהן&quot;) — לא שם פרטי בלבד ולא שם משפחה בלבד.
-                    </p>
-                    <div className="flex flex-col gap-2">
-                      {manualLineage.map((val, idx) => (
-                        <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500 w-14 flex-shrink-0">דור {lineagePath.length + 1 + manualLineage.slice(0, idx).filter(s => s.trim()).length}</span>
-                            <TextInput value={val} placeholder="שם פרטי מלא ושם משפחה מלא"
-                              onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
-                            <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-slate-300 hover:text-red-500 flex-shrink-0">
-                              <X size={16} />
-                            </button>
-                          </div>
-                          {val.trim() && (
-                            <div className="flex items-center justify-between gap-2 pr-14">
-                              <span className="text-xs text-slate-400">בן/חתן של הדור הקודם:</span>
-                              {renderRelToggle(`m${idx}`)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => setManualLineage(prev => [...prev, ''])}
-                      className="mt-3 flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:border-indigo-400 rounded-lg px-3 py-1.5 transition-colors">
-                      <Plus size={14} />
-                      הוסף דור {lineagePath.length + 1 + manualLineage.length}
-                    </button>
-
-                    {/* דור אחרון — הנרשם עצמו (אוטומטי) */}
-                    <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 px-3 py-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-bold text-indigo-400 flex-shrink-0">דור {lineagePath.length + manualLineage.filter(s => s.trim()).length + 1}</span>
-                        <span className="text-sm font-semibold text-indigo-900 truncate">{selfDisplayName || '(שמך)'}</span>
-                        <span className="text-[10px] font-normal text-indigo-400 flex-shrink-0">— זה אתה</span>
-                      </div>
-                      {renderRelToggle('self')}
-                    </div>
-                  </div>
-                )}
-                </>
+                <LineageBuilder selfName={selfDisplayName} onChange={setLineageResult} />
                 )}
               </Card>
             )}
