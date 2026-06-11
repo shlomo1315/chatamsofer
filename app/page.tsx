@@ -1280,7 +1280,7 @@ export default function PublicPortalPage() {
     }
     if (Number(loanForm.amount) > 30000) { setError('הסכום המרבי הוא 30,000 ₪'); return }
     if (Number(loanForm.installments) > 60) { setError('מספר התשלומים המרבי הוא 60'); return }
-    if (loanForm.purpose === 'אחר' && !loanForm.purpose_details.trim()) { setError('אנא פרט את מטרת ההלוואה'); return }
+    if (loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && !loanForm.purpose_details.trim()) { setError('אנא פרט את מטרת ההלוואה'); return }
     if (loanForm.purpose === WEDDING_PURPOSE && !loanWeddingFile) { setError('יש לצרף הזמנה של החתונה'); return }
     if (!beneficiary) return
     if (needsIdWithRequest) {
@@ -1329,14 +1329,22 @@ export default function PublicPortalPage() {
     if (!aidReason.trim()) { setError('אנא פרט את סיבת הבקשה'); return }
     if (!aidFile) { setError('אנא צרף מסמך'); return }
     if (!beneficiary) return
-    if (needsIdWithRequest) {
-      const miss = missingRequestIdDocs()
-      if (miss.length) { setError(`לאישור ראשוני אנא צרף גם: ${miss.map(docLabel).join(', ')}`); return }
+    // משפחה שטרם אושרה — חובה שיהיו צילומי ת.ז (מצורפים כעת או שכבר התקבלו במערכת); נשלחים לגורם המאשר
+    if (!isApproved) {
+      const miss = requiredDocs.filter(d => !docFiles[d] && !existingDocs[d])
+      if (miss.length) { setError(`המשפחה טרם אושרה — חובה לצרף ${miss.map(docLabel).join(', ')}`); return }
     }
     setError(''); setLoading(true)
     try {
-      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
-        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      if (!isApproved) {
+        const fdId = new FormData()
+        fdId.append('beneficiary_id', beneficiary.id)
+        let any = false
+        for (const d of requiredDocs) { if (docFiles[d]) { fdId.append(d, docFiles[d] as File); any = true } }
+        if (any) {
+          const r = await fetch('/api/portal/upload-docs', { method: 'POST', body: fdId })
+          if (!r.ok) { setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return }
+        }
       }
       const fd = new FormData()
       fd.append('beneficiary_id', beneficiary.id)
@@ -2901,7 +2909,7 @@ export default function PublicPortalPage() {
                       )}
                     </Field>
                   </div>
-                  {loanForm.purpose === 'אחר' && (
+                  {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
                     <div className="col-span-2">
                       <Field label="פירוט הבקשה" required hint="פרט/י בהרחבה על מטרת ההלוואה והצורך">
                         <textarea value={loanForm.purpose_details} onChange={setLoan('purpose_details')} rows={4}
@@ -3067,14 +3075,14 @@ export default function PublicPortalPage() {
                     </label>
                   )}
                 </Field>
-                {needsIdWithRequest && (
+                {!isApproved && (
                   <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות לאישור ראשוני</p>
+                    <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות — חובה</p>
                     <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                      טרם אושרת סופית. אנא צרף/י גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
+                      המשפחה טרם אושרה. חובה לצרף צילומי תעודת זהות (כולל ספח) — הבקשה והמסמכים יישלחו יחד לגורם המאשר.
                     </p>
                     <div className="flex flex-col gap-3">
-                      {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+                      {requiredDocs.map(d => (
                         <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
                       ))}
                     </div>

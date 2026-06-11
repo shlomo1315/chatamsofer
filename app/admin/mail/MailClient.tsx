@@ -875,6 +875,7 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [cardOpen, setCardOpen] = useState(false)
 
   useEffect(() => {
     if (!email) return
@@ -898,10 +899,10 @@ function BeneficiaryCard({ email }: { email: string }) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">צאצא מזוהה</span>
-        <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
+        <button type="button" onClick={() => setCardOpen(true)}
           className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
           פתח כרטיס <ExternalLink size={11} />
-        </Link>
+        </button>
       </div>
 
       {/* Name + avatar */}
@@ -965,6 +966,27 @@ function BeneficiaryCard({ email }: { email: string }) {
             {(b.lineage_manual as string[]).map((node, i) => (
               <span key={i} className="text-[11px] bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full">{node}</span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* כרטיס הצאצא — פופאפ באותו חלון (במקום כרטיסייה חדשה) */}
+      {cardOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => setCardOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+              <h2 className="font-bold text-slate-900 text-sm">כרטיס צאצא — {name}</h2>
+              <div className="flex items-center gap-3">
+                <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
+                  className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                  פתח בעמוד מלא <ExternalLink size={11} />
+                </Link>
+                <button type="button" onClick={() => setCardOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+            </div>
+            <iframe src={`/admin/beneficiaries/${ben.id}`} title="כרטיס צאצא" className="flex-1 w-full border-0" />
           </div>
         </div>
       )}
@@ -1053,9 +1075,12 @@ export default function MailClient() {
       .catch(() => {})
   }, [])
 
-  const load = useCallback(async (f: string, q?: string) => {
-    setLoading(true)
-    setSelected(null)
+  const load = useCallback(async (f: string, q?: string, silent = false) => {
+    // רענון רקע (silent) — לא מציג "טוען מיילים" ולא סוגר את ההודעה הפתוחה
+    if (!silent) {
+      setLoading(true)
+      setSelected(null)
+    }
     const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
     const data = await res.json()
     if (data.notConnected) { setNotConnected(true); setLoading(false); return }
@@ -1125,10 +1150,10 @@ export default function MailClient() {
 
   useEffect(() => { load(folder) }, [folder, load])
 
-  // Background poll every 60s for new INBOX mail (for toast notifications)
+  // Background poll every 60s for new INBOX mail (for toast notifications) — שקט, ללא הבהוב טעינה
   useEffect(() => {
     const interval = setInterval(() => {
-      if (folder === 'INBOX') load('INBOX')
+      if (folder === 'INBOX') load('INBOX', undefined, true)
     }, 60_000)
     return () => clearInterval(interval)
   }, [folder, load])
