@@ -90,7 +90,7 @@ export default function WelcomeModal() {
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/logo.jpg"
+                src="/logo.png"
                 alt="לוגו"
                 className="w-full h-full object-contain"
                 onError={() => setLogoError(true)}

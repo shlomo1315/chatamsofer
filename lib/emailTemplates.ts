@@ -10,7 +10,7 @@ export interface BuiltEmail {
 const OFFICE_EMAIL  = 'office@chasamsofer.info'
 const PORTAL_BASE_DEFAULT =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
-const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.jpg`
+const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
 
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
 function autoReplyNote(): string {

@@ -59,7 +59,7 @@ export default function LoginPage() {
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src="/logo.jpg"
+                src="/logo.png"
                 alt="היכל החתם סופר"
                 className="w-full h-full object-contain"
                 onError={() => setLogoError(true)}

@@ -19,7 +19,7 @@ function LogoBadge() {
         <Building2 size={18} className="text-indigo-600" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src="/logo.jpg" alt="היכל החתם סופר" className="w-full h-full object-contain" onError={() => setError(true)} />
+        <img src="/logo.png" alt="היכל החתם סופר" className="w-full h-full object-contain" onError={() => setError(true)} />
       )}
     </div>
   )
