@@ -2516,7 +2516,7 @@ export default function PublicPortalPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
-                  <Field label="תאריך הלידה (לוח עברי)" required>
+                  <Field label="תאריך הלידה" required>
                     <HebrewDatePicker
                       value={birthForm.birth_date}
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
