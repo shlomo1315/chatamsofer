@@ -1591,6 +1591,10 @@ export default function PublicPortalPage() {
               <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
             </div>
 
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 text-center">
+              <p className="text-sm font-bold text-amber-900 leading-relaxed">לעת עתה הרישום לאיגוד הצאצאים הוא לתושבי ארץ הקודש בלבד</p>
+            </div>
+
             <Card>
               <form onSubmit={handleLookup} className="flex flex-col gap-4">
                 {/* doc-type toggle */}
