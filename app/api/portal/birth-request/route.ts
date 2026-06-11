@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { deliverMail } from '@/lib/sendMail'
+import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { validateIsraeliId } from '@/lib/validation'
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type } = body
+  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url } = body
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -79,10 +79,11 @@ export async function POST(request: NextRequest) {
 
   // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי הלידה והמסמך
   if (ben.email) {
-    const firstTime = ben.eligibility_status !== 'approved'
+    const benEmail = ben.email
     const genderLabel = baby_gender === 'male' ? 'בן' : baby_gender === 'female' ? 'בת' : ''
+    const certUrl = birth_certificate_url ? String(birth_certificate_url) : ''
     const mail = requestReceivedEmail({
-      type: 'birth', firstTime, beneficiary: ben,
+      type: 'birth', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
       requestRows: [
         [baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד', baby_name ? String(baby_name).trim() : ''],
         ['מין', genderLabel],
@@ -90,9 +91,12 @@ export async function POST(request: NextRequest) {
         [isPassport ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', babyIdNorm],
         ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
       ],
-      documents: ['אישור לידה'],
+      documents: [{ name: 'אישור לידה', url: certUrl || undefined }],
     })
-    deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+    void (async () => {
+      const att = certUrl ? await urlToAttachment(certUrl, 'אישור-לידה') : null
+      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined)
+    })().catch(() => {})
   }
 
   return NextResponse.json({ ok: true })

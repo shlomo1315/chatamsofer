@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { deliverMail } from '@/lib/sendMail'
+import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -83,9 +83,12 @@ export async function POST(request: NextRequest) {
 
   // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי ההלוואה והמסמכים
   if (ben.email) {
-    const firstTime = ben.eligibility_status !== 'approved'
-    const mail = requestReceivedEmail({
-      type: 'loan', firstTime, beneficiary: ben,
+    const benEmail = ben.email
+    const docs = Array.isArray(document_urls)
+      ? (document_urls as { url?: string; name?: string }[]).filter(d => d?.url).map(d => ({ name: d.name || 'מסמך מצורף', url: d.url as string }))
+      : []
+    const mailData = requestReceivedEmail({
+      type: 'loan', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
       requestRows: [
         ['מטרת ההלוואה', String(purpose).trim()],
         ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
@@ -95,9 +98,12 @@ export async function POST(request: NextRequest) {
         ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
         ['הערות', notes ? String(notes).trim() : ''],
       ],
-      documents: Array.isArray(document_urls) ? document_urls.map((d: { name?: string }) => d?.name).filter(Boolean) as string[] : [],
+      documents: docs,
     })
-    deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+    void (async () => {
+      const atts = (await Promise.all(docs.map(d => urlToAttachment(d.url, d.name)))).filter(Boolean) as { filename: string; mimeType: string; contentB64: string }[]
+      await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined)
+    })().catch(() => {})
   }
 
   return NextResponse.json({ ok: true })

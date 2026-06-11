@@ -409,7 +409,7 @@ export function requestReceivedEmail(opts: {
   firstTime: boolean
   beneficiary: ReceivedBeneficiary
   requestRows?: [string, string | number | null | undefined][]
-  documents?: string[]
+  documents?: { name: string; url?: string }[]
 }): BuiltEmail {
   const { type, firstTime, beneficiary, requestRows = [], documents = [] } = opts
   const reqLabel = type === 'birth' ? 'בקשת הבראה ליולדת' : type === 'financial_aid' ? 'בקשת סיוע רפואי' : 'בקשת הלוואה'
@@ -436,8 +436,10 @@ export function requestReceivedEmail(opts: {
   const docsHtml = documents.length ? `
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">מסמכים מצורפים:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
-      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;color:#334155;font-size:14px;line-height:1.9;">
-        ${documents.map(d => `📎 ${d}`).join('<br/>')}
+      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;color:#334155;font-size:14px;line-height:2;">
+        ${documents.map(d => d.url
+          ? `📎 <a href="${d.url}" target="_blank" download style="color:#4f46e5;font-weight:600;text-decoration:underline;">${d.name}</a>`
+          : `📎 ${d.name}`).join('<br/>')}
       </td></tr>
     </table>` : ''
 

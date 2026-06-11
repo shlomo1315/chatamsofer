@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { deliverMail } from '@/lib/sendMail'
+import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -62,12 +62,16 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: `שגיאה בשמירת הבקשה: ${error.message}` }, { status: 500 })
 
   if (ben.email) {
-    const mail = requestReceivedEmail({
-      type: 'financial_aid', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
-      requestRows: [['סיבת הבקשה', reason]],
-      documents: documentName ? [documentName] : [],
-    })
-    deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+    const benEmail = ben.email
+    void (async () => {
+      const mail = requestReceivedEmail({
+        type: 'financial_aid', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
+        requestRows: [['סיבת הבקשה', reason]],
+        documents: documentUrl ? [{ name: documentName || 'מסמך מצורף', url: documentUrl }] : [],
+      })
+      const att = documentUrl ? await urlToAttachment(documentUrl, documentName || 'מסמך-מצורף') : null
+      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined)
+    })().catch(() => {})
   }
 
   return NextResponse.json({ ok: true })
