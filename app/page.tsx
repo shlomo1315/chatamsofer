@@ -2085,10 +2085,22 @@ export default function PublicPortalPage() {
                               <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
                                 className={childIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
                                 onChange={e => { setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value.replace(/\D/g,'') } : c)); setChildIdErrors(e => ({ ...e, [idx]: '' })) }}
-                                onBlur={() => {
-                                  if (child.id_number && !validateIsraeliId(child.id_number))
-                                    setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' }))
-                                  else setChildIdErrors(e => ({ ...e, [idx]: '' }))
+                                onBlur={async () => {
+                                  const digits = (child.id_number || '').replace(/\D/g, '')
+                                  if (digits && !validateIsraeliId(digits)) {
+                                    setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
+                                  }
+                                  setChildIdErrors(e => ({ ...e, [idx]: '' }))
+                                  // בדיקה מיידית — האם הילד כבר רשום במערכת (כצאצא או כילד אצל מישהו)
+                                  if (digits.length === 9) {
+                                    try {
+                                      const r = await fetch(`/api/portal/lookup?id=${digits}`)
+                                      const d = await r.json()
+                                      if (d.found || d.foundAsChild) {
+                                        setChildIdErrors(e => ({ ...e, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))
+                                      }
+                                    } catch { /* בדיקת שרת תיתפס בעת השליחה */ }
+                                  }
                                 }} />
                               {childIdErrors[idx] && <p className="text-xs text-red-600 mt-1">{childIdErrors[idx]}</p>}
                             </Field>
