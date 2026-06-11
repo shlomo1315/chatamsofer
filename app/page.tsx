@@ -992,6 +992,11 @@ export default function PublicPortalPage() {
         setError('יש לסמן בכל דור (אחרי החתם סופר) האם הוא בן או חתן')
         return
       }
+      // כל דור ידני חייב שם פרטי מלא + שם משפחה מלא (לפחות שתי מילים)
+      if (manualLineage.some(n => n.trim() && n.trim().split(/\s+/).length < 2)) {
+        setError('בכל דור שהוספת יש להזין שם פרטי מלא ושם משפחה מלא (לדוגמה: "משה כהן")')
+        return
+      }
     }
     if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
@@ -1962,15 +1967,18 @@ export default function PublicPortalPage() {
                     <p className="text-xs font-medium text-slate-600 mb-1">
                       המשך דורות (דור {lineagePath.length + 1} ומעלה)
                     </p>
-                    <p className="text-xs text-slate-400 mb-3">
+                    <p className="text-xs text-slate-400 mb-2">
                       אם אתה שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית וסמן בן/חתן.
+                    </p>
+                    <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                      ⚠️ יש להזין <strong>שם פרטי מלא ושם משפחה מלא</strong> בכל דור (לדוגמה: &quot;משה כהן&quot;) — לא שם פרטי בלבד ולא שם משפחה בלבד.
                     </p>
                     <div className="flex flex-col gap-2">
                       {manualLineage.map((val, idx) => (
                         <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-2.5">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-slate-500 w-14 flex-shrink-0">דור {lineagePath.length + 1 + manualLineage.slice(0, idx).filter(s => s.trim()).length}</span>
-                            <TextInput value={val} placeholder="שם"
+                            <TextInput value={val} placeholder="שם פרטי מלא ושם משפחה מלא"
                               onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
                             <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
                               className="text-slate-300 hover:text-red-500 flex-shrink-0">
