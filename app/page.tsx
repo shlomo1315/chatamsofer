@@ -1,6 +1,7 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import EmailInput from '@/components/ui/EmailInput'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import { useDocTypes } from '@/lib/useDocTypes'
@@ -761,6 +762,7 @@ export default function PublicPortalPage() {
   // Birth request form
   const [birthForm, setBirthForm] = useState({
     birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '',
+    baby_id_number: '', baby_id_type: 'id',
   })
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
@@ -1037,6 +1039,8 @@ export default function PublicPortalPage() {
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
     if (!birthForm.baby_name) { setError(birthForm.baby_gender === 'female' ? 'אנא הזן שם הנולדת' : 'אנא הזן שם הנולד'); return }
+    if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
+    if (birthForm.baby_id_type === 'id' && !validateIsraeliId(birthForm.baby_id_number)) { setError('תעודת הזהות של הנולד/ת אינה תקינה'); return }
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
@@ -1160,7 +1164,7 @@ export default function PublicPortalPage() {
   const goToBirthForm = () => {
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError('')
-    setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '' })
+    setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
     setBirthCertFile(null)
     setDocFiles({})
     setStep('new-birth')
@@ -2493,10 +2497,11 @@ export default function PublicPortalPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
-                  <Field label="תאריך הלידה" required>
-                    <TextInput
-                      type="date" value={birthForm.birth_date} onChange={setBirth('birth_date')}
-                      max={new Date().toISOString().split('T')[0]} required
+                  <Field label="תאריך הלידה (לוח עברי)" required>
+                    <HebrewDatePicker
+                      value={birthForm.birth_date}
+                      onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
+                      maxToday
                     />
                   </Field>
                 </div>
@@ -2520,6 +2525,23 @@ export default function PublicPortalPage() {
                     <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required>
                       <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')}
                         placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required />
+                    </Field>
+                  </div>
+                )}
+                {birthForm.baby_gender && (
+                  <div className="col-span-2">
+                    <Field label="תעודת זהות של הנולד/ת" required hint="חובה — למניעת כפילויות. עבור תושב חוץ ניתן לבחור דרכון.">
+                      <div className="flex gap-2 mb-2">
+                        {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
+                          <button key={v} type="button" onClick={() => setBirthForm(f => ({ ...f, baby_id_type: v }))}
+                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${birthForm.baby_id_type === v ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      <TextInput value={birthForm.baby_id_number} onChange={setBirth('baby_id_number')}
+                        dir="ltr" inputMode={birthForm.baby_id_type === 'id' ? 'numeric' : 'text'}
+                        placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required />
                     </Field>
                   </div>
                 )}

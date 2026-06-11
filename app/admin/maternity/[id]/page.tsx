@@ -201,6 +201,9 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
             <span className="text-xs font-semibold text-slate-500 uppercase">פרטי התינוק</span>
           </div>
           <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{aid.baby_name ?? '—'}</span></p>
+          {aid.baby_id_number && (
+            <p className="text-sm"><span className="text-slate-500">{aid.baby_id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{aid.baby_id_number}</span></p>
+          )}
           {aid.baby_gender && (
             <p className="text-sm">
               <span className="text-slate-500">מין: </span>

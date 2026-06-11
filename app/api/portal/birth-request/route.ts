@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { validateIsraeliId } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,11 +21,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes } = body
+  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type } = body
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
+
+  // ת.ז/דרכון של הנולד — חובה + ולידציה
+  const babyId = baby_id_number ? String(baby_id_number).trim() : ''
+  const isPassport = baby_id_type === 'passport'
+  if (!babyId) return NextResponse.json({ error: 'יש להזין תעודת זהות או דרכון של הנולד/ת' }, { status: 400 })
+  if (!isPassport && !validateIsraeliId(babyId)) {
+    return NextResponse.json({ error: 'תעודת הזהות של הנולד/ת אינה תקינה' }, { status: 400 })
+  }
+  const babyIdNorm = isPassport ? babyId : babyId.replace(/\D/g, '').padStart(9, '0')
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -40,11 +50,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
 
+  // מניעת כפילויות — אם הת.ז כבר קיימת במערכת (נתמך/בן-זוג/ילד רשום/לידה קודמת)
+  const [byBen, bySpouse, byChild, byMaternity] = await Promise.all([
+    admin.from('beneficiaries').select('id').eq('id_number', babyIdNorm).limit(1),
+    admin.from('beneficiaries').select('id').eq('spouse_id_number', babyIdNorm).limit(1),
+    admin.from('beneficiaries').select('id').contains('children', [{ id_number: babyIdNorm }]).limit(1),
+    admin.from('maternity_aids').select('id').eq('baby_id_number', babyIdNorm).limit(1),
+  ])
+  if ((byBen.data?.length || bySpouse.data?.length || byChild.data?.length || byMaternity.data?.length)) {
+    return NextResponse.json({ error: 'הילד/ה כבר רשום/ה במערכת — תעודת זהות זו כבר קיימת. לא ניתן להגיש בקשה כפולה.' }, { status: 409 })
+  }
+
   const { error } = await admin.from('maternity_aids').insert({
     beneficiary_id: String(beneficiary_id),
     birth_date: String(birth_date),
     baby_name: baby_name ? String(baby_name).trim() : null,
     baby_gender: baby_gender || null,
+    baby_id_number: babyIdNorm,
+    baby_id_type: isPassport ? 'passport' : 'id',
     recovery_home: recovery_home ? String(recovery_home).trim() : null,
     notes: notes ? String(notes).trim() : null,
     status: 'pending',
