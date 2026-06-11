@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
+import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 import { financialAidInquiryEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -25,21 +26,10 @@ async function verifyStaff() {
   return user
 }
 
-function encodeRaw(to: string, subject: string, html: string): string {
+function encodeRaw(to: string, subject: string, html: string, attachments: { filename: string; mimeType: string; contentB64: string }[]): string {
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
-  const fromName = '=?UTF-8?B?' + Buffer.from('היכל החתם סופר משרד ראשי', 'utf8').toString('base64') + '?='
-  const subj = '=?UTF-8?B?' + Buffer.from(subject, 'utf8').toString('base64') + '?='
-  const raw = [
-    `From: ${fromName} <${from}>`,
-    `To: ${to}`,
-    `Subject: ${subj}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
-    '',
-    Buffer.from(html, 'utf8').toString('base64'),
-  ].join('\r\n')
-  return Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const raw = buildRawEmail({ from, fromName: 'היכל החתם סופר משרד ראשי', to, subject, html, attachments })
+  return encodeForGmail(raw)
 }
 
 // שולח לגורם המאשר מייל מעוצב, ושומר את threadId/messageId לצורך שליפת התשובה.
@@ -53,7 +43,7 @@ export async function POST(request: NextRequest) {
 
   const { data: req } = await admin
     .from('financial_aid_requests')
-    .select('id, reason, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count, eligibility_status)')
+    .select('id, reason, document_url, document_name, beneficiary:beneficiaries(family_name, full_name, id_number, spouse_name, marital_status, phone, city, children_count, eligibility_status)')
     .eq('id', id).maybeSingle()
   if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
 
@@ -67,11 +57,30 @@ export async function POST(request: NextRequest) {
   const ben = (req as Record<string, unknown>).beneficiary as Parameters<typeof financialAidInquiryEmail>[0]
   const mail = financialAidInquiryEmail(ben ?? {}, (req as { reason?: string }).reason)
 
+  // צירוף המסמך שהמבקש העלה בבקשה (אם קיים)
+  const attachments: { filename: string; mimeType: string; contentB64: string }[] = []
+  const docUrl = (req as { document_url?: string }).document_url
+  const docName = (req as { document_name?: string }).document_name
+  if (docUrl) {
+    try {
+      const fileRes = await fetch(docUrl)
+      if (fileRes.ok) {
+        const buf = Buffer.from(await fileRes.arrayBuffer())
+        const ext = (docUrl.split('?')[0].split('.').pop() ?? '').toLowerCase()
+        attachments.push({
+          filename: docName || `מסמך-מצורף.${ext || 'pdf'}`,
+          mimeType: fileRes.headers.get('content-type') || 'application/octet-stream',
+          contentB64: buf.toString('base64'),
+        })
+      }
+    } catch { /* אם נכשל — שולחים בלי הצרופה */ }
+  }
+
   try {
     const gmail = await getGmailClient()
     const res = await gmail.users.messages.send({
       userId: 'me',
-      requestBody: { raw: encodeRaw(decisionEmail, mail.subject, mail.html) },
+      requestBody: { raw: encodeRaw(decisionEmail, mail.subject, mail.html, attachments) },
     })
     const threadId = res.data.threadId ?? null
     const messageId = res.data.id ?? null
