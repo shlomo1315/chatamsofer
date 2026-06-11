@@ -26,9 +26,15 @@ type Step =
   | 'new-loan'
   | 'request-sent'
 
+interface ParentLineage {
+  parentName: string
+  lineage_node_id: string | null
+  lineage_chain: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[] | null
+}
 interface ChildMatchData {
   parentName: string
   childData: { name: string; id_number: string; birth_date: string; gender: string; marital_status: string }
+  parentLineage?: ParentLineage
 }
 
 interface FoundBeneficiary {
@@ -685,6 +691,8 @@ export default function PublicPortalPage() {
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
+  // רישום כילד רשום — השיוך נקבע אוטומטית מההורה
+  const [childParentLineage, setChildParentLineage] = useState<ParentLineage | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | 'financial_aid' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
 
@@ -857,7 +865,7 @@ export default function PublicPortalPage() {
           setStep(isWidow ? 'widow-dashboard' : 'dashboard')
         }
         else if (data.foundAsChild) {
-          setChildMatch({ parentName: data.parentName, childData: data.childData })
+          setChildMatch({ parentName: data.parentName, childData: data.childData, parentLineage: data.parentLineage })
           setStep('found-as-child')
         }
         else { setRegForm(f => ({ ...f, id_number: digits })); setStep('not-found') }
@@ -947,17 +955,20 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
-    if (!lineageDeclared) {
-      setError('יש לאשר את הצהרת הייחוס לפני בחירת סדר הדורות')
-      return
-    }
-    if (!lineageNodeId) {
-      setError('אנא בחר שיוך שושלת')
-      return
-    }
-    if (buildLineageChain().some(c => c.relKey && !c.relation)) {
-      setError('יש לסמן בכל דור (אחרי החתם סופר) האם הוא בן או חתן')
-      return
+    // ברישום כילד רשום — השיוך אוטומטי מההורה, אין צורך בהצהרה/בחירה/סימון ידני
+    if (!childParentLineage) {
+      if (!lineageDeclared) {
+        setError('יש לאשר את הצהרת הייחוס לפני בחירת סדר הדורות')
+        return
+      }
+      if (!lineageNodeId) {
+        setError('אנא בחר שיוך שושלת')
+        return
+      }
+      if (buildLineageChain().some(c => c.relKey && !c.relation)) {
+        setError('יש לסמן בכל דור (אחרי החתם סופר) האם הוא בן או חתן')
+        return
+      }
     }
     if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
@@ -996,6 +1007,24 @@ export default function PublicPortalPage() {
     setError('')
     setLoading(true)
     try {
+      // ייחוס לשליחה: ברישום כילד רשום — נגזר אוטומטית מההורה (שרשרת ההורה + הנרשם כדור אחרון)
+      const pc = childParentLineage?.lineage_chain
+      const lineageData = childParentLineage && pc
+        ? {
+            lineage_node_id: childParentLineage.lineage_node_id,
+            lineage_manual: [],
+            lineage_chain: [...pc, { generation: (pc[pc.length - 1]?.generation ?? 0) + 1, name: selfDisplayName, relation: 'son' as const }],
+            lineage_new_nodes: [{ name: selfDisplayName, relation: 'son' as const }],
+          }
+        : {
+            lineage_node_id: lineageNodeId || null,
+            lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
+            lineage_chain: buildLineageChain().map(({ generation, name, relation }) => ({ generation, name, relation })),
+            lineage_new_nodes: [
+              ...manualLineage.map((name, i) => ({ name: name.trim(), relation: lineageRelations[`m${i}`] ?? null })).filter(n => n.name),
+              { name: selfDisplayName, relation: lineageRelations['self'] ?? null },
+            ],
+          }
       const res = await fetch('/api/portal/public-register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1003,15 +1032,7 @@ export default function PublicPortalPage() {
           ...regForm,
           children_count: children.length,
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
-          lineage_node_id: lineageNodeId || null,
-          lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
-          lineage_chain: buildLineageChain().map(({ generation, name, relation }) => ({ generation, name, relation })),
-          // דורות חדשים שהנרשם הוסיף ידנית (אבות + הנרשם עצמו) — להכנסה לעץ הדורות בסטטוס "ממתין לאימות"
-          lineage_new_nodes: [
-            ...manualLineage.map((name, i) => ({ name: name.trim(), relation: lineageRelations[`m${i}`] ?? null }))
-              .filter(n => n.name),
-            { name: selfDisplayName, relation: lineageRelations['self'] ?? null },
-          ],
+          ...lineageData,
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
@@ -1364,6 +1385,8 @@ export default function PublicPortalPage() {
     setReplaceDoc({})
     setDocFiles({})
     setShowOtherMarital(false)
+    setChildMatch(null)
+    setChildParentLineage(null)
   }
 
   return (
@@ -1561,6 +1584,8 @@ export default function PublicPortalPage() {
                       gender: cd.gender,
                       marital_status: cd.marital_status,
                     }))
+                    // שיוך אוטומטי לפי ההורה — אם קיים ייחוס להורה
+                    setChildParentLineage(childMatch.parentLineage?.lineage_chain?.length ? childMatch.parentLineage : null)
                     setError('')
                     setStep('register')
                   }}
@@ -1822,7 +1847,32 @@ export default function PublicPortalPage() {
                 </div>
                 <p className="text-xs text-slate-500 mb-4">בנה את סדר הייחוס דור אחר דור עד רבינו החתם סופר זיע&quot;א, וסמן בכל דור בן/חתן.</p>
 
-                {!lineageDeclared ? (
+                {childParentLineage && childParentLineage.lineage_chain ? (
+                  /* שיוך אוטומטי — הנרשם הוא ילד רשום, הייחוס נגזר מההורה */
+                  <div className="rounded-2xl border-2 border-green-200 bg-green-50 p-4">
+                    <p className="text-sm font-bold text-green-800 mb-1">✓ השיוך שלך נקבע אוטומטית</p>
+                    <p className="text-xs text-green-700 mb-3 leading-relaxed">
+                      אתה רשום במערכת כבן של <strong>{childParentLineage.parentName}</strong>. סדר הייחוס שלך נגזר אוטומטית מהרישום שלו — אין צורך למלא ידנית.
+                    </p>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {childParentLineage.lineage_chain.map((c, i) => (
+                        <span key={i} className="flex items-center gap-1">
+                          {i > 0 && <ChevronLeft size={11} className="text-green-300" />}
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-white text-green-800 border border-green-200">
+                            {c.name}
+                            {(c.relation === 'son' || c.relation === 'son_in_law') && (
+                              <span className="text-[10px] text-green-400 mr-1">({c.relation === 'son' ? 'בן' : 'חתן'})</span>
+                            )}
+                          </span>
+                        </span>
+                      ))}
+                      <ChevronLeft size={11} className="text-green-300" />
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-600 text-white border border-green-600">
+                        {selfDisplayName || childMatch?.childData.name || 'אתה'} <span className="opacity-80">(אתה)</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : !lineageDeclared ? (
                   /* שער הצהרה — חוסם את בחירת הדורות עד אישור */
                   <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-center">
                     <p className="text-sm font-bold text-amber-900 mb-2">לפני בחירת סדר הדורות נדרשת הצהרה</p>

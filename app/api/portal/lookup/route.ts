@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     // 2. Search inside children JSONB array
     const { data: rows, error: err2 } = await admin
       .from('beneficiaries')
-      .select('id, full_name, family_name, children')
+      .select('id, full_name, family_name, children, lineage_node_id, lineage_chain')
       .not('children', 'is', null)
     if (err2) return NextResponse.json({ error: err2.message }, { status: 500 })
 
@@ -67,6 +67,12 @@ export async function GET(request: NextRequest) {
               birth_date: match.birth_date ?? '',
               gender: match.gender ?? '',
               marital_status: match.marital_status ?? '',
+            },
+            // ייחוס ההורה — לשיוך אוטומטי של הילד בסדר הדורות
+            parentLineage: {
+              parentName,
+              lineage_node_id: row.lineage_node_id ?? null,
+              lineage_chain: Array.isArray(row.lineage_chain) ? row.lineage_chain : null,
             },
           })
         }
