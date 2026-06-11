@@ -38,6 +38,7 @@ interface FoundBeneficiary {
   eligibility_status: string
   phone?: string
   phone2?: string
+  email?: string
   city?: string
   address?: string
   id_number?: string
@@ -774,6 +775,40 @@ export default function PublicPortalPage() {
   const [loanWeddingFile, setLoanWeddingFile] = useState<File | null>(null)
   const [loanOtherFile, setLoanOtherFile] = useState<File | null>(null)
   const WEDDING_PURPOSE = 'נישואי הבן/הבת'
+
+  // עדכון פרטים (משפחה מאושרת)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({ phone: '', phone2: '', address: '', city: '', email: '', marital_status: '' })
+  const [editFile, setEditFile] = useState<File | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
+  const openEditDetails = () => {
+    if (!beneficiary) return
+    setEditForm({
+      phone: beneficiary.phone ?? '', phone2: beneficiary.phone2 ?? '', address: beneficiary.address ?? '',
+      city: beneficiary.city ?? '', email: beneficiary.email ?? '', marital_status: beneficiary.marital_status ?? '',
+    })
+    setEditFile(null); setError(''); setEditOpen(true)
+  }
+  const handleUpdateDetails = async () => {
+    if (!beneficiary) return
+    setEditSaving(true); setError('')
+    try {
+      if (editFile) {
+        const fd = new FormData()
+        fd.append('file', editFile); fd.append('beneficiary_id', beneficiary.id); fd.append('doc_type', 'other')
+        await fetch('/api/portal/upload-docs', { method: 'POST', body: fd }).catch(() => {})
+      }
+      const res = await fetch('/api/portal/update-details', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בעדכון'); setEditSaving(false); return }
+      setBeneficiary(b => b ? { ...b, ...editForm } : b)
+      setEditOpen(false)
+    } catch { setError('שגיאת רשת') }
+    setEditSaving(false)
+  }
 
   const setReg = (k: keyof typeof regForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -2330,26 +2365,47 @@ export default function PublicPortalPage() {
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (
               <div className="flex flex-col gap-3">
-                {/* שלב 1 — השלמת מסמכים (קודם הכל) */}
-                <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · השלמת מסמכים</h3>
-                <button
-                  onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
-                  className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-colors text-right shadow-sm group"
-                >
-                  <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
-                    <FileText size={22} className="text-amber-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">העלאת מסמכים נדרשים</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {docsMissing ? 'צילומי תעודת זהות והמסמכים הנדרשים' : 'המסמכים התקבלו — ניתן לצפות או להחליף'}
-                    </p>
-                  </div>
-                  {docsMissing
-                    ? <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
-                    : <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />}
-                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-amber-400" />
-                </button>
+                {/* שלב 1 — משפחה מאושרת: עדכון פרטים · אחרת: השלמת מסמכים */}
+                {isApproved ? (
+                  <>
+                    <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · עדכון פרטים</h3>
+                    <button
+                      onClick={openEditDetails}
+                      className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-colors text-right shadow-sm group"
+                    >
+                      <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200 transition-colors">
+                        <User size={22} className="text-indigo-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900">עדכון פרטים אישיים</p>
+                        <p className="text-xs text-slate-500 mt-0.5">טלפון, כתובת, מייל, מצב משפחתי ומסמכים</p>
+                      </div>
+                      <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · השלמת מסמכים</h3>
+                    <button
+                      onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
+                      className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-colors text-right shadow-sm group"
+                    >
+                      <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+                        <FileText size={22} className="text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900">העלאת מסמכים נדרשים</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {docsMissing ? 'צילומי תעודת זהות והמסמכים הנדרשים' : 'המסמכים התקבלו — ניתן לצפות או להחליף'}
+                        </p>
+                      </div>
+                      {docsMissing
+                        ? <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
+                        : <CheckCircle2 size={16} className="text-green-500 flex-shrink-0" />}
+                      <ChevronLeft size={18} className="text-slate-300 group-hover:text-amber-400" />
+                    </button>
+                  </>
+                )}
 
                 {/* מפריד ניכר בין מסמכים לבקשות */}
                 <div className="border-t-2 border-dashed border-slate-200 my-3" />
@@ -2860,6 +2916,60 @@ export default function PublicPortalPage() {
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שלח בקשה
                 </button>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ─── עדכון פרטים (משפחה מאושרת) ─── */}
+        {editOpen && beneficiary && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <User size={20} className="text-indigo-600" />
+                  <h2 className="font-bold text-slate-900">עדכון פרטים אישיים</h2>
+                </div>
+                <button type="button" onClick={() => { setEditOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+              <div className="p-6 flex flex-col gap-4">
+                {/* קריאה בלבד — לא ניתן לשינוי */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                  <p><span className="text-slate-400 text-xs block">שם</span>{[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')}</p>
+                  <p><span className="text-slate-400 text-xs block">ת.ז (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.id_number ?? '—'}</span></p>
+                  {beneficiary.spouse_name && <p><span className="text-slate-400 text-xs block">בן/בת זוג</span>{beneficiary.spouse_name}</p>}
+                  {beneficiary.spouse_id_number && <p><span className="text-slate-400 text-xs block">ת.ז בן/זוג (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.spouse_id_number}</span></p>}
+                </div>
+
+                <Field label="טלפון"><TextInput value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
+                <Field label="טלפון נוסף"><TextInput value={editForm.phone2} onChange={e => setEditForm(f => ({ ...f, phone2: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
+                <Field label="מייל"><TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" /></Field>
+                <Field label="עיר"><TextInput value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} /></Field>
+                <Field label="כתובת"><TextInput value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} /></Field>
+                <Field label="מצב משפחתי">
+                  <SelectInput value={editForm.marital_status} onChange={e => setEditForm(f => ({ ...f, marital_status: e.target.value }))}>
+                    <option value="">בחר…</option>
+                    {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </SelectInput>
+                </Field>
+                <Field label="מסמך נוסף (לא חובה)">
+                  {editFile ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                      <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{editFile.name}</span></span>
+                      <button type="button" onClick={() => setEditFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-3 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
+                      <Upload size={16} /> העלאת מסמך
+                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setEditFile(e.target.files?.[0] ?? null)} />
+                    </label>
+                  )}
+                </Field>
+                {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
+                <button onClick={handleUpdateDetails} disabled={editSaving}
+                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl">
+                  {editSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שמירת השינויים
+                </button>
+              </div>
             </div>
           </div>
         )}
