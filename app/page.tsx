@@ -540,13 +540,15 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors">
                   <Plus size={13} /> {lastIsNew || options.length === 0 ? 'הוסף את הדור הבא' : 'הדור הבא לא ברשימה — הוסף "אחר"'}
                 </button>
-                {canAddSelf && (
-                  <button type="button" onClick={() => setSelfAdded(true)}
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 transition-colors">
-                    <Check size={13} /> הוסף אותי כעת (סיימתי את האבות)
-                  </button>
-                )}
               </div>
+              {canAddSelf && (
+                <div className="mt-4">
+                  <button type="button" onClick={() => setSelfAdded(true)}
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-lg px-3 py-2.5 transition-colors shadow-sm">
+                    <Check size={15} /> הוסף אותי כעת (סיימתי את האבות)
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-2">
