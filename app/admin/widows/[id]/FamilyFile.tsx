@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Wallet, CalendarClock, Plus, Trash2, Check, X, Loader2, Baby, Phone, MapPin, ExternalLink } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import Card from '@/components/ui/Card'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import {
   Beneficiary, WidowRequest, WidowSupportPayment, WidowSupportType,
   WIDOW_SUPPORT_TYPE_LABELS, WIDOW_REQUEST_TYPE_LABELS, WIDOW_REQUEST_STATUS_LABELS, WIDOW_REQUEST_STATUS_COLORS,
@@ -131,7 +132,7 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
               <input type="number" min="0" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm ltr-num" />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-500">תאריך
-              <input type="date" value={form.paid_at} onChange={e => setForm(f => ({ ...f, paid_at: e.target.value }))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm" />
+              <HebrewDatePicker value={form.paid_at} onChange={iso => setForm(f => ({ ...f, paid_at: iso }))} maxToday />
             </label>
             <label className="flex flex-col gap-1 text-xs text-slate-500">סוג
               <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as WidowSupportType }))} className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm bg-white">

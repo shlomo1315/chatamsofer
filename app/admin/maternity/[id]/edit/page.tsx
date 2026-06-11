@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Loader2, Check, AlertTriangle, Upload, X, Baby } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -218,10 +219,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         {/* Birth date */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-slate-600">תאריך לידת התינוק <span className="text-red-500">*</span></label>
-          <input type="date" value={babyBirthDate}
-            onChange={e => { setBabyBirthDate(e.target.value); clearErr('babyBirthDate') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.babyBirthDate ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
-            dir="ltr" />
+          <HebrewDatePicker value={babyBirthDate} onChange={iso => { setBabyBirthDate(iso); clearErr('babyBirthDate') }} maxToday />
           {fieldErrors.babyBirthDate && <p className="text-xs text-red-600">{fieldErrors.babyBirthDate}</p>}
           {babyBirthDate && (
             <div className="flex items-center gap-2 text-xs bg-indigo-50 text-indigo-700 rounded-lg px-3 py-2 border border-indigo-100">

@@ -9,6 +9,7 @@ import { ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { HOLIDAY_OPTIONS } from '@/types'
@@ -28,7 +29,7 @@ export default function NewDistributionPage() {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
@@ -76,12 +77,10 @@ export default function NewDistributionPage() {
               placeholder="בחר חג"
               {...register('holiday')}
             />
-            <Input
-              label="תאריך חלוקה"
-              type="date"
-              dir="ltr"
-              {...register('distribution_date')}
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">תאריך חלוקה</label>
+              <HebrewDatePicker value={watch('distribution_date') || ''} onChange={iso => setValue('distribution_date', iso)} />
+            </div>
             <Input
               label="תקציב כולל (₪)"
               type="number"
