@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,12 @@ const fb = (m: Record<string, [string, Tone]>, s: string): [string, Tone] => m[s
 export async function GET(request: NextRequest) {
   const beneficiaryId = new URL(request.url).searchParams.get('beneficiary_id')
   if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
+
+  // אימות סשן הפורטל — מותר לצפות רק בבקשות של המוטב שאותר בסשן הנוכחי
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId || sessionId !== beneficiaryId) {
+    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ requests: [] })
 

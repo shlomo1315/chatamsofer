@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { validateIsraeliId } from '@/lib/validation'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,12 @@ export async function POST(request: NextRequest) {
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // אימות סשן הפורטל — הגשת בקשה רק עבור המוטב שאותר בסשן הנוכחי
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId || sessionId !== String(beneficiary_id)) {
+    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
   }
 
   // ת.ז/דרכון של הנולד — חובה + ולידציה

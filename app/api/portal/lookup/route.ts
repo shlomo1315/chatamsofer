@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { setPortalSession } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +13,11 @@ function getAdminClient() {
 }
 
 export async function GET(request: NextRequest) {
+  // הגבלת קצב — בולמת ניסיונות אנומרציה של תעודות זהות
+  if (!rateLimit(`lookup:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+  }
+
   const params = request.nextUrl.searchParams
   const idParam = params.get('id')?.replace(/\D/g, '')
   const passportParam = params.get('passport')?.trim()
@@ -25,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     // 1. Check main beneficiaries table
     const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', idParam).maybeSingle()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (data) {
       // מסמכי זהות שכבר הועלו — כדי להציגם בעת כניסה חוזרת במקום לבקש העלאה מחדש
       const { data: docs } = await admin
@@ -41,7 +48,10 @@ export async function GET(request: NextRequest) {
           documents[d.doc_type] = { url: d.file_url, name: d.file_name ?? 'מסמך' }
         }
       }
-      return NextResponse.json({ found: true, beneficiary: data, documents })
+      // סשן חתום לפורטל — בקשות ההמשך (הבקשות שלי / עדכון פרטים) מאומתות מולו
+      const response = NextResponse.json({ found: true, beneficiary: data, documents })
+      setPortalSession(response, data.id)
+      return response
     }
 
     // 2. Search inside children JSONB array
@@ -49,7 +59,7 @@ export async function GET(request: NextRequest) {
       .from('beneficiaries')
       .select('id, full_name, family_name, children, lineage_node_id, lineage_chain')
       .not('children', 'is', null)
-    if (err2) return NextResponse.json({ error: err2.message }, { status: 500 })
+    if (err2) { console.error('[lookup] db error:', err2.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
 
     if (rows) {
       for (const row of rows) {
@@ -85,9 +95,11 @@ export async function GET(request: NextRequest) {
   if (passportParam) {
     if (passportParam.length < 5) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
     const { data, error } = await admin.from('beneficiaries').select(select).ilike('passport_number', passportParam).maybeSingle()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (!data) return NextResponse.json({ found: false })
-    return NextResponse.json({ found: true, beneficiary: data })
+    const response = NextResponse.json({ found: true, beneficiary: data })
+    setPortalSession(response, data.id)
+    return response
   }
 
   return NextResponse.json({ error: 'נא לספק מספר תעודת זהות או דרכון' }, { status: 400 })

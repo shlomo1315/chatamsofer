@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, ChevronDown, Loader2, Reply, User, Phone, MapPin,
@@ -1187,7 +1188,7 @@ export default function MailClient() {
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
       {/* Sidebar */}
-      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
+      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 hidden md:flex flex-col">
 
         {/* Account header */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-200 bg-white">
@@ -1308,7 +1309,8 @@ export default function MailClient() {
       </div>
 
       {/* Message List */}
-      <div className={`flex flex-col border-l border-slate-200 ${selected ? 'w-72 flex-shrink-0' : 'flex-1'}`}>
+      {/* במובייל: רשימה במסך מלא; כשנבחרה הודעה — תצוגת ההודעה תופסת את כל המסך (חזרה ב-X) */}
+      <div className={`flex-col border-l border-slate-200 ${selected ? 'hidden md:flex md:w-72 md:flex-shrink-0' : 'flex flex-1'}`}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
           <div className="flex-1 flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5">
             <Search size={14} className="text-slate-400 flex-shrink-0" />
@@ -1534,7 +1536,7 @@ export default function MailClient() {
               </div>
             )}
             <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
+              dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(selected.body || selected.snippet) }} />
             <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
             {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
           </div>

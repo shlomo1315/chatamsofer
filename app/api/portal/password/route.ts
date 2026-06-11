@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import bcrypt from 'bcryptjs'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,9 +45,11 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // הסיסמה נשמרת כ-hash בלבד — לעולם לא בטקסט גלוי
+  const hashed = await bcrypt.hash(String(password), 10)
   const { error } = await admin.from('recovery_portals').upsert({
     home_name,
-    password,
+    password: hashed,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'home_name' })
 

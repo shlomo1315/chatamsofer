@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,12 @@ export async function POST(request: NextRequest) {
 
   const { beneficiary_id, phone, phone2, address, city, email, marital_status } = body
   if (!beneficiary_id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
+
+  // אימות סשן הפורטל — מותר לעדכן רק את הרשומה של המוטב שאותר בסשן הנוכחי
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId || sessionId !== String(beneficiary_id)) {
+    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
