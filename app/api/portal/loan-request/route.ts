@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, amount, installments, purpose, purpose_details, declaration, notes } = body
+  const { beneficiary_id, amount, installments, purpose, purpose_details, declaration, notes, document_urls } = body
 
   if (!beneficiary_id || !amount || !installments || !purpose) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -32,8 +32,18 @@ export async function POST(request: NextRequest) {
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   }
+  if (parsedAmount > 30000) {
+    return NextResponse.json({ error: 'הסכום המרבי הוא 30,000 ₪' }, { status: 400 })
+  }
   if (isNaN(parsedInstallments) || parsedInstallments <= 0) {
     return NextResponse.json({ error: 'מספר תשלומים לא תקין' }, { status: 400 })
+  }
+  if (parsedInstallments > 60) {
+    return NextResponse.json({ error: 'מספר התשלומים המרבי הוא 60' }, { status: 400 })
+  }
+  // מטרת "אחר" — חובה לפרט
+  if (String(purpose).trim() === 'אחר' && !(purpose_details && String(purpose_details).trim())) {
+    return NextResponse.json({ error: 'יש לפרט את מטרת ההלוואה' }, { status: 400 })
   }
 
   const admin = getAdminClient()
@@ -63,6 +73,7 @@ export async function POST(request: NextRequest) {
     purpose_details: purpose_details ? String(purpose_details).trim() : null,
     declaration: declaration ? String(declaration) : null,
     notes: notes ? String(notes).trim() : null,
+    document_urls: Array.isArray(document_urls) && document_urls.length ? document_urls : null,
     status: 'pending',
   })
 

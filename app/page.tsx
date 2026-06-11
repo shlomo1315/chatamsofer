@@ -771,6 +771,8 @@ export default function PublicPortalPage() {
   const [loanForm, setLoanForm] = useState({
     amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '',
   })
+  const [loanWeddingFile, setLoanWeddingFile] = useState<File | null>(null)
+  const WEDDING_PURPOSE = 'נישואי הבן/הבת'
 
   const setReg = (k: keyof typeof regForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -1087,6 +1089,10 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה')
       return
     }
+    if (Number(loanForm.amount) > 30000) { setError('הסכום המרבי הוא 30,000 ₪'); return }
+    if (Number(loanForm.installments) > 60) { setError('מספר התשלומים המרבי הוא 60'); return }
+    if (loanForm.purpose === 'אחר' && !loanForm.purpose_details.trim()) { setError('אנא פרט את מטרת ההלוואה'); return }
+    if (loanForm.purpose === WEDDING_PURPOSE && !loanWeddingFile) { setError('יש לצרף הזמנה של החתונה'); return }
     if (!beneficiary) return
     if (needsIdWithRequest) {
       const miss = missingRequestIdDocs()
@@ -1098,14 +1104,27 @@ export default function PublicPortalPage() {
       if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
         setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
       }
+      // העלאת הזמנת החתונה (אם נבחרה) ושיוכה כמסמך לבקשה
+      const documentUrls: { url: string; name: string }[] = []
+      if (loanForm.purpose === WEDDING_PURPOSE && loanWeddingFile) {
+        const wf = new FormData()
+        wf.append('file', loanWeddingFile)
+        wf.append('beneficiary_id', beneficiary.id)
+        wf.append('doc_type', 'wedding_invite')
+        const wRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: wf })
+        const wData = await wRes.json()
+        if (!wRes.ok || !wData.url) { setError('שגיאה בהעלאת הזמנת החתונה. אנא נסה שוב.'); setLoading(false); return }
+        documentUrls.push({ url: wData.url, name: loanWeddingFile.name })
+      }
       const res = await fetch('/api/portal/loan-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm, document_urls: documentUrls }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
       setLoanModalOpen(false)
+      setLoanWeddingFile(null)
       setRequestType('loan')
       setStep('request-sent')
     } catch {
@@ -2196,10 +2215,10 @@ export default function PublicPortalPage() {
                 {beneficiary.marital_status && (
                   <div><span className="text-slate-400 text-xs block">מצב משפחתי</span><span className="text-slate-700">{beneficiary.marital_status}</span></div>
                 )}
-                {beneficiary.spouse_name && (
+                {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_name && (
                   <div><span className="text-slate-400 text-xs block">שם בן/בת הזוג</span><span className="text-slate-700">{beneficiary.spouse_name}</span></div>
                 )}
-                {beneficiary.spouse_id_number && (
+                {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_id_number && (
                   <div><span className="text-slate-400 text-xs block">ת.ז בן/בת הזוג</span><span className="text-slate-700" dir="ltr">{beneficiary.spouse_id_number}</span></div>
                 )}
                 {(beneficiary.address || beneficiary.city) && (
@@ -2530,7 +2549,7 @@ export default function PublicPortalPage() {
                 )}
                 {birthForm.baby_gender && (
                   <div className="col-span-2">
-                    <Field label="תעודת זהות של הנולד/ת" required hint="חובה — למניעת כפילויות. עבור תושב חוץ ניתן לבחור דרכון.">
+                    <Field label="תעודת זהות של הנולד/ת" required hint="עבור תושב חוץ יש לבחור דרכון">
                       <div className="flex gap-2 mb-2">
                         {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setBirthForm(f => ({ ...f, baby_id_type: v }))}
@@ -2666,6 +2685,23 @@ export default function PublicPortalPage() {
                       </Field>
                     </div>
                   )}
+                  {loanForm.purpose === WEDDING_PURPOSE && (
+                    <div className="col-span-2">
+                      <Field label="הזמנה של החתונה" required hint="יש לצרף הזמנה של החתונה (תמונה / PDF)">
+                        {loanWeddingFile ? (
+                          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                            <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanWeddingFile.name}</span></span>
+                            <button type="button" onClick={() => setLoanWeddingFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
+                            <Upload size={16} /> לחץ לצירוף הזמנת החתונה
+                            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setLoanWeddingFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                        )}
+                      </Field>
+                    </div>
+                  )}
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
                       <TextInput
@@ -2676,7 +2712,7 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="מספר תשלומים" required>
+                    <Field label="מספר תשלומים" required hint="עד 60 תשלומים">
                       <TextInput
                         type="number" min="1" max="60"
                         value={loanForm.installments} onChange={setLoan('installments')}
@@ -2801,35 +2837,11 @@ export default function PublicPortalPage() {
                 <CheckCircle2 size={38} className="text-green-600" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-2">הבקשה נשלחה!</h2>
-              {requestType === 'financial_aid' ? (
-                <p className="text-slate-600 mb-6 leading-relaxed">
-                  הבקשה הועברה לטיפול במזכירות.
-                  <br />
-                  בסיום הטיפול תישלח אליך הודעה.
-                </p>
-              ) : (
-                <>
-                  <p className="text-slate-600 mb-6 leading-relaxed">
-                    {requestType === 'birth'
-                      ? 'בקשת ההבראה ליולדת התקבלה בהצלחה.'
-                      : 'בקשת ההלוואה התקבלה בהצלחה.'}
-                    <br />
-                    צוות העמותה יעיין בבקשתך ויצור עמך קשר.
-                  </p>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600 text-right mb-6">
-                    <p className="flex items-center gap-2">
-                      <Clock size={14} className="text-indigo-400 flex-shrink-0" />
-                      <span>זמן טיפול ממוצע: עד 7 ימי עסקים</span>
-                    </p>
-                    {beneficiary?.phone && (
-                      <p className="flex items-center gap-2 mt-2">
-                        <Phone size={14} className="text-indigo-400 flex-shrink-0" />
-                        <span>עדכון יישלח לטלפון: <span dir="ltr">{beneficiary.phone}</span></span>
-                      </p>
-                    )}
-                  </div>
-                </>
-              )}
+              <p className="text-slate-600 mb-6 leading-relaxed">
+                הבקשה התקבלה במערכת ותטופל בהקדם.
+                <br />
+                יישלח אליכם הודעה.
+              </p>
               <div className="flex flex-col gap-2">
                 <button onClick={backToDashboard}
                   className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors text-sm"

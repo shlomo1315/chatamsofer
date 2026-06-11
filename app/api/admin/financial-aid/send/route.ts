@@ -47,23 +47,27 @@ export async function POST(request: NextRequest) {
     .eq('id', id).maybeSingle()
   if (!req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
 
-  const benElig = ((req as Record<string, unknown>).beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status
-  if (benElig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה לפני שליחת הבקשה לאישור.' }, { status: 400 })
+  // ה-beneficiary עשוי לחזור כאובייקט או כמערך — מנרמלים
+  const benRaw = (req as Record<string, unknown>).beneficiary
+  const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as (Parameters<typeof financialAidInquiryEmail>[0] & { eligibility_status?: string }) | undefined
+  if (ben?.eligibility_status !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה לפני שליחת הבקשה לאישור.' }, { status: 400 })
 
   const { data: setting } = await admin.from('app_settings').select('value').eq('key', 'financial_aid_decision_email').maybeSingle()
   const decisionEmail = (setting?.value ?? '').trim()
   if (!decisionEmail) return NextResponse.json({ error: 'לא הוגדר מייל גורם מאשר. הגדר אותו בראש הדף.' }, { status: 400 })
 
-  const ben = (req as Record<string, unknown>).beneficiary as Parameters<typeof financialAidInquiryEmail>[0]
   const mail = financialAidInquiryEmail(ben ?? {}, (req as { reason?: string }).reason)
 
-  // צירוף המסמך שהמבקש העלה בבקשה (אם קיים)
+  // צירוף המסמך שהמבקש העלה בבקשה (אם קיים) — עם timeout כדי שלא יתקע את השליחה
   const attachments: { filename: string; mimeType: string; contentB64: string }[] = []
   const docUrl = (req as { document_url?: string }).document_url
   const docName = (req as { document_name?: string }).document_name
   if (docUrl) {
     try {
-      const fileRes = await fetch(docUrl)
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 6000)
+      const fileRes = await fetch(docUrl, { signal: ctrl.signal })
+      clearTimeout(timer)
       if (fileRes.ok) {
         const buf = Buffer.from(await fileRes.arrayBuffer())
         const ext = (docUrl.split('?')[0].split('.').pop() ?? '').toLowerCase()
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
           contentB64: buf.toString('base64'),
         })
       }
-    } catch { /* אם נכשל — שולחים בלי הצרופה */ }
+    } catch { /* אם נכשל/נתקע — שולחים בלי הצרופה */ }
   }
 
   try {
