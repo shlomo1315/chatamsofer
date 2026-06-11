@@ -5,6 +5,7 @@ import { Distribution } from '@/types'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
+import PageHeader from '@/components/ui/PageHeader'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -30,37 +31,36 @@ export default async function DistributionsPage() {
   const active = distributions.filter((d) => d.status === 'active' || d.status === 'planning').length
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">חלוקות</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{distributions.length} חלוקות</p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="חלוקות" subtitle={`${distributions.length} חלוקות`}>
         <Link href="/admin/distributions/new">
           <Button>
             <Plus size={16} />
             חלוקה חדשה
           </Button>
         </Link>
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'בתכנון / פעיל', value: active, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'הושלמו', value: distributions.filter((d) => d.status === 'completed').length, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'סה״כ', value: distributions.length, color: 'text-slate-700', bg: 'bg-slate-50' },
-        ].map(({ label, value, color, bg }) => (
-          <div key={label} className={`${bg} rounded-xl p-4 text-center border border-slate-200`}>
-            <p className={`text-2xl font-bold ${color}`}>{value}</p>
-            <p className="text-sm text-slate-600 mt-0.5">{label}</p>
+          { label: 'בתכנון / פעיל', value: active, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+          { label: 'הושלמו', value: distributions.filter((d) => d.status === 'completed').length, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
+          { label: 'סה״כ', value: distributions.length, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
+        ].map(({ label, value, color, bg, border }) => (
+          <div key={label} className={`${bg} rounded-xl p-5 text-center border ${border} shadow-sm`}>
+            <p className={`text-3xl font-bold ltr-num ${color}`}>{value}</p>
+            <p className="text-sm text-slate-600 mt-1">{label}</p>
           </div>
         ))}
       </div>
 
       {distributions.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <Gift size={40} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-400 text-sm">לא נמצאו חלוקות</p>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
+          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Gift size={28} className="text-slate-400" />
+          </div>
+          <p className="text-slate-500 font-medium">לא נמצאו חלוקות</p>
+          <p className="text-slate-400 text-sm mt-1">הוסף חלוקה חדשה להתחלה</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

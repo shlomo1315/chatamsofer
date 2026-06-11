@@ -1,6 +1,6 @@
-import { HandCoins } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { FinancialAidRequest } from '@/types'
+import PageHeader from '@/components/ui/PageHeader'
 import FinancialAidClient from './FinancialAidClient'
 
 async function getRequests(): Promise<FinancialAidRequest[]> {
@@ -17,14 +17,8 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
 export default async function FinancialAidPage() {
   const requests = await getRequests()
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center gap-2">
-        <HandCoins size={20} className="text-emerald-600" />
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">סיוע רפואי</h1>
-          <p className="text-sm text-slate-500 mt-0.5">בקשות סיוע ואישור דרך הגורם המאשר</p>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="סיוע רפואי" subtitle="בקשות סיוע ואישור דרך הגורם המאשר" />
       <FinancialAidClient requests={requests} />
     </div>
   )

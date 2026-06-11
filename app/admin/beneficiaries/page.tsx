@@ -2,8 +2,8 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary } from '@/types'
-import StatusBadge from '@/components/ui/StatusBadge'
 import Button from '@/components/ui/Button'
+import PageHeader from '@/components/ui/PageHeader'
 import BeneficiariesTable from './BeneficiariesTable'
 
 async function getBeneficiaries(): Promise<Beneficiary[]> {
@@ -24,19 +24,15 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
   const initialFilter: Filter = validFilters.includes(params.status as Filter) ? (params.status as Filter) : 'all'
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">צאצאים</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{beneficiaries.length} רשומות</p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="צאצאים" subtitle={`${beneficiaries.length} רשומות`}>
         <Link href="/admin/beneficiaries/new">
           <Button>
             <Plus size={16} />
             רישום צאצא חדש
           </Button>
         </Link>
-      </div>
+      </PageHeader>
 
       <BeneficiariesTable data={beneficiaries} initialFilter={initialFilter} />
     </div>

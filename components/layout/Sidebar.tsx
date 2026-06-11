@@ -97,8 +97,14 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
     const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
     return (
       <Link key={href} href={href} onClick={() => setMobileOpen(false)}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-          ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+        className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+          ${active
+            ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+            : 'text-slate-300 hover:text-white hover:bg-white/10'
+          }`}>
+        {active && (
+          <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+        )}
         <Icon size={18} className="flex-shrink-0" />
         <span>{label}</span>
       </Link>
@@ -107,22 +113,34 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-800">
+      {/* Logo area with gradient separator */}
+      <div className="flex items-center gap-3 px-4 py-5">
         <LogoBadge />
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight truncate">היכל החתם סופר</p>
           <p className="text-xs text-slate-400 truncate">תוכנת ניהול</p>
         </div>
       </div>
+      {/* Gradient fade separator */}
+      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent mb-1" />
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+
+        {/* Section: ניווט ראשי */}
+        <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
         {topVisible.map(renderLink)}
 
-        {/* ── יולדות: לחיצה → רשימת כל הלידות, וגם נפתח לתתי-אגפים ── */}
+        {/* Maternity accordion */}
         {maternityVisible.length > 0 && (
           <div className="pt-0.5">
-            <div className={`flex items-center rounded-lg transition-colors
-                ${maternityRootActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+            <div className={`relative flex items-center rounded-lg transition-all
+                ${maternityRootActive
+                  ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}>
+              {maternityRootActive && (
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+              )}
               <Link href="/admin/maternity" onClick={() => { setMobileOpen(false); setMaternityOpen(true) }}
                 className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium flex-1 min-w-0">
                 <Baby size={18} className="flex-shrink-0" />
@@ -133,14 +151,17 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
               </button>
             </div>
             {maternityOpen && (
-              <div className="mt-1 mr-4 border-r border-slate-700 pr-2 flex flex-col gap-0.5">
+              <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
                 {maternityVisible.map(child => {
                   const active = child.href === '/admin/maternity/cards' ? cardsActive : recoveryActive
                   const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed : Baby
                   return (
                     <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors
-                        ${active ? 'bg-indigo-500/90 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
+                        ${active
+                          ? 'bg-indigo-500/80 text-white shadow-sm shadow-indigo-500/20'
+                          : 'text-slate-400 hover:text-white hover:bg-white/10'
+                        }`}>
                       <Icon size={15} className="flex-shrink-0" />
                       <span>{child.label}</span>
                     </Link>
@@ -151,15 +172,26 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
           </div>
         )}
 
+        {/* Section divider: שירותים */}
+        <div className="pt-3 pb-1">
+          <div className="mx-1 h-px bg-slate-800 mb-2" />
+          <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
+        </div>
         {bottomVisible.map(renderLink)}
 
-        {/* ── Mail accordion ── */}
-        <div className="pt-1">
+        {/* Mail accordion */}
+        <div className="pt-0.5">
           <button
             onClick={() => setMailOpen(o => !o)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-              ${mailActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}
+            className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+              ${mailActive
+                ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
           >
+            {mailActive && (
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+            )}
             <Mail size={18} className="flex-shrink-0" />
             <span className="flex-1 text-right">מייל</span>
             {mailOpen
@@ -168,14 +200,14 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
           </button>
 
           {mailOpen && (
-            <div className="mt-1 mr-4 border-r border-slate-700 pr-2 flex flex-col gap-0.5">
+            <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
               {visibleAccounts.map(acc => (
                 <Link
                   key={acc.email}
                   href="/admin/mail"
                   onClick={() => setMobileOpen(false)}
-                  className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-colors
-                    ${mailActive ? 'text-slate-200 hover:bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                  className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-all
+                    ${mailActive ? 'text-slate-200 hover:bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                 >
                   <span className="font-medium text-slate-200 leading-tight">{acc.name}</span>
                   <span className="text-[10px] text-slate-500 truncate">{acc.email}</span>
@@ -185,13 +217,25 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
           )}
         </div>
 
-        {/* ── Bottom items (הגדרות) below mail ── */}
+        {/* Section divider: מערכת */}
+        <div className="pt-3 pb-1">
+          <div className="mx-1 h-px bg-slate-800 mb-2" />
+          <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
+        </div>
+
+        {/* Bottom items (הגדרות) */}
         {bottomItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}>
+              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+                ${active
+                  ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                  : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}>
+              {active && (
+                <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+              )}
               <Icon size={18} className="flex-shrink-0" />
               <span>{label}</span>
             </Link>
@@ -199,8 +243,9 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-slate-800">
-        <p className="text-xs text-slate-500 text-center">גרסה 1.0.0</p>
+      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent" />
+      <div className="px-4 py-4">
+        <p className="text-xs text-slate-600 text-center">גרסה 1.0.0</p>
       </div>
     </div>
   )
