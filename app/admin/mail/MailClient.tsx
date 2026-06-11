@@ -1343,7 +1343,7 @@ export default function MailClient() {
             (() => {
               const filtered = activeLabel
                 ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
-                : messages
+                : messages.filter(m => !(assignments[m.id] ?? []).includes('label-decision'))
               return filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
                   <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>
@@ -1368,7 +1368,7 @@ export default function MailClient() {
                         }
                       }
                     }}
-                    className={`relative border-b border-slate-100 transition-colors
+                    className={`group relative border-b border-slate-100 transition-colors
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
                       ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
                     <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
@@ -1380,7 +1380,7 @@ export default function MailClient() {
                                 : msg.to)
                             : senderDisplay(msg)}
                         </span>
-                        <span className="text-[11px] text-slate-400 flex-shrink-0">{formatDate(msg.date)}</span>
+                        <span className="text-xs text-slate-500 font-medium flex-shrink-0 tabular-nums">{formatDate(msg.date)}</span>
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -1390,7 +1390,7 @@ export default function MailClient() {
                           </span>
                         )}
                         {msgLabels.map(l => (
-                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
+                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[11px] font-medium pl-1.5 pr-1.5 py-0.5 rounded-full text-white"
                             style={{ backgroundColor: l.color }}>
                             {l.name}
                             <button
@@ -1405,19 +1405,19 @@ export default function MailClient() {
                         {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
                       </div>
                     </button>
-                    <div className="absolute top-2 left-2 flex items-center gap-0.5">
+                    <div className="absolute bottom-2 left-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-lg shadow-sm border border-slate-100 px-0.5">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
-                        className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors"
+                        className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
                         title="מחק">
-                        <Trash2 size={12} />
+                        <Trash2 size={13} />
                       </button>
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                          className="p-1 text-slate-300 hover:text-slate-600 rounded transition-colors"
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
                           title="תוויות">
-                          <Tag size={12} />
+                          <Tag size={13} />
                         </button>
                         {openLabelFor === msg.id && (
                           <LabelDropdown

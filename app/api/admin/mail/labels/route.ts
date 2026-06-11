@@ -103,6 +103,7 @@ const DEFAULT_LABELS: MailLabel[] = [
   { id: 'label-loans',    name: 'הלוואות',        color: '#3b82f6' },
   { id: 'label-maternity', name: 'יולדות',         color: '#ec4899' },
   { id: 'label-widows',   name: 'אלמנות',         color: '#8b5cf6' },
+  { id: 'label-decision', name: 'הגורם המאשר',     color: '#0ea5e9' },
   { id: 'label-urgent',   name: 'דחוף',           color: '#ef4444' },
   { id: 'label-done',     name: 'טופל',           color: '#22c55e' },
 ]
