@@ -685,6 +685,15 @@ export default function PublicPortalPage() {
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | 'financial_aid' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
+
+  // הבקשות שהוגשו ע"י הצאצא (לתצוגה באזור האישי)
+  type MyReq = { id: string; kind: string; kindLabel: string; statusLabel: string; tone: 'pending' | 'progress' | 'approved' | 'rejected'; amount: number | null; created_at: string }
+  const [myRequests, setMyRequests] = useState<MyReq[]>([])
+  const loadMyRequests = useCallback(() => {
+    if (!beneficiary?.id) return
+    fetch(`/api/portal/my-requests?beneficiary_id=${beneficiary.id}`).then(r => r.json()).then(d => setMyRequests(d.requests ?? [])).catch(() => {})
+  }, [beneficiary?.id])
+  useEffect(() => { if (step === 'dashboard') loadMyRequests() }, [step, loadMyRequests])
   const [showRegSuccess, setShowRegSuccess] = useState(false)
   const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
@@ -2261,6 +2270,37 @@ export default function PublicPortalPage() {
             )}
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+
+            {/* הבקשות שלי */}
+            {myRequests.length > 0 && (
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText size={16} className="text-indigo-500" />
+                  <h3 className="font-semibold text-slate-800 text-sm">הבקשות שלי</h3>
+                  <span className="text-xs text-slate-400">({myRequests.length})</span>
+                </div>
+                <div className="flex flex-col divide-y divide-slate-100">
+                  {myRequests.map(r => {
+                    const tone = r.tone === 'approved' ? 'bg-green-100 text-green-700'
+                      : r.tone === 'rejected' ? 'bg-red-100 text-red-700'
+                      : r.tone === 'progress' ? 'bg-blue-100 text-blue-700'
+                      : 'bg-amber-100 text-amber-700'
+                    return (
+                      <div key={`${r.kind}-${r.id}`} className="flex items-center justify-between gap-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800">{r.kindLabel}</p>
+                          <p className="text-xs text-slate-400">
+                            {new Date(r.created_at).toLocaleDateString('he-IL')}
+                            {r.amount != null ? ` · ₪${Number(r.amount).toLocaleString('he-IL')}` : ''}
+                          </p>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${tone}`}>{r.statusLabel}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
+            )}
 
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (

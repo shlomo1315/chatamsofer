@@ -78,10 +78,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const gmail = await getGmailClient()
-    const res = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeRaw(decisionEmail, mail.subject, mail.html, attachments) },
-    })
+    let res
+    let attachmentSkipped = false
+    try {
+      res = await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: encodeRaw(decisionEmail, mail.subject, mail.html, attachments) },
+      })
+    } catch (sendErr) {
+      // אם השליחה עם הצרופה נכשלה — שולחים שוב בלי הצרופה כדי שהמייל בכל זאת יגיע
+      if (attachments.length) {
+        console.error('financial-aid send with attachment failed, retrying without:', sendErr)
+        attachmentSkipped = true
+        res = await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw: encodeRaw(decisionEmail, mail.subject, mail.html, []) },
+        })
+      } else {
+        throw sendErr
+      }
+    }
     const threadId = res.data.threadId ?? null
     const messageId = res.data.id ?? null
     await admin.from('financial_aid_requests').update({
@@ -92,8 +108,9 @@ export async function POST(request: NextRequest) {
       sent_to_decision_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', id)
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, attachmentSkipped })
   } catch (e) {
+    console.error('financial-aid send error:', e)
     return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה בשליחת המייל' }, { status: 500 })
   }
 }
