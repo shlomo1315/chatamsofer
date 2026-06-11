@@ -1,5 +1,6 @@
 import { Bell, Database, Users } from 'lucide-react'
 import Card from '@/components/ui/Card'
+import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile, ROLE_LABELS } from '@/types'
 import LineageTreeManager from '@/components/admin/LineageTreeManager'
@@ -40,16 +41,16 @@ export default async function SettingsPage() {
   const [profiles, recoveryHomes] = await Promise.all([getProfiles(), getRecoveryHomes()])
 
   return (
-    <div className="flex flex-col gap-5 max-w-3xl">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">הגדרות</h1>
-        <p className="text-sm text-slate-500 mt-0.5">ניהול המערכת והמשתמשים</p>
-      </div>
+    <div className="flex flex-col gap-6 max-w-3xl">
+      <PageHeader title="הגדרות" subtitle="ניהול המערכת והמשתמשים" />
 
       <div className="grid grid-cols-1 gap-5">
+        {/* Supabase connection */}
         <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Database size={18} className="text-indigo-500" />
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Database size={16} className="text-indigo-500" />
+            </div>
             <h2 className="text-sm font-semibold text-slate-700">חיבור Supabase</h2>
           </div>
           <div className={`rounded-xl p-4 text-sm ${isSupabaseConfigured() ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
@@ -67,24 +68,27 @@ export default async function SettingsPage() {
           </div>
         </Card>
 
+        {/* Users table */}
         <Card padding="none">
-          <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users size={16} className="text-indigo-500" />
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+                <Users size={16} className="text-indigo-500" />
+              </div>
               <h2 className="text-sm font-semibold text-slate-700">משתמשי מערכת</h2>
             </div>
             <AddUserButton />
           </div>
           {profiles.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-sm">
+            <div className="p-10 text-center text-slate-400 text-sm">
               {isSupabaseConfigured() ? 'לא נמצאו משתמשים' : 'חיבור Supabase נדרש לצפייה במשתמשים'}
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {profiles.map((p) => (
-                <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50">
+                <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xs font-bold">
+                    <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0">
                       {p.full_name.charAt(0)}
                     </div>
                     <div>
@@ -93,7 +97,7 @@ export default async function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5 font-medium">
+                    <span className="text-xs bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-0.5 font-medium">
                       {ROLE_LABELS[p.role]}
                     </span>
                     <div className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
@@ -105,38 +109,45 @@ export default async function SettingsPage() {
           )}
         </Card>
 
+        {/* Lineage tree */}
         <Card>
           <LineageTreeManager />
         </Card>
 
+        {/* Recovery homes */}
         <RecoveryHomeLinks homes={recoveryHomes} />
 
+        {/* Doc types */}
         <Card>
           <DocTypesManager />
         </Card>
 
+        {/* Email templates */}
         <Card>
           <EmailTemplatesManager />
         </Card>
 
+        {/* Notifications */}
         <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Bell size={18} className="text-indigo-500" />
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Bell size={16} className="text-indigo-500" />
+            </div>
             <h2 className="text-sm font-semibold text-slate-700">הגדרות התראות</h2>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-1">
             {[
               { label: 'תזכורת תפוגת כרטיס יולדת', desc: '7 ימים לפני תפוגה' },
               { label: 'פיגורים בהלוואות', desc: 'כשתשלום עובר 30 יום' },
               { label: 'בקשות ממתינות לאישור', desc: 'סיכום יומי' },
               { label: 'אישורי חלוקה', desc: 'שבוע לפני מועד החלוקה' },
             ].map(({ label, desc }) => (
-              <div key={label} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+              <div key={label} className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
                 <div>
                   <p className="text-sm font-medium text-slate-800">{label}</p>
-                  <p className="text-xs text-slate-500">{desc}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
                 </div>
-                <button className="relative w-10 h-5 bg-indigo-500 rounded-full transition-colors">
+                <button className="relative w-10 h-5 bg-indigo-500 rounded-full transition-colors flex-shrink-0">
                   <span className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm translate-x-5 transition-transform" />
                 </button>
               </div>

@@ -111,9 +111,6 @@ function getGreeting() {
   return 'ערב טוב'
 }
 
-function getDateHe() {
-  return new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
 
 export default async function DashboardPage() {
   const s = await getStats()
@@ -125,8 +122,7 @@ export default async function DashboardPage() {
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm text-slate-400 mb-1">{getDateHe()}</p>
-          <h1 className="text-2xl font-bold text-slate-900">{getGreeting()} 👋</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{getGreeting()}</h1>
           <p className="text-slate-500 mt-1 text-sm">ברוך הבא ללוח הבקרה של היכל החתם סופר</p>
         </div>
         <Link href="/admin/reports"

@@ -1,6 +1,6 @@
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
-import { HeartHandshake } from 'lucide-react'
+import PageHeader from '@/components/ui/PageHeader'
 import WidowsDashboard from './WidowsDashboard'
 
 async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }> {
@@ -37,16 +37,7 @@ export default async function WidowsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-          <HeartHandshake size={20} className="text-purple-600" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">אגף אלמנות ויתומים</h1>
-          <p className="text-sm text-slate-500">{widows.length} תיקי משפחות</p>
-        </div>
-      </div>
-
+      <PageHeader title="אגף אלמנות ויתומים" subtitle={`${widows.length} תיקי משפחות`} />
       <WidowsDashboard widows={widows} requests={requests} payments={payments} />
     </div>
   )
