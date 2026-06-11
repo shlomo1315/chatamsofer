@@ -1368,21 +1368,26 @@ export default function MailClient() {
                         }
                       }
                     }}
-                    className={`group relative border-b border-slate-100 transition-colors
-                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
+                    className={`group flex items-stretch border-b border-slate-100 transition-colors
+                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500'
+                        : !msg.isRead ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
+                        : 'hover:bg-slate-50'}
                       ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
-                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                    <button className="flex-1 min-w-0 text-right px-4 py-3" onClick={() => openMessage(msg)}>
                       <div className="flex items-start justify-between gap-2 mb-0.5">
-                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-                          {folder === 'SENT'
-                            ? (emailToInfo[msg.toEmail]
-                                ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
-                                : msg.to)
-                            : senderDisplay(msg)}
+                        <span className="flex items-center gap-2 min-w-0">
+                          {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="לא נקרא" />}
+                          <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
+                            {folder === 'SENT'
+                              ? (emailToInfo[msg.toEmail]
+                                  ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
+                                  : msg.to)
+                              : senderDisplay(msg)}
+                          </span>
                         </span>
-                        <span className="text-sm text-slate-500 font-medium flex-shrink-0 tabular-nums transition-opacity group-hover:opacity-0">{formatDate(msg.date)}</span>
+                        <span className={`text-sm flex-shrink-0 tabular-nums ${!msg.isRead ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>{formatDate(msg.date)}</span>
                       </div>
-                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
+                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-semibold text-slate-800' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
                         {folder === 'SENT' && trackingStatus[msg.id] && (
                           trackingStatus[msg.id].opened ? (
@@ -1409,22 +1414,23 @@ export default function MailClient() {
                             </button>
                           </span>
                         ))}
-                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
+                        {msgLabels.length === 0 && <p className={`text-xs truncate ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>{msg.snippet}</p>}
                       </div>
                     </button>
-                    <div className="absolute top-2 left-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg shadow-sm border border-slate-100 px-0.5">
+                    {/* עמודת פעולות נפרדת — אינה חופפת את התוכן */}
+                    <div className="flex flex-col items-center justify-center gap-1 w-9 flex-shrink-0 border-r border-slate-100 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
                         className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
                         title="מחק">
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
                           className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
                           title="תוויות">
-                          <Tag size={13} />
+                          <Tag size={14} />
                         </button>
                         {openLabelFor === msg.id && (
                           <LabelDropdown
