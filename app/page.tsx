@@ -3025,8 +3025,12 @@ export default function PublicPortalPage() {
                 <Field label="טלפון"><TextInput value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
                 <Field label="טלפון נוסף"><TextInput value={editForm.phone2} onChange={e => setEditForm(f => ({ ...f, phone2: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
                 <Field label="מייל"><TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" /></Field>
-                <Field label="עיר"><TextInput value={editForm.city} onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} /></Field>
-                <Field label="כתובת"><TextInput value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} /></Field>
+                <CityStreetPicker
+                  city={editForm.city}
+                  address={editForm.address}
+                  onCityChange={v => setEditForm(f => ({ ...f, city: v }))}
+                  onAddressChange={v => setEditForm(f => ({ ...f, address: v }))}
+                />
                 <Field label="מצב משפחתי">
                   <SelectInput value={editForm.marital_status} onChange={e => setEditForm(f => ({ ...f, marital_status: e.target.value }))}>
                     <option value="">בחר…</option>
