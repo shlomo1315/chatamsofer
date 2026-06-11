@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload } from 'lucide-react'
+import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -11,12 +11,12 @@ const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join
 const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
-const FILTERS: { key: FinancialAidStatus | 'all'; label: string }[] = [
-  { key: 'all', label: 'הכל' },
-  { key: 'pending', label: 'ממתין' },
-  { key: 'awaiting_decision', label: 'נשלח לגורם מאשר' },
-  { key: 'approved', label: 'מאושר' },
-  { key: 'rejected', label: 'נדחה' },
+const CARD_DEFS: { key: FinancialAidStatus | 'all'; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }[] = [
+  { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
+  { key: 'pending', label: 'ממתין', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'awaiting_decision', label: 'נשלח לגורם מאשר', icon: Mail, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
+  { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
+  { key: 'rejected', label: 'נדחה', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
 
 export default function FinancialAidClient({ requests }: { requests: FinancialAidRequest[] }) {
@@ -50,6 +50,14 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
       else setFound({ id: data.id, name: [data.family_name, data.full_name].filter(Boolean).join(' '), id_number: data.id_number })
     } catch { setLookupErr('שגיאת רשת') }
     setLooking(false)
+  }
+
+  // מחיקת בקשה מהטבלה
+  const del = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (!confirm('למחוק בקשת סיוע זו? הפעולה אינה הפיכה.')) return
+    try { await supabase.from('financial_aid_requests').delete().eq('id', id); router.refresh() }
+    catch { /* ignore */ }
   }
 
   const resetNew = () => { setNewOpen(false); setIdInput(''); setFound(null); setLookupErr(''); setNewReason(''); setNewFile(null); setSaveErr('') }
@@ -124,22 +132,37 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
         </button>
       </div>
 
-      {/* קוביות סינון */}
-      <div className="flex gap-2 flex-wrap items-center">
-        {FILTERS.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${filter === f.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300'}`}>
-            {f.label} <span className="opacity-70">{counts[f.key] ?? 0}</span>
-          </button>
-        ))}
+      {/* פעולות */}
+      <div className="flex items-center justify-end gap-2 flex-wrap">
         <button onClick={() => checkReplies(false)} disabled={checking}
-          className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5">
-          {checking ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} בדוק תשובות
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-2">
+          {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} בדוק תשובות
         </button>
         <button onClick={() => { resetNew(); setNewOpen(true) }}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3 py-1.5">
-          <Plus size={13} /> בקשה חדשה
+          className="inline-flex items-center gap-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">
+          <Plus size={14} /> בקשה חדשה
         </button>
+      </div>
+
+      {/* קוביות סינון */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {CARD_DEFS.map(c => {
+          const Icon = c.icon
+          const isActive = filter === c.key
+          return (
+            <button key={c.key}
+              onClick={() => setFilter(isActive && c.key !== 'all' ? 'all' : c.key)}
+              className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}>
+              <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
+                <Icon size={18} />
+              </span>
+              <span className="flex flex-col min-w-0">
+                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key] ?? 0}</span>
+                <span className="text-xs text-slate-500 mt-1 truncate">{c.label}</span>
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
@@ -172,7 +195,12 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
                     <td className="px-4 py-3 text-slate-600 max-w-xs truncate">{r.reason ?? '—'}</td>
                     <td className="px-4 py-3 font-bold text-slate-800 ltr-num">{r.status === 'approved' ? fmtCur(r.amount) : '—'}</td>
                     <td className="px-4 py-3"><span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[r.status]}`}>{FINANCIAL_AID_STATUS_LABELS[r.status]}</span></td>
-                    <td className="px-4 py-3"><span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span>
+                        <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
                   </tr>
                 )
               })}

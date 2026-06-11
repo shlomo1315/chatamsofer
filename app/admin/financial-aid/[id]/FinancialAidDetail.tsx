@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Send, RefreshCw, Check, X, Clock, Loader2, Mail, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Send, RefreshCw, Check, X, Clock, Loader2, Mail, AlertTriangle, ExternalLink, Trash2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import type { FinancialAidRequest } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
@@ -16,6 +17,7 @@ const ELIGIBILITY_LBL: Record<string, string> = {
 
 export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }) {
   const router = useRouter()
+  const supabase = createClient()
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [amountInput, setAmountInput] = useState('')
@@ -42,6 +44,16 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
     setBusy(null)
   }
   // עדכון ידני (override)
+  const del = async () => {
+    if (!confirm('למחוק בקשת סיוע זו? הפעולה אינה הפיכה.')) return
+    setBusy('delete'); setErr('')
+    try {
+      const { error } = await supabase.from('financial_aid_requests').delete().eq('id', req.id)
+      if (error) throw error
+      router.push('/admin/financial-aid')
+    } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה'); setBusy(null) }
+  }
+
   const setStatus = async (status: string, amount?: number | null) => {
     if (status === 'approved' && !eligible) { setShowBlock(true); return }
     setBusy(status); setErr('')
@@ -160,6 +172,14 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
           <button onClick={() => setStatus('pending')} disabled={busy === 'pending'}
             className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-50 rounded-lg px-2.5 py-1.5"><Clock size={13} /> החזר לממתין</button>
         </div>
+      </div>
+
+      {/* מחיקת הבקשה */}
+      <div className="mt-1 pt-3 border-t border-slate-100">
+        <button onClick={del} disabled={busy === 'delete'}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50">
+          {busy === 'delete' ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} מחק בקשה
+        </button>
       </div>
     </Card>
     </>
