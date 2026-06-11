@@ -706,6 +706,8 @@ export default function PublicPortalPage() {
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   // רישום כילד רשום — השיוך נקבע אוטומטית מההורה
   const [childParentLineage, setChildParentLineage] = useState<ParentLineage | null>(null)
+  // נתוני הילד ברישום מהיר — ימולאו לבעל/אשה לפי המין רק אחרי בחירת מצב משפחתי
+  const [childSelf, setChildSelf] = useState<ChildMatchData['childData'] | null>(null)
   const [requestType, setRequestType] = useState<'birth' | 'loan' | 'financial_aid' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
 
@@ -727,6 +729,17 @@ export default function PublicPortalPage() {
     marital_status: '', spouse_name: '', spouse_id_number: '', spouse_phone: '', spouse_birth_date: '',
     children_count: '0', notes: '',
   })
+  // רישום מהיר של ילד — מילוי הפרטים לבעל/אשה לפי המין, אחרי בחירת מצב משפחתי
+  useEffect(() => {
+    if (!childSelf || !regForm.marital_status) return
+    const married = regForm.marital_status === 'נשואים'
+    if (married && childSelf.gender === 'female') {
+      setRegForm(f => ({ ...f, spouse_name: childSelf.name, spouse_id_number: childSelf.id_number, spouse_birth_date: childSelf.birth_date, gender: 'female', full_name: '', id_number: '', birth_date: '' }))
+    } else {
+      setRegForm(f => ({ ...f, full_name: childSelf.name, id_number: childSelf.id_number, birth_date: childSelf.birth_date, gender: childSelf.gender, spouse_name: '', spouse_id_number: '', spouse_birth_date: '' }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childSelf, regForm.marital_status])
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>([])
@@ -1400,6 +1413,7 @@ export default function PublicPortalPage() {
     setShowOtherMarital(false)
     setChildMatch(null)
     setChildParentLineage(null)
+    setChildSelf(null)
   }
 
   return (
@@ -1581,23 +1595,26 @@ export default function PublicPortalPage() {
                   אתה רשום אצלינו במערכת בתור ילד של
                 </p>
                 <p className="text-lg font-bold text-indigo-700 mb-4">{childMatch.parentName}</p>
+                {/* פרטי הילד הרשום */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4">
+                  <p className="col-span-2"><span className="text-slate-400 text-xs block">שם</span><span className="font-medium text-slate-800">{childMatch.childData.name || '—'}</span></p>
+                  <p><span className="text-slate-400 text-xs block">תעודת זהות</span><span className="ltr-num text-slate-700">{childMatch.childData.id_number}</span></p>
+                  {childMatch.childData.birth_date && <p><span className="text-slate-400 text-xs block">תאריך לידה</span><span className="text-slate-700 ltr-num">{(() => { try { return new Date(childMatch.childData.birth_date).toLocaleDateString('he-IL') } catch { return childMatch.childData.birth_date } })()}</span></p>}
+                </div>
                 <p className="text-slate-500 text-sm">
-                  כדי שתירשם אתה בעצמך, עבור לרישום מהיר — הפרטים שלך כבר ימולאו אוטומטית.
+                  כדי שתירשם אתה בעצמך, עבור לרישום מהיר.
                 </p>
               </div>
               <div className="flex flex-col gap-3">
                 <button
                   onClick={() => {
-                    const cd = childMatch.childData
+                    // שמירת נתוני הילד — ימולאו לבעל/אשה לפי המין רק אחרי בחירת מצב משפחתי
+                    setChildSelf(childMatch.childData)
                     setRegForm(f => ({
                       ...f,
-                      id_number: cd.id_number,
-                      full_name: cd.name,
-                      birth_date: cd.birth_date,
-                      gender: cd.gender,
-                      marital_status: cd.marital_status,
+                      id_number: '', full_name: '', birth_date: '', gender: '', marital_status: '',
+                      spouse_name: '', spouse_id_number: '', spouse_birth_date: '',
                     }))
-                    // שיוך אוטומטי לפי ההורה — אם קיים ייחוס להורה
                     setChildParentLineage(childMatch.parentLineage?.lineage_chain?.length ? childMatch.parentLineage : null)
                     setError('')
                     setStep('register')
