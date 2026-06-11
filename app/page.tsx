@@ -787,7 +787,6 @@ export default function PublicPortalPage() {
   // עדכון פרטים (משפחה מאושרת)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState({ phone: '', phone2: '', address: '', city: '', email: '', marital_status: '' })
-  const [editFile, setEditFile] = useState<File | null>(null)
   const [editSaving, setEditSaving] = useState(false)
   const openEditDetails = () => {
     if (!beneficiary) return
@@ -795,17 +794,12 @@ export default function PublicPortalPage() {
       phone: beneficiary.phone ?? '', phone2: beneficiary.phone2 ?? '', address: beneficiary.address ?? '',
       city: beneficiary.city ?? '', email: beneficiary.email ?? '', marital_status: beneficiary.marital_status ?? '',
     })
-    setEditFile(null); setError(''); setEditOpen(true)
+    setError(''); setEditOpen(true)
   }
   const handleUpdateDetails = async () => {
     if (!beneficiary) return
     setEditSaving(true); setError('')
     try {
-      if (editFile) {
-        const fd = new FormData()
-        fd.append('file', editFile); fd.append('beneficiary_id', beneficiary.id); fd.append('doc_type', 'other')
-        await fetch('/api/portal/upload-docs', { method: 'POST', body: fd }).catch(() => {})
-      }
       const res = await fetch('/api/portal/update-details', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm }),
@@ -3036,19 +3030,6 @@ export default function PublicPortalPage() {
                     <option value="">בחר…</option>
                     {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </SelectInput>
-                </Field>
-                <Field label="מסמך נוסף (לא חובה)">
-                  {editFile ? (
-                    <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
-                      <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{editFile.name}</span></span>
-                      <button type="button" onClick={() => setEditFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-3 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
-                      <Upload size={16} /> העלאת מסמך
-                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setEditFile(e.target.files?.[0] ?? null)} />
-                    </label>
-                  )}
                 </Field>
                 {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
                 <button onClick={handleUpdateDetails} disabled={editSaving}
