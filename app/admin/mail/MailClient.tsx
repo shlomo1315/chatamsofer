@@ -1384,10 +1384,17 @@ export default function MailClient() {
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-medium text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
-                        {folder === 'SENT' && trackingStatus[msg.id]?.opened && (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
-                            <CheckCircle2 size={9} /> נפתח
-                          </span>
+                        {folder === 'SENT' && trackingStatus[msg.id] && (
+                          trackingStatus[msg.id].opened ? (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                              <CheckCircle2 size={10} /> נפתח{trackingStatus[msg.id].openedAt ? ` · ${formatDate(trackingStatus[msg.id].openedAt as string)}` : ''}
+                              {trackingStatus[msg.id].openCount > 1 ? ` (${trackingStatus[msg.id].openCount})` : ''}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                              טרם נפתח
+                            </span>
+                          )
                         )}
                         {msgLabels.map(l => (
                           <span key={l.id} className="inline-flex items-center gap-0.5 text-[11px] font-medium pl-1.5 pr-1.5 py-0.5 rounded-full text-white"
@@ -1457,6 +1464,18 @@ export default function MailClient() {
                   <span className="text-xs text-slate-500">{selected.from}</span>
                 )}
                 <span className="text-xs text-slate-400">· {formatDate(selected.date)}</span>
+                {folder === 'SENT' && trackingStatus[selected.id] && (
+                  trackingStatus[selected.id].opened ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      <CheckCircle2 size={11} /> נפתח{trackingStatus[selected.id].openedAt ? ` · ${formatDate(trackingStatus[selected.id].openedAt as string)}` : ''}
+                      {trackingStatus[selected.id].openCount > 1 ? ` · ${trackingStatus[selected.id].openCount} פתיחות` : ''}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      טרם נפתח
+                    </span>
+                  )
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
