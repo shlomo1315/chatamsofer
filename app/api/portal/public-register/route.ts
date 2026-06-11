@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes,
+    spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     lineage_manual: Array.isArray(lineage_manual) && lineage_manual.length > 0 ? lineage_manual : null,
     lineage_chain: Array.isArray(lineage_chain) && lineage_chain.length > 0 ? lineage_chain : null,
+    past_benefits: past_benefits && typeof past_benefits === 'object' ? past_benefits : null,
     eligibility_status: 'pending',
     is_active: true,
   }
@@ -106,8 +107,8 @@ export async function POST(request: NextRequest) {
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)

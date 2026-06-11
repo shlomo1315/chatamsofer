@@ -174,6 +174,29 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{beneficiary.notes}</p>
         </Card>
       )}
+      {beneficiary.past_benefits && (() => {
+        const pb = beneficiary.past_benefits
+        const items = [
+          pb.recovery_home && 'בית החלמה ליולדות',
+          pb.food_card && 'כרטיס מזון ליולדות',
+          pb.holiday_grant && 'מענק לקראת החגים',
+          pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
+          pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
+          pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
+        ].filter(Boolean) as string[]
+        if (!items.length && !pb.notes) return null
+        return (
+          <Card>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הטבות שהתקבלו בעבר מאיגוד הצאצאים</h2>
+            {items.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {items.map((it, i) => <li key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1">{it}</li>)}
+              </ul>
+            ) : <p className="text-sm text-slate-400">לא דווח על הטבות</p>}
+            {pb.notes && <p className="text-sm text-slate-700 whitespace-pre-wrap mt-2 pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">הערות: </span>{pb.notes}</p>}
+          </Card>
+        )
+      })()}
       <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-400">
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />

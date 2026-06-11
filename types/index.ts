@@ -62,6 +62,10 @@ export interface Beneficiary {
   lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
   children_count: number
   monthly_support?: number
+  past_benefits?: {
+    recovery_home?: boolean; food_card?: boolean; holiday_grant?: boolean; catering?: boolean
+    loan?: boolean; loan_amount?: string; other?: boolean; other_details?: string; notes?: string
+  }
   children?: {
     name: string
     id_number: string | null
