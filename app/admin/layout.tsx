@@ -4,6 +4,7 @@ export const metadata = { title: 'היכל החתם סופר - מערכת ניה
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
+import { ToastProvider } from '@/components/ui/Toast'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile } from '@/types'
 
@@ -32,6 +33,7 @@ export default async function DashboardLayout({
   }
 
   return (
+    <ToastProvider>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <WelcomeModal />
       <Sidebar isAdmin={profile?.role === 'admin'} permissions={profile?.permissions} />
@@ -44,5 +46,6 @@ export default async function DashboardLayout({
         </main>
       </div>
     </div>
+    </ToastProvider>
   )
 }

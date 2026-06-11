@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6', '#a855f7', '#ef4444', '#14b8a6']
@@ -13,18 +14,22 @@ export default function ConfettiSuccess({
   subtitle?: string
   details?: string[]
 }) {
-  const pieces = Array.from({ length: 70 })
+  // הגרלת הקונפיטי פעם אחת בלבד (ולא בכל רינדור)
+  const [pieces] = useState(() =>
+    Array.from({ length: 70 }, (_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 0.8,
+      duration: 2.2 + Math.random() * 1.8,
+      size: 6 + Math.random() * 8,
+      color: COLORS[i % COLORS.length],
+      rounded: Math.random() > 0.5,
+    }))
+  )
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
       {/* Confetti layer */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {pieces.map((_, i) => {
-          const left = Math.random() * 100
-          const delay = Math.random() * 0.8
-          const duration = 2.2 + Math.random() * 1.8
-          const size = 6 + Math.random() * 8
-          const color = COLORS[i % COLORS.length]
-          const rounded = Math.random() > 0.5
+        {pieces.map(({ left, delay, duration, size, color, rounded }, i) => {
           return (
             <span key={i}
               style={{

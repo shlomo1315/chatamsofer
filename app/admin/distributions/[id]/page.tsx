@@ -10,19 +10,18 @@ import { he } from 'date-fns/locale'
 
 async function getDistribution(id: string): Promise<(Distribution & { recipients: DistributionRecipient[] }) | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const [{ data: dist }, { data: recipients }] = await Promise.all([
-      supabase.from('distributions').select('*').eq('id', id).single(),
-      supabase
-        .from('distribution_recipients')
-        .select('*, beneficiary:beneficiaries(full_name), family:families(family_name)')
-        .eq('distribution_id', id),
-    ])
-    return dist ? { ...dist, recipients: recipients ?? [] } : null
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const [distRes, recipientsRes] = await Promise.all([
+    supabase.from('distributions').select('*').eq('id', id).single(),
+    supabase
+      .from('distribution_recipients')
+      .select('*, beneficiary:beneficiaries(full_name), family:families(family_name)')
+      .eq('distribution_id', id),
+  ])
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (distRes.error && distRes.error.code !== 'PGRST116' && distRes.error.code !== '22P02') throw distRes.error
+  if (recipientsRes.error && recipientsRes.error.code !== '22P02') throw recipientsRes.error
+  return distRes.data ? { ...distRes.data, recipients: recipientsRes.data ?? [] } : null
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'

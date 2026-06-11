@@ -10,16 +10,13 @@ import { he } from 'date-fns/locale'
 
 async function getDistributions(): Promise<Distribution[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('distributions')
-      .select('*')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('distributions')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'

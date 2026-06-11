@@ -8,6 +8,7 @@ import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, Fil
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import { useToast } from '@/components/ui/Toast'
 
 const GENDER_BTN_SEL: Record<string, string> = {
   male: 'bg-blue-100 text-blue-800 border-blue-400',
@@ -575,6 +576,7 @@ interface Props {
 export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const isEdit = !!beneficiaryId
@@ -673,7 +675,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       if (error) throw error
       setChild(idx, 'birth_status', 'approved')
     } catch (e) {
-      alert(`שגיאה באישור הלידה: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(`שגיאה באישור הלידה: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setApprovingIdx(null)
     }
@@ -856,7 +858,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       }, 3000)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      alert(`שגיאה בשמירה: ${msg}`)
+      toast.error(`שגיאה בשמירה: ${msg}`)
       setSaving(false)
     }
   }

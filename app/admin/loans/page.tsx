@@ -7,16 +7,13 @@ import LoansTable from './LoansTable'
 
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('loans')
-      .select('*, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('loans')
+    .select('*, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 export default async function LoansPage() {

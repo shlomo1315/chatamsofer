@@ -7,20 +7,17 @@ import Card from '@/components/ui/Card'
 
 async function getFamilies(): Promise<(Family & { member_count: number })[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('families')
-      .select('*, beneficiaries(id)')
-      .order('family_name')
-    return (data ?? []).map((f) => ({
-      ...f,
-      member_count: (f.beneficiaries as { id: string }[]).length,
-      beneficiaries: undefined,
-    }))
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('families')
+    .select('*, beneficiaries(id)')
+    .order('family_name')
+  if (error) throw error
+  return (data ?? []).map((f) => ({
+    ...f,
+    member_count: (f.beneficiaries as { id: string }[]).length,
+    beneficiaries: undefined,
+  }))
 }
 
 export default async function FamiliesPage() {

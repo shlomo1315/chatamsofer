@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
 import { deliverMail } from '@/lib/sendMail'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
@@ -23,17 +22,6 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 // מפענח את תוכן התשובה (הטקסט החדש בלבד, לפני הציטוט):
 // מספר → מאושר + סכום · X → נדחה · אחרת → ללא הכרעה.
 function parseDecision(raw: string): { kind: 'approved'; amount: number } | { kind: 'rejected' } | { kind: 'none' } {
@@ -52,7 +40,7 @@ function parseDecision(raw: string): { kind: 'approved'; amount: number } | { ki
 }
 
 export async function POST() {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 

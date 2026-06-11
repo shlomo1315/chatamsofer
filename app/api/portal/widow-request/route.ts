@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,12 @@ export async function POST(request: NextRequest) {
 
   if (!beneficiary_id || !request_type) {
     return NextResponse.json({ error: 'שדות חסרים' }, { status: 400 })
+  }
+
+  // אימות סשן הפורטל — הגשת בקשה רק עבור המוטב שאותר בסשן הנוכחי
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId || sessionId !== String(beneficiary_id)) {
+    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
   }
 
   const validTypes = ['financial', 'food', 'general']

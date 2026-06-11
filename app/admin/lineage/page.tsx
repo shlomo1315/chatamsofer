@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 
 // ─── Types ───
 
@@ -145,6 +146,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 // ─── Tree view ───
 
 function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
+  const toast = useToast()
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
@@ -295,7 +297,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       onStatusChange(node.id, node.status ?? 'pending')
-      alert(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
+      toast.error(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
       return
     }
     onRefresh()
@@ -309,7 +311,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ id: node.id, relation: next }),
     })
-    if (!res.ok) { onRelationChange(node.id, node.relation ?? null); alert('שגיאה בשמירת בן/חתן'); return }
+    if (!res.ok) { onRelationChange(node.id, node.relation ?? null); toast.error('שגיאה בשמירת בן/חתן'); return }
     onRefresh()
   }
 

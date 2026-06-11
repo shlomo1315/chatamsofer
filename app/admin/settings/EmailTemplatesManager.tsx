@@ -1,10 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Paperclip, Plus, Trash2, Loader2, FileText, Upload } from 'lucide-react'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Tpl { id: string; name: string; file_url: string; file_name: string; mime_type: string }
 
 export default function EmailTemplatesManager() {
+  const { confirm, confirmDialog } = useConfirm()
   const [list, setList] = useState<Tpl[]>([])
   const [name, setName] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -30,7 +32,7 @@ export default function EmailTemplatesManager() {
   }
 
   const remove = async (id: string) => {
-    if (!confirm('למחוק טמפלט זה?')) return
+    if (!(await confirm({ title: 'מחיקת טמפלט', message: 'למחוק טמפלט זה?', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true)
     await fetch(`/api/admin/email-templates?id=${id}`, { method: 'DELETE' }).catch(() => {})
     load(); setBusy(false)
@@ -75,6 +77,7 @@ export default function EmailTemplatesManager() {
         </button>
       </div>
       {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
+      {confirmDialog}
     </div>
   )
 }

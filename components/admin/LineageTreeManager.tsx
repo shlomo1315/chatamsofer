@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { GitBranch, Plus, Trash2, ChevronDown, ChevronLeft, Loader2, X, Check, Pencil, RefreshCw } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface LineageNode {
   id: string
@@ -206,6 +208,8 @@ function NodeRow({
 }
 
 export default function LineageTreeManager() {
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [nodes, setNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -272,12 +276,12 @@ export default function LineageTreeManager() {
   }
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`למחוק את "${name}" וכל צאצאיו?`)) return
+    if (!(await confirm({ title: 'מחיקת ענף', message: `למחוק את "${name}" וכל צאצאיו?`, confirmLabel: 'מחיקה', danger: true }))) return
     try {
       await fetch(`/api/admin/lineage?id=${id}`, { method: 'DELETE' })
       await loadNodes()
     } catch {
-      alert('שגיאה במחיקה')
+      toast.error('שגיאה במחיקה')
     }
   }
 
@@ -289,11 +293,11 @@ export default function LineageTreeManager() {
         body: JSON.stringify({ id, ...payload }),
       })
       const data = await res.json()
-      if (!res.ok) { alert(data.error || 'שגיאה בעריכה'); return false }
+      if (!res.ok) { toast.error(data.error || 'שגיאה בעריכה'); return false }
       await loadNodes()
       return true
     } catch {
-      alert('שגיאת רשת')
+      toast.error('שגיאת רשת')
       return false
     }
   }
@@ -382,6 +386,7 @@ export default function LineageTreeManager() {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   )
 }

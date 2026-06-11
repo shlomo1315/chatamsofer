@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { FinancialAidRequest } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleString('he-IL') : '—'
 const fmtDateTime = (d?: string) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -18,6 +19,7 @@ const ELIGIBILITY_LBL: Record<string, string> = {
 export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }) {
   const router = useRouter()
   const supabase = createClient()
+  const { confirm, confirmDialog } = useConfirm()
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [amountInput, setAmountInput] = useState('')
@@ -45,7 +47,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
   }
   // עדכון ידני (override)
   const del = async () => {
-    if (!confirm('למחוק בקשת סיוע זו? הפעולה אינה הפיכה.')) return
+    if (!(await confirm({ title: 'מחיקת בקשת סיוע', message: 'למחוק בקשת סיוע זו? הפעולה אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy('delete'); setErr('')
     try {
       const { error } = await supabase.from('financial_aid_requests').delete().eq('id', req.id)
@@ -182,6 +184,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
         </button>
       </div>
     </Card>
+    {confirmDialog}
     </>
   )
 }

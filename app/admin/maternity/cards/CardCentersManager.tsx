@@ -2,8 +2,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Pencil, Trash2, Check, X, Loader2, Warehouse } from 'lucide-react'
 import type { CardCenter } from '@/types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function CardCentersManager() {
+  const { confirm, confirmDialog } = useConfirm()
   const [centers, setCenters] = useState<CardCenter[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -43,7 +45,7 @@ export default function CardCentersManager() {
     setBusy(false)
   }
   const remove = async (c: CardCenter) => {
-    if (!confirm(`למחוק את המוקד "${c.name}"?`)) return
+    if (!(await confirm({ title: 'מחיקת מוקד', message: `למחוק את המוקד "${c.name}"?`, confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true); setErr('')
     const r = await fetch(`/api/admin/card-centers?id=${c.id}`, { method: 'DELETE' })
     apply(await r.json())
@@ -127,6 +129,7 @@ export default function CardCentersManager() {
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }

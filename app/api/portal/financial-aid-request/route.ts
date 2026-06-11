@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,12 @@ export async function POST(request: NextRequest) {
   const file = formData.get('file') as File | null
   if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   if (!reason) return NextResponse.json({ error: 'יש לפרט את סיבת הבקשה' }, { status: 400 })
+
+  // אימות סשן הפורטל — הגשת בקשה רק עבור המוטב שאותר בסשן הנוכחי
+  const sessionId = getPortalBeneficiaryId(request)
+  if (!sessionId || sessionId !== beneficiaryId) {
+    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
 
   const { data: ben } = await admin
     .from('beneficiaries')

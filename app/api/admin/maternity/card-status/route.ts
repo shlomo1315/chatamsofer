@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,21 +11,10 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 // עדכון מסלול כרטיס המזון של יולדת. action: approve|reject|pending|load
 // approve: דורש centerId עם מקום פנוי (stock > approved+loaded). load: מנכה בפועל מהמלאי.
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { aidId, action, centerId } = await request.json()
   if (!aidId || !['approve', 'reject', 'pending', 'load'].includes(action)) {
     return NextResponse.json({ error: 'פרמטרים חסרים' }, { status: 400 })

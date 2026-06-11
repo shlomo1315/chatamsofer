@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,11 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — מניעת רישומי ספאם המוניים
+  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   let body: Record<string, unknown>
   try {
     body = await request.json()

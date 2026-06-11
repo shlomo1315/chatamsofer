@@ -16,39 +16,34 @@ import { he } from 'date-fns/locale'
 
 async function getAid(id: string): Promise<MaternityAid | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(*), card_center:card_centers(id, name)')
-      .eq('id', id)
-      .single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('maternity_aids')
+    .select('*, beneficiary:beneficiaries(*), card_center:card_centers(id, name)')
+    .eq('id', id)
+    .single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 // סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
 async function getLineagePath(nodeId?: string | null): Promise<string[]> {
   if (!nodeId || !isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id')
-    if (!data) return []
-    const map = new Map(data.map(n => [n.id, n]))
-    const path: string[] = []
-    let cur = map.get(nodeId)
-    let guard = 0
-    while (cur && guard < 50) {
-      path.unshift(cur.name)
-      cur = cur.parent_id ? map.get(cur.parent_id) : undefined
-      guard++
-    }
-    return path
-  } catch {
-    return []
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
+  if (error) throw error
+  if (!data) return []
+  const map = new Map(data.map(n => [n.id, n]))
+  const path: string[] = []
+  let cur = map.get(nodeId)
+  let guard = 0
+  while (cur && guard < 50) {
+    path.unshift(cur.name)
+    cur = cur.parent_id ? map.get(cur.parent_id) : undefined
+    guard++
   }
+  return path
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'

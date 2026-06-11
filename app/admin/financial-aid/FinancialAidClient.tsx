@@ -5,6 +5,7 @@ import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, 
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
@@ -22,6 +23,7 @@ const CARD_DEFS: { key: FinancialAidStatus | 'all'; label: string; icon: typeof 
 export default function FinancialAidClient({ requests }: { requests: FinancialAidRequest[] }) {
   const router = useRouter()
   const supabase = createClient()
+  const { confirm, confirmDialog } = useConfirm()
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const [checking, setChecking] = useState(false)
@@ -55,7 +57,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   // מחיקת בקשה מהטבלה
   const del = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    if (!confirm('למחוק בקשת סיוע זו? הפעולה אינה הפיכה.')) return
+    if (!(await confirm({ title: 'מחיקת בקשת סיוע', message: 'למחוק בקשת סיוע זו? הפעולה אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
     try { await supabase.from('financial_aid_requests').delete().eq('id', id); router.refresh() }
     catch { /* ignore */ }
   }
@@ -264,6 +266,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           </div>
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }

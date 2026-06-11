@@ -7,6 +7,7 @@ import { goToNextPending } from '@/lib/nextPending'
 import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 import { useDocTypes } from '@/lib/useDocTypes'
+import { useToast } from '@/components/ui/Toast'
 
 const PENDING_SET: EligibilityStatus[] = ['pending']
 
@@ -21,6 +22,7 @@ const STYLES: Record<string, string> = {
 export default function StatusControl({ id, status, advance }: { id: string; status: EligibilityStatus; advance?: boolean }) {
   const router  = useRouter()
   const supabase = createClient()
+  const toast = useToast()
 
   const { docTypes } = useDocTypes()
   const [open, setOpen]       = useState(false)
@@ -80,7 +82,7 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         router.refresh()
       }
     } catch (err: unknown) {
-      alert(`שגיאה בעדכון הסטטוס: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה בעדכון הסטטוס: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }

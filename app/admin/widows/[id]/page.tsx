@@ -7,20 +7,23 @@ import FamilyFile from './FamilyFile'
 
 async function getFamily(id: string) {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const [{ data: widow }, { data: requests }, { data: payments }] = await Promise.all([
-      supabase.from('beneficiaries').select('*').eq('id', id).single(),
-      supabase.from('widow_requests').select('*').eq('beneficiary_id', id).order('created_at', { ascending: false }),
-      supabase.from('widow_support_payments').select('*').eq('beneficiary_id', id).order('paid_at', { ascending: false }),
-    ])
-    if (!widow) return null
-    return {
-      widow: widow as Beneficiary,
-      requests: (requests as WidowRequest[]) ?? [],
-      payments: (payments as WidowSupportPayment[]) ?? [],
-    }
-  } catch { return null }
+  const supabase = await createClient()
+  const [widowRes, requestsRes, paymentsRes] = await Promise.all([
+    supabase.from('beneficiaries').select('*').eq('id', id).single(),
+    supabase.from('widow_requests').select('*').eq('beneficiary_id', id).order('created_at', { ascending: false }),
+    supabase.from('widow_support_payments').select('*').eq('beneficiary_id', id).order('paid_at', { ascending: false }),
+  ])
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (widowRes.error && widowRes.error.code !== 'PGRST116' && widowRes.error.code !== '22P02') throw widowRes.error
+  // טבלאות האלמנות עשויות שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
+  if (requestsRes.error && requestsRes.error.code !== '42P01' && requestsRes.error.code !== '22P02') throw requestsRes.error
+  if (paymentsRes.error && paymentsRes.error.code !== '42P01' && paymentsRes.error.code !== '22P02') throw paymentsRes.error
+  if (!widowRes.data) return null
+  return {
+    widow: widowRes.data as Beneficiary,
+    requests: (requestsRes.data as WidowRequest[]) ?? [],
+    payments: (paymentsRes.data as WidowSupportPayment[]) ?? [],
+  }
 }
 
 export default async function FamilyFilePage({ params }: { params: Promise<{ id: string }> }) {

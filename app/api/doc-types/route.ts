@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { DEFAULT_DOC_TYPES, newDocTypeValue, PROTECTED_DOC_TYPES, type DocTypeOption } from '@/lib/docTypes'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,11 +32,16 @@ async function write(list: DocTypeOption[]) {
   })
 }
 
+// GET נשאר פתוח — משרת את טופס ההרשמה הציבורי
 export async function GET() {
   return NextResponse.json({ docTypes: await read() })
 }
 
+// עריכת סוגי מסמכים — לאנשי צוות בלבד
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const body = await request.json()
   const { action } = body
 

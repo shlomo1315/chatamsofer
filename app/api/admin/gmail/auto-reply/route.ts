@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail, type ContactBeneficiary } from '@/lib/emailTemplates'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,12 +12,15 @@ const PORTAL_BASE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://chasamsofer.co.
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const { fromEmail, fromName, threadId, messageId: gmailMsgId, subject: origSubject } = await request.json()
 
   if (!fromEmail) return NextResponse.json({ error: 'missing fromEmail' }, { status: 400 })

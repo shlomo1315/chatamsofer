@@ -8,6 +8,8 @@ import { goToNextPending } from '@/lib/nextPending'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { MaternityAid, MaternityStatus } from '@/types'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -53,6 +55,7 @@ const STATUS_PILL: Record<string, { label: string; cls: string; icon: typeof Clo
 export function StatusControl({ aid, advance, familyApproved }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -64,7 +67,7 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
     // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת
     if (next === 'active' && familyApproved === false) {
       setOpen(false)
-      alert('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
       return
     }
     setSaving(true)
@@ -110,7 +113,7 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
       }
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -240,25 +243,31 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
 function DeleteAidButton({ aid }: { aid: MaternityAid }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm(`למחוק את תיק היולדת של "${aid.baby_name ?? 'התינוק'}" לצמיתות? פעולה זו אינה הפיכה.`)) return
+    if (!(await confirm({ title: 'מחיקת תיק יולדת', message: `למחוק את תיק היולדת של "${aid.baby_name ?? 'התינוק'}" לצמיתות? פעולה זו אינה הפיכה.`, confirmLabel: 'מחיקה', danger: true }))) return
     setDeleting(true)
     try {
       await deleteMaternityAid(supabase, aid)
+      toast.success('תיק היולדת נמחק')
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
       setDeleting(false)
     }
   }
 
   return (
+    <>
     <button onClick={handleDelete} disabled={deleting}
       className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-white hover:bg-red-600 px-2.5 py-1.5 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
       {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
     </button>
+    {confirmDialog}
+    </>
   )
 }
 

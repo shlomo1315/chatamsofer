@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,27 +13,9 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// מאמת שמי שמבצע את הפעולה מחובר ומשמש כמנהל (admin)
-async function verifyAdmin() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(list) { try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch { /* server component */ } },
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  return profile?.role === 'admin'
-}
-
 export async function POST(request: NextRequest) {
-  const isAdmin = await verifyAdmin()
+  // מאמת שמי שמבצע את הפעולה מחובר ומשמש כמנהל (admin)
+  const isAdmin = await requireAdmin()
   if (!isAdmin) {
     return NextResponse.json({ error: 'אין הרשאה — רק מנהל יכול להוסיף משתמשים' }, { status: 403 })
   }
@@ -86,7 +67,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const isAdmin = await verifyAdmin()
+  const isAdmin = await requireAdmin()
   if (!isAdmin) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
@@ -109,7 +90,7 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const isAdmin = await verifyAdmin()
+  const isAdmin = await requireAdmin()
   if (!isAdmin) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }

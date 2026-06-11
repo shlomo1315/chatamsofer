@@ -1,10 +1,17 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'documents'
 const MAX_SIZE = 10 * 1024 * 1024 // 10 MB
+
+// סוגי קבצים מותרים בלבד — מסמכים ותמונות. ה-Content-Type נקבע בשרת לפי הסיומת.
+const ALLOWED_TYPES: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+  heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
+}
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -14,6 +21,11 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — בולמת שימוש לרעה כהעלאת קבצים חופשית
+  if (!rateLimit(`upload-docs:${clientIp(request)}`, 30, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי העלאות. נסה שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
@@ -53,11 +65,15 @@ export async function POST(request: NextRequest) {
     if (singleFile.size > MAX_SIZE) return NextResponse.json({ error: `הקובץ ${singleFile.name} גדול מ-10MB` }, { status: 400 })
 
     const ext = singleFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const contentType = ALLOWED_TYPES[ext]
+    if (!contentType) {
+      return NextResponse.json({ error: `סוג הקובץ של ${singleFile.name} אינו נתמך. ניתן להעלות תמונות או PDF בלבד.` }, { status: 400 })
+    }
     const path = `${beneficiaryId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
     const arrayBuffer = await singleFile.arrayBuffer()
 
     const { error: upErr } = await admin.storage.from(BUCKET).upload(path, arrayBuffer, {
-      contentType: singleFile.type,
+      contentType,
       upsert: false,
     })
     if (upErr) return NextResponse.json({ error: `שגיאה בהעלאת ${singleFile.name}` }, { status: 500 })

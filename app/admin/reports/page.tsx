@@ -1,28 +1,27 @@
 import { BarChart3, Download } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import ReportsCharts from './ReportsCharts'
+import ReportsCharts from './ReportsChartsLazy'
 
 async function getReportData() {
   if (!isSupabaseConfigured()) {
-    return { beneficiaries: [], loans: [], maternity: [], distributions: [] }
+    return { beneficiaries: [], loans: [], maternity: [] }
   }
   try {
     const supabase = await createClient()
-    const [b, l, m, d] = await Promise.all([
-      supabase.from('beneficiaries').select('eligibility_status, gender, city, created_at'),
-      supabase.from('loans').select('status, amount, monthly_payment, created_at'),
-      supabase.from('maternity_aids').select('status, card_balance, created_at'),
-      supabase.from('distributions').select('status, total_budget, distribution_date'),
+    // Only the columns the charts/summaries below actually use
+    const [b, l, m] = await Promise.all([
+      supabase.from('beneficiaries').select('eligibility_status, city'),
+      supabase.from('loans').select('status, amount'),
+      supabase.from('maternity_aids').select('status, card_balance'),
     ])
     return {
       beneficiaries: b.data ?? [],
       loans: l.data ?? [],
       maternity: m.data ?? [],
-      distributions: d.data ?? [],
     }
   } catch {
-    return { beneficiaries: [], loans: [], maternity: [], distributions: [] }
+    return { beneficiaries: [], loans: [], maternity: [] }
   }
 }
 

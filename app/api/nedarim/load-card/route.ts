@@ -1,7 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { format } from 'date-fns'
 import {
   getNedarimCreds,
@@ -15,21 +14,9 @@ export const dynamic = 'force-dynamic'
 
 function getAdminClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-// מחזיר את המשתמש המחובר (איש מערכת) או null
-async function getStaffUser() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
 }
 
 async function logActivity(
@@ -51,8 +38,9 @@ async function logActivity(
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getStaffUser()
-  if (!user) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  // מוגבל למנהל וגבייה בלבד
+  const staff = await requireStaff(['admin', 'collections'])
+  if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
   const creds = getNedarimCreds()
   if (!creds) {
@@ -132,7 +120,7 @@ export async function POST(request: NextRequest) {
 
   if (!result.ok) {
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: result.message }).eq('id', aid.id)
-    await logActivity(admin, 'maternity_card_load_failed', aid.id, { amount, clientId, message: result.message }, user.id)
+    await logActivity(admin, 'maternity_card_load_failed', aid.id, { amount, clientId, message: result.message }, staff.userId)
     return NextResponse.json({ ok: false, error: result.message || 'ההטענה נכשלה', familyCreated, clientId })
   }
 
@@ -152,7 +140,7 @@ export async function POST(request: NextRequest) {
     card_load_error: null,
   }).eq('id', aid.id)
 
-  await logActivity(admin, 'maternity_card_loaded', aid.id, { amount, clientId, tlushId: result.tlushId, familyCreated }, user.id)
+  await logActivity(admin, 'maternity_card_loaded', aid.id, { amount, clientId, tlushId: result.tlushId, familyCreated }, staff.userId)
 
   return NextResponse.json({ ok: true, familyCreated, clientId, tlushId: result.tlushId, balance: newBalance })
 }

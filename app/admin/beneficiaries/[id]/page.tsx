@@ -17,48 +17,40 @@ import EmailRow from './EmailRow'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 // Walk the lineage tree from the selected node up to the root → ordered path of names
 async function getLineagePath(nodeId?: string): Promise<string[]> {
   if (!nodeId || !isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id')
-    if (!data) return []
-    const map = new Map(data.map(n => [n.id, n]))
-    const path: string[] = []
-    let cur = map.get(nodeId)
-    let guard = 0
-    while (cur && guard < 50) {
-      path.unshift(cur.name)
-      cur = cur.parent_id ? map.get(cur.parent_id) : undefined
-      guard++
-    }
-    return path
-  } catch {
-    return []
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
+  if (error) throw error
+  if (!data) return []
+  const map = new Map(data.map(n => [n.id, n]))
+  const path: string[] = []
+  let cur = map.get(nodeId)
+  let guard = 0
+  while (cur && guard < 50) {
+    path.unshift(cur.name)
+    cur = cur.parent_id ? map.get(cur.parent_id) : undefined
+    guard++
   }
+  return path
 }
 
 async function getBirthCertificates(beneficiaryId: string): Promise<Record<string, string>> {
   if (!isSupabaseConfigured()) return {}
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('maternity_aids').select('id, birth_certificate_url').eq('beneficiary_id', beneficiaryId)
-    const map: Record<string, string> = {}
-    for (const r of data ?? []) if (r.birth_certificate_url) map[r.id] = r.birth_certificate_url
-    return map
-  } catch {
-    return {}
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('maternity_aids').select('id, birth_certificate_url').eq('beneficiary_id', beneficiaryId)
+  if (error) throw error
+  const map: Record<string, string> = {}
+  for (const r of data ?? []) if (r.birth_certificate_url) map[r.id] = r.birth_certificate_url
+  return map
 }
 
 interface ActivityItem { kind: 'loan' | 'maternity'; id: string; title: string; date: string; status: string }
@@ -66,24 +58,22 @@ interface ActivityItem { kind: 'loan' | 'maternity'; id: string; title: string; 
 // היסטוריית פעילות — כל מה שהמשפחה הגישה (הלוואות + לידות) עם תאריך וסטטוס
 async function getActivity(id: string): Promise<ActivityItem[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const [loans, maternity] = await Promise.all([
-      supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id),
-      supabase.from('maternity_aids').select('id, baby_name, status, created_at').eq('beneficiary_id', id),
-    ])
-    const items: ActivityItem[] = []
-    for (const l of loans.data ?? []) {
-      items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (₪${Math.round(Number(l.amount)).toLocaleString('he-IL')})` : ''}`, date: l.created_at, status: l.status })
-    }
-    for (const m of maternity.data ?? []) {
-      items.push({ kind: 'maternity', id: m.id, title: `פתיחת תיק לידה${m.baby_name ? ` — ${m.baby_name}` : ''}`, date: m.created_at, status: m.status })
-    }
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    return items
-  } catch {
-    return []
+  const supabase = await createClient()
+  const [loans, maternity] = await Promise.all([
+    supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id),
+    supabase.from('maternity_aids').select('id, baby_name, status, created_at').eq('beneficiary_id', id),
+  ])
+  if (loans.error) throw loans.error
+  if (maternity.error) throw maternity.error
+  const items: ActivityItem[] = []
+  for (const l of loans.data ?? []) {
+    items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (₪${Math.round(Number(l.amount)).toLocaleString('he-IL')})` : ''}`, date: l.created_at, status: l.status })
   }
+  for (const m of maternity.data ?? []) {
+    items.push({ kind: 'maternity', id: m.id, title: `פתיחת תיק לידה${m.baby_name ? ` — ${m.baby_name}` : ''}`, date: m.created_at, status: m.status })
+  }
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  return items
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {

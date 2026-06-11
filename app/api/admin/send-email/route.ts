@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { sendEmail, type EmailPayload } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   let body: { to: string; subject: string; html: string }
   try { body = await request.json() }

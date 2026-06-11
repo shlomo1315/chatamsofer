@@ -8,16 +8,13 @@ import BeneficiariesTable from './BeneficiariesTable'
 
 async function getBeneficiaries(): Promise<Beneficiary[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('beneficiaries')
-      .select('*')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('beneficiaries')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 export default async function BeneficiariesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {

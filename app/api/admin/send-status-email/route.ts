@@ -4,16 +4,20 @@ import { templateStatusRejected } from '@/lib/email'
 import { docsPendingEmail, approvalEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { getDocTypes } from '@/lib/serverDocTypes'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 function getClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const { id, status, reason, docsNotes } = await request.json()
   if (!id || !status) return NextResponse.json({ error: 'missing fields' }, { status: 400 })
 

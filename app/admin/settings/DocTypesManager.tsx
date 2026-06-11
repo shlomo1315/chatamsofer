@@ -3,9 +3,13 @@ import { useState } from 'react'
 import { FileText, Plus, Trash2, Loader2, Lock } from 'lucide-react'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { PROTECTED_DOC_TYPES } from '@/lib/docTypes'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function DocTypesManager() {
   const { docTypes, setDocTypes } = useDocTypes()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [newLabel, setNewLabel] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -25,7 +29,7 @@ export default function DocTypesManager() {
   }
 
   const remove = async (value: string) => {
-    if (!confirm('למחוק סוג מסמך זה?')) return
+    if (!(await confirm({ title: 'מחיקת סוג מסמך', message: 'למחוק סוג מסמך זה?', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true)
     try {
       const res = await fetch('/api/doc-types', {
@@ -34,7 +38,7 @@ export default function DocTypesManager() {
       })
       const data = await res.json()
       if (data.docTypes) setDocTypes(data.docTypes)
-      else if (data.error) alert(data.error)
+      else if (data.error) toast.error(data.error)
     } finally { setBusy(false) }
   }
 
@@ -81,6 +85,7 @@ export default function DocTypesManager() {
           הוסף
         </button>
       </div>
+      {confirmDialog}
     </div>
   )
 }

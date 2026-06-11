@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -15,6 +16,12 @@ export async function POST(request: NextRequest) {
 
   if (!email || !emailRegex.test(email)) {
     return NextResponse.json({ error: 'כתובת אימייל לא תקינה' }, { status: 400 })
+  }
+
+  // הגבלת קצב — מניעת הצפת מיילים (לפי IP ולפי כתובת היעד)
+  if (!rateLimit(`otp-ip:${clientIp(request)}`, 8, 10 * 60 * 1000) ||
+      !rateLimit(`otp-email:${email.toLowerCase()}`, 3, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: 'נשלחו יותר מדי קודים. נסה שוב בעוד מספר דקות.' }, { status: 429 })
   }
 
   const supabase = createClient(
