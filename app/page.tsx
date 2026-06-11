@@ -1627,7 +1627,7 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="תאריך לידה">
-                      <TextInput type="date" value={regForm.birth_date} onChange={setReg('birth_date')} max={new Date().toISOString().split('T')[0]} />
+                      <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday />
                     </Field>
                   </div>
                 </div>
@@ -1981,9 +1981,8 @@ export default function PublicPortalPage() {
                           </div>
                           <div className="col-span-2 sm:col-span-1">
                             <Field label="תאריך לידה" required>
-                              <TextInput type="date" value={child.birth_date} required
-                                max={new Date().toISOString().split('T')[0]}
-                                onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: e.target.value } : c))} />
+                              <HebrewDatePicker value={child.birth_date}
+                                onChange={iso => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: iso } : c))} maxToday />
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
@@ -2549,7 +2548,7 @@ export default function PublicPortalPage() {
                 )}
                 {birthForm.baby_gender && (
                   <div className="col-span-2">
-                    <Field label="תעודת זהות של הנולד/ת" required hint="עבור תושב חוץ יש לבחור דרכון">
+                    <Field label={birthForm.baby_gender === 'female' ? 'תעודת זהות של הנולדת' : 'תעודת זהות של הנולד'} required hint="עבור תושב חוץ יש לבחור דרכון">
                       <div className="flex gap-2 mb-2">
                         {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setBirthForm(f => ({ ...f, baby_id_type: v }))}
@@ -2558,8 +2557,10 @@ export default function PublicPortalPage() {
                           </button>
                         ))}
                       </div>
-                      <TextInput value={birthForm.baby_id_number} onChange={setBirth('baby_id_number')}
+                      <TextInput value={birthForm.baby_id_number}
+                        onChange={e => { const v = birthForm.baby_id_type === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; setBirthForm(f => ({ ...f, baby_id_number: v })) }}
                         dir="ltr" inputMode={birthForm.baby_id_type === 'id' ? 'numeric' : 'text'}
+                        maxLength={birthForm.baby_id_type === 'id' ? 9 : undefined}
                         placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required />
                       {birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && !validateIsraeliId(birthForm.baby_id_number) && (
                         <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>

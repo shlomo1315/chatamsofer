@@ -7,6 +7,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 
 const GENDER_BTN_SEL: Record<string, string> = {
   male: 'bg-blue-100 text-blue-800 border-blue-400',
@@ -947,7 +948,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               onValue={v => setForm(f => ({ ...f, id_number: v }))}
             />
             <Field label="תאריך לידה" required error={errors.birth_date}>
-              <FInput type="date" value={form.birth_date} onChange={set('birth_date')} dir="ltr" required />
+              <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
             </Field>
             <Field label="מספר ילדים" required>
               <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
@@ -980,7 +981,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 onValue={v => setForm(f => ({ ...f, id_number: v }))}
               />
               <Field label="תאריך לידה" required error={errors.birth_date}>
-                <FInput type="date" value={form.birth_date} onChange={set('birth_date')} dir="ltr" required />
+                <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
               </Field>
               <Field label="מספר ילדים" required>
                 <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
@@ -1013,7 +1014,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 }}
               />
               <Field label="תאריך לידה האישה" required error={errors.spouse_birth_date}>
-                <FInput type="date" value={form.spouse_birth_date} onChange={set('spouse_birth_date')} dir="ltr" required />
+                <HebrewDatePicker value={form.spouse_birth_date} onChange={iso => setForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
               </Field>
               <Field label="טלפון האישה" error={errors.spouse_phone}>
                 <FInput type="tel" value={form.spouse_phone}
@@ -1079,13 +1080,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                     </div>
                   </Field>
                   <Field label="תאריך לידה" required error={childErrors[idx]?.birth_date}>
-                    <FInput
-                      type="date"
-                      value={child.birth_date}
-                      onChange={e => setChild(idx, 'birth_date', e.target.value)}
-                      dir="ltr"
-                      required
-                    />
+                    <HebrewDatePicker value={child.birth_date} onChange={iso => setChild(idx, 'birth_date', iso)} maxToday />
                   </Field>
                   {child.gender && (
                   <Field label="מצב משפחתי" required error={childErrors[idx]?.marital_status}>
