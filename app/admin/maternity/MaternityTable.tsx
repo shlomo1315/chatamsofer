@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2 } from 'lucide-react'
@@ -267,6 +267,17 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+
+  // רענון חי — כשבית ההחלמה מסמן הגעה/אי-הגעה, הממשק מתעדכן מיד (realtime) + גיבוי בפולינג
+  useEffect(() => {
+    const supabase = createClient()
+    const ch = supabase
+      .channel('maternity-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maternity_aids' }, () => router.refresh())
+      .subscribe()
+    const poll = setInterval(() => router.refresh(), 15000)
+    return () => { supabase.removeChannel(ch); clearInterval(poll) }
+  }, [router])
 
   const counts = useMemo(() => ({
     all: data.length,

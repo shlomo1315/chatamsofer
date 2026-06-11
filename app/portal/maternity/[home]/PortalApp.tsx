@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import {
-  Building2, Baby, CalendarDays, Search, Eye, EyeOff,
+  Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
   AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
 } from 'lucide-react'
 import { format, differenceInDays, addDays } from 'date-fns'
@@ -377,11 +377,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                             const a = arrived[aid.id] ?? null
                             const saving = savingId === aid.id
                             return (
-                              <div className={`flex items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                              <div className={`flex items-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${a === true ? 'bg-green-100 text-green-800 border-green-400' : 'bg-white text-slate-500 border-slate-200 hover:border-green-300'}`}>הגיעה</button>
+                                  className={`flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl border-2 transition-all ${a === true ? 'bg-green-600 text-white border-green-600 shadow-md scale-105' : 'bg-white text-green-700 border-green-300 hover:bg-green-50'}`}>
+                                  <Check size={17} /> הגיעה
+                                </button>
                                 <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${a === false ? 'bg-red-100 text-red-800 border-red-400' : 'bg-white text-slate-500 border-slate-200 hover:border-red-300'}`}>לא הגיעה</button>
+                                  className={`flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl border-2 transition-all ${a === false ? 'bg-red-600 text-white border-red-600 shadow-md scale-105' : 'bg-white text-red-600 border-red-300 hover:bg-red-50'}`}>
+                                  <X size={17} /> לא הגיעה
+                                </button>
                               </div>
                             )
                           })()}
