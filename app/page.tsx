@@ -2561,6 +2561,12 @@ export default function PublicPortalPage() {
                       <TextInput value={birthForm.baby_id_number} onChange={setBirth('baby_id_number')}
                         dir="ltr" inputMode={birthForm.baby_id_type === 'id' ? 'numeric' : 'text'}
                         placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required />
+                      {birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && !validateIsraeliId(birthForm.baby_id_number) && (
+                        <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>
+                      )}
+                      {birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && validateIsraeliId(birthForm.baby_id_number) && (
+                        <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
+                      )}
                     </Field>
                   </div>
                 )}
