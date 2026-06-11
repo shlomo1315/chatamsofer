@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2 } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import { format } from 'date-fns'
@@ -50,16 +50,23 @@ const STATUS_PILL: Record<string, { label: string; cls: string; icon: typeof Clo
 }
 
 // ── Clickable status control ────────────────────────────────────────────────────
-export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: boolean }) {
+export function StatusControl({ aid, advance, familyApproved }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
   const setStatus = async (next: MaternityStatus) => {
+    // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת
+    if (next === 'active' && familyApproved === false) {
+      setOpen(false)
+      alert('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      return
+    }
     setSaving(true)
     try {
       // עדכון סטטוס התיק
@@ -92,12 +99,16 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
         }
       }
       setOpen(false)
-      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → קפיצה לבקשה הממתינה הבאה
+      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
       if (advance && next !== 'pending') {
-        await goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
-      } else {
-        router.refresh()
+        setSaving(false)
+        setShowSuccess(true)
+        setTimeout(() => {
+          goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
+        }, 1500)
+        return
       }
+      router.refresh()
     } catch (err: unknown) {
       alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -113,6 +124,17 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
 
   return (
     <div className="relative inline-block">
+      {showSuccess && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle2 size={30} className="text-green-600" />
+            </div>
+            <p className="font-bold text-slate-900">הפעולה בוצעה בהצלחה</p>
+            <p className="text-sm text-slate-500">מעבירים אותך לבקשה הבאה…</p>
+          </div>
+        </div>
+      )}
       <button
         onClick={() => setOpen(o => !o)}
         disabled={saving}

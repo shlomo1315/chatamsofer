@@ -5,6 +5,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
 import { StatusControl } from '../MaternityTable'
+import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
@@ -98,23 +99,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <StatusControl aid={aid} advance />
+          <StatusControl aid={aid} advance familyApproved={beneficiary?.eligibility_status === 'approved'} />
           <MaternityActions aid={aid} />
         </div>
       </div>
 
-      {/* חיווי למזכיר: משפחה מאושרת / טרם אושרה */}
-      {beneficiary?.eligibility_status === 'approved' ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center gap-2">
-          <span className="font-semibold">✅ משפחה מאושרת</span>
-          <span className="text-green-700">— ניתן לאשר את הבקשה ללא בדיקת יחוס נוספת.</span>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
-          <span className="font-semibold">⏳ משפחה טרם אושרה</span>
-          <span className="text-amber-700">— יש לבדוק את הייחוס לפני אישור הבקשה. אישור הבקשה יהפוך את המשפחה למאושרת אוטומטית.</span>
-        </div>
-      )}
+      {/* שער אישור המשפחה — חוסם אישור לידה לפני אישור המשפחה ומאפשר אישור ישיר (פרטי המשפחה מוצגים בכרטיס למטה) */}
+      {ben && <FamilyApprovalGate beneficiary={ben as Parameters<typeof FamilyApprovalGate>[0]['beneficiary']} compact />}
 
       {/* כרטסת המשפחה — כל הפרטים, סדר הדורות וקישור לכרטסת המלאה */}
       {ben && (
