@@ -182,7 +182,8 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
               </div>
               <h2 className="text-base font-bold text-slate-900">השלמת מסמכים</h2>
             </div>
-            <p className="text-sm text-slate-500 mb-3">סמן אילו מסמכים חסרים. הצאצא יקבל מייל עם קישור להעלאתם.</p>
+            <p className="text-sm text-slate-500 mb-2">סמן אילו מסמכים חסרים. הצאצא יקבל מייל עם קישור להעלאתם.</p>
+            <p className="text-xs font-bold text-red-600 mb-3">⚠️ בתעודת זהות — חובה לצרף גם את הספח.</p>
             <div className="flex flex-col gap-1.5 mb-3">
               {docTypes.map(opt => {
                 const checked = docsChecklist.includes(opt.value)

@@ -10,9 +10,9 @@ export interface DocTypeOption {
 }
 
 export const DEFAULT_DOC_TYPES: DocTypeOption[] = [
-  { value: 'id_husband', label: 'ת.ז. הבעל' },
-  { value: 'id_wife',    label: 'ת.ז. האישה' },
-  { value: 'id_child',   label: 'ת.ז. ילד' },
+  { value: 'id_husband', label: 'ת.ז. הבעל (כולל ספח)' },
+  { value: 'id_wife',    label: 'ת.ז. האישה (כולל ספח)' },
+  { value: 'id_child',   label: 'ת.ז. ילד (כולל ספח)' },
   { value: 'other',      label: 'מסמך אחר' },
 ]
 

@@ -113,9 +113,9 @@ const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורי
 
 // תוויות סוגי מסמכים (לפי המפתחות שהמזכירות מסמנת בצ'קליסט) — מקור אמת אחד
 const DOC_LABELS: Record<string, string> = {
-  id_husband:    'תעודת זהות — הבעל',
-  id_wife:       'תעודת זהות — האשה',
-  id_child:      'תעודת זהות — ילד',
+  id_husband:    'תעודת זהות — הבעל (כולל ספח)',
+  id_wife:       'תעודת זהות — האשה (כולל ספח)',
+  id_child:      'תעודת זהות — ילד (כולל ספח)',
   marriage_cert: 'תעודת נישואין',
   birth_cert:    'אישור לידה',
   address_proof: 'אישור כתובת מגורים',
@@ -1456,7 +1456,8 @@ export default function PublicPortalPage() {
     const replacing = !!replaceDoc[docType]
     return (
       <div className="border border-slate-200 rounded-xl p-4">
-        <p className="text-sm font-semibold text-slate-700 mb-3">{label}</p>
+        <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
+        <p className="text-xs font-bold text-red-600 mb-3">⚠️ חובה לצרף גם את הספח (הדף הנלווה לתעודת הזהות)</p>
         {file ? (
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
             <span className="text-sm text-green-700 flex items-center gap-2">
