@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail } from '@/lib/sendMail'
-import { financialAidReceivedEmail } from '@/lib/emailTemplates'
+import { requestReceivedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, email, full_name')
+    .select('id, eligibility_status, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
     .eq('id', beneficiaryId)
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
@@ -62,7 +62,11 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: `שגיאה בשמירת הבקשה: ${error.message}` }, { status: 500 })
 
   if (ben.email) {
-    const mail = financialAidReceivedEmail(ben.full_name || '')
+    const mail = requestReceivedEmail({
+      type: 'financial_aid', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
+      requestRows: [['סיבת הבקשה', reason]],
+      documents: documentName ? [documentName] : [],
+    })
     deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
   }
 

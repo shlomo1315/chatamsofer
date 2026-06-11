@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, email, full_name')
+    .select('id, eligibility_status, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
@@ -77,10 +77,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
   }
 
-  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל)
+  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי הלידה והמסמך
   if (ben.email) {
     const firstTime = ben.eligibility_status !== 'approved'
-    const mail = requestReceivedEmail(ben.full_name || '', 'birth', firstTime)
+    const genderLabel = baby_gender === 'male' ? 'בן' : baby_gender === 'female' ? 'בת' : ''
+    const mail = requestReceivedEmail({
+      type: 'birth', firstTime, beneficiary: ben,
+      requestRows: [
+        [baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד', baby_name ? String(baby_name).trim() : ''],
+        ['מין', genderLabel],
+        ['תאריך לידה', String(birth_date)],
+        [isPassport ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', babyIdNorm],
+        ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
+      ],
+      documents: ['אישור לידה'],
+    })
     deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
   }
 

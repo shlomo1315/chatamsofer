@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, email, full_name')
+    .select('id, eligibility_status, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
@@ -81,10 +81,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הבקשה. אנא נסה שוב.' }, { status: 500 })
   }
 
-  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל)
+  // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי ההלוואה והמסמכים
   if (ben.email) {
     const firstTime = ben.eligibility_status !== 'approved'
-    const mail = requestReceivedEmail(ben.full_name || '', 'loan', firstTime)
+    const mail = requestReceivedEmail({
+      type: 'loan', firstTime, beneficiary: ben,
+      requestRows: [
+        ['מטרת ההלוואה', String(purpose).trim()],
+        ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
+        ['סכום מבוקש', `$${parsedAmount.toLocaleString('he-IL')}`],
+        ['מספר תשלומים', parsedInstallments],
+        ['תשלום חודשי משוער', `$${Math.round(monthly_payment).toLocaleString('he-IL')}`],
+        ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
+        ['הערות', notes ? String(notes).trim() : ''],
+      ],
+      documents: Array.isArray(document_urls) ? document_urls.map((d: { name?: string }) => d?.name).filter(Boolean) as string[] : [],
+    })
     deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
   }
 
