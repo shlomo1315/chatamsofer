@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,25 +8,14 @@ const NEDARIM_URL = 'https://www.matara.pro/nedarimplus/Mechubad/Reports/ManageR
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// מוודא שמי שמבצע מחובר (משתמש מערכת)
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return !!user
-}
-
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) {
+  // מוגבל למנהל וגבייה בלבד
+  if (!(await requireStaff(['admin', 'collections']))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
 

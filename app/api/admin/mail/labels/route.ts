@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,9 @@ async function setSetting(key: string, value: unknown) {
 
 // GET → { labels, assignments, internalEmails }
 export async function GET() {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const [labels, assignments, internalEmails] = await Promise.all([
     getSetting('mail_label_defs'),
     getSetting('mail_label_assignments'),
@@ -42,6 +46,9 @@ export async function GET() {
 //  { action: 'unassign', messageId, labelId }
 //  { action: 'save_internal_emails', emails: [{name,email}] }
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const body = await request.json()
   const { action } = body
 

@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -9,20 +8,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key)
-}
-
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
 }
 
 // מחזיר מוקדים עם ספירות מחושבות: אושרו (approved, טרם נטען), נטענו (loaded),
@@ -49,6 +37,7 @@ async function listCenters(admin: ReturnType<typeof getAdminClient>) {
 }
 
 export async function GET() {
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
   try {
@@ -59,7 +48,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { name, stock, notes } = await request.json()
   if (!name?.trim()) return NextResponse.json({ error: 'שם המוקד חובה' }, { status: 400 })
   const admin = getAdminClient()
@@ -74,7 +63,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { id, name, stock, notes, is_active } = await request.json()
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   const admin = getAdminClient()
@@ -90,7 +79,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   const admin = getAdminClient()

@@ -1,5 +1,6 @@
 import { type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,9 @@ const POLL_INTERVAL_MS = 4_000
 const HEARTBEAT_INTERVAL_MS = 20_000
 
 export async function GET(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
   const encoder = new TextEncoder()
 

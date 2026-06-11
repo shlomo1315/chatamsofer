@@ -1,9 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const { searchParams } = request.nextUrl
   const messageId    = searchParams.get('messageId')
   const attachmentId = searchParams.get('attachmentId')

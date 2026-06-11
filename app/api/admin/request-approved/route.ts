@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 
@@ -14,24 +13,13 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 // נקרא כאשר המזכיר מאשר בקשת הלוואה/לידה:
 // 1. שולח לנרשם מייל מעוצב "בקשתך אושרה" עם הפרטים שלו ופרטי הבקשה.
 // 2. אם המשפחה טרם אושרה — הופך אותה אוטומטית ל"מאושר" (לבקשות הבאות).
 //    אין מייל נפרד על "אישור כצאצא" — רק על אישור הבקשה.
 export async function POST(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   let body: { type?: string; id?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

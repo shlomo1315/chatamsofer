@@ -2,24 +2,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient, sendGmailMessage, ensureLabel } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail } from '@/lib/emailTemplates'
+import { verifyCronSecret } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 const AUTO_LABEL = 'Auto-Replied'
 const MAX_PER_RUN = 25
-
-// אימות הקריאה. עובד "מהקופסה" על Vercel Cron (כותרת x-vercel-cron),
-// וגם תומך ב-CRON_SECRET ידני (Authorization: Bearer <secret> או ?secret=<secret>) לבדיקות.
-function authorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (secret) {
-    if (request.headers.get('authorization') === `Bearer ${secret}`) return true
-    if (new URL(request.url).searchParams.get('secret') === secret) return true
-  }
-  // קריאות מתוזמנות של Vercel נושאות כותרת זו
-  if (request.headers.get('x-vercel-cron')) return true
-  return false
-}
 
 function getAdminDb() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -54,7 +42,8 @@ function isAutomatedHeaders(headers: any[]): boolean {
 }
 
 async function run(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
+  // אימות הקריאה מול CRON_SECRET (Authorization: Bearer <secret> או ?secret=<secret>)
+  if (!verifyCronSecret(request)) return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
 
   const db = getAdminDb()
   if (!db) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })

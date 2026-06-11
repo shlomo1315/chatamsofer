@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // Returns all mail accounts: the main connected Gmail + any profiles with domain email
 export async function GET() {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
   const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })

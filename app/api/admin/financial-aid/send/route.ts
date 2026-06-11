@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 import { financialAidInquiryEmail } from '@/lib/emailTemplates'
@@ -15,17 +14,6 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 function encodeRaw(to: string, subject: string, html: string, attachments: { filename: string; mimeType: string; contentB64: string }[]): string {
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const raw = buildRawEmail({ from, fromName: 'היכל החתם סופר משרד ראשי', to, subject, html, attachments })
@@ -34,7 +22,7 @@ function encodeRaw(to: string, subject: string, html: string, attachments: { fil
 
 // שולח לגורם המאשר מייל מעוצב, ושומר את threadId/messageId לצורך שליפת התשובה.
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { id } = await request.json()
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 

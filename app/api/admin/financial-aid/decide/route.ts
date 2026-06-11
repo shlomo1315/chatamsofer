@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
 
@@ -14,20 +13,9 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } },
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 // עדכון ידני של החלטה (אישור עם סכום / דחייה / החזרה לממתין) + הודעה למבקש.
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { id, status, amount } = await request.json()
   if (!id || !['approved', 'rejected', 'pending'].includes(status)) return NextResponse.json({ error: 'נתונים חסרים' }, { status: 400 })
 

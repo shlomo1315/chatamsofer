@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,30 +9,13 @@ const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-ag
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key)
 }
 
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        },
-      },
-    }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
-
 export async function GET() {
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500, headers: NO_STORE })
 
@@ -48,8 +30,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const body = await request.json()
   const { name, parent_id, notes, relation } = body
@@ -86,8 +68,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const body = await request.json()
   const { id, name, notes, parent_id, relation } = body
@@ -170,8 +152,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר ID' }, { status: 400 })
