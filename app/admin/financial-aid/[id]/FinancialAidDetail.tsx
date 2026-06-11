@@ -80,7 +80,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
           </div>
           <h2 className="text-lg font-bold text-slate-900 mb-2">המשפחה טרם אושרה במערכת</h2>
           <p className="text-sm text-slate-600 leading-relaxed mb-1">
-            לא ניתן לאשר את בקשת הסיוע הכספי כל עוד המשפחה אינה מאושרת.
+            לא ניתן לאשר את בקשת הסיוע הרפואי כל עוד המשפחה אינה מאושרת.
           </p>
           <p className="text-sm text-slate-600 leading-relaxed mb-5">
             סטטוס נוכחי: <span className="font-semibold text-amber-700">{ELIGIBILITY_LBL[req.beneficiary?.eligibility_status ?? ''] ?? req.beneficiary?.eligibility_status}</span>. יש לאשר את המשפחה תחילה.

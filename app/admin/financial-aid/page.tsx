@@ -24,7 +24,7 @@ export default async function FinancialAidPage() {
       <div className="flex items-center gap-2">
         <HandCoins size={20} className="text-emerald-600" />
         <div>
-          <h1 className="text-xl font-bold text-slate-900">סיוע כספי</h1>
+          <h1 className="text-xl font-bold text-slate-900">סיוע רפואי</h1>
           <p className="text-sm text-slate-500 mt-0.5">בקשות סיוע ואישור דרך הגורם המאשר</p>
         </div>
       </div>

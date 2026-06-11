@@ -41,7 +41,7 @@ const maternityChildren: { href: string; label: string; section: SectionKey }[] 
 
 const navBottom: NavItem[] = [
   { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
-  { href: '/admin/financial-aid', label: 'סיוע כספי',      icon: HandCoins,      section: 'financial_aid' },
+  { href: '/admin/financial-aid', label: 'סיוע רפואי',     icon: HandCoins,      section: 'financial_aid' },
   { href: '/admin/distributions', label: 'חלוקות',         icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },

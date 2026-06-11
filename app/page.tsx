@@ -73,7 +73,7 @@ const OTHER_MARITAL_OPTIONS = MARITAL_OPTIONS.filter(o => o.value !== 'נשוא�
 const MARRIED_STATUSES = ['נשואים']
 
 const LOAN_PURPOSES = [
-  { value: 'נישואי הבן/הבת', desc: 'מומלץ לצרף הזמנה' },
+  { value: 'נישואי הבן/הבת' },
   { value: 'שמחה משפחתית' },
   { value: 'הוצאה רפואית' },
   { value: 'חובות מנישואי הילדים' },
@@ -772,6 +772,7 @@ export default function PublicPortalPage() {
     amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '',
   })
   const [loanWeddingFile, setLoanWeddingFile] = useState<File | null>(null)
+  const [loanOtherFile, setLoanOtherFile] = useState<File | null>(null)
   const WEDDING_PURPOSE = 'נישואי הבן/הבת'
 
   const setReg = (k: keyof typeof regForm) =>
@@ -1104,17 +1105,19 @@ export default function PublicPortalPage() {
       if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
         setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
       }
-      // העלאת הזמנת החתונה (אם נבחרה) ושיוכה כמסמך לבקשה
+      // העלאת מסמך מצורף (הזמנת חתונה — חובה לנישואין; מסמך תומך — לא חובה לשאר) ושיוכו לבקשה
       const documentUrls: { url: string; name: string }[] = []
-      if (loanForm.purpose === WEDDING_PURPOSE && loanWeddingFile) {
+      const isWedding = loanForm.purpose === WEDDING_PURPOSE
+      const fileToUpload = isWedding ? loanWeddingFile : loanOtherFile
+      if (fileToUpload) {
         const wf = new FormData()
-        wf.append('file', loanWeddingFile)
+        wf.append('file', fileToUpload)
         wf.append('beneficiary_id', beneficiary.id)
-        wf.append('doc_type', 'wedding_invite')
+        wf.append('doc_type', isWedding ? 'wedding_invite' : 'loan_doc')
         const wRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: wf })
         const wData = await wRes.json()
-        if (!wRes.ok || !wData.url) { setError('שגיאה בהעלאת הזמנת החתונה. אנא נסה שוב.'); setLoading(false); return }
-        documentUrls.push({ url: wData.url, name: loanWeddingFile.name })
+        if (!wRes.ok || !wData.url) { setError('שגיאה בהעלאת המסמך. אנא נסה שוב.'); setLoading(false); return }
+        documentUrls.push({ url: wData.url, name: fileToUpload.name })
       }
       const res = await fetch('/api/portal/loan-request', {
         method: 'POST',
@@ -2390,7 +2393,7 @@ export default function PublicPortalPage() {
                     <HandCoins size={22} className="text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-900">בקשת סיוע כספי</p>
+                    <p className="font-semibold text-slate-900">בקשת סיוע רפואי</p>
                     <p className="text-xs text-slate-500 mt-0.5">פירוט הבקשה + צירוף מסמך</p>
                   </div>
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
@@ -2687,8 +2690,10 @@ export default function PublicPortalPage() {
                   </div>
                   {loanForm.purpose === 'אחר' && (
                     <div className="col-span-2">
-                      <Field label="פרט את מטרת ההלוואה" required>
-                        <TextInput value={loanForm.purpose_details} onChange={setLoan('purpose_details')} placeholder="תאר את מטרת ההלוואה..." required />
+                      <Field label="פירוט הבקשה" required hint="פרט/י בהרחבה על מטרת ההלוואה והצורך">
+                        <textarea value={loanForm.purpose_details} onChange={setLoan('purpose_details')} rows={4}
+                          placeholder="פרט/י כאן בהרחבה על מטרת הבקשה והצורך..."
+                          className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full" />
                       </Field>
                     </div>
                   )}
@@ -2709,8 +2714,25 @@ export default function PublicPortalPage() {
                       </Field>
                     </div>
                   )}
+                  {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
+                    <div className="col-span-2">
+                      <Field label="מסמך מצורף (לא חובה)" hint="ניתן לצרף מסמך תומך (תמונה / PDF)">
+                        {loanOtherFile ? (
+                          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                            <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanOtherFile.name}</span></span>
+                            <button type="button" onClick={() => setLoanOtherFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                          </div>
+                        ) : (
+                          <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
+                            <Upload size={16} /> לחץ לצירוף מסמך
+                            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setLoanOtherFile(e.target.files?.[0] ?? null)} />
+                          </label>
+                        )}
+                      </Field>
+                    </div>
+                  )}
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
+                    <Field label="סכום מבוקש ($)" required hint="עד $30,000">
                       <TextInput
                         type="number" min="100" max="30000" step="100"
                         value={loanForm.amount} onChange={setLoan('amount')}
@@ -2727,12 +2749,18 @@ export default function PublicPortalPage() {
                       />
                     </Field>
                   </div>
+                  <div className="col-span-2">
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800 font-bold">
+                      <AlertCircle size={16} className="flex-shrink-0" />
+                      שים לב: ההלוואה מתבצעת במטבע דולר ($).
+                    </div>
+                  </div>
                   {loanForm.amount && loanForm.installments && (
                     <div className="col-span-2">
                       <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
                         תשלום חודשי משוער:{' '}
                         <strong>
-                          {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
+                          {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
                             .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
                         </strong>
                       </div>
@@ -2803,7 +2831,7 @@ export default function PublicPortalPage() {
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <HandCoins size={20} className="text-emerald-600" />
-                  <h2 className="font-bold text-slate-900">בקשת סיוע כספי</h2>
+                  <h2 className="font-bold text-slate-900">בקשת סיוע רפואי</h2>
                 </div>
                 <button type="button" onClick={() => { setAidModalOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>

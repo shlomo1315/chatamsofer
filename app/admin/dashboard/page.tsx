@@ -137,7 +137,7 @@ export default async function DashboardPage() {
       ],
     },
     {
-      title: 'סיוע כספי', icon: HandCoins, grad: 'from-emerald-500 to-teal-600', href: '/admin/financial-aid',
+      title: 'סיוע רפואי', icon: HandCoins, grad: 'from-emerald-500 to-teal-600', href: '/admin/financial-aid',
       metrics: [
         { label: 'ממתינות', value: fmt(s.aidPending), tone: 'text-amber-600' },
         { label: 'נשלחו לאישור', value: fmt(s.aidAwaiting), tone: 'text-blue-600' },

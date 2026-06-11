@@ -167,7 +167,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="font-semibold text-slate-900">בקשות סיוע כספי</h2>
+          <h2 className="font-semibold text-slate-900">בקשות סיוע רפואי</h2>
           <div className="relative w-full sm:w-64">
             <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש…"
@@ -214,7 +214,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="font-bold text-slate-900">בקשת סיוע כספי חדשה</h2>
+              <h2 className="font-bold text-slate-900">בקשת סיוע רפואי חדשה</h2>
               <button onClick={resetNew} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
             </div>
             <div className="p-6 flex flex-col gap-4">

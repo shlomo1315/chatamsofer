@@ -15,7 +15,7 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// בקשת סיוע כספי מהטופס הציבורי: נימוק + מסמך מצורף.
+// בקשת סיוע רפואי מהטופס הציבורי: נימוק + מסמך מצורף.
 export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

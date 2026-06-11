@@ -25,7 +25,7 @@ async function verifyStaff() {
   return user
 }
 
-// יצירת בקשת סיוע כספי מתוך ממשק הניהול (המזכירות מזינה עבור נתמך קיים).
+// יצירת בקשת סיוע רפואי מתוך ממשק הניהול (המזכירות מזינה עבור נתמך קיים).
 export async function POST(request: NextRequest) {
   if (!(await verifyStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 

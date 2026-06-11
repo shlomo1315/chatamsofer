@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { templateRegistrationConfirmed } from '@/lib/email'
+import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
@@ -95,10 +95,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
 
-  // Send confirmation email (non-blocking)
+  // Send confirmation email (non-blocking) — מעוצב עם כל פרטי הרישום + קישור לפורטל
   if (email) {
-    const displayName = [String(family_name ?? ''), String(full_name ?? '')].filter(Boolean).join(' ')
-    const reg = templateRegistrationConfirmed(displayName)
+    const reg = registrationReceivedEmail({
+      full_name: full_name ? String(full_name) : null,
+      family_name: family_name ? String(family_name) : null,
+      id_number: id_number ? String(id_number) : null,
+      phone: phone ? String(phone) : null,
+      email: String(email),
+      address: address ? String(address) : null,
+      city: city ? String(city) : null,
+      marital_status: marital_status ? String(marital_status) : null,
+      spouse_name: spouse_name ? String(spouse_name) : null,
+      spouse_id_number: spouse_id_number ? String(spouse_id_number) : null,
+      children_count: cleanChildCount,
+    })
     deliverMail(String(email), reg.subject, reg.html)
       .catch(e => console.error('[public-register] confirmation email failed:', e))
   }
