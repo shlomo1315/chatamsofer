@@ -1,6 +1,7 @@
 import {
   Users, Landmark, Baby, UtensilsCrossed, HeartHandshake,
-  ClipboardList, Download, Mail, ArrowLeft, TrendingUp, CheckCircle2, HandCoins,
+  HandCoins, Mail, TrendingUp, Clock, AlertCircle, CheckCircle2,
+  ArrowLeft, ArrowUpRight, Download,
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -103,145 +104,247 @@ async function getStats(): Promise<DashData> {
 const fmtCur = (n: number) => new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 const fmt = (n: number) => n.toLocaleString('he-IL')
 
-interface Metric { label: string; value: string; tone?: string }
-interface Dept {
-  title: string
-  icon: typeof Users
-  grad: string
-  href: string
-  metrics: Metric[]
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'בוקר טוב'
+  if (h < 17) return 'צהריים טובים'
+  return 'ערב טוב'
+}
+
+function getDateHe() {
+  return new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 export default async function DashboardPage() {
   const s = await getStats()
-
-  const departments: Dept[] = [
-    {
-      title: 'איגוד הצאצאים', icon: Users, grad: 'from-indigo-500 to-violet-600', href: '/admin/beneficiaries',
-      metrics: [
-        { label: 'משפחות רשומות', value: fmt(s.totalBeneficiaries), tone: 'text-slate-900' },
-        { label: 'נרשמו השבוע', value: fmt(s.newBeneficiariesWeek), tone: 'text-indigo-600' },
-        { label: 'ממתינים לאישור', value: fmt(s.pending), tone: 'text-amber-600' },
-      ],
-    },
-    {
-      title: 'גמ״ח — הלוואות', icon: Landmark, grad: 'from-blue-500 to-cyan-600', href: '/admin/loans',
-      metrics: [
-        { label: 'בקשות חדשות לאישור', value: fmt(s.pendingLoans), tone: 'text-amber-600' },
-        { label: 'הלוואות פעילות', value: fmt(s.activeLoans), tone: 'text-slate-900' },
-        { label: 'בפיגור', value: fmt(s.defaultedLoans), tone: 'text-red-600' },
-      ],
-    },
-    {
-      title: 'עזר יולדות', icon: Baby, grad: 'from-pink-500 to-rose-600', href: '/admin/maternity',
-      metrics: [
-        { label: 'בקשות חדשות לאישור', value: fmt(s.maternityPending), tone: 'text-amber-600' },
-        { label: 'תיקים פעילים', value: fmt(s.maternityActive), tone: 'text-slate-900' },
-      ],
-    },
-    {
-      title: 'כרטיסי מזון יולדות', icon: UtensilsCrossed, grad: 'from-emerald-500 to-green-600', href: '/admin/maternity/cards',
-      metrics: [
-        { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: 'text-amber-600' },
-        { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: 'text-emerald-600' },
-      ],
-    },
-    {
-      title: 'אלמנות ויתומים', icon: HeartHandshake, grad: 'from-purple-500 to-fuchsia-600', href: '/admin/widows',
-      metrics: [
-        { label: 'בקשות חדשות', value: fmt(s.widowPending), tone: 'text-amber-600' },
-        { label: 'בטיפול', value: fmt(s.widowInProgress), tone: 'text-blue-600' },
-      ],
-    },
-    {
-      title: 'סיוע רפואי', icon: HandCoins, grad: 'from-emerald-500 to-teal-600', href: '/admin/financial-aid',
-      metrics: [
-        { label: 'ממתינות', value: fmt(s.aidPending), tone: 'text-amber-600' },
-        { label: 'נשלחו לאישור', value: fmt(s.aidAwaiting), tone: 'text-blue-600' },
-      ],
-    },
-  ]
-
-  const pendingTotal = s.pending + s.pendingLoans + s.maternityPending + s.widowPending
-
-  const actions = [
-    { title: 'משימות ממתינות לטיפול', desc: `${fmt(pendingTotal)} פריטים ממתינים`, icon: ClipboardList, href: '/admin/beneficiaries?status=pending', grad: 'from-amber-500 to-orange-500' },
-    { title: 'הורדת דוחו״ת', desc: 'דוחות וסטטיסטיקות', icon: Download, href: '/admin/reports', grad: 'from-slate-600 to-slate-800' },
-    { title: 'כניסה לתיבת המייל', desc: 'דואר נכנס ויוצא', icon: Mail, href: '/admin/mail', grad: 'from-cyan-500 to-blue-600' },
-  ]
+  const pendingTotal = s.pending + s.pendingLoans + s.maternityPending + s.widowPending + s.aidPending
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-l from-indigo-600 via-violet-600 to-fuchsia-600 p-7 text-white shadow-lg">
-        <div className="absolute -left-10 -top-10 w-48 h-48 rounded-full bg-white/10" />
-        <div className="absolute left-24 -bottom-16 w-56 h-56 rounded-full bg-white/5" />
-        <div className="relative flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">לוח בקרה</h1>
-            <p className="text-sm text-indigo-100 mt-1">סקירת אגפי העמותה — היכל החתם סופר</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white/15 backdrop-blur rounded-xl px-4 py-2 text-sm">
-            <TrendingUp size={16} />
-            <span>{fmt(s.totalBeneficiaries)} משפחות · {fmtCur(s.totalLoanAmount)} בהלוואות פעילות</span>
-          </div>
+    <div className="flex flex-col gap-8 pb-10">
+
+      {/* ── Header ───────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-sm text-slate-400 mb-1">{getDateHe()}</p>
+          <h1 className="text-2xl font-bold text-slate-900">{getGreeting()} 👋</h1>
+          <p className="text-slate-500 mt-1 text-sm">ברוך הבא ללוח הבקרה של היכל החתם סופר</p>
         </div>
+        <Link href="/admin/reports"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors">
+          <Download size={15} />
+          הורדת דוחות
+        </Link>
       </div>
 
       {!isSupabaseConfigured() && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-          <strong>מצב פיתוח:</strong> Supabase לא מוגדר — מוצגים נתוני אפס.
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2">
+          <AlertCircle size={16} className="flex-shrink-0" />
+          <span><strong>מצב פיתוח:</strong> Supabase לא מוגדר — מוצגים נתוני אפס.</span>
         </div>
       )}
 
-      {/* Department cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        {departments.map(({ title, icon: Icon, grad, href, metrics }) => (
-          <Link key={title} href={href}
-            className="group flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all overflow-hidden">
-            <div className={`bg-gradient-to-br ${grad} px-4 py-4 flex items-center gap-3 text-white`}>
-              <span className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                <Icon size={20} />
-              </span>
-              <h3 className="font-bold text-[15px] leading-tight">{title}</h3>
-            </div>
-            <div className="flex flex-col gap-2.5 p-4 flex-1">
-              {metrics.map(m => (
-                <div key={m.label} className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] text-slate-500">{m.label}</span>
-                  <span className={`text-lg font-bold ltr-num ${m.tone ?? 'text-slate-900'}`}>{m.value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="px-4 pb-4">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 group-hover:text-indigo-600 transition-colors">
-                כניסה לאגף <ArrowLeft size={13} />
-              </span>
-            </div>
-          </Link>
-        ))}
+      {/* ── KPI Row ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          label="משפחות רשומות"
+          value={fmt(s.totalBeneficiaries)}
+          sub={`${fmt(s.newBeneficiariesWeek)} נרשמו השבוע`}
+          subPositive
+          icon={<Users size={18} />}
+          color="indigo"
+          href="/admin/beneficiaries"
+        />
+        <KpiCard
+          label="הלוואות פעילות"
+          value={fmtCur(s.totalLoanAmount)}
+          sub={`${fmt(s.activeLoans)} תיקים פעילים`}
+          icon={<Landmark size={18} />}
+          color="blue"
+          href="/admin/loans"
+        />
+        <KpiCard
+          label="ממתינים לטיפול"
+          value={fmt(pendingTotal)}
+          sub="בקשות בכל האגפים"
+          subWarning={pendingTotal > 0}
+          icon={<Clock size={18} />}
+          color="amber"
+          href="/admin/beneficiaries?status=pending"
+        />
+        <KpiCard
+          label="תיבת המייל"
+          value="מייל"
+          sub="דואר נכנס ויוצא"
+          icon={<Mail size={18} />}
+          color="violet"
+          href="/admin/mail"
+        />
       </div>
 
-      {/* Action cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {actions.map(({ title, desc, icon: Icon, href, grad }) => (
-          <Link key={title} href={href}
-            className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-lg hover:border-indigo-200 transition-all p-5">
-            <span className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${grad} flex items-center justify-center text-white flex-shrink-0 shadow-sm`}>
-              <Icon size={22} />
-            </span>
-            <div className="flex-1">
-              <p className="font-bold text-slate-900">{title}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
-            </div>
-            <ArrowLeft size={16} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
-          </Link>
-        ))}
+      {/* ── Departments ──────────────────────────────────────────── */}
+      <div>
+        <h2 className="text-base font-semibold text-slate-700 mb-4">אגפי העמותה</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+
+          <DeptCard
+            title="איגוד הצאצאים"
+            icon={<Users size={20} />}
+            href="/admin/beneficiaries"
+            accent="#6366f1"
+            rows={[
+              { label: 'רשומות מאושרות', value: fmt(s.approved), tone: 'success' },
+              { label: 'ממתינות לאישור', value: fmt(s.pending), tone: s.pending > 0 ? 'warning' : 'neutral' },
+              { label: 'נרשמו השבוע', value: fmt(s.newBeneficiariesWeek), tone: 'info' },
+            ]}
+          />
+
+          <DeptCard
+            title="גמ״ח — הלוואות"
+            icon={<Landmark size={20} />}
+            href="/admin/loans"
+            accent="#3b82f6"
+            rows={[
+              { label: 'בקשות לאישור', value: fmt(s.pendingLoans), tone: s.pendingLoans > 0 ? 'warning' : 'neutral' },
+              { label: 'הלוואות פעילות', value: fmt(s.activeLoans), tone: 'success' },
+              { label: 'בפיגור', value: fmt(s.defaultedLoans), tone: s.defaultedLoans > 0 ? 'danger' : 'neutral' },
+            ]}
+          />
+
+          <DeptCard
+            title="עזר יולדות"
+            icon={<Baby size={20} />}
+            href="/admin/maternity"
+            accent="#ec4899"
+            rows={[
+              { label: 'בקשות לאישור', value: fmt(s.maternityPending), tone: s.maternityPending > 0 ? 'warning' : 'neutral' },
+              { label: 'תיקים פעילים', value: fmt(s.maternityActive), tone: 'success' },
+            ]}
+          />
+
+          <DeptCard
+            title="כרטיסי מזון יולדות"
+            icon={<UtensilsCrossed size={20} />}
+            href="/admin/maternity/cards"
+            accent="#10b981"
+            rows={[
+              { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: s.cardsPending > 0 ? 'warning' : 'neutral' },
+              { label: 'כרטיסים טעונים', value: fmt(s.cardsLoaded), tone: 'success' },
+              { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: s.cardsRemaining < 5 ? 'danger' : 'info' },
+            ]}
+          />
+
+          <DeptCard
+            title="אלמנות ויתומים"
+            icon={<HeartHandshake size={20} />}
+            href="/admin/widows"
+            accent="#a855f7"
+            rows={[
+              { label: 'בקשות חדשות', value: fmt(s.widowPending), tone: s.widowPending > 0 ? 'warning' : 'neutral' },
+              { label: 'בטיפול', value: fmt(s.widowInProgress), tone: 'info' },
+            ]}
+          />
+
+          <DeptCard
+            title="סיוע רפואי"
+            icon={<HandCoins size={20} />}
+            href="/admin/financial-aid"
+            accent="#14b8a6"
+            rows={[
+              { label: 'בקשות חדשות', value: fmt(s.aidPending), tone: s.aidPending > 0 ? 'warning' : 'neutral' },
+              { label: 'נשלחו לאישור', value: fmt(s.aidAwaiting), tone: 'info' },
+              { label: 'אושרו', value: fmt(s.aidApproved), tone: 'success' },
+            ]}
+          />
+
+        </div>
       </div>
 
+      {/* ── Footer ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
-        <CheckCircle2 size={14} className="text-green-500" /> הנתונים מתעדכנים בזמן אמת
+        <CheckCircle2 size={13} className="text-emerald-500" />
+        הנתונים מתעדכנים בזמן אמת
       </div>
     </div>
+  )
+}
+
+// ── KPI Card ────────────────────────────────────────────────────────────────
+
+const colorMap: Record<string, { bg: string; icon: string; text: string }> = {
+  indigo: { bg: 'bg-indigo-50', icon: 'bg-indigo-600 text-white', text: 'text-indigo-600' },
+  blue:   { bg: 'bg-blue-50',   icon: 'bg-blue-600 text-white',   text: 'text-blue-600'   },
+  amber:  { bg: 'bg-amber-50',  icon: 'bg-amber-500 text-white',  text: 'text-amber-600'  },
+  violet: { bg: 'bg-violet-50', icon: 'bg-violet-600 text-white', text: 'text-violet-600' },
+}
+
+function KpiCard({ label, value, sub, subPositive, subWarning, icon, color, href }: {
+  label: string; value: string; sub: string
+  subPositive?: boolean; subWarning?: boolean
+  icon: React.ReactNode; color: string; href: string
+}) {
+  const c = colorMap[color] ?? colorMap.indigo
+  return (
+    <Link href={href}
+      className={`group relative flex flex-col gap-3 rounded-2xl border border-slate-100 ${c.bg} p-5 hover:shadow-md hover:-translate-y-0.5 transition-all`}>
+      <div className="flex items-center justify-between">
+        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon} shadow-sm`}>
+          {icon}
+        </span>
+        <ArrowUpRight size={15} className={`${c.text} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      </div>
+      <div>
+        <p className="text-[13px] text-slate-500 mb-1">{label}</p>
+        <p className="text-2xl font-bold text-slate-900 ltr-num">{value}</p>
+      </div>
+      <p className={`text-xs font-medium ${subWarning ? 'text-amber-600' : subPositive ? 'text-emerald-600' : 'text-slate-400'}`}>
+        {sub}
+      </p>
+    </Link>
+  )
+}
+
+// ── Department Card ──────────────────────────────────────────────────────────
+
+type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+
+const toneClass: Record<Tone, string> = {
+  success: 'text-emerald-600 bg-emerald-50',
+  warning: 'text-amber-600 bg-amber-50',
+  danger:  'text-red-600 bg-red-50',
+  info:    'text-blue-600 bg-blue-50',
+  neutral: 'text-slate-500 bg-slate-50',
+}
+
+function DeptCard({ title, icon, href, accent, rows }: {
+  title: string; icon: React.ReactNode; href: string
+  accent: string
+  rows: { label: string; value: string; tone: Tone }[]
+}) {
+  return (
+    <Link href={href}
+      className="group flex flex-col rounded-2xl border border-slate-100 bg-white hover:shadow-lg hover:border-slate-200 transition-all overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
+        <div className="flex items-center gap-3">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0"
+            style={{ backgroundColor: accent }}>
+            {icon}
+          </span>
+          <h3 className="font-semibold text-slate-800 text-[15px]">{title}</h3>
+        </div>
+        <ArrowLeft size={15} className="text-slate-300 group-hover:text-slate-600 transition-colors" />
+      </div>
+      {/* Rows */}
+      <div className="flex flex-col divide-y divide-slate-50 px-5">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-center justify-between py-3">
+            <span className="text-[13px] text-slate-500">{r.label}</span>
+            <span className={`text-sm font-bold ltr-num px-2.5 py-0.5 rounded-full ${toneClass[r.tone]}`}>
+              {r.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Link>
   )
 }
