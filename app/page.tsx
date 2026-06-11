@@ -1329,8 +1329,15 @@ export default function PublicPortalPage() {
     if (!aidReason.trim()) { setError('אנא פרט את סיבת הבקשה'); return }
     if (!aidFile) { setError('אנא צרף מסמך'); return }
     if (!beneficiary) return
+    if (needsIdWithRequest) {
+      const miss = missingRequestIdDocs()
+      if (miss.length) { setError(`לאישור ראשוני אנא צרף גם: ${miss.map(docLabel).join(', ')}`); return }
+    }
     setError(''); setLoading(true)
     try {
+      if (needsIdWithRequest && !(await uploadRequiredIdDocs())) {
+        setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
+      }
       const fd = new FormData()
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('reason', aidReason.trim())
@@ -3059,6 +3066,19 @@ export default function PublicPortalPage() {
                     </label>
                   )}
                 </Field>
+                {needsIdWithRequest && (
+                  <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
+                    <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות לאישור ראשוני</p>
+                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
+                      טרם אושרת סופית. אנא צרף/י גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+                        <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
                 <button type="submit" disabled={loading}
                   className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors">
