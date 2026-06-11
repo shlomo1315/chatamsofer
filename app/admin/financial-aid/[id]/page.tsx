@@ -8,14 +8,14 @@ import FinancialAidDetail from './FinancialAidDetail'
 
 async function getReq(id: string): Promise<FinancialAidRequest | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('financial_aid_requests')
-      .select('*, beneficiary:beneficiaries(*)')
-      .eq('id', id).single()
-    return data
-  } catch { return null }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('financial_aid_requests')
+    .select('*, beneficiary:beneficiaries(*)')
+    .eq('id', id).single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'

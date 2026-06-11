@@ -1,10 +1,15 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import dynamic from 'next/dynamic'
 import { Mail, CheckCircle2, Eye, Reply, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
+import type { DayPoint } from './DailyChart'
 
-interface DayPoint { date: string; read: number; handled: number; replied: number }
+// Lazy-load recharts (heavy) on the client only
+const DailyChart = dynamic(() => import('./DailyChart'), {
+  ssr: false,
+  loading: () => <div className="h-[240px] bg-slate-50 rounded-xl animate-pulse" />,
+})
 interface UserRow  { user_id: string; name: string; read: number; handled: number }
 
 interface Stats {
@@ -32,11 +37,6 @@ function Tile({ icon: Icon, label, value, color }: { icon: React.ElementType; la
       </div>
     </div>
   )
-}
-
-function formatDay(iso: string) {
-  const [, m, d] = iso.split('-')
-  return `${d}/${m}`
 }
 
 export default function MailStatsPage() {
@@ -94,22 +94,7 @@ export default function MailStatsPage() {
           {/* Daily chart */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
             <h2 className="text-base font-bold text-slate-800 mb-4">פעילות יומית</h2>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={stats.dailyChart} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="date" tickFormatter={formatDay} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#94a3b8' }} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 13 }}
-                  labelFormatter={(label) => formatDay(String(label))}
-                  formatter={(v, name) => [v, name === 'read' ? 'נקראו' : name === 'handled' ? 'טופלו' : 'נענו']}
-                />
-                <Legend formatter={(v) => v === 'read' ? 'נקראו' : v === 'handled' ? 'טופלו' : 'נענו'} wrapperStyle={{ fontSize: 13 }} />
-                <Bar dataKey="read"    fill="#6366f1" radius={[4,4,0,0]} />
-                <Bar dataKey="handled" fill="#22c55e" radius={[4,4,0,0]} />
-                <Bar dataKey="replied" fill="#f59e0b" radius={[4,4,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <DailyChart data={stats.dailyChart} />
           </div>
 
           {/* Per-user table */}

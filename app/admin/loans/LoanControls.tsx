@@ -5,6 +5,8 @@ import { Clock, Check, X, ChevronDown, Loader2, Trash2, CheckCircle2 } from 'luc
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { Loan, LoanStatus } from '@/types'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 // סטטוס זכאות להלוואה: ממתין / זכאי (מאושר) / לא זכאי (לא מאושר)
 const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
@@ -19,6 +21,7 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
 export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loan; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const btnRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
@@ -39,7 +42,7 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
     // חסימה: לא ניתן לאשר בקשה לפני שהמשפחה מאושרת
     if (next === 'approved' && familyApproved === false) {
       setOpen(false)
-      alert('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
       return
     }
     setSaving(true)
@@ -65,7 +68,7 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
       }
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -124,26 +127,32 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
 export function DeleteLoanButton({ loanId, redirect }: { loanId: string; redirect?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm('למחוק את ההלוואה לצמיתות? פעולה זו אינה הפיכה.')) return
+    if (!(await confirm({ title: 'מחיקת הלוואה', message: 'למחוק את ההלוואה לצמיתות? פעולה זו אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
     setDeleting(true)
     try {
       const { error } = await supabase.from('loans').delete().eq('id', loanId)
       if (error) throw error
+      toast.success('ההלוואה נמחקה')
       if (redirect) router.push('/admin/loans')
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
       setDeleting(false)
     }
   }
 
   return (
+    <>
     <button onClick={handleDelete} disabled={deleting}
       className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-white hover:bg-red-600 px-2.5 py-1.5 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
       {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
     </button>
+    {confirmDialog}
+    </>
   )
 }

@@ -1,5 +1,5 @@
 'use client'
-import { ReactNode, useEffect } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 
 interface ModalProps {
@@ -19,6 +19,9 @@ const sizeClasses = {
 }
 
 export default function Modal({ open, onClose, title, children, size = 'md', footer }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -28,6 +31,24 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
     return () => { document.body.style.overflow = '' }
   }, [open])
 
+  // מיקוד הדיאלוג בפתיחה והחזרת המיקוד בסגירה
+  useEffect(() => {
+    if (!open) return
+    previousFocusRef.current = document.activeElement as HTMLElement | null
+    dialogRef.current?.focus()
+    return () => { previousFocusRef.current?.focus?.() }
+  }, [open])
+
+  // סגירה במקש Escape
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
+
   if (!open) return null
 
   return (
@@ -36,11 +57,19 @@ export default function Modal({ open, onClose, title, children, size = 'md', foo
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className={`relative w-full ${sizeClasses[size]} bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh]`}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        className={`relative w-full ${sizeClasses[size]} bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh] outline-none`}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           <button
             onClick={onClose}
+            aria-label="סגור"
             className="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <X size={18} />

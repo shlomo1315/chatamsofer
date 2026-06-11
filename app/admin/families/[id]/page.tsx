@@ -9,17 +9,15 @@ import { GENDER_LABELS } from '@/types'
 
 async function getFamily(id: string): Promise<(Family & { beneficiaries: Beneficiary[] }) | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('families')
-      .select('*, beneficiaries(*)')
-      .eq('id', id)
-      .single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('families')
+    .select('*, beneficiaries(*)')
+    .eq('id', id)
+    .single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 export default async function FamilyDetailPage({ params }: { params: Promise<{ id: string }> }) {

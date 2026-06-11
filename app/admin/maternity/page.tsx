@@ -7,16 +7,13 @@ import MaternityTable from './MaternityTable'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('maternity_aids')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('maternity_aids')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 export default async function MaternityPage() {

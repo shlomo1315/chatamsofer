@@ -5,16 +5,13 @@ import FinancialAidClient from './FinancialAidClient'
 
 async function getRequests(): Promise<FinancialAidRequest[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('financial_aid_requests')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, id_number, spouse_name, spouse_id_number, phone)')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('financial_aid_requests')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, id_number, spouse_name, spouse_id_number, phone)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 export default async function FinancialAidPage() {

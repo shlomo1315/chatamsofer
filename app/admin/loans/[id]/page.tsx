@@ -12,17 +12,15 @@ import { he } from 'date-fns/locale'
 
 async function getLoan(id: string): Promise<Loan | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('loans')
-      .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
-      .eq('id', id)
-      .single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('loans')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
+    .eq('id', id)
+    .single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'

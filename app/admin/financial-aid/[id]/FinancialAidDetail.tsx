@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { FinancialAidRequest } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleString('he-IL') : '—'
 const fmtDateTime = (d?: string) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'

@@ -11,13 +11,10 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('profiles').select('*').order('full_name')
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('profiles').select('*').order('full_name')
+  if (error) throw error
+  return data ?? []
 }
 
 // רשימת בתי ההחלמה הקבועה — תמיד מוצגת, גם אם אין כרגע אף יולדת בבית מסוים
@@ -25,19 +22,18 @@ const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
 async function getRecoveryHomes(): Promise<string[]> {
   if (!isSupabaseConfigured()) return RECOVERY_HOMES
-  try {
-    const supabase = await createClient()
-    const [homesTable, maternity] = await Promise.all([
-      supabase.from('recovery_homes').select('name').order('name'),
-      supabase.from('maternity_aids').select('recovery_home').not('recovery_home', 'is', null),
-    ])
-    const fromTable = (homesTable.data ?? []).map((r: { name: string }) => r.name).filter(Boolean)
-    const fromMaternity = (maternity.data ?? []).map((r: { recovery_home: string }) => r.recovery_home).filter(Boolean)
-    // איחוד: ברירת מחדל + טבלת הבתים + בתים שנמצאו בתיקי לידה
-    return [...new Set([...RECOVERY_HOMES, ...fromTable, ...fromMaternity])]
-  } catch {
-    return RECOVERY_HOMES
-  }
+  const supabase = await createClient()
+  const [homesTable, maternity] = await Promise.all([
+    supabase.from('recovery_homes').select('name').order('name'),
+    supabase.from('maternity_aids').select('recovery_home').not('recovery_home', 'is', null),
+  ])
+  // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
+  if (homesTable.error && homesTable.error.code !== '42P01') throw homesTable.error
+  if (maternity.error) throw maternity.error
+  const fromTable = (homesTable.data ?? []).map((r: { name: string }) => r.name).filter(Boolean)
+  const fromMaternity = (maternity.data ?? []).map((r: { recovery_home: string }) => r.recovery_home).filter(Boolean)
+  // איחוד: ברירת מחדל + טבלת הבתים + בתים שנמצאו בתיקי לידה
+  return [...new Set([...RECOVERY_HOMES, ...fromTable, ...fromMaternity])]
 }
 
 export default async function SettingsPage() {

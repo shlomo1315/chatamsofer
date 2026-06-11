@@ -8,16 +8,13 @@ import { RELATION_TYPES } from '@/types'
 
 async function getRelations(): Promise<FamilyRelation[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('family_relations')
-      .select('*, person:beneficiaries!person_id(id, full_name, eligibility_status), related_person:beneficiaries!related_person_id(id, full_name, eligibility_status)')
-      .order('created_at', { ascending: false })
-    return data ?? []
-  } catch {
-    return []
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('family_relations')
+    .select('*, person:beneficiaries!person_id(id, full_name, eligibility_status), related_person:beneficiaries!related_person_id(id, full_name, eligibility_status)')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }
 
 export default async function GenealogyPage() {

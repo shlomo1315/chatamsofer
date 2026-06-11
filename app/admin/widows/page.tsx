@@ -5,30 +5,30 @@ import WidowsDashboard from './WidowsDashboard'
 
 async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }> {
   if (!isSupabaseConfigured()) return { widows: [], requests: [], payments: [] }
-  try {
-    const supabase = await createClient()
-    const [{ data: widows }, { data: requests }, { data: payments }] = await Promise.all([
-      supabase
-        .from('beneficiaries')
-        .select('*')
-        .in('marital_status', ['אלמן', 'אלמנה'])
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('widow_requests')
-        .select('*, beneficiary:beneficiaries(full_name,family_name,id_number)')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('widow_support_payments')
-        .select('*')
-        .order('paid_at', { ascending: false }),
-    ])
-    return {
-      widows: widows ?? [],
-      requests: (requests as WidowRequest[]) ?? [],
-      payments: (payments as WidowSupportPayment[]) ?? [],
-    }
-  } catch {
-    return { widows: [], requests: [], payments: [] }
+  const supabase = await createClient()
+  const [widowsRes, requestsRes, paymentsRes] = await Promise.all([
+    supabase
+      .from('beneficiaries')
+      .select('*')
+      .in('marital_status', ['אלמן', 'אלמנה'])
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('widow_requests')
+      .select('*, beneficiary:beneficiaries(full_name,family_name,id_number)')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('widow_support_payments')
+      .select('*')
+      .order('paid_at', { ascending: false }),
+  ])
+  if (widowsRes.error) throw widowsRes.error
+  // טבלאות האלמנות עשויות שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
+  if (requestsRes.error && requestsRes.error.code !== '42P01') throw requestsRes.error
+  if (paymentsRes.error && paymentsRes.error.code !== '42P01') throw paymentsRes.error
+  return {
+    widows: widowsRes.data ?? [],
+    requests: (requestsRes.data as WidowRequest[]) ?? [],
+    payments: (paymentsRes.data as WidowSupportPayment[]) ?? [],
   }
 }
 

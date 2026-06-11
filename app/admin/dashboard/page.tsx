@@ -41,42 +41,59 @@ async function getStats(): Promise<DashData> {
   try {
     const supabase = await createClient()
     const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
-    const [beneficiaries, loans, maternity, widows, distributions, cardCenters, aid] = await Promise.all([
-      supabase.from('beneficiaries').select('eligibility_status, created_at'),
-      supabase.from('loans').select('status, amount, created_at'),
-      supabase.from('maternity_aids').select('status, card_status'),
-      supabase.from('widow_requests').select('status'),
-      supabase.from('distributions').select('status').in('status', ['planning', 'active']),
+    const headCount = { count: 'exact' as const, head: true }
+    const [
+      totalBeneficiaries, newBeneficiariesWeek, approved, pending,
+      activeLoans, pendingLoans, defaultedLoans, loansApprovedWeek,
+      maternityActive, maternityPending, cardsLoaded, cardsPending,
+      widowPending, widowInProgress, distributionsPlanned,
+      aidPending, aidAwaiting, aidApproved,
+      activeLoanAmounts, cardCenters,
+    ] = await Promise.all([
+      supabase.from('beneficiaries').select('id', headCount),
+      supabase.from('beneficiaries').select('id', headCount).gte('created_at', weekAgo),
+      supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'approved'),
+      supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'pending'),
+      supabase.from('loans').select('id', headCount).eq('status', 'active'),
+      supabase.from('loans').select('id', headCount).eq('status', 'pending'),
+      supabase.from('loans').select('id', headCount).eq('status', 'defaulted'),
+      supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']).gte('created_at', weekAgo),
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active'),
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'pending'),
+      supabase.from('maternity_aids').select('id', headCount).eq('card_status', 'loaded'),
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('card_status.is.null,card_status.eq.pending'),
+      supabase.from('widow_requests').select('id', headCount).eq('status', 'pending'),
+      supabase.from('widow_requests').select('id', headCount).eq('status', 'in_progress'),
+      supabase.from('distributions').select('id', headCount).in('status', ['planning', 'active']),
+      supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'pending'),
+      supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'awaiting_decision'),
+      supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'approved'),
+      supabase.from('loans').select('amount').eq('status', 'active'),
       supabase.from('card_centers').select('stock'),
-      supabase.from('financial_aid_requests').select('status'),
     ])
-    const b = beneficiaries.data ?? []
-    const l = loans.data ?? []
-    const m = maternity.data ?? []
-    const fa = aid.data ?? []
-    const w = widows.data ?? []
 
+    const loadedCount = cardsLoaded.count ?? 0
     return {
-      totalBeneficiaries: b.length,
-      newBeneficiariesWeek: b.filter(x => x.created_at && x.created_at >= weekAgo).length,
-      approved: b.filter(x => x.eligibility_status === 'approved').length,
-      pending: b.filter(x => x.eligibility_status === 'pending').length,
-      activeLoans: l.filter(x => x.status === 'active').length,
-      pendingLoans: l.filter(x => x.status === 'pending').length,
-      defaultedLoans: l.filter(x => x.status === 'defaulted').length,
-      loansApprovedWeek: l.filter(x => ['active', 'approved', 'completed'].includes(x.status) && x.created_at && x.created_at >= weekAgo).length,
-      totalLoanAmount: l.filter(x => x.status === 'active').reduce((s, x) => s + (Number(x.amount) || 0), 0),
-      maternityActive: m.filter(x => x.status === 'active').length,
-      maternityPending: m.filter(x => x.status === 'pending').length,
-      cardsLoaded: m.filter(x => x.card_status === 'loaded').length,
-      cardsPending: m.filter(x => x.status === 'active' && (!x.card_status || x.card_status === 'pending')).length,
-      cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - m.filter(x => x.card_status === 'loaded').length,
-      widowPending: w.filter(x => x.status === 'pending').length,
-      widowInProgress: w.filter(x => x.status === 'in_progress').length,
-      aidPending: fa.filter(x => x.status === 'pending').length,
-      aidAwaiting: fa.filter(x => x.status === 'awaiting_decision').length,
-      aidApproved: fa.filter(x => x.status === 'approved').length,
-      distributionsPlanned: distributions.count ?? (distributions.data?.length ?? 0),
+      totalBeneficiaries: totalBeneficiaries.count ?? 0,
+      newBeneficiariesWeek: newBeneficiariesWeek.count ?? 0,
+      approved: approved.count ?? 0,
+      pending: pending.count ?? 0,
+      activeLoans: activeLoans.count ?? 0,
+      pendingLoans: pendingLoans.count ?? 0,
+      defaultedLoans: defaultedLoans.count ?? 0,
+      loansApprovedWeek: loansApprovedWeek.count ?? 0,
+      totalLoanAmount: (activeLoanAmounts.data ?? []).reduce((s, x) => s + (Number(x.amount) || 0), 0),
+      maternityActive: maternityActive.count ?? 0,
+      maternityPending: maternityPending.count ?? 0,
+      cardsLoaded: loadedCount,
+      cardsPending: cardsPending.count ?? 0,
+      cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - loadedCount,
+      widowPending: widowPending.count ?? 0,
+      widowInProgress: widowInProgress.count ?? 0,
+      distributionsPlanned: distributionsPlanned.count ?? 0,
+      aidPending: aidPending.count ?? 0,
+      aidAwaiting: aidAwaiting.count ?? 0,
+      aidApproved: aidApproved.count ?? 0,
     }
   } catch {
     return EMPTY
