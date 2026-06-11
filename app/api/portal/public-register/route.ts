@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, spouse_phone, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain,
+    spouse_name, spouse_id_number, spouse_phone, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -93,6 +93,34 @@ export async function POST(request: NextRequest) {
     console.error('[public-register] insert error:', error.code, error.message, error.details)
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
+  }
+
+  // הכנסת הדורות שהנרשם הוסיף ידנית (אבות + הנרשם) לעץ הדורות בסטטוס "ממתין לאימות",
+  // משורשרים תחת הצומת המאומת שנבחר. הנרשם מקושר לצומת האחרון (מיקומו בעץ).
+  try {
+    if (lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
+      const { data: sel } = await admin.from('lineage_nodes').select('id, generation').eq('id', String(lineage_node_id)).maybeSingle()
+      if (sel) {
+        let parentId: string = sel.id
+        let gen: number = sel.generation as number
+        let lastId: string = sel.id
+        for (const n of lineage_new_nodes as { name?: string; relation?: string }[]) {
+          const nm = (n?.name ?? '').toString().trim()
+          if (!nm) continue
+          gen += 1
+          const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null
+          const { data: node } = await admin.from('lineage_nodes')
+            .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })
+            .select('id').single()
+          if (node?.id) { parentId = node.id; lastId = node.id }
+        }
+        if (lastId !== sel.id) {
+          await admin.from('beneficiaries').update({ lineage_node_id: lastId }).eq('id_number', cleanId)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[public-register] lineage nodes insert failed:', e)
   }
 
   // Send confirmation email (non-blocking) — מעוצב עם כל פרטי הרישום + קישור לפורטל

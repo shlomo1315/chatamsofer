@@ -893,13 +893,16 @@ export default function PublicPortalPage() {
       // דור 1 (שורש) ללא קשר; שאר הנתיב המאומת — קשר אוטומטי מהגדרת העץ בניהול (לא נסמן ע"י הנרשם)
       chain.push({ generation: i + 1, name, relKey: null, relation: i === 0 ? null : (pathRelations[i] ?? null) })
     })
+    // מספור עקבי לפי סדר הדורות שמולאו (כולל דילוג על שורות ריקות) — מונע כפילות דור
+    let gen = lineagePath.length
     manualLineage.forEach((name, i) => {
       if (!name.trim()) return
+      gen += 1
       const relKey = `m${i}`
-      chain.push({ generation: lineagePath.length + 1 + i, name: name.trim(), relKey, relation: lineageRelations[relKey] ?? null })
+      chain.push({ generation: gen, name: name.trim(), relKey, relation: lineageRelations[relKey] ?? null })
     })
     chain.push({
-      generation: lineagePath.length + manualLineage.filter(s => s.trim()).length + 1,
+      generation: gen + 1,
       name: selfDisplayName, relKey: 'self', relation: lineageRelations['self'] ?? null,
     })
     return chain
@@ -1003,6 +1006,12 @@ export default function PublicPortalPage() {
           lineage_node_id: lineageNodeId || null,
           lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
           lineage_chain: buildLineageChain().map(({ generation, name, relation }) => ({ generation, name, relation })),
+          // דורות חדשים שהנרשם הוסיף ידנית (אבות + הנרשם עצמו) — להכנסה לעץ הדורות בסטטוס "ממתין לאימות"
+          lineage_new_nodes: [
+            ...manualLineage.map((name, i) => ({ name: name.trim(), relation: lineageRelations[`m${i}`] ?? null }))
+              .filter(n => n.name),
+            { name: selfDisplayName, relation: lineageRelations['self'] ?? null },
+          ],
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
@@ -1912,7 +1921,7 @@ export default function PublicPortalPage() {
                       {manualLineage.map((val, idx) => (
                         <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 p-2.5">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-slate-500 w-14 flex-shrink-0">דור {lineagePath.length + 1 + idx}</span>
+                            <span className="text-xs text-slate-500 w-14 flex-shrink-0">דור {lineagePath.length + 1 + manualLineage.slice(0, idx).filter(s => s.trim()).length}</span>
                             <TextInput value={val} placeholder="שם"
                               onChange={e => setManualLineage(prev => prev.map((v, i) => i === idx ? e.target.value : v))} />
                             <button type="button" onClick={() => setManualLineage(prev => prev.filter((_, i) => i !== idx))}
