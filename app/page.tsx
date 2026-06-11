@@ -407,31 +407,37 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
   )
 }
 
-function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[]) => void }) {
-  const [levels, setLevels] = useState<{ nodes: LineageNode[]; selected: string | null; selectedName: string }[]>([])
+type CascadeLevel = { nodes: LineageNode[]; selected: string | null; selectedName: string; selectedRelation: 'son' | 'son_in_law' | null }
+function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[], relations: ('son' | 'son_in_law' | null)[]) => void }) {
+  const [levels, setLevels] = useState<CascadeLevel[]>([])
   const [loadingLevel, setLoadingLevel] = useState<number | null>(null)
+  const [root, setRoot] = useState<{ id: string; name: string } | null>(null)
 
-  const loadLevel = useCallback(async (parentId: string | null, levelIdx: number) => {
-    setLoadingLevel(levelIdx)
-    try {
-      const url = parentId ? `/api/lineage?parent_id=${parentId}` : '/api/lineage'
-      const res = await fetch(url)
-      const data = await res.json()
-      setLevels(prev => {
-        const next = prev.slice(0, levelIdx)
-        if ((data.nodes ?? []).length > 0) next.push({ nodes: data.nodes, selected: null, selectedName: '' })
-        return next
-      })
-    } catch { /* ignore */ }
-    setLoadingLevel(null)
+  useEffect(() => {
+    (async () => {
+      setLoadingLevel(0)
+      try {
+        const rootRes = await fetch('/api/lineage')
+        const rootData = await rootRes.json()
+        const rootNode = (rootData.nodes ?? [])[0]
+        if (rootNode) {
+          setRoot({ id: rootNode.id, name: rootNode.name })
+          const chRes = await fetch(`/api/lineage?parent_id=${rootNode.id}`)
+          const chData = await chRes.json()
+          if ((chData.nodes ?? []).length > 0) setLevels([{ nodes: chData.nodes, selected: null, selectedName: '', selectedRelation: null }])
+        }
+      } catch { /* ignore */ }
+      setLoadingLevel(null)
+    })()
   }, [])
 
-  useEffect(() => { loadLevel(null, 0) }, [loadLevel])
-
-  const handleSelect = async (levelIdx: number, node: LineageNode) => {
-    const currentPath = levels.slice(0, levelIdx).map(l => l.selectedName).concat(node.name)
+  const handleSelect = async (levelIdx: number, nodeId: string) => {
+    const node = levels[levelIdx]?.nodes.find(n => n.id === nodeId)
+    if (!node || !root) return
+    const path = [root.name, ...levels.slice(0, levelIdx).map(l => l.selectedName), node.name]
+    const relations = [null as 'son' | 'son_in_law' | null, ...levels.slice(0, levelIdx).map(l => l.selectedRelation), node.relation ?? null]
     setLevels(prev => prev.slice(0, levelIdx + 1).map((l, i) =>
-      i === levelIdx ? { ...l, selected: node.id, selectedName: node.name } : l
+      i === levelIdx ? { ...l, selected: node.id, selectedName: node.name, selectedRelation: node.relation ?? null } : l
     ))
     setLoadingLevel(levelIdx + 1)
     try {
@@ -440,46 +446,38 @@ function LineageCascade({ onSelect }: { onSelect: (nodeId: string, path: string[
       const children: LineageNode[] = data.nodes ?? []
       setLevels(prev => {
         const next = prev.slice(0, levelIdx + 1)
-        if (children.length > 0) {
-          next.push({ nodes: children, selected: null, selectedName: '' })
-          onSelect('', currentPath)
-        } else {
-          onSelect(node.id, currentPath)
-        }
+        if (children.length > 0) next.push({ nodes: children, selected: null, selectedName: '', selectedRelation: null })
         return next
       })
-    } catch {
-      onSelect(node.id, currentPath)
-    }
+      onSelect(node.id, path, relations)
+    } catch { onSelect(node.id, path, relations) }
     setLoadingLevel(null)
   }
 
+  const selCls = 'w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500'
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col">
       {levels.map((level, idx) => (
-        <div key={idx}>
-          <p className="text-xs font-medium text-slate-500 mb-2">
-            {idx === 0 ? 'בחר מהדור הראשון:' : `בחר המשך הדור ${idx + 1}:`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {level.nodes.map(node => (
-              <button
-                key={node.id} type="button" onClick={() => handleSelect(idx, node)}
-                className={`text-sm px-3 py-2 rounded-lg border transition-colors ${
-                  level.selected === node.id
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                    : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
-                }`}
-              >{node.name}</button>
-            ))}
-            {loadingLevel === idx + 1 && (
-              <span className="flex items-center gap-1 text-xs text-slate-400 self-center">
-                <Loader2 size={12} className="animate-spin" /> טוען...
-              </span>
-            )}
+        <div key={idx} className="flex items-stretch gap-2">
+          {/* עמודת חיבור — נקודה + קו לדור הבא */}
+          <div className="flex flex-col items-center w-5 flex-shrink-0">
+            <span className={`w-2.5 h-2.5 rounded-full mt-3 ${level.selected ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+            {idx < levels.length - 1 && <span className="w-0.5 flex-1 bg-indigo-200 my-0.5" />}
+          </div>
+          <div className="flex items-center gap-2 flex-1 pb-3">
+            <span className="text-xs font-bold text-indigo-400 w-12 flex-shrink-0">דור {idx + 2}</span>
+            <select className={selCls} value={level.selected ?? ''} onChange={e => e.target.value && handleSelect(idx, e.target.value)}>
+              <option value="">— בחר/י מהרשימה —</option>
+              {level.nodes.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
+                <option key={node.id} value={node.id}>{node.name}{node.relation ? ` (${node.relation === 'son' ? 'בן' : 'חתן'})` : ''}</option>
+              ))}
+            </select>
+            {loadingLevel === idx + 1 && <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />}
           </div>
         </div>
       ))}
+      {loadingLevel === 0 && <div className="flex items-center gap-2 text-sm text-slate-400"><Loader2 size={14} className="animate-spin" /> טוען דורות…</div>}
     </div>
   )
 }
@@ -1433,7 +1431,7 @@ export default function PublicPortalPage() {
                 אך ורק למי שיש בידו יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
                 ולא על חצאי עדויות.
               </p>
-              <p className="text-sm font-extrabold text-red-700 leading-relaxed bg-white/70 border-r-4 border-red-400 rounded-lg px-3 py-2.5">
+              <p className="text-[15px] font-semibold text-red-800 leading-8 bg-white/80 border-r-4 border-red-400 rounded-lg px-4 py-3" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
                 גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
               </p>
             </div>
@@ -1955,76 +1953,8 @@ export default function PublicPortalPage() {
                     })}
                   </div>
                 )}
-                <LineageTreePicker onSelect={(nodeId, path, relations) => { setLineageNodeId(nodeId); setLineagePath(path); setPathRelations(relations); setSuggestOpen(false) }} />
-                {lineageNodeId && (
-                  <button type="button" onClick={() => { setLineageNodeId(''); setLineagePath([]); setManualLineage([]); setLineageRelations({}); setPathRelations([]) }}
-                    className="mt-3 text-xs text-slate-400 hover:text-slate-600 underline">נקה בחירה</button>
-                )}
-
-                {/* Suggest new node */}
-                <div className="mt-3 pt-3 border-t border-slate-100">
-                  {!suggestOpen ? (
-                    <button type="button"
-                      onClick={() => {
-                        setSuggestOpen(true)
-                        if (allLineageNodes.length === 0) {
-                          fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
-                            setAllLineageNodes((d.nodes ?? []).filter((n: { status?: string }) => (n.status ?? 'verified') === 'verified'))
-                          }).catch(() => {})
-                        }
-                      }}
-                      className="flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:text-amber-900 border border-amber-200 hover:border-amber-400 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors">
-                      <Plus size={13} />
-                      הדור שלי לא מופיע בעץ — הצע צומת חדש
-                    </button>
-                  ) : (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
-                      <p className="text-xs font-semibold text-amber-800">הצע דור חדש לעץ השושלת</p>
-                      <p className="text-xs text-amber-700">הצומת ייכנס לעץ בסטטוס "ממתין לאימות" עד שהצוות יאשר אותו.</p>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-medium text-slate-700">שם האדם <span className="text-red-500">*</span></label>
-                        <TextInput value={suggestName} onChange={e => setSuggestName(e.target.value)} placeholder='שם מלא' />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-medium text-slate-700">הורה בעץ (הדור שמעליו) <span className="text-red-500">*</span></label>
-                        <select value={suggestParentId} onChange={e => setSuggestParentId(e.target.value)}
-                          className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                          <option value="">— בחר הורה —</option>
-                          {allLineageNodes
-                            .slice().sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
-                            .map(n => (
-                              <option key={n.id} value={n.id}>דור {n.generation} — {n.name}</option>
-                            ))}
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-medium text-slate-700">האם הוא בן או חתן של הדור הקודם? <span className="text-red-500">*</span></label>
-                        <div className="flex gap-2">
-                          {(['son', 'son_in_law'] as const).map(r => (
-                            <button type="button" key={r} onClick={() => setSuggestRelation(r)}
-                              className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition-colors ${
-                                suggestRelation === r
-                                  ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400')
-                                  : 'bg-white text-slate-500 border-slate-300 hover:border-slate-400'
-                              }`}>{r === 'son' ? 'בן' : 'חתן'}</button>
-                          ))}
-                        </div>
-                      </div>
-                      {suggestError && <p className="text-xs text-red-600">{suggestError}</p>}
-                      <div className="flex gap-2">
-                        <button type="button" onClick={handleSuggestLineage} disabled={suggestSubmitting}
-                          className="flex items-center gap-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 rounded-lg px-4 py-2 transition-colors">
-                          {suggestSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                          שלח לאישור
-                        </button>
-                        <button type="button" onClick={() => { setSuggestOpen(false); setSuggestName(''); setSuggestParentId(''); setSuggestRelation(''); setSuggestError('') }}
-                          className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">
-                          ביטול
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <LineageCascade onSelect={(nodeId, path, relations) => { setLineageNodeId(nodeId); setLineagePath(path); setPathRelations(relations) }} />
+                <p className="text-xs text-slate-400 mt-2">בחר/י דור אחר דור מהרשימות. אם הדור הבא אינו מופיע — הוסף/י אותו ידנית בהמשך, והוא ייכנס לאישור הצוות.</p>
 
                 {/* Manual generations */}
                 {lineageNodeId && (

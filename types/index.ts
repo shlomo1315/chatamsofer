@@ -337,7 +337,7 @@ export interface FinancialAidRequest {
 }
 
 export const FINANCIAL_AID_STATUS_LABELS: Record<FinancialAidStatus, string> = {
-  pending: 'ממתין',
+  pending: 'ממתין לטיפול',
   awaiting_decision: 'נשלח לגורם מאשר',
   approved: 'מאושר',
   rejected: 'נדחה',
