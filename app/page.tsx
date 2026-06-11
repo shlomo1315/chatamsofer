@@ -703,7 +703,7 @@ export default function PublicPortalPage() {
   const [regForm, setRegForm] = useState({
     id_number: '', full_name: '', family_name: '', phone: '', phone2: '',
     email: '', address: '', city: '', birth_date: '', gender: '',
-    marital_status: '', spouse_name: '', spouse_id_number: '', spouse_phone: '',
+    marital_status: '', spouse_name: '', spouse_id_number: '', spouse_phone: '', spouse_birth_date: '',
     children_count: '0', notes: '',
   })
   const [lineageNodeId, setLineageNodeId] = useState('')
@@ -1015,6 +1015,7 @@ export default function PublicPortalPage() {
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
+          spouse_birth_date: showSpouseFields ? (regForm.spouse_birth_date || null) : null,
         }),
       })
       const data = await res.json()
@@ -1747,6 +1748,11 @@ export default function PublicPortalPage() {
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
                       </Field>
                     </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <Field label="תאריך לידה של האשה">
+                        <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
+                      </Field>
+                    </div>
                   </div>
                 )}
               </Card>
@@ -1987,7 +1993,7 @@ export default function PublicPortalPage() {
 
                 {/* Count field */}
                 <div className="mb-4">
-                  <Field label="כמות ילדים">
+                  <Field label="מספר ילדים">
                     <TextInput
                       type="number" min="0" max="20"
                       value={children.length === 0 && regForm.children_count === '0' ? '' : String(children.length)}

@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, spouse_phone, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes,
+    spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -40,6 +40,30 @@ export async function POST(request: NextRequest) {
 
   const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })
+
+  const cleanSpouseId = spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : ''
+
+  // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות
+  if (Array.isArray(children) && children.length) {
+    const seen = new Set<string>()
+    for (const c of children as { name?: string; id_number?: string }[]) {
+      const cid = (c?.id_number ?? '').replace(/\D/g, '')
+      if (!cid) continue
+      const childName = (c?.name ?? '').trim() || 'הילד/ה'
+      // א. כפילות בתוך אותה משפחה (אותה רשימה / זהה להורה) — מציינים שם
+      if (seen.has(cid)) return NextResponse.json({ error: `תעודת הזהות של ${childName} מופיעה פעמיים ברשימת הילדים.` }, { status: 409 })
+      if (cid === cleanId || (cleanSpouseId && cid === cleanSpouseId)) {
+        return NextResponse.json({ error: `תעודת הזהות של ${childName} זהה לזו של ההורה. יש להזין תעודת זהות נכונה.` }, { status: 409 })
+      }
+      seen.add(cid)
+      // ב. כבר קיים במערכת על שם רשומה אחרת — לא חושפים פרטים
+      const { data: asBen } = await admin.from('beneficiaries').select('id').or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).limit(1)
+      const { data: asChild } = await admin.from('beneficiaries').select('id').contains('children', [{ id_number: cid }]).limit(1)
+      if ((asBen?.length || asChild?.length)) {
+        return NextResponse.json({ error: `תעודת הזהות ${cid} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 409 })
+      }
+    }
+  }
 
   const isMarried = String(marital_status) === 'נשואים'
   const cleanChildCount = Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10))
@@ -72,6 +96,7 @@ export async function POST(request: NextRequest) {
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
+    spouse_birth_date: spouse_birth_date || null,
     ...sharedFields,
   }]
 
@@ -81,8 +106,8 @@ export async function POST(request: NextRequest) {
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, children, lineage_manual, lineage_chain, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void children; void lineage_manual; void lineage_chain
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)
