@@ -1378,10 +1378,12 @@ export default function PublicPortalPage() {
               <p className="text-base font-bold text-amber-900 mb-3 text-center leading-relaxed">
                 הרישום מיועד אך ורק לנכדי רבינו החתם סופר!
               </p>
-              <p className="text-sm text-amber-900 leading-relaxed">
+              <p className="text-sm text-amber-900 leading-relaxed mb-3">
                 אך ורק למי שיש בידו יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
-                ולא על חצאי עדויות. גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס.
-                ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
+                ולא על חצאי עדויות.
+              </p>
+              <p className="text-sm font-extrabold text-red-700 leading-relaxed bg-white/70 border-r-4 border-red-400 rounded-lg px-3 py-2.5">
+                גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
               </p>
             </div>
             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-colors">
@@ -1587,11 +1589,22 @@ export default function PublicPortalPage() {
               <h2 className="font-bold text-slate-900 text-lg">טופס רישום</h2>
             </div>
 
+            {/* הבהרה — רישום פעם אחת בלבד */}
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl px-4 py-3.5 text-sm text-red-800 leading-relaxed">
+              <p className="font-bold mb-1">⚠️ יש להירשם פעם אחת בלבד</p>
+              <p>מי שברשותו גם תעודת זהות וגם דרכון — יירשם עם <strong>אמצעי זיהוי אחד בלבד</strong>, והוא ישמש אותו לאורך כל התהליך. <strong>הירשמות פעם שנייה תגרום לחסימת החשבון לצמיתות.</strong></p>
+            </div>
+
             {/* Marital — FIRST */}
             <Card>
-              <div className="flex items-center gap-2 mb-4">
+              <div className="flex items-center gap-2 mb-3">
                 <Heart size={18} className="text-indigo-600" />
                 <h3 className="font-semibold text-slate-900">מצב משפחתי</h3>
+              </div>
+              {/* הבהרה — ראשי משפחה בלבד */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
+                <p className="font-bold mb-0.5">שימו לב — הרישום מיועד לראשי משפחה בלבד</p>
+                <p>אין רישום כלל לבחורים או לילדים. <strong>רישום של בחור או ילד יגרום לחסימת הרישום שלו בעתיד.</strong></p>
               </div>
               {(() => {
                 const otherActive = showOtherMarital || OTHER_MARITAL_OPTIONS.some(o => o.value === regForm.marital_status)
@@ -1742,9 +1755,13 @@ export default function PublicPortalPage() {
             {/* Contact */}
             {regForm.marital_status && (
               <Card>
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center gap-2 mb-3">
                   <Phone size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
+                  <p className="font-bold">שימו לב — יש לדייק בפרטי הקשר</p>
+                  <p>הקפידו להזין מספר טלפון וכתובת מייל <strong>תקינים</strong>, שכן כל ההודעות והעדכונים יישלחו למספר ולכתובת שתמלאו כאן.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
