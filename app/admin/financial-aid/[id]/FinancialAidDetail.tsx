@@ -19,6 +19,7 @@ const ELIGIBILITY_LBL: Record<string, string> = {
 export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }) {
   const router = useRouter()
   const supabase = createClient()
+  const { confirm, confirmDialog } = useConfirm()
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [amountInput, setAmountInput] = useState('')
@@ -46,7 +47,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
   }
   // עדכון ידני (override)
   const del = async () => {
-    if (!confirm('למחוק בקשת סיוע זו? הפעולה אינה הפיכה.')) return
+    if (!(await confirm({ title: 'מחיקת בקשת סיוע', message: 'למחוק בקשת סיוע זו? הפעולה אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy('delete'); setErr('')
     try {
       const { error } = await supabase.from('financial_aid_requests').delete().eq('id', req.id)
@@ -183,6 +184,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
         </button>
       </div>
     </Card>
+    {confirmDialog}
     </>
   )
 }
