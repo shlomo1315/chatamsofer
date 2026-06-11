@@ -580,9 +580,17 @@ export function birthApprovedEmail(
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההבראה ליולדת אושרה 🎉</h2>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
+      </td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">להמשך התהליך:</p>
+        <p style="margin:6px 0 0;color:#1e3a8a;font-size:14px;line-height:1.7;">
+          עליכם לפנות אל בית ההחלמה שנרשמתם${birth.recovery_home ? ` — <strong>${birth.recovery_home}</strong>` : ''} ולהשלים מולם את הרישום ושאר הפרטים.
+        </p>
       </td></tr>
     </table>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הלידה:</p>
