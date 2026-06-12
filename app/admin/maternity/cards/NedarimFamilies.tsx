@@ -2,8 +2,21 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Loader2, RefreshCw, Search, X, CreditCard, Plus, Trash2, Wallet,
-  Pencil, Check, AlertTriangle, Coins,
+  Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
 } from 'lucide-react'
+
+type Stats = {
+  configured?: boolean
+  familiesCount?: number
+  totalLoaded?: number
+  totalRemaining?: number
+  usedTotal?: number
+  usedToday?: number; usedWeek?: number; usedMonth?: number
+  cntToday?: number; cntWeek?: number; cntMonth?: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transactions?: any[]
+  error?: string
+}
 
 type Family = {
   ClientId: string
@@ -41,6 +54,9 @@ export default function NedarimFamilies() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Family | null>(null)
   const [adding, setAdding] = useState(false)
+  const [view, setView] = useState<'families' | 'history'>('families')
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -54,7 +70,16 @@ export default function NedarimFamilies() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const res = await fetch('/api/admin/nedarim/stats')
+      setStats(await res.json())
+    } catch { setStats(null) }
+    setStatsLoading(false)
+  }, [])
+
+  useEffect(() => { load(); loadStats() }, [load, loadStats])
 
   const q = search.trim()
   const filtered = q
@@ -63,29 +88,57 @@ export default function NedarimFamilies() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Header / stats */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-2.5">
-            <p className="text-xs text-slate-500">סה"כ טעון בכרטיסים</p>
-            <p className="text-lg font-bold text-emerald-700">{total != null ? ils(total) : '—'}</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-2.5">
-            <p className="text-xs text-slate-500">משפחות</p>
-            <p className="text-lg font-bold text-slate-700">{families.length}</p>
-          </div>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard icon={Wallet} color="emerald" label="סה״כ מוטען בארנקים"
+          value={ils(stats?.totalLoaded ?? total ?? 0)} loading={statsLoading} />
+        <StatCard icon={TrendingDown} color="rose" label="סה״כ נוצל"
+          value={ils(stats?.usedTotal ?? 0)} loading={statsLoading} />
+        <StatCard icon={ArrowDownCircle} color="indigo" label="יתרה נוכחית (סטטוס)"
+          value={ils(stats?.totalRemaining ?? 0)} loading={statsLoading} />
+        <StatCard icon={Users} color="slate" label="משפחות"
+          value={String(stats?.familiesCount ?? families.length)} loading={statsLoading && families.length === 0} />
+      </div>
+
+      {/* Usage by period */}
+      <div className="grid grid-cols-3 gap-3">
+        <PeriodCard label="נוצל היום" amount={ils(stats?.usedToday ?? 0)} count={stats?.cntToday ?? 0} loading={statsLoading} />
+        <PeriodCard label="נוצל השבוע" amount={ils(stats?.usedWeek ?? 0)} count={stats?.cntWeek ?? 0} loading={statsLoading} />
+        <PeriodCard label="נוצל החודש" amount={ils(stats?.usedMonth ?? 0)} count={stats?.cntMonth ?? 0} loading={statsLoading} />
+      </div>
+
+      {/* View toggle + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
+        <div className="flex items-center gap-1">
+          {([
+            { id: 'families', label: 'משפחות', icon: Users },
+            { id: 'history', label: 'היסטוריית עסקאות', icon: Receipt },
+          ] as const).map(t => {
+            const Icon = t.icon; const active = view === t.id
+            return (
+              <button key={t.id} onClick={() => setView(t.id)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border-b-2 -mb-px transition-colors
+                  ${active ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                <Icon size={15} /> {t.label}
+              </button>
+            )
+          })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pb-1.5">
           <button onClick={() => setAdding(true)}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg">
             <Plus size={16} /> משפחה חדשה
           </button>
-          <button onClick={load} disabled={loading} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg border border-slate-200">
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          <button onClick={() => { load(); loadStats() }} disabled={loading} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg border border-slate-200">
+            <RefreshCw size={16} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
 
+      {view === 'history' ? (
+        <TransactionsHistory transactions={stats?.transactions ?? []} loading={statsLoading} />
+      ) : (
+      <>
       {/* Search */}
       <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2">
         <Search size={15} className="text-slate-400" />
@@ -113,22 +166,22 @@ export default function NedarimFamilies() {
               <thead>
                 <tr className="text-right text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
                   <th className="px-4 py-2.5 font-medium">שם משפחה</th>
+                  <th className="px-4 py-2.5 font-medium">מזהה משפחה</th>
                   <th className="px-4 py-2.5 font-medium">ת.ז</th>
                   <th className="px-4 py-2.5 font-medium">טלפון</th>
                   <th className="px-4 py-2.5 font-medium">קטגוריה</th>
-                  <th className="px-4 py-2.5 font-medium">יתרה</th>
-                  <th className="px-4 py-2.5 font-medium">מזהה</th>
+                  <th className="px-4 py-2.5 font-medium">יתרה בכרטיס</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map(f => (
                   <tr key={f.ClientId} onClick={() => setSelected(f)} className="hover:bg-emerald-50/40 cursor-pointer">
                     <td className="px-4 py-2.5 font-medium text-slate-800">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-500 ltr-num text-right font-mono">{f.ClientId}</td>
                     <td className="px-4 py-2.5 text-slate-500 ltr-num text-right">{f.Zeout || '—'}</td>
                     <td className="px-4 py-2.5 text-slate-500 ltr-num text-right" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} />
                     <td className="px-4 py-2.5 text-slate-500">{f.Groupe || '—'}</td>
                     <td className="px-4 py-2.5 font-semibold text-emerald-700">{ils(f.Ytra)}</td>
-                    <td className="px-4 py-2.5 text-slate-400 ltr-num text-right">{f.ClientId}</td>
                   </tr>
                 ))}
               </tbody>
@@ -136,8 +189,10 @@ export default function NedarimFamilies() {
           </div>
         )}
       </div>
+      </>
+      )}
 
-      {selected && <FamilyModal family={selected} onClose={() => setSelected(null)} onChanged={load} />}
+      {selected && <FamilyModal family={selected} onClose={() => setSelected(null)} onChanged={() => { load(); loadStats() }} />}
       {adding && <EditFamilyModal onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />}
     </div>
   )
@@ -425,6 +480,80 @@ function FieldI({ label, v, on, ltr }: { label: string; v: string; on: (e: React
       <label className="text-xs font-medium text-slate-600">{label}</label>
       <input value={v} onChange={on} dir={ltr ? 'ltr' : undefined}
         className={`rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${ltr ? 'text-left' : ''}`} />
+    </div>
+  )
+}
+
+const STAT_COLORS: Record<string, string> = {
+  emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+  rose: 'bg-rose-50 border-rose-100 text-rose-700',
+  indigo: 'bg-indigo-50 border-indigo-100 text-indigo-700',
+  slate: 'bg-slate-50 border-slate-100 text-slate-700',
+}
+function StatCard({ icon: Icon, color, label, value, loading }: { icon: typeof Wallet; color: string; label: string; value: string; loading?: boolean }) {
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${STAT_COLORS[color] ?? STAT_COLORS.slate}`}>
+      <div className="flex items-center gap-1.5 mb-1"><Icon size={14} /><p className="text-xs text-slate-500">{label}</p></div>
+      <p className="text-lg font-bold">{loading ? <Loader2 size={16} className="animate-spin" /> : value}</p>
+    </div>
+  )
+}
+function PeriodCard({ label, amount, count, loading }: { label: string; amount: string; count: number; loading?: boolean }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white px-4 py-3">
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      {loading ? <Loader2 size={16} className="animate-spin text-slate-400" /> : (
+        <div className="flex items-baseline gap-2">
+          <span className="text-base font-bold text-slate-800">{amount}</span>
+          <span className="text-xs text-slate-400">{count} כרטיסים</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function TransactionsHistory({ transactions, loading }: { transactions: any[]; loading?: boolean }) {
+  const [q, setQ] = useState('')
+  const filtered = q.trim()
+    ? transactions.filter(t => [t.familyName, t.store, t.date].filter(Boolean).join(' ').includes(q.trim()))
+    : transactions
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2">
+        <Search size={15} className="text-slate-400" />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש בעסקאות לפי משפחה / חנות / תאריך…" className="flex-1 text-sm bg-transparent outline-none" />
+      </div>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm"><Loader2 size={18} className="animate-spin" /> טוען היסטוריית עסקאות…</div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2"><Receipt size={28} /><span className="text-sm">אין עסקאות</span></div>
+        ) : (
+          <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
+            <table className="w-full text-sm" dir="rtl">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-right text-xs text-slate-500 border-b border-slate-100">
+                  <th className="px-4 py-2.5 font-medium">משפחה</th>
+                  <th className="px-4 py-2.5 font-medium">חנות</th>
+                  <th className="px-4 py-2.5 font-medium">תאריך</th>
+                  <th className="px-4 py-2.5 font-medium">סכום</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((t, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 font-medium text-slate-800">{t.familyName || '—'}</td>
+                    <td className="px-4 py-2 text-slate-500">{t.store || '—'}</td>
+                    <td className="px-4 py-2 text-slate-500 ltr-num text-right">{t.date || '—'}</td>
+                    <td className="px-4 py-2 font-semibold text-slate-700">{Number.isFinite(Number(t.amount)) ? `₪${Number(t.amount).toLocaleString('he-IL')}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
