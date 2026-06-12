@@ -16,7 +16,7 @@ async function run(request: NextRequest) {
   // אימות הקריאה מול CRON_SECRET — דרך Authorization: Bearer <secret> או ?secret=<secret>
   if (!verifyCronSecret(request)) return NextResponse.json({ error: 'אין הרשאה' }, { status: 401 })
 
-  const creds = getNedarimCreds()
+  const creds = await getNedarimCreds()
   if (!creds) return NextResponse.json({ error: 'חיבור נדרים פלוס לא מוגדר' }, { status: 500 })
 
   const admin = getAdminClient()

@@ -3,6 +3,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { MaternityAid } from '@/types'
 import CardCentersManager from './CardCentersManager'
 import CardsTable from './CardsTable'
+import CardsTabs from './CardsTabs'
 
 async function getAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -29,8 +30,7 @@ export default async function FoodCardsPage() {
         </div>
       </div>
 
-      <CardCentersManager />
-      <CardsTable aids={aids} />
+      <CardsTabs internal={<><CardCentersManager /><div className="mt-5"><CardsTable aids={aids} /></div></>} />
     </div>
   )
 }

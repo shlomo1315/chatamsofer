@@ -9,6 +9,7 @@ import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
+import NedarimSettings from './NedarimSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -125,6 +126,11 @@ export default async function SettingsPage() {
         {/* Email templates */}
         <Card>
           <EmailTemplatesManager />
+        </Card>
+
+        {/* Nedarim Card connection */}
+        <Card>
+          <NedarimSettings />
         </Card>
 
         {/* Notifications */}

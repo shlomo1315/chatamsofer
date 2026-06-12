@@ -74,6 +74,17 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
       })
 
+      // אישור משפחה → הקמה אוטומטית בנדרים קארד ושמירת מזהה המשפחה (best-effort, לא חוסם)
+      if (next === 'approved') {
+        try {
+          await fetch('/api/nedarim/save-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beneficiaryId: id }),
+          })
+        } catch { /* כשל בהקמה בנדרים לא חוסם את האישור */ }
+      }
+
       setOpen(false)
       // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא
       if (advance && next !== 'pending') {

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
+import { getNedarimCreds } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,16 +15,17 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  // מוגבל למנהל וגבייה בלבד
-  if (!(await requireStaff(['admin', 'collections']))) {
+  // מוגבל לצוות (מנהל / גבייה / מזכירות) — מזכיר מאשר משפחות
+  if (!(await requireStaff(['admin', 'collections', 'secretary']))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
 
-  const mosadId = process.env.NEDARIM_MOSAD_ID
-  const apiPassword = process.env.NEDARIM_API_PASSWORD
-  if (!mosadId || !apiPassword) {
-    return NextResponse.json({ error: 'חיבור נדרים פלוס לא מוגדר (NEDARIM_MOSAD_ID / NEDARIM_API_PASSWORD)' }, { status: 500 })
+  // קוד מוסד + סיסמת API — מההגדרות (app_settings) או ENV. אם לא מוגדר — דילוג רך (לא חוסם אישור).
+  const creds = await getNedarimCreds()
+  if (!creds) {
+    return NextResponse.json({ ok: false, notConfigured: true, message: 'נדרים קארד אינו מוגדר' })
   }
+  const { mosadId, apiPassword } = creds
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })

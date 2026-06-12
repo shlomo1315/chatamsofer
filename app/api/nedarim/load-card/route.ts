@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff(['admin', 'collections'])
   if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
-  const creds = getNedarimCreds()
+  const creds = await getNedarimCreds()
   if (!creds) {
     return NextResponse.json({ error: 'חיבור נדרים פלוס לא מוגדר (NEDARIM_MOSAD_ID / NEDARIM_API_PASSWORD)' }, { status: 500 })
   }

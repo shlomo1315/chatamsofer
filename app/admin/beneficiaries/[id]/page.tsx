@@ -135,6 +135,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             <DetailRow label="תאריך לידה" value={formatDate(beneficiary.birth_date)} />
             <DetailRow label="מצב משפחתי" value={beneficiary.marital_status ?? '—'} />
             <DetailRow label="מספר ילדים" value={String(beneficiary.children_count)} />
+            {beneficiary.nedarim_id && <DetailRow label="מזהה משפחה בנדרים קארד" value={beneficiary.nedarim_id} ltr />}
           </div>
         </Card>
         <Card>
