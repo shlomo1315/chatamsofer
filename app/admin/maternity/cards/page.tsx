@@ -7,14 +7,25 @@ import CardsTabs from './CardsTabs'
 
 async function getAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('maternity_aids')
-    .select('id, birth_date, baby_name, baby_gender, status, card_status, card_center_id, card_loaded_at, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number), card_center:card_centers(name)')
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data ?? []) as unknown as MaternityAid[]
+  try {
+    const supabase = await createClient()
+    const full = await supabase
+      .from('maternity_aids')
+      .select('id, birth_date, baby_name, baby_gender, status, card_status, card_center_id, card_loaded_at, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number), card_center:card_centers(name)')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+    if (!full.error) return (full.data ?? []) as unknown as MaternityAid[]
+
+    // נפילה-לאחור ללא ה-join של card_centers (במקרה שהקשר נכשל) — שהעמוד לא יקרוס
+    const basic = await supabase
+      .from('maternity_aids')
+      .select('id, birth_date, baby_name, baby_gender, status, card_status, card_center_id, card_loaded_at, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, spouse_id_number)')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+    return (basic.data ?? []) as unknown as MaternityAid[]
+  } catch {
+    return []
+  }
 }
 
 export default async function FoodCardsPage() {
