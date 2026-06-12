@@ -2953,7 +2953,7 @@ export default function PublicPortalPage() {
                     </div>
                   )}
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="סכום מבוקש ($)" required hint="עד $30,000">
+                    <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
                       <TextInput
                         type="number" min="100" max="30000" step="100"
                         value={loanForm.amount} onChange={setLoan('amount')}
