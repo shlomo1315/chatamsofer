@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { getNedarimCreds, getClientsTable, getClientCardFull, type NedarimCreds } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +51,29 @@ export async function GET() {
     catch { return { f, card: null } }
   })
 
+  // מפת ת.ז → תאריך פריקה (6 שבועות מהלידה) מתוך תיקי היולדות הפעילים
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unloadByZeout: Record<string, { unloadDate: string; daysRemaining: number }> = {}
+  try {
+    const admin = getServiceClient()
+    if (admin) {
+      const { data: aids } = await admin
+        .from('maternity_aids')
+        .select('birth_date, six_weeks_end, status, beneficiary:beneficiaries(id_number)')
+        .eq('status', 'active')
+      const today0 = new Date(); today0.setHours(0, 0, 0, 0)
+      for (const a of (aids ?? []) as Json[]) {
+        const zeout = String(a.beneficiary?.id_number ?? '').trim()
+        if (!zeout) continue
+        let end: Date | null = a.six_weeks_end ? new Date(a.six_weeks_end) : null
+        if (!end && a.birth_date) { end = new Date(a.birth_date); end.setDate(end.getDate() + 42) }
+        if (!end || Number.isNaN(end.getTime())) continue
+        const days = Math.ceil((end.getTime() - today0.getTime()) / 86400000)
+        unloadByZeout[zeout] = { unloadDate: end.toISOString().slice(0, 10), daysRemaining: days }
+      }
+    }
+  } catch { /* מפת פריקה היא תוספת — כשל לא חוסם את הסטטיסטיקות */ }
+
   const now = new Date()
   const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - ((startToday.getDay() + 7) % 7)) // ראשון
@@ -94,5 +117,6 @@ export async function GET() {
     usedToday, usedWeek, usedMonth,
     cntToday, cntWeek, cntMonth,
     transactions,
+    unloadByZeout,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }

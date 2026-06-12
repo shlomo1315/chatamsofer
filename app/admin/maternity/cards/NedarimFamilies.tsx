@@ -15,6 +15,7 @@ type Stats = {
   cntToday?: number; cntWeek?: number; cntMonth?: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transactions?: any[]
+  unloadByZeout?: Record<string, { unloadDate: string; daysRemaining: number }>
   error?: string
 }
 
@@ -171,6 +172,7 @@ export default function NedarimFamilies() {
                   <th className="px-4 py-2.5 font-medium">טלפון</th>
                   <th className="px-4 py-2.5 font-medium">קטגוריה</th>
                   <th className="px-4 py-2.5 font-medium">יתרה בכרטיס</th>
+                  <th className="px-4 py-2.5 font-medium">ימים לפריקה</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -182,6 +184,7 @@ export default function NedarimFamilies() {
                     <td className="px-4 py-2.5 text-slate-500 ltr-num text-right" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} />
                     <td className="px-4 py-2.5 text-slate-500">{f.Groupe || '—'}</td>
                     <td className="px-4 py-2.5 font-semibold text-emerald-700">{ils(f.Ytra)}</td>
+                    <td className="px-4 py-2.5"><UnloadCell info={f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -481,6 +484,19 @@ function FieldI({ label, v, on, ltr }: { label: string; v: string; on: (e: React
       <input value={v} onChange={on} dir={ltr ? 'ltr' : undefined}
         className={`rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 ${ltr ? 'text-left' : ''}`} />
     </div>
+  )
+}
+
+// חיווי ימים שנותרו עד פריקה אוטומטית (6 שבועות מהלידה)
+function UnloadCell({ info }: { info?: { unloadDate: string; daysRemaining: number } }) {
+  if (!info) return <span className="text-slate-300">—</span>
+  const d = info.daysRemaining
+  const cls = d <= 0 ? 'bg-red-100 text-red-700' : d <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+  const label = d <= 0 ? 'לפריקה היום' : d === 1 ? 'יום אחד' : `${d} ימים`
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
+      {label}
+    </span>
   )
 }
 
