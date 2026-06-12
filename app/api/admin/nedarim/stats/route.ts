@@ -16,7 +16,13 @@ function parseNedarimDate(s: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+// פירוק מספר עמיד — מנקה פסיקים / ₪ / רווחים / NBSP וכו'
+const num = (v: unknown) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+  const cleaned = String(v ?? '').replace(/[^\d.\-]/g, '')
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : 0
+}
 
 // עיבוד מקבילי מוגבל (pool) כדי לא להציף את שרתי נדרים
 async function mapPool<T, R>(items: T[], limit: number, fn: (it: T) => Promise<R>): Promise<R[]> {
@@ -38,12 +44,16 @@ export async function GET() {
   if (!creds) return NextResponse.json({ configured: false })
 
   let families: Json[] = []
+  let tableTotal = 0 // הסכום הכללי המוטען בכל הכרטיסים — ישירות מ-GetClient_Table (מקור אמת)
   try {
     const t = await getClientsTable(creds as NedarimCreds)
     families = t.families
+    tableTotal = num(t.total)
   } catch (e) {
     return NextResponse.json({ configured: true, error: e instanceof Error ? e.message : 'שגיאה' }, { status: 502 })
   }
+  // סכום היתרות לפי עמודת Ytra בטבלת המשפחות (קריאה אחת אמינה)
+  const sumYtra = families.reduce((s, f) => s + num(f.Ytra), 0)
 
   // משיכת כרטיס מלא לכל משפחה (טעינות + היסטוריה) — pool של 5
   const cards = await mapPool(families, 5, async (f) => {
@@ -79,7 +89,7 @@ export async function GET() {
   const startWeek = new Date(startToday); startWeek.setDate(startToday.getDate() - ((startToday.getDay() + 7) % 7)) // ראשון
   const startMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-  let totalLoaded = 0, totalRemaining = 0
+  let totalLoaded = 0, remainingFromCards = 0
   let usedTotal = 0, usedToday = 0, usedWeek = 0, usedMonth = 0
   let cntToday = 0, cntWeek = 0, cntMonth = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,7 +97,7 @@ export async function GET() {
 
   for (const { f, card } of cards) {
     if (!card) continue
-    totalRemaining += num(card.TotalFreeAmount)
+    remainingFromCards += num(card.TotalFreeAmount)
     const tlushim: Json[] = Array.isArray(card.Tlushim) ? card.Tlushim : []
     for (const t of tlushim) totalLoaded += num(t.Amount)
     const history: Json[] = Array.isArray(card.History) ? card.History : []
@@ -110,10 +120,19 @@ export async function GET() {
   }
   transactions.sort((a, b) => b.ts - a.ts)
 
+  // יתרה כללית — מקור אמת: Total מטבלת המשפחות, אחרת סכום Ytra, אחרת מהכרטיסים
+  const totalRemaining = tableTotal || sumYtra || remainingFromCards
+  // נטען אי-פעם — אם לא הצלחנו לסכום טעינות, נשתמש לפחות ביתרה הנוכחית + הניצול
+  const loadedFinal = totalLoaded || (totalRemaining + usedTotal)
+
   return NextResponse.json({
     configured: true,
     familiesCount: families.length,
-    totalLoaded, totalRemaining, usedTotal,
+    totalLoaded: loadedFinal,
+    totalRemaining,
+    tableTotal,
+    sumYtra,
+    usedTotal,
     usedToday, usedWeek, usedMonth,
     cntToday, cntWeek, cntMonth,
     transactions,

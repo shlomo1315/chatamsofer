@@ -74,16 +74,16 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
       })
 
-      // אישור משפחה → הקמה אוטומטית בנדרים קארד ושמירת מזהה המשפחה (best-effort, לא חוסם)
-      if (next === 'approved') {
-        try {
-          await fetch('/api/nedarim/save-client', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ beneficiaryId: id }),
-          })
-        } catch { /* כשל בהקמה בנדרים לא חוסם את האישור */ }
-      }
+      // סנכרון נדרים קארד: רק משפחה מאושרת קיימת בנדרים.
+      // אישור → הקמה/עדכון עם כל הפרטים · כל סטטוס אחר → מחיקה מנדרים. (best-effort, לא חוסם)
+      try {
+        const endpoint = next === 'approved' ? '/api/nedarim/save-client' : '/api/nedarim/delete-client'
+        await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ beneficiaryId: id }),
+        })
+      } catch { /* כשל בסנכרון נדרים לא חוסם את שינוי הסטטוס */ }
 
       setOpen(false)
       // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא

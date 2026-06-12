@@ -35,8 +35,8 @@ type Family = {
 type Json = Record<string, any>
 
 const ils = (v: unknown) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : (v ? String(v) : '—')
+  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^\d.\-]/g, ''))
+  return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : '—'
 }
 
 async function api(action: string, params: Record<string, string> = {}): Promise<Json> {
