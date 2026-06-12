@@ -68,11 +68,6 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
           <span className="font-medium text-slate-800 group-hover/name:text-indigo-600 truncate">
             {fullName(row)}
           </span>
-          {row.id_number ? (
-            <span dir="ltr" className="font-mono text-[11px] text-slate-400 text-left tabular-nums">
-              {row.id_number}
-            </span>
-          ) : null}
         </span>
       </Link>
     ),
