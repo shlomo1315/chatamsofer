@@ -132,9 +132,11 @@ function buildNodePath(nodeId: string, allNodes: LineageNode[]): string[] {
 function LineageTreePicker({
   initialNodeId,
   onSelect,
+  selfName,
 }: {
   initialNodeId?: string
   onSelect: (nodeId: string, path: string[]) => void
+  selfName?: string
 }) {
   const [allNodes, setAllNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
@@ -227,7 +229,16 @@ function LineageTreePicker({
     }
   }, [loading])
 
-  const positions = useMemo(() => tpLayout(tpBuildTree(allNodes)), [allNodes])
+  // הזרקת "צומת הנרשם עצמו" כילד של הצומת שנבחר — כדי שיוצג בעץ במיקומו הנכון
+  const SELF_ID = '__self__'
+  const layoutNodes = useMemo(() => {
+    if (!selected || !selfName) return allNodes
+    const sel = allNodes.find(n => n.id === selected)
+    if (!sel) return allNodes
+    return [...allNodes, { ...sel, id: SELF_ID, name: selfName, parent_id: selected, generation: (sel.generation ?? 0) + 1, status: 'verified' } as LineageNode]
+  }, [allNodes, selected, selfName])
+
+  const positions = useMemo(() => tpLayout(tpBuildTree(layoutNodes)), [layoutNodes])
   const edges = useMemo(() => tpEdges(positions), [positions])
   const { w, h } = useMemo(() => tpCanvasSize(positions), [positions])
 
@@ -239,8 +250,9 @@ function LineageTreePicker({
     let cur = map.get(selected)
     let guard = 0
     while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+    if (selfName) s.add(SELF_ID) // צומת הנרשם תמיד מודגש
     return s
-  }, [selected, allNodes])
+  }, [selected, allNodes, selfName])
 
   // Center horizontally on first load
   useEffect(() => {
@@ -365,13 +377,16 @@ function LineageTreePicker({
           </svg>
 
           {positions.map(pos => {
-            const p = tpPal(pos.node.generation)
+            const isSelf = pos.node.id === SELF_ID    // צומת הנרשם עצמו
+            const p = isSelf
+              ? { bg: 'linear-gradient(135deg,#34D399,#059669)', ring: '#059669', shadow: 'rgba(5,150,105,0.35)' }
+              : tpPal(pos.node.generation)
             const isSel = selected === pos.node.id   // הצומת האחרון שנבחר
             const onBranch = branch.has(pos.node.id)  // כל הצמתים בנתיב הנבחר
             return (
               <div
                 key={pos.node.id}
-                onClick={() => handleNodeClick(pos)}
+                onClick={() => { if (isSelf) return; handleNodeClick(pos) }}
                 style={{
                   position: 'absolute',
                   left: pos.x * zoom, top: pos.y * zoom,
@@ -1224,6 +1239,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
         <LineageTreePicker
           initialNodeId={form.lineage_node_id}
+          selfName={[form.family_name, form.full_name].filter(Boolean).join(' ').trim() || 'הצאצא (אני)'}
           onSelect={(nodeId, path) => {
             setForm(f => ({ ...f, lineage_node_id: nodeId }))
             setLineagePath(path)
