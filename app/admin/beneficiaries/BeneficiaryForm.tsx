@@ -1197,23 +1197,30 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           <p className="text-xs text-red-500 mb-3">{errors.lineage_node_id}</p>
         )}
 
-        {(form.lineage_node_id || lineagePath.length > 0) && (
-          <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
-            <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
-            {lineagePath.map((name, i) => (
-              <span key={i} className="flex items-center gap-1">
-                {i > 0 && <ChevronLeft size={11} className="text-indigo-300" />}
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  i === lineagePath.length - 1
-                    ? 'bg-indigo-600 text-white font-medium'
-                    : 'bg-indigo-100 text-indigo-700'
-                }`}>
-                  {name}
+        {(form.lineage_node_id || lineagePath.length > 0) && (() => {
+          const ancestors = [...lineagePath, ...manualLineage.map(s => s.trim()).filter(Boolean)]
+          const selfName = [form.family_name, form.full_name].filter(Boolean).join(' ').trim()
+          return (
+            <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
+              <span className="text-xs text-indigo-600 font-medium ml-1">שרשרת הדורות:</span>
+              {ancestors.map((name, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <ChevronLeft size={11} className="text-indigo-300" />}
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    {name}
+                  </span>
+                </span>
+              ))}
+              {/* הנרשם עצמו — מוצג כדור האחרון בשרשרת */}
+              <span className="flex items-center gap-1">
+                {ancestors.length > 0 && <ChevronLeft size={11} className="text-emerald-400" />}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white font-medium inline-flex items-center gap-1">
+                  <User size={10} /> {selfName || 'הצאצא'} <span className="opacity-80">(הצאצא)</span>
                 </span>
               </span>
-            ))}
-          </div>
-        )}
+            </div>
+          )
+        })()}
 
         <LineageTreePicker
           initialNodeId={form.lineage_node_id}
