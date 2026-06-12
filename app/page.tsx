@@ -896,6 +896,7 @@ export default function PublicPortalPage() {
     baby_id_number: '', baby_id_type: 'id',
   })
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
+  const [babyIdError, setBabyIdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
 
   // Loan request form
@@ -1232,6 +1233,7 @@ export default function PublicPortalPage() {
     if (!birthForm.baby_name) { setError(birthForm.baby_gender === 'female' ? 'אנא הזן שם הנולדת' : 'אנא הזן שם הנולד'); return }
     if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
     if (birthForm.baby_id_type === 'id' && !validateIsraeliId(birthForm.baby_id_number)) { setError('תעודת הזהות של הנולד/ת אינה תקינה'); return }
+    if (babyIdError) { setError(babyIdError); return }
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
@@ -1388,7 +1390,7 @@ export default function PublicPortalPage() {
 
   const goToBirthForm = () => {
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
-    setError('')
+    setError(''); setBabyIdError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
     setBirthCertFile(null)
     setDocFiles({})
@@ -2782,14 +2784,34 @@ export default function PublicPortalPage() {
                         ))}
                       </div>
                       <TextInput value={birthForm.baby_id_number}
-                        onChange={e => { const v = birthForm.baby_id_type === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; setBirthForm(f => ({ ...f, baby_id_number: v })) }}
+                        className={babyIdError ? 'border-red-400 focus:ring-red-400' : ''}
+                        onChange={e => { const v = birthForm.baby_id_type === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; setBirthForm(f => ({ ...f, baby_id_number: v })); setBabyIdError('') }}
                         dir="ltr" inputMode={birthForm.baby_id_type === 'id' ? 'numeric' : 'text'}
                         maxLength={birthForm.baby_id_type === 'id' ? 9 : undefined}
-                        placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required />
-                      {birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && !validateIsraeliId(birthForm.baby_id_number) && (
+                        placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required
+                        onBlur={async () => {
+                          const val = birthForm.baby_id_number.trim()
+                          if (!val) return
+                          // ת.ז ישראלית — בדיקת תקינות תחילה
+                          if (birthForm.baby_id_type === 'id') {
+                            const digits = val.replace(/\D/g, '')
+                            if (digits.length < 9) return
+                            if (!validateIsraeliId(digits)) { setBabyIdError(''); return }
+                          }
+                          // בדיקה מיידית — האם כבר רשום במערכת (כצאצא או כילד אצל מישהו)
+                          try {
+                            const param = birthForm.baby_id_type === 'id' ? `id=${encodeURIComponent(val)}` : `passport=${encodeURIComponent(val)}`
+                            const r = await fetch(`/api/portal/lookup?${param}`)
+                            const d = await r.json()
+                            if (d.found || d.foundAsChild) setBabyIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב')
+                            else setBabyIdError('')
+                          } catch { /* תיתפס בעת השליחה */ }
+                        }} />
+                      {babyIdError && <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> {babyIdError}</p>}
+                      {!babyIdError && birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && !validateIsraeliId(birthForm.baby_id_number) && (
                         <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>
                       )}
-                      {birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && validateIsraeliId(birthForm.baby_id_number) && (
+                      {!babyIdError && birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && validateIsraeliId(birthForm.baby_id_number) && (
                         <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
                       )}
                     </Field>
@@ -2803,8 +2825,8 @@ export default function PublicPortalPage() {
                           onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
                           className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
                             birthForm.recovery_home === h
-                              ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-300 hover:border-pink-400 hover:bg-pink-50'
+                              ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
                           }`}
                         >{h}</button>
                       ))}
