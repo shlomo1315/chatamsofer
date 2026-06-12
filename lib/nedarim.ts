@@ -102,12 +102,18 @@ export type NedarimClientFields = {
   email?: string | null
 }
 
-// משיכת רשימת כל המשפחות (GetClient_Table) → { total, families[] }
+// משיכת רשימת כל המשפחות (GetClient_Table) → { total, families[], meta }
+// meta = כל השדות ברמה העליונה של התגובה (למעט data) — לאיתור שדות לא מתועדים כמו יתרת ארנק המוסד
 export async function getClientsTable(creds: NedarimCreds) {
   const r = await nedarimRequest(creds, 'GetClient_Table', {})
   if (!isOk(r)) throw new Error(r.Message || 'כשל במשיכת רשימת המשפחות מנדרים')
   const rows = Array.isArray(r.data) ? (r.data as Record<string, unknown>[]) : []
-  return { total: r.Total ?? null, families: rows }
+  const meta: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(r)) {
+    if (k === 'data') continue
+    if (v === null || typeof v !== 'object') meta[k] = v
+  }
+  return { total: r.Total ?? null, families: rows, meta }
 }
 
 // חיפוש משפחה בנדרים לפי ת.ז. → מחזיר ClientId אם קיימת, אחרת null

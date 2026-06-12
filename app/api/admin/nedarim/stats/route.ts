@@ -44,13 +44,26 @@ export async function GET() {
   if (!creds) return NextResponse.json({ configured: false })
 
   let families: Json[] = []
-  let tableTotal = 0 // הסכום הכללי המוטען בכל הכרטיסים — ישירות מ-GetClient_Table (מקור אמת)
+  let tableTotal = 0 // הסכום הכללי המוטען בכל הכרטיסים — ישירות מ-GetClient_Table
+  let tableMeta: Record<string, unknown> = {}
   try {
     const t = await getClientsTable(creds as NedarimCreds)
     families = t.families
     tableTotal = num(t.total)
+    tableMeta = t.meta ?? {}
   } catch (e) {
     return NextResponse.json({ configured: true, error: e instanceof Error ? e.message : 'שגיאה' }, { status: 502 })
+  }
+
+  // איתור "ארנק כללי" (יתרת המוסד) מתוך שדות התגובה — שדה לא מתועד שעשוי להופיע בשמות שונים
+  let generalWallet: number | null = null
+  let generalWalletKey: string | null = null
+  for (const [k, v] of Object.entries(tableMeta)) {
+    if (['Total', 'Result', 'Message'].includes(k)) continue
+    if (/arnak|wallet|ארנק|mosad.*bal|bal.*mosad|credit|kupa|itra|yitra|balance|יתר/i.test(k)) {
+      const n = num(v)
+      if (Number.isFinite(n) && n !== 0) { generalWallet = n; generalWalletKey = k; break }
+    }
   }
   // סכום היתרות לפי עמודת Ytra בטבלת המשפחות (קריאה אחת אמינה)
   const sumYtra = families.reduce((s, f) => s + num(f.Ytra), 0)
@@ -132,6 +145,9 @@ export async function GET() {
     totalRemaining,
     tableTotal,
     sumYtra,
+    generalWallet,        // יתרת ארנק המוסד הכללי (אם נמצאה בתגובת ה-API)
+    generalWalletKey,     // שם השדה שזוהה (לאבחון)
+    tableMeta,            // כל שדות התגובה ברמה העליונה (לאבחון — לאיתור שם השדה הנכון)
     usedTotal,
     usedToday, usedWeek, usedMonth,
     cntToday, cntWeek, cntMonth,

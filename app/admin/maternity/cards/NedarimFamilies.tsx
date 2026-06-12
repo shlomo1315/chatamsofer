@@ -11,6 +11,11 @@ type Stats = {
   totalLoaded?: number
   totalRemaining?: number
   usedTotal?: number
+  tableTotal?: number
+  sumYtra?: number
+  generalWallet?: number | null
+  generalWalletKey?: string | null
+  tableMeta?: Record<string, unknown>
   usedToday?: number; usedWeek?: number; usedMonth?: number
   cntToday?: number; cntWeek?: number; cntMonth?: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -492,46 +497,71 @@ function FieldI({ label, v, on, ltr }: { label: string; v: string; on: (e: React
 
 // טאב יתרה כללית — כמה כסף יש כרגע בארנקים בסך הכל
 function WalletSummary({ stats, loading, total, familiesCount }: { stats: Stats | null; loading?: boolean; total: string | number | null; familiesCount: number }) {
-  const remaining = stats?.totalRemaining ?? (total != null ? Number(total) : 0)
+  const inCards = stats?.totalRemaining ?? (total != null ? Number(total) : 0)
   const loaded = stats?.totalLoaded ?? (total != null ? Number(total) : 0)
-  const used = stats?.usedTotal ?? Math.max(0, loaded - remaining)
+  const used = stats?.usedTotal ?? Math.max(0, loaded - inCards)
   const fams = stats?.familiesCount ?? familiesCount
-  const avg = fams > 0 ? remaining / fams : 0
+  const avg = fams > 0 ? inCards / fams : 0
   const pctUsed = loaded > 0 ? Math.round((used / loaded) * 100) : 0
+  const general = stats?.generalWallet ?? null
 
   if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm"><Loader2 size={18} className="animate-spin" /> טוען נתוני ארנק…</div>
 
   return (
     <div className="flex flex-col gap-4">
-      {/* הסכום הגדול — כמה כסף יש כרגע בארנקים */}
+      {/* ארנק כללי — יתרת המוסד הזמינה לטעינה (הסכום הגדול שביקש המשתמש) */}
       <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white px-6 py-8 text-center shadow-lg">
         <div className="flex items-center justify-center gap-2 mb-2 text-emerald-100">
-          <Wallet size={20} /><span className="text-sm font-medium">סך הכסף הזמין כרגע בכל הארנקים</span>
+          <Wallet size={20} /><span className="text-sm font-medium">ארנק כללי — יתרת המוסד הזמינה</span>
         </div>
-        <p className="text-5xl font-extrabold tracking-tight">{ils(remaining)}</p>
-        <p className="text-emerald-100 text-sm mt-2">פרוס על פני {fams.toLocaleString('he-IL')} משפחות · ממוצע {ils(Math.round(avg))} למשפחה</p>
+        {general != null ? (
+          <p className="text-5xl font-extrabold tracking-tight">{ils(general)}</p>
+        ) : (
+          <>
+            <p className="text-2xl font-bold tracking-tight">לא זמין מה-API</p>
+            <p className="text-emerald-100 text-xs mt-2 max-w-md mx-auto">
+              יתרת הארנק הכללי אינה מוחזרת כרגע מ-API של נדרים. ראה למטה את השדות שהתקבלו — שלח לי את שם השדה הנכון או בקש מנדרים את ה-Action המתאים, ואחבר אותו.
+            </p>
+          </>
+        )}
       </div>
 
       {/* פירוט */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-          <p className="text-xs text-slate-500 mb-1">סה״כ נטען אי פעם</p>
-          <p className="text-xl font-bold text-emerald-700">{ils(loaded)}</p>
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-4">
+          <p className="text-xs text-slate-500 mb-1">מוטען בכרטיסי המשפחות</p>
+          <p className="text-xl font-bold text-indigo-700">{ils(inCards)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{fams.toLocaleString('he-IL')} משפחות · ממוצע {ils(Math.round(avg))}</p>
         </div>
         <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-4">
           <p className="text-xs text-slate-500 mb-1">סה״כ נוצל</p>
           <p className="text-xl font-bold text-rose-700">{ils(used)}</p>
         </div>
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-4">
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4">
           <p className="text-xs text-slate-500 mb-1">אחוז ניצול</p>
-          <p className="text-xl font-bold text-indigo-700">{pctUsed}%</p>
+          <p className="text-xl font-bold text-emerald-700">{pctUsed}%</p>
         </div>
       </div>
+
+      {/* אבחון — שדות שהתקבלו מ-API (מוצג רק אם לא זוהתה יתרת ארנק כללי) */}
+      {general == null && stats?.tableMeta && Object.keys(stats.tableMeta).length > 0 && (
+        <details className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium text-amber-800">שדות שהתקבלו מ-API של נדרים (לאבחון)</summary>
+          <div className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
+            {Object.entries(stats.tableMeta).map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-2 bg-white rounded px-2 py-1 border border-amber-100">
+                <span className="text-slate-500">{k}</span>
+                <span className="font-mono text-slate-800 ltr-num">{String(v)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* פס התקדמות ניצול */}
       <div>
         <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-          <span>נוצל {ils(used)}</span><span>נותר {ils(remaining)}</span>
+          <span>נוצל {ils(used)}</span><span>בכרטיסים {ils(inCards)}</span>
         </div>
         <div className="w-full h-3 rounded-full bg-emerald-100 overflow-hidden">
           <div className="h-full bg-rose-400" style={{ width: `${Math.min(100, pctUsed)}%` }} />
