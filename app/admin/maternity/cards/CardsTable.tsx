@@ -15,6 +15,21 @@ const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; spouse_id_number?: string }
 const motherName = (b?: Ben) => b ? ([b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
+const ils = (n?: number | null) => (n == null ? '—' : `₪${Number(n).toLocaleString('he-IL')}`)
+
+// ספירה לאחור לפריקה אוטומטית (פריקה בחצות של יום six_weeks_end) — מציג שעות כשנותר פחות מיום
+function unloadCountdown(sixWeeksEnd?: string): { text: string; cls: string } | null {
+  if (!sixWeeksEnd) return null
+  const end = new Date(sixWeeksEnd); end.setHours(0, 0, 0, 0)
+  const ms = end.getTime() - Date.now()
+  if (ms <= 0) return { text: 'לפריקה היום', cls: 'bg-red-100 text-red-700' }
+  const days = Math.ceil(ms / 86400000)
+  if (days <= 1) {
+    const hours = Math.max(1, Math.ceil(ms / 3600000))
+    return { text: `עוד ~${hours} שע׳`, cls: 'bg-amber-100 text-amber-700' }
+  }
+  return { text: `${days} ימים`, cls: days <= 7 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600' }
+}
 
 const FILTERS: { key: CardStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'הכל' },
@@ -113,32 +128,36 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
       {err && <p className="px-5 mt-3 text-sm text-red-600">{err}</p>}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-right">
+        <table className="w-full text-[16px] text-right border-collapse">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
-              {['שם היולדת', 'ת.ז. האישה', 'תינוק', 'תאריך לידה', 'מוקד', 'סטטוס כרטיס', 'פעולות'].map(h => (
-                <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+            <tr className="border-b-2 border-slate-200 bg-slate-50 text-[15px] font-bold text-slate-600">
+              {['שם היולדת', 'ת.ז. האישה', 'תינוק', 'תאריך לידה', 'מוקד', 'סטטוס כרטיס', 'סכום שהוטען', 'יתרה בכרטיס', 'ימים לפריקה', 'פעולות'].map((h, i, arr) => (
+                <th key={h} className={`px-5 py-4 font-bold whitespace-nowrap ${i < arr.length - 1 ? 'border-l border-slate-200' : ''}`}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
+              <tr><td colSpan={10} className="px-5 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
             ) : filtered.map(aid => {
               const b = aid.beneficiary as Ben | undefined
               const s = (aid.card_status ?? 'pending') as CardStatus
               const center = (aid as { card_center?: { name?: string } }).card_center
               const busy = busyId === aid.id
+              const countdown = (s === 'loaded') ? unloadCountdown(aid.six_weeks_end) : null
               return (
                 <tr key={aid.id} onClick={() => router.push(`/admin/maternity/${aid.id}`)}
-                  className="hover:bg-emerald-50/40 transition-colors cursor-pointer">
-                  <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{motherName(b)}</td>
-                  <td className="px-4 py-3 text-xs font-mono text-slate-600"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
-                  <td className="px-4 py-3 text-slate-700">{aid.baby_name ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-3 text-slate-600"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
-                  <td className="px-4 py-3 text-slate-600">{center?.name ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-4 py-3"><span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer">
+                  <td className="px-5 py-4 font-semibold text-slate-800 whitespace-nowrap border-l border-slate-100">{motherName(b)}</td>
+                  <td className="px-5 py-4 font-mono text-slate-600 border-l border-slate-100"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
+                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{aid.baby_name ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
+                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{center?.name ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 border-l border-slate-100"><span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>
+                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{aid.card_load_amount != null ? ils(aid.card_load_amount) : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{aid.card_status === 'loaded' && aid.card_balance != null ? ils(aid.card_balance) : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 border-l border-slate-100">{countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
                     ) : approveFor === aid.id ? (

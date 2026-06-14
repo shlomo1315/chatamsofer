@@ -8,6 +8,18 @@ interface LineageNode {
   generation: number
   parent_id: string | null
   relation?: 'son' | 'son_in_law' | null
+  status?: 'verified' | 'pending' | 'rejected'
+}
+
+// צבעי סטטוס — זהים לעץ הניהול: מאומת=ירוק, ממתין=כתום, נדחה=אדום
+const STATUS_NODE = {
+  pending:  { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.40)' },
+  rejected: { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.40)' },
+}
+function statusBadge(s?: string) {
+  if (s === 'rejected') return { glyph: '✕', bg: '#DC2626' }
+  if (s === 'pending' || s === 'review') return { glyph: '!', bg: '#F59E0B' }
+  return { glyph: '✓', bg: '#22C55E' } // verified
 }
 interface TNode extends LineageNode { children: TNode[] }
 interface Pos { node: TNode; x: number; y: number; cx: number; cy: number }
@@ -72,7 +84,8 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
   const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
   useEffect(() => {
-    fetch('/api/lineage?all=1')
+    // מקור אחיד עם עץ הניהול — כולל כל הסטטוסים (מאומת/ממתין/נדחה)
+    fetch('/api/admin/lineage', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setAllNodes(d.nodes ?? []))
       .catch(() => {})
@@ -214,7 +227,11 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
           </svg>
 
           {positions.map(pos => {
-            const p = pal(pos.node.generation)
+            const genPal = pal(pos.node.generation)
+            const st = pos.node.status ?? 'verified'
+            // צבע הצומת לפי סטטוס — אחיד עם עץ הניהול
+            const p = st === 'verified' ? genPal : st === 'rejected' ? STATUS_NODE.rejected : STATUS_NODE.pending
+            const badge = statusBadge(st)
             const onBranch = branch.has(pos.node.id)
             const isTarget = pos.node.id === nodeId
             // אותו עיקרון כמו בעץ הניהול: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
@@ -226,6 +243,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                 position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                 width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
                 background: relOverlay + p.bg,
+                border: st === 'verified' ? 'none' : `${Math.max(1.5, 2 * zoom)}px dashed #fff`,
                 boxShadow: isTarget
                   ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
                   : `0 4px 16px ${p.shadow}`,
@@ -235,6 +253,14 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                 opacity: onBranch ? 1 : 0.32,
                 transition: 'opacity .2s',
               }}>
+                {/* תג סטטוס: ✓ ירוק=מאושר · ! כתום=ממתין לאימות · ✕ אדום=נדחה */}
+                <div style={{
+                  position: 'absolute', top: -10 * zoom, left: 6 * zoom,
+                  background: badge.bg, color: '#fff', fontSize: Math.max(8, 11 * zoom), fontWeight: 900,
+                  width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)', zIndex: 25,
+                }}>{badge.glyph}</div>
                 <div style={{
                   position: 'absolute', top: -10 * zoom, right: 6 * zoom,
                   background: '#fff', color: p.ring, fontSize: Math.max(7, 9 * zoom), fontWeight: 900,

@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
-import { addDays, isAfter } from 'date-fns'
+import { addDays } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,10 +41,12 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const now = new Date()
+  // מציגים יולדות שחלון 6 השבועות שלהן עדיין פעיל — כולל יום הסיום עצמו
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0)
   const filtered = (data ?? []).filter((a: { birth_date: string; six_weeks_end?: string }) => {
     const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
-    return isAfter(end, now)
+    end.setHours(0, 0, 0, 0)
+    return end >= today0
   })
 
   return NextResponse.json({ aids: filtered })
