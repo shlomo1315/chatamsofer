@@ -3,6 +3,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
 import RecoveryHomesView from './RecoveryHomesView'
 import RecoveryHomeLinks from '../RecoveryHomeLinks'
+import RecoveryBillingSummary from '../RecoveryBillingSummary'
 
 const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
@@ -40,6 +41,8 @@ export default async function RecoveryPage() {
       <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-800">
         מוצגות כאן רק לידות שאושרו. כדי לאשר לידות חדשות יש להיכנס לשונית הראשית <strong>יולדות</strong>.
       </div>
+
+      <RecoveryBillingSummary aids={aids} />
 
       {aids.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">

@@ -32,6 +32,7 @@ interface Aid {
   recovery_arrived?: boolean | null
   recovery_amount?: number | null
   recovery_amount_status?: string | null
+  recovery_nights?: number | null
   beneficiary?: Mother
 }
 
@@ -237,6 +238,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [amountStatus, setAmountStatus] = useState<Record<string, string | null>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount_status ?? null])),
   )
+  const [nightsInput, setNightsInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : ''])),
+  )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
   const sendAmount = async (aidId: string) => {
@@ -246,7 +250,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     try {
       const r = await fetch('/api/portal/recovery-amount', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ home, aidId, amount: amt }),
+        body: JSON.stringify({ home, aidId, amount: amt, nights: nightsInput[aidId] || null }),
       })
       if (r.ok) { setAmountStatus(m => ({ ...m, [aidId]: 'pending' })); setEditingAmt(m => ({ ...m, [aidId]: false })) }
     } catch { /* נסיון חוזר אפשרי */ }
@@ -417,13 +421,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
                                     <Check size={15} className="text-emerald-600" />
                                     <span className="text-sm font-semibold text-emerald-800">
-                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}
+                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
-                                    {status === 'pending' && <span className="text-xs font-medium text-amber-600">נשלח לאישור ✓</span>}
-                                    {status === 'approved' && <span className="text-xs font-medium text-green-600">אושר ✓</span>}
-                                    {status === 'rejected' && <span className="text-xs font-medium text-red-600">נדחה</span>}
+                                    {status === 'rejected'
+                                      ? <span className="text-xs font-medium text-red-600">נדחה</span>
+                                      : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
                                     <button type="button" onClick={() => setEditingAmt(m => ({ ...m, [aid.id]: true }))}
                                       className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
                                   </div>
@@ -451,13 +455,19 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                         value={amountInput[aid.id] ?? ''}
                                         onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
                                         inputMode="decimal" placeholder="סכום שמומש"
-                                        className="w-32 pr-6 pl-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        className="w-28 pr-6 pl-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                       />
                                     </div>
+                                    <input
+                                      value={nightsInput[aid.id] ?? ''}
+                                      onChange={e => setNightsInput(m => ({ ...m, [aid.id]: e.target.value.replace(/\D/g, '') }))}
+                                      inputMode="numeric" placeholder="מס׳ לילות"
+                                      className="w-24 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                    />
                                     <button type="button" onClick={() => sendAmount(aid.id)}
                                       disabled={savingAmt === aid.id || !amountInput[aid.id]}
                                       className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
-                                      {savingAmt === aid.id ? '...' : 'שלח לאישור'}
+                                      {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
                                     </button>
                                   </div>
                                 )}
