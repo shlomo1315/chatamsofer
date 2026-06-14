@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
-import Collapsible from '@/components/ui/Collapsible'
+import Tabs, { type TabDef } from '@/components/ui/Tabs'
 import { StatusControl } from '../MaternityTable'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
@@ -115,199 +115,199 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
       {/* שער אישור המשפחה — חוסם אישור לידה לפני אישור המשפחה ומאפשר אישור ישיר (פרטי המשפחה מוצגים בכרטיס למטה) */}
       {ben && <FamilyApprovalGate beneficiary={ben as Parameters<typeof FamilyApprovalGate>[0]['beneficiary']} compact />}
 
-      {/* כרטסת המשפחה — כל הפרטים, סדר הדורות וקישור לכרטסת המלאה */}
-      {ben && (
-        <Collapsible
-          title="כרטסת המשפחה"
-          icon={<User size={16} className="text-indigo-600" />}
-          headerRight={
-            <Link
-              href={`/admin/beneficiaries/${ben.id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
-            >
-              לכרטסת המלאה <ExternalLink size={13} />
-            </Link>
-          }
-        >
-          <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
-              <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
-              <DetailRow label="ת.ז." value={ben.id_number ?? '—'} ltr />
-              <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
-              <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
-            </div>
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-400">פרטי קשר</p>
-              <DetailRow label="טלפון" value={ben.phone ?? '—'} ltr icon={<Phone size={12} />} />
-              <DetailRow label="טלפון נוסף" value={ben.phone2 ?? '—'} ltr />
-              <DetailRow label="אימייל" value={ben.email ?? '—'} ltr />
-              <DetailRow label="כתובת" value={[ben.address, ben.city].filter(Boolean).join(', ') || '—'} icon={<MapPin size={12} />} />
-            </div>
-            {ben.spouse_name && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-400">פרטי האישה</p>
-                <DetailRow label="שם" value={ben.spouse_name} />
-                {ben.spouse_id_number && <DetailRow label="ת.ז." value={ben.spouse_id_number} ltr />}
-                {ben.spouse_birth_date && <DetailRow label="תאריך לידה" value={fmtDate(ben.spouse_birth_date)} />}
+      {/* טאבים מסודרים לכל נתוני התיק */}
+      <Tabs tabs={[
+        ...(ben ? [{
+          key: 'family', label: 'משפחה', accent: 'indigo' as const, icon: <User size={15} />,
+          content: (
+            <Card className="flex flex-col gap-4">
+              <div className="flex items-center justify-end">
+                <Link href={`/admin/beneficiaries/${ben.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+                  לכרטסת המלאה <ExternalLink size={13} />
+                </Link>
               </div>
-            )}
-          </div>
-
-          {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
-            <div className="pt-3 border-t border-slate-100">
-              <div className="flex items-center gap-2 mb-2">
-                <GitBranch size={14} className="text-violet-500" />
-                <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
+                  <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
+                  <DetailRow label="ת.ז." value={ben.id_number ?? '—'} ltr />
+                  <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
+                  <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-400">פרטי קשר</p>
+                  <DetailRow label="טלפון" value={ben.phone ?? '—'} ltr icon={<Phone size={12} />} />
+                  <DetailRow label="טלפון נוסף" value={ben.phone2 ?? '—'} ltr />
+                  <DetailRow label="אימייל" value={ben.email ?? '—'} ltr />
+                  <DetailRow label="כתובת" value={[ben.address, ben.city].filter(Boolean).join(', ') || '—'} icon={<MapPin size={12} />} />
+                </div>
+                {ben.spouse_name && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-400">פרטי האישה</p>
+                    <DetailRow label="שם" value={ben.spouse_name} />
+                    {ben.spouse_id_number && <DetailRow label="ת.ז." value={ben.spouse_id_number} ltr />}
+                    {ben.spouse_birth_date && <DetailRow label="תאריך לידה" value={fmtDate(ben.spouse_birth_date)} />}
+                  </div>
+                )}
               </div>
-              {(lineagePath.length > 0 || lineageManual.length > 0) && (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {lineagePath.map((name, i) => (
-                    <span key={`l-${i}`} className="flex items-center gap-1.5">
-                      {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
-                    </span>
-                  ))}
-                  {lineageManual.map((name, i) => (
-                    <span key={`m-${i}`} className="flex items-center gap-1.5">
-                      <ChevronLeft size={12} className="text-slate-300" />
-                      <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
-                    </span>
-                  ))}
+              {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitBranch size={14} className="text-violet-500" />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
+                  </div>
+                  {(lineagePath.length > 0 || lineageManual.length > 0) && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {lineagePath.map((name, i) => (
+                        <span key={`l-${i}`} className="flex items-center gap-1.5">
+                          {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
+                        </span>
+                      ))}
+                      {lineageManual.map((name, i) => (
+                        <span key={`m-${i}`} className="flex items-center gap-1.5">
+                          <ChevronLeft size={12} className="text-slate-300" />
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {ben.lineage_node_id && (
+                    <div className="mt-3">
+                      <LineageBranchView nodeId={ben.lineage_node_id} />
+                    </div>
+                  )}
                 </div>
               )}
-              {ben.lineage_node_id && (
-                <div className="mt-3">
-                  <LineageBranchView nodeId={ben.lineage_node_id} />
+            </Card>
+          ),
+        }] : []),
+        {
+          key: 'baby', label: 'תינוק ולידה', accent: 'violet' as const, icon: <Baby size={15} />,
+          content: (
+            <div className="flex flex-col gap-4">
+              <Card className="flex flex-col gap-1">
+                <div className="flex items-center gap-2 text-indigo-600 mb-2">
+                  <Baby size={16} />
+                  <span className="text-xs font-semibold text-slate-500 uppercase">פרטי התינוק</span>
                 </div>
+                <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{aid.baby_name ?? '—'}</span></p>
+                {aid.baby_id_number && (
+                  <p className="text-sm"><span className="text-slate-500">{aid.baby_id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{aid.baby_id_number}</span></p>
+                )}
+                {aid.baby_gender && (
+                  <p className="text-sm">
+                    <span className="text-slate-500">מין: </span>
+                    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${aid.baby_gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                      {aid.baby_gender === 'male' ? 'בן' : 'בת'}
+                    </span>
+                  </p>
+                )}
+                <p className="text-sm"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
+                {aid.six_weeks_end && (
+                  <p className="text-sm"><span className="text-slate-500">6 שבועות לאחר הלידה: </span><span className="ltr-num text-indigo-600 font-medium">{fmtDate(aid.six_weeks_end)}</span></p>
+                )}
+                {aid.six_weeks_end && differenceInCalendarDays(new Date(aid.six_weeks_end), new Date()) > 0 && (
+                  <p className="text-sm"><span className="text-slate-500">ימים שנותרו: </span><span className="font-medium text-amber-600">{differenceInCalendarDays(new Date(aid.six_weeks_end), new Date())} ימים</span></p>
+                )}
+              </Card>
+              {aid.birth_certificate_url && (
+                <Card>
+                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
+                  </div>
+                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} />
+                </Card>
+              )}
+              {aid.notes && (
+                <Card>
+                  <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{aid.notes}</p>
+                </Card>
               )}
             </div>
-          )}
-          </div>
-        </Collapsible>
-      )}
-
-      {/* תכתובות מייל — לשונית מתקפלת שנפתחת בלחיצה */}
-      {ben?.email && (
-        <CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />
-      )}
-
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-indigo-600 mb-2">
-            <Baby size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">פרטי התינוק</span>
-          </div>
-          <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{aid.baby_name ?? '—'}</span></p>
-          {aid.baby_id_number && (
-            <p className="text-sm"><span className="text-slate-500">{aid.baby_id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{aid.baby_id_number}</span></p>
-          )}
-          {aid.baby_gender && (
-            <p className="text-sm">
-              <span className="text-slate-500">מין: </span>
-              <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${aid.baby_gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
-                {aid.baby_gender === 'male' ? 'בן' : 'בת'}
-              </span>
-            </p>
-          )}
-          <p className="text-sm"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
-          {aid.baby_id_number && (
-            <p className="text-sm"><span className="text-slate-500">{aid.baby_id_type === 'passport' ? 'דרכון' : 'ת.ז.'}: </span><span className="ltr-num font-mono text-xs">{aid.baby_id_number}</span></p>
-          )}
-          {aid.six_weeks_end && (
-            <p className="text-sm"><span className="text-slate-500">6 שבועות לאחר הלידה: </span><span className="ltr-num text-indigo-600 font-medium">{fmtDate(aid.six_weeks_end)}</span></p>
-          )}
-          {aid.six_weeks_end && differenceInCalendarDays(new Date(aid.six_weeks_end), new Date()) > 0 && (
-            <p className="text-sm"><span className="text-slate-500">ימים שנותרו: </span><span className="font-medium text-amber-600">{differenceInCalendarDays(new Date(aid.six_weeks_end), new Date())} ימים</span></p>
-          )}
-        </Card>
-
-        <Card className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-emerald-600 mb-2">
-            <CreditCard size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">כרטיס מזון</span>
-          </div>
-          {(() => {
-            const cs = aid.card_status ?? 'pending'
-            const meta: Record<string, { label: string; cls: string }> = {
-              pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800' },
-              approved:       { label: 'אושר',              cls: 'bg-blue-100 text-blue-800' },
-              awaiting_stock: { label: 'אושר — ממתין למלאי', cls: 'bg-orange-100 text-orange-800' },
-              loaded:         { label: 'נטען',              cls: 'bg-green-100 text-green-800' },
-              rejected:       { label: 'נדחה',              cls: 'bg-red-100 text-red-800' },
-            }
-            const m = meta[cs] ?? meta.pending
-            const center = (aid as { card_center?: { name?: string } }).card_center
-            return (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500 text-sm">סטטוס:</span>
-                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${m.cls}`}>{m.label}</span>
-                </div>
-                {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
-                {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
-              </>
-            )
-          })()}
-          <Link href="/admin/maternity/cards" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5 transition-colors self-start">
-            לניהול כרטיסי מזון
-          </Link>
-        </Card>
-      </div>
-
-      {aid.recovery_home && (
-        <Card>
-          <div className="flex items-center gap-2 text-indigo-600 mb-3">
-            <Home size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">בית החלמה</span>
-          </div>
-          <div className="text-sm">
-            <span className="text-slate-500">שם: </span>{aid.recovery_home}
-          </div>
-          {aid.recovery_arrived != null && (
-            <div className="text-sm mt-2">
-              <span className="text-slate-500">הגעה: </span>
-              <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${aid.recovery_arrived ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-600'}`}>
-                {aid.recovery_arrived ? 'הגיעה' : 'לא הגיעה'}
-              </span>
-            </div>
-          )}
-          {aid.recovery_amount != null && (() => {
-            const st = aid.recovery_amount_status ?? 'pending'
-            const stMeta: Record<string, { label: string; cls: string }> = {
-              pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-700' },
-              approved: { label: 'אושר',          cls: 'bg-green-100 text-green-700' },
-              rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-700' },
-            }
-            const sm = stMeta[st] ?? stMeta.pending
-            return (
-              <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
-                <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>
-                <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
-                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${sm.cls}`}>{sm.label}</span>
+          ),
+        },
+        {
+          key: 'card', label: 'כרטיס מזון', accent: 'emerald' as const, icon: <CreditCard size={15} />,
+          content: (
+            <Card className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-emerald-600 mb-2">
+                <CreditCard size={16} />
+                <span className="text-xs font-semibold text-slate-500 uppercase">כרטיס מזון</span>
               </div>
-            )
-          })()}
-        </Card>
-      )}
-
-      {aid.birth_certificate_url && (
-        <Card>
-          <div className="flex items-center gap-2 text-indigo-600 mb-3">
-            <FileText size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
-          </div>
-          <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} />
-        </Card>
-      )}
-
-      {aid.notes && (
-        <Card>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
-          <p className="text-sm text-slate-700 whitespace-pre-wrap">{aid.notes}</p>
-        </Card>
-      )}
+              {(() => {
+                const cs = aid.card_status ?? 'pending'
+                const meta: Record<string, { label: string; cls: string }> = {
+                  pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800' },
+                  approved:       { label: 'אושר',              cls: 'bg-blue-100 text-blue-800' },
+                  awaiting_stock: { label: 'אושר — ממתין למלאי', cls: 'bg-orange-100 text-orange-800' },
+                  loaded:         { label: 'נטען',              cls: 'bg-green-100 text-green-800' },
+                  rejected:       { label: 'נדחה',              cls: 'bg-red-100 text-red-800' },
+                }
+                const m = meta[cs] ?? meta.pending
+                const center = (aid as { card_center?: { name?: string } }).card_center
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-500 text-sm">סטטוס:</span>
+                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${m.cls}`}>{m.label}</span>
+                    </div>
+                    {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
+                    {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
+                  </>
+                )
+              })()}
+              <Link href="/admin/maternity/cards" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5 transition-colors self-start">
+                לניהול כרטיסי מזון
+              </Link>
+            </Card>
+          ),
+        },
+        ...(aid.recovery_home ? [{
+          key: 'recovery', label: 'בית החלמה', accent: 'sky' as const, icon: <Home size={15} />,
+          content: (
+            <Card>
+              <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                <Home size={16} />
+                <span className="text-xs font-semibold text-slate-500 uppercase">בית החלמה</span>
+              </div>
+              <div className="text-sm">
+                <span className="text-slate-500">שם: </span>{aid.recovery_home}
+              </div>
+              {aid.recovery_arrived != null && (
+                <div className="text-sm mt-2">
+                  <span className="text-slate-500">הגעה: </span>
+                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${aid.recovery_arrived ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-600'}`}>
+                    {aid.recovery_arrived ? 'הגיעה' : 'לא הגיעה'}
+                  </span>
+                </div>
+              )}
+              {aid.recovery_amount != null && (() => {
+                const st = aid.recovery_amount_status ?? 'pending'
+                const stMeta: Record<string, { label: string; cls: string }> = {
+                  pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-700' },
+                  approved: { label: 'אושר',          cls: 'bg-green-100 text-green-700' },
+                  rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-700' },
+                }
+                const sm = stMeta[st] ?? stMeta.pending
+                return (
+                  <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>
+                    <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${sm.cls}`}>{sm.label}</span>
+                  </div>
+                )
+              })()}
+            </Card>
+          ),
+        }] : []),
+        ...(ben?.email ? [{
+          key: 'mail', label: 'מיילים', accent: 'amber' as const, icon: <Mail size={15} />,
+          content: <CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />,
+        }] : []),
+      ] as TabDef[]} />
     </div>
   )
 }
