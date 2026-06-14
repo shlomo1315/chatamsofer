@@ -116,6 +116,9 @@ export async function GET() {
     const history: Json[] = Array.isArray(card.History) ? card.History : []
     const famName = [card.FamilyName ?? f.FamilyName, card.FirstName ?? f.FirstName].filter(Boolean).join(' ')
     for (const h of history) {
+      // היסטוריית עסקאות = רק קניות בבית עסק (יש שם חנות) — לא טעינות/פריקות
+      const store = String(h.StoreName ?? h.Store ?? '').trim()
+      if (!store) continue
       const amt = num(h.Amount)
       usedTotal += amt
       const d = parseNedarimDate(h.Date)
@@ -126,7 +129,7 @@ export async function GET() {
       }
       transactions.push({
         clientId: f.ClientId, familyName: famName,
-        store: h.StoreName ?? '', date: h.Date ?? '', ts: d ? d.getTime() : 0,
+        store, date: h.Date ?? '', ts: d ? d.getTime() : 0,
         amount: amt, comments: h.Comments ?? '',
       })
     }
