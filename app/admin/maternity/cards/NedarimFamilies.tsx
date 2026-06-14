@@ -577,14 +577,25 @@ function WalletSummary({ stats, loading, total, familiesCount }: { stats: Stats 
 // חיווי ימים שנותרו עד פריקה אוטומטית (6 שבועות מהלידה)
 function UnloadCell({ info }: { info?: { unloadDate: string; daysRemaining: number } }) {
   if (!info) return <span className="text-slate-300">—</span>
-  // פריקה בחצות של יום unloadDate — כשנותר פחות מיום מציגים שעות
+  // פריקה בחצות; כשהפריקה היום/באיחור — מציג שעות ודקות עד החצות הקרובה
+  const now = new Date()
   const end = new Date(info.unloadDate); end.setHours(0, 0, 0, 0)
-  const ms = end.getTime() - Date.now()
-  const days = Math.ceil(ms / 86400000)
+  const ms = end.getTime() - now.getTime()
   let label: string, cls: string
-  if (ms <= 0) { label = 'לפריקה היום'; cls = 'bg-red-100 text-red-700' }
-  else if (days <= 1) { label = `עוד ~${Math.max(1, Math.ceil(ms / 3600000))} שע׳`; cls = 'bg-amber-100 text-amber-700' }
-  else { label = `${days} ימים`; cls = days <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700' }
+  if (ms <= 0) {
+    const nextMidnight = new Date(now); nextMidnight.setHours(24, 0, 0, 0)
+    const rem = nextMidnight.getTime() - now.getTime()
+    const h = Math.floor(rem / 3600000); const m = Math.floor((rem % 3600000) / 60000)
+    label = h > 0 ? `פריקה בעוד ${h} שע׳ ${m} דק׳` : `פריקה בעוד ${m} דק׳`
+    cls = 'bg-red-100 text-red-700'
+  } else {
+    const days = Math.ceil(ms / 86400000)
+    if (days <= 1) {
+      const h = Math.floor(ms / 3600000); const m = Math.floor((ms % 3600000) / 60000)
+      label = h > 0 ? `עוד ${h} שע׳ ${m} דק׳` : `עוד ${m} דק׳`
+      cls = 'bg-amber-100 text-amber-700'
+    } else { label = `${days} ימים`; cls = days <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700' }
+  }
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[15px] font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
       {label}
