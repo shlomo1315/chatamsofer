@@ -401,13 +401,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                   {filtered.map(aid => {
                     const m = aid.beneficiary
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
+                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center" style={{ verticalAlign: 'middle' }}
                         onClick={() => setSelected(aid)}>
-                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap align-middle text-center">{motherName(m)}</td>
-                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num align-middle text-center">{m?.spouse_id_number ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap align-middle text-center">{aid.baby_name ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap align-middle text-center">{fmtDate(aid.birth_date)}</td>
-                        <td className="px-4 py-3.5 align-middle text-center" onClick={e => e.stopPropagation()}>
+                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{motherName(m)}</td>
+                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num text-center" style={{ verticalAlign: 'middle' }}>{m?.spouse_id_number ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{aid.baby_name ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }} onClick={e => e.stopPropagation()}>
                           {(() => {
                             const a = arrived[aid.id] ?? null
                             const saving = savingId === aid.id
@@ -438,11 +438,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                               <div className="flex flex-col items-center gap-2">
                                 <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
                                   <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
                                     <Check size={15} /> הגיעה
                                   </button>
                                   <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
                                     <X size={15} /> לא הגיעה
                                   </button>
                                 </div>
@@ -475,7 +475,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                             )
                           })()}
                         </td>
-                        <td className="px-4 py-3.5 align-middle text-center">
+                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }}>
                           <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
                             <ChevronLeft size={13} /> פרטים
                           </span>
