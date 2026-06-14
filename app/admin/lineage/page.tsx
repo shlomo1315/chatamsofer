@@ -145,7 +145,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void }) {
   const toast = useToast()
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
@@ -475,7 +475,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               ? false
               : selected !== null
                 ? !pathBranch.has(pos.node.id)
-                : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
+                : dupFilter
+                  ? !isDup
+                  : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
             const p = nodeStatus === 'verified' ? genPal
               : nodeStatus === 'rejected'
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
@@ -597,6 +599,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                       background: '#fff', borderRadius: 16, padding: '8px 10px',
                       boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0', zIndex: 40,
                     }}>
+                    {/* כפתור מיזוג כפילים — מופיע רק לצומת ששמו כפול באותו גזע */}
+                    {isDup && (
+                      <button onClick={() => onMergeGroup(pos.node.id)} title="מזג את הכפילויות של שם זה באותו גזע"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                        ⚯ מזג כפילים
+                      </button>
+                    )}
                     {/* שורת אייקונים */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[
@@ -718,7 +727,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
 // ─── Table view ───
 
-function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge }: {
+function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: {
   nodes: LineageNode[]
   onRefresh: () => void
   onAdd: (parentId: string | null, parentName: string) => void
@@ -730,6 +739,8 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
   mergeSel: Set<string>
   dupIds: Set<string>
   onToggleMerge: (id: string) => void
+  dupFilter: boolean
+  onMergeGroup: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
@@ -755,8 +766,10 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
 
   function renderRows(node: TreeNode, depth: number): React.ReactNode {
     const nodeStatus = node.status ?? 'verified'
+    const isDup = dupIds.has(node.id)
     const isDimmed = (statusFilter !== null && nodeStatus !== statusFilter)
       || (generationFilter !== null && node.generation !== generationFilter)
+      || (dupFilter && !isDup)
     const p = pal(node.generation)
     const hasChildren = node.children.length > 0
     const isExpanded = expanded.has(node.id)
@@ -790,6 +803,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
             {childCount.get(node.id) ? `${childCount.get(node.id)}` : '—'}
           </div>
           <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+            {isDup && !mergeMode && (
+              <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 28, height: 28, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
+            )}
             <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>
             <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
             <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 28, height: 28, borderRadius: 7, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
@@ -840,32 +856,80 @@ export default function LineagePage() {
   const [keepId, setKeepId] = useState<string | null>(null)
   const [mergeConfirm, setMergeConfirm] = useState(false)
   const [merging, setMerging] = useState(false)
+  // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
+  const [dupFilter, setDupFilter] = useState(false)
+  // לאחר מיזוג — הצעה לאשר את הייחוס
+  const [approvePrompt, setApprovePrompt] = useState<{ keepId: string; keepName: string } | null>(null)
+  const [approveDesc, setApproveDesc] = useState(true)
+  const [approving, setApproving] = useState(false)
   const toast = useToast()
 
   function close() { setModal(null); setSaveErr(''); setFormParentId(null); setFormRelation(null) }
 
-  // קבוצות שמות כפולים (שם מנורמל המופיע ביותר מצומת אחד) → סט מזהים מודגשים
-  const dupIds = useMemo(() => {
-    const byName = new Map<string, string[]>()
-    for (const n of nodes) {
-      const key = n.name.trim().replace(/\s+/g, ' ')
-      if (!key) continue
-      const arr = byName.get(key) ?? []
-      arr.push(n.id)
-      byName.set(key, arr)
+  // מפת שורש לכל צומת (ראש הגזע) — לצורך זיהוי כפילות בתוך אותו גזע בלבד
+  const rootOf = useMemo(() => {
+    const parent = new Map(nodes.map(n => [n.id, n.parent_id]))
+    const cache = new Map<string, string>()
+    const find = (id: string): string => {
+      if (cache.has(id)) return cache.get(id)!
+      const seen = new Set<string>()
+      let cur = id
+      while (true) {
+        const p = parent.get(cur) ?? null
+        if (!p || !parent.has(p) || seen.has(p)) break
+        seen.add(cur); cur = p
+      }
+      cache.set(id, cur)
+      return cur
     }
-    const s = new Set<string>()
-    for (const ids of byName.values()) if (ids.length > 1) ids.forEach(id => s.add(id))
-    return s
+    const m = new Map<string, string>()
+    for (const n of nodes) m.set(n.id, find(n.id))
+    return m
   }, [nodes])
-  const dupNameCount = useMemo(() => {
-    const names = new Set<string>()
-    for (const id of dupIds) { const n = nodes.find(x => x.id === id); if (n) names.add(n.name.trim().replace(/\s+/g, ' ')) }
-    return names.size
-  }, [dupIds, nodes])
+
+  // קבוצות שמות כפולים — אותו שם מנורמל המופיע 2+ פעמים בתוך אותו גזע (אותו שורש)
+  const { dupIds, dupGroups } = useMemo(() => {
+    const byKey = new Map<string, string[]>()
+    for (const n of nodes) {
+      const name = n.name.trim().replace(/\s+/g, ' ')
+      if (!name) continue
+      const key = `${rootOf.get(n.id) ?? n.id}|${name}`
+      const arr = byKey.get(key) ?? []
+      arr.push(n.id)
+      byKey.set(key, arr)
+    }
+    const ids = new Set<string>()
+    const groups = new Map<string, string[]>()
+    for (const [key, arr] of byKey) if (arr.length > 1) { arr.forEach(id => ids.add(id)); groups.set(key, arr) }
+    return { dupIds: ids, dupGroups: groups }
+  }, [nodes, rootOf])
+
+  // מזהה → רשימת הצמתים בקבוצת הכפילות שלו (אותו גזע + אותו שם)
+  const dupGroupOf = useCallback((id: string): string[] => {
+    const n = nodes.find(x => x.id === id)
+    if (!n) return []
+    const key = `${rootOf.get(id) ?? id}|${n.name.trim().replace(/\s+/g, ' ')}`
+    return dupGroups.get(key) ?? []
+  }, [nodes, rootOf, dupGroups])
+
+  const dupNameCount = dupGroups.size
 
   function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
-  function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
+  function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
+
+  // התחלת מיזוג ממוקד מצומת כפול — מסמן אוטומטית את כל הקבוצה (אותו גזע + שם), הצומת שנלחץ נשאר
+  const startGroupMerge = useCallback((id: string) => {
+    const group = dupGroupOf(id)
+    if (group.length < 2) return
+    setStatusFilter(null); setGenerationFilter(null); setDupFilter(false)
+    setMergeMode(true); setMergeSel(new Set(group)); setKeepId(id)
+  }, [dupGroupOf])
+
+  function toggleDupFilter() {
+    setStatusFilter(null); setGenerationFilter(null)
+    if (mergeMode) exitMerge()
+    setDupFilter(f => !f)
+  }
   const toggleMerge = useCallback((id: string) => {
     setMergeSel(prev => {
       const s = new Set(prev)
@@ -894,10 +958,48 @@ export default function LineagePage() {
       const d = await res.json()
       if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
       toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
+      const keepName = nodes.find(n => n.id === effectiveKeepId)?.name ?? ''
       await loadAll()
       exitMerge()
+      // לאחר מיזוג — להציע לאשר את הייחוס של הצומת שנשאר
+      setApprovePrompt({ keepId: effectiveKeepId, keepName })
+      setApproveDesc(true)
     } catch { toast.error('שגיאת רשת') }
     setMerging(false)
+  }
+
+  // כל הצאצאים (המשורשרים) של צומת — לפי קשרי האב במצב הנוכחי
+  const descendantsOf = useCallback((rootId: string): string[] => {
+    const childrenBy = new Map<string, string[]>()
+    nodes.forEach(n => { if (n.parent_id) { const a = childrenBy.get(n.parent_id) ?? []; a.push(n.id); childrenBy.set(n.parent_id, a) } })
+    const out: string[] = []
+    const stack = [...(childrenBy.get(rootId) ?? [])]
+    while (stack.length) {
+      const id = stack.pop()!
+      out.push(id)
+      for (const c of childrenBy.get(id) ?? []) stack.push(c)
+    }
+    return out
+  }, [nodes])
+
+  async function handleApproveLineage(includeDescendants: boolean) {
+    if (!approvePrompt) return
+    const ids = [approvePrompt.keepId, ...(includeDescendants ? descendantsOf(approvePrompt.keepId) : [])]
+    setApproving(true)
+    try {
+      // עדכון אופטימי
+      setNodes(prev => prev.map(n => ids.includes(n.id) ? { ...n, status: 'verified' } : n))
+      await Promise.all(ids.map(id =>
+        fetch('/api/admin/lineage', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status: 'verified' }),
+        })
+      ))
+      toast.success(includeDescendants ? `אושר הייחוס + ${ids.length - 1} משורשרים` : 'הייחוס אושר')
+      await softRefresh()
+    } catch { toast.error('שגיאה באישור הייחוס') }
+    setApproving(false)
+    setApprovePrompt(null)
   }
 
   const loadAll = useCallback(async () => {
@@ -993,9 +1095,10 @@ export default function LineagePage() {
                 ✗ {rejectedCount} נדחים
               </button>
               {dupNameCount > 0 && (
-                <button onClick={enterMerge}
+                <button onClick={toggleDupFilter}
+                  title="הצג רק שמות כפולים (באותו גזע) · לחיצה נוספת לביטול"
                   className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
-                  style={{ background: mergeMode ? '#9333EA' : '#F3E8FF', color: mergeMode ? '#fff' : '#7C2D92', border: `2px solid ${mergeMode ? '#9333EA' : '#E9D5FF'}`, cursor: 'pointer' }}>
+                  style={{ background: dupFilter ? '#9333EA' : '#F3E8FF', color: dupFilter ? '#fff' : '#7C2D92', border: `2px solid ${dupFilter ? '#9333EA' : '#E9D5FF'}`, cursor: 'pointer' }}>
                   ⚠ {dupNameCount} שמות כפולים
                 </button>
               )}
@@ -1054,7 +1157,7 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} />
+        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} />
       ) : (
         <TableView
           nodes={nodes}
@@ -1065,6 +1168,8 @@ export default function LineagePage() {
           mergeSel={mergeSel}
           dupIds={dupIds}
           onToggleMerge={toggleMerge}
+          dupFilter={dupFilter}
+          onMergeGroup={startGroupMerge}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
           onEdit={node => { setFormName(node.name); setFormRelation(node.relation ?? null); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
@@ -1173,6 +1278,28 @@ export default function LineagePage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="מזג עכשיו" color="#9333EA" onClick={() => { setMergeConfirm(false); handleMerge() }} loading={merging} />
               <MBtn label="ביטול" color="#94A3B8" onClick={() => setMergeConfirm(false)} />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* מודאל אישור ייחוס לאחר מיזוג */}
+      {approvePrompt && (
+        <Modal title="אישור ייחוס" onClose={() => setApprovePrompt(null)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.7 }}>
+              המיזוג הושלם. האם לאשר את הייחוס של <strong style={{ color: '#166534' }}>{approvePrompt.keepName}</strong> ולסמן אותו כ<strong>מאומת</strong>?
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 11, padding: '10px 14px' }}>
+              <input type="checkbox" checked={approveDesc} onChange={e => setApproveDesc(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#16A34A', cursor: 'pointer' }} />
+              לאשר גם את כל המשורשרים אליו (הצאצאים)
+            </label>
+            <p style={{ margin: 0, fontSize: 12, color: '#94A3B8', lineHeight: 1.5 }}>
+              ניתן גם להשאיר בסטטוס &quot;ממתין לאימות&quot; ולאשר ידנית בהמשך.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="אשר ייחוס" color="#16A34A" onClick={() => handleApproveLineage(approveDesc)} loading={approving} />
+              <MBtn label="השאר ממתין לאימות" color="#94A3B8" onClick={() => setApprovePrompt(null)} />
             </div>
           </div>
         </Modal>
