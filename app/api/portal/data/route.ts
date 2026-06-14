@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     .select(`
       id, birth_date, baby_name, baby_gender, six_weeks_end,
       recovery_from, recovery_to, card_number, notes, recovery_arrived,
-      recovery_amount, recovery_amount_status, recovery_nights,
+      recovery_amount, recovery_amount_status, recovery_nights, recovery_receipt_number,
       beneficiary:beneficiaries(
         id, full_name, family_name, spouse_name, spouse_id_number, phone, address, city
       )

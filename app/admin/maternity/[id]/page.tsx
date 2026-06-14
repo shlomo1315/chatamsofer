@@ -297,6 +297,12 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   )}
                 </div>
               )}
+              {aid.recovery_receipt_number && (
+                <div className="text-sm mt-2">
+                  <span className="text-slate-500">מספר קבלה (בית ההחלמה): </span>
+                  <span className="font-bold text-slate-800 ltr-num">{aid.recovery_receipt_number}</span>
+                </div>
+              )}
             </Card>
           ),
         }] : []),

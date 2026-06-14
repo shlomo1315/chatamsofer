@@ -145,6 +145,7 @@ export interface MaternityAid {
   recovery_amount_status?: string
   recovery_amount_at?: string
   recovery_nights?: number
+  recovery_receipt_number?: string
   status: MaternityStatus
   card_status?: CardStatus
   card_center_id?: string
