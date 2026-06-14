@@ -238,6 +238,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount_status ?? null])),
   )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
+  const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
   const sendAmount = async (aidId: string) => {
     const amt = Number(amountInput[aidId])
     if (!Number.isFinite(amt) || amt <= 0) return
@@ -247,7 +248,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ home, aidId, amount: amt }),
       })
-      if (r.ok) setAmountStatus(m => ({ ...m, [aidId]: 'pending' }))
+      if (r.ok) { setAmountStatus(m => ({ ...m, [aidId]: 'pending' })); setEditingAmt(m => ({ ...m, [aidId]: false })) }
     } catch { /* נסיון חוזר אפשרי */ }
     setSavingAmt(null)
   }
@@ -384,11 +385,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-right">
+              <table className="w-full text-sm text-center">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
                     {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'הגעה לבית החלמה', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap text-center">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -396,7 +397,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                   {filtered.map(aid => {
                     const m = aid.beneficiary
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-top"
+                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
                         onClick={() => setSelected(aid)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
                         <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>
@@ -407,9 +408,31 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                             const a = arrived[aid.id] ?? null
                             const saving = savingId === aid.id
                             const status = amountStatus[aid.id] ?? null
+                            const editing = editingAmt[aid.id] ?? false
+                            const amountVal = Number(amountInput[aid.id])
+                            // לאחר שליחת הסכום — מוסתרים כפתורי ההגעה ומוצג סיכום מימוש הזכאות
+                            if (status && !editing) {
+                              return (
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
+                                    <Check size={15} className="text-emerald-600" />
+                                    <span className="text-sm font-semibold text-emerald-800">
+                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {status === 'pending' && <span className="text-xs font-medium text-amber-600">נשלח לאישור ✓</span>}
+                                    {status === 'approved' && <span className="text-xs font-medium text-green-600">אושר ✓</span>}
+                                    {status === 'rejected' && <span className="text-xs font-medium text-red-600">נדחה</span>}
+                                    <button type="button" onClick={() => setEditingAmt(m => ({ ...m, [aid.id]: true }))}
+                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
+                                  </div>
+                                </div>
+                              )
+                            }
                             return (
-                              <div className="flex flex-col gap-2">
-                                <div className={`flex items-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                              <div className="flex flex-col items-center gap-2">
+                                <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
                                   <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
                                     className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
                                     <Check size={15} /> הגיעה
@@ -421,14 +444,14 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 </div>
                                 {/* שדה הסכום — מופיע רק אם סומן "הגיעה" */}
                                 {a === true && (
-                                  <div className="flex items-center gap-2 flex-wrap bg-emerald-50/60 border border-emerald-100 rounded-lg p-2">
+                                  <div className="flex items-center justify-center gap-2 flex-wrap bg-emerald-50/60 border border-emerald-100 rounded-lg p-2">
                                     <div className="relative">
                                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₪</span>
                                       <input
                                         value={amountInput[aid.id] ?? ''}
                                         onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
                                         inputMode="decimal" placeholder="סכום שמומש"
-                                        className="w-32 pr-6 pl-2 py-1.5 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        className="w-32 pr-6 pl-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                       />
                                     </div>
                                     <button type="button" onClick={() => sendAmount(aid.id)}
@@ -436,9 +459,6 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                       className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
                                       {savingAmt === aid.id ? '...' : 'שלח לאישור'}
                                     </button>
-                                    {status === 'pending' && <span className="text-xs font-medium text-amber-600">נשלח לאישור ✓</span>}
-                                    {status === 'approved' && <span className="text-xs font-medium text-green-600">אושר ✓</span>}
-                                    {status === 'rejected' && <span className="text-xs font-medium text-red-600">נדחה</span>}
                                   </div>
                                 )}
                               </div>
