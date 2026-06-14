@@ -368,14 +368,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 1 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -395,6 +395,18 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                           : aid.recovery_arrived === false
                             ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-800">לא הגיעה</span>
                             : <span className="text-slate-300">—</span>}
+                      </td>
+                    )}
+                    {showArrived && (
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        {aid.recovery_amount != null ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+                            {aid.recovery_amount_status === 'rejected'
+                              ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">נדחה</span>
+                              : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{aid.recovery_amount_status === 'approved' ? 'אושר' : 'מומש'}</span>}
+                          </span>
+                        ) : <span className="text-slate-300">—</span>}
                       </td>
                     )}
                     <td className="px-4 py-3 align-middle">
