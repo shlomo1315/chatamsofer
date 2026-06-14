@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff } from '@/lib/apiAuth'
+import { getNedarimCreds } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,40 +9,30 @@ const NEDARIM_URL = 'https://www.matara.pro/nedarimplus/Mechubad/Reports/ManageR
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// מוודא שמי שמבצע מחובר (משתמש מערכת)
-async function verifyStaff() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() }, setAll() {} } }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  return !!user
-}
-
 export async function POST(request: NextRequest) {
-  if (!(await verifyStaff())) {
+  // מוגבל לצוות (מנהל / גבייה / מזכירות) — מזכיר מאשר משפחות
+  if (!(await requireStaff(['admin', 'collections', 'secretary']))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
 
-  const mosadId = process.env.NEDARIM_MOSAD_ID
-  const apiPassword = process.env.NEDARIM_API_PASSWORD
-  if (!mosadId || !apiPassword) {
-    return NextResponse.json({ error: 'חיבור נדרים פלוס לא מוגדר (NEDARIM_MOSAD_ID / NEDARIM_API_PASSWORD)' }, { status: 500 })
+  // קוד מוסד + סיסמת API — מההגדרות (app_settings) או ENV. אם לא מוגדר — דילוג רך (לא חוסם אישור).
+  const creds = await getNedarimCreds()
+  if (!creds) {
+    return NextResponse.json({ ok: false, notConfigured: true, message: 'נדרים קארד אינו מוגדר' })
   }
+  const { mosadId, apiPassword } = creds
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })
 
   let body: { beneficiaryId?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
-  if (!body.beneficiaryId) return NextResponse.json({ error: 'חסר מזהה נתמך' }, { status: 400 })
+  if (!body.beneficiaryId) return NextResponse.json({ error: 'חסר מזהה צאצא' }, { status: 400 })
 
   // שליפת פרטי המשפחה
   const { data: b, error: bErr } = await admin
@@ -50,7 +40,7 @@ export async function POST(request: NextRequest) {
     .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
     .eq('id', body.beneficiaryId)
     .maybeSingle()
-  if (bErr || !b) return NextResponse.json({ error: 'הנתמך לא נמצא' }, { status: 404 })
+  if (bErr || !b) return NextResponse.json({ error: 'הצאצא לא נמצא' }, { status: 404 })
 
   // בניית גוף הבקשה לנדרים פלוס — Action=SaveClientCard
   const form = new URLSearchParams()

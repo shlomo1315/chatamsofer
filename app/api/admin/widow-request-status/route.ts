@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,9 @@ function getAdmin() {
 }
 
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   let body: Record<string, unknown>
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
@@ -33,6 +37,9 @@ export async function POST(request: NextRequest) {
     })
     .eq('id', String(id))
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[widow-request-status] update failed:', error.message)
+    return NextResponse.json({ error: 'שגיאה בעדכון הבקשה' }, { status: 500 })
+  }
   return NextResponse.json({ ok: true })
 }

@@ -3,9 +3,22 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
-import StatusBadge from '@/components/ui/StatusBadge'
 import QuickEmailModal from '@/components/QuickEmailModal'
-import { Beneficiary } from '@/types'
+import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
+
+// תווית סטטוס מלאה לטבלה
+const STATUS_CHIP: Record<string, string> = {
+  pending:      'bg-amber-100 text-amber-800 ring-amber-200',
+  review:       'bg-violet-100 text-violet-800 ring-violet-200',
+  docs_pending: 'bg-blue-100 text-blue-800 ring-blue-200',
+  approved:     'bg-green-100 text-green-800 ring-green-200',
+  rejected:     'bg-red-100 text-red-800 ring-red-200',
+}
+const StatusChip = ({ status }: { status: string }) => (
+  <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ring-1 ${STATUS_CHIP[status] ?? 'bg-slate-100 text-slate-700 ring-slate-200'}`}>
+    {ELIGIBILITY_LABELS[status as keyof typeof ELIGIBILITY_LABELS] ?? status}
+  </span>
+)
 
 const fullName = (row: Beneficiary) =>
   [row.family_name, row.full_name].filter(Boolean).join(' ') || row.full_name
@@ -55,11 +68,6 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
           <span className="font-medium text-slate-800 group-hover/name:text-indigo-600 truncate">
             {fullName(row)}
           </span>
-          {row.id_number ? (
-            <span dir="ltr" className="font-mono text-[11px] text-slate-400 text-left tabular-nums">
-              {row.id_number}
-            </span>
-          ) : null}
         </span>
       </Link>
     ),
@@ -175,7 +183,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'eligibility_status',
     header: 'סטטוס',
     sortable: true,
-    render: (row) => <StatusBadge status={row.eligibility_status} />,
+    render: (row) => <StatusChip status={row.eligibility_status} />,
   },
   {
     key: 'is_active',
@@ -198,10 +206,12 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
 ]
 
 // Status filter buckets
-type Filter = 'all' | 'pending' | 'approved' | 'rejected' | 'docs_pending'
+type Filter = 'all' | 'pending' | 'review' | 'approved' | 'rejected' | 'docs_pending'
 const matchesFilter = (row: Beneficiary, f: Filter) => {
   if (f === 'all') return true
-  if (f === 'pending') return row.eligibility_status === 'pending' || row.eligibility_status === 'review'
+  if (f === 'pending') return row.eligibility_status === 'pending'
+  if (f === 'review') return row.eligibility_status === 'review'
+  if (f === 'docs_pending') return row.eligibility_status === 'docs_pending'
   return row.eligibility_status === f
 }
 
@@ -215,7 +225,7 @@ interface CardDef {
 }
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Users, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
-  { key: 'pending', label: 'ממתין לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'pending', label: 'ממתין לאישור ראשוני', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
   { key: 'docs_pending', label: 'השלמת מסמכים', icon: FileText, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
   { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
@@ -233,6 +243,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
   const counts = useMemo(() => ({
     all: data.length,
     pending: data.filter((r) => matchesFilter(r, 'pending')).length,
+    review: data.filter((r) => matchesFilter(r, 'review')).length,
     docs_pending: data.filter((r) => matchesFilter(r, 'docs_pending')).length,
     approved: data.filter((r) => matchesFilter(r, 'approved')).length,
     rejected: data.filter((r) => matchesFilter(r, 'rejected')).length,
@@ -243,7 +254,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
   return (
     <div className="flex flex-col gap-5">
       {/* Status filter cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
           const isActive = filter === c.key
@@ -272,7 +283,7 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
         searchable
         searchPlaceholder="חיפוש חופשי בכל השדות..."
         searchKeys={['full_name', 'family_name', 'id_number', 'phone', 'phone2', 'email', 'address', 'city', 'marital_status', 'spouse_name', 'spouse_id_number', 'nedarim_id', 'notes']}
-        emptyMessage="לא נמצאו נתמכים. לחץ על 'רישום נתמך חדש' להוספה."
+        emptyMessage="לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."
         actions={(row) => (
           <Link href={`/admin/beneficiaries/${row.id}`}>
             <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">

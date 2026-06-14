@@ -17,48 +17,40 @@ import EmailRow from './EmailRow'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 // Walk the lineage tree from the selected node up to the root → ordered path of names
 async function getLineagePath(nodeId?: string): Promise<string[]> {
   if (!nodeId || !isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id')
-    if (!data) return []
-    const map = new Map(data.map(n => [n.id, n]))
-    const path: string[] = []
-    let cur = map.get(nodeId)
-    let guard = 0
-    while (cur && guard < 50) {
-      path.unshift(cur.name)
-      cur = cur.parent_id ? map.get(cur.parent_id) : undefined
-      guard++
-    }
-    return path
-  } catch {
-    return []
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
+  if (error) throw error
+  if (!data) return []
+  const map = new Map(data.map(n => [n.id, n]))
+  const path: string[] = []
+  let cur = map.get(nodeId)
+  let guard = 0
+  while (cur && guard < 50) {
+    path.unshift(cur.name)
+    cur = cur.parent_id ? map.get(cur.parent_id) : undefined
+    guard++
   }
+  return path
 }
 
 async function getBirthCertificates(beneficiaryId: string): Promise<Record<string, string>> {
   if (!isSupabaseConfigured()) return {}
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase.from('maternity_aids').select('id, birth_certificate_url').eq('beneficiary_id', beneficiaryId)
-    const map: Record<string, string> = {}
-    for (const r of data ?? []) if (r.birth_certificate_url) map[r.id] = r.birth_certificate_url
-    return map
-  } catch {
-    return {}
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('maternity_aids').select('id, birth_certificate_url').eq('beneficiary_id', beneficiaryId)
+  if (error) throw error
+  const map: Record<string, string> = {}
+  for (const r of data ?? []) if (r.birth_certificate_url) map[r.id] = r.birth_certificate_url
+  return map
 }
 
 interface ActivityItem { kind: 'loan' | 'maternity'; id: string; title: string; date: string; status: string }
@@ -66,24 +58,22 @@ interface ActivityItem { kind: 'loan' | 'maternity'; id: string; title: string; 
 // היסטוריית פעילות — כל מה שהמשפחה הגישה (הלוואות + לידות) עם תאריך וסטטוס
 async function getActivity(id: string): Promise<ActivityItem[]> {
   if (!isSupabaseConfigured()) return []
-  try {
-    const supabase = await createClient()
-    const [loans, maternity] = await Promise.all([
-      supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id),
-      supabase.from('maternity_aids').select('id, baby_name, status, created_at').eq('beneficiary_id', id),
-    ])
-    const items: ActivityItem[] = []
-    for (const l of loans.data ?? []) {
-      items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (₪${Math.round(Number(l.amount)).toLocaleString('he-IL')})` : ''}`, date: l.created_at, status: l.status })
-    }
-    for (const m of maternity.data ?? []) {
-      items.push({ kind: 'maternity', id: m.id, title: `פתיחת תיק לידה${m.baby_name ? ` — ${m.baby_name}` : ''}`, date: m.created_at, status: m.status })
-    }
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    return items
-  } catch {
-    return []
+  const supabase = await createClient()
+  const [loans, maternity] = await Promise.all([
+    supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id),
+    supabase.from('maternity_aids').select('id, baby_name, status, created_at').eq('beneficiary_id', id),
+  ])
+  if (loans.error) throw loans.error
+  if (maternity.error) throw maternity.error
+  const items: ActivityItem[] = []
+  for (const l of loans.data ?? []) {
+    items.push({ kind: 'loan', id: l.id, title: `בקשת הלוואה${l.purpose ? ` — ${l.purpose}` : ''}${l.amount ? ` (₪${Math.round(Number(l.amount)).toLocaleString('he-IL')})` : ''}`, date: l.created_at, status: l.status })
   }
+  for (const m of maternity.data ?? []) {
+    items.push({ kind: 'maternity', id: m.id, title: `פתיחת תיק לידה${m.baby_name ? ` — ${m.baby_name}` : ''}`, date: m.created_at, status: m.status })
+  }
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  return items
 }
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -110,10 +100,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       <div className="flex flex-col gap-5 max-w-5xl">
         <div className="flex items-center gap-3">
           <Link href="/admin/beneficiaries" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
-          <h1 className="text-xl font-bold text-slate-900">פרטי נתמך</h1>
+          <h1 className="text-xl font-bold text-slate-900">פרטי צאצא</h1>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
-          נתמך זה אינו זמין. הגדר Supabase כדי לראות נתונים אמיתיים.
+          צאצא זה אינו זמין. הגדר Supabase כדי לראות נתונים אמיתיים.
         </div>
       </div>
     )
@@ -145,6 +135,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             <DetailRow label="תאריך לידה" value={formatDate(beneficiary.birth_date)} />
             <DetailRow label="מצב משפחתי" value={beneficiary.marital_status ?? '—'} />
             <DetailRow label="מספר ילדים" value={String(beneficiary.children_count)} />
+            {beneficiary.nedarim_id && <DetailRow label="מזהה משפחה בנדרים קארד" value={beneficiary.nedarim_id} ltr />}
           </div>
         </Card>
         <Card>
@@ -174,6 +165,29 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{beneficiary.notes}</p>
         </Card>
       )}
+      {beneficiary.past_benefits && (() => {
+        const pb = beneficiary.past_benefits
+        const items = [
+          pb.recovery_home && 'בית החלמה ליולדות',
+          pb.food_card && 'כרטיס מזון ליולדות',
+          pb.holiday_grant && 'מענק לקראת החגים',
+          pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
+          pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
+          pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
+        ].filter(Boolean) as string[]
+        if (!items.length && !pb.notes) return null
+        return (
+          <Card>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הטבות שהתקבלו בעבר מאיגוד הצאצאים</h2>
+            {items.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {items.map((it, i) => <li key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1">{it}</li>)}
+              </ul>
+            ) : <p className="text-sm text-slate-400">לא דווח על הטבות</p>}
+            {pb.notes && <p className="text-sm text-slate-700 whitespace-pre-wrap mt-2 pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">הערות: </span>{pb.notes}</p>}
+          </Card>
+        )
+      })()}
       <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-400">
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />
@@ -255,21 +269,34 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
 
-      {/* breadcrumb of the selected branch */}
-      <div className="flex items-center gap-1.5 flex-wrap mb-4">
-        {lineagePath.map((name, i) => (
-          <span key={`t-${i}`} className="flex items-center gap-1.5">
-            {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-            <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
-          </span>
-        ))}
-        {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
-          <span key={`m-${i}`} className="flex items-center gap-1.5">
-            <ChevronLeft size={12} className="text-slate-300" />
-            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
-          </span>
-        ))}
-      </div>
+      {/* breadcrumb of the selected branch — עם בן/חתן לכל דור */}
+      {(() => {
+        const chain = Array.isArray(beneficiary.lineage_chain)
+          ? (beneficiary.lineage_chain as { generation: number; name: string; relation: string | null }[])
+          : []
+        const relByGen = new Map(chain.map(c => [c.generation, c.relation]))
+        const relTag = (gen: number) => {
+          const r = relByGen.get(gen)
+          if (r !== 'son' && r !== 'son_in_law') return null
+          return <span className="text-[10px] font-semibold bg-white/70 rounded px-1 mr-1">{r === 'son' ? 'בן' : 'חתן'}</span>
+        }
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap mb-4">
+            {lineagePath.map((name, i) => (
+              <span key={`t-${i}`} className="flex items-center gap-1.5">
+                {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}{relTag(i + 1)}</span>
+              </span>
+            ))}
+            {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
+              <span key={`m-${i}`} className="flex items-center gap-1.5">
+                <ChevronLeft size={12} className="text-slate-300" />
+                <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}{relTag(lineagePath.length + 1 + i)}</span>
+              </span>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* visual tree with this beneficiary's branch highlighted */}
       <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />
@@ -313,7 +340,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <StatusControl id={id} status={beneficiary.eligibility_status} />
+          <StatusControl id={id} status={beneficiary.eligibility_status} advance />
           <BeneficiaryActions id={id} name={fullName} />
         </div>
       </div>

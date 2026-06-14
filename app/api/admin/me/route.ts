@@ -1,31 +1,20 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(list) {
-          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) } catch { /* server component */ }
-        },
-      },
-    }
-  )
+  // רק איש צוות פעיל מקבל את הפרופיל שלו; אחרת מחזירים null (אותו מבנה תשובה)
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ profile: null })
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ profile: null })
+  const admin = getServiceClient()
+  if (!admin) return NextResponse.json({ profile: null })
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', staff.userId)
     .maybeSingle()
 
   return NextResponse.json({ profile })

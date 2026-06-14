@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { registrationReceivedEmail } from '@/lib/emailTemplates'
+import { deliverMail } from '@/lib/sendMail'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +14,11 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — מניעת רישומי ספאם המוניים
+  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   let body: Record<string, unknown>
   try {
     body = await request.json()
@@ -21,7 +29,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, spouse_phone, children, children_count, notes, lineage_node_id, lineage_manual,
+    spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -39,6 +47,30 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })
 
+  const cleanSpouseId = spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : ''
+
+  // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות
+  if (Array.isArray(children) && children.length) {
+    const seen = new Set<string>()
+    for (const c of children as { name?: string; id_number?: string }[]) {
+      const cid = (c?.id_number ?? '').replace(/\D/g, '')
+      if (!cid) continue
+      const childName = (c?.name ?? '').trim() || 'הילד/ה'
+      // א. כפילות בתוך אותה משפחה (אותה רשימה / זהה להורה) — מציינים שם
+      if (seen.has(cid)) return NextResponse.json({ error: `תעודת הזהות של ${childName} מופיעה פעמיים ברשימת הילדים.` }, { status: 409 })
+      if (cid === cleanId || (cleanSpouseId && cid === cleanSpouseId)) {
+        return NextResponse.json({ error: `תעודת הזהות של ${childName} זהה לזו של ההורה. יש להזין תעודת זהות נכונה.` }, { status: 409 })
+      }
+      seen.add(cid)
+      // ב. כבר קיים במערכת על שם רשומה אחרת — לא חושפים פרטים
+      const { data: asBen } = await admin.from('beneficiaries').select('id').or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).limit(1)
+      const { data: asChild } = await admin.from('beneficiaries').select('id').contains('children', [{ id_number: cid }]).limit(1)
+      if ((asBen?.length || asChild?.length)) {
+        return NextResponse.json({ error: `תעודת הזהות ${cid} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 409 })
+      }
+    }
+  }
+
   const isMarried = String(marital_status) === 'נשואים'
   const cleanChildCount = Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10))
   const childrenJson = Array.isArray(children) && children.length > 0 ? children : null
@@ -54,10 +86,14 @@ export async function POST(request: NextRequest) {
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     lineage_manual: Array.isArray(lineage_manual) && lineage_manual.length > 0 ? lineage_manual : null,
+    lineage_chain: Array.isArray(lineage_chain) && lineage_chain.length > 0 ? lineage_chain : null,
+    past_benefits: past_benefits && typeof past_benefits === 'object' ? past_benefits : null,
     eligibility_status: 'pending',
     is_active: true,
   }
 
+  // נשואים = משפחה אחת = כרטסת אחת. הבעל והאשה נשמרים על אותה רשומה
+  // (full_name + spouse_name), ולא כשתי רשומות נפרדות.
   const records: Record<string, unknown>[] = [{
     id_number: cleanId,
     full_name: String(full_name).trim(),
@@ -67,30 +103,9 @@ export async function POST(request: NextRequest) {
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
+    spouse_birth_date: spouse_birth_date || null,
     ...sharedFields,
   }]
-
-  // For נשואים: also insert spouse as a separate beneficiary record
-  if (isMarried && spouse_name && spouse_id_number) {
-    const cleanSpouseId = String(spouse_id_number).replace(/\D/g, '')
-    if (cleanSpouseId.length >= 5) {
-      const { data: existingSpouse } = await admin.from('beneficiaries').select('id').eq('id_number', cleanSpouseId).maybeSingle()
-      if (!existingSpouse) {
-        const spouseParts = String(spouse_name).trim().split(' ')
-        records.push({
-          id_number: cleanSpouseId,
-          full_name: spouseParts[0] ?? String(spouse_name).trim(),
-          family_name: spouseParts.slice(1).join(' ') || String(family_name ?? '').trim(),
-          birth_date: null,
-          gender: 'female',
-          spouse_name: String(full_name).trim(),
-          spouse_id_number: cleanId,
-          spouse_phone: phone ? String(phone).trim() : null,
-          ...sharedFields,
-        })
-      }
-    }
-  }
 
   let { error } = await admin.from('beneficiaries').insert(records)
 
@@ -98,8 +113,8 @@ export async function POST(request: NextRequest) {
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, children, lineage_manual, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void children; void lineage_manual
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)
@@ -110,6 +125,53 @@ export async function POST(request: NextRequest) {
     console.error('[public-register] insert error:', error.code, error.message, error.details)
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
+  }
+
+  // הכנסת הדורות שהנרשם הוסיף ידנית (אבות + הנרשם) לעץ הדורות בסטטוס "ממתין לאימות",
+  // משורשרים תחת הצומת המאומת שנבחר. הנרשם מקושר לצומת האחרון (מיקומו בעץ).
+  try {
+    if (lineage_node_id && Array.isArray(lineage_new_nodes) && lineage_new_nodes.length) {
+      const { data: sel } = await admin.from('lineage_nodes').select('id, generation').eq('id', String(lineage_node_id)).maybeSingle()
+      if (sel) {
+        let parentId: string = sel.id
+        let gen: number = sel.generation as number
+        let lastId: string = sel.id
+        for (const n of lineage_new_nodes as { name?: string; relation?: string }[]) {
+          const nm = (n?.name ?? '').toString().trim()
+          if (!nm) continue
+          gen += 1
+          const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null
+          const { data: node } = await admin.from('lineage_nodes')
+            .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })
+            .select('id').single()
+          if (node?.id) { parentId = node.id; lastId = node.id }
+        }
+        if (lastId !== sel.id) {
+          await admin.from('beneficiaries').update({ lineage_node_id: lastId }).eq('id_number', cleanId)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[public-register] lineage nodes insert failed:', e)
+  }
+
+  // Send confirmation email (non-blocking) — מעוצב עם כל פרטי הרישום + קישור לפורטל
+  if (email) {
+    const reg = registrationReceivedEmail({
+      full_name: full_name ? String(full_name) : null,
+      family_name: family_name ? String(family_name) : null,
+      id_number: id_number ? String(id_number) : null,
+      phone: phone ? String(phone) : null,
+      email: String(email),
+      address: address ? String(address) : null,
+      city: city ? String(city) : null,
+      marital_status: marital_status ? String(marital_status) : null,
+      spouse_name: spouse_name ? String(spouse_name) : null,
+      spouse_id_number: spouse_id_number ? String(spouse_id_number) : null,
+      children_count: cleanChildCount,
+    })
+    deliverMail(String(email), reg.subject, reg.html)
+      .catch(e => console.error('[public-register] confirmation email failed:', e))
   }
 
   return NextResponse.json({ ok: true })

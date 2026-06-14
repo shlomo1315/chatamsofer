@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
-export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'loans' | 'distributions' | 'reports' | 'widows'
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
@@ -8,6 +8,7 @@ export type Gender = 'male' | 'female'
 export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
 export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloaded'
+export type CardStatus = 'pending' | 'approved' | 'rejected' | 'loaded' | 'awaiting_stock'
 export type DistributionStatus = 'planning' | 'active' | 'completed' | 'cancelled'
 export type DistributionRecipientStatus = 'pending' | 'received' | 'not_received'
 export type NotificationType = 'info' | 'warning' | 'urgent' | 'reminder'
@@ -58,7 +59,13 @@ export interface Beneficiary {
   spouse_phone?: string
   lineage_node_id?: string
   lineage_manual?: string[]
+  lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
   children_count: number
+  monthly_support?: number
+  past_benefits?: {
+    recovery_home?: boolean; food_card?: boolean; holiday_grant?: boolean; catering?: boolean
+    loan?: boolean; loan_amount?: string; other?: boolean; other_details?: string; notes?: string
+  }
   children?: {
     name: string
     id_number: string | null
@@ -74,6 +81,9 @@ export interface Beneficiary {
   eligibility_status: EligibilityStatus
   is_active: boolean
   notes?: string
+  rejection_reason?: string
+  docs_notes?: string
+  required_docs?: string
   nedarim_id?: string
   created_at: string
   updated_at: string
@@ -128,12 +138,36 @@ export interface MaternityAid {
   recovery_home?: string
   recovery_from?: string
   recovery_to?: string
+  recovery_arrived?: boolean | null
+  recovery_arrived_at?: string
+  recovery_arrived_by?: string
+  recovery_amount?: number
+  recovery_amount_status?: string
+  recovery_amount_at?: string
+  recovery_nights?: number
   status: MaternityStatus
+  card_status?: CardStatus
+  card_center_id?: string
   approved_by?: string
   notes?: string
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary
+}
+
+// מוקד חלוקת כרטיסי מזון. remaining/approved/loaded מחושבים בצד שרת.
+export interface CardCenter {
+  id: string
+  name: string
+  stock: number
+  is_active: boolean
+  notes?: string
+  created_at: string
+  updated_at: string
+  approved?: number   // אושרו וטרם נטענו
+  loaded?: number     // נטענו (נוכו מהמלאי)
+  remaining?: number  // נשאר פיזית = stock - loaded
+  available?: number  // פנוי לאישור = stock - approved - loaded
 }
 
 export interface Loan {
@@ -260,6 +294,66 @@ export const WIDOW_REQUEST_STATUS_COLORS: Record<WidowRequestStatus, string> = {
   rejected: 'bg-red-100 text-red-700',
 }
 
+// ─── תמיכות אלמנות (לוג תשלומים לתיק משפחה) ───
+export type WidowSupportType = 'one_time' | 'monthly' | 'holiday' | 'medical' | 'food' | 'other'
+
+export interface WidowSupportPayment {
+  id: string
+  beneficiary_id: string
+  amount: number
+  paid_at: string
+  type: WidowSupportType
+  note?: string
+  created_at: string
+}
+
+export const WIDOW_SUPPORT_TYPE_LABELS: Record<WidowSupportType, string> = {
+  one_time: 'חד-פעמי',
+  monthly: 'קצבה חודשית',
+  holiday: 'חג',
+  medical: 'רפואי',
+  food: 'מזון',
+  other: 'אחר',
+}
+
+// ─── סיוע כספי ───
+export type FinancialAidStatus = 'pending' | 'awaiting_decision' | 'approved' | 'rejected'
+
+export interface FinancialAidRequest {
+  id: string
+  beneficiary_id: string
+  reason?: string
+  document_url?: string
+  document_name?: string
+  status: FinancialAidStatus
+  amount?: number
+  decision_email?: string
+  gmail_thread_id?: string
+  gmail_message_id?: string
+  sent_to_decision_at?: string
+  decision_reply?: string
+  decision_replied_at?: string
+  reviewed_by?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  beneficiary?: Beneficiary
+}
+
+export const FINANCIAL_AID_STATUS_LABELS: Record<FinancialAidStatus, string> = {
+  pending: 'ממתין לטיפול',
+  awaiting_decision: 'נשלח לגורם מאשר',
+  approved: 'מאושר',
+  rejected: 'נדחה',
+}
+
+export const FINANCIAL_AID_STATUS_COLORS: Record<FinancialAidStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  awaiting_decision: 'bg-blue-100 text-blue-700',
+  approved: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+}
+
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'מנהל',
   secretary: 'מזכירות',
@@ -268,10 +362,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
-  pending: 'ממתין לאישור',
+  pending: 'ממתין לאישור ראשוני',
   approved: 'מאושר',
   rejected: 'נדחה',
-  review: 'בבדיקה',
+  review: 'ממתין לאישור מסמכים',
   docs_pending: 'השלמת מסמכים',
 }
 

@@ -43,46 +43,33 @@ export async function saveRefreshToken(token: string) {
   await db.from('app_settings').upsert({ key: 'gmail_refresh_token', value: token, updated_at: new Date().toISOString() })
 }
 
-function encodeHeader(text: string): string {
-  // RFC 2047 encoded-word for non-ASCII header values
+function _encodeHeader(text: string): string {
   return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`
 }
 
-// שליחת מייל HTML דרך חשבון ה-Gmail של המשרד (משמש גם את ה-API וגם את ה-cron).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function sendGmailMessage(gmail: any, opts: { to: string; subject: string; html: string; threadId?: string }) {
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const fromName = 'היכל החתם סופר משרד ראשי'
   const bodyB64 = Buffer.from(opts.html ?? '', 'utf8').toString('base64')
-
   const raw = [
-    `From: ${encodeHeader(fromName)} <${from}>`,
+    `From: ${_encodeHeader(fromName)} <${from}>`,
     `To: ${opts.to}`,
-    `Subject: ${encodeHeader(opts.subject)}`,
+    `Subject: ${_encodeHeader(opts.subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',
     '',
     bodyB64,
   ].join('\r\n')
-
-  const encoded = Buffer.from(raw)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-
+  const encoded = Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   await gmail.users.messages.send({
     userId: 'me',
     requestBody: { raw: encoded, threadId: opts.threadId || undefined },
   })
 }
 
-// מאתר/יוצר תווית Gmail לפי שם ומחזיר את ה-id שלה (לסימון הודעות שטופלו).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function ensureLabel(gmail: any, name: string): Promise<string> {
   const list = await gmail.users.labels.list({ userId: 'me' })
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const existing = (list.data.labels ?? []).find((l: any) => l.name === name)
   if (existing?.id) return existing.id
   const created = await gmail.users.labels.create({
@@ -90,6 +77,14 @@ export async function ensureLabel(gmail: any, name: string): Promise<string> {
     requestBody: { name, labelListVisibility: 'labelHide', messageListVisibility: 'show' },
   })
   return created.data.id as string
+}
+
+export interface Attachment {
+  attachmentId: string
+  filename: string
+  mimeType: string
+  size: number
+  inlineData?: string  // base64url — present for small attachments (< 25KB) that Gmail embeds inline
 }
 
 export interface ParsedMessage {
@@ -105,6 +100,7 @@ export interface ParsedMessage {
   body: string
   isRead: boolean
   labelIds: string[]
+  attachments: Attachment[]
 }
 
 function decodeBase64(data: string) {
@@ -132,6 +128,53 @@ function getBody(payload: any): string {
     }
   }
   return ''
+}
+
+function getPartFilename(part: any): string {
+  // filename may be on the part directly, or inside Content-Type / Content-Disposition headers
+  if (part.filename) return part.filename
+  const headers: { name: string; value: string }[] = part.headers ?? []
+  for (const h of headers) {
+    const val = h.value ?? ''
+    // Content-Disposition: attachment; filename="foo.pdf"
+    const cdMatch = /filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i.exec(val)
+    if (cdMatch) return decodeURIComponent(cdMatch[1].trim())
+    // Content-Type: application/pdf; name="foo.pdf"
+    const ctMatch = /name\*?=(?:UTF-8'')?["']?([^"';\n]+)/i.exec(val)
+    if (ctMatch) return decodeURIComponent(ctMatch[1].trim())
+  }
+  return ''
+}
+
+function isAttachmentPart(part: any): boolean {
+  const filename = getPartFilename(part)
+  if (!filename) return false
+  // Must have either an attachmentId (large) or body.data (small inline)
+  return !!(part.body?.attachmentId || part.body?.data)
+}
+
+function getAttachments(payload: any): Attachment[] {
+  const attachments: Attachment[] = []
+  if (!payload) return attachments
+
+  const scanParts = (parts: any[]) => {
+    for (const part of parts) {
+      if (isAttachmentPart(part)) {
+        attachments.push({
+          attachmentId: part.body?.attachmentId ?? '',
+          filename: getPartFilename(part),
+          mimeType: part.mimeType ?? 'application/octet-stream',
+          size: part.body?.size ?? (part.body?.data ? Buffer.from(part.body.data, 'base64').length : 0),
+          // inline data for small attachments (< 25KB)
+          inlineData: part.body?.attachmentId ? undefined : part.body?.data,
+        })
+      }
+      if (part.parts) scanParts(part.parts)
+    }
+  }
+
+  if (payload.parts) scanParts(payload.parts)
+  return attachments
 }
 
 function getHeader(headers: any[], name: string) {
@@ -172,5 +215,6 @@ export function parseMessage(msg: any): ParsedMessage {
     body: getBody(msg.payload),
     isRead: !msg.labelIds?.includes('UNREAD'),
     labelIds: msg.labelIds ?? [],
+    attachments: getAttachments(msg.payload),
   }
 }

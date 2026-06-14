@@ -5,23 +5,22 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import Card from '@/components/ui/Card'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
+import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BackButton from '@/components/ui/BackButton'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 
 async function getLoan(id: string): Promise<Loan | null> {
   if (!isSupabaseConfigured()) return null
-  try {
-    const supabase = await createClient()
-    const { data } = await supabase
-      .from('loans')
-      .select('*, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone)')
-      .eq('id', id)
-      .single()
-    return data
-  } catch {
-    return null
-  }
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('loans')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
+    .eq('id', id)
+    .single()
+  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return data
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
@@ -45,7 +44,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
     )
   }
 
-  const b = loan.beneficiary as { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string } | undefined
+  const b = loan.beneficiary as (Parameters<typeof FamilyApprovalGate>[0]['beneficiary'] & { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string; eligibility_status?: string }) | undefined
+  const familyApproved = b?.eligibility_status === 'approved'
   // הלווה = הבעל (full_name); אם אין בעל, האישה (spouse_name)
   const borrower = b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name) : undefined
 
@@ -60,7 +60,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <LoanStatusControl loan={loan} />
+          <LoanStatusControl loan={loan} advance familyApproved={familyApproved} />
           <Link href={`/admin/loans/${loan.id}/edit`}>
             <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה
@@ -69,6 +69,9 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           <DeleteLoanButton loanId={loan.id} redirect />
         </div>
       </div>
+
+      {/* שער אישור המשפחה — אם טרם אושרה, מציג פרטים+ייחוס ומאפשר אישור ישיר; חוסם אישור בקשה לפני כן */}
+      {b && <FamilyApprovalGate beneficiary={b} />}
 
       <Card>
           <div className="flex items-center gap-2 text-indigo-600 mb-3">

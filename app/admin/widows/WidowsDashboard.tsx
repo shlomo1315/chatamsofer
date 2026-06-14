@@ -1,265 +1,122 @@
 'use client'
-import { useState } from 'react'
-import Link from 'next/link'
-import { Eye, MapPin, Baby, Clock, Check, X, Users, CheckCircle2 } from 'lucide-react'
-import { Beneficiary, WidowRequest, WIDOW_REQUEST_TYPE_LABELS, WIDOW_REQUEST_STATUS_LABELS, WIDOW_REQUEST_STATUS_COLORS } from '@/types'
+import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock } from 'lucide-react'
+import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
+const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
 
-const TABS = [
-  { key: 'widows',   label: 'רשימת אלמנות/אלמנים' },
-  { key: 'orphans',  label: 'ילדים יתומים' },
-  { key: 'requests', label: 'בקשות' },
-]
+export default function WidowsDashboard({
+  widows, requests, payments,
+}: { widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }) {
+  const router = useRouter()
+  const [query, setQuery] = useState('')
 
-const STATUS_SEL: Record<string, string> = {
-  pending:     'bg-amber-100 text-amber-700',
-  approved:    'bg-green-100 text-green-700',
-  rejected:    'bg-red-100 text-red-700',
-  docs_pending:'bg-blue-100 text-blue-700',
-  review:      'bg-slate-100 text-slate-600',
-}
-const STATUS_LBL: Record<string, string> = {
-  pending: 'ממתין', approved: 'מאושר', rejected: 'נדחה',
-  docs_pending: 'השלמת מסמכים', review: 'בבדיקה',
-}
+  // סכומים לפי תיק
+  const totalsByFamily = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const p of payments) m[p.beneficiary_id] = (m[p.beneficiary_id] ?? 0) + Number(p.amount || 0)
+    return m
+  }, [payments])
 
-export default function WidowsDashboard({ widows, requests }: { widows: Beneficiary[]; requests: WidowRequest[] }) {
-  const [tab, setTab] = useState<'widows' | 'orphans' | 'requests'>('widows')
+  const pendingByFamily = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const r of requests) if (r.status === 'pending') m[r.beneficiary_id] = (m[r.beneficiary_id] ?? 0) + 1
+    return m
+  }, [requests])
 
-  const totalOrphans = widows.reduce((sum, w) => sum + (w.children_count ?? 0), 0)
-  const pendingReqs  = requests.filter(r => r.status === 'pending').length
-  const approvedReqs = requests.filter(r => r.status === 'approved').length
+  // שלוש סטטיסטיקות עליונות
+  const totalSupport = useMemo(() => payments.reduce((s, p) => s + Number(p.amount || 0), 0), [payments])
+  const monthlySupport = useMemo(() => widows.reduce((s, w) => s + Number(w.monthly_support || 0), 0), [widows])
+  const pendingTotal = useMemo(() => requests.filter(r => r.status === 'pending').length, [requests])
 
   const tiles = [
-    { label: 'אלמנות ואלמנים',  value: widows.length, icon: Users,        color: 'bg-purple-50 text-purple-600', border: 'border-purple-100', active: 'ring-purple-400', tab: 'widows'   },
-    { label: 'ילדים יתומים',    value: totalOrphans,   icon: Baby,         color: 'bg-pink-50 text-pink-600',     border: 'border-pink-100',   active: 'ring-pink-400',   tab: 'orphans'  },
-    { label: 'בקשות ממתינות',   value: pendingReqs,    icon: Clock,        color: 'bg-amber-50 text-amber-600',   border: 'border-amber-100',  active: 'ring-amber-400',  tab: 'requests' },
-    { label: 'בקשות שאושרו',    value: approvedReqs,   icon: CheckCircle2, color: 'bg-green-50 text-green-600',   border: 'border-green-100',  active: 'ring-green-400',  tab: 'requests' },
-  ] as const
+    { label: 'תיקי משפחות', value: String(widows.length), icon: FolderOpen, color: 'bg-purple-50 text-purple-600' },
+    { label: 'סך תמיכות כללי', value: fmtCur(totalSupport), icon: Wallet, color: 'bg-emerald-50 text-emerald-600' },
+    { label: 'סך תמיכות חודשי', value: fmtCur(monthlySupport), icon: CalendarClock, color: 'bg-blue-50 text-blue-600' },
+  ]
 
-  // Collect all orphans from children JSONB
-  const orphans = widows.flatMap(w =>
-    (w.children ?? []).map(c => ({ ...c, parentName: fullName(w), parentId: w.id }))
-  )
+  const filtered = widows
+    .filter(w => {
+      if (!query.trim()) return true
+      return [fullName(w), w.id_number, w.city].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
+    })
+    .sort((a, b) => (pendingByFamily[b.id] ?? 0) - (pendingByFamily[a.id] ?? 0))
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* שלוש סטטיסטיקות */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {tiles.map(t => (
-          <button
-            key={t.label}
-            onClick={() => setTab(t.tab)}
-            className={`bg-white rounded-2xl border ${t.border} p-4 flex items-center gap-3 shadow-sm text-right transition-all hover:shadow-md hover:scale-[1.02] ${tab === t.tab ? `ring-2 ${t.active}` : ''}`}
-          >
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${t.color}`}>
-              <t.icon size={18} />
+          <div key={t.label} className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center gap-4 shadow-sm">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${t.color}`}>
+              <t.icon size={22} />
             </div>
             <div>
-              <p className="text-2xl font-bold text-slate-900">{t.value}</p>
-              <p className="text-xs text-slate-500">{t.label}</p>
+              <p className="text-2xl font-bold text-slate-900 ltr-num">{t.value}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{t.label}</p>
             </div>
-          </button>
+          </div>
         ))}
       </div>
 
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Tab bar */}
-      <div className="flex border-b border-slate-200 bg-slate-50">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key as typeof tab)}
-            className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 ${
-              tab === t.key
-                ? 'border-purple-600 text-purple-700 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {pendingTotal > 0 && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-sm text-amber-800">
+          <Clock size={15} /> {pendingTotal} בקשות ממתינות לטיפול — מסומנות בתיקים הרלוונטיים למטה.
+        </div>
+      )}
 
-      <div className="overflow-x-auto">
-        {/* ── Tab 1: Widows list ── */}
-        {tab === 'widows' && (
-          <table className="w-full text-sm">
+      {/* רשימת תיקי המשפחות */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="font-semibold text-slate-900">תיקי משפחות</h2>
+          <div className="relative w-full sm:w-64">
+            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש לפי שם / ת.ז / עיר…"
+              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-purple-200" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-right">
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
               <tr>
-                <th className="text-right px-4 py-3">שם</th>
-                <th className="text-right px-4 py-3">ת.ז.</th>
-                <th className="text-right px-4 py-3">עיר</th>
-                <th className="text-right px-4 py-3">מצב</th>
-                <th className="text-right px-4 py-3">ילדים</th>
-                <th className="text-right px-4 py-3">סטטוס</th>
+                <th className="px-4 py-3">שם המשפחה</th>
+                <th className="px-4 py-3">ת.ז.</th>
+                <th className="px-4 py-3">עיר</th>
+                <th className="px-4 py-3">ילדים</th>
+                <th className="px-4 py-3">תמיכה חודשית</th>
+                <th className="px-4 py-3">סך תמיכות</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {widows.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין רשומות</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
               )}
-              {widows.map(w => (
-                <tr key={w.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-800">{fullName(w)}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500" dir="ltr">{w.id_number}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {w.city ? <span className="flex items-center gap-1"><MapPin size={12} />{w.city}</span> : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700">
-                      {w.marital_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="flex items-center gap-1 text-slate-600">
-                      <Baby size={13} />{w.children_count ?? 0}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_SEL[w.eligibility_status] ?? 'bg-slate-100 text-slate-600'}`}>
-                      {STATUS_LBL[w.eligibility_status] ?? w.eligibility_status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/beneficiaries/${w.id}`} className="text-indigo-600 hover:text-indigo-800">
-                      <Eye size={15} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {/* ── Tab 2: Orphans ── */}
-        {tab === 'orphans' && (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
-              <tr>
-                <th className="text-right px-4 py-3">שם הילד/ה</th>
-                <th className="text-right px-4 py-3">ת.ז.</th>
-                <th className="text-right px-4 py-3">מין</th>
-                <th className="text-right px-4 py-3">תאריך לידה</th>
-                <th className="text-right px-4 py-3">הורה</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orphans.length === 0 && (
-                <tr><td colSpan={5} className="text-center py-10 text-slate-400">אין ילדים רשומים</td></tr>
-              )}
-              {orphans.map((c, i) => (
-                <tr key={i} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-800">{c.name || '—'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-500" dir="ltr">{c.id_number || '—'}</td>
-                  <td className="px-4 py-3">
-                    {c.gender === 'male'
-                      ? <span className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">בן</span>
-                      : c.gender === 'female'
-                      ? <span className="px-2 py-0.5 rounded-full text-xs bg-pink-50 text-pink-700">בת</span>
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{c.birth_date || '—'}</td>
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/beneficiaries/${c.parentId}`} className="text-indigo-600 hover:underline text-xs">
-                      {c.parentName}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {/* ── Tab 3: Requests ── */}
-        {tab === 'requests' && (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
-              <tr>
-                <th className="text-right px-4 py-3">מגיש/ה</th>
-                <th className="text-right px-4 py-3">סוג בקשה</th>
-                <th className="text-right px-4 py-3">פרטים</th>
-                <th className="text-right px-4 py-3">סכום</th>
-                <th className="text-right px-4 py-3">תאריך</th>
-                <th className="text-right px-4 py-3">סטטוס</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {requests.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין בקשות</td></tr>
-              )}
-              {requests.map(r => {
-                const ben = r.beneficiary as (Beneficiary & { full_name: string }) | undefined
-                const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : '—'
+              {filtered.map(w => {
+                const pend = pendingByFamily[w.id] ?? 0
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{name}</td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700">
-                        {WIDOW_REQUEST_TYPE_LABELS[r.request_type]}
+                  <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      <span className="flex items-center gap-2">
+                        {fullName(w)}
+                        {pend > 0 && <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pend} בקשות</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600 max-w-xs truncate">{r.description || '—'}</td>
-                    <td className="px-4 py-3 text-slate-700 font-medium">
-                      {r.amount ? `₪${r.amount.toLocaleString('he-IL')}` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
-                      {new Date(r.created_at).toLocaleDateString('he-IL')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${WIDOW_REQUEST_STATUS_COLORS[r.status]}`}>
-                        {WIDOW_REQUEST_STATUS_LABELS[r.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 flex gap-2">
-                      {r.status === 'pending' && (
-                        <>
-                          <ApproveBtn id={r.id} />
-                          <RejectBtn id={r.id} />
-                        </>
-                      )}
-                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500 ltr-num">{w.id_number}</td>
+                    <td className="px-4 py-3 text-slate-600">{w.city ? <span className="flex items-center gap-1"><MapPin size={12} />{w.city}</span> : '—'}</td>
+                    <td className="px-4 py-3"><span className="flex items-center gap-1 text-slate-600"><Baby size={13} />{w.children_count ?? 0}</span></td>
+                    <td className="px-4 py-3 text-blue-700 font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</td>
+                    <td className="px-4 py-3 text-emerald-700 font-bold ltr-num">{totalsByFamily[w.id] ? fmtCur(totalsByFamily[w.id]) : '—'}</td>
+                    <td className="px-4 py-3 text-slate-300"><ChevronLeft size={16} /></td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
     </div>
-    </div>
-  )
-}
-
-function ApproveBtn({ id }: { id: string }) {
-  return (
-    <button
-      onClick={async () => {
-        await fetch('/api/admin/widow-request-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'approved' }) })
-        window.location.reload()
-      }}
-      className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
-      title="אשר"
-    >
-      <Check size={14} />
-    </button>
-  )
-}
-
-function RejectBtn({ id }: { id: string }) {
-  return (
-    <button
-      onClick={async () => {
-        await fetch('/api/admin/widow-request-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'rejected' }) })
-        window.location.reload()
-      }}
-      className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-      title="דחה"
-    >
-      <X size={14} />
-    </button>
   )
 }

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, Loader2, UserPlus, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
+import EmailInput from '@/components/ui/EmailInput'
 import { ROLE_LABELS, type UserRole, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
 
 interface MailLabel { id: string; name: string; color: string }
@@ -10,9 +11,11 @@ interface MailAccount { name: string; email: string }
 const ROLES: UserRole[] = ['admin', 'secretary']
 
 const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'beneficiaries', label: 'נתמכים' },
-  { key: 'maternity',     label: 'יולדות' },
+  { key: 'beneficiaries', label: 'צאצאים' },
+  { key: 'maternity',     label: 'עזר יולדות' },
+  { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
   { key: 'loans',         label: 'הלוואות' },
+  { key: 'financial_aid', label: 'סיוע רפואי' },
   { key: 'distributions', label: 'חלוקות' },
   { key: 'reports',       label: 'דוחות' },
   { key: 'lineage',       label: 'עץ הדורות' },
@@ -125,8 +128,8 @@ export default function AddUserButton() {
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">אימייל <span className="text-red-500">*</span></label>
-                  <input type="email" value={email} onChange={e => setEmail(e.target.value)} dir="ltr"
-                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <EmailInput value={email} onChange={setEmail}
+                    inputClassName="text-left" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-slate-600">טלפון <span className="text-red-500">*</span></label>

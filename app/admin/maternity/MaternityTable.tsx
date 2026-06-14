@@ -1,12 +1,15 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2 } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, ChevronDown, Loader2, Search, FileText, Trash2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { MaternityAid, MaternityStatus } from '@/types'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -49,16 +52,24 @@ const STATUS_PILL: Record<string, { label: string; cls: string; icon: typeof Clo
 }
 
 // ── Clickable status control ────────────────────────────────────────────────────
-export function StatusControl({ aid }: { aid: MaternityAid }) {
+export function StatusControl({ aid, advance, familyApproved }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
   const setStatus = async (next: MaternityStatus) => {
+    // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת
+    if (next === 'active' && familyApproved === false) {
+      setOpen(false)
+      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      return
+    }
     setSaving(true)
     try {
       // עדכון סטטוס התיק
@@ -68,6 +79,14 @@ export function StatusControl({ aid }: { aid: MaternityAid }) {
       // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת
       // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
       await syncBabyStatusInFamily(supabase, aid, next)
+
+      // באישור הלידה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      if (next === 'active') {
+        await fetch('/api/admin/request-approved', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'maternity', id: aid.id }),
+        }).catch(() => {})
+      }
 
       // באישור הלידה — סנכרון המשפחה לנדרים פלוס (כרטיס נדרים). נכשל בשקט אם לא מוגדר.
       if (next === 'active') {
@@ -83,9 +102,18 @@ export function StatusControl({ aid }: { aid: MaternityAid }) {
         }
       }
       setOpen(false)
+      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
+      if (advance && next !== 'pending') {
+        setSaving(false)
+        setShowSuccess(true)
+        setTimeout(() => {
+          goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
+        }, 1500)
+        return
+      }
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -99,6 +127,17 @@ export function StatusControl({ aid }: { aid: MaternityAid }) {
 
   return (
     <div className="relative inline-block">
+      {showSuccess && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle2 size={30} className="text-green-600" />
+            </div>
+            <p className="font-bold text-slate-900">הפעולה בוצעה בהצלחה</p>
+            <p className="text-sm text-slate-500">מעבירים אותך לבקשה הבאה…</p>
+          </div>
+        </div>
+      )}
       <button
         onClick={() => setOpen(o => !o)}
         disabled={saving}
@@ -204,25 +243,31 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
 function DeleteAidButton({ aid }: { aid: MaternityAid }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm(`למחוק את תיק היולדת של "${aid.baby_name ?? 'התינוק'}" לצמיתות? פעולה זו אינה הפיכה.`)) return
+    if (!(await confirm({ title: 'מחיקת תיק יולדת', message: `למחוק את תיק היולדת של "${aid.baby_name ?? 'התינוק'}" לצמיתות? פעולה זו אינה הפיכה.`, confirmLabel: 'מחיקה', danger: true }))) return
     setDeleting(true)
     try {
       await deleteMaternityAid(supabase, aid)
+      toast.success('תיק היולדת נמחק')
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
       setDeleting(false)
     }
   }
 
   return (
+    <>
     <button onClick={handleDelete} disabled={deleting}
       className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-white hover:bg-red-600 px-2.5 py-1.5 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
       {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
     </button>
+    {confirmDialog}
+    </>
   )
 }
 
@@ -242,10 +287,28 @@ const searchHaystack = (a: MaternityAid) => {
 }
 
 // ── Main table ──────────────────────────────────────────────────────────────────
-export default function MaternityTable({ data }: { data: MaternityAid[] }) {
+const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
+  pending:  { label: 'ממתין', cls: 'bg-amber-100 text-amber-800' },
+  approved: { label: 'אושר',   cls: 'bg-blue-100 text-blue-800' },
+  loaded:   { label: 'נטען',    cls: 'bg-green-100 text-green-800' },
+  rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
+}
+
+export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+
+  // רענון חי — כשבית ההחלמה מסמן הגעה/אי-הגעה, הממשק מתעדכן מיד (realtime) + גיבוי בפולינג
+  useEffect(() => {
+    const supabase = createClient()
+    const ch = supabase
+      .channel('maternity-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maternity_aids' }, () => router.refresh())
+      .subscribe()
+    const poll = setInterval(() => router.refresh(), 15000)
+    return () => { supabase.removeChannel(ch); clearInterval(poll) }
+  }, [router])
 
   const counts = useMemo(() => ({
     all: data.length,
@@ -264,6 +327,7 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
+      {!hideFilters && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
@@ -283,6 +347,7 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
           )
         })}
       </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -303,14 +368,14 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'כרטיס נדרים', 'אישור לידה', 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו לידות בסינון זה</td></tr>
+                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : filtered.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -323,7 +388,27 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
-                    <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.card_number ?? '—'}</span></td>
+                    {showArrived && (
+                      <td className="px-4 py-3 align-middle">
+                        {aid.recovery_arrived === true
+                          ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">הגיעה</span>
+                          : aid.recovery_arrived === false
+                            ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-800">לא הגיעה</span>
+                            : <span className="text-slate-300">—</span>}
+                      </td>
+                    )}
+                    {showArrived && (
+                      <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        {aid.recovery_amount != null ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+                            {aid.recovery_amount_status === 'rejected'
+                              ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">נדחה</span>
+                              : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{aid.recovery_amount_status === 'approved' ? 'אושר' : 'מומש'}</span>}
+                          </span>
+                        ) : <span className="text-slate-300">—</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 align-middle">
                       {aid.birth_certificate_url ? (
                         <a href={aid.birth_certificate_url} target="_blank" rel="noopener noreferrer"
@@ -335,6 +420,11 @@ export default function MaternityTable({ data }: { data: MaternityAid[] }) {
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
+                    {showCard && (
+                      <td className="px-4 py-3 align-middle">
+                        {(() => { const cs = aid.card_status ?? 'pending'; const m = CARD_STATUS_PILL[cs]; return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${m.cls}`}>{m.label}</span> })()}
+                      </td>
+                    )}
                     <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
                     <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">

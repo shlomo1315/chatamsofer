@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Mail, Send, Loader2, PenSquare, Reply, CheckCircle2, X, ChevronRight } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
+import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 
 interface Props { email: string; name: string; beneficiaryId: string }
 
@@ -171,7 +172,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
         <div
           className="px-5 py-4 text-sm text-slate-800 leading-relaxed overflow-auto min-h-[200px]"
           dir="auto"
-          dangerouslySetInnerHTML={{ __html: selected.body || `<p style="color:#94a3b8">אין תוכן להצגה</p>` }}
+          dangerouslySetInnerHTML={{ __html: selected.body ? sanitizeEmailHtml(selected.body) : `<p style="color:#94a3b8">אין תוכן להצגה</p>` }}
         />
       </div>
     )
@@ -222,7 +223,7 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
       ) : messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-2 text-slate-400">
           <Mail size={28} />
-          <p className="text-sm">אין התכתבות עם נתמך זה</p>
+          <p className="text-sm">אין התכתבות עם צאצא זה</p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">

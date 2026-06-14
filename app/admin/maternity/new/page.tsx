@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Search, Loader2, Check, AlertTriangle, Upload, X, Baby, ExternalLink, GitBranch, ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { Beneficiary } from '@/types'
@@ -86,7 +87,7 @@ export default function NewMaternityPage() {
         .maybeSingle()
 
       if (error || !data) {
-        setLookupError('לא נמצאה אישה עם תעודת זהות זו במערכת. יש לרשום את המשפחה תחילה בכרטסת נתמכים (כולל פרטי האישה).')
+        setLookupError('לא נמצאה אישה עם תעודת זהות זו במערכת. יש לרשום את המשפחה תחילה בכרטסת צאצאים (כולל פרטי האישה).')
       } else if (data.marital_status !== 'נשואים') {
         // גרושה / אלמנה — אין אפשרות לפתוח תיק יולדת
         setLookupError(`נמצאה רשומה אך הסטטוס המשפחתי הוא "${data.marital_status || 'לא ידוע'}". ניתן לפתוח תיק יולדת רק עבור סטטוס "נשואים".`)
@@ -325,7 +326,7 @@ export default function NewMaternityPage() {
             {statusWarning && (
               <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-1">
                 <AlertTriangle size={13} />
-                שים לב: הנתמכת בסטטוס "{mother.eligibility_status === 'pending' || mother.eligibility_status === 'review' ? 'ממתין לאישור' : 'לא מאושר'}" — ניתן להמשיך אך מומלץ לאשר קודם.
+                שים לב: הצאצא בסטטוס "{mother.eligibility_status === 'pending' || mother.eligibility_status === 'review' ? 'ממתין לאישור' : 'לא מאושר'}" — ניתן להמשיך אך מומלץ לאשר קודם.
               </div>
             )}
           </div>
@@ -404,12 +405,7 @@ export default function NewMaternityPage() {
             {/* Birth date + 6 weeks calc */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium text-slate-600">תאריך לידת התינוק <span className="text-red-500">*</span></label>
-              <input
-                type="date" value={babyBirthDate}
-                onChange={e => { setBabyBirthDate(e.target.value); clearErr('babyBirthDate') }}
-                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.babyBirthDate ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
-                dir="ltr"
-              />
+              <HebrewDatePicker value={babyBirthDate} onChange={iso => { setBabyBirthDate(iso); clearErr('babyBirthDate') }} maxToday />
               {fieldErrors.babyBirthDate && <p className="text-xs text-red-600">{fieldErrors.babyBirthDate}</p>}
               {babyBirthDate && (
                 <div className="flex items-center gap-2 text-xs bg-indigo-50 text-indigo-700 rounded-lg px-3 py-2 border border-indigo-100">

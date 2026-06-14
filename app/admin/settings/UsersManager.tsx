@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { Users, Trash2, MoreVertical } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import Input from '@/components/ui/Input'
+import EmailInput from '@/components/ui/EmailInput'
 import Select from '@/components/ui/Select'
 import { Profile, ROLE_LABELS, UserRole } from '@/types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'מנהל' },
@@ -27,6 +29,7 @@ interface Props {
 }
 
 export default function UsersManager({ initialProfiles, isConfigured }: Props) {
+  const { confirm, confirmDialog } = useConfirm()
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles)
   const [showAdd, setShowAdd] = useState(false)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -95,7 +98,7 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
   }
 
   async function handleDelete(profile: Profile) {
-    if (!confirm(`למחוק את ${profile.full_name}?`)) return
+    if (!(await confirm({ title: 'מחיקת משתמש', message: `למחוק את ${profile.full_name}?`, confirmLabel: 'מחיקה', danger: true }))) return
     setProfiles(prev => prev.filter(p => p.id !== profile.id))
     setOpenMenuId(null)
     const res = await fetch(`/api/admin/users?id=${profile.id}`, { method: 'DELETE' })
@@ -218,14 +221,12 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
         }
       >
         <form id="add-user-form" onSubmit={handleAdd} className="flex flex-col gap-4">
-          <Input
+          <EmailInput
             label="כתובת אימייל"
-            type="email"
             required
             placeholder="user@example.com"
             value={form.email}
-            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-            dir="ltr"
+            onChange={v => setForm(f => ({ ...f, email: v }))}
           />
           <Input
             label="שם מלא"
@@ -247,6 +248,7 @@ export default function UsersManager({ initialProfiles, isConfigured }: Props) {
           <p className="text-xs text-slate-500">המשתמש יקבל אימייל עם קישור להגדרת סיסמה</p>
         </form>
       </Modal>
+      {confirmDialog}
     </>
   )
 }

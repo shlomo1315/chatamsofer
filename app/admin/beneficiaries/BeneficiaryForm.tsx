@@ -3,9 +3,12 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } fr
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
+import EmailInput from '@/components/ui/EmailInput'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import { useToast } from '@/components/ui/Toast'
 
 const GENDER_BTN_SEL: Record<string, string> = {
   male: 'bg-blue-100 text-blue-800 border-blue-400',
@@ -129,9 +132,11 @@ function buildNodePath(nodeId: string, allNodes: LineageNode[]): string[] {
 function LineageTreePicker({
   initialNodeId,
   onSelect,
+  selfName,
 }: {
   initialNodeId?: string
   onSelect: (nodeId: string, path: string[]) => void
+  selfName?: string
 }) {
   const [allNodes, setAllNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
@@ -224,7 +229,16 @@ function LineageTreePicker({
     }
   }, [loading])
 
-  const positions = useMemo(() => tpLayout(tpBuildTree(allNodes)), [allNodes])
+  // הזרקת "צומת הנרשם עצמו" כילד של הצומת שנבחר — כדי שיוצג בעץ במיקומו הנכון
+  const SELF_ID = '__self__'
+  const layoutNodes = useMemo(() => {
+    if (!selected || !selfName) return allNodes
+    const sel = allNodes.find(n => n.id === selected)
+    if (!sel) return allNodes
+    return [...allNodes, { ...sel, id: SELF_ID, name: selfName, parent_id: selected, generation: (sel.generation ?? 0) + 1, status: 'verified' } as LineageNode]
+  }, [allNodes, selected, selfName])
+
+  const positions = useMemo(() => tpLayout(tpBuildTree(layoutNodes)), [layoutNodes])
   const edges = useMemo(() => tpEdges(positions), [positions])
   const { w, h } = useMemo(() => tpCanvasSize(positions), [positions])
 
@@ -236,8 +250,9 @@ function LineageTreePicker({
     let cur = map.get(selected)
     let guard = 0
     while (cur && guard < 60) { s.add(cur.id); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+    if (selfName) s.add(SELF_ID) // צומת הנרשם תמיד מודגש
     return s
-  }, [selected, allNodes])
+  }, [selected, allNodes, selfName])
 
   // Center horizontally on first load
   useEffect(() => {
@@ -362,13 +377,16 @@ function LineageTreePicker({
           </svg>
 
           {positions.map(pos => {
-            const p = tpPal(pos.node.generation)
+            const isSelf = pos.node.id === SELF_ID    // צומת הנרשם עצמו
+            const p = isSelf
+              ? { bg: 'linear-gradient(135deg,#34D399,#059669)', ring: '#059669', shadow: 'rgba(5,150,105,0.35)' }
+              : tpPal(pos.node.generation)
             const isSel = selected === pos.node.id   // הצומת האחרון שנבחר
             const onBranch = branch.has(pos.node.id)  // כל הצמתים בנתיב הנבחר
             return (
               <div
                 key={pos.node.id}
-                onClick={() => handleNodeClick(pos)}
+                onClick={() => { if (isSelf) return; handleNodeClick(pos) }}
                 style={{
                   position: 'absolute',
                   left: pos.x * zoom, top: pos.y * zoom,
@@ -573,6 +591,7 @@ interface Props {
 export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const isEdit = !!beneficiaryId
@@ -671,7 +690,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       if (error) throw error
       setChild(idx, 'birth_status', 'approved')
     } catch (e) {
-      alert(`שגיאה באישור הלידה: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(`שגיאה באישור הלידה: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setApprovingIdx(null)
     }
@@ -854,7 +873,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       }, 3000)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      alert(`שגיאה בשמירה: ${msg}`)
+      toast.error(`שגיאה בשמירה: ${msg}`)
       setSaving(false)
     }
   }
@@ -946,7 +965,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               onValue={v => setForm(f => ({ ...f, id_number: v }))}
             />
             <Field label="תאריך לידה" required error={errors.birth_date}>
-              <FInput type="date" value={form.birth_date} onChange={set('birth_date')} dir="ltr" required />
+              <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
             </Field>
             <Field label="מספר ילדים" required>
               <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
@@ -979,7 +998,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 onValue={v => setForm(f => ({ ...f, id_number: v }))}
               />
               <Field label="תאריך לידה" required error={errors.birth_date}>
-                <FInput type="date" value={form.birth_date} onChange={set('birth_date')} dir="ltr" required />
+                <HebrewDatePicker value={form.birth_date} onChange={iso => setForm(f => ({ ...f, birth_date: iso }))} maxToday />
               </Field>
               <Field label="מספר ילדים" required>
                 <FInput type="number" min="0" max="30" value={form.children_count} onChange={handleChildrenCount} required />
@@ -1012,7 +1031,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                 }}
               />
               <Field label="תאריך לידה האישה" required error={errors.spouse_birth_date}>
-                <FInput type="date" value={form.spouse_birth_date} onChange={set('spouse_birth_date')} dir="ltr" required />
+                <HebrewDatePicker value={form.spouse_birth_date} onChange={iso => setForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
               </Field>
               <Field label="טלפון האישה" error={errors.spouse_phone}>
                 <FInput type="tel" value={form.spouse_phone}
@@ -1078,13 +1097,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
                     </div>
                   </Field>
                   <Field label="תאריך לידה" required error={childErrors[idx]?.birth_date}>
-                    <FInput
-                      type="date"
-                      value={child.birth_date}
-                      onChange={e => setChild(idx, 'birth_date', e.target.value)}
-                      dir="ltr"
-                      required
-                    />
+                    <HebrewDatePicker value={child.birth_date} onChange={iso => setChild(idx, 'birth_date', iso)} maxToday />
                   </Field>
                   {child.gender && (
                   <Field label="מצב משפחתי" required error={childErrors[idx]?.marital_status}>
@@ -1170,7 +1183,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
             <FInput type="tel" value={form.phone2} onChange={set('phone2')} placeholder="050-0000000" dir="ltr" />
           </Field>
           <Field label="אימייל" required error={errors.email}>
-            <FInput type="email" value={form.email} onChange={set('email')} placeholder="name@example.com" dir="ltr" required />
+            <EmailInput value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="name@example.com" required />
           </Field>
         </div>
       </Section>
@@ -1193,32 +1206,40 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       {/* ── Lineage ── */}
       <Section title="שיוך שושלת *" icon={GitBranch}>
         <p className="text-xs text-slate-500 mb-3">
-          בחר את הענף שהנתמך שייך אליו. לחץ על שם ואז המשך לבחור את הדור הבא.
+          בחר את הענף שהצאצא שייך אליו. לחץ על שם ואז המשך לבחור את הדור הבא.
         </p>
         {errors.lineage_node_id && (
           <p className="text-xs text-red-500 mb-3">{errors.lineage_node_id}</p>
         )}
 
-        {(form.lineage_node_id || lineagePath.length > 0) && (
-          <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
-            <span className="text-xs text-indigo-600 font-medium ml-1">נבחר:</span>
-            {lineagePath.map((name, i) => (
-              <span key={i} className="flex items-center gap-1">
-                {i > 0 && <ChevronLeft size={11} className="text-indigo-300" />}
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  i === lineagePath.length - 1
-                    ? 'bg-indigo-600 text-white font-medium'
-                    : 'bg-indigo-100 text-indigo-700'
-                }`}>
-                  {name}
+        {(form.lineage_node_id || lineagePath.length > 0) && (() => {
+          const ancestors = [...lineagePath, ...manualLineage.map(s => s.trim()).filter(Boolean)]
+          const selfName = [form.family_name, form.full_name].filter(Boolean).join(' ').trim()
+          return (
+            <div className="flex items-center gap-1 flex-wrap mb-3 p-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
+              <span className="text-xs text-indigo-600 font-medium ml-1">שרשרת הדורות:</span>
+              {ancestors.map((name, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <ChevronLeft size={11} className="text-indigo-300" />}
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    {name}
+                  </span>
+                </span>
+              ))}
+              {/* הנרשם עצמו — מוצג כדור האחרון בשרשרת */}
+              <span className="flex items-center gap-1">
+                {ancestors.length > 0 && <ChevronLeft size={11} className="text-emerald-400" />}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white font-medium inline-flex items-center gap-1">
+                  <User size={10} /> {selfName || 'הצאצא'} <span className="opacity-80">(הצאצא)</span>
                 </span>
               </span>
-            ))}
-          </div>
-        )}
+            </div>
+          )
+        })()}
 
         <LineageTreePicker
           initialNodeId={form.lineage_node_id}
+          selfName={[form.family_name, form.full_name].filter(Boolean).join(' ').trim() || 'הצאצא (אני)'}
           onSelect={(nodeId, path) => {
             setForm(f => ({ ...f, lineage_node_id: nodeId }))
             setLineagePath(path)
@@ -1293,7 +1314,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               המשך דורות (דור {lineagePath.length + 1} ומעלה)
             </p>
             <p className="text-xs text-slate-400 mb-3">
-              אם הנתמך שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
+              אם הצאצא שייך לדור שאינו ברשימה, הוסף כאן את שמות הדורות הבאים ידנית.
             </p>
 
             <div className="flex flex-col gap-2">
@@ -1353,7 +1374,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       <div className="flex gap-3 justify-end">
         <Button type="button" variant="secondary" onClick={() => router.back()}>ביטול</Button>
         <Button type="submit" loading={saving}>
-          {isEdit ? 'שמור שינויים' : 'רישום נתמך'}
+          {isEdit ? 'שמור שינויים' : 'רישום צאצא'}
         </Button>
       </div>
     </form>

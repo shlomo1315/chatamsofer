@@ -3,6 +3,8 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const isImage = (url: string) => /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/i.test(url)
 const isPdf = (url: string) => /\.pdf(\?|$)/i.test(url)
@@ -19,6 +21,8 @@ export default function BirthCertificatePreview({
 }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const fileRef = useRef<HTMLInputElement>(null)
   const [url, setUrl] = useState(initialUrl)
   const [busy, setBusy] = useState(false)
@@ -34,23 +38,25 @@ export default function BirthCertificatePreview({
       const { error } = await supabase.from('maternity_aids').update({ birth_certificate_url: pub.publicUrl }).eq('id', aidId)
       if (error) throw error
       setUrl(pub.publicUrl)
+      toast.success('הקובץ הוחלף בהצלחה')
       router.refresh()
     } catch (e) {
-      alert(`שגיאה בהחלפת הקובץ: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(`שגיאה בהחלפת הקובץ: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setBusy(false)
     }
   }
 
   const remove = async () => {
-    if (!confirm('למחוק את אישור הלידה?')) return
+    if (!(await confirm({ title: 'מחיקת אישור לידה', message: 'למחוק את אישור הלידה?', confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true)
     try {
       const { error } = await supabase.from('maternity_aids').update({ birth_certificate_url: null }).eq('id', aidId)
       if (error) throw error
+      toast.success('אישור הלידה נמחק')
       router.refresh()
     } catch (e) {
-      alert(`שגיאה במחיקה: ${e instanceof Error ? e.message : String(e)}`)
+      toast.error(`שגיאה במחיקה: ${e instanceof Error ? e.message : String(e)}`)
       setBusy(false)
     }
   }
@@ -92,6 +98,7 @@ export default function BirthCertificatePreview({
           <Loader2 size={22} className="animate-spin text-indigo-500" />
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }

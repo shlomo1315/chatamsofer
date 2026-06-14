@@ -53,7 +53,6 @@ function baseTemplate(title: string, body: string) {
         <tr>
           <td style="background:#4f46e5;padding:28px 32px;text-align:center;">
             <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">היכל החתם סופר</h1>
-            <p style="margin:4px 0 0;color:#c7d2fe;font-size:13px;">מערכת ניהול נתמכים</p>
           </td>
         </tr>
         <!-- Body -->
@@ -96,13 +95,16 @@ export function templateStatusApproved(name: string): EmailPayload {
 
 export function templateStatusRejected(name: string, reason?: string): EmailPayload {
   return {
-    subject: 'עדכון בקשה — היכל החתם סופר',
-    html: baseTemplate('עדכון בקשה', `
+    subject: 'הרישום לאיגוד הצאצאים נדחה — היכל החתם סופר',
+    html: baseTemplate('הרישום נדחה', `
       <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
-        לאחר בחינת בקשתך, לצערנו <strong>לא ניתן לאשרה</strong> בשלב זה.
+        לאחר בחינת בקשתך, הרישום ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר <strong>נדחה</strong>.
       </p>
-      ${reason ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#991b1b;font-size:14px;">${reason}</p></div>` : ''}
+      ${reason ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:16px;margin:20px 0;">
+        <p style="margin:0 0 4px;color:#991b1b;font-size:13px;font-weight:700;">סיבת הדחייה:</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.6;">${reason}</p>
+      </div>` : ''}
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }
@@ -151,6 +153,36 @@ export function templateWidowRequestApproved(name: string): EmailPayload {
       <div style="background:#fdf4ff;border:1px solid #d8b4fe;border-radius:10px;padding:16px;margin:20px 0;">
         <p style="margin:0;color:#6b21a8;font-size:14px;font-weight:600;">✅ הבקשה אושרה — נציג יצור איתך קשר בהקדם.</p>
       </div>
+      <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
+    `),
+  }
+}
+
+export function templateRegistrationConfirmed(name: string): EmailPayload {
+  return {
+    subject: 'קיבלנו את בקשתך — היכל החתם סופר',
+    html: baseTemplate('בקשתך התקבלה', `
+      <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
+      <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
+        תודה על פנייתך! בקשתך להירשם במערכת היכל החתם סופר <strong>התקבלה בהצלחה</strong> ותועברה לטיפול המשרד.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
+        <p style="margin:0;color:#1e40af;font-size:14px;font-weight:600;">📋 הבקשה בטיפול — נעדכן אותך בהקדם על המשך התהליך.</p>
+      </div>
+      <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו בכתובת <a href="mailto:office@chasamsofer.info" style="color:#6366f1;">office@chasamsofer.info</a></p>
+    `),
+  }
+}
+
+export function templateDocsPendingWithNotes(name: string, notes?: string): EmailPayload {
+  return {
+    subject: 'נדרשים מסמכים נוספים — היכל החתם סופר',
+    html: baseTemplate('השלמת מסמכים', `
+      <h2 style="margin:0 0 16px;color:#1e293b;font-size:18px;">שלום ${name},</h2>
+      <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
+        קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
+      </p>
+      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך הפורטל האישי שלך.</p></div>'}
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }

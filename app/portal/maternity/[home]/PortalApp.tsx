@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import {
-  Building2, Baby, CalendarDays, Search, Eye, EyeOff,
-  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft
+  Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
+  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
 } from 'lucide-react'
 import { format, differenceInDays, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -29,6 +29,10 @@ interface Aid {
   recovery_to?: string
   card_number?: string
   notes?: string
+  recovery_arrived?: boolean | null
+  recovery_amount?: number | null
+  recovery_amount_status?: string | null
+  recovery_nights?: number | null
   beneficiary?: Mother
 }
 
@@ -80,7 +84,7 @@ function LoginForm({ home, onSuccess }: { home: string; onSuccess: () => void })
           <div className="w-20 h-20 bg-white rounded-2xl shadow-lg border border-sky-100 flex items-center justify-center overflow-hidden p-2">
             {logoErr
               ? <Building2 size={36} className="text-indigo-400" />
-              : <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
+              : <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
           </div>
           <div>
             <p className="text-xs text-slate-400 uppercase tracking-widest font-medium">היכל החתם סופר</p>
@@ -214,12 +218,56 @@ function Row({ icon, label, value, ltr }: { icon: React.ReactNode; label: string
 }
 
 // ─── Data Table ───────────────────────────────────────────────────────────────
-function DataView({ home, aids }: { home: string; aids: Aid[] }) {
+function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogout: () => void }) {
   const [query, setQuery] = useState('')
+  const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('all')
   const [selected, setSelected] = useState<Aid | null>(null)
   const [logoErr, setLogoErr] = useState(false)
   const [hebrewInfo, setHebrewInfo] = useState<{ hebrewDate: string; parasha: string; hebrewYear: string } | null>(null)
   const today = new Date()
+
+  // סימון הגעת היולדת — נשמר במערכת המרכזית
+  const [arrived, setArrived] = useState<Record<string, boolean | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_arrived ?? null])),
+  )
+  const [savingId, setSavingId] = useState<string | null>(null)
+  // סכום שמומש עבור הלידה — מוזן רק כשסומן "הגיעה" ונשלח לאישור
+  const [amountInput, setAmountInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount != null ? String(a.recovery_amount) : ''])),
+  )
+  const [amountStatus, setAmountStatus] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount_status ?? null])),
+  )
+  const [nightsInput, setNightsInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : ''])),
+  )
+  const [savingAmt, setSavingAmt] = useState<string | null>(null)
+  const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
+  const sendAmount = async (aidId: string) => {
+    const amt = Number(amountInput[aidId])
+    if (!Number.isFinite(amt) || amt <= 0) return
+    setSavingAmt(aidId)
+    try {
+      const r = await fetch('/api/portal/recovery-amount', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home, aidId, amount: amt, nights: nightsInput[aidId] || null }),
+      })
+      if (r.ok) { setAmountStatus(m => ({ ...m, [aidId]: 'pending' })); setEditingAmt(m => ({ ...m, [aidId]: false })) }
+    } catch { /* נסיון חוזר אפשרי */ }
+    setSavingAmt(null)
+  }
+  const markArrived = async (aidId: string, value: boolean | null) => {
+    const prev = arrived[aidId] ?? null
+    setArrived(m => ({ ...m, [aidId]: value })); setSavingId(aidId)
+    try {
+      const r = await fetch('/api/portal/arrived', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home, aidId, arrived: value }),
+      })
+      if (!r.ok) setArrived(m => ({ ...m, [aidId]: prev }))
+    } catch { setArrived(m => ({ ...m, [aidId]: prev })) }
+    setSavingId(null)
+  }
 
   useEffect(() => {
     fetch('/api/portal/hebrewdate')
@@ -228,17 +276,33 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
       .catch(() => {})
   }, [])
 
+  const matchArrived = (id: string) => {
+    if (arrivedFilter === 'all') return true
+    const a = arrived[id] ?? null
+    if (arrivedFilter === 'arrived') return a === true
+    if (arrivedFilter === 'not') return a === false
+    return a === null // pending
+  }
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return aids
     return aids.filter(a => {
+      if (!matchArrived(a.id)) return false
+      if (!q) return true
       const m = a.beneficiary
       return [
         motherName(m), m?.spouse_id_number, a.baby_name,
         fmtDate(a.birth_date), a.card_number,
       ].filter(Boolean).join(' ').toLowerCase().includes(q)
     })
-  }, [aids, query])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aids, query, arrivedFilter, arrived])
+
+  const counts = {
+    all: aids.length,
+    arrived: aids.filter(a => (arrived[a.id] ?? null) === true).length,
+    not: aids.filter(a => (arrived[a.id] ?? null) === false).length,
+    pending: aids.filter(a => (arrived[a.id] ?? null) === null).length,
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
@@ -250,13 +314,13 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
           <div className="w-10 h-10 rounded-xl border border-slate-100 shadow-sm overflow-hidden flex-shrink-0 bg-white flex items-center justify-center p-1">
             {logoErr
               ? <Building2 size={22} className="text-indigo-400" />
-              : <img src="/logo.jpg" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
+              : <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-400 leading-none">היכל החתם סופר</p>
+            <p className="text-xs text-slate-400 leading-none">היכל החתם סופר · עזר יולדות</p>
             <h1 className="text-base font-bold text-slate-800 truncate">{home}</h1>
           </div>
-          <div className="text-left text-xs text-slate-400 flex-shrink-0">
+          <div className="text-left text-xs text-slate-400 flex-shrink-0 hidden sm:block">
             <p>{format(today, 'EEEE', { locale: he })} · {format(today, 'd/M/yyyy')}</p>
             {hebrewInfo?.hebrewDate && (
               <p className="font-medium text-slate-700 mt-0.5">{hebrewInfo.hebrewDate}</p>
@@ -265,6 +329,10 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
               <p className="text-indigo-500 font-semibold mt-0.5">{hebrewInfo.parasha}</p>
             )}
           </div>
+          <button onClick={onLogout}
+            className="flex-shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-300 rounded-lg px-3 py-2 transition-colors">
+            <LogOut size={14} /> התנתקות
+          </button>
         </div>
       </div>
 
@@ -281,13 +349,35 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
           />
         </div>
 
-        {/* Info banner */}
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
-          <Baby size={14} className="text-indigo-500 flex-shrink-0" />
-          <p className="text-xs text-indigo-700">
-            מוצגות <strong>{filtered.length}</strong> יולדות מאושרות.
-            רשימה זו לקריאה בלבד · מתעדכנת אוטומטית.
-          </p>
+        {/* קוביות סינון + פילוח (מספר + אחוז) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {([
+            { key: 'all', label: 'סה״כ', count: counts.all, base: 'bg-white border-slate-200', sel: 'ring-2 ring-indigo-400 border-indigo-300', num: 'text-slate-800' },
+            { key: 'arrived', label: 'הגיעו', count: counts.arrived, base: 'bg-green-50 border-green-200', sel: 'ring-2 ring-green-400', num: 'text-green-700' },
+            { key: 'not', label: 'לא הגיעו', count: counts.not, base: 'bg-red-50 border-red-200', sel: 'ring-2 ring-red-400', num: 'text-red-700' },
+            { key: 'pending', label: 'טרם סומן', count: counts.pending, base: 'bg-amber-50 border-amber-200', sel: 'ring-2 ring-amber-400', num: 'text-amber-700' },
+          ] as const).map(c => {
+            const pct = counts.all ? Math.round((c.count / counts.all) * 100) : 0
+            const active = arrivedFilter === c.key
+            return (
+              <button key={c.key} onClick={() => setArrivedFilter(c.key)}
+                className={`rounded-2xl border px-4 py-3 text-right transition-all ${c.base} ${active ? c.sel : 'hover:shadow-sm'}`}>
+                <p className="text-xs text-slate-500 mb-1">{c.label}</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-extrabold ${c.num}`}>{c.count}</span>
+                  {c.key !== 'all' && <span className="text-xs font-semibold text-slate-400">{pct}%</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        <div className="flex items-center justify-center gap-2 my-1">
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-full px-4 py-1.5">
+            <Check size={15} className="text-indigo-500" />
+            סמנו הגעה לכל יולדת
+            <span className="text-indigo-300">·</span>
+            <span className="font-normal text-indigo-400">הרשימה מתעדכנת אוטומטית</span>
+          </span>
         </div>
 
         {/* Table / empty */}
@@ -299,11 +389,11 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm text-right">
+              <table className="w-full text-sm text-center">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'הגעה לבית החלמה', ''].map(h => (
+                      <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap text-center">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -311,13 +401,81 @@ function DataView({ home, aids }: { home: string; aids: Aid[] }) {
                   {filtered.map(aid => {
                     const m = aid.beneficiary
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center" style={{ verticalAlign: 'middle' }}
                         onClick={() => setSelected(aid)}>
-                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
-                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-700">{aid.baby_name ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap">{fmtDate(aid.birth_date)}</td>
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{motherName(m)}</td>
+                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num text-center" style={{ verticalAlign: 'middle' }}>{m?.spouse_id_number ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{aid.baby_name ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }} onClick={e => e.stopPropagation()}>
+                          {(() => {
+                            const a = arrived[aid.id] ?? null
+                            const saving = savingId === aid.id
+                            const status = amountStatus[aid.id] ?? null
+                            const editing = editingAmt[aid.id] ?? false
+                            const amountVal = Number(amountInput[aid.id])
+                            // לאחר שליחת הסכום — מוסתרים כפתורי ההגעה ומוצג סיכום מימוש הזכאות
+                            if (status && !editing) {
+                              return (
+                                <div className="flex flex-col items-center gap-1.5">
+                                  <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
+                                    <Check size={15} className="text-emerald-600" />
+                                    <span className="text-sm font-semibold text-emerald-800">
+                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {status === 'rejected'
+                                      ? <span className="text-xs font-medium text-red-600">נדחה</span>
+                                      : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
+                                    <button type="button" onClick={() => setEditingAmt(m => ({ ...m, [aid.id]: true }))}
+                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div className="flex flex-col items-center gap-2">
+                                <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                                  <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                    <Check size={15} /> הגיעה
+                                  </button>
+                                  <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+                                    <X size={15} /> לא הגיעה
+                                  </button>
+                                </div>
+                                {/* שדה הסכום — מופיע רק אם סומן "הגיעה" */}
+                                {a === true && (
+                                  <div className="flex items-center justify-center gap-2 flex-wrap bg-emerald-50/60 border border-emerald-100 rounded-lg p-2">
+                                    <div className="relative">
+                                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₪</span>
+                                      <input
+                                        value={amountInput[aid.id] ?? ''}
+                                        onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
+                                        inputMode="decimal" placeholder="סכום שמומש"
+                                        className="w-28 pr-6 pl-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                      />
+                                    </div>
+                                    <input
+                                      value={nightsInput[aid.id] ?? ''}
+                                      onChange={e => setNightsInput(m => ({ ...m, [aid.id]: e.target.value.replace(/\D/g, '') }))}
+                                      inputMode="numeric" placeholder="מס׳ לילות"
+                                      className="w-24 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                    />
+                                    <button type="button" onClick={() => sendAmount(aid.id)}
+                                      disabled={savingAmt === aid.id || !amountInput[aid.id]}
+                                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
+                                      {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </td>
+                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }}>
                           <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
                             <ChevronLeft size={13} /> פרטים
                           </span>
@@ -374,5 +532,13 @@ export default function PortalApp({ home }: { home: string }) {
     return <LoginForm home={home} onSuccess={fetchData} />
   }
 
-  return <DataView home={home} aids={aids} />
+  const logout = async () => {
+    await fetch('/api/portal/logout', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ home }),
+    }).catch(() => {})
+    setState('login')
+  }
+
+  return <DataView home={home} aids={aids} onLogout={logout} />
 }

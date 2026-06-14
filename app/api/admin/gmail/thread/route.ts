@@ -1,9 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const threadId = request.nextUrl.searchParams.get('id')
   if (!threadId) return NextResponse.json({ error: 'missing id' }, { status: 400 })
 

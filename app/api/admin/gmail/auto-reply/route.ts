@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail, type ContactBeneficiary } from '@/lib/emailTemplates'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,12 +12,15 @@ const PORTAL_BASE = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://chasamsofer.co.
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const { fromEmail, fromName, threadId, messageId: gmailMsgId, subject: origSubject } = await request.json()
 
   if (!fromEmail) return NextResponse.json({ error: 'missing fromEmail' }, { status: 400 })
@@ -34,13 +38,34 @@ export async function POST(request: NextRequest) {
   const client = getSupabase()
   if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
 
-  // Fetch the original Gmail message to get its Message-ID header for proper threading
+  // מענה אוטומטי נשלח רק על מייל חדש (תחילת שרשור). אם בשרשור כבר קיימת
+  // הודעה שיצאה מאיתנו (SENT) — סימן שכבר ענינו, ואין לשלוח מענה אוטומטי נוסף.
   let originalMessageId: string | undefined
-  try {
-    const gmail = await getGmailClient()
-    const orig = await gmail.users.messages.get({ userId: 'me', id: gmailMsgId, format: 'metadata', metadataHeaders: ['Message-ID'] })
-    originalMessageId = orig.data.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
-  } catch { /* best-effort */ }
+  if (threadId) {
+    try {
+      const gmail = await getGmailClient()
+      const thread = await gmail.users.threads.get({
+        userId: 'me', id: threadId, format: 'metadata', metadataHeaders: ['Message-ID'],
+      })
+      const msgs = thread.data.messages ?? []
+      const alreadyReplied = msgs.some(m => (m.labelIds ?? []).includes('SENT'))
+      if (alreadyReplied) {
+        return NextResponse.json({ skipped: true, reason: 'already replied in thread' })
+      }
+      // מזהה ה-Message-ID של ההודעה הנכנסת — לצורך שרשור תקין של התשובה
+      const incoming = msgs.find(m => m.id === gmailMsgId) ?? msgs[0]
+      originalMessageId = incoming?.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
+    } catch { /* best-effort */ }
+  }
+
+  // נפילה אחורה: אם לא הצלחנו לקרוא את השרשור, ננסה לקרוא את ההודעה הבודדת
+  if (!originalMessageId) {
+    try {
+      const gmail = await getGmailClient()
+      const orig = await gmail.users.messages.get({ userId: 'me', id: gmailMsgId, format: 'metadata', metadataHeaders: ['Message-ID'] })
+      originalMessageId = orig.data.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
+    } catch { /* best-effort */ }
+  }
 
   // Look up beneficiary by email
   const { data: rows } = await client

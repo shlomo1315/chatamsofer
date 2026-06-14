@@ -1,13 +1,29 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
-  ChevronLeft, Loader2, Reply, User, Phone, MapPin,
-  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings,
+  ChevronLeft, ChevronDown, Loader2, Reply, User, Phone, MapPin,
+  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
+  Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
 } from 'lucide-react'
-import { ParsedMessage } from '@/lib/gmail'
+
+const EMOJIS = ['😊','🙏','👍','🙌','❤️','✨','🎉','✅','📌','📞','📧','📅','⏰','💡','🔔','⚠️','😇','🤝','💪','🌟','📝','📎','🏠','👶','💳','🕯️','✡️','🍀','😀','🙂','👏','🎊']
+
+function ToolBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" title={title} onMouseDown={e => e.preventDefault()} onClick={onClick}
+      className="p-1.5 rounded hover:bg-slate-100 text-slate-600 flex items-center">
+      {children}
+    </button>
+  )
+}
+import { ParsedMessage, type Attachment } from '@/lib/gmail'
+import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
+import EmailInput from '@/components/ui/EmailInput'
+import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,20 +60,18 @@ function formatDate(raw: string) {
   try {
     const d = new Date(raw)
     const now = new Date()
-    if (d.toDateString() === now.toDateString())
-      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit' })
-  } catch { return raw }
-}
-
-function formatDateFull(raw: string) {
-  try {
-    const d = new Date(raw)
-    const now = new Date()
     const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
-    if (d.toDateString() === now.toDateString()) return time
-    const date = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })
-    return `${date} · ${time}`
+    const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+    const dayDiff = Math.round((startOfDay(now) - startOfDay(d)) / 86400000)
+    if (dayDiff === 0) return time                       // היום → רק שעה
+    if (dayDiff === 1) return `אתמול ${time}`            // אתמול
+    if (dayDiff < 7) {                                   // השבוע → יום בשבוע
+      const day = d.toLocaleDateString('he-IL', { weekday: 'long' })
+      return `${day} ${time}`
+    }
+    if (d.getFullYear() === now.getFullYear())           // השנה → יום/חודש + שעה
+      return `${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })} ${time}`
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch { return raw }
 }
 
@@ -76,6 +90,34 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
   const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)
   const [sentInfo, setSentInfo] = useState<{ to: string; toName: string; body: string } | null>(null)
+
+  // עורך עשיר + צרופות
+  const editorRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [attachments, setAttachments] = useState<{ filename: string; mimeType: string; contentB64: string }[]>([])
+  const [tplPicked, setTplPicked] = useState<{ url: string; filename: string; mimeType: string }[]>([])
+  const [templates, setTemplates] = useState<{ id: string; name: string; file_url: string; file_name: string; mime_type: string }[]>([])
+  const [showTpl, setShowTpl] = useState(false)
+  const [showEmoji, setShowEmoji] = useState(false)
+  useEffect(() => { fetch('/api/admin/email-templates').then(r => r.json()).then(d => setTemplates(d.templates ?? [])).catch(() => {}) }, [])
+
+  const syncBody = () => setBody(editorRef.current?.innerHTML ?? '')
+  const exec = (cmd: string, val?: string) => { document.execCommand(cmd, false, val); editorRef.current?.focus(); syncBody() }
+  const insertEmoji = (e: string) => { editorRef.current?.focus(); document.execCommand('insertText', false, e); setShowEmoji(false); syncBody() }
+
+  const onPickFiles = async (files: FileList | null) => {
+    if (!files) return
+    for (const f of Array.from(files)) {
+      if (f.size > 15 * 1024 * 1024) { alert(`הקובץ ${f.name} גדול מ-15MB`); continue }
+      const b64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result).split(',')[1] ?? '')
+        r.onerror = rej
+        r.readAsDataURL(f)
+      })
+      setAttachments(prev => [...prev, { filename: f.name, mimeType: f.type || 'application/octet-stream', contentB64: b64 }])
+    }
+  }
   const [suggestions, setSuggestions] = useState<BeneficiarySuggestion[]>([])
   const [showSug, setShowSug] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -119,13 +161,18 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
   const send = async () => {
     if (!to || !subject) return
     setSending(true)
+    const html = editorRef.current?.innerHTML ?? body
     await fetch('/api/admin/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, subject, body: body.replace(/\n/g, '<br/>'), threadId: replyTo?.threadId }),
+      body: JSON.stringify({
+        to, subject, body: html, threadId: replyTo?.threadId,
+        attachments,
+        templateUrls: tplPicked.map(t => ({ url: t.url, filename: t.filename, mimeType: t.mimeType })),
+      }),
     })
     setSending(false)
-    setSentInfo({ to, toName, body })
+    setSentInfo({ to, toName, body: (html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() })
     setTimeout(onClose, 2000)
   }
 
@@ -230,12 +277,77 @@ function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; re
             <input className="flex-1 text-sm outline-none" value={subject} onChange={e => setSubject(e.target.value)} placeholder="נושא המייל..." />
           </div>
 
-          <textarea
-            className="flex-1 px-5 py-4 text-sm text-slate-800 outline-none resize-none min-h-[200px]"
-            value={body}
-            onChange={e => setBody(e.target.value)}
-            placeholder="כתוב את ההודעה כאן..."
+          {/* סרגל עיצוב */}
+          <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-slate-100 flex-wrap relative">
+            <ToolBtn title="מודגש" onClick={() => exec('bold')}><Bold size={15} /></ToolBtn>
+            <ToolBtn title="נטוי" onClick={() => exec('italic')}><Italic size={15} /></ToolBtn>
+            <ToolBtn title="קו תחתי" onClick={() => exec('underline')}><Underline size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <ToolBtn title="רשימת תבליטים" onClick={() => exec('insertUnorderedList')}><List size={15} /></ToolBtn>
+            <ToolBtn title="רשימה ממוספרת" onClick={() => exec('insertOrderedList')}><ListOrdered size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <label className="p-1.5 rounded hover:bg-slate-100 cursor-pointer text-slate-600 flex items-center" title="צבע טקסט">
+              <Palette size={15} />
+              <input type="color" className="w-0 h-0 opacity-0 absolute" onChange={e => exec('foreColor', e.target.value)} />
+            </label>
+            <ToolBtn title="אימוג'י" onClick={() => setShowEmoji(s => !s)}><Smile size={15} /></ToolBtn>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <ToolBtn title="צרף קובץ" onClick={() => fileInputRef.current?.click()}><Paperclip size={15} /></ToolBtn>
+            <div className="relative">
+              <ToolBtn title="צרף מהטמפלטים" onClick={() => setShowTpl(s => !s)}><FileText size={15} /></ToolBtn>
+              {showTpl && (
+                <div className="absolute z-20 top-full right-0 mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+                  {templates.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-3">אין טמפלטים. ניתן להעלות בהגדרות.</p>
+                  ) : templates.map(t => (
+                    <button key={t.id} type="button" onMouseDown={e => { e.preventDefault(); setTplPicked(prev => prev.some(p => p.url === t.file_url) ? prev : [...prev, { url: t.file_url, filename: t.file_name, mimeType: t.mime_type }]); setShowTpl(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-right text-sm hover:bg-indigo-50">
+                      <FileText size={14} className="text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{t.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={e => { onPickFiles(e.target.files); e.target.value = '' }} />
+
+            {showEmoji && (
+              <div className="absolute z-20 top-full right-2 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg p-2 grid grid-cols-8 gap-0.5 w-64">
+                {EMOJIS.map(e => (
+                  <button key={e} type="button" onMouseDown={ev => { ev.preventDefault(); insertEmoji(e) }} className="text-lg hover:bg-slate-100 rounded p-0.5">{e}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* גוף ההודעה — עורך עשיר */}
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            dir="rtl"
+            onInput={syncBody}
+            data-placeholder="כתוב את ההודעה כאן..."
+            className="mail-editor flex-1 px-5 py-4 text-sm text-slate-800 outline-none overflow-y-auto min-h-[180px]"
           />
+
+          {/* צרופות שנבחרו */}
+          {(attachments.length > 0 || tplPicked.length > 0) && (
+            <div className="px-5 py-2 border-t border-slate-100 flex flex-wrap gap-2">
+              {attachments.map((a, i) => (
+                <span key={`a${i}`} className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 rounded-lg px-2.5 py-1 text-xs">
+                  <Paperclip size={12} /> <span className="truncate max-w-[140px]">{a.filename}</span>
+                  <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-500"><X size={12} /></button>
+                </span>
+              ))}
+              {tplPicked.map((t, i) => (
+                <span key={`t${i}`} className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 rounded-lg px-2.5 py-1 text-xs">
+                  <FileText size={12} /> <span className="truncate max-w-[140px]">{t.filename}</span>
+                  <button onClick={() => setTplPicked(prev => prev.filter((_, j) => j !== i))} className="text-indigo-400 hover:text-red-500"><X size={12} /></button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200">
@@ -486,8 +598,8 @@ function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
                 <p className="text-xs font-semibold text-slate-500">הוסף מייל פנימי:</p>
                 <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
                   value={newEmailName} onChange={e => setNewEmailName(e.target.value)} placeholder="שם המחלקה..." />
-                <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newEmailAddr} onChange={e => setNewEmailAddr(e.target.value)} placeholder="כתובת מייל..." type="email" />
+                <EmailInput value={newEmailAddr} onChange={setNewEmailAddr} placeholder="כתובת מייל..."
+                  inputClassName="border-slate-200 outline-none" />
                 <button onClick={addEmail} disabled={!newEmailName.trim() || !newEmailAddr.trim()}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
                   <Plus size={14} /> הוסף
@@ -551,9 +663,220 @@ const MARITAL_STATUS_LABELS: Record<string, string> = {
   widowed: 'אלמן/אלמנה', other: 'אחר',
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: {
+  attachment: Attachment; messageId: string; senderEmail?: string; onClose: () => void
+}) {
+  const [query, setQuery]           = useState('')
+  const [results, setResults]       = useState<{ id: string; full_name: string }[]>([])
+  const [selected, setSelected]     = useState<{ id: string; full_name: string } | null>(null)
+  const [docType, setDocType]       = useState('id_husband')
+  const [saving, setSaving]         = useState(false)
+  const [done, setDone]             = useState(false)
+  const [autoMatched, setAutoMatched] = useState(false)   // צאצא זוהה אוטומטית לפי מייל השולח
+  const [lookingUp, setLookingUp]   = useState(!!senderEmail?.trim())
+  const [maritalStatus, setMaritalStatus] = useState<string | null>(null)
+  const { docTypes: allDocTypes } = useDocTypes()
+
+  // רק המסמכים הנדרשים לפי הרכב המשפחה בכרטסת. כשהצאצא לא מזוהה — מציגים הכל.
+  const docTypes = (() => {
+    if (!autoMatched) return allDocTypes
+    const married = !!maritalStatus && /נשוי|נשוא/.test(maritalStatus)
+    const allowed = married
+      ? ['id_husband', 'id_wife', 'id_child', 'other']
+      : ['id_husband', 'id_child', 'other']
+    return allDocTypes.filter(t => allowed.includes(t.value))
+  })()
+
+  // זיהוי אוטומטי של הצאצא לפי כתובת המייל של השולח
+  useEffect(() => {
+    const email = senderEmail?.trim()
+    if (!email) { setLookingUp(false); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/beneficiary-search?email=${encodeURIComponent(email)}&exact=1`)
+        const data = await res.json()
+        const match = data.beneficiaries?.[0]
+        if (!cancelled && match) {
+          setSelected({ id: match.id, full_name: match.full_name })
+          setMaritalStatus(match.marital_status ?? null)
+          setAutoMatched(true)
+        }
+      } catch { /* נתעלם — ניפול לחיפוש ידני */ }
+      finally { if (!cancelled) setLookingUp(false) }
+    })()
+    return () => { cancelled = true }
+  }, [senderEmail])
+
+  // יישור סוג המסמך לאופציה חוקית כשהרשימה מסתננת
+  useEffect(() => {
+    if (!docTypes.some(t => t.value === docType)) setDocType(docTypes[0]?.value ?? 'other')
+  }, [docTypes, docType])
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(query)}&limit=6`)
+      const data = await res.json()
+      setResults(data.beneficiaries ?? [])
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const save = async () => {
+    if (!selected) return
+    setSaving(true)
+    try {
+      await fetch('/api/admin/assign-attachment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId,
+          attachmentId: attachment.attachmentId,
+          inlineData: attachment.inlineData,
+          beneficiaryId: selected.id,
+          docType,
+          filename: attachment.filename,
+          mimeType: attachment.mimeType,
+        }),
+      })
+      setDone(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" dir="rtl">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        {done ? (
+          <div className="text-center py-4">
+            <CheckCircle2 size={40} className="mx-auto text-green-500 mb-3" />
+            <p className="font-bold text-slate-900">הקובץ שויך בהצלחה!</p>
+            <p className="text-sm text-slate-500 mt-1">הקובץ נשמר בתיקיית המסמכים של הצאצא.</p>
+            <button onClick={onClose} className="mt-4 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium">סגור</button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <FolderOpen size={18} className="text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">שייך קובץ לצאצא</h2>
+                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{attachment.filename}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 block mb-1">סוג מסמך</label>
+                <select value={docType} onChange={e => setDocType(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {docTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+              {lookingUp ? (
+                <div className="flex items-center gap-2 text-sm text-slate-500 py-2">
+                  <Loader2 size={15} className="animate-spin" /> מזהה את הצאצא לפי כתובת המייל...
+                </div>
+              ) : autoMatched && selected ? (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">צאצא</label>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
+                      <span className="text-sm font-medium text-slate-800 truncate">{selected.full_name}</span>
+                      <span className="text-[11px] text-green-700 bg-green-100 rounded-full px-2 py-0.5 flex-shrink-0">זוהה לפי המייל</span>
+                    </div>
+                    <button onClick={() => { setAutoMatched(false); setSelected(null) }}
+                      className="text-xs text-slate-500 hover:text-indigo-600 flex-shrink-0">שנה</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  <label className="text-xs font-semibold text-slate-600 block mb-1">חפש צאצא</label>
+                  <input value={selected ? selected.full_name : query}
+                    onChange={e => { setSelected(null); setQuery(e.target.value) }}
+                    placeholder="שם, ת.ז. או מייל..."
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  {results.length > 0 && !selected && (
+                    <ul className="absolute z-10 top-full mt-1 left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                      {results.map(r => (
+                        <li key={r.id} onClick={() => { setSelected(r); setResults([]); setQuery('') }}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 text-slate-800">
+                          {r.full_name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-5 justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ביטול</button>
+              <button disabled={!selected || saving} onClick={save}
+                className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                שמור
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: Attachment[]; messageId: string; senderEmail?: string }) {
+  const [assigning, setAssigning] = useState<Attachment | null>(null)
+  if (!attachments.length) return null
+
+  return (
+    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/60">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Paperclip size={13} className="text-slate-400" />
+        <span className="text-xs font-semibold text-slate-500">{attachments.length} קבצים מצורפים</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {attachments.map(att => (
+          <div key={att.attachmentId}
+            className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
+            <FileText size={13} className="text-slate-400 flex-shrink-0" />
+            <span className="truncate max-w-[140px]">{att.filename}</span>
+            <span className="text-slate-400">{formatBytes(att.size)}</span>
+            <a href={att.inlineData
+                ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+                : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+              }
+              download={att.filename}
+              className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+              <Download size={13} />
+            </a>
+            <button onClick={() => setAssigning(att)}
+              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
+              <FolderOpen size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} senderEmail={senderEmail} onClose={() => setAssigning(null)} />}
+    </div>
+  )
+}
+
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [cardOpen, setCardOpen] = useState(false)
 
   useEffect(() => {
     if (!email) return
@@ -564,7 +887,7 @@ function BeneficiaryCard({ email }: { email: string }) {
       .finally(() => setLoading(false))
   }, [email])
 
-  if (loading) return <div className="p-4 flex items-center gap-2 text-xs text-slate-400"><Loader2 size={13} className="animate-spin" />מחפש נתמך...</div>
+  if (loading) return <div className="p-4 flex items-center gap-2 text-xs text-slate-400"><Loader2 size={13} className="animate-spin" />מחפש צאצא...</div>
   if (!ben) return null
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
@@ -576,11 +899,11 @@ function BeneficiaryCard({ email }: { email: string }) {
     <div className="border-t border-slate-200 bg-slate-50 p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">נתמך מזוהה</span>
-        <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">צאצא מזוהה</span>
+        <button type="button" onClick={() => setCardOpen(true)}
           className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
           פתח כרטיס <ExternalLink size={11} />
-        </Link>
+        </button>
       </div>
 
       {/* Name + avatar */}
@@ -647,99 +970,25 @@ function BeneficiaryCard({ email }: { email: string }) {
           </div>
         </div>
       )}
-    </div>
-  )
-}
 
-// ─── Thread View ──────────────────────────────────────────────────────────────
-
-function ThreadView({
-  selected, folder, assignments, labels, emailToInfo, toggleLabel,
-  threadMsgs, threadLoading, setThreadMsgs, setThreadLoading,
-}: {
-  selected: ParsedMessage
-  folder: string
-  assignments: Record<string, string[]>
-  labels: MailLabel[]
-  emailToInfo: Record<string, { name: string; id: string }>
-  toggleLabel: (msgId: string, labelId: string, add: boolean) => void
-  threadMsgs: ParsedMessage[]
-  threadLoading: boolean
-  setThreadMsgs: (msgs: ParsedMessage[]) => void
-  setThreadLoading: (v: boolean) => void
-}) {
-  useEffect(() => {
-    setThreadMsgs([])
-    setThreadLoading(true)
-    fetch(`/api/admin/gmail/thread?id=${selected.threadId}`)
-      .then(r => r.json())
-      .then(d => setThreadMsgs((d.messages ?? []).filter((m: ParsedMessage) => m.id !== selected.id)))
-      .catch(() => {})
-      .finally(() => setThreadLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected.id])
-
-  const isSent = (msg: ParsedMessage) => msg.labelIds?.includes('SENT')
-
-  return (
-    <div className="flex-1 overflow-y-auto">
-      {/* Label chips */}
-      {(assignments[selected.id] ?? []).length > 0 && (
-        <div className="flex items-center gap-1.5 px-6 pt-3 flex-wrap">
-          {(assignments[selected.id] ?? []).map(id => {
-            const l = labels.find(x => x.id === id)
-            if (!l) return null
-            return (
-              <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
-                {l.name}
-                <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
-                  <X size={10} />
-                </button>
-              </span>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Main message body */}
-      <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
-        dangerouslySetInnerHTML={{ __html: selected.body || selected.snippet }} />
-
-      {/* Beneficiary card (inbox only) */}
-      {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
-
-      {/* Thread replies */}
-      {threadLoading && (
-        <div className="flex items-center gap-2 px-6 py-3 text-xs text-slate-400">
-          <Loader2 size={13} className="animate-spin" /> טוען שרשרת...
-        </div>
-      )}
-
-      {!threadLoading && threadMsgs.length > 0 && (
-        <div className="border-t border-slate-100 mt-2">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-6 pt-3 pb-1">
-            שרשרת ({threadMsgs.length})
-          </p>
-          {threadMsgs.map(msg => (
-            <div key={msg.id} className={`mx-4 mb-3 rounded-xl border overflow-hidden ${isSent(msg) ? 'border-indigo-100 bg-indigo-50/40' : 'border-slate-200 bg-white'}`}>
-              <div className={`flex items-center justify-between px-4 py-2.5 border-b ${isSent(msg) ? 'border-indigo-100 bg-indigo-50' : 'border-slate-100 bg-slate-50'}`}>
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${isSent(msg) ? 'bg-indigo-200 text-indigo-700' : 'bg-slate-200 text-slate-600'}`}>
-                    {(isSent(msg) ? 'ח' : (emailToInfo[msg.fromEmail]?.name ?? msg.from).charAt(0))}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate">
-                      {isSent(msg) ? 'מענה אוטומטי — היכל החתם סופר' : (emailToInfo[msg.fromEmail]?.name ?? msg.from)}
-                    </p>
-                    <p className="text-[10px] text-slate-400">{isSent(msg) ? msg.to : msg.fromEmail}</p>
-                  </div>
-                </div>
-                <span className="text-[10px] text-slate-400 flex-shrink-0 mr-2">{formatDateFull(msg.date)}</span>
+      {/* כרטיס הצאצא — פופאפ באותו חלון (במקום כרטיסייה חדשה) */}
+      {cardOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => setCardOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+              <h2 className="font-bold text-slate-900 text-sm">כרטיס צאצא — {name}</h2>
+              <div className="flex items-center gap-3">
+                <Link href={`/admin/beneficiaries/${ben.id}`} target="_blank"
+                  className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                  פתח בעמוד מלא <ExternalLink size={11} />
+                </Link>
+                <button type="button" onClick={() => setCardOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
-              <div className="px-4 py-3 text-xs text-slate-700 leading-relaxed max-h-48 overflow-y-auto"
-                dangerouslySetInnerHTML={{ __html: msg.body || msg.snippet }} />
             </div>
-          ))}
+            <iframe src={`/admin/beneficiaries/${ben.id}`} title="כרטיס צאצא" className="flex-1 w-full border-0" />
+          </div>
         </div>
       )}
     </div>
@@ -762,28 +1011,8 @@ export default function MailClient() {
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
-  // Auto-reply tracking
-  const knownMsgIds = useRef<Set<string>>(new Set())
-  const isFirstLoad = useRef(true)
-
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
-
-  const triggerAutoReply = useCallback(async (msg: ParsedMessage) => {
-    try {
-      await fetch('/api/admin/gmail/auto-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromEmail: msg.fromEmail,
-          fromName: msg.from,
-          threadId: msg.threadId,
-          messageId: msg.id,
-          subject: msg.subject,
-        }),
-      })
-    } catch { /* silent */ }
-  }, [])
 
   // Labels
   const [labels, setLabels] = useState<MailLabel[]>([])
@@ -799,6 +1028,38 @@ export default function MailClient() {
   const [threadMsgs, setThreadMsgs] = useState<ParsedMessage[]>([])
   const [threadLoading, setThreadLoading] = useState(false)
 
+  // Email open tracking (SENT folder)
+  const [trackingStatus, setTrackingStatus] = useState<Record<string, { opened: boolean; openedAt: string | null; openCount: number }>>({})
+
+  // New mail toast notifications
+  const [mailToasts, setMailToasts] = useState<MailToast[]>([])
+  const knownMsgIdsRef = useRef<Set<string>>(new Set())
+  const isFirstMailLoad = useRef(true)
+
+  // Handled messages (in-session tracking)
+  const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
+
+  const recordEvent = useCallback(async (
+    msg: ParsedMessage,
+    eventType: 'read' | 'handled' | 'replied',
+  ) => {
+    try {
+      await fetch('/api/admin/mail/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message_id: msg.id,
+          thread_id: msg.threadId,
+          event_type: eventType,
+          user_id: myProfileRef.current?.id ?? null,
+          label_ids: assignments[msg.id] ?? [],
+          from_email: msg.fromEmail,
+          subject: msg.subject,
+        }),
+      })
+    } catch { /* silent */ }
+  }, [assignments])
+
   // Current user profile (for label-based filtering) — kept in a ref so load() stays stable
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const myProfileRef = useRef<Profile | null>(null)
@@ -807,43 +1068,61 @@ export default function MailClient() {
   useEffect(() => {
     fetch('/api/admin/me')
       .then(r => r.json())
-      .then(d => { myProfileRef.current = d.profile ?? null; setMyProfile(d.profile ?? null) })
+      .then(d => {
+        const p = d.profile ?? null
+        setMyProfile(p)
+        myProfileRef.current = p
+      })
       .catch(() => {})
   }, [])
 
-  const load = useCallback(async (f: string, q?: string, background = false) => {
-    if (!background) { setLoading(true); setSelected(null) }
+  const load = useCallback(async (f: string, q?: string, silent = false) => {
+    // רענון רקע (silent) — לא מציג "טוען מיילים" ולא סוגר את ההודעה הפתוחה
+    if (!silent) {
+      setLoading(true)
+      setSelected(null)
+    }
     const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
     const data = await res.json()
-    if (data.notConnected) { setNotConnected(true); if (!background) setLoading(false); return }
+    if (data.notConnected) { setNotConnected(true); setLoading(false); return }
     let msgs: ParsedMessage[] = data.messages ?? []
 
     // Filter messages by assigned label IDs for non-admin users
-    const profile = myProfileRef.current
-    if (profile && profile.role !== 'admin' && profile.mail_label_ids && profile.mail_label_ids.length > 0) {
+    if (myProfile && myProfile.role !== 'admin' && myProfile.mail_label_ids && myProfile.mail_label_ids.length > 0) {
       // We need the assignments to filter — fetch them first (they're loaded separately via labels endpoint)
       // Use a local fetch to get current assignments at load time
       const labelsRes = await fetch('/api/admin/mail/labels')
       const labelsData = await labelsRes.json()
       const currentAssignments: Record<string, string[]> = labelsData.assignments ?? {}
       msgs = msgs.filter(msg =>
-        (currentAssignments[msg.id] ?? []).some(labelId => profile.mail_label_ids!.includes(labelId))
+        (currentAssignments[msg.id] ?? []).some(labelId => myProfile.mail_label_ids!.includes(labelId))
       )
     }
 
     setMessages(msgs)
 
-    // Detect new incoming messages and send auto-replies
-    if (f === 'INBOX' && !isFirstLoad.current) {
-      for (const msg of msgs) {
-        if (!msg.isRead && !knownMsgIds.current.has(msg.id)) {
-          triggerAutoReply(msg)
-        }
+    // Detect new INBOX messages for toast notifications
+    if (f === 'INBOX') {
+      const newMsgs = msgs.filter(m => !knownMsgIdsRef.current.has(m.id))
+      msgs.forEach(m => knownMsgIdsRef.current.add(m.id))
+      if (!isFirstMailLoad.current && newMsgs.length > 0) {
+        playMailSound()
+        setMailToasts(prev => [
+          ...prev,
+          ...newMsgs.map(m => ({ id: m.id, from: m.from, subject: m.subject, snippet: m.snippet })),
+        ])
       }
+      if (isFirstMailLoad.current) isFirstMailLoad.current = false
     }
-    // Update known IDs after first load
-    for (const msg of msgs) knownMsgIds.current.add(msg.id)
-    isFirstLoad.current = false
+
+    // Fetch open-tracking status for SENT messages
+    if (f === 'SENT' && msgs.length > 0) {
+      const ids = msgs.map(m => m.id).join(',')
+      fetch(`/api/admin/mail/tracking-status?messageIds=${encodeURIComponent(ids)}`)
+        .then(r => r.json())
+        .then(d => setTrackingStatus(d))
+        .catch(() => {})
+    }
 
     // batch resolve sender + recipient names
     const uniqueEmails = [...new Set([
@@ -858,8 +1137,8 @@ export default function MailClient() {
       setEmailToInfo(map)
     }
 
-    if (!background) setLoading(false)
-  }, [triggerAutoReply])
+    setLoading(false)
+  }, [myProfile])
 
   // Load labels on mount
   useEffect(() => {
@@ -870,55 +1149,14 @@ export default function MailClient() {
     })
   }, [])
 
-  // SSE stream for real-time inbox updates
+  useEffect(() => { load(folder) }, [folder, load])
+
+  // Background poll every 60s for new INBOX mail (for toast notifications) — שקט, ללא הבהוב טעינה
   useEffect(() => {
-    if (folder !== 'INBOX') return // SSE only for inbox
-    let es: EventSource | null = null
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
-
-    const connect = () => {
-      es = new EventSource(`/api/admin/gmail/stream?folder=${folder}`)
-
-      es.onmessage = (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          if (data.type === 'new') load(folder, undefined, true)
-          else if (data.type === 'reconnect') {
-            es?.close()
-            reconnectTimer = setTimeout(connect, 500)
-          }
-        } catch {}
-      }
-
-      es.onerror = () => {
-        es?.close()
-        reconnectTimer = setTimeout(connect, 5_000)
-      }
-    }
-
-    connect()
-    return () => {
-      es?.close()
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-    }
-  }, [folder, load])
-
-  useEffect(() => {
-    // Reset auto-reply state when folder changes
-    knownMsgIds.current = new Set()
-    isFirstLoad.current = true
-    load(folder)
-    // Fallback polling (30s) — covers SENT folder and SSE gaps
-    const interval = setInterval(() => load(folder, undefined, true), 30_000)
-
-    // Reload immediately when user comes back to the tab
-    const onVisible = () => { if (document.visibilityState === 'visible') load(folder, undefined, true) }
-    document.addEventListener('visibilitychange', onVisible)
-
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
+    const interval = setInterval(() => {
+      if (folder === 'INBOX') load('INBOX', undefined, true)
+    }, 60_000)
+    return () => clearInterval(interval)
   }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
@@ -928,6 +1166,12 @@ export default function MailClient() {
       await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
+    recordEvent(msg, 'read')
+  }
+
+  const markHandled = (msg: ParsedMessage) => {
+    setHandledIds(prev => new Set([...prev, msg.id]))
+    recordEvent(msg, 'handled')
   }
 
   const trashMessage = async (id: string) => {
@@ -969,7 +1213,7 @@ export default function MailClient() {
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
       {/* Sidebar */}
-      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col">
+      <div className="w-56 flex-shrink-0 bg-slate-50 border-l border-slate-200 hidden md:flex flex-col">
 
         {/* Account header */}
         <div className="px-4 pt-4 pb-3 border-b border-slate-200 bg-white">
@@ -1017,8 +1261,14 @@ export default function MailClient() {
         <div className="flex-1 overflow-y-auto px-2 py-2">
           {labels.length > 0 && (
             <>
-              <p className="text-[11px] font-bold text-slate-400 uppercase px-2 pt-1 pb-2 tracking-widest">תוויות</p>
-              <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between px-2 pt-1 pb-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">תוויות</p>
+                <button onClick={() => setShowManageLabels(true)}
+                  className="text-slate-300 hover:text-indigo-500 transition-colors" title="נהל תוויות">
+                  <Settings size={13} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-0.5">
                 {labels.map(l => {
                   const labelMsgs = messages.filter(m => (assignments[m.id] ?? []).includes(l.id))
                   const count = Object.values(assignments).filter(ids => ids.includes(l.id)).length
@@ -1030,39 +1280,38 @@ export default function MailClient() {
                         onDragStart={() => setDragLabelId(l.id)}
                         onDragEnd={() => setDragLabelId(null)}
                         onClick={() => { setActiveLabel(isOpen ? null : l.id); setSelected(null) }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-right cursor-grab active:cursor-grabbing
-                          ${isOpen ? 'shadow-sm' : 'text-slate-700 hover:bg-white hover:shadow-sm'}`}
-                        style={isOpen ? { backgroundColor: l.color + '18', color: l.color, border: `1.5px solid ${l.color}40` } : {}}
+                        className={`group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right cursor-pointer
+                          ${isOpen ? 'font-semibold' : 'text-slate-600 hover:bg-slate-100 font-medium'}`}
+                        style={isOpen ? { backgroundColor: l.color + '14', color: l.color } : {}}
                       >
-                        <span className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-sm" style={{ backgroundColor: l.color }} />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
                         <span className="truncate flex-1">{l.name}</span>
                         {count > 0 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: l.color + '25', color: l.color }}>
+                          <span className={`text-[11px] font-semibold flex-shrink-0 ${isOpen ? '' : 'text-slate-400'}`}>
                             {count}
                           </span>
                         )}
-                        {isOpen && <X size={11} className="opacity-60 flex-shrink-0 mr-0.5" />}
+                        <ChevronDown size={13} className={`flex-shrink-0 transition-transform ${isOpen ? 'rotate-180 opacity-70' : 'opacity-0 group-hover:opacity-40'}`} />
                       </button>
 
                       {/* Accordion: list of message subjects under this label */}
                       {isOpen && labelMsgs.length > 0 && (
-                        <div className="mx-1 mb-1 rounded-xl overflow-hidden border border-slate-100 bg-white">
+                        <div className="mr-4 ml-1 mt-0.5 mb-1 border-r-2 pr-2" style={{ borderColor: l.color + '40' }}>
                           {labelMsgs.map(msg => (
                             <button
                               key={msg.id}
                               onClick={() => openMessage(msg)}
-                              className={`w-full text-right px-3 py-2 text-xs border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors
-                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}
+                              className={`w-full text-right px-2 py-1.5 rounded-md text-xs hover:bg-slate-50 transition-colors
+                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'}`}
                             >
-                              <p className={`truncate ${!msg.isRead ? 'font-semibold' : ''}`}>{msg.subject}</p>
+                              <p className={`truncate ${!msg.isRead ? 'font-semibold text-slate-800' : ''}`}>{msg.subject || '(ללא נושא)'}</p>
                               <p className="text-[10px] text-slate-400 truncate">{formatDate(msg.date)}</p>
                             </button>
                           ))}
                         </div>
                       )}
                       {isOpen && labelMsgs.length === 0 && (
-                        <p className="text-[11px] text-slate-400 text-center py-2">אין מיילים טעונים עם תווית זו</p>
+                        <p className="text-[11px] text-slate-400 text-center py-1.5">אין מיילים טעונים עם תווית זו</p>
                       )}
                     </div>
                   )
@@ -1072,7 +1321,11 @@ export default function MailClient() {
           )}
         </div>
 
-        <div className="px-2 pb-2 border-t border-slate-200 pt-2">
+        <div className="px-2 pb-2 border-t border-slate-200 pt-2 flex flex-col gap-0.5">
+          <Link href="/admin/mail/stats"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
+            <BarChart2 size={13} /> ניטור וסטטיסטיקות
+          </Link>
           <button onClick={() => setShowManageLabels(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <Settings size={13} /> הגדרות מייל
@@ -1081,7 +1334,8 @@ export default function MailClient() {
       </div>
 
       {/* Message List */}
-      <div className={`flex flex-col border-l border-slate-200 ${selected ? 'w-72 flex-shrink-0' : 'flex-1'}`}>
+      {/* במובייל: רשימה במסך מלא; כשנבחרה הודעה — תצוגת ההודעה תופסת את כל המסך (חזרה ב-X) */}
+      <div className={`flex-col border-l border-slate-200 ${selected ? 'hidden md:flex md:w-72 md:flex-shrink-0' : 'flex flex-1'}`}>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100">
           <div className="flex-1 flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5">
             <Search size={14} className="text-slate-400 flex-shrink-0" />
@@ -1116,7 +1370,7 @@ export default function MailClient() {
             (() => {
               const filtered = activeLabel
                 ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
-                : messages
+                : messages.filter(m => !(assignments[m.id] ?? []).includes('label-decision'))
               return filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
                   <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>
@@ -1134,28 +1388,74 @@ export default function MailClient() {
                         const existing = assignments[msg.id] ?? []
                         setDragOverMsgId(null)
                         if (existing.length > 0 && !existing.includes(dragLabelId)) {
+                          // Ask: add alongside existing or replace?
                           setPendingDrop({ msgId: msg.id, labelId: dragLabelId })
                         } else {
                           toggleLabel(msg.id, dragLabelId, true)
                         }
                       }
                     }}
-                    className={`group relative border-b border-slate-100 transition-colors
-                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500' : 'hover:bg-slate-50'}
+                    className={`group flex items-stretch border-b border-slate-100 transition-colors
+                      ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500'
+                        : !msg.isRead ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
+                        : 'hover:bg-slate-50'}
                       ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
-
-                    {/* Action buttons — visible on hover */}
-                    <div className="absolute top-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button className="flex-1 min-w-0 text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                      <div className="flex items-start justify-between gap-2 mb-0.5">
+                        <span className="flex items-center gap-2 min-w-0">
+                          {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="לא נקרא" />}
+                          <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
+                            {folder === 'SENT'
+                              ? (emailToInfo[msg.toEmail]
+                                  ? `${emailToInfo[msg.toEmail].name} · ${msg.toEmail}`
+                                  : msg.to)
+                              : senderDisplay(msg)}
+                          </span>
+                        </span>
+                        <span className={`text-sm flex-shrink-0 tabular-nums ${!msg.isRead ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>{formatDate(msg.date)}</span>
+                      </div>
+                      <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-semibold text-slate-800' : 'text-slate-500'}`}>{msg.subject}</p>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {folder === 'SENT' && trackingStatus[msg.id] && (
+                          trackingStatus[msg.id].opened ? (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                              <CheckCircle2 size={10} /> נפתח{trackingStatus[msg.id].openedAt ? ` · ${formatDate(trackingStatus[msg.id].openedAt as string)}` : ''}
+                              {trackingStatus[msg.id].openCount > 1 ? ` (${trackingStatus[msg.id].openCount})` : ''}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                              טרם נפתח
+                            </span>
+                          )
+                        )}
+                        {msgLabels.map(l => (
+                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[11px] font-medium pl-1.5 pr-1.5 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: l.color }}>
+                            {l.name}
+                            <button
+                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
+                              className="opacity-70 hover:opacity-100 leading-none"
+                              title="הסר תווית"
+                            >
+                              <X size={9} />
+                            </button>
+                          </span>
+                        ))}
+                        {msgLabels.length === 0 && <p className={`text-xs truncate ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>{msg.snippet}</p>}
+                      </div>
+                    </button>
+                    {/* עמודת פעולות נפרדת — אינה חופפת את התוכן */}
+                    <div className="flex flex-col items-center justify-center gap-1 w-9 flex-shrink-0 border-r border-slate-100 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
-                        className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                        className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
                         title="מחק">
                         <Trash2 size={14} />
                       </button>
                       <div className="relative">
                         <button
                           onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                          className="p-1.5 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-200 transition-colors"
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
                           title="תוויות">
                           <Tag size={14} />
                         </button>
@@ -1170,39 +1470,6 @@ export default function MailClient() {
                         )}
                       </div>
                     </div>
-
-                    <button className="w-full text-right px-4 py-3" onClick={() => openMessage(msg)}>
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'text-slate-700'}`}>
-                          {folder === 'SENT'
-                            ? (emailToInfo[msg.toEmail]
-                                ? `${emailToInfo[msg.toEmail].name}`
-                                : msg.to)
-                            : senderDisplay(msg)}
-                        </span>
-                        {/* Date/time — always readable */}
-                        <span className="text-xs text-slate-500 flex-shrink-0 font-semibold whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded">
-                          {formatDateFull(msg.date)}
-                        </span>
-                      </div>
-                      <p className={`text-xs truncate mb-1 ${!msg.isRead ? 'font-semibold text-slate-700' : 'text-slate-500'}`}>{msg.subject}</p>
-                      <div className="flex items-center gap-1 flex-wrap">
-                        {msgLabels.map(l => (
-                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[10px] font-medium pl-1.5 pr-1 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: l.color }}>
-                            {l.name}
-                            <button
-                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
-                              className="opacity-70 hover:opacity-100 leading-none"
-                              title="הסר תווית"
-                            >
-                              <X size={9} />
-                            </button>
-                          </span>
-                        ))}
-                        {msgLabels.length === 0 && <p className="text-xs text-slate-400 truncate">{msg.snippet}</p>}
-                      </div>
-                    </button>
                   </div>
                 )
               })
@@ -1230,9 +1497,32 @@ export default function MailClient() {
                   <span className="text-xs text-slate-500">{selected.from}</span>
                 )}
                 <span className="text-xs text-slate-400">· {formatDate(selected.date)}</span>
+                {folder === 'SENT' && trackingStatus[selected.id] && (
+                  trackingStatus[selected.id].opened ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      <CheckCircle2 size={11} /> נפתח{trackingStatus[selected.id].openedAt ? ` · ${formatDate(trackingStatus[selected.id].openedAt as string)}` : ''}
+                      {trackingStatus[selected.id].openCount > 1 ? ` · ${trackingStatus[selected.id].openCount} פתיחות` : ''}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                      טרם נפתח
+                    </span>
+                  )
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Handled toggle */}
+              {handledIds.has(selected.id) ? (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg font-semibold">
+                  <CheckCircle2 size={14} className="text-green-500" /> טופל
+                </span>
+              ) : (
+                <button onClick={() => markHandled(selected)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 border border-green-300 rounded-lg hover:bg-green-50 transition-colors font-semibold">
+                  <CheckCircle2 size={14} /> סמן כטופל
+                </button>
+              )}
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
                 <Reply size={14} /> השב
@@ -1252,18 +1542,29 @@ export default function MailClient() {
             </div>
           </div>
 
-          <ThreadView
-            selected={selected}
-            folder={folder}
-            assignments={assignments}
-            labels={labels}
-            emailToInfo={emailToInfo}
-            toggleLabel={toggleLabel}
-            threadMsgs={threadMsgs}
-            threadLoading={threadLoading}
-            setThreadMsgs={setThreadMsgs}
-            setThreadLoading={setThreadLoading}
-          />
+          <div className="flex-1 overflow-y-auto">
+            {/* Label chips on selected message */}
+            {(assignments[selected.id] ?? []).length > 0 && (
+              <div className="flex items-center gap-1.5 px-6 pt-3 flex-wrap">
+                {(assignments[selected.id] ?? []).map(id => {
+                  const l = labels.find(x => x.id === id)
+                  if (!l) return null
+                  return (
+                    <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
+                      {l.name}
+                      <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
+                        <X size={10} />
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+            <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(selected.body || selected.snippet) }} />
+            <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
+            {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
+          </div>
         </div>
       )}
 
@@ -1324,6 +1625,22 @@ export default function MailClient() {
           onClose={() => setShowManageLabels(false)}
         />
       )}
+
+      {/* New mail toast notifications — bottom-left */}
+      <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
+        {mailToasts.map(t => (
+          <NewMailToast
+            key={t.id}
+            toast={t}
+            onClick={() => {
+              const msg = messages.find(m => m.id === t.id)
+              if (msg) { setFolder('INBOX'); openMessage(msg) }
+              setMailToasts(p => p.filter(x => x.id !== t.id))
+            }}
+            onClose={() => setMailToasts(p => p.filter(x => x.id !== t.id))}
+          />
+        ))}
+      </div>
     </div>
   )
 }

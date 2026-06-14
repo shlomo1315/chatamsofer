@@ -22,7 +22,7 @@ create table families (
   updated_at timestamptz default now()
 );
 
--- נתמכים
+-- צאצאים
 create table beneficiaries (
   id uuid primary key default gen_random_uuid(),
   id_number text unique not null,

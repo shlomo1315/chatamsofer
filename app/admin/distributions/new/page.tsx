@@ -9,9 +9,11 @@ import { ArrowRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
+import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import { HOLIDAY_OPTIONS } from '@/types'
+import { useToast } from '@/components/ui/Toast'
 
 const schema = z.object({
   name: z.string().min(2, 'שם חלוקה חייב להכיל לפחות 2 תווים'),
@@ -26,9 +28,10 @@ type FormData = z.infer<typeof schema>
 export default function NewDistributionPage() {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
 
@@ -43,7 +46,7 @@ export default function NewDistributionPage() {
       if (error) throw error
       router.push(`/admin/distributions/${inserted.id}`)
     } catch {
-      alert('שגיאה בשמירה. נסה שוב.')
+      toast.error('שגיאה בשמירה. נסה שוב.')
     } finally {
       setSaving(false)
     }
@@ -76,12 +79,10 @@ export default function NewDistributionPage() {
               placeholder="בחר חג"
               {...register('holiday')}
             />
-            <Input
-              label="תאריך חלוקה"
-              type="date"
-              dir="ltr"
-              {...register('distribution_date')}
-            />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">תאריך חלוקה</label>
+              <HebrewDatePicker value={watch('distribution_date') || ''} onChange={iso => setValue('distribution_date', iso)} />
+            </div>
             <Input
               label="תקציב כולל (₪)"
               type="number"

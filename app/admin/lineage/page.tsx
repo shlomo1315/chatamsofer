@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 
 // ─── Types ───
 
@@ -10,6 +11,7 @@ interface LineageNode {
   generation: number
   parent_id: string | null
   status?: 'verified' | 'pending' | 'rejected'
+  relation?: 'son' | 'son_in_law' | null
 }
 
 type StatusFilter = 'verified' | 'pending' | 'rejected' | null
@@ -124,12 +126,32 @@ function MBtn({ label, color, onClick, loading }: { label: string; color: string
   )
 }
 
+// בורר קשר בן/חתן של הצומת ביחס להורה שלו (לשורש אין קשר)
+function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_law' | null; onChange: (v: 'son' | 'son_in_law' | null) => void; required?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: '#64748B' }}>קשר להורה (הדור הקודם){required && <span style={{ color: '#DC2626' }}> *</span>}</label>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {([['son', 'בן', '#DBEAFE', '#1E40AF', '#93C5FD'], ['son_in_law', 'חתן', '#FEF3C7', '#92400E', '#FCD34D']] as const).map(([v, l, bg, fg, br]) => (
+          <button key={v} type="button" onClick={() => onChange(value === v ? null : v)}
+            style={{ flex: 1, padding: '9px 0', borderRadius: 10, border: `1.5px solid ${value === v ? br : '#E2E8F0'}`, background: value === v ? bg : '#fff', color: value === v ? fg : '#94A3B8', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilter, generationFilter }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void }) {
+  const toast = useToast()
   const [selected, setSelected] = useState<string | null>(null)
+  const [hovered, setHovered] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
+  const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -237,16 +259,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
     })
   }, [positions.length, w, zoom])
 
-  function close() { setModal(null); setSaveErr('') }
+  function close() { setModal(null); setSaveErr(''); setFormRelation(null) }
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: modal.parentId, relation: formRelation }) })
       }
       onRefresh(); close()
     } catch { setSaveErr('שגיאה בשמירה') }
@@ -275,9 +297,21 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       onStatusChange(node.id, node.status ?? 'pending')
-      alert(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
+      toast.error(`שגיאה בשמירה: ${res.status} — ${err.error ?? 'שגיאה לא ידועה'}`)
       return
     }
+    onRefresh()
+  }
+
+  // סימון בן/חתן מהיר (מ-hover) — עדכון אופטימי + שמירה
+  async function patchRelation(node: LineageNode, relation: 'son' | 'son_in_law') {
+    const next = node.relation === relation ? null : relation
+    onRelationChange(node.id, next)
+    const res = await fetch('/api/admin/lineage', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ id: node.id, relation: next }),
+    })
+    if (!res.ok) { onRelationChange(node.id, node.relation ?? null); toast.error('שגיאה בשמירת בן/חתן'); return }
     onRefresh()
   }
 
@@ -430,10 +464,18 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
           {positions.map(pos => {
             const nodeStatus = pos.node.status ?? 'verified'
             const genPal = pal(pos.node.generation)
+            // הבדל בתוך צבע הדור בלי להחוויר: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
+            const relOverlay = pos.node.relation === 'son_in_law'
+              ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
+              : ''
             const isSel = selected === pos.node.id
-            const isDimmed = selected !== null
-              ? !pathBranch.has(pos.node.id)
-              : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
+            const inMerge = mergeMode && mergeSel.has(pos.node.id)
+            const isDup = dupIds.has(pos.node.id)
+            const isDimmed = mergeMode
+              ? false
+              : selected !== null
+                ? !pathBranch.has(pos.node.id)
+                : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
             const p = nodeStatus === 'verified' ? genPal
               : nodeStatus === 'rejected'
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
@@ -442,14 +484,18 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
               <div
                 key={pos.node.id}
                 data-lin-node="1"
-                onClick={e => { e.stopPropagation(); setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
+                onMouseEnter={() => setHovered(pos.node.id)}
+                onMouseLeave={() => setHovered(prev => prev === pos.node.id ? null : prev)}
+                onClick={e => { e.stopPropagation(); if (mergeMode) { onToggleMerge(pos.node.id); return } setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
-                  background: p.bg,
-                  boxShadow: isSel
-                    ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
-                    : `0 4px 18px ${p.shadow}`,
+                  background: relOverlay + p.bg,
+                  boxShadow: inMerge
+                    ? `0 0 0 3px #fff, 0 0 0 6px #16A34A, 0 12px 32px rgba(22,163,74,0.4)`
+                    : isSel
+                      ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
+                      : `0 4px 18px ${p.shadow}`,
                   border: nodeStatus === 'verified' ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
@@ -469,6 +515,18 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                   boxShadow: `0 2px 8px ${p.shadow}`,
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
+
+                {/* תג "כפול" — שם המופיע ביותר מצומת אחד */}
+                {isDup && zoom >= 0.5 && (
+                  <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: '#9333EA', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>כפול</div>
+                )}
+
+                {/* כיסוי בחירה במצב מיזוג */}
+                {inMerge && (
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: 16 * zoom, background: 'rgba(22,163,74,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 24 }}>
+                    <div style={{ background: '#16A34A', borderRadius: '50%', width: 26 * zoom, height: 26 * zoom, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}><Check size={14 * zoom} color="#fff" strokeWidth={3} /></div>
+                  </div>
+                )}
 
                 {/* status indicator dot */}
                 <div
@@ -516,25 +574,50 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
                   }}>{pos.node.children.length} ילדים</div>
                 )}
 
-                {/* actions strip */}
-                {isSel && (
-                  <div onClick={e => e.stopPropagation()} style={{
-                    position: 'absolute', bottom: -54,
-                    display: 'flex', gap: 6,
-                    background: '#fff', borderRadius: 22,
-                    padding: '6px 10px',
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.14)',
-                    border: '1px solid #E2E8F0', zIndex: 30,
-                  }}>
-                    {[
-                      { icon: <Pencil size={12} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
-                      { icon: <Plus size={13} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
-                      ...(nodeStatus !== 'verified' ? [{ icon: <Check size={12} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אמת' }] : []),
-                      ...(nodeStatus !== 'rejected' ? [{ icon: <X size={12} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
-                      { icon: <Trash2 size={12} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
-                    ].map((b, i) => (
-                      <button key={i} onClick={b.fn} title={(b as {title?: string}).title} style={{ width: 30, height: 30, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .1s' }}>{b.icon}</button>
-                    ))}
+                {/* בן/חתן badge — קשר הצומת להורה (מקור אחד: lineage_nodes.relation) */}
+                {pos.node.relation && zoom >= 0.5 && (
+                  <div style={{
+                    position: 'absolute', bottom: -11 * zoom, right: 6 * zoom,
+                    background: pos.node.relation === 'son' ? '#DBEAFE' : '#FEF3C7',
+                    color: pos.node.relation === 'son' ? '#1E40AF' : '#92400E',
+                    fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
+                    padding: `${1 * zoom}px ${8 * zoom}px`, borderRadius: 20,
+                    boxShadow: `0 1px 4px rgba(0,0,0,0.12)`, direction: 'rtl',
+                    border: `1.5px solid ${pos.node.relation === 'son' ? '#93C5FD' : '#FCD34D'}`,
+                  }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
+                )}
+
+                {/* actions strip — מתחת לקובייה, גם בלחיצה וגם במעבר עכבר (hover) */}
+                {!mergeMode && (isSel || hovered === pos.node.id) && (
+                  <div onClick={e => e.stopPropagation()}
+                    onMouseEnter={() => setHovered(pos.node.id)}
+                    style={{
+                      position: 'absolute', top: 'calc(100% + 10px)', left: '50%', transform: 'translateX(-50%)',
+                      display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
+                      background: '#fff', borderRadius: 16, padding: '8px 10px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0', zIndex: 40,
+                    }}>
+                    {/* שורת אייקונים */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[
+                        { icon: <Pencil size={13} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
+                        { icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
+                        ...(nodeStatus !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
+                        ...(nodeStatus !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
+                        { icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
+                      ].map((b, i) => (
+                        <button key={i} onClick={b.fn} title={b.title} style={{ width: 32, height: 32, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{b.icon}</button>
+                      ))}
+                    </div>
+                    {/* שורת בן/חתן — מתחת לכל האייקונים (רק לצומת שאינו השורש) */}
+                    {pos.node.parent_id && (
+                      <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+                        {([['son', 'בן', '#1E40AF', '#BFDBFE', '#EFF6FF'], ['son_in_law', 'חתן', '#92400E', '#FDE68A', '#FFFBEB']] as const).map(([v, l, fg, selBg, bg]) => (
+                          <button key={v} onClick={() => patchRelation(pos.node, v)} title={`סמן ${l}`}
+                            style={{ flex: 1, padding: '5px 0', borderRadius: 9, background: pos.node.relation === v ? selBg : bg, color: fg, border: `1.5px solid ${pos.node.relation === v ? fg : fg + '33'}`, cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>{l}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -562,7 +645,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
+                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setFormRelation(selPos.node.relation ?? null); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
                 { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
                 ...((selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
                 ...((selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
@@ -590,6 +673,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
@@ -602,6 +686,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
         <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף שורש חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.parentId && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
@@ -633,7 +718,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onClearFilters, statusFilt
 
 // ─── Table view ───
 
-function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, generationFilter }: {
+function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge }: {
   nodes: LineageNode[]
   onRefresh: () => void
   onAdd: (parentId: string | null, parentName: string) => void
@@ -641,6 +726,10 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
   onDelete: (node: LineageNode) => void
   statusFilter: StatusFilter
   generationFilter: number | null
+  mergeMode: boolean
+  mergeSel: Set<string>
+  dupIds: Set<string>
+  onToggleMerge: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
@@ -677,6 +766,10 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
           style={{ display: 'flex', alignItems: 'center', padding: '10px 18px', borderBottom: '1px solid #F1F5F9', direction: 'rtl', gap: 8, background: '#fff', transition: 'background .12s, opacity .2s', minWidth: 0, opacity: isDimmed ? 0.25 : 1 }}
           onMouseEnter={e => (e.currentTarget.style.background = '#FAFAFE')}
           onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+          {mergeMode && (
+            <input type="checkbox" checked={mergeSel.has(node.id)} onChange={() => onToggleMerge(node.id)}
+              style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', flexShrink: 0 }} />
+          )}
           <div style={{ width: depth * 22, flexShrink: 0 }} />
           <button onClick={() => toggle(node.id)} style={{ width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasChildren ? p.light : 'none', border: 'none', cursor: hasChildren ? 'pointer' : 'default', color: p.ring, flexShrink: 0, borderRadius: 6 }}>
             {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span style={{ width: 13 }} />}
@@ -688,7 +781,10 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
             style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: 'pointer', flexShrink: 0,
               boxShadow: nodeStatus === 'verified' ? '0 0 0 3px #DCFCE7' : nodeStatus === 'rejected' ? '0 0 0 3px #FEE2E2' : '0 0 0 3px #FEF3C7' }}
           />
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{node.name}</span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+            {node.name}
+            {dupIds.has(node.id) && <span style={{ marginRight: 6, background: '#F3E8FF', color: '#7C2D92', fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 20, border: '1px solid #E9D5FF' }}>כפול</span>}
+          </span>
           <div style={{ padding: '3px 10px', borderRadius: 20, background: p.light, color: p.text, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>דור {node.generation}</div>
           <div style={{ minWidth: 56, textAlign: 'center', fontSize: 12, color: '#94A3B8', flexShrink: 0 }}>
             {childCount.get(node.id) ? `${childCount.get(node.id)}` : '—'}
@@ -732,13 +828,77 @@ export default function LineagePage() {
   const [view, setView] = useState<View>('tree')
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
+  const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [formParentId, setFormParentId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(null)
   const [generationFilter, setGenerationFilter] = useState<number | null>(null)
+  // ── מצב מיזוג כפולים ──
+  const [mergeMode, setMergeMode] = useState(false)
+  const [mergeSel, setMergeSel] = useState<Set<string>>(new Set())
+  const [keepId, setKeepId] = useState<string | null>(null)
+  const [mergeConfirm, setMergeConfirm] = useState(false)
+  const [merging, setMerging] = useState(false)
+  const toast = useToast()
 
-  function close() { setModal(null); setSaveErr(''); setFormParentId(null) }
+  function close() { setModal(null); setSaveErr(''); setFormParentId(null); setFormRelation(null) }
+
+  // קבוצות שמות כפולים (שם מנורמל המופיע ביותר מצומת אחד) → סט מזהים מודגשים
+  const dupIds = useMemo(() => {
+    const byName = new Map<string, string[]>()
+    for (const n of nodes) {
+      const key = n.name.trim().replace(/\s+/g, ' ')
+      if (!key) continue
+      const arr = byName.get(key) ?? []
+      arr.push(n.id)
+      byName.set(key, arr)
+    }
+    const s = new Set<string>()
+    for (const ids of byName.values()) if (ids.length > 1) ids.forEach(id => s.add(id))
+    return s
+  }, [nodes])
+  const dupNameCount = useMemo(() => {
+    const names = new Set<string>()
+    for (const id of dupIds) { const n = nodes.find(x => x.id === id); if (n) names.add(n.name.trim().replace(/\s+/g, ' ')) }
+    return names.size
+  }, [dupIds, nodes])
+
+  function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
+  function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
+  const toggleMerge = useCallback((id: string) => {
+    setMergeSel(prev => {
+      const s = new Set(prev)
+      if (s.has(id)) { s.delete(id); setKeepId(k => (k === id ? null : k)) }
+      else { s.add(id); setKeepId(k => k ?? id) }
+      return s
+    })
+  }, [])
+
+  const selectedNodes = useMemo(() => nodes.filter(n => mergeSel.has(n.id)), [nodes, mergeSel])
+  // ברירת מחדל ל-keep: הצומת המאומת בבחירה, אחרת הראשון
+  const effectiveKeepId = keepId && mergeSel.has(keepId)
+    ? keepId
+    : (selectedNodes.find(n => (n.status ?? 'verified') === 'verified')?.id ?? selectedNodes[0]?.id ?? null)
+
+  async function handleMerge() {
+    const ids = [...mergeSel]
+    if (!effectiveKeepId || ids.length < 2) return
+    const mergeIds = ids.filter(id => id !== effectiveKeepId)
+    setMerging(true)
+    try {
+      const res = await fetch('/api/admin/lineage/merge', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
+      toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
+      await loadAll()
+      exitMerge()
+    } catch { toast.error('שגיאת רשת') }
+    setMerging(false)
+  }
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -746,7 +906,8 @@ export default function LineagePage() {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
       const raw: LineageNode[] = (await r.json()).nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
-      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen })))
+      // החתם סופר (הדור הנמוך ביותר) תמיד דור 1, וממשיך משם
+      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
     } catch {}
     setLoading(false)
   }, [])
@@ -756,7 +917,7 @@ export default function LineagePage() {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
       const raw: LineageNode[] = (await r.json()).nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
-      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen })))
+      setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
     } catch {}
   }, [])
 
@@ -775,13 +936,18 @@ export default function LineagePage() {
 
   async function handleSave() {
     if (!formName.trim()) { setSaveErr('נא להזין שם'); return }
+    const addParentId = modal?.type === 'add' ? (modal.parentId ?? formParentId) : null
+    // בהוספת דור חדש (כשכבר יש עץ) — אבא ובן/חתן חובה
+    if (modal?.type === 'add' && nodes.length > 0) {
+      if (!addParentId) { setSaveErr('יש לבחור את האב/האם (הדור הקודם)'); return }
+      if (!formRelation) { setSaveErr('יש לבחור האם הוא בן או חתן'); return }
+    }
     setSaving(true); setSaveErr('')
     try {
       if (modal?.type === 'edit') {
-        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName }) })
+        await fetch('/api/admin/lineage', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: modal.node.id, name: formName, relation: formRelation }) })
       } else if (modal?.type === 'add') {
-        const parentId = modal.parentId ?? formParentId
-        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: parentId }) })
+        await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: addParentId, relation: formRelation }) })
       }
       await loadAll(); close()
     } catch { setSaveErr('שגיאה') }
@@ -826,6 +992,13 @@ export default function LineagePage() {
                 style={{ background: statusFilter === 'rejected' ? '#991B1B' : '#FEE2E2', color: statusFilter === 'rejected' ? '#fff' : '#DC2626', border: `2px solid ${statusFilter === 'rejected' ? '#991B1B' : '#FECACA'}`, cursor: 'pointer' }}>
                 ✗ {rejectedCount} נדחים
               </button>
+              {dupNameCount > 0 && (
+                <button onClick={enterMerge}
+                  className="text-xs px-2.5 py-1 rounded-full font-bold transition-all"
+                  style={{ background: mergeMode ? '#9333EA' : '#F3E8FF', color: mergeMode ? '#fff' : '#7C2D92', border: `2px solid ${mergeMode ? '#9333EA' : '#E9D5FF'}`, cursor: 'pointer' }}>
+                  ⚠ {dupNameCount} שמות כפולים
+                </button>
+              )}
             </>
           )}
         </div>
@@ -841,6 +1014,11 @@ export default function LineagePage() {
           <button onClick={loadAll} disabled={loading} title="רענן"
             className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+          </button>
+          <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
+            {mergeMode ? 'סיום מיזוג' : '⚯ מזג כפולים'}
           </button>
           <button
             onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
@@ -876,15 +1054,19 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} />
+        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} />
       ) : (
         <TableView
           nodes={nodes}
           onRefresh={loadAll}
           statusFilter={statusFilter}
           generationFilter={generationFilter}
+          mergeMode={mergeMode}
+          mergeSel={mergeSel}
+          dupIds={dupIds}
+          onToggleMerge={toggleMerge}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
-          onEdit={node => { setFormName(node.name); setModal({ type: 'edit', node }) }}
+          onEdit={node => { setFormName(node.name); setFormRelation(node.relation ?? null); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
         />
       )}
@@ -894,6 +1076,7 @@ export default function LineagePage() {
         <Modal title={`עריכת: ${modal.node.name}`} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
@@ -905,19 +1088,23 @@ export default function LineagePage() {
       {modal?.type === 'add' && (
         <Modal title={modal.parentId ? `הוסף ילד ל: ${modal.parentName}` : 'הוסף דור חדש'} onClose={close}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>שם <span style={{ color: '#DC2626' }}>*</span></label>
+              <input autoFocus value={formName} onChange={e => setFormName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="הכנס שם..." style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF' }} />
+            </div>
             {!modal.parentId && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו?</label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>מי האב/האם שלו? <span style={{ color: '#DC2626' }}>*</span></label>
                 <select value={formParentId ?? ''} onChange={e => setFormParentId(e.target.value || null)}
                   style={{ border: '1.5px solid #E2E8F0', borderRadius: 11, padding: '11px 14px', fontSize: 14, direction: 'rtl', outline: 'none', fontFamily: 'inherit', background: '#FAFBFF', cursor: 'pointer' }}>
-                  <option value="">— ללא הורה (שורש ראשי) —</option>
+                  <option value="">— בחר אב/אם —</option>
                   {[...nodes].filter(n => (n.status ?? 'verified') === 'verified').sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he')).map(n => (
                     <option key={n.id} value={n.id}>{n.name} (דור {n.generation})</option>
                   ))}
                 </select>
               </div>
             )}
+            {(modal.parentId || formParentId) && <RelationPicker value={formRelation} onChange={setFormRelation} required />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
@@ -934,6 +1121,58 @@ export default function LineagePage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* באנר הדרכה במצב מיזוג */}
+      {mergeMode && mergeSel.size === 0 && (
+        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 120, background: '#FAF5FF', border: '1.5px solid #E9D5FF', color: '#7C2D92', borderRadius: 14, padding: '10px 18px', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 24px rgba(124,58,237,0.18)' }}>
+          מצב מיזוג: סמן 2 צמתים או יותר (אותו אדם) למיזוג · <button onClick={exitMerge} style={{ color: '#9333EA', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>סיום</button>
+        </div>
+      )}
+
+      {/* בר מיזוג צף — נבחרו צמתים */}
+      {mergeMode && mergeSel.size > 0 && (
+        <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 120, background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '12px 16px', boxShadow: '0 12px 32px rgba(0,0,0,0.18)', maxWidth: '92vw', direction: 'rtl' }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#64748B', marginBottom: 8 }}>נבחרו {mergeSel.size} צמתים — בחר איזה <span style={{ color: '#16A34A' }}>נשאר</span>:</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 720 }}>
+            {selectedNodes.map(n => {
+              const isKeep = effectiveKeepId === n.id
+              return (
+                <button key={n.id} onClick={() => setKeepId(n.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    background: isKeep ? '#DCFCE7' : '#F1F5F9', color: isKeep ? '#166534' : '#475569', border: `1.5px solid ${isKeep ? '#16A34A' : '#E2E8F0'}` }}>
+                  {isKeep ? '★ נשאר' : '○'} {n.name} <span style={{ opacity: 0.6 }}>(דור {n.generation})</span>
+                  <span onClick={e => { e.stopPropagation(); toggleMerge(n.id) }} style={{ color: '#94A3B8', cursor: 'pointer', marginRight: 2 }}>✕</span>
+                </button>
+              )
+            })}
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setMergeConfirm(true)} disabled={mergeSel.size < 2}
+              style={{ background: mergeSel.size < 2 ? '#C4B5FD' : '#9333EA', color: '#fff', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 13, fontWeight: 800, cursor: mergeSel.size < 2 ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+              מזג {mergeSel.size} צמתים
+            </button>
+            <button onClick={exitMerge} style={{ background: '#F1F5F9', color: '#64748B', border: 'none', borderRadius: 11, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
+          </div>
+        </div>
+      )}
+
+      {/* מודאל אישור מיזוג */}
+      {mergeConfirm && effectiveKeepId && (
+        <Modal title="אישור מיזוג צמתים" onClose={() => setMergeConfirm(false)}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.7 }}>
+              {mergeSel.size - 1} צמתים ימוזגו אל <strong style={{ color: '#166534' }}>{nodes.find(n => n.id === effectiveKeepId)?.name}</strong>.
+              <br />כל הילדים והנרשמים המשויכים יועברו אליו, והכפילים יימחקו.
+            </p>
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 11, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
+              ⚠ פעולה זו אינה הפיכה.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <MBtn label="מזג עכשיו" color="#9333EA" onClick={() => { setMergeConfirm(false); handleMerge() }} loading={merging} />
+              <MBtn label="ביטול" color="#94A3B8" onClick={() => setMergeConfirm(false)} />
             </div>
           </div>
         </Modal>

@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { name, parent_id } = body
+  const { name, parent_id, relation } = body
+  const rel = relation === 'son' || relation === 'son_in_law' ? relation : null
   if (!name || typeof name !== 'string' || !name.trim()) {
     return NextResponse.json({ error: 'שם הצומת הוא שדה חובה' }, { status: 400 })
   }
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       parent_id: parent_id || null,
       generation,
+      relation: rel,
       status: 'pending',
     })
     .select()

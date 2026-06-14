@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import bcrypt from 'bcryptjs'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +23,11 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — בולמת ניחוש סיסמאות
+  if (!rateLimit(`portal-login:${clientIp(request)}`, 10, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות התחברות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+  }
+
   const { home, password } = await request.json()
   if (!home || !password) {
     return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
@@ -41,8 +48,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בית ההחלמה לא נמצא במערכת' }, { status: 404 })
   }
 
-  if (data.password !== password) {
-    return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
+  // סיסמאות נשמרות כ-hash (bcrypt). סיסמה ישנה בטקסט גלוי — מאומתת פעם אחת ומשודרגת ל-hash.
+  const stored: string = data.password ?? ''
+  if (stored.startsWith('$2')) {
+    const ok = await bcrypt.compare(password, stored)
+    if (!ok) return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
+  } else {
+    if (stored !== password) {
+      return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
+    }
+    // שדרוג שקוף ל-hash — כשל בשדרוג אינו חוסם את ההתחברות
+    try {
+      const hash = await bcrypt.hash(password, 10)
+      await admin.from('recovery_portals').update({ password: hash }).eq('home_name', home)
+    } catch (e) {
+      console.error('[portal-login] password hash upgrade failed:', e)
+    }
   }
 
   const response = NextResponse.json({ ok: true })

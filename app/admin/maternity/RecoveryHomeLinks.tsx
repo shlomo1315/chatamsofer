@@ -3,12 +3,14 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Portal { home_name: string; updated_at: string }
 
 export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
   const router = useRouter()
   const supabase = createClient()
+  const { confirm, confirmDialog } = useConfirm()
   const [portals, setPortals] = useState<Portal[]>([])
   const [adding, setAdding] = useState(false)
   const [newHome, setNewHome] = useState('')
@@ -91,7 +93,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
   }
 
   const removePassword = async (home: string) => {
-    if (!confirm(`להסיר גישה לפורטל עבור "${home}"?`)) return
+    if (!(await confirm({ title: 'הסרת גישה לפורטל', message: `להסיר גישה לפורטל עבור "${home}"?`, confirmLabel: 'הסר', danger: true }))) return
     await fetch('/api/portal/password', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -193,6 +195,12 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
                     onChange={e => setPw(e.target.value)}
                     placeholder="הכנס סיסמה (לפחות 10 תווים)"
                     dir="ltr"
+                    name="recovery-portal-password"
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    data-1p-ignore
+                    data-lpignore="true"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     onKeyDown={e => e.key === 'Enter' && savePassword(home)}
                   />
@@ -218,6 +226,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
           הגדר סיסמה לכל בית החלמה — לאחר מכן העתק את הקישור ושלח להם. הם יצטרכו להזין סיסמה לפני הצפייה ברשימה.
         </p>
       </div>
+      {confirmDialog}
     </div>
   )
 }

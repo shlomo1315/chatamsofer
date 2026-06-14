@@ -2,6 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useDocTypes } from '@/lib/useDocTypes'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 const BUCKET = 'documents'
 
@@ -14,18 +17,21 @@ interface DocRow {
   uploaded_at?: string
 }
 
-const DOC_TYPES = [
-  { value: 'id_husband', label: 'ת.ז. הבעל' },
-  { value: 'id_wife', label: 'ת.ז. האישה' },
-  { value: 'id_child', label: 'ת.ז. ילד' },
-  { value: 'other', label: 'מסמך אחר' },
-]
-const typeLabel = (v: string) => DOC_TYPES.find((t) => t.value === v)?.label || v
+const formatUploaded = (raw?: string) => {
+  if (!raw) return ''
+  try {
+    const d = new Date(raw)
+    return `${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} · ${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+  } catch { return '' }
+}
 
 const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(name)
 
 export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: string }) {
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
+  const { docTypes: DOC_TYPES, label: typeLabel } = useDocTypes()
   const fileRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,7 +84,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
   }
 
   const handleDelete = async (doc: DocRow) => {
-    if (!confirm(`למחוק את הקובץ "${doc.file_name || ''}"?`)) return
+    if (!(await confirm({ title: 'מחיקת קובץ', message: `למחוק את הקובץ "${doc.file_name || ''}"?`, confirmLabel: 'מחיקה', danger: true }))) return
     try {
       // Try to remove the underlying storage object (path = everything after the bucket segment)
       if (doc.file_url) {
@@ -92,7 +98,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
       await supabase.from('documents').delete().eq('id', doc.id)
       await load()
     } catch (err: unknown) {
-      alert(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -162,6 +168,9 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                   {typeLabel(doc.doc_type)}
                 </p>
                 <p className="text-xs text-slate-600 truncate mt-1" title={doc.file_name ?? ''}>{doc.file_name}</p>
+                {doc.uploaded_at && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">🕒 {formatUploaded(doc.uploaded_at)}</p>
+                )}
               </div>
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <a
@@ -185,6 +194,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }

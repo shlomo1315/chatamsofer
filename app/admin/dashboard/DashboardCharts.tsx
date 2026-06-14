@@ -2,7 +2,7 @@
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
 import Card from '@/components/ui/Card'
 
-export interface MonthlyPoint { month: string; נתמכים: number; הלוואות: number }
+export interface MonthlyPoint { month: string; צאצאים: number; הלוואות: number }
 export interface SlicePoint { name: string; value: number; color: string }
 
 export default function DashboardCharts({
@@ -15,7 +15,7 @@ export default function DashboardCharts({
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-slate-700 mb-4">סטטוס נתמכים</h2>
+      <h2 className="text-sm font-semibold text-slate-700 mb-4">סטטוס צאצאים</h2>
       {hasStatus ? (
         <ResponsiveContainer width="100%" height={260}>
           <PieChart>
@@ -23,7 +23,7 @@ export default function DashboardCharts({
               {statusData.filter(s => s.value > 0).map((entry, i) => <Cell key={i} fill={entry.color} />)}
             </Pie>
             <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ fontSize: 12, color: '#475569' }}>{v}</span>} />
-            <Tooltip formatter={(value) => [`${value}`, 'נתמכים']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
+            <Tooltip formatter={(value) => [`${value}`, 'צאצאים']} contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }} />
           </PieChart>
         </ResponsiveContainer>
       ) : (

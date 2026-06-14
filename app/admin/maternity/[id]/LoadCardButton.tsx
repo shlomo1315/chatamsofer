@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Wallet, Loader2, Check, AlertTriangle } from 'lucide-react'
 import type { MaternityAid } from '@/types'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function LoadCardButton({ aid }: { aid: MaternityAid }) {
   const router = useRouter()
+  const { confirm, confirmDialog } = useConfirm()
   const defaultAmount = (Number(aid.weekly_amount) || 0) * (Number(aid.total_weeks) || 0)
   const [amount, setAmount] = useState(defaultAmount ? String(defaultAmount) : '')
   const [loading, setLoading] = useState(false)
@@ -20,7 +22,7 @@ export default function LoadCardButton({ aid }: { aid: MaternityAid }) {
       setMsg({ type: 'err', text: 'יש להזין סכום תקין' })
       return
     }
-    if (!confirm(`להטעין ₪${amt.toLocaleString('he-IL')} לכרטיס נדרים?`)) return
+    if (!(await confirm({ title: 'הטענת כרטיס', message: `להטעין ₪${amt.toLocaleString('he-IL')} לכרטיס נדרים?`, confirmLabel: 'הטען' }))) return
     setLoading(true)
     try {
       const res = await fetch('/api/nedarim/load-card', {
@@ -77,6 +79,7 @@ export default function LoadCardButton({ aid }: { aid: MaternityAid }) {
           <span>{msg.text}</span>
         </div>
       )}
+      {confirmDialog}
     </div>
   )
 }

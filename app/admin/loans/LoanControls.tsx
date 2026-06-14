@@ -1,9 +1,12 @@
 'use client'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, ChevronDown, Loader2, Trash2 } from 'lucide-react'
+import { Clock, Check, X, ChevronDown, Loader2, Trash2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 import type { Loan, LoanStatus } from '@/types'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 // סטטוס זכאות להלוואה: ממתין / זכאי (מאושר) / לא זכאי (לא מאושר)
 const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
@@ -15,13 +18,15 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
   defaulted: { label: 'לא מאושר',     cls: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200', icon: X },
 }
 
-export function LoanStatusControl({ loan }: { loan: Loan }) {
+export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loan; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
   const btnRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const pill = PILL[loan.status] ?? PILL.pending
   const Icon = pill.icon
@@ -34,14 +39,36 @@ export function LoanStatusControl({ loan }: { loan: Loan }) {
   }
 
   const setStatus = async (next: LoanStatus) => {
+    // חסימה: לא ניתן לאשר בקשה לפני שהמשפחה מאושרת
+    if (next === 'approved' && familyApproved === false) {
+      setOpen(false)
+      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      return
+    }
     setSaving(true)
     try {
       const { error } = await supabase.from('loans').update({ status: next }).eq('id', loan.id)
       if (error) throw error
+      // באישור הבקשה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      if (next === 'approved') {
+        await fetch('/api/admin/request-approved', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'loan', id: loan.id }),
+        }).catch(() => {})
+      }
       setOpen(false)
+      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
+      if (advance && next !== 'pending') {
+        setSaving(false)
+        setShowSuccess(true)
+        setTimeout(() => {
+          goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
+        }, 1500)
+        return
+      }
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
@@ -57,6 +84,17 @@ export function LoanStatusControl({ loan }: { loan: Loan }) {
 
   return (
     <div className="inline-block">
+      {showSuccess && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle2 size={30} className="text-green-600" />
+            </div>
+            <p className="font-bold text-slate-900">הפעולה בוצעה בהצלחה</p>
+            <p className="text-sm text-slate-500">מעבירים אותך לבקשה הבאה…</p>
+          </div>
+        </div>
+      )}
       <button ref={btnRef} onClick={toggle} disabled={saving}
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${pill.cls}`}>
         {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
@@ -89,26 +127,32 @@ export function LoanStatusControl({ loan }: { loan: Loan }) {
 export function DeleteLoanButton({ loanId, redirect }: { loanId: string; redirect?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
+  const toast = useToast()
+  const { confirm, confirmDialog } = useConfirm()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!confirm('למחוק את ההלוואה לצמיתות? פעולה זו אינה הפיכה.')) return
+    if (!(await confirm({ title: 'מחיקת הלוואה', message: 'למחוק את ההלוואה לצמיתות? פעולה זו אינה הפיכה.', confirmLabel: 'מחיקה', danger: true }))) return
     setDeleting(true)
     try {
       const { error } = await supabase.from('loans').delete().eq('id', loanId)
       if (error) throw error
+      toast.success('ההלוואה נמחקה')
       if (redirect) router.push('/admin/loans')
       router.refresh()
     } catch (err: unknown) {
-      alert(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
+      toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
       setDeleting(false)
     }
   }
 
   return (
+    <>
     <button onClick={handleDelete} disabled={deleting}
       className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-white hover:bg-red-600 px-2.5 py-1.5 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
       {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
     </button>
+    {confirmDialog}
+    </>
   )
 }

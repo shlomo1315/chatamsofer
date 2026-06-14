@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,9 @@ async function setSetting(key: string, value: unknown) {
 
 // GET → { labels, assignments, internalEmails }
 export async function GET() {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const [labels, assignments, internalEmails] = await Promise.all([
     getSetting('mail_label_defs'),
     getSetting('mail_label_assignments'),
@@ -42,6 +46,9 @@ export async function GET() {
 //  { action: 'unassign', messageId, labelId }
 //  { action: 'save_internal_emails', emails: [{name,email}] }
 export async function POST(request: NextRequest) {
+  const staff = await requireStaff()
+  if (!staff) return unauthorized()
+
   const body = await request.json()
   const { action } = body
 
@@ -103,6 +110,7 @@ const DEFAULT_LABELS: MailLabel[] = [
   { id: 'label-loans',    name: 'הלוואות',        color: '#3b82f6' },
   { id: 'label-maternity', name: 'יולדות',         color: '#ec4899' },
   { id: 'label-widows',   name: 'אלמנות',         color: '#8b5cf6' },
+  { id: 'label-decision', name: 'הגורם המאשר',     color: '#0ea5e9' },
   { id: 'label-urgent',   name: 'דחוף',           color: '#ef4444' },
   { id: 'label-done',     name: 'טופל',           color: '#22c55e' },
 ]
