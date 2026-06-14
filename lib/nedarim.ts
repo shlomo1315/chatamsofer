@@ -129,6 +129,7 @@ export async function saveClientCard(
   creds: NedarimCreds,
   b: NedarimClientFields,
   clientId?: string | null,
+  groupe: string = 'לידות',
 ): Promise<string | null> {
   const r = await nedarimRequest(creds, 'SaveClientCard', {
     ClientId: clientId ?? undefined,
@@ -139,6 +140,7 @@ export async function saveClientCard(
     Phone1: b.phone ?? undefined,
     Phone2: b.phone2 ?? undefined,
     Email: b.email ?? undefined,
+    Groupe: groupe || undefined, // קטגוריה בנדרים — ברירת מחדל "לידות"
     Comments: 'נוצר/עודכן אוטומטית ממערכת היכל החתם סופר',
   })
   if (!isOk(r)) throw new Error(r.Message || 'כשל בהקמת/עדכון משפחה בנדרים')

@@ -171,28 +171,28 @@ export default function NedarimFamilies() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" dir="rtl">
+            <table className="w-full text-[16px] border-collapse" dir="rtl">
               <thead>
-                <tr className="text-right text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                  <th className="px-4 py-2.5 font-medium">שם משפחה</th>
-                  <th className="px-4 py-2.5 font-medium">מזהה משפחה</th>
-                  <th className="px-4 py-2.5 font-medium">ת.ז</th>
-                  <th className="px-4 py-2.5 font-medium">טלפון</th>
-                  <th className="px-4 py-2.5 font-medium">קטגוריה</th>
-                  <th className="px-4 py-2.5 font-medium">יתרה בכרטיס</th>
-                  <th className="px-4 py-2.5 font-medium">ימים לפריקה</th>
+                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 bg-slate-50">
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">שם משפחה</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">מזהה משפחה</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">ת.ז</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">טלפון</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">קטגוריה</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">יתרה בכרטיס</th>
+                  <th className="px-5 py-4 font-bold">ימים לפריקה</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {filtered.map(f => (
-                  <tr key={f.ClientId} onClick={() => setSelected(f)} className="hover:bg-emerald-50/40 cursor-pointer">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-500 ltr-num text-right font-mono">{f.ClientId}</td>
-                    <td className="px-4 py-2.5 text-slate-500 ltr-num text-right">{f.Zeout || '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-500 ltr-num text-right" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} />
-                    <td className="px-4 py-2.5 text-slate-500">{f.Groupe || '—'}</td>
-                    <td className="px-4 py-2.5 font-semibold text-emerald-700">{ils(f.Ytra)}</td>
-                    <td className="px-4 py-2.5"><UnloadCell info={f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined} /></td>
+                  <tr key={f.ClientId} onClick={() => setSelected(f)} className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer">
+                    <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Zeout || '—'}</span></td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} /></td>
+                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{f.Groupe || '—'}</td>
+                    <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{ils(f.Ytra)}</td>
+                    <td className="px-5 py-4"><UnloadCell info={f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -281,7 +281,9 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
   const name = [card?.FamilyName ?? family.FamilyName, card?.FirstName ?? family.FirstName].filter(Boolean).join(' ')
   const tlushim: Json[] = Array.isArray(card?.Tlushim) ? card!.Tlushim : []
   const cards: Json[] = Array.isArray(card?.Cards) ? card!.Cards : []
-  const history: Json[] = Array.isArray(card?.History) ? card!.History : []
+  // היסטוריית עסקאות = רק קניות בבית עסק (יש שם חנות), לא טעינות/פריקות
+  const history: Json[] = (Array.isArray(card?.History) ? card!.History : [])
+    .filter((h: Json) => String(h.StoreName ?? h.Store ?? '').trim() !== '')
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
@@ -357,8 +359,8 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
                       </div>
                       {t.TlushId && (
                         <button onClick={() => unload(String(t.TlushId))} disabled={busy === 'unload' + t.TlushId}
-                          className="text-xs text-red-500 hover:text-red-700 inline-flex items-center gap-1">
-                          {busy === 'unload' + t.TlushId ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} פריקה
+                          className="text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:bg-red-300 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg flex-shrink-0">
+                          {busy === 'unload' + t.TlushId ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} פריקה
                         </button>
                       )}
                     </div>
@@ -631,22 +633,22 @@ function TransactionsHistory({ transactions, loading }: { transactions: any[]; l
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2"><Receipt size={28} /><span className="text-sm">אין עסקאות</span></div>
         ) : (
           <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-            <table className="w-full text-sm" dir="rtl">
+            <table className="w-full text-[16px] border-collapse" dir="rtl">
               <thead className="sticky top-0 bg-slate-50">
-                <tr className="text-right text-xs text-slate-500 border-b border-slate-100">
-                  <th className="px-4 py-2.5 font-medium">משפחה</th>
-                  <th className="px-4 py-2.5 font-medium">חנות</th>
-                  <th className="px-4 py-2.5 font-medium">תאריך</th>
-                  <th className="px-4 py-2.5 font-medium">סכום</th>
+                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200">
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">משפחה</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">חנות</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">תאריך</th>
+                  <th className="px-5 py-4 font-bold">סכום</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {filtered.map((t, i) => (
-                  <tr key={i} className="hover:bg-slate-50">
-                    <td className="px-4 py-2 font-medium text-slate-800">{t.familyName || '—'}</td>
-                    <td className="px-4 py-2 text-slate-500">{t.store || '—'}</td>
-                    <td className="px-4 py-2 text-slate-500 ltr-num text-right">{t.date || '—'}</td>
-                    <td className="px-4 py-2 font-semibold text-slate-700">{Number.isFinite(Number(t.amount)) ? `₪${Number(t.amount).toLocaleString('he-IL')}` : '—'}</td>
+                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{t.familyName || '—'}</td>
+                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{t.store || '—'}</td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{t.date || '—'}</span></td>
+                    <td className="px-5 py-4 font-bold text-slate-800">{Number.isFinite(Number(t.amount)) ? `₪${Number(t.amount).toLocaleString('he-IL')}` : '—'}</td>
                   </tr>
                 ))}
               </tbody>
