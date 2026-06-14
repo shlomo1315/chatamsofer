@@ -311,7 +311,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
+    <div className="portal16 min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
+      {/* גופן אחיד 16px בכל הפורטל (האייקונים נשלטים ע"י width/height ולכן לא מושפעים) */}
+      <style>{`
+        .portal16, .portal16 * { font-size: 16px !important; line-height: 1.5 !important; }
+        .portal16 svg { font-size: 0 !important; }
+        .portal16 input, .portal16 textarea, .portal16 select, .portal16 button { font-size: 16px !important; }
+      `}</style>
       {selected && <DetailModal aid={selected} onClose={() => setSelected(null)} />}
 
       {/* Top bar */}
