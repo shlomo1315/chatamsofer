@@ -163,6 +163,8 @@ export interface CardCenter {
   stock: number
   is_active: boolean
   notes?: string
+  city?: string
+  address?: string
   created_at: string
   updated_at: string
   approved?: number   // אושרו וטרם נטענו

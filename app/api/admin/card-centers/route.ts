@@ -50,7 +50,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
-  const { name, stock, notes } = await request.json()
+  const { name, stock, notes, city, address } = await request.json()
   if (!name?.trim()) return NextResponse.json({ error: 'שם המוקד חובה' }, { status: 400 })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
     name: name.trim(),
     stock: Math.max(0, parseInt(String(stock ?? 0), 10) || 0),
     notes: notes?.trim() || null,
+    city: city?.trim() || null,
+    address: address?.trim() || null,
   })
   if (error) return NextResponse.json({ error: error.code === '23505' ? 'מוקד בשם זה כבר קיים' : error.message }, { status: 400 })
   // מלאי חדש נוסף → שיוך אוטומטי של יולדות בתור "ממתין למלאי" ושליחת שובר
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
-  const { id, name, stock, notes, is_active } = await request.json()
+  const { id, name, stock, notes, is_active, city, address } = await request.json()
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -76,6 +78,8 @@ export async function PATCH(request: NextRequest) {
   if (stock !== undefined) updates.stock = Math.max(0, parseInt(String(stock), 10) || 0)
   if (notes !== undefined) updates.notes = notes?.trim() || null
   if (is_active !== undefined) updates.is_active = !!is_active
+  if (city !== undefined) updates.city = city?.trim() || null
+  if (address !== undefined) updates.address = address?.trim() || null
   const { error } = await admin.from('card_centers').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.code === '23505' ? 'מוקד בשם זה כבר קיים' : error.message }, { status: 400 })
   // עדכון מלאי (למשל הגדלת כמות) → שיוך אוטומטי של יולדות בתור "ממתין למלאי" ושליחת שובר
