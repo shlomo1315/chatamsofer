@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import {
   Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
   AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
@@ -412,103 +412,103 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map(aid => {
                     const m = aid.beneficiary
+                    const a = arrived[aid.id] ?? null
+                    const saving = savingId === aid.id
+                    const status = amountStatus[aid.id] ?? null
+                    const editing = editingAmt[aid.id] ?? false
+                    const amountVal = Number(amountInput[aid.id])
+                    const showForm = a === true && !(status && !editing)
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center" style={{ verticalAlign: 'middle' }}
+                      <Fragment key={aid.id}>
+                      <tr className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
                         onClick={() => setSelected(aid)}>
-                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{motherName(m)}</td>
-                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num text-center" style={{ verticalAlign: 'middle' }}>{m?.spouse_id_number ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{aid.baby_name ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap text-center" style={{ verticalAlign: 'middle' }}>{fmtDate(aid.birth_date)}</td>
-                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }} onClick={e => e.stopPropagation()}>
-                          {(() => {
-                            const a = arrived[aid.id] ?? null
-                            const saving = savingId === aid.id
-                            const status = amountStatus[aid.id] ?? null
-                            const editing = editingAmt[aid.id] ?? false
-                            const amountVal = Number(amountInput[aid.id])
-                            // לאחר שליחת הסכום — מוסתרים כפתורי ההגעה ומוצג סיכום מימוש הזכאות
-                            if (status && !editing) {
-                              return (
-                                <div className="flex flex-col items-center gap-1.5">
-                                  <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
-                                    <Check size={15} className="text-emerald-600" />
-                                    <span className="text-sm font-semibold text-emerald-800">
-                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}{receiptInput[aid.id] ? ` · קבלה ${receiptInput[aid.id]}` : ''}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {status === 'rejected'
-                                      ? <span className="text-xs font-medium text-red-600">נדחה</span>
-                                      : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
-                                    <button type="button" onClick={() => setEditingAmt(m => ({ ...m, [aid.id]: true }))}
-                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
-                                  </div>
-                                </div>
-                              )
-                            }
-                            return (
-                              <div className="flex flex-col items-center gap-2">
-                                <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
-                                  <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
-                                    <Check size={15} /> הגיעה
-                                  </button>
-                                  <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
-                                    <X size={15} /> לא הגיעה
-                                  </button>
-                                </div>
-                                {/* שדה הסכום — מופיע רק אם סומן "הגיעה" */}
-                                {a === true && (
-                                  <div className="flex flex-col gap-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 w-full max-w-sm mx-auto">
-                                    <label className="flex flex-col gap-1.5 text-right">
-                                      <span className="text-sm font-semibold text-slate-600">סכום שמומש (₪)</span>
-                                      <div className="relative">
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">₪</span>
-                                        <input
-                                          value={amountInput[aid.id] ?? ''}
-                                          onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
-                                          inputMode="decimal" placeholder="0"
-                                          className="w-full pr-8 pl-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                                        />
-                                      </div>
-                                    </label>
-                                    <label className="flex flex-col gap-1.5 text-right">
-                                      <span className="text-sm font-semibold text-slate-600">מספר לילות</span>
-                                      <input
-                                        value={nightsInput[aid.id] ?? ''}
-                                        onChange={e => setNightsInput(m => ({ ...m, [aid.id]: e.target.value.replace(/\D/g, '') }))}
-                                        inputMode="numeric" placeholder="0"
-                                        className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                                      />
-                                    </label>
-                                    <label className="flex flex-col gap-1.5 text-right">
-                                      <span className="text-sm font-semibold text-slate-600">מספר קבלה</span>
-                                      <input
-                                        value={receiptInput[aid.id] ?? ''}
-                                        onChange={e => setReceiptInput(m => ({ ...m, [aid.id]: e.target.value }))}
-                                        inputMode="text" placeholder="הזן/י מספר קבלה"
-                                        className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                                      />
-                                    </label>
-                                    <button type="button" onClick={() => sendAmount(aid.id)}
-                                      disabled={savingAmt === aid.id || !amountInput[aid.id] || !(receiptInput[aid.id] ?? '').trim()}
-                                      title={!(receiptInput[aid.id] ?? '').trim() ? 'יש להזין מספר קבלה' : undefined}
-                                      className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
-                                      {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
-                                    </button>
-                                  </div>
-                                )}
+                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center align-middle">{motherName(m)}</td>
+                        <td className="px-4 py-3.5 font-mono text-slate-500 ltr-num text-center align-middle">{m?.spouse_id_number ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">{aid.baby_name ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap text-center align-middle">{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
+                          {status && !editing ? (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
+                                <Check size={15} className="text-emerald-600" />
+                                <span className="text-sm font-semibold text-emerald-800">
+                                  היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}{receiptInput[aid.id] ? ` · קבלה ${receiptInput[aid.id]}` : ''}
+                                </span>
                               </div>
-                            )
-                          })()}
+                              <div className="flex items-center gap-2">
+                                {status === 'rejected'
+                                  ? <span className="text-xs font-medium text-red-600">נדחה</span>
+                                  : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
+                                <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
+                                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                              <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
+                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                <Check size={15} /> הגיעה
+                              </button>
+                              <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
+                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+                                <X size={15} /> לא הגיעה
+                              </button>
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3.5 text-center" style={{ verticalAlign: 'middle' }}>
+                        <td className="px-4 py-3.5 text-center align-middle">
                           <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
                             <ChevronLeft size={13} /> פרטים
                           </span>
                         </td>
                       </tr>
+
+                      {/* שורת טופס מלאה-רוחב — כך עמודות הנתונים נשארות מיושרות וקצרות */}
+                      {showForm && (
+                        <tr className="bg-emerald-50/30" onClick={e => e.stopPropagation()}>
+                          <td colSpan={6} className="px-4 pb-5 pt-1">
+                            <div className="flex flex-col gap-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 w-full max-w-sm mx-auto">
+                              <label className="flex flex-col gap-1.5 text-right">
+                                <span className="text-sm font-semibold text-slate-600">סכום שמומש (₪)</span>
+                                <div className="relative">
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">₪</span>
+                                  <input
+                                    value={amountInput[aid.id] ?? ''}
+                                    onChange={e => setAmountInput(mm => ({ ...mm, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
+                                    inputMode="decimal" placeholder="0"
+                                    className="w-full pr-8 pl-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                  />
+                                </div>
+                              </label>
+                              <label className="flex flex-col gap-1.5 text-right">
+                                <span className="text-sm font-semibold text-slate-600">מספר לילות</span>
+                                <input
+                                  value={nightsInput[aid.id] ?? ''}
+                                  onChange={e => setNightsInput(mm => ({ ...mm, [aid.id]: e.target.value.replace(/\D/g, '') }))}
+                                  inputMode="numeric" placeholder="0"
+                                  className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1.5 text-right">
+                                <span className="text-sm font-semibold text-slate-600">מספר קבלה</span>
+                                <input
+                                  value={receiptInput[aid.id] ?? ''}
+                                  onChange={e => setReceiptInput(mm => ({ ...mm, [aid.id]: e.target.value }))}
+                                  inputMode="text" placeholder="הזן/י מספר קבלה"
+                                  className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                />
+                              </label>
+                              <button type="button" onClick={() => sendAmount(aid.id)}
+                                disabled={savingAmt === aid.id || !amountInput[aid.id] || !(receiptInput[aid.id] ?? '').trim()}
+                                title={!(receiptInput[aid.id] ?? '').trim() ? 'יש להזין מספר קבלה' : undefined}
+                                className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
+                                {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </tbody>
