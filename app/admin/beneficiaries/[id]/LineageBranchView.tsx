@@ -253,13 +253,13 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                 opacity: onBranch ? 1 : 0.32,
                 transition: 'opacity .2s',
               }}>
-                {/* תג סטטוס: ✓ ירוק=מאושר · ! כתום=ממתין לאימות · ✕ אדום=נדחה */}
+                {/* תג סטטוס: ✓ ירוק=מאושר · ! כתום=ממתין לאימות · ✕ אדום=נדחה — גודל קבוע כדי שיהיה ברור בכל זום */}
                 <div style={{
-                  position: 'absolute', top: -10 * zoom, left: 6 * zoom,
-                  background: badge.bg, color: '#fff', fontSize: Math.max(8, 11 * zoom), fontWeight: 900,
-                  width: 20 * zoom, height: 20 * zoom, borderRadius: '50%',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #fff',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.25)', zIndex: 25,
+                  position: 'absolute', top: -9, left: -6,
+                  background: badge.bg, color: '#fff', fontSize: 13, fontWeight: 900,
+                  width: 20, height: 20, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff',
+                  boxShadow: '0 1px 5px rgba(0,0,0,0.3)', zIndex: 25,
                 }}>{badge.glyph}</div>
                 <div style={{
                   position: 'absolute', top: -10 * zoom, right: 6 * zoom,
