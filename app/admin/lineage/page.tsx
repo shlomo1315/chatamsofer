@@ -594,11 +594,15 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   <div onClick={e => e.stopPropagation()}
                     onMouseEnter={() => setHovered(pos.node.id)}
                     style={{
-                      position: 'absolute', top: 'calc(100% + 10px)', left: '50%', transform: 'translateX(-50%)',
-                      display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
-                      background: '#fff', borderRadius: 16, padding: '8px 10px',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0', zIndex: 40,
+                      // top:100% צמוד לתחתית הקוביה + padding-top שקוף כ"גשר" — כך המעבר עם העכבר לחלונית אינו מאבד את ה-hover
+                      position: 'absolute', top: '100%', paddingTop: 12, left: '50%', transform: 'translateX(-50%)',
+                      display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center', zIndex: 40,
                     }}>
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center',
+                    background: '#fff', borderRadius: 16, padding: '8px 10px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0',
+                  }}>
                     {/* כפתור מיזוג כפילים — מופיע רק לצומת ששמו כפול באותו גזע */}
                     {isDup && (
                       <button onClick={() => onMergeGroup(pos.node.id)} title="מזג את הכפילויות של שם זה באותו גזע"
@@ -627,6 +631,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         ))}
                       </div>
                     )}
+                  </div>
                   </div>
                 )}
               </div>
