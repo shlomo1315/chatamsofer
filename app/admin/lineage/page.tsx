@@ -514,7 +514,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
                   transition: 'box-shadow .2s, transform .2s, opacity .2s',
                   opacity: isDimmed ? 0.25 : 1,
-                  zIndex: isSel ? 20 : 2, userSelect: 'none',
+                  zIndex: (isSel || hovered === pos.node.id) ? 50 : 2, userSelect: 'none',
                 }}>
 
                 {/* generation badge */}
@@ -882,39 +882,20 @@ export default function LineagePage() {
 
   function close() { setModal(null); setSaveErr(''); setFormParentId(null); setFormRelation(null) }
 
-  // מפת שורש לכל צומת (ראש הגזע) — לצורך זיהוי כפילות בתוך אותו גזע בלבד
-  const rootOf = useMemo(() => {
-    const parent = new Map(nodes.map(n => [n.id, n.parent_id]))
-    const cache = new Map<string, string>()
-    const find = (id: string): string => {
-      if (cache.has(id)) return cache.get(id)!
-      const seen = new Set<string>()
-      let cur = id
-      while (true) {
-        const p = parent.get(cur) ?? null
-        if (!p || !parent.has(p) || seen.has(p)) break
-        seen.add(cur); cur = p
-      }
-      cache.set(id, cur)
-      return cur
-    }
-    const m = new Map<string, string>()
-    for (const n of nodes) m.set(n.id, find(n.id))
-    return m
-  }, [nodes])
-
-  // קבוצות שמות כפולים — אותו שם מנורמל, באותו גזע (אותו שורש) *וגם* באותו דור.
-  // בני דודים בדורות שונים עם אותו שם אינם כפילות; רק אותו שם באותו גזע ובאותו דור נחשב כפילות למיזוג.
+  // קבוצות שמות כפולים — אותו שם מנורמל, תחת *אותו אב* (אותו parent_id) ובאותו דור.
+  // כך בני דודים (אבות שונים) עם אותו שם אינם נחשבים כפילות; רק אותו אדם שנרשם פעמיים
+  // תחת אותו אב (למשל ע"י שני בניו בנפרד) נחשב כפילות למיזוג.
   const dupKey = useCallback(
-    (id: string, name: string, generation: number) => `${rootOf.get(id) ?? id}|${generation}|${name.trim().replace(/\s+/g, ' ')}`,
-    [rootOf],
+    (parentId: string | null, generation: number, name: string) =>
+      `${parentId ?? 'root'}|${generation}|${name.trim().replace(/\s+/g, ' ')}`,
+    [],
   )
   const { dupIds, dupGroups } = useMemo(() => {
     const byKey = new Map<string, string[]>()
     for (const n of nodes) {
       const name = n.name.trim().replace(/\s+/g, ' ')
       if (!name) continue
-      const key = dupKey(n.id, name, n.generation)
+      const key = dupKey(n.parent_id, n.generation, name)
       const arr = byKey.get(key) ?? []
       arr.push(n.id)
       byKey.set(key, arr)
@@ -925,11 +906,11 @@ export default function LineagePage() {
     return { dupIds: ids, dupGroups: groups }
   }, [nodes, dupKey])
 
-  // מזהה → רשימת הצמתים בקבוצת הכפילות שלו (אותו גזע + אותו דור + אותו שם)
+  // מזהה → רשימת הצמתים בקבוצת הכפילות שלו (אותו אב + אותו דור + אותו שם)
   const dupGroupOf = useCallback((id: string): string[] => {
     const n = nodes.find(x => x.id === id)
     if (!n) return []
-    return dupGroups.get(dupKey(n.id, n.name, n.generation)) ?? []
+    return dupGroups.get(dupKey(n.parent_id, n.generation, n.name)) ?? []
   }, [nodes, dupGroups, dupKey])
 
   const dupNameCount = dupGroups.size
