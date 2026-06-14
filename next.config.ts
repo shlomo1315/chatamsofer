@@ -2,17 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async headers() {
+    const noStore = [
+      { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+    ]
     return [
-      {
-        // Prevent NetFree / browser caching of admin pages so deploys are seen immediately
-        source: "/admin/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-store, no-cache, must-revalidate, max-age=0",
-          },
-        ],
-      },
+      // מונע caching של NetFree/דפדפן כדי שפריסות ייראו מיד — ניהול, פורטל בתי החלמה, והדף הציבורי
+      { source: "/admin/:path*", headers: noStore },
+      { source: "/portal/:path*", headers: noStore },
+      { source: "/", headers: noStore },
     ];
   },
 };
