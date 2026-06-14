@@ -5,6 +5,7 @@ import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import MaternityTable from './MaternityTable'
+import RecoveryAmountApprovals, { type PendingAmount } from './RecoveryAmountApprovals'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -17,8 +18,30 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   return data ?? []
 }
 
+// סכומי החלמה שהוזנו ע"י בתי ההחלמה וממתינים לאישור
+async function getPendingRecoveryAmounts(): Promise<PendingAmount[]> {
+  if (!isSupabaseConfigured()) return []
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('maternity_aids')
+      .select('id, recovery_amount, recovery_home, recovery_amount_at, baby_name, beneficiary:beneficiaries(full_name, family_name, spouse_name)')
+      .eq('recovery_amount_status', 'pending')
+      .order('recovery_amount_at', { ascending: true })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data ?? []).map((a: any) => ({
+      id: a.id,
+      recovery_amount: a.recovery_amount,
+      recovery_home: a.recovery_home,
+      recovery_amount_at: a.recovery_amount_at,
+      babyName: a.baby_name ?? null,
+      motherName: [a.beneficiary?.family_name, a.beneficiary?.spouse_name || a.beneficiary?.full_name].filter(Boolean).join(' ') || '—',
+    }))
+  } catch { return [] }
+}
+
 export default async function MaternityPage() {
-  const aids = await getMaternityAids()
+  const [aids, pendingAmounts] = await Promise.all([getMaternityAids(), getPendingRecoveryAmounts()])
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,6 +53,8 @@ export default async function MaternityPage() {
           </Button>
         </Link>
       </PageHeader>
+
+      <RecoveryAmountApprovals items={pendingAmounts} />
 
       {aids.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
