@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
     baby_gender: baby_gender || null,
     baby_id_number: babyIdNorm,
     baby_id_type: isPassport ? 'passport' : 'id',
+    birth_certificate_url: birth_certificate_url ? String(birth_certificate_url) : null,
     recovery_home: recovery_home ? String(recovery_home).trim() : null,
     notes: notes ? String(notes).trim() : null,
     status: 'pending',

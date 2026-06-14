@@ -24,6 +24,18 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     .single()
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  // נפילה-לאחור: אם אין birth_certificate_url ברשומה — שליפת אישור הלידה מטבלת המסמכים
+  if (data && !data.birth_certificate_url && data.beneficiary_id) {
+    const { data: doc } = await supabase
+      .from('documents')
+      .select('file_url')
+      .eq('doc_type', 'birth_cert')
+      .eq('beneficiary_id', data.beneficiary_id)
+      .order('uploaded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (doc?.file_url) data.birth_certificate_url = doc.file_url
+  }
   return data
 }
 

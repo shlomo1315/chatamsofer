@@ -396,7 +396,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                   {filtered.map(aid => {
                     const m = aid.beneficiary
                     return (
-                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle"
+                      <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-top"
                         onClick={() => setSelected(aid)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
                         <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>

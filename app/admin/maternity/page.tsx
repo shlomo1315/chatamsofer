@@ -15,7 +15,22 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data ?? []
+  const aids = (data ?? []) as MaternityAid[]
+  // נפילה-לאחור: רשומות שאין בהן birth_certificate_url — שליפת אישור הלידה מטבלת המסמכים
+  const missing = aids.filter(a => !a.birth_certificate_url && a.beneficiary_id)
+  if (missing.length) {
+    const benIds = [...new Set(missing.map(a => a.beneficiary_id))]
+    const { data: docs } = await supabase
+      .from('documents')
+      .select('beneficiary_id, file_url, uploaded_at')
+      .eq('doc_type', 'birth_cert')
+      .in('beneficiary_id', benIds)
+      .order('uploaded_at', { ascending: false })
+    const byBen: Record<string, string> = {}
+    for (const d of docs ?? []) if (d.file_url && !byBen[d.beneficiary_id]) byBen[d.beneficiary_id] = d.file_url
+    for (const a of aids) if (!a.birth_certificate_url && byBen[a.beneficiary_id]) a.birth_certificate_url = byBen[a.beneficiary_id]
+  }
+  return aids
 }
 
 // סכומי החלמה שהוזנו ע"י בתי ההחלמה וממתינים לאישור
