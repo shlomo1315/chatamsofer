@@ -903,13 +903,18 @@ export default function LineagePage() {
     return m
   }, [nodes])
 
-  // קבוצות שמות כפולים — אותו שם מנורמל המופיע 2+ פעמים בתוך אותו גזע (אותו שורש)
+  // קבוצות שמות כפולים — אותו שם מנורמל, באותו גזע (אותו שורש) *וגם* באותו דור.
+  // בני דודים בדורות שונים עם אותו שם אינם כפילות; רק אותו שם באותו גזע ובאותו דור נחשב כפילות למיזוג.
+  const dupKey = useCallback(
+    (id: string, name: string, generation: number) => `${rootOf.get(id) ?? id}|${generation}|${name.trim().replace(/\s+/g, ' ')}`,
+    [rootOf],
+  )
   const { dupIds, dupGroups } = useMemo(() => {
     const byKey = new Map<string, string[]>()
     for (const n of nodes) {
       const name = n.name.trim().replace(/\s+/g, ' ')
       if (!name) continue
-      const key = `${rootOf.get(n.id) ?? n.id}|${name}`
+      const key = dupKey(n.id, name, n.generation)
       const arr = byKey.get(key) ?? []
       arr.push(n.id)
       byKey.set(key, arr)
@@ -918,15 +923,14 @@ export default function LineagePage() {
     const groups = new Map<string, string[]>()
     for (const [key, arr] of byKey) if (arr.length > 1) { arr.forEach(id => ids.add(id)); groups.set(key, arr) }
     return { dupIds: ids, dupGroups: groups }
-  }, [nodes, rootOf])
+  }, [nodes, dupKey])
 
-  // מזהה → רשימת הצמתים בקבוצת הכפילות שלו (אותו גזע + אותו שם)
+  // מזהה → רשימת הצמתים בקבוצת הכפילות שלו (אותו גזע + אותו דור + אותו שם)
   const dupGroupOf = useCallback((id: string): string[] => {
     const n = nodes.find(x => x.id === id)
     if (!n) return []
-    const key = `${rootOf.get(id) ?? id}|${n.name.trim().replace(/\s+/g, ' ')}`
-    return dupGroups.get(key) ?? []
-  }, [nodes, rootOf, dupGroups])
+    return dupGroups.get(dupKey(n.id, n.name, n.generation)) ?? []
+  }, [nodes, dupGroups, dupKey])
 
   const dupNameCount = dupGroups.size
 
