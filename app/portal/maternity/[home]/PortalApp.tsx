@@ -30,6 +30,8 @@ interface Aid {
   card_number?: string
   notes?: string
   recovery_arrived?: boolean | null
+  recovery_amount?: number | null
+  recovery_amount_status?: string | null
   beneficiary?: Mother
 }
 
@@ -228,6 +230,27 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_arrived ?? null])),
   )
   const [savingId, setSavingId] = useState<string | null>(null)
+  // סכום שמומש עבור הלידה — מוזן רק כשסומן "הגיעה" ונשלח לאישור
+  const [amountInput, setAmountInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount != null ? String(a.recovery_amount) : ''])),
+  )
+  const [amountStatus, setAmountStatus] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount_status ?? null])),
+  )
+  const [savingAmt, setSavingAmt] = useState<string | null>(null)
+  const sendAmount = async (aidId: string) => {
+    const amt = Number(amountInput[aidId])
+    if (!Number.isFinite(amt) || amt <= 0) return
+    setSavingAmt(aidId)
+    try {
+      const r = await fetch('/api/portal/recovery-amount', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home, aidId, amount: amt }),
+      })
+      if (r.ok) setAmountStatus(m => ({ ...m, [aidId]: 'pending' }))
+    } catch { /* נסיון חוזר אפשרי */ }
+    setSavingAmt(null)
+  }
   const markArrived = async (aidId: string, value: boolean | null) => {
     const prev = arrived[aidId] ?? null
     setArrived(m => ({ ...m, [aidId]: value })); setSavingId(aidId)
@@ -383,16 +406,41 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                           {(() => {
                             const a = arrived[aid.id] ?? null
                             const saving = savingId === aid.id
+                            const status = amountStatus[aid.id] ?? null
                             return (
-                              <div className={`flex items-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
-                                <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                  className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
-                                  <Check size={15} /> הגיעה
-                                </button>
-                                <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                  className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
-                                  <X size={15} /> לא הגיעה
-                                </button>
+                              <div className="flex flex-col gap-2">
+                                <div className={`flex items-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                                  <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                    <Check size={15} /> הגיעה
+                                  </button>
+                                  <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
+                                    className={`flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+                                    <X size={15} /> לא הגיעה
+                                  </button>
+                                </div>
+                                {/* שדה הסכום — מופיע רק אם סומן "הגיעה" */}
+                                {a === true && (
+                                  <div className="flex items-center gap-2 flex-wrap bg-emerald-50/60 border border-emerald-100 rounded-lg p-2">
+                                    <div className="relative">
+                                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₪</span>
+                                      <input
+                                        value={amountInput[aid.id] ?? ''}
+                                        onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
+                                        inputMode="decimal" placeholder="סכום שמומש"
+                                        className="w-32 pr-6 pl-2 py-1.5 text-sm rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                      />
+                                    </div>
+                                    <button type="button" onClick={() => sendAmount(aid.id)}
+                                      disabled={savingAmt === aid.id || !amountInput[aid.id]}
+                                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
+                                      {savingAmt === aid.id ? '...' : 'שלח לאישור'}
+                                    </button>
+                                    {status === 'pending' && <span className="text-xs font-medium text-amber-600">נשלח לאישור ✓</span>}
+                                    {status === 'approved' && <span className="text-xs font-medium text-green-600">אושר ✓</span>}
+                                    {status === 'rejected' && <span className="text-xs font-medium text-red-600">נדחה</span>}
+                                  </div>
+                                )}
                               </div>
                             )
                           })()}
