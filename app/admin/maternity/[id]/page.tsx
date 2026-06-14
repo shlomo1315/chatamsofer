@@ -284,22 +284,19 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   </span>
                 </div>
               )}
-              {aid.recovery_amount != null && (() => {
-                const st = aid.recovery_amount_status ?? 'pending'
-                const stMeta: Record<string, { label: string; cls: string }> = {
-                  pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-700' },
-                  approved: { label: 'אושר',          cls: 'bg-green-100 text-green-700' },
-                  rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-700' },
-                }
-                const sm = stMeta[st] ?? stMeta.pending
-                return (
-                  <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
-                    <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>
-                    <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
-                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${sm.cls}`}>{sm.label}</span>
-                  </div>
-                )
-              })()}
+              {aid.recovery_amount != null && (
+                <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>
+                  <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+                  {aid.recovery_amount_status === 'rejected' ? (
+                    <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">נדחה</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                      מומש{aid.recovery_amount_at ? ` בתאריך ${fmtDate(aid.recovery_amount_at)}` : ''}
+                    </span>
+                  )}
+                </div>
+              )}
             </Card>
           ),
         }] : []),

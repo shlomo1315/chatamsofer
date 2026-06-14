@@ -62,3 +62,25 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<numbe
   }
   return processed
 }
+
+// אישור כרטיס אוטומטי בעת אישור הלידה: אם יש מלאי — מאשר ומשייך מוקד ושולח שובר;
+// אם אין מלאי — מכניס לתור "ממתין למלאי". לא נוגע בכרטיס שכבר אושר/נטען.
+export async function autoApproveCard(admin: SupabaseClient, aidId: string): Promise<void> {
+  const { data: aid } = await admin.from('maternity_aids').select('id, card_status').eq('id', aidId).maybeSingle()
+  if (!aid) return
+  if (aid.card_status === 'approved' || aid.card_status === 'loaded') return
+  const avail = await centersAvailability(admin)
+  if (avail.length) {
+    const c = avail[0]
+    const { error } = await admin
+      .from('maternity_aids')
+      .update({ card_status: 'approved', card_center_id: c.id, updated_at: new Date().toISOString() })
+      .eq('id', aidId)
+    if (!error) await sendCardVoucher(admin, aidId, c.name)
+  } else {
+    await admin
+      .from('maternity_aids')
+      .update({ card_status: 'awaiting_stock', updated_at: new Date().toISOString() })
+      .eq('id', aidId)
+  }
+}

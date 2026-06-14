@@ -399,11 +399,11 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                     return (
                       <tr key={aid.id} className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
                         onClick={() => setSelected(aid)}>
-                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
-                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-700">{aid.baby_name ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap">{fmtDate(aid.birth_date)}</td>
-                        <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap align-middle text-center">{motherName(m)}</td>
+                        <td className="px-4 py-3.5 text-xs font-mono text-slate-500 ltr-num align-middle text-center">{m?.spouse_id_number ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap align-middle text-center">{aid.baby_name ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap align-middle text-center">{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5 align-middle text-center" onClick={e => e.stopPropagation()}>
                           {(() => {
                             const a = arrived[aid.id] ?? null
                             const saving = savingId === aid.id
@@ -465,7 +465,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                             )
                           })()}
                         </td>
-                        <td className="px-4 py-3.5">
+                        <td className="px-4 py-3.5 align-middle text-center">
                           <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
                             <ChevronLeft size={13} /> פרטים
                           </span>

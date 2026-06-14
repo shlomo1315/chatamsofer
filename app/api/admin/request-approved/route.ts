@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
+import { autoApproveCard } from '@/lib/maternityCards'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,12 @@ export async function POST(request: NextRequest) {
       .eq('id', ben.id)
     if (!upErr) promoted = true
     else console.error('[request-approved] promote failed:', upErr.message)
+  }
+
+  // 3. אישור לידה → אישור כרטיס מזון אוטומטי (טעינה/ממתין למלאי + שובר). לא חוסם.
+  if (type === 'maternity') {
+    try { await autoApproveCard(admin, id) }
+    catch (e) { console.error('[request-approved] auto card approve failed:', e) }
   }
 
   return NextResponse.json({ ok: true, promoted })
