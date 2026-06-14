@@ -149,6 +149,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   const toast = useToast()
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  // hover עם השהיה לסגירה — מאפשר להזיז את העכבר אל החלונית בלי שהיא תיעלם
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showHover = useCallback((id: string) => {
+    if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null }
+    setHovered(id)
+  }, [])
+  const scheduleHideHover = useCallback(() => {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setHovered(null), 280)
+  }, [])
   const [modal, setModal] = useState<ModalState>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
@@ -486,8 +496,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               <div
                 key={pos.node.id}
                 data-lin-node="1"
-                onMouseEnter={() => setHovered(pos.node.id)}
-                onMouseLeave={() => setHovered(prev => prev === pos.node.id ? null : prev)}
+                onMouseEnter={() => showHover(pos.node.id)}
+                onMouseLeave={scheduleHideHover}
                 onClick={e => { e.stopPropagation(); if (mergeMode) { onToggleMerge(pos.node.id); return } setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
                   position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
@@ -592,7 +602,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 {/* actions strip — מתחת לקובייה, גם בלחיצה וגם במעבר עכבר (hover) */}
                 {!mergeMode && (isSel || hovered === pos.node.id) && (
                   <div onClick={e => e.stopPropagation()}
-                    onMouseEnter={() => setHovered(pos.node.id)}
+                    onMouseEnter={() => showHover(pos.node.id)}
+                    onMouseLeave={scheduleHideHover}
                     style={{
                       // top:100% צמוד לתחתית הקוביה + padding-top שקוף כ"גשר" — כך המעבר עם העכבר לחלונית אינו מאבד את ה-hover
                       position: 'absolute', top: '100%', paddingTop: 12, left: '50%', transform: 'translateX(-50%)',

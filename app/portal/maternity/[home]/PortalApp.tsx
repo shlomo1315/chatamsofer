@@ -460,32 +460,41 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 </div>
                                 {/* שדה הסכום — מופיע רק אם סומן "הגיעה" */}
                                 {a === true && (
-                                  <div className="flex items-center justify-center gap-2 flex-wrap bg-emerald-50/60 border border-emerald-100 rounded-lg p-2">
-                                    <div className="relative">
-                                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₪</span>
+                                  <div className="flex flex-col gap-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 w-full max-w-sm mx-auto">
+                                    <label className="flex flex-col gap-1.5 text-right">
+                                      <span className="text-sm font-semibold text-slate-600">סכום שמומש (₪)</span>
+                                      <div className="relative">
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">₪</span>
+                                        <input
+                                          value={amountInput[aid.id] ?? ''}
+                                          onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
+                                          inputMode="decimal" placeholder="0"
+                                          className="w-full pr-8 pl-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                        />
+                                      </div>
+                                    </label>
+                                    <label className="flex flex-col gap-1.5 text-right">
+                                      <span className="text-sm font-semibold text-slate-600">מספר לילות</span>
                                       <input
-                                        value={amountInput[aid.id] ?? ''}
-                                        onChange={e => setAmountInput(m => ({ ...m, [aid.id]: e.target.value.replace(/[^\d.]/g, '') }))}
-                                        inputMode="decimal" placeholder="סכום שמומש"
-                                        className="w-28 pr-6 pl-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        value={nightsInput[aid.id] ?? ''}
+                                        onChange={e => setNightsInput(m => ({ ...m, [aid.id]: e.target.value.replace(/\D/g, '') }))}
+                                        inputMode="numeric" placeholder="0"
+                                        className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                       />
-                                    </div>
-                                    <input
-                                      value={nightsInput[aid.id] ?? ''}
-                                      onChange={e => setNightsInput(m => ({ ...m, [aid.id]: e.target.value.replace(/\D/g, '') }))}
-                                      inputMode="numeric" placeholder="מס׳ לילות"
-                                      className="w-24 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                                    />
-                                    <input
-                                      value={receiptInput[aid.id] ?? ''}
-                                      onChange={e => setReceiptInput(m => ({ ...m, [aid.id]: e.target.value }))}
-                                      inputMode="text" placeholder="מספר קבלה"
-                                      className="w-28 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
-                                    />
+                                    </label>
+                                    <label className="flex flex-col gap-1.5 text-right">
+                                      <span className="text-sm font-semibold text-slate-600">מספר קבלה</span>
+                                      <input
+                                        value={receiptInput[aid.id] ?? ''}
+                                        onChange={e => setReceiptInput(m => ({ ...m, [aid.id]: e.target.value }))}
+                                        inputMode="text" placeholder="הזן/י מספר קבלה"
+                                        className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                      />
+                                    </label>
                                     <button type="button" onClick={() => sendAmount(aid.id)}
                                       disabled={savingAmt === aid.id || !amountInput[aid.id] || !(receiptInput[aid.id] ?? '').trim()}
                                       title={!(receiptInput[aid.id] ?? '').trim() ? 'יש להזין מספר קבלה' : undefined}
-                                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
+                                      className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
                                       {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
                                     </button>
                                   </div>
