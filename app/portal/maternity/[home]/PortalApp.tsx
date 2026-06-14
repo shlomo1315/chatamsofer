@@ -423,9 +423,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                       <tr className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
                         onClick={() => setSelected(aid)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center align-middle">{motherName(m)}</td>
-                        <td className="px-4 py-3.5 font-mono text-slate-500 ltr-num text-center align-middle">{m?.spouse_id_number ?? '—'}</td>
+                        <td className="px-4 py-3.5 font-mono text-slate-500 text-center align-middle"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                         <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">{aid.baby_name ?? '—'}</td>
-                        <td className="px-4 py-3.5 text-slate-600 ltr-num whitespace-nowrap text-center align-middle">{fmtDate(aid.birth_date)}</td>
+                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap text-center align-middle"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
                         <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                           {status && !editing ? (
                             <div className="flex flex-col items-center gap-1.5">
