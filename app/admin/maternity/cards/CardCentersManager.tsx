@@ -1,8 +1,12 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Pencil, Trash2, Check, X, Loader2, Warehouse } from 'lucide-react'
+import { Plus, Pencil, Trash2, Loader2, Warehouse, X, MapPin } from 'lucide-react'
 import type { CardCenter } from '@/types'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import CityStreetPicker from '@/components/ui/CityStreetPicker'
+
+type Draft = { id?: string; name: string; stock: string; city: string; address: string }
+const emptyDraft: Draft = { name: '', stock: '', city: '', address: '' }
 
 export default function CardCentersManager() {
   const { confirm, confirmDialog } = useConfirm()
@@ -10,11 +14,7 @@ export default function CardCentersManager() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const [newName, setNewName] = useState('')
-  const [newStock, setNewStock] = useState('')
-  const [editId, setEditId] = useState<string | null>(null)
-  const [editStock, setEditStock] = useState('')
-  const [editName, setEditName] = useState('')
+  const [modal, setModal] = useState<Draft | null>(null) // null=closed; id present=edit, else add
 
   const load = useCallback(async () => {
     try {
@@ -26,29 +26,23 @@ export default function CardCentersManager() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  const apply = (d: { centers?: CardCenter[]; error?: string }) => {
-    if (d.error) { setErr(d.error); return false }
-    setCenters(d.centers ?? []); setErr(''); return true
+  const save = async () => {
+    if (!modal || !modal.name.trim()) { setErr('שם המוקד חובה'); return }
+    setBusy(true); setErr('')
+    const method = modal.id ? 'PATCH' : 'POST'
+    const body = { id: modal.id, name: modal.name, stock: modal.stock, city: modal.city, address: modal.address }
+    const r = await fetch('/api/admin/card-centers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const d = await r.json()
+    if (d.error) { setErr(d.error) } else { setCenters(d.centers ?? []); setModal(null) }
+    setBusy(false)
   }
 
-  const add = async () => {
-    if (!newName.trim()) return
-    setBusy(true); setErr('')
-    const r = await fetch('/api/admin/card-centers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName, stock: newStock }) })
-    if (apply(await r.json())) { setNewName(''); setNewStock('') }
-    setBusy(false)
-  }
-  const saveEdit = async (id: string) => {
-    setBusy(true); setErr('')
-    const r = await fetch('/api/admin/card-centers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name: editName, stock: editStock }) })
-    if (apply(await r.json())) setEditId(null)
-    setBusy(false)
-  }
   const remove = async (c: CardCenter) => {
     if (!(await confirm({ title: 'מחיקת מוקד', message: `למחוק את המוקד "${c.name}"?`, confirmLabel: 'מחיקה', danger: true }))) return
     setBusy(true); setErr('')
     const r = await fetch(`/api/admin/card-centers?id=${c.id}`, { method: 'DELETE' })
-    apply(await r.json())
+    const d = await r.json()
+    if (d.error) setErr(d.error); else setCenters(d.centers ?? [])
     setBusy(false)
   }
 
@@ -57,11 +51,19 @@ export default function CardCentersManager() {
   const totApproved = centers.reduce((s, c) => s + (c.approved ?? 0), 0)
   const totRemaining = totStock - totLoaded
 
+  const fullAddress = (c: CardCenter) => [c.address, c.city].filter(Boolean).join(', ')
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Warehouse size={18} className="text-emerald-600" />
-        <h2 className="font-semibold text-slate-900">מוקדי כרטיסים ומלאי</h2>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <div className="flex items-center gap-2">
+          <Warehouse size={18} className="text-emerald-600" />
+          <h2 className="font-semibold text-slate-900">מוקדי כרטיסים ומלאי</h2>
+        </div>
+        <button onClick={() => { setErr(''); setModal({ ...emptyDraft }) }}
+          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg px-4 py-2">
+          <Plus size={15} /> הוסף מוקד
+        </button>
       </div>
 
       {/* סיכום מלאי */}
@@ -79,53 +81,97 @@ export default function CardCentersManager() {
         ))}
       </div>
 
-      {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+      {err && !modal && <p className="text-sm text-red-600 mb-3">{err}</p>}
 
       {loading ? (
         <div className="flex items-center gap-2 text-slate-400 text-sm py-4"><Loader2 size={15} className="animate-spin" /> טוען מוקדים…</div>
+      ) : centers.length === 0 ? (
+        <p className="text-sm text-slate-400 py-3 text-center">אין מוקדים עדיין. לחץ "הוסף מוקד" כדי להתחיל.</p>
       ) : (
-        <div className="flex flex-col gap-2">
-          {centers.map(c => {
-            const remaining = c.remaining ?? 0
-            const available = c.available ?? 0
-            return (
-              <div key={c.id} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-2.5">
-                {editId === c.id ? (
-                  <>
-                    <input value={editName} onChange={e => setEditName(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-slate-500">מלאי</span>
-                      <input type="number" min="0" value={editStock} onChange={e => setEditStock(e.target.value)} className="w-20 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-center" />
-                    </div>
-                    <button onClick={() => saveEdit(c.id)} disabled={busy} className="text-green-600 hover:bg-green-50 rounded-lg p-1.5"><Check size={16} /></button>
-                    <button onClick={() => setEditId(null)} className="text-slate-400 hover:bg-slate-100 rounded-lg p-1.5"><X size={16} /></button>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex-1 min-w-0 font-medium text-slate-800 truncate">{c.name}</span>
-                    <div className="flex items-center gap-2 text-xs flex-shrink-0">
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">מלאי {c.stock}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">אושרו {c.approved ?? 0}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-green-50 text-green-700">נטענו {c.loaded ?? 0}</span>
-                      <span className={`px-2 py-0.5 rounded-full font-bold ${remaining > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>נשאר {remaining}</span>
-                      <span className={`px-2 py-0.5 rounded-full ${available > 0 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400'}`}>פנוי לאישור {available}</span>
-                    </div>
-                    <button onClick={() => { setEditId(c.id); setEditName(c.name); setEditStock(String(c.stock)) }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5 flex-shrink-0"><Pencil size={15} /></button>
-                    <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5 flex-shrink-0"><Trash2 size={15} /></button>
-                  </>
-                )}
-              </div>
-            )
-          })}
-          {centers.length === 0 && <p className="text-sm text-slate-400 py-2">אין מוקדים עדיין. הוסף מוקד ראשון למטה.</p>}
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-[16px] text-right border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b-2 border-slate-200 text-[15px] font-bold text-slate-600">
+                <th className="px-5 py-4 font-bold border-l border-slate-200">שם המוקד</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">כתובת</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">מלאי</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">אושרו</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">נטענו</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">נשאר</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">פנוי לאישור</th>
+                <th className="px-5 py-4 font-bold">פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {centers.map(c => {
+                const remaining = c.remaining ?? 0
+                const available = c.available ?? 0
+                return (
+                  <tr key={c.id} className="border-b border-slate-100 hover:bg-emerald-50/30">
+                    <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{c.name}</td>
+                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">
+                      {fullAddress(c) ? (
+                        <span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-slate-400" />{fullAddress(c)}</span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{c.stock}</td>
+                    <td className="px-5 py-4 text-blue-700 border-l border-slate-100">{c.approved ?? 0}</td>
+                    <td className="px-5 py-4 text-green-700 border-l border-slate-100">{c.loaded ?? 0}</td>
+                    <td className={`px-5 py-4 font-bold border-l border-slate-100 ${remaining > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{remaining}</td>
+                    <td className={`px-5 py-4 border-l border-slate-100 ${available > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{available}</td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '' }) }}
+                          className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
+                        <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-          {/* הוספת מוקד */}
-          <div className="flex items-center gap-2 mt-2 pt-3 border-t border-slate-100">
-            <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()} placeholder="שם מוקד חדש…" className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-            <input type="number" min="0" value={newStock} onChange={e => setNewStock(e.target.value)} placeholder="מלאי" className="w-24 rounded-lg border border-slate-300 px-2 py-2 text-sm text-center" />
-            <button onClick={add} disabled={busy || !newName.trim()} className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-4 py-2">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={15} />} הוסף
-            </button>
+      {/* מודאל הוספה/עריכה */}
+      {modal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={() => setModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">{modal.id ? 'עריכת מוקד' : 'הוספת מוקד'}</h3>
+              <button onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">שם המוקד <span className="text-red-500">*</span></label>
+                <input value={modal.name} onChange={e => setModal(m => m && { ...m, name: e.target.value })}
+                  className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="שם המוקד…" autoFocus />
+              </div>
+
+              <CityStreetPicker
+                city={modal.city}
+                address={modal.address}
+                onCityChange={city => setModal(m => m && { ...m, city })}
+                onAddressChange={address => setModal(m => m && { ...m, address })}
+              />
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">מלאי כרטיסים</label>
+                <input type="number" min="0" value={modal.stock} onChange={e => setModal(m => m && { ...m, stock: e.target.value })}
+                  className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="0" />
+              </div>
+
+              {err && <p className="text-sm text-red-600">{err}</p>}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>
+                <button onClick={save} disabled={busy || !modal.name.trim()}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-5 py-2">
+                  {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} {modal.id ? 'שמירה' : 'הוסף'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
