@@ -1,8 +1,8 @@
-import { Download } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import ReportsCharts from './ReportsChartsLazy'
+import ReportBuilder from './ReportBuilder'
 
 async function getReportData() {
   if (!isSupabaseConfigured()) {
@@ -55,12 +55,10 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="דוחות וניתוח נתונים" subtitle="סטטיסטיקות ומגמות">
-        <button className="flex items-center gap-2 text-sm text-slate-600 border border-slate-300 rounded-lg px-4 py-2 hover:bg-slate-50 transition-colors">
-          <Download size={16} />
-          ייצוא דוח
-        </button>
-      </PageHeader>
+      <PageHeader title="דוחות וניתוח נתונים" subtitle="סטטיסטיקות, מגמות ובונה דוחות להורדה" />
+
+      {/* בונה דוחות יולדות — סינון לפי תאריכים/סכומים/בתי החלמה/כרטיסים + הורדה */}
+      <ReportBuilder />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
