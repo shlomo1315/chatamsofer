@@ -17,16 +17,25 @@ const motherName = (b?: Ben) => b ? ([b.family_name, b.spouse_name || b.full_nam
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 const ils = (n?: number | null) => (n == null ? '—' : `₪${Number(n).toLocaleString('he-IL')}`)
 
-// ספירה לאחור לפריקה אוטומטית (פריקה בחצות של יום six_weeks_end) — מציג שעות כשנותר פחות מיום
+// ספירה לאחור לפריקה אוטומטית (רצה בחצות שעון ישראל). כשהפריקה היום/באיחור — מציג שעות ודקות עד החצות הקרובה.
 function unloadCountdown(sixWeeksEnd?: string): { text: string; cls: string } | null {
   if (!sixWeeksEnd) return null
+  const now = new Date()
   const end = new Date(sixWeeksEnd); end.setHours(0, 0, 0, 0)
-  const ms = end.getTime() - Date.now()
-  if (ms <= 0) return { text: 'לפריקה היום', cls: 'bg-red-100 text-red-700' }
+  const ms = end.getTime() - now.getTime()
+  if (ms <= 0) {
+    // יום הסיום הגיע/עבר → הפריקה תתבצע בחצות הקרובה. מציג שעות ודקות עד אז.
+    const nextMidnight = new Date(now); nextMidnight.setHours(24, 0, 0, 0)
+    const rem = nextMidnight.getTime() - now.getTime()
+    const h = Math.floor(rem / 3600000)
+    const m = Math.floor((rem % 3600000) / 60000)
+    return { text: h > 0 ? `פריקה בעוד ${h} שע׳ ${m} דק׳` : `פריקה בעוד ${m} דק׳`, cls: 'bg-red-100 text-red-700' }
+  }
   const days = Math.ceil(ms / 86400000)
   if (days <= 1) {
-    const hours = Math.max(1, Math.ceil(ms / 3600000))
-    return { text: `עוד ~${hours} שע׳`, cls: 'bg-amber-100 text-amber-700' }
+    const h = Math.floor(ms / 3600000)
+    const m = Math.floor((ms % 3600000) / 60000)
+    return { text: h > 0 ? `עוד ${h} שע׳ ${m} דק׳` : `עוד ${m} דק׳`, cls: 'bg-amber-100 text-amber-700' }
   }
   return { text: `${days} ימים`, cls: days <= 7 ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600' }
 }
