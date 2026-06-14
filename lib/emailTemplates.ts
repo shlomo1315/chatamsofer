@@ -699,3 +699,38 @@ export function birthApprovedEmail(
     html: shell({ preheader: 'בקשת ההבראה ליולדת שלך אושרה.', accent: '#db2777', title: 'הבקשה אושרה', subtitle: 'היכל החתם סופר', body }),
   }
 }
+
+// ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
+export function maternityCardEmail(
+  b: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null },
+  opts: { centerName?: string | null } = {},
+): BuiltEmail {
+  const greet = b.full_name ?? [b.family_name, b.spouse_name].filter(Boolean).join(' ') ?? ''
+  const rows = [
+    detailRow('שם המשפחה', [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ')),
+    detailRow('מוקד החלוקה', opts.centerName),
+  ].join('')
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${greet}, כרטיס המזון אושר 🎉</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">✅ כרטיס המזון שלך אושר וזמין לאיסוף.</p>
+      </td></tr>
+    </table>
+    ${opts.centerName ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">להמשך התהליך:</p>
+        <p style="margin:6px 0 0;color:#1e3a8a;font-size:14px;line-height:1.7;">
+          ניתן לאסוף את כרטיס המזון / השובר במוקד <strong>${opts.centerName}</strong>.
+        </p>
+      </td></tr>
+    </table>` : ''}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
+  `
+  return {
+    subject: '✅ כרטיס המזון אושר — היכל החתם סופר',
+    html: shell({ preheader: 'כרטיס המזון שלך אושר וזמין לאיסוף.', accent: '#059669', title: 'כרטיס המזון אושר', subtitle: 'היכל החתם סופר', body }),
+  }
+}
