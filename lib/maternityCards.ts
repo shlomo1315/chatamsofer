@@ -1,6 +1,69 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from '@/lib/sendMail'
 import { maternityCardEmail } from '@/lib/emailTemplates'
+import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard } from '@/lib/nedarim'
+
+// סכום הטעינה הקבוע ליולדת בעת אישור הלידה
+export const MATERNITY_LOAD_AMOUNT = 600
+
+// בעת אישור לידה: לוודא שהמשפחה קיימת בנדרים (לפי ת.ז, אחרת להקים אותה), ולהטעין 600 ₪ לארנק.
+// שיוך הכרטיס הפיזי/מוקד נעשה בהמשך ידנית. best-effort — לא חוסם את אישור הלידה.
+export async function loadMaternityCardOnApproval(
+  admin: SupabaseClient, aidId: string, amount = MATERNITY_LOAD_AMOUNT,
+): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; error?: string; clientId?: string | null }> {
+  const creds = await getNedarimCreds()
+  if (!creds) return { ok: false, notConfigured: true }
+
+  const { data: aid } = await admin
+    .from('maternity_aids')
+    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id')
+    .eq('id', aidId).maybeSingle()
+  if (!aid) return { ok: false, error: 'התיק לא נמצא' }
+  if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
+
+  const { data: b } = await admin
+    .from('beneficiaries')
+    .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
+    .eq('id', aid.beneficiary_id).maybeSingle()
+  if (!b) return { ok: false, error: 'המשפחה לא נמצאה' }
+
+  // 1) איתור/הקמת המשפחה בנדרים לפי ת.ז
+  let clientId = b.nedarim_id ? String(b.nedarim_id) : null
+  try {
+    if (!clientId && b.id_number) clientId = await findClientByZeout(creds, String(b.id_number))
+    if (!clientId) clientId = await saveClientCard(creds, b)
+    if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים' } }
+  if (!clientId) return { ok: false, error: 'לא ניתן לאתר או להקים את המשפחה בנדרים' }
+
+  // 2) הטענת הזכאות
+  let result: Awaited<ReturnType<typeof addTlush>>
+  try {
+    result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר')
+  } catch (e) {
+    await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: e instanceof Error ? e.message : String(e) }).eq('id', aid.id)
+    return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים', clientId }
+  }
+  if (!result.ok) {
+    await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: result.message }).eq('id', aid.id)
+    return { ok: false, error: result.message, clientId }
+  }
+
+  // 3) רענון יתרה ועדכון התיק
+  let newBalance = (Number(aid.card_balance) || 0) + amount
+  try { const card = await getClientCard(creds, clientId); if (card?.totalFreeAmount != null) newBalance = card.totalFreeAmount } catch { /* אומדן */ }
+  await admin.from('maternity_aids').update({
+    card_status: 'loaded',
+    card_load_status: 'loaded',
+    card_tlush_id: result.tlushId,
+    card_load_amount: amount,
+    card_loaded_at: new Date().toISOString(),
+    card_balance: newBalance,
+    card_load_error: null,
+  }).eq('id', aid.id)
+
+  return { ok: true, clientId }
+}
 
 // שולח ליולדת מייל "כרטיס מזון אושר / שובר" (best-effort)
 export async function sendCardVoucher(admin: SupabaseClient, aidId: string, centerName?: string | null) {
