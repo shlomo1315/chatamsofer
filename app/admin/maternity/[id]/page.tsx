@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
+import Collapsible from '@/components/ui/Collapsible'
 import { StatusControl } from '../MaternityTable'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
@@ -116,20 +117,19 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
 
       {/* כרטסת המשפחה — כל הפרטים, סדר הדורות וקישור לכרטסת המלאה */}
       {ben && (
-        <Card className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-indigo-600">
-              <User size={16} />
-              <span className="text-xs font-semibold text-slate-500 uppercase">כרטסת המשפחה</span>
-            </div>
+        <Collapsible
+          title="כרטסת המשפחה"
+          icon={<User size={16} className="text-indigo-600" />}
+          headerRight={
             <Link
               href={`/admin/beneficiaries/${ben.id}`}
               className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
             >
               לכרטסת המלאה <ExternalLink size={13} />
             </Link>
-          </div>
-
+          }
+        >
+          <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
             <div className="space-y-2">
               <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
@@ -184,7 +184,8 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               )}
             </div>
           )}
-        </Card>
+          </div>
+        </Collapsible>
       )}
 
       {/* תכתובות מייל — לשונית מתקפלת שנפתחת בלחיצה */}
@@ -230,17 +231,19 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           {(() => {
             const cs = aid.card_status ?? 'pending'
             const meta: Record<string, { label: string; cls: string }> = {
-              pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-800' },
-              approved: { label: 'אושר',          cls: 'bg-blue-100 text-blue-800' },
-              loaded:   { label: 'נטען',           cls: 'bg-green-100 text-green-800' },
-              rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-800' },
+              pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800' },
+              approved:       { label: 'אושר',              cls: 'bg-blue-100 text-blue-800' },
+              awaiting_stock: { label: 'אושר — ממתין למלאי', cls: 'bg-orange-100 text-orange-800' },
+              loaded:         { label: 'נטען',              cls: 'bg-green-100 text-green-800' },
+              rejected:       { label: 'נדחה',              cls: 'bg-red-100 text-red-800' },
             }
+            const m = meta[cs] ?? meta.pending
             const center = (aid as { card_center?: { name?: string } }).card_center
             return (
               <>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-500 text-sm">סטטוס:</span>
-                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${meta[cs].cls}`}>{meta[cs].label}</span>
+                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${m.cls}`}>{m.label}</span>
                 </div>
                 {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
                 {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
@@ -262,6 +265,30 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <div className="text-sm">
             <span className="text-slate-500">שם: </span>{aid.recovery_home}
           </div>
+          {aid.recovery_arrived != null && (
+            <div className="text-sm mt-2">
+              <span className="text-slate-500">הגעה: </span>
+              <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${aid.recovery_arrived ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-600'}`}>
+                {aid.recovery_arrived ? 'הגיעה' : 'לא הגיעה'}
+              </span>
+            </div>
+          )}
+          {aid.recovery_amount != null && (() => {
+            const st = aid.recovery_amount_status ?? 'pending'
+            const stMeta: Record<string, { label: string; cls: string }> = {
+              pending:  { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-700' },
+              approved: { label: 'אושר',          cls: 'bg-green-100 text-green-700' },
+              rejected: { label: 'נדחה',           cls: 'bg-red-100 text-red-700' },
+            }
+            const sm = stMeta[st] ?? stMeta.pending
+            return (
+              <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
+                <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>
+                <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${sm.cls}`}>{sm.label}</span>
+              </div>
+            )
+          })()}
         </Card>
       )}
 

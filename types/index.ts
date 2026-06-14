@@ -141,6 +141,9 @@ export interface MaternityAid {
   recovery_arrived?: boolean | null
   recovery_arrived_at?: string
   recovery_arrived_by?: string
+  recovery_amount?: number
+  recovery_amount_status?: string
+  recovery_amount_at?: string
   status: MaternityStatus
   card_status?: CardStatus
   card_center_id?: string
