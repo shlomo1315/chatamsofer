@@ -14,7 +14,7 @@ function getAdminClient() {
 
 // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
 export async function POST(request: NextRequest) {
-  const { home, aidId, amount, nights } = await request.json()
+  const { home, aidId, amount, nights, receiptNumber } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   const amt = Number(amount)
   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
   if (nightsNum != null && (!Number.isInteger(nightsNum) || nightsNum < 0)) {
     return NextResponse.json({ error: 'מספר לילות לא תקין' }, { status: 400 })
   }
+  const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
+  if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
 
   const cookieStore = await cookies()
   if (cookieStore.get(portalCookieName(home))?.value !== '1') {
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
   const { error } = await admin.from('maternity_aids').update({
     recovery_amount: amt,
     recovery_nights: nightsNum,
+    recovery_receipt_number: receipt,
     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
     recovery_amount_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

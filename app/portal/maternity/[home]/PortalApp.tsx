@@ -33,6 +33,7 @@ interface Aid {
   recovery_amount?: number | null
   recovery_amount_status?: string | null
   recovery_nights?: number | null
+  recovery_receipt_number?: string | null
   beneficiary?: Mother
 }
 
@@ -241,16 +242,21 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [nightsInput, setNightsInput] = useState<Record<string, string>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : ''])),
   )
+  const [receiptInput, setReceiptInput] = useState<Record<string, string>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_number ?? ''])),
+  )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
   const sendAmount = async (aidId: string) => {
     const amt = Number(amountInput[aidId])
     if (!Number.isFinite(amt) || amt <= 0) return
+    const receipt = (receiptInput[aidId] ?? '').trim()
+    if (!receipt) return
     setSavingAmt(aidId)
     try {
       const r = await fetch('/api/portal/recovery-amount', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ home, aidId, amount: amt, nights: nightsInput[aidId] || null }),
+        body: JSON.stringify({ home, aidId, amount: amt, nights: nightsInput[aidId] || null, receiptNumber: receipt }),
       })
       if (r.ok) { setAmountStatus(m => ({ ...m, [aidId]: 'pending' })); setEditingAmt(m => ({ ...m, [aidId]: false })) }
     } catch { /* נסיון חוזר אפשרי */ }
@@ -421,7 +427,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
                                     <Check size={15} className="text-emerald-600" />
                                     <span className="text-sm font-semibold text-emerald-800">
-                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
+                                      היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}{receiptInput[aid.id] ? ` · קבלה ${receiptInput[aid.id]}` : ''}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -464,8 +470,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                       inputMode="numeric" placeholder="מס׳ לילות"
                                       className="w-24 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                     />
+                                    <input
+                                      value={receiptInput[aid.id] ?? ''}
+                                      onChange={e => setReceiptInput(m => ({ ...m, [aid.id]: e.target.value }))}
+                                      inputMode="text" placeholder="מספר קבלה"
+                                      className="w-28 px-2 py-1.5 text-sm text-center rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                    />
                                     <button type="button" onClick={() => sendAmount(aid.id)}
-                                      disabled={savingAmt === aid.id || !amountInput[aid.id]}
+                                      disabled={savingAmt === aid.id || !amountInput[aid.id] || !(receiptInput[aid.id] ?? '').trim()}
+                                      title={!(receiptInput[aid.id] ?? '').trim() ? 'יש להזין מספר קבלה' : undefined}
                                       className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-lg px-3 py-1.5">
                                       {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
                                     </button>
