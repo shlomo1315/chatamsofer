@@ -357,7 +357,8 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
                         <span className="text-slate-500">נותר {ils(t.FreeAmount)}</span>
                         {t.Expiration && <span className="text-xs text-slate-400 mr-2">תפוגה {t.Expiration}</span>}
                       </div>
-                      {t.TlushId && (
+                      {/* כפתור פריקה רק לטעינה שנותר בה סכום כלשהו */}
+                      {t.TlushId && Number(String(t.FreeAmount ?? '').replace(/[^\d.-]/g, '')) > 0 && (
                         <button onClick={() => unload(String(t.TlushId))} disabled={busy === 'unload' + t.TlushId}
                           className="text-sm font-semibold text-white bg-red-500 hover:bg-red-600 disabled:bg-red-300 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg flex-shrink-0">
                           {busy === 'unload' + t.TlushId ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} פריקה
@@ -576,11 +577,16 @@ function WalletSummary({ stats, loading, total, familiesCount }: { stats: Stats 
 // חיווי ימים שנותרו עד פריקה אוטומטית (6 שבועות מהלידה)
 function UnloadCell({ info }: { info?: { unloadDate: string; daysRemaining: number } }) {
   if (!info) return <span className="text-slate-300">—</span>
-  const d = info.daysRemaining
-  const cls = d <= 0 ? 'bg-red-100 text-red-700' : d <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-  const label = d <= 0 ? 'לפריקה היום' : d === 1 ? 'יום אחד' : `${d} ימים`
+  // פריקה בחצות של יום unloadDate — כשנותר פחות מיום מציגים שעות
+  const end = new Date(info.unloadDate); end.setHours(0, 0, 0, 0)
+  const ms = end.getTime() - Date.now()
+  const days = Math.ceil(ms / 86400000)
+  let label: string, cls: string
+  if (ms <= 0) { label = 'לפריקה היום'; cls = 'bg-red-100 text-red-700' }
+  else if (days <= 1) { label = `עוד ~${Math.max(1, Math.ceil(ms / 3600000))} שע׳`; cls = 'bg-amber-100 text-amber-700' }
+  else { label = `${days} ימים`; cls = days <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700' }
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[15px] font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
       {label}
     </span>
   )
