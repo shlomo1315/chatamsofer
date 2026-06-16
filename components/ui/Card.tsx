@@ -1,10 +1,13 @@
 import { ReactNode } from 'react'
 import Link from 'next/link'
 
+type AccentColor = 'indigo' | 'violet' | 'blue' | 'emerald' | 'amber' | 'red'
+
 interface CardProps {
   children: ReactNode
   className?: string
   padding?: 'none' | 'sm' | 'md' | 'lg'
+  accent?: AccentColor
 }
 
 interface StatCardProps {
@@ -17,29 +20,53 @@ interface StatCardProps {
   href?: string
 }
 
-export default function Card({ children, className = '', padding = 'md' }: CardProps) {
+const accentBorder: Record<AccentColor, string> = {
+  indigo:  'border-t-[3px] border-t-indigo-500',
+  violet:  'border-t-[3px] border-t-violet-500',
+  blue:    'border-t-[3px] border-t-blue-500',
+  emerald: 'border-t-[3px] border-t-emerald-500',
+  amber:   'border-t-[3px] border-t-amber-500',
+  red:     'border-t-[3px] border-t-red-500',
+}
+
+export default function Card({ children, className = '', padding = 'md', accent }: CardProps) {
   const padClasses = { none: '', sm: 'p-4', md: 'p-5', lg: 'p-6' }
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${padClasses[padding]} ${className}`}>
+    <div
+      className={`
+        bg-white rounded-xl border border-zinc-200
+        shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)]
+        ${accent ? accentBorder[accent] : ''}
+        ${padClasses[padding]}
+        ${className}
+      `}
+    >
       {children}
     </div>
   )
 }
 
-export function StatCard({ title, value, subtitle, icon, iconBg = 'bg-indigo-50', trend, href }: StatCardProps) {
+export function StatCard({ title, value, subtitle, icon, iconBg, trend, href }: StatCardProps) {
+  const iconContainer = iconBg ?? 'bg-gradient-to-br from-indigo-500 to-violet-600'
+  const iconEl = (
+    <div className={`flex-shrink-0 rounded-xl p-3 ${iconContainer} flex items-center justify-center`}>
+      <span className="[&>svg]:text-white [&>svg]:stroke-white">{icon}</span>
+    </div>
+  )
+
   const inner = (
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-500 truncate">{title}</p>
-        <p className="mt-1 text-2xl font-bold text-slate-900 ltr-num">{value}</p>
-        {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
+        <p className="text-sm font-medium text-zinc-500 truncate">{title}</p>
+        <p className="mt-1 text-2xl font-bold text-zinc-900 ltr-num">{value}</p>
+        {subtitle && <p className="mt-1 text-xs text-zinc-500">{subtitle}</p>}
         {trend && (
-          <p className={`mt-1 text-xs font-medium ${trend.value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          <p className={`mt-1 text-xs font-medium ${trend.value >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
             {trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value)}% {trend.label}
           </p>
         )}
       </div>
-      <div className={`flex-shrink-0 rounded-xl p-3 ${iconBg}`}>{icon}</div>
+      {iconEl}
     </div>
   )
 
@@ -47,16 +74,16 @@ export function StatCard({ title, value, subtitle, icon, iconBg = 'bg-indigo-50'
     return (
       <Link
         href={href}
-        className="block bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-indigo-300 hover:shadow-md transition-all group"
+        className="block bg-white rounded-xl border border-zinc-200 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] p-5 hover:border-blue-300 hover:shadow-md transition-all group"
       >
         {inner}
-        <p className="mt-2 text-xs text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">לחץ לצפייה ←</p>
+        <p className="mt-2 text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">לחץ לצפייה ←</p>
       </Link>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-zinc-200 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] p-5">
       {inner}
     </div>
   )

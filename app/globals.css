@@ -5,18 +5,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-heebo);
 
-  --color-primary: #4f46e5;
-  --color-primary-dark: #4338ca;
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
   --color-surface: #ffffff;
-  --color-surface-alt: #f8fafc;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-surface-alt: #f5f4f8;
+  --color-border: #e4e4e7;
+  --color-text: #18181b;
+  --color-text-muted: #71717a;
 }
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #f5f4f8;
+  --foreground: #18181b;
 }
 
 * {
