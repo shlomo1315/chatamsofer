@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const {
     id_number, id_doc_type, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
-    spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
+    spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })
 
-  const cleanSpouseId = spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : ''
+  const isSpousePassport = String(spouse_id_doc_type ?? 'id') === 'passport'
+  const cleanSpouseId = spouse_id_number
+    ? (isSpousePassport ? String(spouse_id_number).trim() : String(spouse_id_number).replace(/\D/g, ''))
+    : ''
 
   // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות
   if (Array.isArray(children) && children.length) {
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
     birth_date: birth_date || null,
     gender: isMarried ? 'male' : (gender || null),
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
-    spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
+    spouse_id_number: cleanSpouseId || null,
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
     spouse_birth_date: spouse_birth_date || null,
     ...sharedFields,
