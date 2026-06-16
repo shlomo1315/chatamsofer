@@ -99,12 +99,12 @@ export default function DataTable<T extends { id: string }>({
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm text-right border-collapse">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="bg-slate-50 border-b-2 border-slate-200">
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
-                  className={`px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
+                  className={`bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
                   onClick={() => col.sortable && toggleSort(String(col.key))}
                 >
                   <div className="flex items-center gap-1">
@@ -115,7 +115,7 @@ export default function DataTable<T extends { id: string }>({
                   </div>
                 </th>
               ))}
-              {actions && <th className="px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center">פעולות</th>}
+              {actions && <th className="bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center">פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
