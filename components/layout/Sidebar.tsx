@@ -99,7 +99,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
       <Link key={href} href={href} onClick={() => setMobileOpen(false)}
         className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
           ${active
-            ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+            ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
             : 'text-slate-300 hover:text-white hover:bg-white/10'
           }`}>
         {active && (
@@ -113,8 +113,8 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo area with gradient separator */}
-      <div className="flex items-center gap-3 px-4 py-5">
+      {/* Logo area with gradient background */}
+      <div className="flex items-center gap-3 px-4 py-5 bg-gradient-to-b from-slate-800 to-slate-900">
         <LogoBadge />
         <div className="min-w-0">
           <p className="text-sm font-bold text-white leading-tight truncate">היכל החתם סופר</p>
@@ -122,12 +122,12 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         </div>
       </div>
       {/* Gradient fade separator */}
-      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent mb-1" />
+      <div className="mx-4 h-px bg-gradient-to-l from-transparent via-indigo-800/60 to-transparent mb-1" />
 
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
 
         {/* Section: ניווט ראשי */}
-        <p className="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
+        <p className="px-3 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
         {topVisible.map(renderLink)}
 
         {/* Maternity accordion */}
@@ -135,7 +135,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
           <div className="pt-0.5">
             <div className={`relative flex items-center rounded-lg transition-all
                 ${maternityRootActive
-                  ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                  ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
                 }`}>
               {maternityRootActive && (
@@ -175,7 +175,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         {/* Section divider: שירותים */}
         <div className="pt-3 pb-1">
           <div className="mx-1 h-px bg-slate-800 mb-2" />
-          <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
+          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
         </div>
         {bottomVisible.map(renderLink)}
 
@@ -185,7 +185,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             onClick={() => setMailOpen(o => !o)}
             className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
               ${mailActive
-                ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
                 : 'text-slate-300 hover:text-white hover:bg-white/10'
               }`}
           >
@@ -220,7 +220,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         {/* Section divider: מערכת */}
         <div className="pt-3 pb-1">
           <div className="mx-1 h-px bg-slate-800 mb-2" />
-          <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
+          <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
         </div>
 
         {/* Bottom items (הגדרות) */}
@@ -230,7 +230,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}
               className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
                 ${active
-                  ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-500/30'
+                  ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'
                 }`}>
               {active && (
