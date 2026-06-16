@@ -439,7 +439,9 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
 
   useEffect(() => {
     const deepestVerified = [...chain].reverse().find(c => !c.isNew && c.id)
-    const valid = chain.length >= 1 && selfAdded && !!selfRel && chain.every(c => c.relation)
+    // קשר (בן/חתן) נדרש רק לדורות שהנרשם הוסיף ידנית; דורות מאומתים מהעץ
+    // משתמשים בקשר שמוגדר בניהול (שעשוי להיות ריק) — אחרת אי אפשר להתקדם.
+    const valid = chain.length >= 1 && selfAdded && !!selfRel && chain.every(c => !c.isNew || !!c.relation)
     onChange({ valid, nodeId: deepestVerified?.id ?? null, ancestors: chain, selfRelation: selfRel })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chain, selfAdded, selfRel])
