@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import PendingTasksPanel from './PendingTasksPanel'
 
 interface DashData {
   totalBeneficiaries: number
@@ -158,15 +159,7 @@ export default async function DashboardPage() {
           color="blue"
           href="/admin/loans"
         />
-        <KpiCard
-          label="ממתינים לטיפול"
-          value={fmt(pendingTotal)}
-          sub="בקשות בכל האגפים"
-          subWarning={pendingTotal > 0}
-          icon={<Clock size={18} />}
-          color="amber"
-          href="/admin/beneficiaries?status=pending"
-        />
+        <PendingTasksPanel count={pendingTotal} />
         <KpiCard
           label="תיבת המייל"
           value="מייל"
