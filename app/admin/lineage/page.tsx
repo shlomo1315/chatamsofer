@@ -1026,30 +1026,6 @@ export default function LineagePage() {
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // ── ייבוא עץ הדורות המלא (235 צמתים) מקובץ האקסל המאושר ──
-  const [importing, setImporting] = useState(false)
-  const [importConfirm, setImportConfirm] = useState(false)
-  async function handleImport() {
-    setImporting(true)
-    try {
-      const res = await fetch('/api/admin/lineage/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ reset: true }),
-      })
-      const d = await res.json()
-      if (!res.ok || d.ok === false) {
-        toast.error(`שגיאה בייבוא: ${d.error ?? (d.errors?.length ? d.errors[0] : 'שגיאה לא ידועה')}`)
-      } else {
-        toast.success(`הייבוא הושלם · ${d.inserted} צמתים נוספו`)
-        setImportConfirm(false)
-        await loadAll()
-      }
-    } catch { toast.error('שגיאת רשת בייבוא') }
-    setImporting(false)
-  }
-
   const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
     const counts: Record<number, number> = {}
@@ -1142,11 +1118,6 @@ export default function LineagePage() {
           <button onClick={loadAll} disabled={loading} title="רענן"
             className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          </button>
-          <button onClick={() => setImportConfirm(true)} disabled={importing} title="ייבוא עץ הדורות המלא (235 צמתים) — מאפס את הקיים"
-            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm disabled:opacity-50"
-            style={{ background: '#fff', color: '#0E7490', border: '1px solid #A5F3FC' }}>
-            {importing ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : '⬇'} ייבוא 235 צמתים
           </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
@@ -1256,24 +1227,6 @@ export default function LineagePage() {
             <div style={{ display: 'flex', gap: 8 }}>
               <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* אישור ייבוא עץ הדורות המלא */}
-      {importConfirm && (
-        <Modal title="ייבוא עץ הדורות המלא" onClose={() => !importing && setImportConfirm(false)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.6 }}>
-              פעולה זו <strong style={{ color: '#DC2626' }}>תמחק את כל הצמתים הקיימים</strong> ותכניס מחדש את כל <strong style={{ color: '#0F172A' }}>235 הצמתים</strong> מקובץ האקסל המאושר (5 דורות).
-            </p>
-            <div style={{ background: '#ECFEFF', border: '1px solid #A5F3FC', borderRadius: 11, padding: '11px 14px', fontSize: 12, color: '#0E7490', lineHeight: 1.6 }}>
-              דור 1: 1 · דור 2: 6 · דור 3: 33 · דור 4: 72 · דור 5: 123
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="אפס וייבא הכל" color="#0891B2" onClick={handleImport} loading={importing} />
-              <MBtn label="ביטול" color="#94A3B8" onClick={() => setImportConfirm(false)} />
             </div>
           </div>
         </Modal>

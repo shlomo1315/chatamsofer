@@ -115,7 +115,7 @@ export default function DataTable<T extends { id: string }>({
                   </div>
                 </th>
               ))}
-              {actions && <th className="sticky left-0 z-20 bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center">פעולות</th>}
+              {actions && <th className="bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center">פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -127,7 +127,7 @@ export default function DataTable<T extends { id: string }>({
                       <div className="h-4 bg-slate-100 rounded-md animate-pulse" />
                     </td>
                   ))}
-                  {actions && <td className="sticky left-0 z-10 bg-white px-5 py-4 border-r border-slate-100"><div className="h-4 w-16 bg-slate-100 rounded-md animate-pulse mx-auto" /></td>}
+                  {actions && <td className="px-5 py-4"><div className="h-4 w-16 bg-slate-100 rounded-md animate-pulse mx-auto" /></td>}
                 </tr>
               ))
             ) : paged.length === 0 ? (
@@ -152,7 +152,7 @@ export default function DataTable<T extends { id: string }>({
                     </td>
                   ))}
                   {actions && (
-                    <td className="sticky left-0 z-10 bg-white px-5 py-3.5 align-middle text-center border-r border-slate-100" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
+                    <td className="px-5 py-3.5 align-middle text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
                   )}
                 </tr>
               ))
