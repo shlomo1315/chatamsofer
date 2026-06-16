@@ -791,6 +791,7 @@ export default function PublicPortalPage() {
   const [idInput, setIdInput] = useState('')
   const [docType, setDocType] = useState<'id' | 'passport'>('id')
   const [regDocType, setRegDocType] = useState<'id' | 'passport'>('id')
+  const [spouseDocType, setSpouseDocType] = useState<'id' | 'passport'>('id')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
@@ -1088,18 +1089,21 @@ export default function PublicPortalPage() {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
     if (showSpouseFields && regForm.spouse_id_number) {
-      if (!validateIsraeliId(regForm.spouse_id_number)) {
+      if (spouseDocType === 'id' && !validateIsraeliId(regForm.spouse_id_number)) {
         setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
       }
-      if (regForm.spouse_id_number.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
-        setSpouseIdError('תעודת הזהות של האישה זהה לתעודת הזהות של הבעל'); setError('אנא תקן את שגיאות הטופס'); return
+      const sIdClean = spouseDocType === 'passport' ? regForm.spouse_id_number.trim() : regForm.spouse_id_number.replace(/\D/g, '')
+      const hIdClean = regDocType === 'passport' ? regForm.id_number.trim() : regForm.id_number.replace(/\D/g, '')
+      if (sIdClean === hIdClean) {
+        setSpouseIdError('המספר שהזנת זהה לזה של הבעל'); setError('אנא תקן את שגיאות הטופס'); return
       }
       // Check if spouse ID already exists in DB
       try {
-        const chkRes = await fetch(`/api/portal/lookup?id=${regForm.spouse_id_number.replace(/\D/g, '')}`)
+        const chkParam = spouseDocType === 'passport' ? `passport=${encodeURIComponent(sIdClean)}` : `id=${sIdClean}`
+        const chkRes = await fetch(`/api/portal/lookup?${chkParam}`)
         const chkData = await chkRes.json()
         if (chkData.found) {
-          setSpouseIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב'); setError('אנא תקן את שגיאות הטופס'); return
+          setSpouseIdError('מספר זה כבר רשום במערכת — לא ניתן לרשום אותו שוב'); setError('אנא תקן את שגיאות הטופס'); return
         }
       } catch { /* network error — continue */ }
     }
@@ -1117,6 +1121,8 @@ export default function PublicPortalPage() {
     if (regForm.email && !validateEmail(regForm.email)) {
       setEmailError('אנא הזן כתובת מייל תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
+    if (!regForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    if (showSpouseFields && !regForm.spouse_birth_date) { setError('אנא הזן תאריך לידה של האשה'); return }
     if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
     setError('')
     setLoading(true)
@@ -1160,6 +1166,7 @@ export default function PublicPortalPage() {
           past_benefits: pastBenefits,
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
           spouse_id_number: showSpouseFields ? regForm.spouse_id_number : null,
+          spouse_id_doc_type: showSpouseFields ? spouseDocType : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
           spouse_birth_date: showSpouseFields ? (regForm.spouse_birth_date || null) : null,
         }),
@@ -1522,6 +1529,7 @@ export default function PublicPortalPage() {
     setIdInput('')
     setError('')
     setRegDocType('id')
+    setSpouseDocType('id')
     setBeneficiary(null)
     setPendingConfirmed(false)
     setExistingDocs({})
@@ -1867,7 +1875,7 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="תאריך לידה">
+                    <Field label="תאריך לידה" required>
                       <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday />
                     </Field>
                   </div>
@@ -1885,22 +1893,33 @@ export default function PublicPortalPage() {
                       </Field>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <Field label='תעודת זהות' required>
+                      <div className="flex rounded-xl border border-slate-200 overflow-hidden mb-2">
+                        {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                          <button key={v} type="button"
+                            onClick={() => { setSpouseDocType(v); setReg('spouse_id_number')({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>); setSpouseIdError('') }}
+                            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${spouseDocType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                          >{l}</button>
+                        ))}
+                      </div>
+                      <Field label={spouseDocType === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
                         <TextInput
                           value={regForm.spouse_id_number}
                           onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
                           onBlur={() => {
                             const sid = regForm.spouse_id_number.trim()
                             if (!sid) { setSpouseIdError(''); return }
-                            if (!validateIsraeliId(sid)) {
+                            if (spouseDocType === 'id' && !validateIsraeliId(sid)) {
                               setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה')
-                            } else if (sid.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
-                              setSpouseIdError('תעודת הזהות של האישה זהה לתעודת הזהות של הבעל')
+                            } else if (sid.replace(/\D/g, '') && sid.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
+                              setSpouseIdError('המספר שהזנת זהה לזה של הבעל')
                             } else {
                               setSpouseIdError('')
                             }
                           }}
-                          placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                          placeholder={spouseDocType === 'passport' ? 'AA000000' : '000000000'}
+                          inputMode={spouseDocType === 'passport' ? 'text' : 'numeric'}
+                          maxLength={spouseDocType === 'passport' ? 20 : 9}
+                          dir="ltr" required
                           className={spouseIdError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spouseIdError && <p className="text-xs text-red-600 mt-1">{spouseIdError}</p>}
@@ -1929,7 +1948,7 @@ export default function PublicPortalPage() {
                       </Field>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <Field label="תאריך לידה של האשה">
+                      <Field label="תאריך לידה של האשה" required>
                         <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
                       </Field>
                     </div>
