@@ -790,6 +790,7 @@ export default function PublicPortalPage() {
   const [step, setStep] = useState<Step>('id-lookup')
   const [idInput, setIdInput] = useState('')
   const [docType, setDocType] = useState<'id' | 'passport'>('id')
+  const [regDocType, setRegDocType] = useState<'id' | 'passport'>('id')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
@@ -1003,7 +1004,7 @@ export default function PublicPortalPage() {
           const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
           setStep(isWidow ? 'widow-dashboard' : 'dashboard')
         }
-        else { setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
+        else { setRegDocType('passport'); setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }
       setLoading(false)
     }
@@ -1083,7 +1084,7 @@ export default function PublicPortalPage() {
         return
       }
     }
-    if (regForm.id_number && !validateIsraeliId(regForm.id_number)) {
+    if (regDocType === 'id' && regForm.id_number && !validateIsraeliId(regForm.id_number)) {
       setIdFieldError('תעודת הזהות שהזנתם אינה תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
     if (showSpouseFields && regForm.spouse_id_number) {
@@ -1152,6 +1153,7 @@ export default function PublicPortalPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...regForm,
+          id_doc_type: regDocType,
           children_count: children.length,
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
           ...lineageData,
@@ -1519,6 +1521,7 @@ export default function PublicPortalPage() {
     setStep('id-lookup')
     setIdInput('')
     setError('')
+    setRegDocType('id')
     setBeneficiary(null)
     setPendingConfirmed(false)
     setExistingDocs({})
@@ -1676,7 +1679,7 @@ export default function PublicPortalPage() {
                 </div>
                 <h2 className="text-xl font-bold text-slate-900 mb-2">לא מופיע במערכת</h2>
                 <p className="text-slate-600 text-sm leading-relaxed">
-                  מספר תעודת הזהות{' '}
+                  {docType === 'passport' ? 'מספר הדרכון' : 'מספר תעודת הזהות'}{' '}
                   <span className="font-semibold text-slate-800" dir="ltr">{idInput}</span>
                   {' '}אינו רשום במערכת שלנו.
                 </p>
@@ -1845,16 +1848,19 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label='תעודת זהות' required>
+                    <Field label={regDocType === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
                       <TextInput
                         value={regForm.id_number}
                         onChange={e => { setReg('id_number')(e); setIdFieldError('') }}
                         onBlur={() => {
-                          if (regForm.id_number && !validateIsraeliId(regForm.id_number))
+                          if (regDocType === 'id' && regForm.id_number && !validateIsraeliId(regForm.id_number))
                             setIdFieldError('תעודת הזהות שהזנתם אינה תקינה')
                           else setIdFieldError('')
                         }}
-                        placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                        placeholder={regDocType === 'passport' ? 'AA000000' : '000000000'}
+                        inputMode={regDocType === 'passport' ? 'text' : 'numeric'}
+                        maxLength={regDocType === 'passport' ? 20 : 9}
+                        dir="ltr" required
                         className={idFieldError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
                       {idFieldError && <p className="text-xs text-red-600 mt-1">{idFieldError}</p>}

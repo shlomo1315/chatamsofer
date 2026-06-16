@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const select = 'id, full_name, family_name, eligibility_status, is_active, phone, phone2, email, city, address, id_number, spouse_name, spouse_id_number, marital_status, children_count, required_docs, children, lineage_node_id, lineage_manual, lineage_chain, created_at'
+  const select = 'id, full_name, family_name, eligibility_status, is_active, phone, phone2, email, city, address, id_number, id_doc_type, spouse_name, spouse_id_number, marital_status, children_count, required_docs, children, lineage_node_id, lineage_manual, lineage_chain, created_at'
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
 
   if (passportParam) {
     if (passportParam.length < 5) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
-    const { data, error } = await admin.from('beneficiaries').select(select).ilike('passport_number', passportParam).maybeSingle()
+    const { data, error } = await admin.from('beneficiaries').select(select).ilike('id_number', passportParam).maybeSingle()
     if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (!data) return NextResponse.json({ found: false })
     const response = NextResponse.json({ found: true, beneficiary: data })
