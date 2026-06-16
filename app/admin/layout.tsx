@@ -40,7 +40,7 @@ export default async function DashboardLayout({
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header user={profile} />
         <main className="flex-1 overflow-y-auto">
-          <div className="p-5 lg:p-6 max-w-screen-2xl mx-auto">
+          <div className="p-5 lg:p-6 pb-16 max-w-screen-2xl mx-auto">
             {children}
           </div>
         </main>
