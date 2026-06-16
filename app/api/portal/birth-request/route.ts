@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     })
     void (async () => {
       const att = certUrl ? await urlToAttachment(certUrl, 'אישור-לידה') : null
-      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined)
+      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('maternity'))
     })().catch(() => {})
   }
 

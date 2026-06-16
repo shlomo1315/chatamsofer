@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { templateStatusRejected } from '@/lib/email'
 import { docsPendingEmail, approvalEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'no template for status' })
   }
 
-  const result = await deliverMail(ben.email, payload.subject, payload.html)
+  const result = await deliverMail(ben.email, payload.subject, payload.html, undefined, mailFor('igud'))
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

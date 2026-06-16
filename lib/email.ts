@@ -1,16 +1,5 @@
-import nodemailer from 'nodemailer'
-
-function getTransporter() {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST ?? 'smtp-relay.gmail.com',
-    port: Number(process.env.SMTP_PORT ?? 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  })
-}
+import { deliverMail } from './sendMail'
+import type { MailOptions } from './sendMail'
 
 export interface EmailPayload {
   to?: string
@@ -18,20 +7,10 @@ export interface EmailPayload {
   html: string
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const transporter = getTransporter()
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM ?? 'היכל החתם סופר משרד ראשי <office@chasamsofer.info>',
-      to: payload.to,
-      subject: payload.subject,
-      html: payload.html,
-    })
-    return { ok: true }
-  } catch (err) {
-    console.error('[email] send error:', err)
-    return { ok: false, error: String(err) }
-  }
+// כל המיילים נשלחים כעת דרך Resend (lib/sendMail). פונקציה זו נשמרת לתאימות אחורה.
+export async function sendEmail(payload: EmailPayload, options?: MailOptions): Promise<{ ok: boolean; error?: string }> {
+  if (!payload.to) return { ok: false, error: 'אין נמען' }
+  return deliverMail(payload.to, payload.subject, payload.html, undefined, options)
 }
 
 // ─── Templates ───────────────────────────────────────────────────────────────

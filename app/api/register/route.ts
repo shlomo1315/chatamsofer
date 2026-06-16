@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
+import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 function verifyNonce(nonce: string, email: string): boolean {
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Send confirmation email (non-blocking)
-  sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: String(email).toLowerCase().trim() })
+  sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: String(email).toLowerCase().trim() }, mailFor('igud'))
     .catch(e => console.error('[register] confirmation email failed:', e))
 
   return NextResponse.json({ ok: true })
