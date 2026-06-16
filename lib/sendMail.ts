@@ -1,29 +1,55 @@
-import { sendEmail } from './email'
-import { getGmailClient } from './gmail'
-import { buildRawEmail, encodeForGmail } from './buildEmail'
+import { Resend } from 'resend'
+import { NOREPLY_FROM, BRAND_NAME } from './departments'
 
-// שליחת מייל דרך Gmail API (מוגדר ועובד), עם נפילה ל-SMTP אם נכשל. תומך בצרופות.
+export interface MailAttachment { filename: string; mimeType: string; contentB64: string }
+export interface MailOptions {
+  replyTo?: string
+  fromName?: string
+}
+
+// שליחת מייל דרך Resend. כל המיילים נשלחים מ-noreply@chasamsofer.info,
+// עם אפשרות "דואר לתשובה" (Reply-To) לפי המחלקה. תומך בצרופות.
 export async function deliverMail(
   to: string,
   subject: string,
   html: string,
-  attachments?: { filename: string; mimeType: string; contentB64: string }[],
+  attachments?: MailAttachment[],
+  options?: MailOptions,
 ): Promise<{ ok: boolean; error?: string }> {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.error('[mail] RESEND_API_KEY חסר — לא נשלח מייל')
+    return { ok: false, error: 'RESEND_API_KEY missing' }
+  }
+
+  const fromName = options?.fromName ?? BRAND_NAME
+  const from = `${fromName} <${NOREPLY_FROM}>`
+
   try {
-    const from     = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
-    const fromName = 'היכל החתם סופר משרד ראשי'
-    const raw      = buildRawEmail({ from, fromName, to, subject, html, attachments })
-    const gmail    = await getGmailClient()
-    await gmail.users.messages.send({ userId: 'me', requestBody: { raw: encodeForGmail(raw) } })
+    const resend = new Resend(apiKey)
+    const { error } = await resend.emails.send({
+      from,
+      to,
+      subject,
+      html,
+      ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
+      ...(attachments?.length
+        ? { attachments: attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.contentB64, 'base64') })) }
+        : {}),
+    })
+    if (error) {
+      console.error('[mail] Resend error:', error)
+      return { ok: false, error: String(error.message ?? error) }
+    }
     return { ok: true }
-  } catch (gmailErr) {
-    console.error('[mail] Gmail failed, trying SMTP:', gmailErr)
-    return sendEmail({ to, subject, html })
+  } catch (err) {
+    console.error('[mail] Resend threw:', err)
+    return { ok: false, error: String(err) }
   }
 }
 
 // שליפת קובץ מ-URL והמרתו לצרופה (base64), עם timeout. מחזיר null אם נכשל.
-export async function urlToAttachment(url: string, filename: string): Promise<{ filename: string; mimeType: string; contentB64: string } | null> {
+export async function urlToAttachment(url: string, filename: string): Promise<MailAttachment | null> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 8000)

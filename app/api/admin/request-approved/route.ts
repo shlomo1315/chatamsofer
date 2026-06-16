@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     const mail = type === 'loan'
       ? loanApprovedEmail(ben, req as { amount?: number; installments?: number; monthly_payment?: number; purpose?: string })
       : birthApprovedEmail(ben, req as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string })
-    deliverMail(ben.email, mail.subject, mail.html).catch(e => console.error('[request-approved] mail failed:', e))
+    deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor(type === 'loan' ? 'gemach' : 'maternity')).catch(e => console.error('[request-approved] mail failed:', e))
   }
 
   // 2. הפיכה אוטומטית ל"מאושר" אם טרם אושר — ללא מייל נפרד

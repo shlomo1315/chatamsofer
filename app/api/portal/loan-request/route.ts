@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
     })
     void (async () => {
       const atts = (await Promise.all(docs.map(d => urlToAttachment(d.url, d.name)))).filter(Boolean) as { filename: string; mimeType: string; contentB64: string }[]
-      await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined)
+      await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined, mailFor('gemach'))
     })().catch(() => {})
   }
 

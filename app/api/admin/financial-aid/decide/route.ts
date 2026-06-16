@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (ben?.email) {
       const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name || ''
       const mail = financialAidDecisionEmail(name, status === 'approved', status === 'approved' ? Number(amount) || 0 : null)
-      deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+      deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('medical')).catch(() => {})
     }
   }
 

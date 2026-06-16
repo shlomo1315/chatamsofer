@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
 import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard } from '@/lib/nedarim'
 
@@ -77,7 +78,7 @@ export async function sendCardVoucher(admin: SupabaseClient, aidId: string, cent
     const ben = (aid as any)?.beneficiary
     if (!ben?.email) return
     const mail = maternityCardEmail(ben, { centerName })
-    await deliverMail(ben.email, mail.subject, mail.html)
+    await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('maternity'))
   } catch (e) {
     console.error('[maternityCards] voucher mail failed:', e)
   }

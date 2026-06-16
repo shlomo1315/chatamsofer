@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
       spouse_id_number: spouse_id_number ? String(spouse_id_number) : null,
       children_count: cleanChildCount,
     })
-    deliverMail(String(email), reg.subject, reg.html)
+    deliverMail(String(email), reg.subject, reg.html, undefined, mailFor('igud'))
       .catch(e => console.error('[public-register] confirmation email failed:', e))
   }
 

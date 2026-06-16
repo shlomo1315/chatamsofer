@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -89,7 +90,7 @@ export async function POST() {
       if (ben?.email) {
         const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name || ''
         const mail = financialAidDecisionEmail(name, d.kind === 'approved', d.kind === 'approved' ? d.amount : null)
-        deliverMail(ben.email, mail.subject, mail.html).catch(() => {})
+        deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('medical')).catch(() => {})
       }
     } catch { /* ממשיכים לבקשה הבאה */ }
   }
