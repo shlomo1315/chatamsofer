@@ -1399,7 +1399,11 @@ export default function PublicPortalPage() {
   // האם עדיין חסרים מסמכים נדרשים (לכרטיס "העלאת מסמכים נדרשים" בדשבורד)
   const docsMissing = !!beneficiary && requiredDocs.some(d => !existingDocs[d])
 
+  // בקשת הבראה ליולדת — זמינה רק לרשומים במצב נשואים
+  const canRequestBirth = !!beneficiary?.marital_status && MARRIED_STATUSES.includes(beneficiary.marital_status)
+
   const goToBirthForm = () => {
+    if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setBabyIdError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
@@ -2615,19 +2619,21 @@ export default function PublicPortalPage() {
                 {/* שלב 2 — הגשת בקשה */}
                 <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 2 · הגשת בקשה</h3>
 
-                <button
-                  onClick={goToBirthForm}
-                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                >
-                  <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-colors">
-                    <Baby size={22} className="text-pink-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
-                    <p className="text-xs text-slate-500 mt-0.5">שהייה בבית החלמה לאחר לידה</p>
-                  </div>
-                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                </button>
+                {canRequestBirth && (
+                  <button
+                    onClick={goToBirthForm}
+                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-colors">
+                      <Baby size={22} className="text-pink-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
+                      <p className="text-xs text-slate-500 mt-0.5">שהייה בבית החלמה לאחר לידה</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                  </button>
+                )}
 
                 <button
                   onClick={goToLoanForm}
