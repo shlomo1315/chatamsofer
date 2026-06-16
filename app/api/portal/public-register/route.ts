@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   const {
-    id_number, full_name, family_name, phone, phone2, email,
+    id_number, id_doc_type, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
     spouse_name, spouse_id_number, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
   } = body
@@ -36,9 +36,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
-  const cleanId = String(id_number).replace(/\D/g, '')
-  if (cleanId.length < 5 || cleanId.length > 9) {
-    return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
+  const isPassport = String(id_doc_type ?? 'id') === 'passport'
+  const cleanId = isPassport
+    ? String(id_number).trim()
+    : String(id_number).replace(/\D/g, '')
+
+  if (isPassport) {
+    if (cleanId.length < 5 || cleanId.length > 20) {
+      return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
+    }
+  } else {
+    if (cleanId.length < 5 || cleanId.length > 9) {
+      return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
+    }
   }
 
   const admin = getAdminClient()
@@ -96,6 +106,7 @@ export async function POST(request: NextRequest) {
   // (full_name + spouse_name), ולא כשתי רשומות נפרדות.
   const records: Record<string, unknown>[] = [{
     id_number: cleanId,
+    id_doc_type: isPassport ? 'passport' : 'id',
     full_name: String(full_name).trim(),
     family_name: String(family_name).trim(),
     birth_date: birth_date || null,
