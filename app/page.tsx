@@ -1905,16 +1905,24 @@ export default function PublicPortalPage() {
                         <TextInput
                           value={regForm.spouse_id_number}
                           onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
-                          onBlur={() => {
+                          onBlur={async () => {
                             const sid = regForm.spouse_id_number.trim()
                             if (!sid) { setSpouseIdError(''); return }
                             if (spouseDocType === 'id' && !validateIsraeliId(sid)) {
-                              setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה')
-                            } else if (sid.replace(/\D/g, '') && sid.replace(/\D/g, '') === regForm.id_number.replace(/\D/g, '')) {
-                              setSpouseIdError('המספר שהזנת זהה לזה של הבעל')
-                            } else {
-                              setSpouseIdError('')
+                              setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); return
                             }
+                            const cleanSid = spouseDocType === 'passport' ? sid : sid.replace(/\D/g, '')
+                            if (cleanSid === (regDocType === 'passport' ? regForm.id_number.trim() : regForm.id_number.replace(/\D/g, ''))) {
+                              setSpouseIdError('המספר שהזנת זהה לזה של הבעל'); return
+                            }
+                            // בדיקה מול המערכת
+                            try {
+                              const param = spouseDocType === 'passport' ? `passport=${encodeURIComponent(cleanSid)}` : `id=${cleanSid}`
+                              const res = await fetch(`/api/portal/lookup?${param}`)
+                              const d = await res.json()
+                              if (d.found) { setSpouseIdError('מספר זה כבר קיים במערכת — לא ניתן לרשום אותו שוב'); return }
+                            } catch { /* network error — ignore on blur */ }
+                            setSpouseIdError('')
                           }}
                           placeholder={spouseDocType === 'passport' ? 'AA000000' : '000000000'}
                           inputMode={spouseDocType === 'passport' ? 'text' : 'numeric'}
