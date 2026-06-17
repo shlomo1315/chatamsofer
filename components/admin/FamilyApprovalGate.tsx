@@ -39,8 +39,9 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
   }
 
   return (
-    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/60 overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-100/70 flex-wrap">
+    // ללא overflow-hidden — אחרת תפריט אישור הסטטוס (absolute) נחתך ולא נפתח כראוי
+    <div className={`rounded-2xl border-2 border-amber-300 bg-amber-50/60 ${compact ? '' : 'overflow-hidden'}`}>
+      <div className={`flex items-center justify-between gap-3 px-4 py-3 bg-amber-100/70 flex-wrap ${compact ? 'rounded-[14px]' : 'rounded-t-[14px]'}`}>
         <div className="flex items-center gap-2 text-amber-900">
           <AlertTriangle size={18} className="flex-shrink-0" />
           <span className="font-bold text-sm">המשפחה טרם אושרה — יש לאשר אותה לפני אישור הבקשה</span>

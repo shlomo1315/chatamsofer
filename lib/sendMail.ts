@@ -46,7 +46,11 @@ export async function deliverMail(
       ...(text ? { text } : {}),
       ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
       ...(attachments?.length
-        ? { attachments: attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.contentB64, 'base64') })) }
+        ? { attachments: attachments.map((a) => ({
+            filename: a.filename,
+            content: Buffer.from(a.contentB64, 'base64'),
+            ...(a.mimeType ? { contentType: a.mimeType } : {}),
+          })) }
         : {}),
     })
     if (error) {
@@ -60,7 +64,32 @@ export async function deliverMail(
   }
 }
 
+// מיפוי סוג-תוכן → סיומת קובץ, להבטחת צרופה שנפתחת אצל הנמען
+const MIME_EXT: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/gif': 'gif',
+  'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'image/bmp': 'bmp',
+  'image/tiff': 'tiff', 'image/svg+xml': 'svg',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+}
+
+// חילוץ סיומת מתוך נתיב URL (מתעלם מ-query string)
+function extFromUrl(url: string): string | null {
+  try {
+    const path = new URL(url).pathname
+    const m = path.match(/\.([a-z0-9]{2,5})$/i)
+    return m ? m[1].toLowerCase() : null
+  } catch {
+    const m = url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)
+    return m ? m[1].toLowerCase() : null
+  }
+}
+
 // שליפת קובץ מ-URL והמרתו לצרופה (base64), עם timeout. מחזיר null אם נכשל.
+// מבטיח שלשם הקובץ יש סיומת תקינה (לפי ה-URL או סוג-התוכן) כדי שייפתח אצל הנמען.
 export async function urlToAttachment(url: string, filename: string): Promise<MailAttachment | null> {
   try {
     const ctrl = new AbortController()
@@ -69,6 +98,15 @@ export async function urlToAttachment(url: string, filename: string): Promise<Ma
     clearTimeout(timer)
     if (!res.ok) return null
     const buf = Buffer.from(await res.arrayBuffer())
-    return { filename, mimeType: res.headers.get('content-type') || 'application/octet-stream', contentB64: buf.toString('base64') }
+    const mimeType = (res.headers.get('content-type') || '').split(';')[0].trim() || 'application/octet-stream'
+
+    // ודא סיומת: אם השם כבר מסתיים בסיומת — נשאיר; אחרת נגזור מה-URL או מ-mimeType
+    let safeName = filename
+    if (!/\.[a-z0-9]{2,5}$/i.test(safeName)) {
+      const ext = extFromUrl(url) ?? MIME_EXT[mimeType.toLowerCase()] ?? null
+      if (ext) safeName = `${safeName}.${ext}`
+    }
+
+    return { filename: safeName, mimeType, contentB64: buf.toString('base64') }
   } catch { return null }
 }
