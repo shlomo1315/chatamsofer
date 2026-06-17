@@ -5,8 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
-  ChevronLeft, ChevronDown, Loader2, Reply, User, Phone, MapPin,
-  CheckCircle2, ExternalLink, Forward, Tag, Plus, Trash2, Settings, BarChart2,
+  ChevronLeft, Loader2, Reply, User, Phone, MapPin,
+  CheckCircle2, ExternalLink, Forward, Trash2, BarChart2,
   Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
 } from 'lucide-react'
 
@@ -24,14 +24,11 @@ import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import { DEPARTMENTS, departmentByEmail, type DepartmentKey } from '@/lib/departments'
-import EmailInput from '@/components/ui/EmailInput'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface BeneficiarySuggestion { id: string; name: string; email: string }
-interface MailLabel { id: string; name: string; color: string }
-interface InternalEmail { name: string; email: string }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,17 +43,6 @@ const STATUS_COLORS: Record<string, string> = {
   rejected:     'bg-red-100 text-red-700',
   docs_pending: 'bg-blue-100 text-blue-700',
 }
-
-const LABEL_COLORS = [
-  { hex: '#ef4444', name: 'אדום' },
-  { hex: '#f97316', name: 'כתום' },
-  { hex: '#eab308', name: 'צהוב' },
-  { hex: '#22c55e', name: 'ירוק' },
-  { hex: '#3b82f6', name: 'כחול' },
-  { hex: '#8b5cf6', name: 'סגול' },
-  { hex: '#ec4899', name: 'ורוד' },
-  { hex: '#6b7280', name: 'אפור' },
-]
 
 function formatDate(raw: string) {
   try {
@@ -379,20 +365,24 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
 
 // ─── Forward Modal ─────────────────────────────────────────────────────────────
 
-function ForwardModal({ msg, internalEmails, onClose }: { msg: ParsedMessage; internalEmails: InternalEmail[]; onClose: () => void }) {
-  const [target, setTarget] = useState(internalEmails[0]?.email ?? '')
+function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => void }) {
+  const deptList = Object.values(DEPARTMENTS)
+  const [target, setTarget] = useState<DepartmentKey>(deptList[0]?.key ?? 'main')
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
 
   const forward = async () => {
     if (!target) return
+    const dep = DEPARTMENTS[target]
+    if (!dep) return
     setSending(true)
     const forwardBody = `${note ? `${note}\n\n---\n` : ''}הועבר: ${msg.from}<br/>${msg.body || msg.snippet}`
     await fetch('/api/admin/gmail/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: target, subject: `Fwd: ${msg.subject}`, body: forwardBody }),
+      // נשלח לכתובת המחלקה; השליחה מטעם אותה מחלקה (department) כדי שהמעקב והכתובת יהיו עקביים
+      body: JSON.stringify({ to: dep.email, subject: `Fwd: ${msg.subject}`, body: forwardBody, department: target }),
     })
     setSending(false)
     setDone(true)
@@ -420,22 +410,19 @@ function ForwardModal({ msg, internalEmails, onClose }: { msg: ParsedMessage; in
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">העבר אל:</label>
-              {internalEmails.length === 0 ? (
-                <p className="text-xs text-slate-400">אין מיילים פנימיים מוגדרים. הוסף בהגדרות.</p>
-              ) : (
-                <div className="flex flex-col gap-1">
-                  {internalEmails.map(ie => (
-                    <label key={ie.email} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-                      <input type="radio" name="target" value={ie.email} checked={target === ie.email} onChange={() => setTarget(ie.email)} />
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">{ie.name}</p>
-                        <p className="text-xs text-slate-400">{ie.email}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
+              <label className="text-xs font-medium text-slate-600">העבר אל מחלקה:</label>
+              <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
+                {deptList.map(dep => (
+                  <label key={dep.key} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="target" value={dep.key} checked={target === dep.key} onChange={() => setTarget(dep.key)} />
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dep.color }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700">{dep.label}</p>
+                      <p className="text-xs text-slate-400 truncate">{dep.email}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -446,7 +433,7 @@ function ForwardModal({ msg, internalEmails, onClose }: { msg: ParsedMessage; in
 
             <div className="flex items-center justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500">ביטול</button>
-              <button onClick={forward} disabled={sending || !target || internalEmails.length === 0}
+              <button onClick={forward} disabled={sending || !target}
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {sending ? <Loader2 size={14} className="animate-spin" /> : <Forward size={14} />}
                 העבר
@@ -454,214 +441,6 @@ function ForwardModal({ msg, internalEmails, onClose }: { msg: ParsedMessage; in
             </div>
           </>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Label Tag Dropdown ────────────────────────────────────────────────────────
-
-function LabelDropdown({ messageId, labels, assigned, onAssign, onClose }: {
-  messageId: string; labels: MailLabel[]; assigned: string[];
-  onAssign: (labelId: string, add: boolean) => void; onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose() }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [onClose])
-
-  return (
-    <div ref={ref} className="absolute z-20 top-full left-0 mt-1 w-44 bg-white border border-slate-200 rounded-xl shadow-lg py-1 overflow-hidden">
-      <p className="text-[10px] font-semibold text-slate-400 uppercase px-3 pt-1 pb-1.5">תוויות</p>
-      {labels.map(l => {
-        const active = assigned.includes(l.id)
-        return (
-          <button key={l.id} type="button"
-            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-right text-sm transition-colors"
-            onClick={() => onAssign(l.id, !active)}
-          >
-            <span className="w-3 h-3 rounded-full flex-shrink-0 border-2" style={{ backgroundColor: active ? l.color : 'transparent', borderColor: l.color }} />
-            <span className={active ? 'font-medium text-slate-800' : 'text-slate-600'}>{l.name}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── Manage Labels Modal ───────────────────────────────────────────────────────
-
-function ManageLabelsModal({ labels, internalEmails, onSaved, onClose }: {
-  labels: MailLabel[]; internalEmails: InternalEmail[];
-  onSaved: (labels: MailLabel[], internalEmails: InternalEmail[]) => void; onClose: () => void;
-}) {
-  const [localLabels, setLocalLabels] = useState<MailLabel[]>(labels)
-  const [localEmails, setLocalEmails] = useState<InternalEmail[]>(internalEmails)
-  const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState('#3b82f6')
-  const [newEmailName, setNewEmailName] = useState('')
-  const [newEmailAddr, setNewEmailAddr] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState<'labels' | 'emails' | 'accounts'>('labels')
-  const [domainAccounts, setDomainAccounts] = useState<{ name: string; email: string; isMain: boolean }[]>([])
-
-  useEffect(() => {
-    fetch('/api/admin/mail/accounts')
-      .then(r => r.json())
-      .then(d => setDomainAccounts(d.accounts ?? []))
-      .catch(() => {})
-  }, [])
-
-  const addLabel = () => {
-    if (!newName.trim()) return
-    setLocalLabels(prev => [...prev, { id: crypto.randomUUID(), name: newName.trim(), color: newColor }])
-    setNewName('')
-  }
-
-  const removeLabel = (id: string) => setLocalLabels(prev => prev.filter(l => l.id !== id))
-
-  const addEmail = () => {
-    if (!newEmailName.trim() || !newEmailAddr.trim()) return
-    setLocalEmails(prev => [...prev, { name: newEmailName.trim(), email: newEmailAddr.trim() }])
-    setNewEmailName(''); setNewEmailAddr('')
-  }
-
-  const removeEmail = (email: string) => setLocalEmails(prev => prev.filter(e => e.email !== email))
-
-  const save = async () => {
-    setSaving(true)
-    await Promise.all([
-      fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_internal_emails', emails: localEmails }) }),
-      // save labels by clearing + re-adding — simplified: just save defs as a whole
-      fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: '_set_label_defs', labels: localLabels }) }),
-    ])
-    setSaving(false)
-    onSaved(localLabels, localEmails)
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{ maxHeight: '85vh' }}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="font-semibold text-slate-900">הגדרות מייל</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
-        </div>
-
-        <div className="flex border-b border-slate-100">
-          {([['labels', 'תוויות'], ['emails', 'מיילים פנימיים'], ['accounts', 'חשבונות מייל']] as const).map(([k, l]) => (
-            <button key={k} onClick={() => setTab(k)}
-              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${tab === k ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-          {tab === 'labels' ? (
-            <>
-              <div className="flex flex-col gap-1">
-                {localLabels.map(l => (
-                  <div key={l.id} className="flex items-center gap-2 p-2 rounded-lg border border-slate-100">
-                    <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                    <span className="flex-1 text-sm text-slate-700">{l.name}</span>
-                    <button onClick={() => removeLabel(l.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-500">הוסף תווית:</p>
-                <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newName} onChange={e => setNewName(e.target.value)} placeholder="שם התווית..." />
-                <div className="flex flex-wrap gap-1.5">
-                  {LABEL_COLORS.map(c => (
-                    <button key={c.hex} type="button" onClick={() => setNewColor(c.hex)}
-                      className={`w-6 h-6 rounded-full transition-transform ${newColor === c.hex ? 'ring-2 ring-offset-1 ring-slate-500 scale-110' : ''}`}
-                      style={{ backgroundColor: c.hex }} title={c.name} />
-                  ))}
-                </div>
-                <button onClick={addLabel} disabled={!newName.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
-                  <Plus size={14} /> הוסף
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-1">
-                {localEmails.length === 0 && <p className="text-sm text-slate-400 text-center py-4">לא הוגדרו מיילים פנימיים</p>}
-                {localEmails.map(e => (
-                  <div key={e.email} className="flex items-center gap-2 p-2 rounded-lg border border-slate-100">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700">{e.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{e.email}</p>
-                    </div>
-                    <button onClick={() => removeEmail(e.email)} className="text-slate-300 hover:text-red-500"><Trash2 size={14} /></button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-500">הוסף מייל פנימי:</p>
-                <input className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  value={newEmailName} onChange={e => setNewEmailName(e.target.value)} placeholder="שם המחלקה..." />
-                <EmailInput value={newEmailAddr} onChange={setNewEmailAddr} placeholder="כתובת מייל..."
-                  inputClassName="border-slate-200 outline-none" />
-                <button onClick={addEmail} disabled={!newEmailName.trim() || !newEmailAddr.trim()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-40 self-start">
-                  <Plus size={14} /> הוסף
-                </button>
-              </div>
-            </>
-          )}
-
-          {tab === 'accounts' && (
-            <>
-              <p className="text-xs text-slate-500 mb-3">כל חשבונות המייל שזוהו אוטומטית ממשתמשי המערכת עם דומיין הארגון.</p>
-              <div className="flex flex-col gap-2">
-                {domainAccounts.map(acc => (
-                  <div key={acc.email} className="flex items-center gap-3 p-3 border border-slate-200 rounded-xl">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold
-                      ${acc.isMain ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
-                      {acc.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-800">{acc.name}</p>
-                      <p className="text-xs text-slate-400 truncate">{acc.email}</p>
-                    </div>
-                    {acc.isMain ? (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium flex-shrink-0">מחובר</span>
-                    ) : (
-                      <a href="/api/auth/gmail" className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0 font-medium">
-                        חבר
-                      </a>
-                    )}
-                  </div>
-                ))}
-                {domainAccounts.length === 0 && (
-                  <p className="text-sm text-slate-400 text-center py-6">לא נמצאו חשבונות מייל בדומיין הארגון</p>
-                )}
-              </div>
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-                <p className="font-semibold mb-1">כיצד להוסיף חשבון?</p>
-                <p>הוסף משתמש מערכת עם כתובת מייל מהדומיין (למשל: name@chasamsofer.info) — החשבון יופיע כאן אוטומטית.</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-200">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500">ביטול</button>
-          <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-            שמור
-          </button>
-        </div>
       </div>
     </div>
   )
@@ -1017,26 +796,15 @@ export default function MailClient() {
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
-  const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
   const searchParams = useSearchParams()
   const [activeDepartment, setActiveDepartment] = useState<string | null>(searchParams.get('department'))
   const activeDepartmentRef = useRef<string | null>(searchParams.get('department'))
-  const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
-  const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
-  const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
 
   // ספירת מיילים שלא נקראו לפי מחלקה
   const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
 
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
-
-  // Labels
-  const [labels, setLabels] = useState<MailLabel[]>([])
-  const [assignments, setAssignments] = useState<Record<string, string[]>>({})
-  const [internalEmails, setInternalEmails] = useState<InternalEmail[]>([])
-  const [openLabelFor, setOpenLabelFor] = useState<string | null>(null)
-  const [showManageLabels, setShowManageLabels] = useState(false)
 
   // Forward
   const [forwardMsg, setForwardMsg] = useState<ParsedMessage | null>(null)
@@ -1069,15 +837,15 @@ export default function MailClient() {
           thread_id: msg.threadId,
           event_type: eventType,
           user_id: myProfileRef.current?.id ?? null,
-          label_ids: assignments[msg.id] ?? [],
+          label_ids: [],
           from_email: msg.fromEmail,
           subject: msg.subject,
         }),
       })
     } catch { /* silent */ }
-  }, [assignments])
+  }, [])
 
-  // Current user profile (for label-based filtering) — kept in a ref so load() stays stable
+  // Current user profile — kept in a ref so load() stays stable
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const myProfileRef = useRef<Profile | null>(null)
 
@@ -1151,13 +919,8 @@ export default function MailClient() {
     setLoading(false)
   }, [myProfile])
 
-  // Load labels + unread counts on mount
+  // Load unread counts on mount
   useEffect(() => {
-    fetch('/api/admin/mail/labels').then(r => r.json()).then(d => {
-      setLabels(d.labels ?? [])
-      setAssignments(d.assignments ?? {})
-      setInternalEmails(d.internalEmails ?? [])
-    })
     loadUnreadCounts()
   }, [loadUnreadCounts])
 
@@ -1185,10 +948,10 @@ export default function MailClient() {
 
   const openMessage = async (msg: ParsedMessage) => {
     setSelected(msg)
-    setOpenLabelFor(null)
     if (!msg.isRead) {
       await fetch('/api/admin/mail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
+      loadUnreadCounts()
     }
     recordEvent(msg, 'read')
   }
@@ -1202,16 +965,6 @@ export default function MailClient() {
     await fetch('/api/admin/mail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setMessages(ms => ms.filter(m => m.id !== id))
     if (selected?.id === id) setSelected(null)
-  }
-
-  const toggleLabel = async (messageId: string, labelId: string, add: boolean) => {
-    const action = add ? 'assign' : 'unassign'
-    await fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, messageId, labelId }) })
-    setAssignments(prev => {
-      const cur = prev[messageId] ?? []
-      return { ...prev, [messageId]: add ? [...new Set([...cur, labelId])] : cur.filter(id => id !== labelId) }
-    })
   }
 
   const senderDisplay = (msg: ParsedMessage) => {
@@ -1258,8 +1011,8 @@ export default function MailClient() {
         {/* Folders */}
         <nav className="px-2 py-2 border-b border-slate-100">
           {FOLDER_ITEMS.map(({ key, label, icon: Icon }) => (
-            <button key={key} onClick={() => { setFolder(key); setSelected(null); setActiveLabel(null) }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key && !activeLabel ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <button key={key} onClick={() => { setFolder(key); setSelected(null) }}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-right ${folder === key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
               <Icon size={16} className="flex-shrink-0" />
               {label}
             </button>
@@ -1299,79 +1052,14 @@ export default function MailClient() {
           </nav>
         )}
 
-        {/* Labels section */}
-        <div className="flex-1 overflow-y-auto px-2 py-2">
-          {labels.length > 0 && (
-            <>
-              <div className="flex items-center justify-between px-2 pt-1 pb-2">
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">תוויות</p>
-                <button onClick={() => setShowManageLabels(true)}
-                  className="text-slate-300 hover:text-indigo-500 transition-colors" title="נהל תוויות">
-                  <Settings size={13} />
-                </button>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                {labels.map(l => {
-                  const labelMsgs = messages.filter(m => (assignments[m.id] ?? []).includes(l.id))
-                  const count = Object.values(assignments).filter(ids => ids.includes(l.id)).length
-                  const isOpen = activeLabel === l.id
-                  return (
-                    <div key={l.id}>
-                      <button
-                        draggable
-                        onDragStart={() => setDragLabelId(l.id)}
-                        onDragEnd={() => setDragLabelId(null)}
-                        onClick={() => { setActiveLabel(isOpen ? null : l.id); setSelected(null) }}
-                        className={`group w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-right cursor-pointer
-                          ${isOpen ? 'font-semibold' : 'text-slate-600 hover:bg-slate-100 font-medium'}`}
-                        style={isOpen ? { backgroundColor: l.color + '14', color: l.color } : {}}
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                        <span className="truncate flex-1">{l.name}</span>
-                        {count > 0 && (
-                          <span className={`text-[11px] font-semibold flex-shrink-0 ${isOpen ? '' : 'text-slate-400'}`}>
-                            {count}
-                          </span>
-                        )}
-                        <ChevronDown size={13} className={`flex-shrink-0 transition-transform ${isOpen ? 'rotate-180 opacity-70' : 'opacity-0 group-hover:opacity-40'}`} />
-                      </button>
-
-                      {/* Accordion: list of message subjects under this label */}
-                      {isOpen && labelMsgs.length > 0 && (
-                        <div className="mr-4 ml-1 mt-0.5 mb-1 border-r-2 pr-2" style={{ borderColor: l.color + '40' }}>
-                          {labelMsgs.map(msg => (
-                            <button
-                              key={msg.id}
-                              onClick={() => openMessage(msg)}
-                              className={`w-full text-right px-2 py-1.5 rounded-md text-xs hover:bg-slate-50 transition-colors
-                                ${selected?.id === msg.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600'}`}
-                            >
-                              <p className={`truncate ${!msg.isRead ? 'font-semibold text-slate-800' : ''}`}>{msg.subject || '(ללא נושא)'}</p>
-                              <p className="text-[10px] text-slate-400 truncate">{formatDate(msg.date)}</p>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {isOpen && labelMsgs.length === 0 && (
-                        <p className="text-[11px] text-slate-400 text-center py-1.5">אין מיילים טעונים עם תווית זו</p>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </div>
+        {/* מרווח גמיש (התוויות הוסרו — ההפניה למחלקות מחליפה אותן) */}
+        <div className="flex-1 overflow-y-auto px-2 py-2" />
 
         <div className="px-2 pb-2 border-t border-slate-200 pt-2 flex flex-col gap-0.5">
           <Link href="/admin/mail/stats"
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <BarChart2 size={13} /> ניטור וסטטיסטיקות
           </Link>
-          <button onClick={() => setShowManageLabels(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
-            <Settings size={13} /> הגדרות מייל
-          </button>
         </div>
       </div>
 
@@ -1390,19 +1078,6 @@ export default function MailClient() {
           </button>
         </div>
 
-        {/* Active label filter banner */}
-        {activeLabel && (
-          <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50">
-            {(() => { const l = labels.find(x => x.id === activeLabel); return l ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
-                <span className="text-xs font-medium text-slate-700 flex-1">מסונן: {l.name}</span>
-                <button onClick={() => setActiveLabel(null)} className="text-xs text-slate-400 hover:text-slate-700">נקה</button>
-              </>
-            ) : null })()}
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 gap-2 text-slate-400 text-sm">
@@ -1410,9 +1085,7 @@ export default function MailClient() {
             </div>
           ) : (
             (() => {
-              const filtered = activeLabel
-                ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
-                : messages.filter(m => !(assignments[m.id] ?? []).includes('label-decision'))
+              const filtered = messages
               if (loadError) return (
                 <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-6">
                   <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
@@ -1426,35 +1099,17 @@ export default function MailClient() {
               )
               return filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
-                  <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>
+                  <Mail size={24} /><span className="text-sm">אין הודעות</span>
                 </div>
               ) : filtered.map(msg => {
-                const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
                 // המחלקה של ההודעה: נכנס לפי כתובת היעד, יוצא לפי כתובת השולח
                 const msgDept = departmentByEmail(folder === 'SENT' ? msg.fromEmail : msg.toEmail)
-                const isDragTarget = dragOverMsgId === msg.id && dragLabelId
                 return (
                   <div key={msg.id}
-                    onDragOver={e => { if (dragLabelId) { e.preventDefault(); setDragOverMsgId(msg.id) } }}
-                    onDragLeave={() => setDragOverMsgId(null)}
-                    onDrop={e => {
-                      e.preventDefault()
-                      if (dragLabelId) {
-                        const existing = assignments[msg.id] ?? []
-                        setDragOverMsgId(null)
-                        if (existing.length > 0 && !existing.includes(dragLabelId)) {
-                          // Ask: add alongside existing or replace?
-                          setPendingDrop({ msgId: msg.id, labelId: dragLabelId })
-                        } else {
-                          toggleLabel(msg.id, dragLabelId, true)
-                        }
-                      }
-                    }}
                     className={`group flex items-stretch border-b border-slate-100 transition-colors
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500'
                         : !msg.isRead ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
-                        : 'hover:bg-slate-50'}
-                      ${isDragTarget ? 'bg-amber-50 border-amber-300' : ''}`}>
+                        : 'hover:bg-slate-50'}`}>
                     <button className="flex-1 min-w-0 text-right px-4 py-3" onClick={() => openMessage(msg)}>
                       <div className="flex items-start justify-between gap-2 mb-0.5">
                         <span className="flex items-center gap-2 min-w-0">
@@ -1490,20 +1145,7 @@ export default function MailClient() {
                             </span>
                           )
                         )}
-                        {msgLabels.map(l => (
-                          <span key={l.id} className="inline-flex items-center gap-0.5 text-[11px] font-medium pl-1.5 pr-1.5 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: l.color }}>
-                            {l.name}
-                            <button
-                              onClick={e => { e.stopPropagation(); toggleLabel(msg.id, l.id, false) }}
-                              className="opacity-70 hover:opacity-100 leading-none"
-                              title="הסר תווית"
-                            >
-                              <X size={9} />
-                            </button>
-                          </span>
-                        ))}
-                        {msgLabels.length === 0 && <p className={`text-xs truncate ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>{msg.snippet}</p>}
+                        <p className={`text-xs truncate ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>{msg.snippet}</p>
                       </div>
                     </button>
                     {/* עמודת פעולות נפרדת — אינה חופפת את התוכן */}
@@ -1514,23 +1156,6 @@ export default function MailClient() {
                         title="מחק">
                         <Trash2 size={14} />
                       </button>
-                      <div className="relative">
-                        <button
-                          onClick={e => { e.stopPropagation(); setOpenLabelFor(openLabelFor === msg.id ? null : msg.id) }}
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
-                          title="תוויות">
-                          <Tag size={14} />
-                        </button>
-                        {openLabelFor === msg.id && (
-                          <LabelDropdown
-                            messageId={msg.id}
-                            labels={labels}
-                            assigned={assignments[msg.id] ?? []}
-                            onAssign={(labelId, add) => toggleLabel(msg.id, labelId, add)}
-                            onClose={() => setOpenLabelFor(null)}
-                          />
-                        )}
-                      </div>
                     </div>
                   </div>
                 )
@@ -1605,23 +1230,6 @@ export default function MailClient() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {/* Label chips on selected message */}
-            {(assignments[selected.id] ?? []).length > 0 && (
-              <div className="flex items-center gap-1.5 px-6 pt-3 flex-wrap">
-                {(assignments[selected.id] ?? []).map(id => {
-                  const l = labels.find(x => x.id === id)
-                  if (!l) return null
-                  return (
-                    <span key={id} className="inline-flex items-center gap-1 text-xs font-medium pl-2.5 pr-1.5 py-1 rounded-full text-white" style={{ backgroundColor: l.color }}>
-                      {l.name}
-                      <button onClick={() => toggleLabel(selected.id, id, false)} className="opacity-70 hover:opacity-100 ml-0.5">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  )
-                })}
-              </div>
-            )}
             <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
               dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(selected.body || selected.snippet) }} />
             <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
@@ -1643,61 +1251,7 @@ export default function MailClient() {
           ?? undefined
         }
       />}
-      {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
-
-      {/* Add-or-Replace label popup */}
-      {pendingDrop && (() => {
-        const newLabel = labels.find(l => l.id === pendingDrop.labelId)
-        const existingLabels = (assignments[pendingDrop.msgId] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
-              <h3 className="font-semibold text-slate-900 text-center">הוסף תווית</h3>
-              <p className="text-sm text-slate-600 text-center">
-                להודעה כבר משויכת תווית{existingLabels.length > 1 ? 'ות' : ''}{' '}
-                <span className="font-medium">{existingLabels.map(l => l.name).join(', ')}</span>.<br/>
-                מה לעשות עם התווית{' '}
-                {newLabel && <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-medium" style={{ backgroundColor: newLabel.color }}>{newLabel.name}</span>}?
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={async () => {
-                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
-                    setPendingDrop(null)
-                  }}
-                  className="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 transition-colors"
-                >
-                  הוסף לצד הקיים
-                </button>
-                <button
-                  onClick={async () => {
-                    // Remove all existing labels then add new one
-                    for (const l of existingLabels) {
-                      await toggleLabel(pendingDrop.msgId, l.id, false)
-                    }
-                    await toggleLabel(pendingDrop.msgId, pendingDrop.labelId, true)
-                    setPendingDrop(null)
-                  }}
-                  className="w-full px-4 py-2.5 bg-slate-100 text-slate-700 text-sm font-medium rounded-xl hover:bg-slate-200 transition-colors"
-                >
-                  החלף את {existingLabels.length > 1 ? 'כל התוויות' : 'התווית'}
-                </button>
-                <button onClick={() => setPendingDrop(null)} className="text-xs text-slate-400 hover:text-slate-600 text-center py-1">
-                  ביטול
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-      {showManageLabels && (
-        <ManageLabelsModal
-          labels={labels}
-          internalEmails={internalEmails}
-          onSaved={(l, e) => { setLabels(l); setInternalEmails(e) }}
-          onClose={() => setShowManageLabels(false)}
-        />
-      )}
+      {forwardMsg && <ForwardModal msg={forwardMsg} onClose={() => setForwardMsg(null)} />}
 
       {/* New mail toast notifications — bottom-left */}
       <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">

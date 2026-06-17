@@ -232,7 +232,8 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
                     </span>
                   )}
                 </Link>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
