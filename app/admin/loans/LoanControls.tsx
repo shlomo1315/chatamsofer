@@ -27,6 +27,9 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  // מודל אישור — קליטת הסכום שאושר בפועל לפני האישור
+  const [approveOpen, setApproveOpen] = useState(false)
+  const [approvedAmount, setApprovedAmount] = useState(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
 
   const pill = PILL[loan.status] ?? PILL.pending
   const Icon = pill.icon
@@ -38,16 +41,11 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
     setOpen(true)
   }
 
-  const setStatus = async (next: LoanStatus) => {
-    // חסימה: לא ניתן לאשר בקשה לפני שהמשפחה מאושרת
-    if (next === 'approved' && familyApproved === false) {
-      setOpen(false)
-      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
-      return
-    }
+  // חלק האישור/דחייה המשותף — מקבל אילו שדות לעדכן
+  const applyStatus = async (next: LoanStatus, extra: Record<string, unknown> = {}) => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('loans').update({ status: next }).eq('id', loan.id)
+      const { error } = await supabase.from('loans').update({ status: next, ...extra }).eq('id', loan.id)
       if (error) throw error
       // באישור הבקשה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
       if (next === 'approved') {
@@ -57,6 +55,7 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
         }).catch(() => {})
       }
       setOpen(false)
+      setApproveOpen(false)
       // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
       if (advance && next !== 'pending') {
         setSaving(false)
@@ -74,6 +73,29 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
     }
   }
 
+  const setStatus = async (next: LoanStatus) => {
+    // חסימה: לא ניתן לאשר בקשה לפני שהמשפחה מאושרת
+    if (next === 'approved' && familyApproved === false) {
+      setOpen(false)
+      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      return
+    }
+    // אישור — קודם מבקשים את הסכום שאושר בפועל
+    if (next === 'approved') {
+      setOpen(false)
+      setApprovedAmount(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
+      setApproveOpen(true)
+      return
+    }
+    await applyStatus(next)
+  }
+
+  const confirmApprove = async () => {
+    const n = parseInt(approvedAmount.replace(/\D/g, '') || '0', 10)
+    if (!n) { toast.error('יש להזין את הסכום שאושר'); return }
+    await applyStatus('approved', { approved_amount: n })
+  }
+
   const options: { value: LoanStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'approved',  label: 'אשר (זכאי)',      cls: 'text-green-700 hover:bg-green-50', icon: Check },
     { value: 'rejected',  label: 'דחה (לא זכאי)',   cls: 'text-red-600 hover:bg-red-50', icon: X },
@@ -84,6 +106,42 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
 
   return (
     <div className="inline-block">
+      {approveOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-l from-green-500 to-emerald-500 px-6 py-4">
+              <h2 className="text-white font-bold">אישור הלוואה</h2>
+              <p className="text-emerald-100 text-xs mt-0.5">הזן את הסכום שאושר בפועל</p>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <span className="text-slate-500">סכום מבוקש</span>
+                <span className="font-semibold text-slate-700 ltr-num">₪{Math.round(Number(loan.amount) || 0).toLocaleString('he-IL')}</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">סכום שאושר (₪)</label>
+                <input
+                  type="text" inputMode="numeric" autoFocus dir="ltr"
+                  value={approvedAmount}
+                  onChange={e => setApprovedAmount(e.target.value.replace(/\D/g, ''))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 text-left ltr-num focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-shadow"
+                />
+              </div>
+              <div className="flex gap-3 mt-1">
+                <button onClick={confirmApprove} disabled={saving}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-green-500 to-emerald-500 text-white font-semibold py-2.5 text-sm shadow-md shadow-emerald-200 hover:opacity-90 transition-opacity disabled:opacity-50">
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  אשר הלוואה
+                </button>
+                <button onClick={() => setApproveOpen(false)} disabled={saving}
+                  className="px-5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showSuccess && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">

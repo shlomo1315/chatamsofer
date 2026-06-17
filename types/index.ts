@@ -178,6 +178,7 @@ export interface Loan {
   id: string
   beneficiary_id: string
   amount: number
+  approved_amount?: number | null
   installments: number
   monthly_payment: number
   purpose?: string

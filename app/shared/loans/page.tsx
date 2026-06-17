@@ -6,6 +6,7 @@ import { Lock, LogIn, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User,
 interface PortalLoan {
   id: string
   amount: number
+  approved_amount?: number | null
   installments: number
   monthly_payment: number
   purpose?: string
@@ -30,6 +31,10 @@ const fmtDate = (d?: string | null) => {
 }
 const borrowerName = (b?: PortalLoan['beneficiary']) =>
   b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
+
+// בפורטל מציגים את הסכום שאושר בפועל (נפילה לסכום המבוקש אם לא הוזן)
+const shownAmount = (l: PortalLoan) => Number(l.approved_amount ?? l.amount) || 0
+const monthlyOf = (l: PortalLoan) => l.installments ? Math.round(shownAmount(l) / l.installments) : 0
 
 // ── Password Screen ───────────────────────────────────────────────────────────
 function PasswordScreen({ onAuth }: { onAuth: () => void }) {
@@ -142,7 +147,7 @@ function DisburseModal({ loan, onClose, onDone }: {
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-l from-emerald-500 to-teal-500 px-6 py-5">
           <h2 className="text-white font-bold text-lg">סימון ביצוע הלוואה</h2>
-          <p className="text-emerald-100 text-sm mt-0.5">{borrowerName(loan.beneficiary)} — {fmtCur(loan.amount)}</p>
+          <p className="text-emerald-100 text-sm mt-0.5">{borrowerName(loan.beneficiary)} — {fmtCur(shownAmount(loan))}</p>
         </div>
 
         <form onSubmit={submit} className="px-6 py-6 flex flex-col gap-4">
@@ -221,7 +226,8 @@ function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => vo
             </div>
           </div>
           <div className="flex-shrink-0 text-left">
-            <p className="text-xl font-bold text-slate-900 tabular-nums">{fmtCur(loan.amount)}</p>
+            <p className="text-xl font-bold text-slate-900 tabular-nums">{fmtCur(shownAmount(loan))}</p>
+            <p className="text-[10px] text-emerald-600 font-medium">סכום מאושר</p>
             <p className="text-xs text-slate-500 text-left">{loan.installments} תשלומים</p>
           </div>
         </div>
@@ -229,7 +235,7 @@ function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => vo
         <div className="mt-4 grid grid-cols-2 gap-2">
           <div className="bg-slate-50 rounded-xl px-3 py-2">
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">תשלום חודשי</p>
-            <p className="text-sm font-bold text-slate-800 tabular-nums mt-0.5">{fmtCur(loan.monthly_payment)}</p>
+            <p className="text-sm font-bold text-slate-800 tabular-nums mt-0.5">{fmtCur(monthlyOf(loan))}</p>
           </div>
           {loan.purpose && (
             <div className="bg-slate-50 rounded-xl px-3 py-2">
