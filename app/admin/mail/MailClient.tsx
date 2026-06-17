@@ -1004,7 +1004,6 @@ export default function MailClient() {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [selected, setSelected] = useState<ParsedMessage | null>(null)
   const [loading, setLoading] = useState(true)
-  const [notConnected, setNotConnected] = useState(false)
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
@@ -1087,22 +1086,9 @@ export default function MailClient() {
       setSelected(null)
     }
     const dept = myProfileRef.current?.role === 'admin' ? activeDepartmentRef.current : (myProfileRef.current?.department ?? null)
-    const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
+    const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
     const data = await res.json()
-    if (data.notConnected) { setNotConnected(true); setLoading(false); return }
-    let msgs: ParsedMessage[] = data.messages ?? []
-
-    // Filter messages by assigned label IDs for non-admin users
-    if (myProfile && myProfile.role !== 'admin' && myProfile.mail_label_ids && myProfile.mail_label_ids.length > 0) {
-      // We need the assignments to filter — fetch them first (they're loaded separately via labels endpoint)
-      // Use a local fetch to get current assignments at load time
-      const labelsRes = await fetch('/api/admin/mail/labels')
-      const labelsData = await labelsRes.json()
-      const currentAssignments: Record<string, string[]> = labelsData.assignments ?? {}
-      msgs = msgs.filter(msg =>
-        (currentAssignments[msg.id] ?? []).some(labelId => myProfile.mail_label_ids!.includes(labelId))
-      )
-    }
+    const msgs: ParsedMessage[] = data.messages ?? []
 
     setMessages(msgs)
 
@@ -1118,15 +1104,6 @@ export default function MailClient() {
         ])
       }
       if (isFirstMailLoad.current) isFirstMailLoad.current = false
-    }
-
-    // Fetch open-tracking status for SENT messages
-    if (f === 'SENT' && msgs.length > 0) {
-      const ids = msgs.map(m => m.id).join(',')
-      fetch(`/api/admin/mail/tracking-status?messageIds=${encodeURIComponent(ids)}`)
-        .then(r => r.json())
-        .then(d => setTrackingStatus(d))
-        .catch(() => {})
     }
 
     // batch resolve sender + recipient names
@@ -1175,7 +1152,7 @@ export default function MailClient() {
     setSelected(msg)
     setOpenLabelFor(null)
     if (!msg.isRead) {
-      await fetch('/api/admin/gmail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
+      await fetch('/api/admin/mail/mark-read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: msg.id }) })
       setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: true } : m))
     }
     recordEvent(msg, 'read')
@@ -1187,7 +1164,7 @@ export default function MailClient() {
   }
 
   const trashMessage = async (id: string) => {
-    await fetch('/api/admin/gmail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    await fetch('/api/admin/mail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setMessages(ms => ms.filter(m => m.id !== id))
     if (selected?.id === id) setSelected(null)
   }
@@ -1206,19 +1183,6 @@ export default function MailClient() {
     const info = emailToInfo[msg.fromEmail]
     if (info) return `${info.name} · ${msg.fromEmail}`
     return msg.from.replace(/<.*>/, '').trim() || msg.fromEmail
-  }
-
-  if (notConnected) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 gap-4">
-        <Mail size={48} className="text-slate-300" />
-        <h2 className="text-lg font-semibold text-slate-700">Gmail לא מחובר</h2>
-        <p className="text-sm text-slate-500">יש לאשר גישה לחשבון הגוגל כדי להשתמש בממשק המייל</p>
-        <a href="/api/auth/gmail" className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors">
-          חבר Gmail
-        </a>
-      </div>
-    )
   }
 
   return (
