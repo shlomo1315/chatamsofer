@@ -173,11 +173,11 @@ export function weeklyLoansReportEmail(
   const newLoans = stats.newLoans ?? []
   const sinceLabel = sinceISO ? fmtDate(sinceISO) : ''
 
-  // טבלת ההלוואות החדשות מאז הדוח הקודם
+  // טבלת ההלוואות שאושרו מאז הדוח הקודם
   const newLoansSection = newLoans.length > 0
     ? `
     <h2 style="margin:30px 0 12px;color:#0f172a;font-size:16px;font-weight:800;">
-      הלוואות חדשות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''} — ${newLoans.length}
+      הלוואות מאושרות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''} — ${newLoans.length}
     </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       <tr style="background:#f1f5f9;">
@@ -197,7 +197,7 @@ export function weeklyLoansReportEmail(
     : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr><td style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;">
-        <p style="margin:0;color:#94a3b8;font-size:13px;">אין הלוואות חדשות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''}</p>
+        <p style="margin:0;color:#94a3b8;font-size:13px;">אין הלוואות מאושרות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''}</p>
       </td></tr>
     </table>`
 
@@ -217,16 +217,16 @@ export function weeklyLoansReportEmail(
 
     ${newLoansSection}
 
-    <div style="margin:28px 0 0;">${btn(portalUrl, 'צפייה בפורטל ההלוואות ←', accent)}</div>
+    <div style="margin:28px 0 0;">${btn(portalUrl, 'לחץ כאן לכניסה לאישור ההלוואות ←', accent)}</div>
 
     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
       בפורטל ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
     </p>`
 
   return {
-    subject: `דוח הלוואות — ${stats.awaitingDisbursement} ממתינות לביצוע${newLoans.length ? ` · ${newLoans.length} חדשות` : ''}`,
+    subject: `דוח הלוואות — ${stats.pending} ממתינות לאישור`,
     html: shell({
-      preheader: `${stats.awaitingDisbursement} הלוואות ממתינות לביצוע · ${newLoans.length} חדשות מאז הדוח הקודם`,
+      preheader: `${stats.pending} הלוואות ממתינות לאישור`,
       accent,
       title: 'דוח הלוואות',
       subtitle: 'היכל החתם סופר',

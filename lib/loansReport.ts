@@ -52,10 +52,11 @@ async function collectReport(admin: SupabaseClient, sinceISO: string) {
     admin.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     admin.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'approved').is('disbursed_at', null),
     admin.from('loans').select('id', { count: 'exact', head: true }).gte('disbursed_at', weekAgo),
-    // ההלוואות שנכנסו/נוצרו מאז השליחה הקודמת — "מה שעדיין לא נשלח"
+    // ההלוואות שאושרו מאז השליחה הקודמת — אך ורק בסטטוס "מאושר"
     admin
       .from('loans')
       .select('id, amount, approved_amount, status, created_at, beneficiary:beneficiaries(full_name, family_name)')
+      .eq('status', 'approved')
       .gte('created_at', sinceISO)
       .order('created_at', { ascending: false }),
   ])
