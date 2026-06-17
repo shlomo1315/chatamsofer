@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, CreditCard, FileText, Edit } from 'lucide-react'
+import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
@@ -108,6 +108,25 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
         </Card>
       )}
+
+      {/* ביצוע הלוואה */}
+      <Card>
+        <div className="flex items-center gap-2 mb-3">
+          {loan.disbursed_at
+            ? <CheckCircle2 size={16} className="text-emerald-500" />
+            : <Clock size={16} className="text-amber-500" />}
+          <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
+        </div>
+        {loan.disbursed_at ? (
+          <div className="space-y-1.5 text-sm">
+            <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
+            <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
+            {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
+        )}
+      </Card>
 
       {loan.notes && (
         <Card>

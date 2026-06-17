@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Eye, Search, Layers } from 'lucide-react'
+import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus } from 'lucide-react'
 import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
@@ -95,14 +95,14 @@ export default function LoansTable({ data }: { data: Loan[] }) {
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200">
-                {['שם הלווה', 'ת.ז.', 'סכום מבוקש', 'סכום מאושר', 'תשלומים', 'מטרה', 'תאריך הגשה', 'סטטוס', 'פעולות'].map(h => (
+                {['שם הלווה', 'ת.ז.', 'סכום מבוקש', 'סכום מאושר', 'תשלומים', 'מטרה', 'תאריך הגשה', 'ביצוע', 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap align-middle text-right">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
+                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
               ) : filtered.map(loan => {
                 const b = loan.beneficiary as BenRef | undefined
                 return (
@@ -120,6 +120,23 @@ export default function LoansTable({ data }: { data: Loan[] }) {
                     <td className="px-4 py-3.5 align-middle text-right text-slate-600">{loan.installments}</td>
                     <td className="px-4 py-3.5 align-middle text-right text-slate-600 max-w-[140px] truncate">{loan.purpose ?? '—'}</td>
                     <td className="px-4 py-3.5 align-middle text-right text-slate-500 text-xs"><span className="ltr-num">{fmtDate(loan.created_at)}</span></td>
+                    <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                      {loan.disbursed_at ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                            <CheckCircle2 size={13} className="flex-shrink-0" />
+                            בוצע
+                          </span>
+                          <span className="text-[11px] text-slate-400 ltr-num">{fmtDate(loan.disbursed_at)}</span>
+                          {loan.disbursed_by && <span className="text-[11px] text-slate-400 truncate max-w-[100px]">{loan.disbursed_by}</span>}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                          <Minus size={13} />
+                          טרם בוצע
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}><LoanStatusControl loan={loan} /></td>
                     <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
