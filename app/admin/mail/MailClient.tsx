@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
@@ -22,7 +23,7 @@ function ToolBtn({ title, onClick, children }: { title: string; onClick: () => v
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
-import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { DEPARTMENTS, departmentByEmail, type DepartmentKey } from '@/lib/departments'
 import EmailInput from '@/components/ui/EmailInput'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
@@ -1016,8 +1017,9 @@ export default function MailClient() {
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
   const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
-  const [activeDepartment, setActiveDepartment] = useState<string | null>(null)
-  const activeDepartmentRef = useRef<string | null>(null)
+  const searchParams = useSearchParams()
+  const [activeDepartment, setActiveDepartment] = useState<string | null>(searchParams.get('department'))
+  const activeDepartmentRef = useRef<string | null>(searchParams.get('department'))
   const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
@@ -1147,6 +1149,11 @@ export default function MailClient() {
     load(folder)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDepartment])
+
+  // סנכרון לפי פרמטר ה-URL (לחיצה על מחלקה בתפריט הצד)
+  useEffect(() => {
+    setActiveDepartment(searchParams.get('department'))
+  }, [searchParams])
 
   // Background poll every 60s for new INBOX mail (for toast notifications) — שקט, ללא הבהוב טעינה
   useEffect(() => {
@@ -1382,6 +1389,8 @@ export default function MailClient() {
                 </div>
               ) : filtered.map(msg => {
                 const msgLabels = (assignments[msg.id] ?? []).map(id => labels.find(l => l.id === id)).filter(Boolean) as MailLabel[]
+                // המחלקה של ההודעה: נכנס לפי כתובת היעד, יוצא לפי כתובת השולח
+                const msgDept = departmentByEmail(folder === 'SENT' ? msg.fromEmail : msg.toEmail)
                 const isDragTarget = dragOverMsgId === msg.id && dragLabelId
                 return (
                   <div key={msg.id}
@@ -1421,6 +1430,13 @@ export default function MailClient() {
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-semibold text-slate-800' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
+                        {/* תווית מחלקה — מוצגת בתצוגת "כל המחלקות" */}
+                        {!activeDepartment && msgDept && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-full text-white flex-shrink-0"
+                            style={{ backgroundColor: msgDept.color }} title={msgDept.email}>
+                            {msgDept.label}
+                          </span>
+                        )}
                         {folder === 'SENT' && trackingStatus[msg.id] && (
                           trackingStatus[msg.id].opened ? (
                             <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">

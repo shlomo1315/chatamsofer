@@ -15,16 +15,24 @@ export interface Department {
   key: DepartmentKey
   label: string
   email: string
+  color: string   // צבע התווית להצגה בתיבת המייל המאוחדת
 }
 
 export const DEPARTMENTS: Record<DepartmentKey, Department> = {
-  main:      { key: 'main',      label: 'משרד ראשי',        email: 'office@chasamsofer.info' },
-  igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info' },
-  gemach:    { key: 'gemach',    label: 'גמ"ח',             email: 'g@chasamsofer.info' },
-  maternity: { key: 'maternity', label: 'עזר יולדות',        email: 'y@chasamsofer.info' },
-  widows:    { key: 'widows',    label: 'אלמנות ויתומים',    email: 'a@chasamsofer.info' },
-  medical:   { key: 'medical',   label: 'אגף סיוע רפואי',    email: 'r@chasamsofer.info' },
-  holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: 'c@chasamsofer.info' },
+  main:      { key: 'main',      label: 'משרד ראשי',        email: 'office@chasamsofer.info', color: '#64748b' },
+  igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info',   color: '#6366f1' },
+  gemach:    { key: 'gemach',    label: 'גמ"ח',             email: 'g@chasamsofer.info',      color: '#10b981' },
+  maternity: { key: 'maternity', label: 'עזר יולדות',        email: 'y@chasamsofer.info',      color: '#ec4899' },
+  widows:    { key: 'widows',    label: 'אלמנות ויתומים',    email: 'a@chasamsofer.info',      color: '#8b5cf6' },
+  medical:   { key: 'medical',   label: 'אגף סיוע רפואי',    email: 'r@chasamsofer.info',      color: '#ef4444' },
+  holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: 'c@chasamsofer.info',      color: '#f59e0b' },
+}
+
+// איתור מחלקה לפי כתובת מייל (נכנס: to; יוצא: from). מחזיר null אם לא נמצא.
+export function departmentByEmail(email?: string | null): Department | null {
+  if (!email) return null
+  const e = email.toLowerCase().trim()
+  return Object.values(DEPARTMENTS).find(d => d.email.toLowerCase() === e) ?? null
 }
 
 // כתובת השולח האחידה לכל המיילים האוטומטיים
