@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Mail } from 'lucide-react'
 import MailClient from './MailClient'
 
@@ -13,7 +14,9 @@ export default function MailPage() {
           <p className="text-sm text-slate-500">office@chasamsofer.info</p>
         </div>
       </div>
-      <MailClient />
+      <Suspense fallback={<div className="h-96 flex items-center justify-center text-slate-400 text-sm">טוען…</div>}>
+        <MailClient />
+      </Suspense>
     </div>
   )
 }

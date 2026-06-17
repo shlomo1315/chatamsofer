@@ -197,7 +197,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
               {visibleDepartments.map(dep => (
                 <Link
                   key={dep.key}
-                  href="/admin/mail"
+                  href={`/admin/mail?department=${dep.key}`}
                   onClick={() => setMobileOpen(false)}
                   className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-all
                     ${mailActive ? 'text-slate-200 hover:bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
