@@ -25,6 +25,7 @@ export interface Profile {
   permissions?: UserPermissions
   mail_label_ids?: string[]
   mail_account?: string
+  department?: string | null
   created_at: string
 }
 

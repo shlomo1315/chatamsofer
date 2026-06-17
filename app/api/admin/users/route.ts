@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'מפתח השירות (SERVICE_ROLE) אינו מוגדר בשרת' }, { status: 500 })
   }
 
-  let body: { full_name?: string; email?: string; password?: string; role?: string; phone?: string; permissions?: Record<string, string>; mail_account?: string; mail_label_ids?: string[] }
+  let body: { full_name?: string; email?: string; password?: string; role?: string; phone?: string; permissions?: Record<string, string>; mail_account?: string; mail_label_ids?: string[]; department?: string | null }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const full_name = String(body.full_name ?? '').trim()
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
   const permissions = body.permissions ?? {}
   const mail_account = body.mail_account ?? null
   const mail_label_ids = body.mail_label_ids ?? []
+  const department = body.department ?? null
 
   if (!full_name) return NextResponse.json({ error: 'שם מלא חובה' }, { status: 400 })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'אימייל לא תקין' }, { status: 400 })
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
   // יצירת פרופיל מקושר
   const { error: profErr } = await admin.from('profiles').insert({
     id: created.user.id, email, full_name, role, phone, is_active: true, permissions,
-    mail_account, mail_label_ids,
+    mail_account, mail_label_ids, department,
   })
   if (profErr) {
     // ניקוי: אם הפרופיל נכשל, מחק את משתמש האימות שנוצר
@@ -100,10 +101,10 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'מפתח השירות אינו מוגדר' }, { status: 500 })
   }
 
-  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[] }
+  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[]; department?: string | null }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids } = body
+  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids, department } = body
 
   if (!id) return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
   if (role && !VALID_ROLES.includes(role)) return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
@@ -116,6 +117,7 @@ export async function PATCH(request: NextRequest) {
   if (permissions !== undefined) updates.permissions = permissions
   if (mail_account !== undefined) updates.mail_account = mail_account || null
   if (mail_label_ids !== undefined) updates.mail_label_ids = mail_label_ids
+  if (department !== undefined) updates.department = department || null
 
   const { error } = await admin.from('profiles').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: `שגיאה בעדכון: ${error.message}` }, { status: 500 })
