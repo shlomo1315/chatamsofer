@@ -1,11 +1,46 @@
 import { Resend } from 'resend'
-import { NOREPLY_FROM, BRAND_NAME } from './departments'
+import { createClient } from '@supabase/supabase-js'
+import { NOREPLY_FROM, BRAND_NAME, departmentByEmail } from './departments'
 
 export interface MailAttachment { filename: string; mimeType: string; contentB64: string }
 export interface MailOptions {
   replyTo?: string
   fromName?: string
   fromEmail?: string   // כתובת השולח (ברירת מחדל: noreply). מחלקות שולחות מכתובתן.
+  department?: string  // מחלקה לתיוג בתיבת "דואר יוצא" (ברירת מחדל: לפי כתובת השולח/תשובה)
+  sentBy?: string      // מי שלח (משתמש מערכת); ריק = מייל אוטומטי
+  skipLog?: boolean    // דלג על תיעוד ב-sent_emails (כשהקורא מתעד בעצמו)
+}
+
+// תיעוד מייל יוצא ב-Supabase כדי שיופיע בתיבת "דואר יוצא" של המחלקה. לא חוסם.
+async function logSentEmail(
+  to: string, subject: string, html: string,
+  attachments: MailAttachment[] | undefined, opts: MailOptions | undefined, fromName: string,
+) {
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) return
+    const replyTo = opts?.replyTo ?? opts?.fromEmail ?? null
+    const department = opts?.department
+      ?? departmentByEmail(opts?.replyTo)?.key
+      ?? departmentByEmail(opts?.fromEmail)?.key
+      ?? 'main'
+    const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+    const { error } = await admin.from('sent_emails').insert({
+      from_name: fromName,
+      to_email: to,
+      subject,
+      html,
+      department,
+      reply_to: replyTo,
+      sent_by: opts?.sentBy ?? null,
+      attachments: (attachments ?? []).map(a => ({ filename: a.filename, mimeType: a.mimeType })),
+    })
+    if (error) console.error('[mail] sent_emails log error:', error.message)
+  } catch (e) {
+    console.error('[mail] sent_emails log threw:', e)
+  }
 }
 
 // שליחת מייל דרך Resend. ברירת המחדל לשולח היא noreply@chasamsofer.info,
@@ -56,6 +91,10 @@ export async function deliverMail(
     if (error) {
       console.error('[mail] Resend error:', error)
       return { ok: false, error: String(error.message ?? error) }
+    }
+    // תיעוד אוטומטי בתיבת "דואר יוצא" — אלא אם הקורא מתעד בעצמו
+    if (!options?.skipLog) {
+      await logSentEmail(to, subject, html, attachments, options, fromName)
     }
     return { ok: true }
   } catch (err) {
