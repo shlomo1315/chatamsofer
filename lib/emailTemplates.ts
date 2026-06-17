@@ -734,6 +734,13 @@ export function loanApprovedEmail(
     </table>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי ההלוואה:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${loanRows}</table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#3730a3;font-size:14px;font-weight:700;line-height:1.7;">
+          בקשתכם הועברה לטיפול במזכירות של הרב אברהם סלונים שליט"א, ויצרו עמכם קשר בימים הקרובים.
+        </p>
+      </td></tr>
+    </table>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
   `
