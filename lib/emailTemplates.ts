@@ -143,6 +143,54 @@ function shell(opts: {
 </html>`
 }
 
+// ─── דוח שבועי של הלוואות (נשלח לכתובת שמוגדרת בהגדרות הפורטל) ────────────────
+export function weeklyLoansReportEmail(
+  stats: { pending: number; awaitingDisbursement: number; disbursedThisWeek: number },
+  portalUrl: string,
+): BuiltEmail {
+  const accent = '#6366f1'
+  const statBox = (value: number, label: string, color: string) => `
+    <td width="33%" style="padding:6px;" valign="top">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;">
+        <tr><td style="padding:18px 10px;text-align:center;">
+          <div style="font-size:32px;font-weight:900;color:${color};line-height:1;">${value}</div>
+          <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.4;">${label}</div>
+        </td></tr>
+      </table>
+    </td>`
+
+  const body = `
+    <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.7;text-align:center;">
+      ריכוז שבועי של בקשות ההלוואה במערכת.<br/>
+      להלן מצב ההלוואות נכון להיום:
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr>
+        ${statBox(stats.awaitingDisbursement, 'מאושרות וממתינות לביצוע', '#6366f1')}
+        ${statBox(stats.pending, 'ממתינות לאישור', '#d97706')}
+        ${statBox(stats.disbursedThisWeek, 'בוצעו השבוע', '#059669')}
+      </tr>
+    </table>
+
+    ${btn(portalUrl, 'צפייה בפורטל ההלוואות ←', accent)}
+
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
+      בפורטל ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
+    </p>`
+
+  return {
+    subject: `דוח שבועי — ${stats.awaitingDisbursement} הלוואות ממתינות לביצוע`,
+    html: shell({
+      preheader: `${stats.awaitingDisbursement} הלוואות ממתינות לביצוע · ${stats.pending} ממתינות לאישור`,
+      accent,
+      title: 'דוח שבועי — הלוואות',
+      subtitle: 'היכל החתם סופר',
+      body,
+    }),
+  }
+}
+
 // ─── עזרים ────────────────────────────────────────────────────────────────────
 export function requiredDocLabels(maritalStatus?: string | null): string[] {
   if (maritalStatus === 'נשואים') return ['תעודת זהות של הבעל (כולל ספח)', 'תעודת זהות של האשה (כולל ספח)']
