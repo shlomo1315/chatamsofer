@@ -100,6 +100,26 @@ export async function syncStreetsForCity(admin: SupabaseClient, city: string): P
   return streets.length
 }
 
+// רענון יומי מלא — נקרא מהמתזמן הפנימי (instrumentation) מדי לילה.
+// מרענן את רשימת הערים, ואת הרחובות של ערים שכבר נטענו למאגר (אלו שבשימוש).
+export async function runGovSync(): Promise<{ cities: number; streetsCities: number; error?: string }> {
+  const admin = getAdminClient()
+  if (!admin) return { cities: 0, streetsCities: 0, error: 'no admin client' }
+  let cities = 0
+  let streetsCities = 0
+  try { cities = await syncCities(admin) } catch (e) { return { cities, streetsCities, error: e instanceof Error ? e.message : 'cities error' } }
+  try {
+    const { data } = await admin.from('gov_streets').select('city')
+    const list = [...new Set((data ?? []).map(r => r.city))]
+    for (const city of list) {
+      try { await syncStreetsForCity(admin, city); streetsCities++ } catch { /* ממשיכים לעיר הבאה */ }
+    }
+  } catch (e) {
+    return { cities, streetsCities, error: e instanceof Error ? e.message : 'streets error' }
+  }
+  return { cities, streetsCities }
+}
+
 // מחזיר רחובות לעיר מהמאגר המקומי; אם ריק/ישן — מסנכרן ומחזיר. מהיר ברוב הפעמים.
 export async function getStreets(admin: SupabaseClient, city: string): Promise<string[]> {
   const { data } = await admin
