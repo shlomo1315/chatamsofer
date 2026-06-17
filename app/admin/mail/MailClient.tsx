@@ -374,19 +374,17 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
 
   const forward = async () => {
     if (!target) return
-    const dep = DEPARTMENTS[target]
-    if (!dep) return
     setSending(true)
-    const forwardBody = `${note ? `${note}\n\n---\n` : ''}הועבר: ${msg.from}<br/>${msg.body || msg.snippet}`
-    await fetch('/api/admin/gmail/send', {
+    const res = await fetch('/api/admin/mail/forward', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // נשלח לכתובת המחלקה; השליחה מטעם אותה מחלקה (department) כדי שהמעקב והכתובת יהיו עקביים
-      body: JSON.stringify({ to: dep.email, subject: `Fwd: ${msg.subject}`, body: forwardBody, department: target }),
+      body: JSON.stringify({ messageId: msg.id, targetDepartment: target, note }),
     })
     setSending(false)
-    setDone(true)
-    setTimeout(onClose, 1500)
+    if (res.ok) {
+      setDone(true)
+      setTimeout(onClose, 1500)
+    }
   }
 
   return (
