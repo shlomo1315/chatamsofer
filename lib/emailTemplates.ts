@@ -144,11 +144,22 @@ function shell(opts: {
 }
 
 // ─── דוח שבועי של הלוואות (נשלח לכתובת שמוגדרת בהגדרות הפורטל) ────────────────
+export interface ReportLoanRow {
+  name: string
+  amount: number
+  statusLabel: string
+  createdAt: string
+}
+
 export function weeklyLoansReportEmail(
-  stats: { pending: number; awaitingDisbursement: number; disbursedThisWeek: number },
+  stats: { pending: number; awaitingDisbursement: number; disbursedThisWeek: number; newLoans?: ReportLoanRow[] },
   portalUrl: string,
+  sinceISO?: string,
 ): BuiltEmail {
   const accent = '#6366f1'
+  const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
+  const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
+
   const statBox = (value: number, label: string, color: string) => `
     <td width="33%" style="padding:6px;" valign="top">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;">
@@ -159,13 +170,44 @@ export function weeklyLoansReportEmail(
       </table>
     </td>`
 
+  const newLoans = stats.newLoans ?? []
+  const sinceLabel = sinceISO ? fmtDate(sinceISO) : ''
+
+  // טבלת ההלוואות החדשות מאז הדוח הקודם
+  const newLoansSection = newLoans.length > 0
+    ? `
+    <h2 style="margin:30px 0 12px;color:#0f172a;font-size:16px;font-weight:800;">
+      הלוואות חדשות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''} — ${newLoans.length}
+    </h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <tr style="background:#f1f5f9;">
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">משפחה</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">סכום</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">סטטוס</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">תאריך</td>
+      </tr>
+      ${newLoans.map((l, i) => `
+      <tr style="background:${i % 2 ? '#ffffff' : '#fafbfc'};">
+        <td style="padding:10px 12px;font-size:13px;color:#0f172a;border-top:1px solid #f1f5f9;">${l.name}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#0f172a;font-weight:700;border-top:1px solid #f1f5f9;">${fmtCur(l.amount)}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#64748b;border-top:1px solid #f1f5f9;">${l.statusLabel}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#64748b;border-top:1px solid #f1f5f9;">${fmtDate(l.createdAt)}</td>
+      </tr>`).join('')}
+    </table>`
+    : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+      <tr><td style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;">
+        <p style="margin:0;color:#94a3b8;font-size:13px;">אין הלוואות חדשות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''}</p>
+      </td></tr>
+    </table>`
+
   const body = `
     <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.7;text-align:center;">
-      ריכוז שבועי של בקשות ההלוואה במערכת.<br/>
+      ריכוז בקשות ההלוואה במערכת.<br/>
       להלן מצב ההלוואות נכון להיום:
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr>
         ${statBox(stats.awaitingDisbursement, 'מאושרות וממתינות לביצוע', '#6366f1')}
         ${statBox(stats.pending, 'ממתינות לאישור', '#d97706')}
@@ -173,18 +215,20 @@ export function weeklyLoansReportEmail(
       </tr>
     </table>
 
-    ${btn(portalUrl, 'צפייה בפורטל ההלוואות ←', accent)}
+    ${newLoansSection}
+
+    <div style="margin:28px 0 0;">${btn(portalUrl, 'צפייה בפורטל ההלוואות ←', accent)}</div>
 
     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
       בפורטל ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
     </p>`
 
   return {
-    subject: `דוח שבועי — ${stats.awaitingDisbursement} הלוואות ממתינות לביצוע`,
+    subject: `דוח הלוואות — ${stats.awaitingDisbursement} ממתינות לביצוע${newLoans.length ? ` · ${newLoans.length} חדשות` : ''}`,
     html: shell({
-      preheader: `${stats.awaitingDisbursement} הלוואות ממתינות לביצוע · ${stats.pending} ממתינות לאישור`,
+      preheader: `${stats.awaitingDisbursement} הלוואות ממתינות לביצוע · ${newLoans.length} חדשות מאז הדוח הקודם`,
       accent,
-      title: 'דוח שבועי — הלוואות',
+      title: 'דוח הלוואות',
       subtitle: 'היכל החתם סופר',
       body,
     }),

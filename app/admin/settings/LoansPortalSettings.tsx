@@ -25,6 +25,7 @@ export default function LoansPortalSettings() {
   const [reportEmail, setReportEmail] = useState('')
   const [savingEmail, setSavingEmail] = useState(false)
   const [sendingTest, setSendingTest] = useState(false)
+  const [sendingNow, setSendingNow] = useState(false)
   const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   const portalUrl = typeof window !== 'undefined'
@@ -77,16 +78,34 @@ export default function LoansPortalSettings() {
     setEmailResult(null)
     setSendingTest(true)
     try {
+      // שולח לכתובת שמופיעה בשדה — עובד גם לפני שמירה
       const res = await fetch('/api/admin/portal/report-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ send: true }),
+        body: JSON.stringify({ send: true, email: reportEmail.trim() }),
       })
       const d = await res.json()
       if (res.ok) setEmailResult({ ok: true, msg: `נשלח דוח בדיקה ל-${d.sentTo} ✓` })
       else setEmailResult({ ok: false, msg: d.error ?? 'שליחה נכשלה' })
     } catch { setEmailResult({ ok: false, msg: 'שגיאת תקשורת' }) }
     finally { setSendingTest(false) }
+  }
+
+  // שליחה אמיתית עכשיו — שולח את כל ההלוואות החדשות מאז הדוח הקודם ומקדם את החותמת
+  const sendNow = async () => {
+    setEmailResult(null)
+    setSendingNow(true)
+    try {
+      const res = await fetch('/api/admin/portal/report-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendNow: true, email: reportEmail.trim() }),
+      })
+      const d = await res.json()
+      if (res.ok) setEmailResult({ ok: true, msg: `הדוח נשלח ל-${d.sentTo} · ${d.count} הלוואות חדשות ✓` })
+      else setEmailResult({ ok: false, msg: d.error ?? 'שליחה נכשלה' })
+    } catch { setEmailResult({ ok: false, msg: 'שגיאת תקשורת' }) }
+    finally { setSendingNow(false) }
   }
 
   return (
@@ -189,7 +208,7 @@ export default function LoansPortalSettings() {
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={saveEmail}
             disabled={savingEmail}
@@ -199,15 +218,28 @@ export default function LoansPortalSettings() {
             שמור כתובת
           </button>
           <button
+            onClick={sendNow}
+            disabled={sendingNow || !reportEmail.trim()}
+            title={!reportEmail.trim() ? 'יש להזין כתובת תחילה' : 'שלח עכשיו את כל ההלוואות החדשות מאז הדוח הקודם'}
+            className="flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {sendingNow ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            שלח עכשיו
+          </button>
+          <button
             onClick={sendTest}
             disabled={sendingTest || !reportEmail.trim()}
-            title={!reportEmail.trim() ? 'יש לשמור כתובת תחילה' : 'שלח דוח בדיקה עכשיו'}
+            title={!reportEmail.trim() ? 'יש להזין כתובת תחילה' : 'שלח דוח בדיקה לכתובת שבשדה'}
             className="flex items-center gap-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {sendingTest ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
             שלח בדיקה
           </button>
         </div>
+        <p className="text-[11px] text-slate-400 -mt-1">
+          <strong>שלח עכשיו</strong> = שולח את כל ההלוואות שנכנסו מאז הדוח הקודם ומאפס את הספירה ·
+          <strong> שלח בדיקה</strong> = שולח עותק לכתובת שבשדה בלי לאפס
+        </p>
       </div>
     </div>
   )
