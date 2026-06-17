@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { DEPARTMENTS, BRAND_NAME, type DepartmentKey } from '@/lib/departments'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
@@ -42,5 +43,25 @@ export async function POST(request: NextRequest) {
 
   const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
+
+  // תיעוד המייל היוצא ב-Supabase (לא חוסם)
+  try {
+    const admin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } },
+    )
+    admin.from('sent_emails').insert({
+      from_name: fromName,
+      to_email: to,
+      subject,
+      html,
+      department: deptKey,
+      reply_to: replyTo,
+      sent_by: staff.email,
+      attachments: allAttachments.map(a => ({ filename: a.filename, mimeType: a.mimeType })),
+    }).then(({ error }) => { if (error) console.error('[mail/send] log error:', error.message) })
+  } catch (e) { console.error('[mail/send] log threw:', e) }
+
   return NextResponse.json({ ok: true })
 }
