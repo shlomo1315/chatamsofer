@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, CreditCard } from 'lucide-react'
+import { Plus, CreditCard, ExternalLink } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import Button from '@/components/ui/Button'
@@ -23,6 +23,12 @@ export default async function LoansPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="הלוואות" subtitle={`${loans.length} הלוואות`}>
+        <Link href="/shared/loans" target="_blank" rel="noopener noreferrer">
+          <Button variant="secondary">
+            <ExternalLink size={16} />
+            פורטל ביצוע
+          </Button>
+        </Link>
         <Link href="/admin/loans/new">
           <Button>
             <Plus size={16} />

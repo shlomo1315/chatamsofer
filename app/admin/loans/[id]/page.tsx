@@ -79,7 +79,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             <span className="text-xs font-semibold text-slate-500 uppercase">פרטי הלוואה</span>
           </div>
           <div className="space-y-2 text-sm">
-            <p><span className="text-slate-500">סכום: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
+            <p><span className="text-slate-500">סכום מבוקש: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
+            {loan.approved_amount != null && (
+              <p><span className="text-slate-500">סכום שאושר: </span><span className="font-bold text-green-700 ltr-num">{fmtCur(loan.approved_amount)}</span></p>
+            )}
             <p><span className="text-slate-500">מספר תשלומים: </span>{loan.installments}</p>
             <p><span className="text-slate-500">מטרה: </span>{loan.purpose ?? '—'}</p>
             {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}

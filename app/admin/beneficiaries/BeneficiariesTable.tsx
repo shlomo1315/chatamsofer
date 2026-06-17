@@ -56,98 +56,94 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'full_name',
     header: 'שם מלא',
     sortable: true,
+    className: 'min-w-[160px]',
     render: (row) => (
       <Link
         href={`/admin/beneficiaries/${row.id}`}
-        className="flex items-center gap-3 group/name"
+        className="flex items-center gap-2.5 group/name"
       >
-        <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(row.id)}`}>
-          {initials(row)}
-        </span>
-        <span className="flex flex-col min-w-0">
-          <span className="font-medium text-slate-800 group-hover/name:text-indigo-600 truncate">
-            {fullName(row)}
+        <div className="relative flex-shrink-0">
+          <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${avatarColor(row.id)}`}>
+            {initials(row)}
           </span>
+          {row.is_active !== false && (
+            <span className="absolute -bottom-0.5 -left-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
+          )}
+        </div>
+        <span className="font-medium text-slate-800 group-hover/name:text-indigo-600 truncate max-w-[130px]">
+          {fullName(row)}
         </span>
       </Link>
     ),
   },
   {
     key: 'id_number',
-    header: 'מספר זהות',
+    header: 'מספר ת.ז.',
     sortable: true,
+    className: 'min-w-[100px]',
     render: (row) =>
       row.id_number ? (
-        <span dir="ltr" className="font-mono text-xs text-slate-600 inline-block text-left tabular-nums">{row.id_number}</span>
+        <span dir="ltr" className="font-mono text-xs text-slate-600 tabular-nums">{row.id_number}</span>
       ) : (
         <span className="text-slate-300">—</span>
       ),
   },
   {
     key: 'spouse_name',
-    header: 'שם האישה',
+    header: 'בן/בת זוג',
     sortable: true,
+    className: 'min-w-[140px]',
     render: (row) =>
       row.spouse_name ? (
-        <span className="text-sm text-slate-700">{row.spouse_name}</span>
-      ) : (
-        <span className="text-slate-300">—</span>
-      ),
-  },
-  {
-    key: 'spouse_id_number',
-    header: 'ת.ז. האישה',
-    sortable: true,
-    render: (row) =>
-      row.spouse_id_number ? (
-        <span dir="ltr" className="font-mono text-xs text-slate-600 inline-block text-left tabular-nums">{row.spouse_id_number}</span>
-      ) : (
-        <span className="text-slate-300">—</span>
-      ),
-  },
-  {
-    key: 'phone',
-    header: 'טלפון',
-    sortable: true,
-    render: (row) =>
-      row.phone ? (
-        <div dir="ltr" className="flex items-center justify-end gap-1.5 text-xs text-slate-600 tabular-nums">
-          <Phone size={12} className="text-slate-400 flex-shrink-0" />
-          <span>{row.phone}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-slate-700 font-medium truncate max-w-[130px]">{row.spouse_name}</span>
+          {row.spouse_id_number && (
+            <span dir="ltr" className="font-mono text-[11px] text-slate-400 tabular-nums">{row.spouse_id_number}</span>
+          )}
         </div>
       ) : (
         <span className="text-slate-300">—</span>
       ),
   },
   {
-    key: 'email',
-    header: 'מייל',
-    sortable: true,
-    render: (row) =>
-      row.email ? (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
-          dir="ltr"
-          title="שליחת מייל מתוך המערכת"
-          className="inline-flex items-center justify-end gap-1.5 text-xs text-slate-600 hover:text-indigo-600 hover:underline text-left"
-        >
-          <Mail size={12} className="text-slate-400 flex-shrink-0" />
-          <span className="truncate max-w-[200px]">{row.email}</span>
-        </button>
-      ) : (
-        <span className="text-slate-300">—</span>
-      ),
+    key: 'phone',
+    header: 'יצירת קשר',
+    sortable: false,
+    className: 'min-w-[160px]',
+    render: (row) => (
+      <div className="flex flex-col gap-1">
+        {row.phone ? (
+          <div dir="ltr" className="flex items-center gap-1.5 text-xs text-slate-600 tabular-nums">
+            <Phone size={11} className="text-slate-400 flex-shrink-0" />
+            <span>{row.phone}</span>
+          </div>
+        ) : null}
+        {row.email ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
+            dir="ltr"
+            title="שליחת מייל מתוך המערכת"
+            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 hover:underline text-left w-fit"
+          >
+            <Mail size={11} className="text-slate-400 flex-shrink-0" />
+            <span className="truncate max-w-[140px]">{row.email}</span>
+          </button>
+        ) : null}
+        {!row.phone && !row.email && <span className="text-slate-300">—</span>}
+      </div>
+    ),
   },
   {
     key: 'city',
     header: 'עיר',
     sortable: true,
+    className: 'min-w-[90px]',
     render: (row) =>
       row.city ? (
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-          <MapPin size={12} className="text-slate-400" />
-          {row.city}
+        <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+          <MapPin size={11} className="text-slate-400 flex-shrink-0" />
+          <span className="truncate max-w-[90px]">{row.city}</span>
         </span>
       ) : (
         <span className="text-slate-300">—</span>
@@ -157,9 +153,10 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'marital_status',
     header: 'מצב משפחתי',
     sortable: true,
+    className: 'min-w-[100px]',
     render: (row) =>
       row.marital_status ? (
-        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${
+        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${
           MARITAL_TINT[row.marital_status] ?? 'bg-slate-100 text-slate-600'
         }`}>
           {row.marital_status}
@@ -171,7 +168,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   {
     key: 'children_count',
     header: 'ילדים',
-    className: 'text-center',
+    className: 'text-center min-w-[60px]',
     sortable: true,
     render: (row) => (
       <span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-slate-100 text-slate-600 text-xs font-medium tabular-nums">
@@ -183,25 +180,8 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'eligibility_status',
     header: 'סטטוס',
     sortable: true,
+    className: 'min-w-[120px]',
     render: (row) => <StatusChip status={row.eligibility_status} />,
-  },
-  {
-    key: 'is_active',
-    header: 'פעיל',
-    className: 'text-center',
-    sortable: true,
-    render: (row) =>
-      row.is_active ? (
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-          פעיל
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-          לא פעיל
-        </span>
-      ),
   },
 ]
 

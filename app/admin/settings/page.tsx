@@ -10,6 +10,7 @@ import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
+import LoansPortalSettings from './LoansPortalSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -131,6 +132,11 @@ export default async function SettingsPage() {
         {/* Nedarim Card connection */}
         <Card>
           <NedarimSettings />
+        </Card>
+
+        {/* Loans portal */}
+        <Card>
+          <LoansPortalSettings />
         </Card>
 
         {/* Notifications */}

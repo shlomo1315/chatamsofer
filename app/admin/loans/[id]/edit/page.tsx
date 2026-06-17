@@ -28,6 +28,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
   const [purpose, setPurpose] = useState('')
   const [purposeDetails, setPurposeDetails] = useState('')
   const [amount, setAmount] = useState('')
+  const [approvedAmount, setApprovedAmount] = useState('')
   const [installments, setInstallments] = useState('')
   const [declaration, setDeclaration] = useState('')
   const [notes, setNotes] = useState('')
@@ -39,6 +40,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   const amountNum = parseInt(amount.replace(/\D/g, '') || '0', 10)
+  const approvedNum = parseInt(approvedAmount.replace(/\D/g, '') || '0', 10)
   const instNum = parseInt(installments.replace(/\D/g, '') || '0', 10)
   const needsDetails = purpose !== 'נישואי הבן/הבת'
 
@@ -53,6 +55,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
         setPurpose(data.purpose ?? '')
         setPurposeDetails(data.purpose_details ?? '')
         setAmount(data.amount ? String(Math.round(Number(data.amount))) : '')
+        setApprovedAmount(data.approved_amount != null ? String(Math.round(Number(data.approved_amount))) : '')
         setInstallments(data.installments ? String(data.installments) : '')
         setDeclaration(data.declaration ?? '')
         setNotes(data.notes ?? '')
@@ -107,6 +110,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
       }
       const { error } = await supabase.from('loans').update({
         amount: amountNum,
+        approved_amount: approvedNum || null,
         installments: instNum,
         purpose: purpose || null,
         purpose_details: needsDetails ? (purposeDetails.trim() || null) : null,
@@ -182,6 +186,12 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
             className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} dir="ltr" />
           <p className="text-[11px] text-slate-400">עד {MAX_AMOUNT.toLocaleString('he-IL')} ש״ח (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
           {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-slate-600">סכום שאושר בפועל (₪)</label>
+          <input type="text" inputMode="numeric" value={approvedAmount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setApprovedAmount(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_AMOUNT))) }}
+            className="rounded-lg border border-slate-300 focus:ring-indigo-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left" dir="ltr" placeholder="ריק = כסכום המבוקש" />
+          <p className="text-[11px] text-slate-400">הסכום שמוצג בפורטל הביצוע</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">מספר תשלומים להחזר <span className="text-red-500">*</span></label>
