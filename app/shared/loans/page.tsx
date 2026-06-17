@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, IdCard, Mail, Phone } from 'lucide-react'
+import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, IdCard, Mail, Phone, Download } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PortalLoan {
@@ -324,6 +324,34 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     done: 'בוצעו',
   }
 
+  // ייצוא ההלוואות המסוננות לקובץ אקסל (CSV עם BOM — נפתח ישירות באקסל בעברית)
+  const exportExcel = () => {
+    const headers = ['משפחה', 'ת.ז.', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'סכום מבוקש', 'מספר תשלומים', 'מטרה', 'סטטוס', 'תאריך ביצוע', 'בוצע ע"י']
+    const rows = visibleLoans.map(l => [
+      borrowerName(l.beneficiary),
+      l.beneficiary?.id_number ?? '',
+      l.beneficiary?.city ?? '',
+      l.beneficiary?.phone ?? '',
+      l.beneficiary?.email ?? '',
+      shownAmount(l),
+      Math.round(Number(l.amount) || 0),
+      l.installments ?? '',
+      l.purpose ?? '',
+      l.disbursed_at ? 'בוצעה' : 'ממתינה לביצוע',
+      fmtDate(l.disbursed_at),
+      l.disbursed_by ?? '',
+    ])
+    const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+    const csv = '﻿' + [headers, ...rows].map(row => row.map(esc).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `הלוואות-${filterLabel[filter]}-${new Date().toLocaleDateString('he-IL').replace(/\//g, '-')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const statCards: { key: FilterMode; label: string; value: number; numCls: string; dotCls: string; activeCls: string }[] = [
     { key: 'pending', label: 'ממתינות לביצוע', value: pending.length, numCls: 'text-amber-600', dotCls: 'bg-amber-400', activeCls: 'bg-amber-50 border-amber-300 ring-2 ring-amber-200' },
     { key: 'all', label: 'סה״כ הלוואות', value: loans.length, numCls: 'text-indigo-600', dotCls: 'bg-indigo-400', activeCls: 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200' },
@@ -397,12 +425,22 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
           <>
             {visibleLoans.length > 0 ? (
               <section>
-                <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  {filter === 'pending' && <Clock3 size={15} className="text-amber-500" />}
-                  {filter === 'done' && <CheckCircle2 size={15} className="text-emerald-500" />}
-                  {filter === 'all' && <CreditCard size={15} className="text-slate-400" />}
-                  {filterLabel[filter]} ({visibleLoans.length})
-                </h2>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    {filter === 'pending' && <Clock3 size={15} className="text-amber-500" />}
+                    {filter === 'done' && <CheckCircle2 size={15} className="text-emerald-500" />}
+                    {filter === 'all' && <CreditCard size={15} className="text-slate-400" />}
+                    {filterLabel[filter]} ({visibleLoans.length})
+                  </h2>
+                  <button
+                    onClick={exportExcel}
+                    title="הורד את הרשימה המסוננת כקובץ אקסל"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    <Download size={14} />
+                    הורד אקסל
+                  </button>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {visibleLoans.map(l => (
                     <LoanCard
