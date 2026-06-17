@@ -47,9 +47,19 @@ export async function POST(request: NextRequest) {
 
   // 1. מייל אישור הבקשה (לא חוסם)
   if (ben.email) {
+    // אישור לידה → שולפים את רשימת המוקדים הפעילים לאיסוף כרטיס המזון (600 ₪)
+    let centers: { name: string; city?: string | null; address?: string | null }[] = []
+    if (type === 'maternity') {
+      const { data: centerRows } = await admin
+        .from('card_centers')
+        .select('name, city, address')
+        .eq('is_active', true)
+        .order('name')
+      centers = centerRows ?? []
+    }
     const mail = type === 'loan'
       ? loanApprovedEmail(ben, req as { amount?: number; installments?: number; monthly_payment?: number; purpose?: string })
-      : birthApprovedEmail(ben, req as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string })
+      : birthApprovedEmail(ben, req as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, centers)
     deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor(type === 'loan' ? 'gemach' : 'maternity')).catch(e => console.error('[request-approved] mail failed:', e))
   }
 
