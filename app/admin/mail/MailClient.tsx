@@ -1220,6 +1220,15 @@ export default function MailClient() {
     return msg.from.replace(/<.*>/, '').trim() || msg.fromEmail
   }
 
+  // המחלקה הפעילה להצגה בכותרת: למנהל — לפי הבחירה (activeDepartment),
+  // למשתמש רגיל — המחלקה שלו. כש"כל המחלקות" נבחר אצל מנהל — תצוגה מאוחדת.
+  const headerDeptKey = myProfile?.role === 'admin'
+    ? activeDepartment
+    : (myProfile?.department ?? null)
+  const headerDept = headerDeptKey ? DEPARTMENTS[headerDeptKey as DepartmentKey] : null
+  const headerLabel = headerDept ? headerDept.label : (myProfile?.role === 'admin' ? 'כל המחלקות' : 'משרד ראשי')
+  const headerEmail = headerDept ? headerDept.email : (myProfile?.role === 'admin' ? 'כל הכתובות' : 'office@chasamsofer.info')
+
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
@@ -1233,21 +1242,8 @@ export default function MailClient() {
               <Mail size={16} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              {myProfile?.department && DEPARTMENTS[myProfile.department as DepartmentKey] ? (
-                <>
-                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">
-                    {DEPARTMENTS[myProfile.department as DepartmentKey].label}
-                  </p>
-                  <p className="text-[11px] text-indigo-500 truncate font-medium">
-                    {DEPARTMENTS[myProfile.department as DepartmentKey].email}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-bold text-slate-800 truncate leading-tight">משרד ראשי</p>
-                  <p className="text-[11px] text-indigo-500 truncate font-medium">office@chasamsofer.info</p>
-                </>
-              )}
+              <p className="text-sm font-bold text-slate-800 truncate leading-tight">{headerLabel}</p>
+              <p className="text-[11px] text-indigo-500 truncate font-medium">{headerEmail}</p>
             </div>
           </div>
           <button
