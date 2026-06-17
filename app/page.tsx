@@ -951,6 +951,17 @@ export default function PublicPortalPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setLoanForm(f => ({ ...f, [k]: e.target.value }))
 
+  // שדות מספריים עם תקרה — חוסם הקלדה מעבר למקסימום (סכום עד 30,000, תשלומים עד 60)
+  const setLoanClamped = (k: keyof typeof loanForm, max: number) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      let v = e.target.value
+      if (v !== '') {
+        const n = Number(v)
+        if (!Number.isNaN(n) && n > max) v = String(max)
+      }
+      setLoanForm(f => ({ ...f, [k]: v }))
+    }
+
   const showSpouseFields = MARRIED_STATUSES.includes(regForm.marital_status)
   const regGender = genderFromMarital(regForm.marital_status)
 
@@ -3020,7 +3031,7 @@ export default function PublicPortalPage() {
                     <Field label="סכום מבוקש (₪)" required hint="עד 30,000 ₪">
                       <TextInput
                         type="number" min="100" max="30000" step="100"
-                        value={loanForm.amount} onChange={setLoan('amount')}
+                        value={loanForm.amount} onChange={setLoanClamped('amount', 30000)}
                         placeholder="5000" required
                       />
                     </Field>
@@ -3029,7 +3040,7 @@ export default function PublicPortalPage() {
                     <Field label="מספר תשלומים" required hint="עד 60 תשלומים">
                       <TextInput
                         type="number" min="1" max="60"
-                        value={loanForm.installments} onChange={setLoan('installments')}
+                        value={loanForm.installments} onChange={setLoanClamped('installments', 60)}
                         placeholder="12" required
                       />
                     </Field>
