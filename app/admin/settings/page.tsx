@@ -11,6 +11,7 @@ import DocTypesManager from './DocTypesManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
+import YemotCallLog from './YemotCallLog'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -137,6 +138,11 @@ export default async function SettingsPage() {
         {/* Loans portal */}
         <Card>
           <LoansPortalSettings />
+        </Card>
+
+        {/* Yemot telephony log */}
+        <Card>
+          <YemotCallLog />
         </Card>
 
         {/* Notifications */}
