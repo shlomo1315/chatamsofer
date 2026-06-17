@@ -5,10 +5,11 @@ export interface MailAttachment { filename: string; mimeType: string; contentB64
 export interface MailOptions {
   replyTo?: string
   fromName?: string
+  fromEmail?: string   // כתובת השולח (ברירת מחדל: noreply). מחלקות שולחות מכתובתן.
 }
 
-// שליחת מייל דרך Resend. כל המיילים נשלחים מ-noreply@chasamsofer.info,
-// עם אפשרות "דואר לתשובה" (Reply-To) לפי המחלקה. תומך בצרופות.
+// שליחת מייל דרך Resend. ברירת המחדל לשולח היא noreply@chasamsofer.info,
+// אך מיילים מחלקתיים נשלחים מכתובת המחלקה (fromEmail). תומך בצרופות.
 export async function deliverMail(
   to: string,
   subject: string,
@@ -23,7 +24,17 @@ export async function deliverMail(
   }
 
   const fromName = options?.fromName ?? BRAND_NAME
-  const from = `${fromName} <${NOREPLY_FROM}>`
+  const fromEmail = options?.fromEmail ?? NOREPLY_FROM
+  const from = `${fromName} <${fromEmail}>`
+
+  // גרסת טקסט רגיל (multipart) — משפרת מסירה ומקטינה סיכוי לספאם
+  const text = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim()
 
   try {
     const resend = new Resend(apiKey)
@@ -32,6 +43,7 @@ export async function deliverMail(
       to,
       subject,
       html,
+      ...(text ? { text } : {}),
       ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
       ...(attachments?.length
         ? { attachments: attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.contentB64, 'base64') })) }
