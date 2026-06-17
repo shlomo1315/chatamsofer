@@ -284,11 +284,14 @@ function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => vo
   )
 }
 
+type FilterMode = 'all' | 'pending' | 'done'
+
 // ── Portal Screen ─────────────────────────────────────────────────────────────
 function PortalScreen({ onLogout }: { onLogout: () => void }) {
   const [loans, setLoans] = useState<PortalLoan[]>([])
   const [loading, setLoading] = useState(true)
   const [activeModal, setActiveModal] = useState<PortalLoan | null>(null)
+  const [filter, setFilter] = useState<FilterMode>('pending')
 
   const loadLoans = useCallback(async () => {
     setLoading(true)
@@ -313,6 +316,19 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   const pending = loans.filter(l => !l.disbursed_at)
   const done = loans.filter(l => !!l.disbursed_at)
+  const visibleLoans = filter === 'pending' ? pending : filter === 'done' ? done : loans
+
+  const filterLabel: Record<FilterMode, string> = {
+    all: 'כל ההלוואות',
+    pending: 'ממתינות לביצוע',
+    done: 'בוצעו',
+  }
+
+  const statCards: { key: FilterMode; label: string; value: number; valueColor: string; activeBg: string; activeRing: string }[] = [
+    { key: 'all', label: 'סה״כ הלוואות', value: loans.length, valueColor: 'text-slate-900', activeBg: 'bg-slate-900', activeRing: 'ring-slate-900' },
+    { key: 'pending', label: 'ממתינות לביצוע', value: pending.length, valueColor: 'text-amber-700', activeBg: 'bg-amber-500', activeRing: 'ring-amber-400' },
+    { key: 'done', label: 'בוצעו', value: done.length, valueColor: 'text-emerald-700', activeBg: 'bg-emerald-500', activeRing: 'ring-emerald-400' },
+  ]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50" dir="rtl">
@@ -347,19 +363,26 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-8">
-        {/* Summary */}
+      <main className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+        {/* Filter Cards */}
         <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'סה״כ הלוואות', value: loans.length, color: 'text-slate-900', bg: 'bg-white' },
-            { label: 'ממתינות לביצוע', value: pending.length, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
-            { label: 'בוצעו', value: done.length, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-          ].map(s => (
-            <div key={s.label} className={`${s.bg} rounded-2xl border border-slate-200 p-4 text-center`}>
-              <p className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</p>
-              <p className="text-xs text-slate-500 mt-1">{s.label}</p>
-            </div>
-          ))}
+          {statCards.map(s => {
+            const isActive = filter === s.key
+            return (
+              <button
+                key={s.key}
+                onClick={() => setFilter(s.key)}
+                className={`rounded-2xl border p-4 text-center transition-all cursor-pointer ${
+                  isActive
+                    ? `${s.activeBg} border-transparent ring-2 ${s.activeRing} shadow-md`
+                    : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+                }`}
+              >
+                <p className={`text-2xl font-bold tabular-nums ${isActive ? 'text-white' : s.valueColor}`}>{s.value}</p>
+                <p className={`text-xs mt-1 ${isActive ? 'text-white/80' : 'text-slate-500'}`}>{s.label}</p>
+              </button>
+            )
+          })}
         </div>
 
         {loading ? (
@@ -369,40 +392,30 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
           </div>
         ) : (
           <>
-            {/* Pending */}
-            {pending.length > 0 && (
+            {visibleLoans.length > 0 ? (
               <section>
                 <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <Clock3 size={15} className="text-amber-500" />
-                  ממתינות לביצוע ({pending.length})
+                  {filter === 'pending' && <Clock3 size={15} className="text-amber-500" />}
+                  {filter === 'done' && <CheckCircle2 size={15} className="text-emerald-500" />}
+                  {filter === 'all' && <CreditCard size={15} className="text-slate-400" />}
+                  {filterLabel[filter]} ({visibleLoans.length})
                 </h2>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {pending.map(l => (
-                    <LoanCard key={l.id} loan={l} onDisburse={() => setActiveModal(l)} />
+                  {visibleLoans.map(l => (
+                    <LoanCard
+                      key={l.id}
+                      loan={l}
+                      onDisburse={l.disbursed_at ? () => {} : () => setActiveModal(l)}
+                    />
                   ))}
                 </div>
               </section>
-            )}
-
-            {/* Done */}
-            {done.length > 0 && (
-              <section>
-                <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-500" />
-                  בוצעו ({done.length})
-                </h2>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {done.map(l => (
-                    <LoanCard key={l.id} loan={l} onDisburse={() => {}} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {loans.length === 0 && (
+            ) : (
               <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
                 <CreditCard size={36} strokeWidth={1.5} />
-                <p className="text-sm">אין הלוואות מאושרות כרגע</p>
+                <p className="text-sm">
+                  {filter === 'pending' ? 'אין הלוואות הממתינות לביצוע' : filter === 'done' ? 'אין הלוואות שבוצעו' : 'אין הלוואות'}
+                </p>
               </div>
             )}
           </>
