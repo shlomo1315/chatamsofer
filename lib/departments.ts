@@ -41,7 +41,7 @@ export const BRAND_NAME = 'היכל החתם סופר'
 
 // אפשרויות שליחה לפי מחלקה: המייל נשלח מכתובת המחלקה (fromEmail),
 // תשובות חוזרות לאותה כתובת, ושם התצוגה כולל את שם המחלקה.
-export function mailFor(key: DepartmentKey): { fromEmail: string; replyTo: string; fromName: string } {
+export function mailFor(key: DepartmentKey): { fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey } {
   const dep = DEPARTMENTS[key] ?? DEPARTMENTS.main
-  return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${dep.label}` }
+  return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${dep.label}`, department: dep.key }
 }

@@ -651,9 +651,12 @@ export function loanApprovedEmail(
   }
 }
 
+export type FoodCardCenter = { name: string; city?: string | null; address?: string | null }
+
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
+  centers: FoodCardCenter[] = [],
 ): BuiltEmail {
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
   const genderLabel = birth.baby_gender === 'male' ? 'בן' : birth.baby_gender === 'female' ? 'בת' : ''
@@ -673,6 +676,31 @@ export function birthApprovedEmail(
     detailRow('עיר', b.city),
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
   ].join('')
+  // רשימת המוקדים לאיסוף כרטיס המזון — נשלפת אוטומטית מהמערכת
+  const centerRows = centers
+    .map((c) => {
+      const place = [c.city, c.address].filter(Boolean).join(', ')
+      return `<tr>
+        <td style="padding:10px 16px;border-bottom:1px solid #fde68a;color:#92400e;font-size:14px;font-weight:800;">${c.name}</td>
+        <td style="padding:10px 16px;border-bottom:1px solid #fde68a;color:#b45309;font-size:13px;text-align:left;">${place || '—'}</td>
+      </tr>`
+    })
+    .join('')
+  const foodCardBlock = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">🍞 כרטיס מזון על סך 600 ₪</p>
+        <p style="margin:0;color:#92400e;font-size:14px;line-height:1.7;">
+          כיולדת אתם זכאים לכרטיס מזון על סך <strong>600 ₪</strong>. לאיסוף הכרטיס עליכם לפנות לאחד המוקדים הבאים:
+        </p>
+        ${centers.length
+          ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">
+              <tr><td style="padding:8px 16px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:800;">שם המוקד</td><td style="padding:8px 16px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:800;text-align:left;">כתובת</td></tr>
+              ${centerRows}
+            </table>`
+          : `<p style="margin:10px 0 0;color:#92400e;font-size:13px;">רשימת המוקדים תימסר לכם בהמשך.</p>`}
+      </td></tr>
+    </table>`
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההבראה ליולדת אושרה 🎉</h2>
@@ -689,6 +717,7 @@ export function birthApprovedEmail(
         </p>
       </td></tr>
     </table>
+    ${foodCardBlock}
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הלידה:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${birthRows}</table>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>

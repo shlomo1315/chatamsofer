@@ -52,4 +52,21 @@ export async function register() {
     setTimeout(() => { void checkUnload(); setInterval(() => { void checkUnload() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[unload-expired] daily midnight (Israel) scheduler started')
   }
+
+  // ── רענון מאגר הכתובות (ערים/רחובות) ממשרד הפנים — מדי יום בחצות שעון ישראל ──
+  if (process.env.GOV_SYNC_DISABLED !== '1') {
+    let lastGovDate = ''
+    const checkGovSync = async () => {
+      const { date, hour } = israelParts()
+      if (hour !== 0 || date === lastGovDate) return
+      lastGovDate = date
+      try {
+        const { runGovSync } = await import('@/lib/govData')
+        const res = await runGovSync()
+        console.log(`[gov-sync] daily run · cities=${res.cities} streetsCities=${res.streetsCities}` + (res.error ? ` error=${res.error}` : ''))
+      } catch (err) { console.error('[gov-sync] daily run failed', err) }
+    }
+    setTimeout(() => { void checkGovSync(); setInterval(() => { void checkGovSync() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[gov-sync] daily midnight (Israel) scheduler started')
+  }
 }

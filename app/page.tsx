@@ -982,8 +982,9 @@ export default function PublicPortalPage() {
           setBeneficiary(data.beneficiary)
           setExistingDocs(data.documents ?? {})
           setReplaceDoc({})
-          const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
-          setStep(isWidow ? 'widow-dashboard' : 'dashboard')
+          // דשבורד מלא אחיד לכולם (כולל אלמנים/אלמנות וכניסה בדרכון):
+          // הלוואות, סיוע רפואי, הבראה ליולדת — עם כל התנאים.
+          setStep('dashboard')
         }
         else if (data.foundAsChild) {
           setChildMatch({ parentName: data.parentName, childData: data.childData, parentLineage: data.parentLineage })
@@ -1004,8 +1005,8 @@ export default function PublicPortalPage() {
           setBeneficiary(data.beneficiary)
           setExistingDocs(data.documents ?? {})
           setReplaceDoc({})
-          const isWidow = ['אלמן', 'אלמנה'].includes(data.beneficiary?.marital_status ?? '')
-          setStep(isWidow ? 'widow-dashboard' : 'dashboard')
+          // דשבורד מלא אחיד לכולם (כולל כניסה בדרכון)
+          setStep('dashboard')
         }
         else { setRegDocType('passport'); setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }

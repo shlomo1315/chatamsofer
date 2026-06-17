@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail })
+  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail, skipLog: true })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
 
   // תיעוד המייל היוצא ב-Supabase (לא חוסם)
