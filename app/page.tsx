@@ -3056,7 +3056,7 @@ export default function PublicPortalPage() {
                       <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
                         תשלום חודשי משוער:{' '}
                         <strong>
-                          {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+                        {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
                             .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
                         </strong>
                       </div>
