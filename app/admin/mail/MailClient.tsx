@@ -22,6 +22,7 @@ function ToolBtn({ title, onClick, children }: { title: string; onClick: () => v
 import { ParsedMessage, type Attachment } from '@/lib/gmail'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
+import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 import EmailInput from '@/components/ui/EmailInput'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
 
@@ -79,7 +80,7 @@ function formatDate(raw: string) {
 
 interface FoundBeneficiary { id: string; name: string; email: string; matchedAs?: 'husband' | 'wife' }
 
-function ComposeModal({ onClose, replyTo, initialTo }: { onClose: () => void; replyTo?: ParsedMessage; initialTo?: string }) {
+function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: () => void; replyTo?: ParsedMessage; initialTo?: string; department?: string }) {
   const [query, setQuery]     = useState('')          // unified search (name / email / ID)
   const [searching, setSearching] = useState(false)
 
@@ -1007,6 +1008,8 @@ export default function MailClient() {
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
   const [activeLabel, setActiveLabel] = useState<string | null>(null) // label filter
+  const [activeDepartment, setActiveDepartment] = useState<string | null>(null)
+  const activeDepartmentRef = useRef<string | null>(null)
   const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
@@ -1082,7 +1085,8 @@ export default function MailClient() {
       setLoading(true)
       setSelected(null)
     }
-    const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
+    const dept = myProfileRef.current?.role === 'admin' ? activeDepartmentRef.current : (myProfileRef.current?.department ?? null)
+    const res = await fetch(`/api/admin/gmail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
     const data = await res.json()
     if (data.notConnected) { setNotConnected(true); setLoading(false); return }
     let msgs: ParsedMessage[] = data.messages ?? []
@@ -1150,6 +1154,13 @@ export default function MailClient() {
   }, [])
 
   useEffect(() => { load(folder) }, [folder, load])
+
+  // Reload when activeDepartment changes
+  useEffect(() => {
+    activeDepartmentRef.current = activeDepartment
+    load(folder)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDepartment])
 
   // Background poll every 60s for new INBOX mail (for toast notifications) — שקט, ללא הבהוב טעינה
   useEffect(() => {
@@ -1222,12 +1233,14 @@ export default function MailClient() {
               <Mail size={16} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              {myProfile && myProfile.role !== 'admin' && myProfile.mail_account ? (
+              {myProfile?.department && DEPARTMENTS[myProfile.department as DepartmentKey] ? (
                 <>
                   <p className="text-sm font-bold text-slate-800 truncate leading-tight">
-                    {internalEmails.find(ie => ie.email === myProfile.mail_account)?.name ?? myProfile.mail_account}
+                    {DEPARTMENTS[myProfile.department as DepartmentKey].label}
                   </p>
-                  <p className="text-[11px] text-slate-400 truncate">{myProfile.mail_account}</p>
+                  <p className="text-[11px] text-indigo-500 truncate font-medium">
+                    {DEPARTMENTS[myProfile.department as DepartmentKey].email}
+                  </p>
                 </>
               ) : (
                 <>
@@ -1256,6 +1269,25 @@ export default function MailClient() {
             </button>
           ))}
         </nav>
+
+        {/* Departments filter — admins can filter by any department */}
+        {myProfile?.role === 'admin' && (
+          <nav className="px-2 py-2 border-b border-slate-100">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-2 pb-1.5">מחלקות</p>
+            <button onClick={() => setActiveDepartment(null)}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right mb-0.5
+                ${!activeDepartment ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+              כל המחלקות
+            </button>
+            {Object.values(DEPARTMENTS).map(d => (
+              <button key={d.key} onClick={() => setActiveDepartment(d.key)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right
+                  ${activeDepartment === d.key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+                <span className="truncate">{d.label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
 
         {/* Labels section */}
         <div className="flex-1 overflow-y-auto px-2 py-2">

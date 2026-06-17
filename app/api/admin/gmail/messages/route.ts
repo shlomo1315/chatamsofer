@@ -10,8 +10,14 @@ export async function GET(request: NextRequest) {
 
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
   const q = request.nextUrl.searchParams.get('q') ?? ''
+  const department = request.nextUrl.searchParams.get('department') ?? ''
 
   try {
+    const { DEPARTMENTS } = await import('@/lib/departments')
+    const deptEmail = department && DEPARTMENTS[department as keyof typeof DEPARTMENTS]?.email
+    const deptFilter = deptEmail ? `(to:${deptEmail} OR from:${deptEmail})` : ''
+    const combinedQ = [q, deptFilter].filter(Boolean).join(' ')
+
     const gmail = await getGmailClient()
     // folder=ALL → search all mail (no label filter), used for beneficiary threads
     const labelIds = folder === 'ALL' ? undefined
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
       userId: 'me',
       maxResults: 50,
       ...(labelIds ? { labelIds } : {}),
-      q: q || undefined,
+      q: combinedQ || undefined,
     })
 
     const ids = list.data.messages ?? []
