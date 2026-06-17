@@ -1013,6 +1013,7 @@ export default function MailClient() {
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [selected, setSelected] = useState<ParsedMessage | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
@@ -1023,6 +1024,9 @@ export default function MailClient() {
   const [dragLabelId, setDragLabelId] = useState<string | null>(null) // currently dragged label
   const [dragOverMsgId, setDragOverMsgId] = useState<string | null>(null) // message being dragged over
   const [pendingDrop, setPendingDrop] = useState<{ msgId: string; labelId: string } | null>(null) // waiting for add/replace decision
+
+  // ספירת מיילים שלא נקראו לפי מחלקה
+  const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
 
   // Beneficiary name lookup
   const [emailToInfo, setEmailToInfo] = useState<Record<string, { name: string; id: string }>>({})
@@ -1089,15 +1093,30 @@ export default function MailClient() {
       .catch(() => {})
   }, [])
 
+  const loadUnreadCounts = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/mail/unread-counts')
+      const d = await r.json()
+      if (!d.error) setUnreadCounts({ byDepartment: d.byDepartment ?? {}, total: d.total ?? 0 })
+    } catch { /* silent */ }
+  }, [])
+
   const load = useCallback(async (f: string, q?: string, silent = false) => {
     // רענון רקע (silent) — לא מציג "טוען מיילים" ולא סוגר את ההודעה הפתוחה
     if (!silent) {
       setLoading(true)
+      setLoadError(null)
       setSelected(null)
     }
     const dept = myProfileRef.current?.role === 'admin' ? activeDepartmentRef.current : (myProfileRef.current?.department ?? null)
     const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
     const data = await res.json()
+    if (data.error && !data.messages) {
+      setLoadError(data.error)
+      setMessages([])
+      setLoading(false)
+      return
+    }
     const msgs: ParsedMessage[] = data.messages ?? []
 
     setMessages(msgs)
@@ -1132,14 +1151,15 @@ export default function MailClient() {
     setLoading(false)
   }, [myProfile])
 
-  // Load labels on mount
+  // Load labels + unread counts on mount
   useEffect(() => {
     fetch('/api/admin/mail/labels').then(r => r.json()).then(d => {
       setLabels(d.labels ?? [])
       setAssignments(d.assignments ?? {})
       setInternalEmails(d.internalEmails ?? [])
     })
-  }, [])
+    loadUnreadCounts()
+  }, [loadUnreadCounts])
 
   useEffect(() => { load(folder) }, [folder, load])
 
@@ -1257,15 +1277,29 @@ export default function MailClient() {
             <button onClick={() => setActiveDepartment(null)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right mb-0.5
                 ${!activeDepartment ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-              כל המחלקות
+              <span className="flex-1 truncate">כל המחלקות</span>
+              {unreadCounts.total > 0 && (
+                <span className="text-[10px] font-bold bg-indigo-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
+                  {unreadCounts.total}
+                </span>
+              )}
             </button>
-            {Object.values(DEPARTMENTS).map(d => (
-              <button key={d.key} onClick={() => setActiveDepartment(d.key)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right
-                  ${activeDepartment === d.key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-                <span className="truncate">{d.label}</span>
-              </button>
-            ))}
+            {Object.values(DEPARTMENTS).map(d => {
+              const cnt = unreadCounts.byDepartment[d.key] ?? 0
+              return (
+                <button key={d.key} onClick={() => setActiveDepartment(d.key)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right
+                    ${activeDepartment === d.key ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
+                  <span className="truncate flex-1">{d.label}</span>
+                  {cnt > 0 && (
+                    <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0 text-white"
+                      style={{ backgroundColor: d.color }}>
+                      {cnt}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </nav>
         )}
 
@@ -1383,6 +1417,17 @@ export default function MailClient() {
               const filtered = activeLabel
                 ? messages.filter(m => (assignments[m.id] ?? []).includes(activeLabel))
                 : messages.filter(m => !(assignments[m.id] ?? []).includes('label-decision'))
+              if (loadError) return (
+                <div className="flex flex-col items-center justify-center h-40 gap-3 text-center px-6">
+                  <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                    <Mail size={18} className="text-red-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-red-600">שגיאה בטעינת המיילים</p>
+                    <p className="text-xs text-slate-400 mt-1">ייתכן שטבלאות המייל לא הוגדרו עדיין ב-Supabase. הרץ את migration ב-SQL Editor.</p>
+                  </div>
+                </div>
+              )
               return filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 gap-2 text-slate-400">
                   <Mail size={24} /><span className="text-sm">{activeLabel ? 'אין מיילים עם תווית זו' : 'אין הודעות'}</span>

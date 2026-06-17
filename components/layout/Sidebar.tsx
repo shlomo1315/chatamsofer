@@ -56,12 +56,24 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
   const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
+  const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
 
   useEffect(() => {
     fetch('/api/admin/me')
       .then(r => r.json())
       .then(d => setMyProfile(d.profile ?? null))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const fetchCounts = () =>
+      fetch('/api/admin/mail/unread-counts')
+        .then(r => r.json())
+        .then(d => { if (!d.error) setUnreadCounts({ byDepartment: d.byDepartment ?? {}, total: d.total ?? 0 }) })
+        .catch(() => {})
+    fetchCounts()
+    const interval = setInterval(fetchCounts, 60_000)
+    return () => clearInterval(interval)
   }, [])
 
   // מחלקות בתפריט המייל: מנהל רואה את כל המחלקות; משתמש רגיל רק את המחלקה שלו.
@@ -187,6 +199,11 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             )}
             <Mail size={18} className="flex-shrink-0" />
             <span className="flex-1 text-right">מייל</span>
+            {unreadCounts.total > 0 && (
+              <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
+                {unreadCounts.total}
+              </span>
+            )}
             {mailOpen
               ? <ChevronUp size={14} className="flex-shrink-0 opacity-70" />
               : <ChevronDown size={14} className="flex-shrink-0 opacity-70" />}
@@ -194,16 +211,26 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
           {mailOpen && (
             <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
-              {visibleDepartments.map(dep => (
+              {visibleDepartments.map(dep => {
+                const cnt = unreadCounts.byDepartment[dep.key] ?? 0
+                return (
                 <Link
                   key={dep.key}
                   href={`/admin/mail?department=${dep.key}`}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-all
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all
                     ${mailActive ? 'text-slate-200 hover:bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                 >
-                  <span className="font-medium text-slate-200 leading-tight">{dep.label}</span>
-                  <span className="text-[10px] text-slate-500 truncate">{dep.email}</span>
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <span className="font-medium text-slate-200 leading-tight">{dep.label}</span>
+                    <span className="text-[10px] text-slate-500 truncate">{dep.email}</span>
+                  </div>
+                  {cnt > 0 && (
+                    <span className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0 text-white"
+                      style={{ backgroundColor: dep.color }}>
+                      {cnt}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
