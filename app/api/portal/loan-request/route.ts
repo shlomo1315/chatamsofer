@@ -100,9 +100,9 @@ export async function POST(request: NextRequest) {
       requestRows: [
         ['מטרת ההלוואה', String(purpose).trim()],
         ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
-        ['סכום מבוקש', `$${parsedAmount.toLocaleString('he-IL')}`],
+        ['סכום מבוקש', `₪${parsedAmount.toLocaleString('he-IL')}`],
         ['מספר תשלומים', parsedInstallments],
-        ['תשלום חודשי משוער', `$${Math.round(monthly_payment).toLocaleString('he-IL')}`],
+        ['תשלום חודשי משוער', `₪${Math.round(monthly_payment).toLocaleString('he-IL')}`],
         ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
         ['הערות', notes ? String(notes).trim() : ''],
       ],
