@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, LogIn, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw } from 'lucide-react'
+import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, IdCard, Mail, Phone } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PortalLoan {
@@ -21,6 +21,7 @@ interface PortalLoan {
     id_number?: string
     city?: string
     phone?: string
+    email?: string
   } | null
 }
 
@@ -34,7 +35,6 @@ const borrowerName = (b?: PortalLoan['beneficiary']) =>
 
 // בפורטל מציגים את הסכום שאושר בפועל (נפילה לסכום המבוקש אם לא הוזן)
 const shownAmount = (l: PortalLoan) => Number(l.approved_amount ?? l.amount) || 0
-const monthlyOf = (l: PortalLoan) => l.installments ? Math.round(shownAmount(l) / l.installments) : 0
 
 // ── Password Screen ───────────────────────────────────────────────────────────
 function PasswordScreen({ onAuth }: { onAuth: () => void }) {
@@ -232,25 +232,35 @@ function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => vo
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="bg-slate-50 rounded-xl px-3 py-2">
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">תשלום חודשי</p>
-            <p className="text-sm font-bold text-slate-800 tabular-nums mt-0.5">{fmtCur(monthlyOf(loan))}</p>
+        {loan.purpose && (
+          <div className="mt-4 bg-slate-50 rounded-xl px-3 py-2">
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">מטרה</p>
+            <p className="text-sm text-slate-700 mt-0.5 truncate">{loan.purpose}</p>
           </div>
-          {loan.purpose && (
-            <div className="bg-slate-50 rounded-xl px-3 py-2">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">מטרה</p>
-              <p className="text-sm text-slate-700 mt-0.5 truncate">{loan.purpose}</p>
-            </div>
+        )}
+
+        {/* פרטי מבקש ההלוואה */}
+        <div className="mt-3 flex flex-col gap-1.5">
+          {loan.beneficiary?.id_number && (
+            <p className="text-xs text-slate-600 flex items-center gap-1.5">
+              <IdCard size={13} className="text-slate-400 flex-shrink-0" />
+              <span className="text-slate-400">ת.ז.</span>
+              <span dir="ltr" className="tabular-nums">{loan.beneficiary.id_number}</span>
+            </p>
+          )}
+          {loan.beneficiary?.email && (
+            <a href={`mailto:${loan.beneficiary.email}`} className="text-xs text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
+              <Mail size={13} className="text-slate-400 flex-shrink-0" />
+              <span dir="ltr" className="truncate">{loan.beneficiary.email}</span>
+            </a>
+          )}
+          {loan.beneficiary?.phone && (
+            <a href={`tel:${loan.beneficiary.phone}`} className="text-xs text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
+              <Phone size={13} className="text-slate-400 flex-shrink-0" />
+              <span dir="ltr">{loan.beneficiary.phone}</span>
+            </a>
           )}
         </div>
-
-        {loan.beneficiary?.phone && (
-          <p className="mt-3 text-xs text-slate-500 flex items-center gap-1">
-            <span className="text-slate-400">📞</span>
-            <span dir="ltr">{loan.beneficiary.phone}</span>
-          </p>
-        )}
 
         {isDone ? (
           <div className="mt-4 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5">
@@ -275,7 +285,7 @@ function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => vo
 }
 
 // ── Portal Screen ─────────────────────────────────────────────────────────────
-function PortalScreen() {
+function PortalScreen({ onLogout }: { onLogout: () => void }) {
   const [loans, setLoans] = useState<PortalLoan[]>([])
   const [loading, setLoading] = useState(true)
   const [activeModal, setActiveModal] = useState<PortalLoan | null>(null)
@@ -318,13 +328,22 @@ function PortalScreen() {
               <p className="text-xs text-slate-500">היכל החתם סופר</p>
             </div>
           </div>
-          <button
-            onClick={loadLoans}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg px-3 py-1.5 transition-colors"
-          >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-            רענן
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadLoans}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+              רענן
+            </button>
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1.5 text-xs text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              <LogOut size={13} />
+              התנתקות
+            </button>
+          </div>
         </div>
       </header>
 
@@ -424,5 +443,10 @@ export default function LoansPortalPage() {
     return <PasswordScreen onAuth={() => setState('unlocked')} />
   }
 
-  return <PortalScreen />
+  const logout = async () => {
+    await fetch('/api/shared/loans/logout', { method: 'POST' }).catch(() => {})
+    setState('locked')
+  }
+
+  return <PortalScreen onLogout={logout} />
 }
