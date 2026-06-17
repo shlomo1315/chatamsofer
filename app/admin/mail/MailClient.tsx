@@ -207,7 +207,15 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: '90vh' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h3 className="font-semibold text-slate-900">{replyTo ? 'השב למייל' : 'מייל חדש'}</h3>
+          <div className="flex flex-col gap-0.5">
+            <h3 className="font-semibold text-slate-900">{replyTo ? 'השב למייל' : 'מייל חדש'}</h3>
+            {department && DEPARTMENTS[department as DepartmentKey] && (
+              <span className="text-xs text-slate-500">
+                נשלח מטעם <span className="font-medium text-indigo-600">{DEPARTMENTS[department as DepartmentKey].label}</span>
+                <span className="text-slate-400"> · תשובות אל {DEPARTMENTS[department as DepartmentKey].email}</span>
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
 
@@ -1566,7 +1574,18 @@ export default function MailClient() {
       )}
 
 
-      {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} department={myProfile?.department ?? undefined} />}
+      {compose && <ComposeModal
+        onClose={() => setCompose(false)}
+        replyTo={replyMsg}
+        department={
+          // בתשובה: שולחים מהמחלקה שאליה הגיע המייל המקורי.
+          // בחיבור חדש: מהמחלקה שעליה עומדים כעת (מנהל) או ממחלקת המשתמש.
+          (replyMsg && Object.values(DEPARTMENTS).find(d => d.email === replyMsg.toEmail)?.key)
+          ?? activeDepartment
+          ?? myProfile?.department
+          ?? undefined
+        }
+      />}
       {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
 
       {/* Add-or-Replace label popup */}

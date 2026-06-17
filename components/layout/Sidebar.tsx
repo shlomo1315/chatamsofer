@@ -8,8 +8,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, Profile } from '@/types'
-
-interface MailAccount { name: string; email: string }
+import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 
 function LogoBadge() {
   const [error, setError] = useState(false)
@@ -56,28 +55,22 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
   const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
-  const [mailAccounts, setMailAccounts] = useState<MailAccount[]>([])
   const [myProfile, setMyProfile] = useState<Profile | null>(null)
 
-  // Fetch mail accounts from dedicated endpoint
   useEffect(() => {
-    fetch('/api/admin/mail/accounts')
-      .then(r => r.json())
-      .then(d => setMailAccounts(d.accounts ?? [{ name: 'משרד ראשי', email: 'office@chasamsofer.info' }]))
-      .catch(() => setMailAccounts([{ name: 'משרד ראשי', email: 'office@chasamsofer.info' }]))
-
     fetch('/api/admin/me')
       .then(r => r.json())
       .then(d => setMyProfile(d.profile ?? null))
       .catch(() => {})
   }, [])
 
-  // Filter accounts by role: non-admin only sees their assigned account
-  const visibleAccounts = isAdmin
-    ? mailAccounts
-    : mailAccounts.filter(a =>
-        !myProfile || !myProfile.mail_account || a.email === myProfile.mail_account
-      )
+  // מחלקות בתפריט המייל: מנהל רואה את כל המחלקות; משתמש רגיל רק את המחלקה שלו.
+  const allDepartments = Object.values(DEPARTMENTS)
+  const visibleDepartments = isAdmin
+    ? allDepartments
+    : (myProfile?.department && DEPARTMENTS[myProfile.department as DepartmentKey]
+        ? [DEPARTMENTS[myProfile.department as DepartmentKey]]
+        : allDepartments)
 
   const canSee = (section?: SectionKey) => {
     if (!section) return true
@@ -201,16 +194,16 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
           {mailOpen && (
             <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
-              {visibleAccounts.map(acc => (
+              {visibleDepartments.map(dep => (
                 <Link
-                  key={acc.email}
+                  key={dep.key}
                   href="/admin/mail"
                   onClick={() => setMobileOpen(false)}
                   className={`flex flex-col px-3 py-2 rounded-lg text-xs transition-all
                     ${mailActive ? 'text-slate-200 hover:bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
                 >
-                  <span className="font-medium text-slate-200 leading-tight">{acc.name}</span>
-                  <span className="text-[10px] text-slate-500 truncate">{acc.email}</span>
+                  <span className="font-medium text-slate-200 leading-tight">{dep.label}</span>
+                  <span className="text-[10px] text-slate-500 truncate">{dep.email}</span>
                 </Link>
               ))}
             </div>
