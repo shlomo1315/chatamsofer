@@ -170,6 +170,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
         to, subject, body: html, threadId: replyTo?.threadId,
         attachments,
         templateUrls: tplPicked.map(t => ({ url: t.url, filename: t.filename, mimeType: t.mimeType })),
+        department,
       }),
     })
     setSending(false)
@@ -1601,7 +1602,7 @@ export default function MailClient() {
       )}
 
 
-      {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} />}
+      {compose && <ComposeModal onClose={() => setCompose(false)} replyTo={replyMsg} department={myProfile?.department ?? undefined} />}
       {forwardMsg && <ForwardModal msg={forwardMsg} internalEmails={internalEmails} onClose={() => setForwardMsg(null)} />}
 
       {/* Add-or-Replace label popup */}
