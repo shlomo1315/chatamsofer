@@ -10,10 +10,10 @@ const HOURLY_MS = 60 * 60 * 1000
 // התאריך/שעה הנוכחיים לפי שעון ישראל (עמיד לשעון קיץ/חורף)
 function israelParts() {
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false, weekday: 'short',
   })
   const p = Object.fromEntries(fmt.formatToParts(new Date()).map(x => [x.type, x.value]))
-  return { date: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour) }
+  return { date: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour), weekday: p.weekday }
 }
 
 export async function register() {
@@ -68,5 +68,22 @@ export async function register() {
     }
     setTimeout(() => { void checkGovSync(); setInterval(() => { void checkGovSync() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[gov-sync] daily midnight (Israel) scheduler started')
+  }
+
+  // ── דוח שבועי של הלוואות במייל — כל יום ראשון בשעה 08:00 שעון ישראל ──
+  if (process.env.LOANS_REPORT_DISABLED !== '1') {
+    let lastReportDate = ''
+    const checkLoansReport = async () => {
+      const { date, hour, weekday } = israelParts()
+      if (weekday !== 'Sun' || hour !== 8 || date === lastReportDate) return
+      lastReportDate = date
+      try {
+        const { runWeeklyLoansReport } = await import('@/lib/loansReport')
+        const res = await runWeeklyLoansReport()
+        console.log(`[loans-report] weekly run · sent=${res.sent}` + (res.to ? ` to=${res.to}` : '') + (res.error ? ` error=${res.error}` : ''))
+      } catch (err) { console.error('[loans-report] weekly run failed', err) }
+    }
+    setTimeout(() => { void checkLoansReport(); setInterval(() => { void checkLoansReport() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[loans-report] weekly (Sun 08:00 Israel) scheduler started')
   }
 }
