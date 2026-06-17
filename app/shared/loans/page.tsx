@@ -324,10 +324,10 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     done: 'בוצעו',
   }
 
-  const statCards: { key: FilterMode; label: string; value: number; valueColor: string; activeBg: string; activeRing: string }[] = [
-    { key: 'all', label: 'סה״כ הלוואות', value: loans.length, valueColor: 'text-slate-900', activeBg: 'bg-slate-900', activeRing: 'ring-slate-900' },
-    { key: 'pending', label: 'ממתינות לביצוע', value: pending.length, valueColor: 'text-amber-700', activeBg: 'bg-amber-500', activeRing: 'ring-amber-400' },
-    { key: 'done', label: 'בוצעו', value: done.length, valueColor: 'text-emerald-700', activeBg: 'bg-emerald-500', activeRing: 'ring-emerald-400' },
+  const statCards: { key: FilterMode; label: string; value: number; numCls: string; dotCls: string; activeCls: string }[] = [
+    { key: 'pending', label: 'ממתינות לביצוע', value: pending.length, numCls: 'text-amber-600', dotCls: 'bg-amber-400', activeCls: 'bg-amber-50 border-amber-300 ring-2 ring-amber-200' },
+    { key: 'all', label: 'סה״כ הלוואות', value: loans.length, numCls: 'text-indigo-600', dotCls: 'bg-indigo-400', activeCls: 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200' },
+    { key: 'done', label: 'בוצעו', value: done.length, numCls: 'text-emerald-600', dotCls: 'bg-emerald-400', activeCls: 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200' },
   ]
 
   return (
@@ -374,12 +374,15 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                 onClick={() => setFilter(s.key)}
                 className={`rounded-2xl border p-4 text-center transition-all cursor-pointer ${
                   isActive
-                    ? `${s.activeBg} border-transparent ring-2 ${s.activeRing} shadow-md`
+                    ? `${s.activeCls} shadow-sm`
                     : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
                 }`}
               >
-                <p className={`text-2xl font-bold tabular-nums ${isActive ? 'text-white' : s.valueColor}`}>{s.value}</p>
-                <p className={`text-xs mt-1 ${isActive ? 'text-white/80' : 'text-slate-500'}`}>{s.label}</p>
+                <div className="flex items-center justify-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${s.dotCls} ${isActive ? '' : 'opacity-60'}`} />
+                  <p className={`text-2xl font-bold tabular-nums ${s.numCls}`}>{s.value}</p>
+                </div>
+                <p className={`text-xs mt-1.5 font-medium ${isActive ? 'text-slate-700' : 'text-slate-500'}`}>{s.label}</p>
               </button>
             )
           })}

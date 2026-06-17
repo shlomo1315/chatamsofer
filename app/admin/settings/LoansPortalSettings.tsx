@@ -102,7 +102,7 @@ export default function LoansPortalSettings() {
         body: JSON.stringify({ sendNow: true, email: reportEmail.trim() }),
       })
       const d = await res.json()
-      if (res.ok) setEmailResult({ ok: true, msg: `הדוח נשלח ל-${d.sentTo} · ${d.count} הלוואות חדשות ✓` })
+      if (res.ok) setEmailResult({ ok: true, msg: `הדוח נשלח ל-${d.sentTo} · ${d.count} הלוואות מאושרות ✓` })
       else setEmailResult({ ok: false, msg: d.error ?? 'שליחה נכשלה' })
     } catch { setEmailResult({ ok: false, msg: 'שגיאת תקשורת' }) }
     finally { setSendingNow(false) }
