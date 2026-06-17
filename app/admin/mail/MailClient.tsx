@@ -71,9 +71,14 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
   const [query, setQuery]     = useState('')          // unified search (name / email / ID)
   const [searching, setSearching] = useState(false)
 
-  const [to, setTo]           = useState(initialTo ?? (replyTo ? replyTo.fromEmail : ''))
+  // יעד התשובה = הצד החיצוני (הצאצא ששלח), אף פעם לא כתובת מחלקה פנימית.
+  // אם השולח הוא מחלקה (למשל בתיקיית "נשלח" או במייל שהועבר) — משיבים לנמען המקורי.
+  const replyTarget = replyTo
+    ? (departmentByEmail(replyTo.fromEmail) ? replyTo.toEmail : replyTo.fromEmail)
+    : ''
+  const [to, setTo]           = useState(initialTo ?? replyTarget)
   const [toName, setToName]   = useState('')
-  const [locked, setLocked]   = useState(!!(initialTo ?? replyTo?.fromEmail))
+  const [locked, setLocked]   = useState(!!(initialTo ?? replyTarget))
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject}` : '')
   const [body, setBody]       = useState('')
   const [sending, setSending] = useState(false)

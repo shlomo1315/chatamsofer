@@ -50,20 +50,21 @@ export async function POST(request: NextRequest) {
       <strong>ע"י:</strong> ${staff.email}
     </div>
     <div style="margin-top:8px;">
-      ${original.body_html ?? original.body_text ?? ''}
+      ${original.html ?? original.plain_text ?? ''}
     </div>
   `
 
   const { error: insertErr } = await admin.from('inbound_emails').insert({
+    // שומרים את הכתובת המקורית של השולח — כך ש"השב" יחזור לצאצא, לא למחלקה
     from_email: original.from_email,
     from_name: original.from_name ?? null,
     to_email: dep.email,
     subject: `Fwd: ${original.subject ?? ''}`,
-    body_html: forwardedBody,
-    body_text: original.body_text ? `${note ? `${note}\n\n---\n` : ''}${original.body_text}` : null,
+    html: forwardedBody,
+    plain_text: original.plain_text ? `${note ? `${note}\n\n---\n` : ''}${original.plain_text}` : null,
+    attachments: original.attachments ?? [],
     is_read: false,
     received_at: new Date().toISOString(),
-    resend_email_id: null,
   })
 
   if (insertErr) {
