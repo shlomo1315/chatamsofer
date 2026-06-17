@@ -31,8 +31,9 @@ export const DEPARTMENTS: Record<DepartmentKey, Department> = {
 export const NOREPLY_FROM = 'noreply@chasamsofer.info'
 export const BRAND_NAME = 'היכל החתם סופר'
 
-// אפשרויות שליחה לפי מחלקה: כתובת תשובה + שם תצוגה הכולל את שם המחלקה
-export function mailFor(key: DepartmentKey): { replyTo: string; fromName: string } {
+// אפשרויות שליחה לפי מחלקה: המייל נשלח מכתובת המחלקה (fromEmail),
+// תשובות חוזרות לאותה כתובת, ושם התצוגה כולל את שם המחלקה.
+export function mailFor(key: DepartmentKey): { fromEmail: string; replyTo: string; fromName: string } {
   const dep = DEPARTMENTS[key] ?? DEPARTMENTS.main
-  return { replyTo: dep.email, fromName: `${BRAND_NAME} · ${dep.label}` }
+  return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${dep.label}` }
 }

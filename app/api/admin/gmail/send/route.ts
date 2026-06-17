@@ -12,10 +12,11 @@ export async function POST(request: NextRequest) {
 
   const { to, subject, body, threadId, department, attachments, templateUrls } = await request.json()
 
-  // Determine reply-to from department
+  // המייל נשלח מכתובת המחלקה הנבחרת (לא מ-noreply), ותשובות חוזרות אליה
   const deptKey = (department as DepartmentKey) ?? 'main'
   const dept = DEPARTMENTS[deptKey] ?? DEPARTMENTS.main
   const fromName = `${BRAND_NAME} · ${dept.label}`
+  const fromEmail = dept.email
   const replyTo = dept.email
 
   const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head><body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;font-size:14px;line-height:1.6;color:#1e293b;">${body ?? ''}</body></html>`
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName })
+  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
 
   // תיעוד המייל היוצא ב-Supabase (לא חוסם)
