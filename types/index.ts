@@ -188,6 +188,8 @@ export interface Loan {
   approved_by?: string
   start_date?: string
   end_date?: string
+  disbursed_at?: string | null
+  disbursed_by?: string | null
   notes?: string
   created_at: string
   updated_at: string
