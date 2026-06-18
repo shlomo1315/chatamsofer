@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
+import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import QuickEmailModal from '@/components/QuickEmailModal'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 
@@ -214,6 +215,7 @@ const CARD_DEFS: CardDef[] = [
 export default function BeneficiariesTable({ data, initialFilter = 'all' }: { data: Beneficiary[], initialFilter?: Filter }) {
   const [filter, setFilter] = useState<Filter>(initialFilter)
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
+  const [sort, setSort] = useState<SortMode>('newest')
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
@@ -230,6 +232,12 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
   }), [data])
 
   const filtered = useMemo(() => data.filter((r) => matchesFilter(r, filter)), [data, filter])
+
+  const sorted = useMemo(() =>
+    applySortMode(filtered, sort,
+      r => [r.family_name, r.full_name].filter(Boolean).join(' '),
+      r => r.created_at,
+    ), [filtered, sort])
 
   return (
     <div className="flex flex-col gap-5">
@@ -256,8 +264,13 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
         })}
       </div>
 
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-500">מיון:</span>
+        <SortButtons value={sort} onChange={setSort} />
+      </div>
+
       <DataTable
-        data={filtered}
+        data={sorted}
         columns={columns}
         rowHref={(row) => `/admin/beneficiaries/${row.id}`}
         searchable

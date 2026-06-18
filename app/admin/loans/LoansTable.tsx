@@ -7,6 +7,7 @@ import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
+import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // סמל השקל משמאל למספר
@@ -45,6 +46,7 @@ export default function LoansTable({ data }: { data: Loan[] }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortMode>('newest')
 
   const counts = useMemo(() => ({
     all: data.length,
@@ -57,6 +59,12 @@ export default function LoansTable({ data }: { data: Loan[] }) {
     const q = query.trim().toLowerCase()
     return data.filter(l => matchesFilter(l, filter) && (q === '' || haystack(l).includes(q)))
   }, [data, filter, query])
+
+  const visible = useMemo(() =>
+    applySortMode(filtered, sort,
+      l => borrowerName(l.beneficiary as BenRef | undefined),
+      l => l.created_at,
+    ), [filtered, sort])
 
   return (
     <div className="flex flex-col gap-5">
@@ -85,10 +93,13 @@ export default function LoansTable({ data }: { data: Loan[] }) {
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-slate-700">רשימת הלוואות</h2>
-          <div className="relative w-full sm:w-72">
-            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-            <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חופשי…"
-              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <SortButtons value={sort} onChange={setSort} />
+            <div className="relative w-full sm:w-64">
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+              <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חופשי…"
+                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors" />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -101,9 +112,9 @@ export default function LoansTable({ data }: { data: Loan[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {visible.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
-              ) : filtered.map(loan => {
+              ) : visible.map(loan => {
                 const b = loan.beneficiary as BenRef | undefined
                 return (
                   <tr key={loan.id}
