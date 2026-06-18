@@ -32,17 +32,17 @@ function phoneMatches(stored: string | null | undefined, caller: string): boolea
 }
 
 // ── תגובות ימות ─────────────────────────────────────────────────────────────
-// ימות מצפה לתוכן מסוג text/plain; שורות מופרדות בנקודה-פסיק.
-function yemotText(lines: string[], callId?: string) {
-  const body = lines.join(';') + ';'
+// ימות מצפה לתוכן מסוג text/plain; פקודות מופרדות ב-&.
+function yemotText(commands: string[], callId?: string) {
+  const body = commands.join('&') + '&'
   console.log(`[yemot-maternity] response${callId ? ` (callId=${callId})` : ''}: ${body}`)
   return new NextResponse(body, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   })
 }
 
+// TTS: id_list_message=t-TEXT. (הנקודה בסוף חובה)
 function say(...msgs: string[]) {
-  // Yemot TTS format: id_list_message=t-TEXT. (dot at end required)
   return msgs.map((m) => `id_list_message=t-${m}.`)
 }
 
@@ -50,13 +50,60 @@ function hangup() {
   return ['hangup']
 }
 
-// read: שמור קלט DTMF ועבור לתיקייה
-// הפורמט הנכון של read עדיין לא מאומת — יש לעדכן בהתאם לתיעוד ימות
-function readDigits(folder: string, maxDigits: number = 20) {
+// read_v2: ימות אוספת DTMF ומעבירה לתיקייה.
+// פורמט: read_v2,<folder>,<type>,<min_digits>,<timeout_sec>,<max_digits>
+// type=1 → DTMF (tap)
+function readDigits(maxDigits: number = 20) {
   return [
-    `id_list_message=t-תקליט נא הקישו את מספר הכרטיס שקיבלתם משמאל לימין ולסיום הקישו סולמית.`,
-    `read_v2,1,1,15,${maxDigits},${folder}`,
+    `id_list_message=t-אנא הקישו את מספר הכרטיס שקיבלתם, משמאל לימין, ולסיום הקישו סולמית.`,
+    `read_v2,collect_card,1,1,15,${maxDigits}`,
   ]
+}
+
+// ── חיפוש משפחה + לידה פעילה (שותף לשני השלבים) ────────────────────────────
+async function findActiveAid(callerPhone: string) {
+  const admin = adminClient()
+
+  const { data: beneficiaries, error } = await admin
+    .from('beneficiaries')
+    .select('id, full_name, family_name, phone, phone2, spouse_phone')
+    .eq('is_active', true)
+
+  if (error) return { error: error.message }
+
+  const family = (beneficiaries ?? []).find(
+    (b) =>
+      phoneMatches(b.phone, callerPhone) ||
+      phoneMatches(b.phone2, callerPhone) ||
+      phoneMatches(b.spouse_phone, callerPhone),
+  )
+
+  if (!family) return { notFound: true }
+
+  // לא מסננים לפי status — כל לידה בתוך 6 שבועות תוקינה ללא קשר לסטטוס
+  const { data: aids, error: aidErr } = await admin
+    .from('maternity_aids')
+    .select('id, birth_date, six_weeks_end, card_number, status')
+    .eq('beneficiary_id', family.id)
+    .not('status', 'eq', 'cancelled')
+    .order('birth_date', { ascending: false })
+    .limit(10)
+
+  if (aidErr) return { error: aidErr.message }
+
+  const now = new Date()
+  const active = (aids ?? []).find((a) => {
+    const end = a.six_weeks_end
+      ? new Date(a.six_weeks_end)
+      : addDays(new Date(a.birth_date), 42)
+    return end >= now
+  })
+
+  const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
+
+  if (!active) return { noBirth: true, familyId: family.id, familyName }
+
+  return { family, active, familyName }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -78,6 +125,8 @@ async function handle(req: NextRequest) {
   const step = String(params['ApiEnterID'] ?? '').trim() || 'start'
   const digits = String(params['Digits'] ?? '').trim()
 
+  console.log(`[yemot-maternity] step=${step} phone=${apiPhone} callId=${callId} digits=${digits}`)
+
   // אופציונלי: סוד לאימות הבקשה (הגדר YEMOT_WEBHOOK_SECRET ב-Railway)
   const secret = process.env.YEMOT_WEBHOOK_SECRET
   if (secret && params['ApiToken'] !== secret) {
@@ -93,30 +142,19 @@ async function handle(req: NextRequest) {
 
   // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
   if (step === 'start') {
-    // חיפוש בטלפונות של הנרשם ובן/בת הזוג
-    const { data: beneficiaries, error } = await admin
-      .from('beneficiaries')
-      .select('id, full_name, family_name, phone, phone2, spouse_phone')
-      .eq('is_active', true)
+    const result = await findActiveAid(callerPhone)
 
-    if (error) {
-      console.error('[yemot-maternity] DB error', error.message)
+    if (result.error) {
+      console.error('[yemot-maternity] DB error', result.error)
       return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()], callId)
     }
 
-    const family = (beneficiaries ?? []).find(
-      (b) =>
-        phoneMatches(b.phone, callerPhone) ||
-        phoneMatches(b.phone2, callerPhone) ||
-        phoneMatches(b.spouse_phone, callerPhone),
-    )
-
-    if (!family) {
-      console.log(`[yemot-maternity] phone not found: ${callerPhone} (callId=${callId})`)
+    if (result.notFound) {
+      console.log(`[yemot-maternity] phone not found: ${callerPhone}`)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_phone_not_found', entity_type: 'phone',
-          entity_id: null, details: { caller: callerPhone, callId },
+          entity_id: null, details: { caller: callerPhone, callId, note: 'מספר לא קיים במערכת' },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -128,34 +166,12 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
-    // חיפוש לידה פעילה בתוך 6 שבועות
-    const { data: aids, error: aidErr } = await admin
-      .from('maternity_aids')
-      .select('id, birth_date, six_weeks_end, card_number, status')
-      .eq('beneficiary_id', family.id)
-      .eq('status', 'active')
-      .order('birth_date', { ascending: false })
-      .limit(5)
-
-    if (aidErr) {
-      console.error('[yemot-maternity] aids error', aidErr.message)
-      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()], callId)
-    }
-
-    const now = new Date()
-    const active = (aids ?? []).find((a) => {
-      const end = a.six_weeks_end
-        ? new Date(a.six_weeks_end)
-        : addDays(new Date(a.birth_date), 42)
-      return end >= now
-    })
-
-    if (!active) {
-      console.log(`[yemot-maternity] no active birth for family ${family.id} (${callerPhone})`)
+    if (result.noBirth) {
+      console.log(`[yemot-maternity] no active birth for family ${result.familyId} (${result.familyName})`)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_no_active_birth', entity_type: 'beneficiary',
-          entity_id: family.id, details: { caller: callerPhone, callId },
+          entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -167,58 +183,68 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
+    const { family, active, familyName } = result!
+
     if (active.card_number) {
-      // כרטיס כבר רשום — אפשרות לעדכן
-      console.log(`[yemot-maternity] card already set for aid ${active.id}, allowing update`)
+      console.log(`[yemot-maternity] card already set for aid ${active.id} (${familyName}), allowing update`)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_card_already_set', entity_type: 'maternity_aid',
-          entity_id: active.id, details: { caller: callerPhone, callId },
+          entity_id: active.id, details: { caller: callerPhone, callId, family_name: familyName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
         ...say(
-          `שלום! מצאנו את תיק הלידה שלך.`,
-          `כרטיס נדרים כבר רשום בתיק.`,
+          'שלום! מצאנו את תיק הלידה שלך.',
+          'כרטיס נדרים כבר רשום בתיק.',
+          'ניתן לעדכן את המספר.',
         ),
-        ...readDigits(`got_card_${active.id}`),
+        ...readDigits(),
       ], callId)
     }
 
-    const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
-    console.log(`[yemot-maternity] prompting card input for family "${familyName}", aid ${active.id} (${callerPhone})`)
+    console.log(`[yemot-maternity] prompting card input for family "${familyName}", aid ${active.id}`)
 
     return yemotText([
       ...say(
-        `שלום! זוהית בהצלחה.`,
-        `נמצא תיק לידה פעיל בחשבונך.`,
+        'שלום! זוהית בהצלחה.',
+        'נמצא תיק לידה פעיל בחשבונך.',
       ),
-      ...readDigits(`got_card_${active.id}`),
+      ...readDigits(),
     ], callId)
   }
 
   // ── שלב 2: קבלת מספר הכרטיס ─────────────────────────────────────────────
-  if (step.startsWith('got_card_')) {
-    const aidId = step.replace('got_card_', '')
-
+  if (step === 'collect_card') {
     if (!digits || digits.length < 4) {
+      console.log(`[yemot-maternity] invalid digits: "${digits}"`)
       return yemotText([
         ...say('מספר כרטיס לא תקין. אנא נסי שוב.'),
-        ...readDigits(`got_card_${aidId}`),
+        ...readDigits(),
       ], callId)
     }
+
+    // חיפוש מחדש לפי טלפון
+    const result = await findActiveAid(callerPhone)
+
+    if (result.error || result.notFound || result.noBirth || !result.active) {
+      console.error('[yemot-maternity] re-lookup failed at collect_card', result)
+      return yemotText([...say('שגיאת מערכת, אנא חייגי שוב'), ...hangup()], callId)
+    }
+
+    const { active, familyName: fName } = result
 
     const { error: updateErr } = await admin
       .from('maternity_aids')
       .update({ card_number: digits })
-      .eq('id', aidId)
+      .eq('id', active.id)
 
     if (updateErr) {
       console.error('[yemot-maternity] update error', updateErr.message)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_error', entity_type: 'maternity_aid',
-          entity_id: aidId, details: { caller: callerPhone, callId, error: updateErr.message },
+          entity_id: active.id, details: { caller: callerPhone, callId, error: updateErr.message, family_name: fName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -227,18 +253,17 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
-    // רישום לוג
     try {
       await admin.from('activity_log').insert({
         user_id: null,
         action: 'yemot_card_registered',
         entity_type: 'maternity_aid',
-        entity_id: aidId,
-        details: { card_number_last4: digits.slice(-4), caller: callerPhone, callId },
+        entity_id: active.id,
+        details: { card_number_last4: digits.slice(-4), caller: callerPhone, callId, family_name: fName },
       })
     } catch { /* לא חוסם */ }
 
-    console.log(`[yemot-maternity] card saved for aid ${aidId}, last4=${digits.slice(-4)}`)
+    console.log(`[yemot-maternity] card saved for aid ${active.id}, last4=${digits.slice(-4)}, family=${fName}`)
 
     return yemotText([
       ...say(
@@ -251,6 +276,7 @@ async function handle(req: NextRequest) {
   }
 
   // שלב לא ידוע — חזרה להתחלה
+  console.log(`[yemot-maternity] unknown step: "${step}"`)
   return yemotText([
     ...say('שגיאה, אנא חייגי שוב.'),
     ...hangup(),

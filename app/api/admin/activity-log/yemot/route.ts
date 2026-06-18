@@ -43,18 +43,23 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (data ?? []).map((r) => ({
-    id: r.id,
-    action: r.action,
-    actionLabel: ACTION_LABELS[r.action] ?? r.action,
-    ok: r.action === 'yemot_card_registered',
-    caller: (r.details as Record<string, string>)?.caller ?? '—',
-    callId: (r.details as Record<string, string>)?.callId ?? '',
-    cardLast4: (r.details as Record<string, string>)?.card_number_last4 ?? null,
-    errorMsg: (r.details as Record<string, string>)?.error ?? null,
-    entityId: r.entity_id ?? null,
-    createdAt: r.created_at,
-  }))
+  const rows = (data ?? []).map((r) => {
+    const d = (r.details ?? {}) as Record<string, string>
+    return {
+      id: r.id,
+      action: r.action,
+      actionLabel: ACTION_LABELS[r.action] ?? r.action,
+      ok: r.action === 'yemot_card_registered',
+      caller: d.caller ?? '—',
+      callId: d.callId ?? '',
+      cardLast4: d.card_number_last4 ?? null,
+      errorMsg: d.error ?? null,
+      familyName: d.family_name ?? null,
+      note: d.note ?? null,
+      entityId: r.entity_id ?? null,
+      createdAt: r.created_at,
+    }
+  })
 
   return NextResponse.json({ rows })
 }
