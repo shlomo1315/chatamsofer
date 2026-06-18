@@ -183,7 +183,7 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
-    const { family, active, familyName } = result!
+    const { family, active, familyName } = result as { family: NonNullable<typeof result['family']>; active: NonNullable<typeof result['active']>; familyName: string }
 
     if (active.card_number) {
       console.log(`[yemot-maternity] card already set for aid ${active.id} (${familyName}), allowing update`)
