@@ -12,6 +12,7 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
+import GovDataSettings from './GovDataSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -123,6 +124,11 @@ export default async function SettingsPage() {
         {/* Doc types */}
         <Card>
           <DocTypesManager />
+        </Card>
+
+        {/* Gov address data (cities/streets from Ministry of Interior) */}
+        <Card>
+          <GovDataSettings />
         </Card>
 
         {/* Email templates */}
