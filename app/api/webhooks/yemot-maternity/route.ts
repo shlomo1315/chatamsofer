@@ -42,8 +42,8 @@ function yemotText(lines: string[], callId?: string) {
 }
 
 function say(...msgs: string[]) {
-  // id_list_message,2 = Hebrew TTS (type 2). system_message expects a pre-recorded file ID, not text.
-  return msgs.map((m) => `id_list_message,2,${m}`)
+  // Yemot TTS format: id_list_message=t-TEXT. (dot at end required)
+  return msgs.map((m) => `id_list_message=t-${m}.`)
 }
 
 function hangup() {
@@ -51,9 +51,12 @@ function hangup() {
 }
 
 // read: שמור קלט DTMF ועבור לתיקייה
-// read_v2,<id>,<type=1>,<timeout_sec>,<max_digits>,<folder>
+// הפורמט הנכון של read עדיין לא מאומת — יש לעדכן בהתאם לתיעוד ימות
 function readDigits(folder: string, maxDigits: number = 20) {
-  return [`read_v2,1,1,15,${maxDigits},${folder}`]
+  return [
+    `id_list_message=t-תקליט נא הקישו את מספר הכרטיס שקיבלתם משמאל לימין ולסיום הקישו סולמית.`,
+    `read_v2,1,1,15,${maxDigits},${folder}`,
+  ]
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -176,7 +179,7 @@ async function handle(req: NextRequest) {
       return yemotText([
         ...say(
           `שלום! מצאנו את תיק הלידה שלך.`,
-          `כרטיס נדרים כבר רשום בתיק. כדי לעדכן מספר חדש, הזיני את המספר ולחצי על כוכבית.`,
+          `כרטיס נדרים כבר רשום בתיק.`,
         ),
         ...readDigits(`got_card_${active.id}`),
       ], callId)
@@ -189,7 +192,6 @@ async function handle(req: NextRequest) {
       ...say(
         `שלום! זוהית בהצלחה.`,
         `נמצא תיק לידה פעיל בחשבונך.`,
-        `אנא הזיני את מספר כרטיס נדרים שלך ולחצי על כוכבית.`,
       ),
       ...readDigits(`got_card_${active.id}`),
     ], callId)
