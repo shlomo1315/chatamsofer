@@ -46,8 +46,10 @@ function say(...msgs: string[]) {
   return msgs.map((m) => `id_list_message=t-${m}.`)
 }
 
+// ניתוק שיחה — ימות מזהה go_to_folder=hangup כסיום תקין.
+// token בודד "hangup" *לא* עובד וגורם לימות לחזור ולקרוא ל-webhook (קריאה כפולה).
 function hangup() {
-  return ['hangup']
+  return ['go_to_folder=hangup']
 }
 
 // read_v2: ימות אוספת DTMF ומעבירה לתיקייה.
@@ -80,19 +82,21 @@ async function findActiveAid(callerPhone: string) {
 
   if (!family) return { notFound: true }
 
-  // לא מסננים לפי status — כל לידה בתוך 6 שבועות תוקינה ללא קשר לסטטוס
-  const { data: aids, error: aidErr } = await admin
+  // מושכים את כל רשומות הלידה של המשפחה. *לא* מסננים status ב-SQL כי
+  // status=NULL היה נפסל ע"י .not(eq) — מסננים cancelled ב-JS במקום.
+  const { data: allAids, error: aidErr } = await admin
     .from('maternity_aids')
     .select('id, birth_date, six_weeks_end, card_number, status')
     .eq('beneficiary_id', family.id)
-    .not('status', 'eq', 'cancelled')
     .order('birth_date', { ascending: false })
-    .limit(10)
+    .limit(20)
 
   if (aidErr) return { error: aidErr.message }
 
+  const aids = (allAids ?? []).filter((a) => a.status !== 'cancelled')
+
   const now = new Date()
-  const active = (aids ?? []).find((a) => {
+  const active = aids.find((a) => {
     const end = a.six_weeks_end
       ? new Date(a.six_weeks_end)
       : addDays(new Date(a.birth_date), 42)
@@ -101,7 +105,19 @@ async function findActiveAid(callerPhone: string) {
 
   const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
 
-  if (!active) return { noBirth: true, familyId: family.id, familyName }
+  // אבחון: מה נמצא במסד הנתונים עבור משפחה זו
+  const diag = (allAids ?? []).map((a) => {
+    const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
+    return `${a.birth_date}→${end.toISOString().slice(0, 10)}(${a.status ?? 'null'})`
+  }).join(', ')
+  console.log(`[yemot-maternity] family ${family.id} (${familyName}): ${allAids?.length ?? 0} aids [${diag}], active=${active?.id ?? 'none'}`)
+
+  if (!active) {
+    const note = (allAids?.length ?? 0) === 0
+      ? 'אין רשומות לידה כלל'
+      : `נמצאו ${allAids!.length} רשומות אך אף אחת לא בחלון 6 שבועות: ${diag}`
+    return { noBirth: true, familyId: family.id, familyName, note }
+  }
 
   return { family, active, familyName }
 }
@@ -171,7 +187,7 @@ async function handle(req: NextRequest) {
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_no_active_birth', entity_type: 'beneficiary',
-          entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName },
+          entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName, note: result.note },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
