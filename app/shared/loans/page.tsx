@@ -326,20 +326,18 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   // ייצוא ההלוואות המסוננות לקובץ אקסל (CSV עם BOM — נפתח ישירות באקסל בעברית)
   const exportExcel = () => {
-    const headers = ['משפחה', 'ת.ז.', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'סכום מבוקש', 'מספר תשלומים', 'מטרה', 'סטטוס', 'תאריך ביצוע', 'בוצע ע"י']
+    const headers = ['שם משפחה', 'שם פרטי', 'ת.ז.', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'מספר תשלומים', 'סטטוס', 'תאריך ביצוע']
     const rows = visibleLoans.map(l => [
-      borrowerName(l.beneficiary),
+      l.beneficiary?.family_name ?? '',
+      l.beneficiary?.full_name ?? '',
       l.beneficiary?.id_number ?? '',
       l.beneficiary?.city ?? '',
-      l.beneficiary?.phone ?? '',
+      l.beneficiary?.phone ? `="${l.beneficiary.phone}"` : '',
       l.beneficiary?.email ?? '',
       shownAmount(l),
-      Math.round(Number(l.amount) || 0),
       l.installments ?? '',
-      l.purpose ?? '',
       l.disbursed_at ? 'בוצעה' : 'ממתינה לביצוע',
       fmtDate(l.disbursed_at),
-      l.disbursed_by ?? '',
     ])
     const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
     const csv = '﻿' + [headers, ...rows].map(row => row.map(esc).join(',')).join('\n')
