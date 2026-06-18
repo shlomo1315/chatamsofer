@@ -28,7 +28,13 @@ export default function GovDataSettings() {
       } else {
         setCount(d.cities ?? count)
         setLastSyncedAt(d.lastSyncedAt ?? new Date().toISOString())
-        setMsg({ type: 'ok', text: `המאגר עודכן ממשרד הפנים — ${d.cities?.toLocaleString('he-IL') ?? ''} ערים.` })
+        // פירוט מקורות לאבחון: כמה ממרשם היישובים, כמה ממאגר הרחובות, ושגיאות אם היו
+        const parts = [
+          `סה״כ ${d.cities?.toLocaleString('he-IL') ?? ''} ערים במאגר`,
+          d.fetched != null ? `נמשכו כעת ${d.fetched?.toLocaleString('he-IL')} (מרשם ${d.registry ?? 0}, רחובות ${d.streets ?? 0}/${d.streetsMethod ?? '—'})` : '',
+        ].filter(Boolean)
+        const hasErr = Array.isArray(d.errors) && d.errors.length > 0
+        setMsg({ type: hasErr ? 'err' : 'ok', text: parts.join(' · ') + (hasErr ? ` · שגיאות: ${d.errors.join(' | ')}` : '') })
         // חימום מטמון רשימת הערים כך שהטפסים יציגו מיד את הרשימה המעודכנת
         fetch('/api/gov/cities?fresh=1').catch(() => {})
       }

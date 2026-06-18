@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
-import { syncCities, syncStreetsForCity, getCitiesMeta } from '@/lib/govData'
+import { syncCitiesDetailed, syncStreetsForCity, getCitiesMeta } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -29,11 +29,21 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() } catch { /* גוף ריק — רענון ערים בלבד */ }
 
   try {
-    const cities = await syncCities(admin)
-    let streets: number | undefined
-    if (body.city?.trim()) streets = await syncStreetsForCity(admin, body.city.trim())
+    const detail = await syncCitiesDetailed(admin)
+    let streetsForCity: number | undefined
+    if (body.city?.trim()) streetsForCity = await syncStreetsForCity(admin, body.city.trim())
     const meta = await getCitiesMeta(admin)
-    return NextResponse.json({ ok: true, cities, streets, lastSyncedAt: meta.lastSyncedAt })
+    return NextResponse.json({
+      ok: true,
+      cities: meta.count,            // סך הערים במאגר (מצטבר)
+      fetched: detail.total,         // כמה נמשכו כעת ממשרד הפנים
+      registry: detail.registry,     // מתוכן ממרשם היישובים
+      streets: detail.streets,       // מתוכן ממאגר הרחובות
+      streetsMethod: detail.streetsMethod,
+      streetsForCity,
+      errors: detail.errors,
+      lastSyncedAt: meta.lastSyncedAt,
+    })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'הרענון נכשל' }, { status: 502 })
   }

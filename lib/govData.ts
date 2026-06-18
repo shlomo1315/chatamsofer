@@ -49,47 +49,98 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
 
 // ── ערים ────────────────────────────────────────────────────────────────────
 
-// השלמת שמות יישובים ממאגר הרחובות (DISTINCT) — תופס יישובים שאולי חסרים
-// במרשם היישובים הראשי, ומבטיח כיסוי מלא של כל יישוב שיש לו רחובות.
-async function fetchCityNamesFromStreets(): Promise<string[]> {
+// תוצאת סנכרון מפורטת — לאבחון: כמה יישובים הגיעו מכל מקור ואילו שגיאות קרו.
+export interface CitiesSyncDetail {
+  names: string[]
+  registry: number                       // ממרשם היישובים
+  streets: number                        // ממאגר הרחובות (DISTINCT)
+  streetsMethod: 'sql' | 'paged' | 'none'
+  total: number
+  errors: string[]
+}
+
+// שמות יישובים ייחודיים ממאגר הרחובות דרך שאילתת SQL (מהיר — בקשה אחת).
+async function fetchCityNamesFromStreetsSql(): Promise<string[]> {
   const sql = `SELECT DISTINCT "שם_ישוב" AS c FROM "${STREETS_RESOURCE}"`
   const res = await fetch(`${GOV_SQL_URL}?sql=${encodeURIComponent(sql)}`, { headers: GOV_HEADERS })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
+  if (data?.success === false) throw new Error(String(data?.error?.info?.orig ?? data?.error?.message ?? 'SQL failed'))
   const records: Record<string, string>[] = data?.result?.records ?? []
   return records.map(r => (r.c ?? r['שם_ישוב'] ?? '').trim()).filter(Boolean)
 }
 
-export async function fetchCitiesFromGov(): Promise<string[]> {
+// נפילה-לאחור: דפדוף מלא של מאגר הרחובות (אותו endpoint מוכח של הרחובות) ואיסוף יישובים ייחודיים.
+async function fetchCityNamesFromStreetsPaged(): Promise<string[]> {
+  const records = await fetchAll(STREETS_RESOURCE, ['שם_ישוב'])
   const set = new Set<string>()
-  // מקור ראשי: מרשם היישובים של משרד הפנים
+  for (const r of records) { const n = (r['שם_ישוב'] ?? '').trim(); if (n) set.add(n) }
+  return [...set]
+}
+
+// רשימת הערים המלאה = איחוד מרשם היישובים + יישובים ממאגר הרחובות. מבטיח כיסוי
+// מלא (כל יישוב שיש לו רחובות נכנס) גם אם המרשם הראשי חלקי או נכשל.
+export async function fetchCitiesDetailed(): Promise<CitiesSyncDetail> {
+  const set = new Set<string>()
+  const errors: string[] = []
+
+  // 1) מרשם היישובים של משרד הפנים
+  let registry = 0
   try {
     const records = await fetchAll(CITIES_RESOURCE, ['שם_ישוב'])
     for (const r of records) {
       const n = (r['שם_ישוב'] ?? '').trim()
-      // מסננים את רשומת הדמה "לא רשום" (קוד יישוב 0) שאינה יישוב אמיתי
-      if (n && n !== 'לא רשום') set.add(n)
+      if (n && n !== 'לא רשום') { if (!set.has(n)) registry++; set.add(n) }
     }
   } catch (e) {
-    if (set.size === 0) throw e // אם המקור הראשי נכשל לגמרי — מפיצים את השגיאה
+    errors.push(`מרשם יישובים: ${e instanceof Error ? e.message : 'שגיאה'}`)
   }
-  // השלמה (best-effort) ממאגר הרחובות — מבטיח שכל יישוב (כגון עמנואל) ייכנס לרשימה
+
+  // 2) השלמה ממאגר הרחובות — SQL מהיר, ואם נכשל נופלים לדפדוף מלא
+  let streets = 0
+  let streetsMethod: 'sql' | 'paged' | 'none' = 'none'
+  let fromStreets: string[] | null = null
   try {
-    for (const n of await fetchCityNamesFromStreets()) if (n && n !== 'לא רשום') set.add(n)
-  } catch { /* השלמה אופציונלית — לא חוסמת את סנכרון הערים */ }
-  return [...set].sort((a, b) => a.localeCompare(b, 'he'))
+    fromStreets = await fetchCityNamesFromStreetsSql()
+    streetsMethod = 'sql'
+  } catch (e1) {
+    errors.push(`רחובות(SQL): ${e1 instanceof Error ? e1.message : 'שגיאה'}`)
+    try {
+      fromStreets = await fetchCityNamesFromStreetsPaged()
+      streetsMethod = 'paged'
+    } catch (e2) {
+      errors.push(`רחובות(דפדוף): ${e2 instanceof Error ? e2.message : 'שגיאה'}`)
+    }
+  }
+  if (fromStreets) {
+    streets = fromStreets.length
+    for (const n of fromStreets) { const t = n.trim(); if (t && t !== 'לא רשום') set.add(t) }
+  }
+
+  const names = [...set].sort((a, b) => a.localeCompare(b, 'he'))
+  return { names, registry, streets, streetsMethod, total: names.length, errors }
+}
+
+export async function fetchCitiesFromGov(): Promise<string[]> {
+  return (await fetchCitiesDetailed()).names
+}
+
+// מסנכרן את רשימת הערים למאגר ומחזיר פירוט מלא (לאבחון מקורות הנתונים).
+export async function syncCitiesDetailed(admin: SupabaseClient): Promise<CitiesSyncDetail> {
+  const detail = await fetchCitiesDetailed()
+  if (detail.names.length > 0) {
+    const now = new Date().toISOString()
+    const rows = detail.names.map(name => ({ name, synced_at: now }))
+    // upsert בקבוצות כדי לא לחרוג ממגבלות גוף הבקשה
+    for (let i = 0; i < rows.length; i += 1000) {
+      await admin.from('gov_cities').upsert(rows.slice(i, i + 1000), { onConflict: 'name' })
+    }
+  }
+  return detail
 }
 
 export async function syncCities(admin: SupabaseClient): Promise<number> {
-  const cities = await fetchCitiesFromGov()
-  if (cities.length === 0) return 0
-  const now = new Date().toISOString()
-  const rows = cities.map(name => ({ name, synced_at: now }))
-  // upsert בקבוצות כדי לא לחרוג ממגבלות גוף הבקשה
-  for (let i = 0; i < rows.length; i += 1000) {
-    await admin.from('gov_cities').upsert(rows.slice(i, i + 1000), { onConflict: 'name' })
-  }
-  return cities.length
+  return (await syncCitiesDetailed(admin)).names.length
 }
 
 // שובר-סטמפדה: מבטיח שרענון-רקע של הערים ירוץ לכל היותר פעם ביממה לכל תהליך.
