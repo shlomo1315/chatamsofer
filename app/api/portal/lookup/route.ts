@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { setPortalSession } from '@/lib/portalSession'
+import { maskEmail } from '@/lib/portalPassword'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,33 +25,25 @@ export async function GET(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const select = 'id, full_name, family_name, eligibility_status, is_active, phone, phone2, email, city, address, id_number, id_doc_type, spouse_name, spouse_id_number, marital_status, children_count, required_docs, children, lineage_node_id, lineage_manual, lineage_chain, created_at'
+  // שלב הזיהוי מחזיר אך ורק האם המוטב רשום ומצב הסיסמה — ללא PII.
+  // פרטי המוטב נמסרים רק לאחר אימות סיסמה (auth/login או auth/set-password).
+  const gateSelect = 'id, email, portal_password_hash'
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
 
     // 1. Check main beneficiaries table
-    const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', idParam).maybeSingle()
+    const { data, error } = await admin.from('beneficiaries').select(gateSelect).eq('id_number', idParam).maybeSingle()
     if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (data) {
-      // מסמכי זהות שכבר הועלו — כדי להציגם בעת כניסה חוזרת במקום לבקש העלאה מחדש
-      const { data: docs } = await admin
-        .from('documents')
-        .select('doc_type, file_url, file_name, uploaded_at')
-        .eq('beneficiary_id', data.id)
-        .in('doc_type', ['id_husband', 'id_wife'])
-        .order('uploaded_at', { ascending: false })
-      const documents: Record<string, { url: string; name: string }> = {}
-      for (const d of docs ?? []) {
-        // שומרים רק את העדכני ביותר לכל סוג (כבר ממוין יורד)
-        if (!documents[d.doc_type] && d.file_url) {
-          documents[d.doc_type] = { url: d.file_url, name: d.file_name ?? 'מסמך' }
-        }
-      }
-      // סשן חתום לפורטל — בקשות ההמשך (הבקשות שלי / עדכון פרטים) מאומתות מולו
-      const response = NextResponse.json({ found: true, beneficiary: data, documents })
-      setPortalSession(response, data.id)
-      return response
+      const hasPassword = !!data.portal_password_hash
+      return NextResponse.json({
+        found: true,
+        needsPassword: hasPassword,
+        needsSetup: !hasPassword,
+        hasEmail: !!data.email,
+        emailHint: maskEmail(data.email),
+      })
     }
 
     // 2. Search inside children JSONB array
@@ -96,12 +88,17 @@ export async function GET(request: NextRequest) {
     if (passportParam.length < 5) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
     // חסימת תווי ג'וקר של ilike (% _) — מנע סריקה כמו passport=% שמחזירה מוטב שרירותי + סשן
     if (/[%_]/.test(passportParam)) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
-    const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', passportParam).maybeSingle()
+    const { data, error } = await admin.from('beneficiaries').select(gateSelect).eq('id_number', passportParam).maybeSingle()
     if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (!data) return NextResponse.json({ found: false })
-    const response = NextResponse.json({ found: true, beneficiary: data })
-    setPortalSession(response, data.id)
-    return response
+    const hasPassword = !!data.portal_password_hash
+    return NextResponse.json({
+      found: true,
+      needsPassword: hasPassword,
+      needsSetup: !hasPassword,
+      hasEmail: !!data.email,
+      emailHint: maskEmail(data.email),
+    })
   }
 
   return NextResponse.json({ error: 'נא לספק מספר תעודת זהות או דרכון' }, { status: 400 })
