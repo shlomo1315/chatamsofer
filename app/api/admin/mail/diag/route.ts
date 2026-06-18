@@ -39,6 +39,13 @@ export async function GET() {
     .order('sent_at', { ascending: false })
     .limit(5)
 
+  // אבחון: ה-payload האחרון שהגיע ל-webhook הנכנס (כדי לאתר היכן נמצא גוף ההודעה)
+  let lastPayload: unknown = null
+  try {
+    const { data: p } = await admin.from('app_settings').select('value').eq('key', 'mail_inbound_last_payload').maybeSingle()
+    if (p?.value) { try { lastPayload = JSON.parse(p.value) } catch { lastPayload = p.value } }
+  } catch { /* ignore */ }
+
   return NextResponse.json({
     env,
     inbound: {
@@ -57,6 +64,7 @@ export async function GET() {
         attachments: Array.isArray(m.attachments) ? m.attachments.length : 0,
       })),
     },
+    lastInboundPayload: lastPayload,
     sent: {
       tableExists: !sent.error,
       error: sent.error?.message ?? null,

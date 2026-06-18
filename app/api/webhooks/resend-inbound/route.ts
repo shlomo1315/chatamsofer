@@ -47,6 +47,18 @@ function extractFromRawMime(raw: string): { html: string | null; text: string | 
   } catch { return { html: null, text: null } }
 }
 
+// צילום מצב של ה-payload הנכנס לאבחון — ללא תוכן בינארי של קבצים, עם קיצור מחרוזות ארוכות.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function debugSnapshot(d: any): any {
+  try {
+    return JSON.parse(JSON.stringify(d, (k, v) => {
+      if ((k === 'content' || k === 'content_b64' || k === 'contentB64') && v) return `[binary ${String(v).length} chars]`
+      if (typeof v === 'string' && v.length > 1500) return `[len ${v.length}] ${v.slice(0, 1500)}`
+      return v
+    }))
+  } catch { return { _error: 'serialize failed' } }
+}
+
 // Webhook לקבלת מיילים נכנסים מ-Resend Inbound.
 // Resend עוטף את הנתונים תחת data; תומכים גם במבנה שטוח ליתר ביטחון.
 export async function POST(request: NextRequest) {
@@ -70,6 +82,20 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
 
   const messageId = data.message_id ?? data.messageId ?? data.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  // אבחון: שומרים צילום של ה-payload האחרון (ללא תוכן בינארי) כדי לאתר היכן נמצא גוף ההודעה
+  try {
+    await admin.from('app_settings').upsert({
+      key: 'mail_inbound_last_payload',
+      value: JSON.stringify({
+        at: new Date().toISOString(),
+        bodyKeys: Object.keys(body),
+        dataKeys: Object.keys(data),
+        snapshot: debugSnapshot(data),
+      }).slice(0, 90000),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+  } catch { /* אבחון בלבד — לא חוסם את הקליטה */ }
 
   // attachments: העלאת התוכן הבינארי ל-Supabase storage כדי שיהיה ניתן לצפות/להוריד.
   // Resend מספק את התוכן כ-base64 בשדה content. נשמר את שם/סוג/גודל + url ציבורי.
