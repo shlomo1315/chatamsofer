@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, X, CreditCard, Loader2, Search, RotateCcw } from 'lucide-react'
 import type { MaternityAid, CardCenter, CardStatus } from '@/types'
+import ExtendEligibility from '../ExtendEligibility'
 
 const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
   pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -165,7 +166,12 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                   <td className="px-5 py-4 border-l border-slate-100"><span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>
                   <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{aid.card_load_amount != null ? ils(aid.card_load_amount) : <span className="text-slate-300">—</span>}</td>
                   <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{aid.card_status === 'loaded' && aid.card_balance != null ? ils(aid.card_balance) : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-5 py-4 border-l border-slate-100">{countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 border-l border-slate-100">
+                    <div className="flex flex-col items-start gap-1">
+                      {countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}
+                      {aid.eligibility_extended && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>}
+                    </div>
+                  </td>
                   <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
@@ -206,6 +212,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                           <button onClick={() => act(aid.id, 'reject')}
                             className="inline-flex items-center gap-1 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5"><X size={13} /> דחה</button>
                         )}
+                        <ExtendEligibility aid={aid} variant="icon" onDone={() => router.refresh()} />
                       </div>
                     )}
                   </td>

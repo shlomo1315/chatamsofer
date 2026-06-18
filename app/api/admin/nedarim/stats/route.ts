@@ -74,15 +74,20 @@ export async function GET() {
     catch { return { f, card: null } }
   })
 
-  // מפת ת.ז → תאריך פריקה (6 שבועות מהלידה) מתוך תיקי היולדות הפעילים
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unloadByZeout: Record<string, { unloadDate: string; daysRemaining: number }> = {}
+  // מפת ת.ז → פרטי פריקה (תאריך סיום הזכאות) מתוך תיקי היולדות הפעילים.
+  // כולל את מזהה התיק ופרטי הזכאות כדי לאפשר הארכת זכאות ידנית ישירות ממסך הכרטיסים הנטענים.
+  type UnloadInfo = {
+    unloadDate: string; daysRemaining: number
+    aidId?: string; birthDate?: string; sixWeeksEnd?: string
+    extended?: boolean; reason?: string
+  }
+  const unloadByZeout: Record<string, UnloadInfo> = {}
   try {
     const admin = getServiceClient()
     if (admin) {
       const { data: aids } = await admin
         .from('maternity_aids')
-        .select('birth_date, six_weeks_end, status, beneficiary:beneficiaries(id_number)')
+        .select('id, birth_date, six_weeks_end, status, eligibility_extended, eligibility_extension_reason, beneficiary:beneficiaries(id_number)')
         .eq('status', 'active')
       const today0 = new Date(); today0.setHours(0, 0, 0, 0)
       for (const a of (aids ?? []) as Json[]) {
@@ -92,7 +97,15 @@ export async function GET() {
         if (!end && a.birth_date) { end = new Date(a.birth_date); end.setDate(end.getDate() + 42) }
         if (!end || Number.isNaN(end.getTime())) continue
         const days = Math.ceil((end.getTime() - today0.getTime()) / 86400000)
-        unloadByZeout[zeout] = { unloadDate: end.toISOString().slice(0, 10), daysRemaining: days }
+        unloadByZeout[zeout] = {
+          unloadDate: end.toISOString().slice(0, 10),
+          daysRemaining: days,
+          aidId: a.id,
+          birthDate: a.birth_date ?? undefined,
+          sixWeeksEnd: a.six_weeks_end ?? undefined,
+          extended: !!a.eligibility_extended,
+          reason: a.eligibility_extension_reason ?? undefined,
+        }
       }
     }
   } catch { /* מפת פריקה היא תוספת — כשל לא חוסם את הסטטיסטיקות */ }

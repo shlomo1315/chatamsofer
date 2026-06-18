@@ -45,6 +45,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [cardNumber, setCardNumber] = useState('')
   const [certUrl, setCertUrl] = useState<string | null>(null)
   const [certFile, setCertFile] = useState<File | null>(null)
+  // האם הזכאות הוארכה ידנית — אם כן, לא נדרוס את six_weeks_end בעת שמירת העריכה
+  const [eligibilityExtended, setEligibilityExtended] = useState(false)
 
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -67,6 +69,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setRecoveryHome(data.recovery_home ?? '')
         setCardNumber(data.card_number ?? '')
         setCertUrl(data.birth_certificate_url ?? null)
+        setEligibilityExtended(!!data.eligibility_extended)
         const ben = data.beneficiary as { id?: string; children?: Child[] } | undefined
         setMotherId(ben?.id ?? null)
         setChildren(Array.isArray(ben?.children) ? ben!.children! : [])
@@ -115,19 +118,23 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       const sixEnd = addWeeks(new Date(babyBirthDate), 6).toISOString().split('T')[0]
 
+      const updatePayload: Record<string, unknown> = {
+        birth_date: babyBirthDate,
+        baby_name: babyName.trim() || null,
+        baby_id_type: babyIdType,
+        baby_id_number: babyIdNumber || null,
+        baby_gender: babyGender || null,
+        birth_certificate_url: newCertUrl ?? null,
+        recovery_home: recoveryHome || null,
+        card_number: cardNumber || null,
+      }
+      // אם הזכאות הוארכה ידנית — שומרים על תאריך הסיום הידני ולא דורסים אותו.
+      // אחרת מחשבים מחדש לפי תאריך הלידה (ברירת מחדל: 6 שבועות).
+      if (!eligibilityExtended) updatePayload.six_weeks_end = sixEnd
+
       const { error } = await supabase
         .from('maternity_aids')
-        .update({
-          birth_date: babyBirthDate,
-          baby_name: babyName.trim() || null,
-          baby_id_type: babyIdType,
-          baby_id_number: babyIdNumber || null,
-          baby_gender: babyGender || null,
-          birth_certificate_url: newCertUrl ?? null,
-          recovery_home: recoveryHome || null,
-          card_number: cardNumber || null,
-          six_weeks_end: sixEnd,
-        })
+        .update(updatePayload)
         .eq('id', id)
       if (error) throw error
 
@@ -224,6 +231,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           {babyBirthDate && (
             <div className="flex items-center gap-2 text-xs bg-indigo-50 text-indigo-700 rounded-lg px-3 py-2 border border-indigo-100">
               <Baby size={13} /> 6 שבועות לאחר הלידה: <span className="font-bold mr-1">{sixWeeksEnd(babyBirthDate)}</span>
+              {eligibilityExtended && <span className="mr-1 text-indigo-500">— הזכאות הוארכה ידנית (תאריך הסיום נשמר בנפרד)</span>}
             </div>
           )}
         </div>

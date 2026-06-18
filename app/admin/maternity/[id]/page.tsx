@@ -8,6 +8,7 @@ import Tabs, { type TabDef } from '@/components/ui/Tabs'
 import { StatusControl } from '../MaternityTable'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
+import ExtendEligibility from '../ExtendEligibility'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
@@ -244,11 +245,23 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 )}
                 <p className="text-sm"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
                 {aid.six_weeks_end && (
-                  <p className="text-sm"><span className="text-slate-500">6 שבועות לאחר הלידה: </span><span className="ltr-num text-indigo-600 font-medium">{fmtDate(aid.six_weeks_end)}</span></p>
+                  <p className="text-sm">
+                    <span className="text-slate-500">{aid.eligibility_extended ? 'סיום זכאות: ' : '6 שבועות לאחר הלידה: '}</span>
+                    <span className="ltr-num text-indigo-600 font-medium">{fmtDate(aid.six_weeks_end)}</span>
+                    {aid.eligibility_extended && (
+                      <span className="mr-2 inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>
+                    )}
+                  </p>
+                )}
+                {aid.eligibility_extended && aid.eligibility_extension_reason && (
+                  <p className="text-xs text-slate-400">סיבת ההארכה: {aid.eligibility_extension_reason}</p>
                 )}
                 {aid.six_weeks_end && differenceInCalendarDays(new Date(aid.six_weeks_end), new Date()) > 0 && (
                   <p className="text-sm"><span className="text-slate-500">ימים שנותרו: </span><span className="font-medium text-amber-600">{differenceInCalendarDays(new Date(aid.six_weeks_end), new Date())} ימים</span></p>
                 )}
+                <div className="pt-2">
+                  <ExtendEligibility aid={aid} />
+                </div>
               </Card>
               {aid.birth_certificate_url && (
                 <Card>

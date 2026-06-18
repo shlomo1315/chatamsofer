@@ -4,6 +4,7 @@ import {
   Loader2, RefreshCw, Search, X, CreditCard, Plus, Trash2, Wallet,
   Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
 } from 'lucide-react'
+import ExtendEligibility from '../ExtendEligibility'
 
 type Stats = {
   configured?: boolean
@@ -20,8 +21,19 @@ type Stats = {
   cntToday?: number; cntWeek?: number; cntMonth?: number
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transactions?: any[]
-  unloadByZeout?: Record<string, { unloadDate: string; daysRemaining: number }>
+  unloadByZeout?: Record<string, UnloadInfo>
   error?: string
+}
+
+// פרטי פריקה/זכאות לכל ת.ז — כולל מזהה התיק לצורך הארכת זכאות ידנית
+type UnloadInfo = {
+  unloadDate: string
+  daysRemaining: number
+  aidId?: string
+  birthDate?: string
+  sixWeeksEnd?: string
+  extended?: boolean
+  reason?: string
 }
 
 type Family = {
@@ -184,7 +196,9 @@ export default function NedarimFamilies() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(f => (
+                {filtered.map(f => {
+                  const info = f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
+                  return (
                   <tr key={f.ClientId} onClick={() => setSelected(f)} className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer">
                     <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
@@ -192,9 +206,21 @@ export default function NedarimFamilies() {
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} /></td>
                     <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{f.Groupe || '—'}</td>
                     <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{ils(f.Ytra)}</td>
-                    <td className="px-5 py-4"><UnloadCell info={f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined} /></td>
+                    <td className="px-5 py-4" onClick={info?.aidId ? (e => e.stopPropagation()) : undefined}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <UnloadCell info={info} />
+                        {info?.aidId && (
+                          <ExtendEligibility
+                            aid={{ id: info.aidId, birth_date: info.birthDate ?? '', six_weeks_end: info.sixWeeksEnd, eligibility_extended: info.extended, eligibility_extension_reason: info.reason }}
+                            variant="icon"
+                            onDone={() => { load(); loadStats() }}
+                          />
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -574,8 +600,8 @@ function WalletSummary({ stats, loading, total, familiesCount }: { stats: Stats 
   )
 }
 
-// חיווי ימים שנותרו עד פריקה אוטומטית (6 שבועות מהלידה)
-function UnloadCell({ info }: { info?: { unloadDate: string; daysRemaining: number } }) {
+// חיווי ימים שנותרו עד פריקה אוטומטית (ברירת מחדל: 6 שבועות מהלידה; ניתן להארכה ידנית)
+function UnloadCell({ info }: { info?: UnloadInfo }) {
   if (!info) return <span className="text-slate-300">—</span>
   // פריקה בחצות; כשהפריקה היום/באיחור — מציג שעות ודקות עד החצות הקרובה
   const now = new Date()
@@ -597,8 +623,13 @@ function UnloadCell({ info }: { info?: { unloadDate: string; daysRemaining: numb
     } else { label = `${days} ימים`; cls = days <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-50 text-emerald-700' }
   }
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[15px] font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
-      {label}
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[15px] font-medium ${cls}`} title={`פריקה ב-${info.unloadDate}`}>
+        {label}
+      </span>
+      {info.extended && (
+        <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title={info.reason || 'הזכאות הוארכה ידנית'}>הוארך</span>
+      )}
     </span>
   )
 }

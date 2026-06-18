@@ -124,7 +124,12 @@ export interface MaternityAid {
   baby_id_number?: string
   baby_gender?: 'male' | 'female'
   birth_certificate_url?: string
+  // תאריך סיום הזכאות האפקטיבי (ברירת מחדל: לידה + 6 שבועות; ניתן להארכה ידנית)
   six_weeks_end?: string
+  // הארכת זכאות ידנית — חורגת מ-6 השבועות במקרים חריגים
+  eligibility_extended?: boolean
+  eligibility_extended_at?: string
+  eligibility_extension_reason?: string
   card_number?: string
   card_balance: number
   card_loaded_at?: string
