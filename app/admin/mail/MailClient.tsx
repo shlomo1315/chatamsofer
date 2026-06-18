@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
+import { docViewUrl } from '@/lib/docUrl'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
@@ -645,7 +646,7 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
           // קישור ההורדה/צפייה: מיילים נכנסים (Resend) נשמרים ב-Supabase storage עם url ישיר,
           // מיילים מ-Gmail נטענים דרך ה-API לפי attachmentId / inlineData
           const href = att.url
-            ? att.url
+            ? docViewUrl(att.url)
             : att.inlineData
               ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
               : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`

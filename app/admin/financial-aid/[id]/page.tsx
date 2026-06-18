@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowRight, FileText, HandCoins } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { FinancialAidRequest, Beneficiary } from '@/types'
+import { docViewUrl } from '@/lib/docUrl'
 import Card from '@/components/ui/Card'
 import FinancialAidDetail from './FinancialAidDetail'
 
@@ -62,7 +63,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
         <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">סיבת הבקשה</h2>
         <p className="text-sm text-slate-700 whitespace-pre-wrap">{req.reason ?? '—'}</p>
         {req.document_url && (
-          <a href={req.document_url} target="_blank" rel="noopener noreferrer"
+          <a href={docViewUrl(req.document_url)} target="_blank" rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 hover:bg-indigo-50 rounded-lg px-3 py-1.5">
             <FileText size={14} /> {req.document_name || 'צפייה במסמך המצורף'}
           </a>

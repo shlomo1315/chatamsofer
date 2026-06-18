@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -153,10 +154,10 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {docs.map((doc) => (
             <div key={doc.id} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <a href={doc.file_url ?? '#'} target="_blank" rel="noopener noreferrer" className="block">
+              <a href={doc.file_url ? docViewUrl(doc.file_url) : '#'} target="_blank" rel="noopener noreferrer" className="block">
                 {isImage(doc.file_name) && doc.file_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={doc.file_url} alt={doc.file_name ?? ''} className="w-full h-28 object-cover" />
+                  <img src={docViewUrl(doc.file_url)} alt={doc.file_name ?? ''} className="w-full h-28 object-cover" />
                 ) : (
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
                     {isImage(doc.file_name) ? <ImageIcon size={28} /> : <FileText size={28} />}
@@ -174,7 +175,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
               </div>
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <a
-                  href={doc.file_url ?? '#'}
+                  href={doc.file_url ? docViewUrl(doc.file_url) : '#'}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-indigo-600 shadow-sm"

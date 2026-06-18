@@ -9,6 +9,7 @@ import { StatusControl } from '../MaternityTable'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
 import ExtendEligibility from '../ExtendEligibility'
+import { docViewUrl } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
@@ -385,12 +386,13 @@ function DocCard({ label, url }: { label: string; url?: string }) {
     </div>
   )
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  const href = docViewUrl(url)
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer"
+    <a href={href} target="_blank" rel="noopener noreferrer"
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={label} className="w-full h-20 object-cover rounded-lg bg-slate-100" />
+        <img src={href} alt={label} className="w-full h-20 object-cover rounded-lg bg-slate-100" />
       ) : (
         <div className="w-full h-20 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={24} className="text-slate-400" />

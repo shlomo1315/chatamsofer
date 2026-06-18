@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { docViewUrl } from '@/lib/docUrl'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
@@ -62,24 +63,25 @@ export default function BirthCertificatePreview({
   }
 
   const btn = 'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/95 shadow-sm border border-slate-200 hover:bg-white transition-colors'
+  const view = docViewUrl(url)
 
   return (
     <div className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
       {/* תצוגה מקדימה */}
       {isImage(url) ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
+        <img src={view} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
       ) : isPdf(url) ? (
-        <iframe src={`${url}#toolbar=0&navpanes=0`} title="אישור לידה" className="w-full h-80 bg-white" />
+        <iframe src={`${view}#toolbar=0&navpanes=0`} title="אישור לידה" className="w-full h-80 bg-white" />
       ) : (
-        <a href={url} target="_blank" rel="noopener noreferrer" className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
+        <a href={view} target="_blank" rel="noopener noreferrer" className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>
         </a>
       )}
 
       {/* פעולות בריחוף */}
       <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 p-2 bg-gradient-to-b from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-        <a href={url} target="_blank" rel="noopener noreferrer" className={`${btn} text-indigo-700`}>
+        <a href={view} target="_blank" rel="noopener noreferrer" className={`${btn} text-indigo-700`}>
           <ExternalLink size={13} /> פתח
         </a>
         <button onClick={() => fileRef.current?.click()} disabled={busy} className={`${btn} text-slate-700`}>

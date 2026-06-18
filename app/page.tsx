@@ -4,6 +4,7 @@ import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import EmailInput from '@/components/ui/EmailInput'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
+import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
@@ -1512,7 +1513,7 @@ export default function PublicPortalPage() {
             </span>
             <div className="flex items-center gap-3 flex-shrink-0">
               {existing.url && (
-                <a href={existing.url} target="_blank" rel="noopener noreferrer"
+                <a href={docViewUrl(existing.url)} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-indigo-600 hover:text-indigo-800 underline">צפייה</a>
               )}
               <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: true }))}

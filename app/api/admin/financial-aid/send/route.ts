@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/apiAuth'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 import { financialAidInquiryEmail } from '@/lib/emailTemplates'
+import { storagePath } from '@/lib/docUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,26 +47,24 @@ export async function POST(request: NextRequest) {
 
   const mail = financialAidInquiryEmail(ben ?? {}, (req as { reason?: string }).reason)
 
-  // צירוף המסמך שהמבקש העלה בבקשה (אם קיים) — עם timeout כדי שלא יתקע את השליחה
+  // צירוף המסמך שהמבקש העלה בבקשה (אם קיים) — הורדה דרך service-role כדי שתעבוד
+  // גם כשהדלי פרטי (לא מסתמכים על URL ציבורי).
   const attachments: { filename: string; mimeType: string; contentB64: string }[] = []
   const docUrl = (req as { document_url?: string }).document_url
   const docName = (req as { document_name?: string }).document_name
   if (docUrl) {
     try {
-      const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), 6000)
-      const fileRes = await fetch(docUrl, { signal: ctrl.signal })
-      clearTimeout(timer)
-      if (fileRes.ok) {
-        const buf = Buffer.from(await fileRes.arrayBuffer())
+      const { data: blob } = await admin.storage.from('documents').download(storagePath(docUrl))
+      if (blob) {
+        const buf = Buffer.from(await blob.arrayBuffer())
         const ext = (docUrl.split('?')[0].split('.').pop() ?? '').toLowerCase()
         attachments.push({
           filename: docName || `מסמך-מצורף.${ext || 'pdf'}`,
-          mimeType: fileRes.headers.get('content-type') || 'application/octet-stream',
+          mimeType: blob.type || 'application/octet-stream',
           contentB64: buf.toString('base64'),
         })
       }
-    } catch { /* אם נכשל/נתקע — שולחים בלי הצרופה */ }
+    } catch { /* אם נכשל — שולחים בלי הצרופה */ }
   }
 
   try {

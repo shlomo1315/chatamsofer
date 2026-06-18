@@ -3,6 +3,7 @@ import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLi
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
+import { docViewUrl } from '@/lib/docUrl'
 import Card from '@/components/ui/Card'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
@@ -115,7 +116,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
           <div className="flex flex-col gap-2">
             {loan.document_urls.map((d, i) => (
-              <a key={i} href={d.url} target="_blank" rel="noopener noreferrer"
+              <a key={i} href={docViewUrl(d.url)} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-lg px-3 py-2 transition-colors">
                 <FileText size={14} className="flex-shrink-0" />
                 <span className="truncate">{d.name || `מסמך ${i + 1}`}</span>
@@ -174,12 +175,13 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 function LoanDocCard({ label, url }: { label: string; url?: string }) {
   if (!url) return null
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  const href = docViewUrl(url)
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer"
+    <a href={href} target="_blank" rel="noopener noreferrer"
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+        <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
       ) : (
         <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={28} className="text-slate-400" />

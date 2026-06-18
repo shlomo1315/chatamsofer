@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { storagePath as extractDocPath } from '@/lib/docUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,10 +49,19 @@ export async function POST(request: NextRequest) {
     let buffer: Buffer
 
     if (sourceUrl) {
-      // מייל נכנס (Resend) — הקובץ כבר שמור ב-Supabase storage, נמשך אותו לפי ה-URL
-      const res = await fetch(String(sourceUrl))
-      if (!res.ok) return NextResponse.json({ error: 'failed to fetch attachment' }, { status: 502 })
-      buffer = Buffer.from(await res.arrayBuffer())
+      // מייל נכנס (Resend) — הקובץ שמור בדלי 'documents'. הורדה דרך service-role
+      // (עובד גם כשהדלי פרטי); נפילה-לאחור ל-fetch אם זה URL חיצוני.
+      const src = String(sourceUrl)
+      const p = extractDocPath(src)
+      if (p !== src) {
+        const { data: blob } = await getAdminClient().storage.from('documents').download(p)
+        if (!blob) return NextResponse.json({ error: 'failed to fetch attachment' }, { status: 502 })
+        buffer = Buffer.from(await blob.arrayBuffer())
+      } else {
+        const res = await fetch(src)
+        if (!res.ok) return NextResponse.json({ error: 'failed to fetch attachment' }, { status: 502 })
+        buffer = Buffer.from(await res.arrayBuffer())
+      }
     } else if (inlineData) {
       // Small attachment already embedded inline
       buffer = Buffer.from(inlineData.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
