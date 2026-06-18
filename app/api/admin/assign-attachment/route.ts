@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
 
-  const { messageId, attachmentId, inlineData, beneficiaryId, docType, filename, mimeType } = await request.json()
+  const { messageId, attachmentId, inlineData, sourceUrl, beneficiaryId, docType, filename, mimeType } = await request.json()
 
-  if (!messageId || !beneficiaryId || !docType) {
+  if (!beneficiaryId || !docType) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 })
   }
 
@@ -47,10 +47,15 @@ export async function POST(request: NextRequest) {
   try {
     let buffer: Buffer
 
-    if (inlineData) {
+    if (sourceUrl) {
+      // מייל נכנס (Resend) — הקובץ כבר שמור ב-Supabase storage, נמשך אותו לפי ה-URL
+      const res = await fetch(String(sourceUrl))
+      if (!res.ok) return NextResponse.json({ error: 'failed to fetch attachment' }, { status: 502 })
+      buffer = Buffer.from(await res.arrayBuffer())
+    } else if (inlineData) {
       // Small attachment already embedded inline
       buffer = Buffer.from(inlineData.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
-    } else {
+    } else if (messageId && attachmentId) {
       // Fetch from Gmail API
       const gmail = await getGmailClient()
       const res = await gmail.users.messages.attachments.get({
@@ -61,6 +66,8 @@ export async function POST(request: NextRequest) {
       const data = res.data.data
       if (!data) return NextResponse.json({ error: 'empty attachment' }, { status: 404 })
       buffer = Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64')
+    } else {
+      return NextResponse.json({ error: 'missing attachment source' }, { status: 400 })
     }
 
     // Upload to Supabase storage

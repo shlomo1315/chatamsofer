@@ -533,6 +533,7 @@ function AssignAttachmentModal({ attachment, messageId, senderEmail, onClose }: 
           messageId,
           attachmentId: attachment.attachmentId,
           inlineData: attachment.inlineData,
+          sourceUrl: attachment.url,
           beneficiaryId: selected.id,
           docType,
           filename: attachment.filename,
@@ -640,26 +641,35 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
         <span className="text-xs font-semibold text-slate-500">{attachments.length} קבצים מצורפים</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        {attachments.map(att => (
-          <div key={att.attachmentId}
-            className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
-            <FileText size={13} className="text-slate-400 flex-shrink-0" />
-            <span className="truncate max-w-[140px]">{att.filename}</span>
-            <span className="text-slate-400">{formatBytes(att.size)}</span>
-            <a href={att.inlineData
-                ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
-                : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
-              }
-              download={att.filename}
-              className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
-              <Download size={13} />
-            </a>
-            <button onClick={() => setAssigning(att)}
-              className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
-              <FolderOpen size={13} />
-            </button>
-          </div>
-        ))}
+        {attachments.map((att, i) => {
+          // קישור ההורדה/צפייה: מיילים נכנסים (Resend) נשמרים ב-Supabase storage עם url ישיר,
+          // מיילים מ-Gmail נטענים דרך ה-API לפי attachmentId / inlineData
+          const href = att.url
+            ? att.url
+            : att.inlineData
+              ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+              : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+          return (
+            <div key={att.attachmentId || att.url || `${att.filename}-${i}`}
+              className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
+              <FileText size={13} className="text-slate-400 flex-shrink-0" />
+              <span className="truncate max-w-[140px]">{att.filename}</span>
+              {att.size > 0 && <span className="text-slate-400">{formatBytes(att.size)}</span>}
+              <a href={href} target="_blank" rel="noopener noreferrer"
+                className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                <ExternalLink size={13} />
+              </a>
+              <a href={href} download={att.filename}
+                className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+                <Download size={13} />
+              </a>
+              <button onClick={() => setAssigning(att)}
+                className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
+                <FolderOpen size={13} />
+              </button>
+            </div>
+          )
+        })}
       </div>
       {assigning && <AssignAttachmentModal attachment={assigning} messageId={messageId} senderEmail={senderEmail} onClose={() => setAssigning(null)} />}
     </div>
@@ -1173,7 +1183,7 @@ export default function MailClient() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-slate-900 text-base truncate">{selected.subject}</h2>
+              <h2 className="font-semibold text-slate-900 text-base break-words whitespace-pre-wrap" title={selected.subject}>{selected.subject}</h2>
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 {emailToInfo[selected.fromEmail] ? (
                   <>
