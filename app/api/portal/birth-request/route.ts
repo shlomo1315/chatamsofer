@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { signedDocUrl } from '@/lib/docUrl'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
@@ -91,18 +92,18 @@ export async function POST(request: NextRequest) {
     const benEmail = ben.email
     const genderLabel = baby_gender === 'male' ? 'בן' : baby_gender === 'female' ? 'בת' : ''
     const certUrl = birth_certificate_url ? String(birth_certificate_url) : ''
-    const mail = requestReceivedEmail({
-      type: 'birth', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
-      requestRows: [
-        [baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד', baby_name ? String(baby_name).trim() : ''],
-        ['מין', genderLabel],
-        ['תאריך לידה', String(birth_date)],
-        [isPassport ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', babyIdNorm],
-        ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
-      ],
-      documents: [{ name: 'אישור לידה', url: certUrl || undefined }],
-    })
     void (async () => {
+      const mail = requestReceivedEmail({
+        type: 'birth', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
+        requestRows: [
+          [baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד', baby_name ? String(baby_name).trim() : ''],
+          ['מין', genderLabel],
+          ['תאריך לידה', String(birth_date)],
+          [isPassport ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', babyIdNorm],
+          ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
+        ],
+        documents: [{ name: 'אישור לידה', url: certUrl ? await signedDocUrl(admin, certUrl) : undefined }],
+      })
       const att = certUrl ? await urlToAttachment(certUrl, 'אישור-לידה') : null
       await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('maternity'))
     })().catch(() => {})

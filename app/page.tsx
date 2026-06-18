@@ -16,6 +16,7 @@ import {
 
 type Step =
   | 'id-lookup'
+  | 'portal-auth'
   | 'not-found'
   | 'found-as-child'
   | 'register'
@@ -806,6 +807,16 @@ export default function PublicPortalPage() {
   const [requestType, setRequestType] = useState<'birth' | 'loan' | 'financial_aid' | null>(null)
   const [pendingConfirmed, setPendingConfirmed] = useState(false)
 
+  // ── אימות כניסה לפורטל: סיסמה + "שכחתי סיסמה"/הגדרת סיסמה ראשונה ──
+  const [pendingAuth, setPendingAuth] = useState<{ idType: 'id' | 'passport'; id: string } | null>(null)
+  const [authMode, setAuthMode] = useState<'login' | 'reset'>('login')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authPassword2, setAuthPassword2] = useState('')
+  const [authCode, setAuthCode] = useState('')
+  const [authEmailHint, setAuthEmailHint] = useState('')
+  const [authCodeSent, setAuthCodeSent] = useState(false)
+  const [authIsSetup, setAuthIsSetup] = useState(false)
+
   // הבקשות שהוגשו ע"י הצאצא (לתצוגה באזור האישי)
   type MyReq = { id: string; kind: string; kindLabel: string; statusLabel: string; tone: 'pending' | 'progress' | 'approved' | 'rejected'; amount: number | null; created_at: string }
   const [myRequests, setMyRequests] = useState<MyReq[]>([])
@@ -991,12 +1002,14 @@ export default function PublicPortalPage() {
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) {
-          setBeneficiary(data.beneficiary)
-          setExistingDocs(data.documents ?? {})
-          setReplaceDoc({})
-          // דשבורד מלא אחיד לכולם (כולל אלמנים/אלמנות וכניסה בדרכון):
-          // הלוואות, סיוע רפואי, הבראה ליולדת — עם כל התנאים.
-          setStep('dashboard')
+          // נדרשת סיסמה לפני חשיפת פרטי המוטב
+          setPendingAuth({ idType: 'id', id: digits })
+          setAuthEmailHint(data.emailHint || '')
+          setAuthIsSetup(!!data.needsSetup)
+          setAuthMode(data.needsSetup ? 'reset' : 'login')
+          setAuthCodeSent(false)
+          setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
+          setStep('portal-auth')
         }
         else if (data.foundAsChild) {
           setChildMatch({ parentName: data.parentName, childData: data.childData, parentLineage: data.parentLineage })
@@ -1014,16 +1027,78 @@ export default function PublicPortalPage() {
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) {
-          setBeneficiary(data.beneficiary)
-          setExistingDocs(data.documents ?? {})
-          setReplaceDoc({})
-          // דשבורד מלא אחיד לכולם (כולל כניסה בדרכון)
-          setStep('dashboard')
+          setPendingAuth({ idType: 'passport', id: raw })
+          setAuthEmailHint(data.emailHint || '')
+          setAuthIsSetup(!!data.needsSetup)
+          setAuthMode(data.needsSetup ? 'reset' : 'login')
+          setAuthCodeSent(false)
+          setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
+          setStep('portal-auth')
         }
         else { setRegDocType('passport'); setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
       } catch { setError('שגיאת רשת. אנא נסה שוב.') }
       setLoading(false)
     }
+  }
+
+  // ── אימות פורטל: כניסה עם סיסמה / הגדרת סיסמה דרך קוד למייל ──
+  const enterDashboard = (b: FoundBeneficiary, docs: Record<string, { url: string; name: string }>) => {
+    setBeneficiary(b)
+    setExistingDocs(docs ?? {})
+    setReplaceDoc({})
+    setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
+    setStep('dashboard')
+  }
+
+  const handlePortalLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pendingAuth) return
+    if (!authPassword) { setError('אנא הזן סיסמה'); return }
+    setError(''); setLoading(true)
+    try {
+      const res = await fetch('/api/portal/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id, password: authPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
+      enterDashboard(data.beneficiary, data.documents)
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setLoading(false)
+  }
+
+  const handleSendCode = async () => {
+    if (!pendingAuth) return
+    setError(''); setLoading(true)
+    try {
+      const res = await fetch('/api/portal/auth/send-code', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
+      setAuthMode('reset')
+      setAuthCodeSent(true)
+      if (data.emailHint) setAuthEmailHint(data.emailHint)
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setLoading(false)
+  }
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pendingAuth) return
+    if (authPassword !== authPassword2) { setError('הסיסמאות אינן תואמות'); return }
+    setError(''); setLoading(true)
+    try {
+      const res = await fetch('/api/portal/auth/set-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id, code: authCode, password: authPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
+      enterDashboard(data.beneficiary, data.documents)
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setLoading(false)
   }
 
   // ── סדר הדורות המלא: דור 1 (החתם סופר, נעול) → נתיב מהעץ → דורות ידניים → הנרשם עצמו ──
@@ -1693,6 +1768,104 @@ export default function PublicPortalPage() {
               </form>
             </Card>
 
+          </div>
+        )}
+
+        {/* ─── Step: Portal Auth (סיסמה) ─── */}
+        {step === 'portal-auth' && pendingAuth && (
+          <div className="flex flex-col gap-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-3 shadow-lg bg-white border border-slate-200">
+                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain p-1" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 mb-1">
+                {authMode === 'login' ? 'כניסה לאזור האישי' : authIsSetup ? 'הגדרת סיסמה' : 'איפוס סיסמה'}
+              </h2>
+              <p className="text-sm text-slate-500 ltr-num">{pendingAuth.id}</p>
+            </div>
+
+            <Card>
+              {authMode === 'login' ? (
+                <form onSubmit={handlePortalLogin} className="flex flex-col gap-4">
+                  <Field label="סיסמה" required>
+                    <TextInput
+                      type="password" value={authPassword}
+                      onChange={e => setAuthPassword(e.target.value)}
+                      placeholder="הסיסמה שלך" dir="ltr" autoComplete="current-password"
+                      className="text-center text-lg"
+                    />
+                  </Field>
+                  {error && <ErrorBox message={error} />}
+                  <button type="submit" disabled={loading}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                    {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                    {loading ? 'מאמת...' : 'כניסה'}
+                  </button>
+                  <button type="button"
+                    onClick={() => { setError(''); setAuthMode('reset'); setAuthIsSetup(false); setAuthCodeSent(false); setAuthPassword('') }}
+                    className="text-sm text-indigo-600 hover:text-indigo-800 underline mx-auto">
+                    שכחתי סיסמה
+                  </button>
+                </form>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {!authCodeSent ? (
+                    <>
+                      <p className="text-sm text-slate-600 leading-relaxed text-center">
+                        {authIsSetup
+                          ? 'כדי להגדיר סיסמה לראשונה, נשלח קוד אימות לכתובת המייל הרשומה שלך.'
+                          : 'נשלח קוד אימות לכתובת המייל הרשומה שלך לאיפוס הסיסמה.'}
+                        {authEmailHint && <><br /><span className="font-semibold ltr-num">{authEmailHint}</span></>}
+                      </p>
+                      {error && <ErrorBox message={error} />}
+                      <button type="button" onClick={handleSendCode} disabled={loading}
+                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                        {loading && <Loader2 size={20} className="animate-spin" />}
+                        {loading ? 'שולח...' : 'שליחת קוד למייל'}
+                      </button>
+                    </>
+                  ) : (
+                    <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
+                      <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
+                        קוד נשלח אל {authEmailHint || 'המייל שלך'} · תקף ל-10 דקות
+                      </div>
+                      <Field label="קוד אימות" required hint="6 ספרות שהתקבלו במייל">
+                        <TextInput value={authCode}
+                          onChange={e => setAuthCode(e.target.value.replace(/\D/g, ''))}
+                          placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
+                          className="text-center text-lg font-semibold tracking-widest" />
+                      </Field>
+                      <Field label="סיסמה חדשה" required hint="לפחות 10 תווים, אות באנגלית וספרה">
+                        <TextInput type="password" value={authPassword}
+                          onChange={e => setAuthPassword(e.target.value)}
+                          dir="ltr" autoComplete="new-password" className="text-center text-lg" />
+                      </Field>
+                      <Field label="אימות סיסמה" required>
+                        <TextInput type="password" value={authPassword2}
+                          onChange={e => setAuthPassword2(e.target.value)}
+                          dir="ltr" autoComplete="new-password" className="text-center text-lg" />
+                      </Field>
+                      {error && <ErrorBox message={error} />}
+                      <button type="submit" disabled={loading}
+                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                        {loading && <Loader2 size={20} className="animate-spin" />}
+                        {loading ? 'שומר...' : 'שמירת סיסמה וכניסה'}
+                      </button>
+                      <button type="button" onClick={handleSendCode} disabled={loading}
+                        className="text-sm text-slate-500 hover:text-slate-700 underline mx-auto">
+                        שליחת קוד חדש
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              <button type="button"
+                onClick={() => { setError(''); setStep('id-lookup'); setPendingAuth(null); setAuthPassword(''); setAuthPassword2(''); setAuthCode(''); setAuthCodeSent(false) }}
+                className="text-sm text-slate-400 hover:text-slate-600 mx-auto mt-3 block">
+                חזרה
+              </button>
+            </Card>
           </div>
         )}
 

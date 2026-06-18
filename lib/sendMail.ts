@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
 import { NOREPLY_FROM, BRAND_NAME, departmentByEmail } from './departments'
+import { storagePath } from './docUrl'
 
 export interface MailAttachment { filename: string; mimeType: string; contentB64: string }
 export interface MailOptions {
@@ -131,13 +132,27 @@ function extFromUrl(url: string): string | null {
 // מבטיח שלשם הקובץ יש סיומת תקינה (לפי ה-URL או סוג-התוכן) כדי שייפתח אצל הנמען.
 export async function urlToAttachment(url: string, filename: string): Promise<MailAttachment | null> {
   try {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 8000)
-    const res = await fetch(url, { signal: ctrl.signal })
-    clearTimeout(timer)
-    if (!res.ok) return null
-    const buf = Buffer.from(await res.arrayBuffer())
-    const mimeType = (res.headers.get('content-type') || '').split(';')[0].trim() || 'application/octet-stream'
+    let buf: Buffer
+    let mimeType: string
+    const path = storagePath(url)
+    const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (path !== url && supaUrl && supaKey) {
+      // קובץ בדלי 'documents' — הורדה דרך service-role (עובד גם כשהדלי פרטי)
+      const admin = createClient(supaUrl, supaKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      const { data: blob } = await admin.storage.from('documents').download(path)
+      if (!blob) return null
+      buf = Buffer.from(await blob.arrayBuffer())
+      mimeType = blob.type || 'application/octet-stream'
+    } else {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 8000)
+      const res = await fetch(url, { signal: ctrl.signal })
+      clearTimeout(timer)
+      if (!res.ok) return null
+      buf = Buffer.from(await res.arrayBuffer())
+      mimeType = (res.headers.get('content-type') || '').split(';')[0].trim() || 'application/octet-stream'
+    }
 
     // ודא סיומת: אם השם כבר מסתיים בסיומת — נשאיר; אחרת נגזור מה-URL או מ-mimeType
     let safeName = filename
