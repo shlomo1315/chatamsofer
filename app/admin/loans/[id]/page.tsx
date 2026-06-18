@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock } from 'lucide-react'
+import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
@@ -23,12 +23,28 @@ async function getLoan(id: string): Promise<Loan | null> {
   return data
 }
 
+async function getBeneficiaryIdDocs(beneficiaryId: string): Promise<{ doc_type: string; file_url: string | null; file_name: string | null }[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('documents')
+    .select('doc_type, file_url, file_name')
+    .eq('beneficiary_id', beneficiaryId)
+    .in('doc_type', ['id_husband', 'id_wife'])
+    .order('uploaded_at', { ascending: false })
+  if (!data) return []
+  const seen = new Set<string>()
+  return data.filter(d => { if (seen.has(d.doc_type)) return false; seen.add(d.doc_type); return true })
+}
+
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
 const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 export default async function LoanDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const loan = await getLoan(id)
+  const beneficiaryId = (loan?.beneficiary as { id?: string } | undefined)?.id
+  const idDocs = beneficiaryId ? await getBeneficiaryIdDocs(beneficiaryId) : []
 
   if (!loan && isSupabaseConfigured()) notFound()
 
@@ -109,6 +125,23 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         </Card>
       )}
 
+      {idDocs.length > 0 && (
+        <Card>
+          <div className="flex items-center gap-2 text-indigo-600 mb-3">
+            <FileText size={16} />
+            <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {idDocs.find(d => d.doc_type === 'id_husband') && (
+              <LoanDocCard label="ת.ז. הבעל" url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+            )}
+            {idDocs.find(d => d.doc_type === 'id_wife') && (
+              <LoanDocCard label="ת.ז. האישה" url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* ביצוע הלוואה */}
       <Card>
         <div className="flex items-center gap-2 mb-3">
@@ -135,5 +168,26 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         </Card>
       )}
     </div>
+  )
+}
+
+function LoanDocCard({ label, url }: { label: string; url?: string }) {
+  if (!url) return null
+  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+      ) : (
+        <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+          <FileText size={28} className="text-slate-400" />
+        </div>
+      )}
+      <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
+        {label} <ExternalLink size={11} />
+      </span>
+    </a>
   )
 }

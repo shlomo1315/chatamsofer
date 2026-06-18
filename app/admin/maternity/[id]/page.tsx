@@ -15,6 +15,8 @@ import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 
+interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name: string | null }
+
 async function getAid(id: string): Promise<MaternityAid | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
@@ -38,6 +40,21 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     if (doc?.file_url) data.birth_certificate_url = doc.file_url
   }
   return data
+}
+
+async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('documents')
+    .select('doc_type, file_url, file_name')
+    .eq('beneficiary_id', beneficiaryId)
+    .in('doc_type', ['id_husband', 'id_wife'])
+    .order('uploaded_at', { ascending: false })
+  if (!data) return []
+  // מחזיר doc אחד לכל סוג (הכי חדש)
+  const seen = new Set<string>()
+  return data.filter(d => { if (seen.has(d.doc_type)) return false; seen.add(d.doc_type); return true })
 }
 
 // סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
@@ -65,7 +82,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const { id } = await params
   const aid = await getAid(id)
   const ben = aid?.beneficiary as Beneficiary | undefined
-  const lineagePath = await getLineagePath(ben?.lineage_node_id)
+  const [lineagePath, idDocs] = await Promise.all([
+    getLineagePath(ben?.lineage_node_id),
+    aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
+  ])
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
 
   if (!aid && isSupabaseConfigured()) notFound()
@@ -150,6 +170,25 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   </div>
                 )}
               </div>
+              {(idDocs.length > 0 || aid.birth_certificate_url) && (
+                <div className="pt-3 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={14} className="text-indigo-500" />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {idDocs.find(d => d.doc_type === 'id_husband') && (
+                      <DocCard label="ת.ז. הבעל" url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+                    )}
+                    {idDocs.find(d => d.doc_type === 'id_wife') && (
+                      <DocCard label="ת.ז. האישה" url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+                    )}
+                    {aid.birth_certificate_url && (
+                      <DocCard label="אישור לידה" url={aid.birth_certificate_url} />
+                    )}
+                  </div>
+                </div>
+              )}
               {(lineagePath.length > 0 || lineageManual.length > 0 || ben.lineage_node_id) && (
                 <div className="pt-3 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-2">
@@ -321,5 +360,32 @@ function DetailRow({ label, value, ltr, icon }: { label: string; value: string; 
       <span className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">{icon}{label}</span>
       <span className={`text-sm text-slate-800 ${ltr ? 'ltr-num text-left' : ''}`}>{value}</span>
     </div>
+  )
+}
+
+function DocCard({ label, url }: { label: string; url?: string }) {
+  if (!url) return (
+    <div className="flex flex-col items-center gap-1.5 p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center">
+      <FileText size={18} className="text-slate-300" />
+      <span className="text-[11px] font-medium text-slate-400">{label}</span>
+      <span className="text-[10px] text-slate-300">לא הועלה</span>
+    </div>
+  )
+  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+       className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={label} className="w-full h-20 object-cover rounded-lg bg-slate-100" />
+      ) : (
+        <div className="w-full h-20 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+          <FileText size={24} className="text-slate-400" />
+        </div>
+      )}
+      <span className="text-[11px] font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
+        {label} <ExternalLink size={10} />
+      </span>
+    </a>
   )
 }
