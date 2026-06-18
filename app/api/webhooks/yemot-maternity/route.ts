@@ -33,14 +33,17 @@ function phoneMatches(stored: string | null | undefined, caller: string): boolea
 
 // ── תגובות ימות ─────────────────────────────────────────────────────────────
 // ימות מצפה לתוכן מסוג text/plain; שורות מופרדות בנקודה-פסיק.
-function yemotText(lines: string[]) {
-  return new NextResponse(lines.join(';') + ';', {
+function yemotText(lines: string[], callId?: string) {
+  const body = lines.join(';') + ';'
+  console.log(`[yemot-maternity] response${callId ? ` (callId=${callId})` : ''}: ${body}`)
+  return new NextResponse(body, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   })
 }
 
 function say(...msgs: string[]) {
-  return msgs.map((m) => `system_message,1,${m}`)
+  // id_list_message,2 = Hebrew TTS (type 2). system_message expects a pre-recorded file ID, not text.
+  return msgs.map((m) => `id_list_message,2,${m}`)
 }
 
 function hangup() {
@@ -75,11 +78,11 @@ async function handle(req: NextRequest) {
   // אופציונלי: סוד לאימות הבקשה (הגדר YEMOT_WEBHOOK_SECRET ב-Railway)
   const secret = process.env.YEMOT_WEBHOOK_SECRET
   if (secret && params['ApiToken'] !== secret) {
-    return yemotText([...say('אין הרשאה'), ...hangup()])
+    return yemotText([...say('אין הרשאה'), ...hangup()], callId)
   }
 
   if (!apiPhone) {
-    return yemotText([...say('שגיאה במספר המתקשר'), ...hangup()])
+    return yemotText([...say('שגיאה במספר המתקשר'), ...hangup()], callId)
   }
 
   const callerPhone = normalizePhone(apiPhone)
@@ -95,7 +98,7 @@ async function handle(req: NextRequest) {
 
     if (error) {
       console.error('[yemot-maternity] DB error', error.message)
-      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()])
+      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()], callId)
     }
 
     const family = (beneficiaries ?? []).find(
@@ -119,7 +122,7 @@ async function handle(req: NextRequest) {
           'לעזרה ורישום אנא פני למשרד של היכל החתם סופר.',
         ),
         ...hangup(),
-      ])
+      ], callId)
     }
 
     // חיפוש לידה פעילה בתוך 6 שבועות
@@ -133,7 +136,7 @@ async function handle(req: NextRequest) {
 
     if (aidErr) {
       console.error('[yemot-maternity] aids error', aidErr.message)
-      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()])
+      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()], callId)
     }
 
     const now = new Date()
@@ -158,7 +161,7 @@ async function handle(req: NextRequest) {
           'אם את בתוך שישה שבועות מהלידה ועדיין מופיעה שגיאה, אנא פני למשרד.',
         ),
         ...hangup(),
-      ])
+      ], callId)
     }
 
     if (active.card_number) {
@@ -174,12 +177,9 @@ async function handle(req: NextRequest) {
         ...say(
           `שלום! מצאנו את תיק הלידה שלך.`,
           `כרטיס נדרים כבר רשום בתיק. כדי לעדכן מספר חדש, הזיני את המספר ולחצי על כוכבית.`,
-          `לביטול לחצי על מקש ה שי-טין.`,
         ),
-        // שמירת ה-aidId בתיקייה כדי לאחזרו בשלב הבא
-        `go_to_folder,card_input_${active.id}`,
         ...readDigits(`got_card_${active.id}`),
-      ])
+      ], callId)
     }
 
     const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
@@ -192,7 +192,7 @@ async function handle(req: NextRequest) {
         `אנא הזיני את מספר כרטיס נדרים שלך ולחצי על כוכבית.`,
       ),
       ...readDigits(`got_card_${active.id}`),
-    ])
+    ], callId)
   }
 
   // ── שלב 2: קבלת מספר הכרטיס ─────────────────────────────────────────────
@@ -203,7 +203,7 @@ async function handle(req: NextRequest) {
       return yemotText([
         ...say('מספר כרטיס לא תקין. אנא נסי שוב.'),
         ...readDigits(`got_card_${aidId}`),
-      ])
+      ], callId)
     }
 
     const { error: updateErr } = await admin
@@ -222,7 +222,7 @@ async function handle(req: NextRequest) {
       return yemotText([
         ...say('שגיאה בשמירת הכרטיס. אנא נסי שוב מאוחר יותר.'),
         ...hangup(),
-      ])
+      ], callId)
     }
 
     // רישום לוג
@@ -245,12 +245,12 @@ async function handle(req: NextRequest) {
         'שיהיה בריאות ומזל טוב!',
       ),
       ...hangup(),
-    ])
+    ], callId)
   }
 
   // שלב לא ידוע — חזרה להתחלה
   return yemotText([
     ...say('שגיאה, אנא חייגי שוב.'),
     ...hangup(),
-  ])
+  ], callId)
 }
