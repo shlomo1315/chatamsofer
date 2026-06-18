@@ -73,7 +73,14 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         .catch(() => {})
     fetchCounts()
     const interval = setInterval(fetchCounts, 60_000)
-    return () => clearInterval(interval)
+    // סנכרון מיידי של תג ה"לא נקראו" כשמסמנים מייל כנקרא / מוחקים / נכנס מייל חדש במסך המייל
+    const onRefresh = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { byDepartment?: Record<string, number>; total?: number } | undefined
+      if (detail && typeof detail.total === 'number') setUnreadCounts({ byDepartment: detail.byDepartment ?? {}, total: detail.total })
+      else fetchCounts()
+    }
+    window.addEventListener('mail-unread-refresh', onRefresh)
+    return () => { clearInterval(interval); window.removeEventListener('mail-unread-refresh', onRefresh) }
   }, [])
 
   // מחלקות בתפריט המייל: מנהל רואה את כל המחלקות; משתמש רגיל רק את המחלקה שלו.

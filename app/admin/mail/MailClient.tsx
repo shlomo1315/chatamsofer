@@ -878,7 +878,12 @@ export default function MailClient() {
     try {
       const r = await fetch('/api/admin/mail/unread-counts')
       const d = await r.json()
-      if (!d.error) setUnreadCounts({ byDepartment: d.byDepartment ?? {}, total: d.total ?? 0 })
+      if (!d.error) {
+        const counts = { byDepartment: d.byDepartment ?? {}, total: d.total ?? 0 }
+        setUnreadCounts(counts)
+        // עדכון מיידי של תג ה"לא נקראו" בתפריט הצד (Sidebar) — בלי להמתין לרענון התקופתי
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mail-unread-refresh', { detail: counts }))
+      }
     } catch { /* silent */ }
   }, [])
 
@@ -914,6 +919,8 @@ export default function MailClient() {
         ])
       }
       if (isFirstMailLoad.current) isFirstMailLoad.current = false
+      // רענון תג ה"לא נקראו" (כולל בתפריט הצד) בכל טעינת תיבת דואר — תופס מיילים חדשים
+      loadUnreadCounts()
     }
 
     // batch resolve sender + recipient names
@@ -930,7 +937,7 @@ export default function MailClient() {
     }
 
     setLoading(false)
-  }, [myProfile])
+  }, [myProfile, loadUnreadCounts])
 
   // Load unread counts on mount
   useEffect(() => {
@@ -978,6 +985,7 @@ export default function MailClient() {
     await fetch('/api/admin/mail/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     setMessages(ms => ms.filter(m => m.id !== id))
     if (selected?.id === id) setSelected(null)
+    loadUnreadCounts()
   }
 
   const senderDisplay = (msg: ParsedMessage) => {

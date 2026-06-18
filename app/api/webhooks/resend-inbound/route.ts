@@ -17,6 +17,36 @@ function parseAddress(raw: string): { name: string | null; email: string } {
   return { name: null, email: s.toLowerCase() }
 }
 
+// פענוח חלק MIME לפי Content-Transfer-Encoding (base64 / quoted-printable)
+function decodeMimePart(content: string, encoding: string): string {
+  const enc = (encoding || '').toLowerCase()
+  try {
+    if (enc.includes('base64')) return Buffer.from(content.replace(/\s+/g, ''), 'base64').toString('utf8')
+    if (enc.includes('quoted-printable')) {
+      return content.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    }
+  } catch { /* נופלים לתוכן הגולמי */ }
+  return content
+}
+
+// נפילה-לאחור: חילוץ בסיסי של חלקי text/html ו-text/plain מתוך MIME גולמי
+function extractFromRawMime(raw: string): { html: string | null; text: string | null } {
+  try {
+    let html: string | null = null
+    let text: string | null = null
+    for (const part of raw.split(/\r?\n--/)) {
+      const sep = part.search(/\r?\n\r?\n/)
+      if (sep === -1) continue
+      const head = part.slice(0, sep).toLowerCase()
+      const enc = (head.match(/content-transfer-encoding:\s*([^\r\n;]+)/) || [])[1] || ''
+      const content = part.slice(sep).trim()
+      if (head.includes('text/html') && !html) html = decodeMimePart(content, enc)
+      else if (head.includes('text/plain') && !text) text = decodeMimePart(content, enc)
+    }
+    return { html, text }
+  } catch { return { html: null, text: null } }
+}
+
 // Webhook לקבלת מיילים נכנסים מ-Resend Inbound.
 // Resend עוטף את הנתונים תחת data; תומכים גם במבנה שטוח ליתר ביטחון.
 export async function POST(request: NextRequest) {
@@ -71,14 +101,33 @@ export async function POST(request: NextRequest) {
     }
     attachments.push({ filename, mimeType, size, url })
   }
+  // חילוץ גוף ההודעה — תומך בשמות שדה שונים של ספקי Inbound (Resend/Mailgun/SendGrid/Postmark)
+  const pickStr = (...keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = (data as Record<string, unknown>)[k]
+      if (typeof v === 'string' && v.trim()) return v
+    }
+    return null
+  }
+  let html = pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody')
+  let plain = pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody')
+  // אם אין גוף מפורק אך יש MIME גולמי — מחלצים ממנו
+  if (!html && !plain) {
+    const raw = pickStr('raw', 'email', 'message', 'mime', 'body')
+    if (raw) { const ex = extractFromRawMime(raw); html = ex.html; plain = ex.text }
+  }
+  if (!html && !plain) {
+    console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
+  }
+
   const { error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
     from_name: from.name,
     to_email: to.email,
     subject: String(data.subject ?? ''),
-    html: data.html ?? null,
-    plain_text: data.text ?? data.plain_text ?? null,
+    html: html ?? null,
+    plain_text: plain ?? null,
     headers: data.headers ?? null,
     attachments,
     is_read: false,

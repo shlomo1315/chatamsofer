@@ -27,10 +27,10 @@ export async function GET() {
   const inbound = await admin.from('inbound_emails').select('id', { count: 'exact', head: true })
   const sent = await admin.from('sent_emails').select('id', { count: 'exact', head: true })
 
-  // דגימת השורות האחרונות (מטא-דאטה בלבד)
+  // דגימת השורות האחרונות + אורך הגוף (לאבחון מיילים שמגיעים "ריקים")
   const lastInbound = await admin
     .from('inbound_emails')
-    .select('from_email,to_email,subject,received_at,is_read')
+    .select('from_email,to_email,subject,received_at,is_read,html,plain_text,attachments')
     .order('received_at', { ascending: false })
     .limit(5)
   const lastSent = await admin
@@ -45,7 +45,17 @@ export async function GET() {
       tableExists: !inbound.error,
       error: inbound.error?.message ?? null,
       count: inbound.count ?? 0,
-      last: lastInbound.data ?? [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      last: (lastInbound.data ?? []).map((m: any) => ({
+        from_email: m.from_email,
+        to_email: m.to_email,
+        subject: m.subject,
+        received_at: m.received_at,
+        is_read: m.is_read,
+        html_len: (m.html ?? '').length,
+        text_len: (m.plain_text ?? '').length,
+        attachments: Array.isArray(m.attachments) ? m.attachments.length : 0,
+      })),
     },
     sent: {
       tableExists: !sent.error,
