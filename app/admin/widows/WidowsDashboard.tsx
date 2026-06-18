@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock } from 'lucide-react'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
+import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
 const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
@@ -12,6 +13,7 @@ export default function WidowsDashboard({
 }: { widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }) {
   const router = useRouter()
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortMode>('newest')
 
   // סכומים לפי תיק
   const totalsByFamily = useMemo(() => {
@@ -37,12 +39,16 @@ export default function WidowsDashboard({
     { label: 'סך תמיכות חודשי', value: fmtCur(monthlySupport), icon: CalendarClock, color: 'bg-blue-50 text-blue-600' },
   ]
 
-  const filtered = widows
-    .filter(w => {
-      if (!query.trim()) return true
-      return [fullName(w), w.id_number, w.city].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
-    })
-    .sort((a, b) => (pendingByFamily[b.id] ?? 0) - (pendingByFamily[a.id] ?? 0))
+  const filtered = useMemo(() => widows.filter(w => {
+    if (!query.trim()) return true
+    return [fullName(w), w.id_number, w.city].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
+  }), [widows, query])
+
+  const visible = useMemo(() =>
+    applySortMode(filtered, sort,
+      w => fullName(w),
+      w => w.created_at,
+    ), [filtered, sort])
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,10 +77,13 @@ export default function WidowsDashboard({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-semibold text-slate-900">תיקי משפחות</h2>
-          <div className="relative w-full sm:w-64">
-            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש לפי שם / ת.ז / עיר…"
-              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-purple-200" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <SortButtons value={sort} onChange={setSort} />
+            <div className="relative w-full sm:w-56">
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש לפי שם / ת.ז / עיר…"
+                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-purple-200" />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -91,10 +100,10 @@ export default function WidowsDashboard({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 && (
+              {visible.length === 0 && (
                 <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
               )}
-              {filtered.map(w => {
+              {visible.map(w => {
                 const pend = pendingByFamily[w.id] ?? 0
                 return (
                   <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">

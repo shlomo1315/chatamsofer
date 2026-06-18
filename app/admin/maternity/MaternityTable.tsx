@@ -10,6 +10,7 @@ import { he } from 'date-fns/locale'
 import type { MaternityAid, MaternityStatus } from '@/types'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -298,6 +299,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortMode>('newest')
 
   // רענון חי — כשבית ההחלמה מסמן הגעה/אי-הגעה, הממשק מתעדכן מיד (realtime) + גיבוי בפולינג
   useEffect(() => {
@@ -323,6 +325,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       matchesFilter(a, filter) && (q === '' || searchHaystack(a).includes(q))
     )
   }, [data, filter, query])
+
+  const visible = useMemo(() =>
+    applySortMode(filtered, sort,
+      a => motherName(a.beneficiary as MotherRef | undefined),
+      a => a.created_at,
+    ), [filtered, sort])
 
   return (
     <div className="flex flex-col gap-5">
@@ -353,15 +361,18 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="text-sm font-semibold text-slate-700">רשימת לידות</h2>
-          <div className="relative w-full sm:w-72">
-            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="חיפוש חופשי…"
-              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors"
-            />
+          <div className="flex items-center gap-2 flex-wrap">
+            <SortButtons value={sort} onChange={setSort} />
+            <div className="relative w-full sm:w-64">
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="חיפוש חופשי…"
+                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors"
+              />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -374,9 +385,9 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {visible.length === 0 ? (
                 <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
-              ) : filtered.map(aid => {
+              ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
                   <tr key={aid.id}

@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
+import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -26,6 +27,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const { confirm, confirmDialog } = useConfirm()
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortMode>('newest')
   const [checking, setChecking] = useState(false)
 
   // בקשה חדשה מהניהול
@@ -113,12 +115,18 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
     return c
   }, [requests])
 
-  const filtered = requests.filter(r => {
+  const filtered = useMemo(() => requests.filter(r => {
     if (filter !== 'all' && r.status !== filter) return false
     if (!query.trim()) return true
     const b = r.beneficiary as Ben | undefined
     return [name(b), b?.id_number, b?.spouse_id_number, r.reason].filter(Boolean).join(' ').toLowerCase().includes(query.trim().toLowerCase())
-  })
+  }), [requests, filter, query])
+
+  const visible = useMemo(() =>
+    applySortMode(filtered, sort,
+      r => name(r.beneficiary as Ben | undefined),
+      r => r.created_at,
+    ), [filtered, sort])
 
   return (
     <div className="flex flex-col gap-4">
@@ -170,10 +178,13 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-semibold text-slate-900">בקשות סיוע רפואי</h2>
-          <div className="relative w-full sm:w-64">
-            <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש…"
-              className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <SortButtons value={sort} onChange={setSort} />
+            <div className="relative w-full sm:w-64">
+              <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+              <input value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש…"
+                className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -186,9 +197,9 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
+              {visible.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-              ) : filtered.map(r => {
+              ) : visible.map(r => {
                 const b = r.beneficiary as Ben | undefined
                 return (
                   <tr key={r.id} onClick={() => router.push(`/admin/financial-aid/${r.id}`)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
