@@ -203,7 +203,7 @@ export default function NedarimFamilies() {
                     <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Zeout || '—'}</span></td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num" dangerouslySetInnerHTML={{ __html: f.Phone || '—' }} /></td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Phone || '—'}</span></td>
                     <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{f.Groupe || '—'}</td>
                     <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{ils(f.Ytra)}</td>
                     <td className="px-5 py-4" onClick={info?.aidId ? (e => e.stopPropagation()) : undefined}>

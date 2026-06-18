@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { validateIsraeliId } from '@/lib/validation'
 
 function verifyNonce(nonce: string, email: string): boolean {
   try {
@@ -67,9 +68,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
-  // Sanitize ID number (digits only)
+  // Sanitize ID number (digits only) + אימות ספרת ביקורת (אלא אם דרכון)
   const cleanId = String(id_number).replace(/\D/g, '')
-  if (cleanId.length < 5 || cleanId.length > 9) {
+  const isPassport = String((body as Record<string, unknown>).id_doc_type ?? 'id') === 'passport'
+  if (isPassport) {
+    if (String(id_number).trim().length < 5) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
+  } else if (!validateIsraeliId(cleanId)) {
     return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
   }
 

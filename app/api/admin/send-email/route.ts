@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireAdmin } from '@/lib/apiAuth'
 import { sendEmail, type EmailPayload } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  // שליחת מייל חופשי בשם הארגון — מוגבל למנהל בלבד (מניעת ניצול לפישינג/התחזות/ספאם)
+  const staff = await requireAdmin()
+  if (!staff) return NextResponse.json({ error: 'נדרשות הרשאות מנהל' }, { status: 403 })
 
   let body: { to: string; subject: string; html: string }
   try { body = await request.json() }

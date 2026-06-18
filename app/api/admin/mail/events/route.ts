@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
   if (!staff) return unauthorized()
 
   const body = await request.json()
-  const { message_id, thread_id, event_type, user_id, label_ids, from_email, subject } = body
+  // user_id נלקח מהסשן המאומת ולא מגוף הבקשה — מניעת ייחוס אירועים למשתמש אחר
+  const { message_id, thread_id, event_type, label_ids, from_email, subject } = body
+  const user_id = staff.userId
 
   if (!message_id || !event_type) {
     return NextResponse.json({ error: 'missing fields' }, { status: 400 })

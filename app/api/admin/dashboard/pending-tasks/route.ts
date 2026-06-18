@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireStaff } from '@/lib/apiAuth'
+
+export const dynamic = 'force-dynamic'
 
 const WIDOW_TYPE_LABELS: Record<string, string> = {
   financial: 'קרן סיוע כספי',
@@ -8,6 +11,8 @@ const WIDOW_TYPE_LABELS: Record<string, string> = {
 }
 
 export async function GET() {
+  // הגנת הרשאה מפורשת (defense-in-depth מעבר ל-RLS) — מחזיר PII של בקשות ממתינות
+  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   try {
     const supabase = await createClient()
 

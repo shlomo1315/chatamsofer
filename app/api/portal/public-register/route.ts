@@ -4,6 +4,7 @@ import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { validateIsraeliId } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
     }
   } else {
-    if (cleanId.length < 5 || cleanId.length > 9) {
+    // תעודת זהות ישראלית — כולל אימות ספרת ביקורת (מונע ת"ז שגויה/מומצאת)
+    if (!validateIsraeliId(cleanId)) {
       return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
     }
   }

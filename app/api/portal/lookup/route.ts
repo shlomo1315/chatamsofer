@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
 
   if (passportParam) {
     if (passportParam.length < 5) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
-    const { data, error } = await admin.from('beneficiaries').select(select).ilike('id_number', passportParam).maybeSingle()
+    // חסימת תווי ג'וקר של ilike (% _) — מנע סריקה כמו passport=% שמחזירה מוטב שרירותי + סשן
+    if (/[%_]/.test(passportParam)) return NextResponse.json({ error: 'מספר דרכון לא תקין' }, { status: 400 })
+    const { data, error } = await admin.from('beneficiaries').select(select).eq('id_number', passportParam).maybeSingle()
     if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
     if (!data) return NextResponse.json({ found: false })
     const response = NextResponse.json({ found: true, beneficiary: data })

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/apiAuth'
 
 // 235 nodes parsed from the approved Excel file (generations 1-5)
 // _key: override map-storage key (used when two nodes share the same name)
@@ -1189,11 +1190,10 @@ const LINEAGE_DATA: { name: string; generation: number; parentName: string | nul
 
 export async function POST(req: NextRequest) {
   try {
+    // הרשאת מנהל בלבד — פעולה הרסנית (מחיקת כל עץ הדורות וטעינה מחדש).
+    // הבדיקה הקודמת (getSession בלבד) אישרה כל משתמש מחובר, כולל מוטב פורטל.
+    if (!(await requireAdmin())) return NextResponse.json({ error: 'נדרשות הרשאות מנהל' }, { status: 403 })
     const supabase = await createClient()
-
-    // Auth check — admin only
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
     const reset = body.reset !== false // default true

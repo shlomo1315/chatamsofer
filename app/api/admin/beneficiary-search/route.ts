@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       .eq('email', email)
       .limit(1)
   } else if (email) {
-    query = query.ilike('email', `%${email}%`)
+    query = query.ilike('email', `%${email.replace(/[%_\\]/g, ' ')}%`)
   } else if (q) {
     // If query looks like a number, also search by id_number and phone
     const numericQ = /^\d+$/.test(q)
@@ -61,7 +61,9 @@ export async function GET(request: NextRequest) {
         `phone.ilike.%${q}%`,`phone2.ilike.%${q}%`,
       ].join(','))
     } else {
-      query = query.or(`full_name.ilike.%${q}%,family_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+      // ניטרול תווים שמורים של מסנן .or() ושל תבנית ilike (מניעת filter injection)
+      const safe = q.replace(/[,()*%_\\"']/g, ' ').trim()
+      query = query.or(`full_name.ilike.%${safe}%,family_name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
     }
   }
 

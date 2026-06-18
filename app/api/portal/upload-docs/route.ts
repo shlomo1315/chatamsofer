@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +39,12 @@ export async function POST(request: NextRequest) {
 
   const beneficiaryId = formData.get('beneficiary_id') as string | null
   if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה צאצא' }, { status: 400 })
+
+  // אימות בעלות: רק בעל הסשן בפורטל רשאי להעלות מסמכים לתיק שלו (מניעת IDOR)
+  const sessionBeneficiaryId = getPortalBeneficiaryId(request)
+  if (!sessionBeneficiaryId || sessionBeneficiaryId !== beneficiaryId) {
+    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  }
 
   // Verify beneficiary exists
   const { data: ben, error: benErr } = await admin

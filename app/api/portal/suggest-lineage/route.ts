@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,11 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — נקודת קצה ציבורית שכותבת ל-lineage_nodes (מניעת זיהום המאגר)
+  if (!rateLimit(`suggest-lineage:${clientIp(request)}`, 20, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי בקשות. נסה שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   let body: Record<string, unknown>
   try { body = await request.json() }
   catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

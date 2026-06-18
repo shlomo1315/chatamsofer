@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
   if (!staff) return unauthorized()
 
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
-  const q = (request.nextUrl.searchParams.get('q') ?? '').trim()
+  // מנטרלים תווים שמורים של מסנן PostgREST .or() ושל תבנית ilike (% _ * , ( ) \ " ')
+  // כדי למנוע "פריצה" של המסנן והרצת תנאים נוספים (filter injection)
+  const q = (request.nextUrl.searchParams.get('q') ?? '').trim().replace(/[,()*%_\\"']/g, ' ').trim()
   const department = request.nextUrl.searchParams.get('department') ?? ''
 
   const admin = getAdminClient()
