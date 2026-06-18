@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       const mail = requestReceivedEmail({
         type: 'financial_aid', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
         requestRows: [['סיבת הבקשה', reason]],
-        documents: documentUrl ? [{ name: documentName || 'מסמך מצורף', url: documentUrl }] : [],
+        documents: documentUrl ? [{ name: documentName || 'מסמך מצורף', url: await signedDocUrl(admin, documentUrl) }] : [],
       })
       const att = documentUrl ? await urlToAttachment(documentUrl, documentName || 'מסמך-מצורף') : null
       await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('medical'))

@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 
 export const dynamic = 'force-dynamic'
@@ -95,20 +96,21 @@ export async function POST(request: NextRequest) {
     const docs = Array.isArray(document_urls)
       ? (document_urls as { url?: string; name?: string }[]).filter(d => d?.url).map(d => ({ name: d.name || 'מסמך מצורף', url: d.url as string }))
       : []
-    const mailData = requestReceivedEmail({
-      type: 'loan', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
-      requestRows: [
-        ['מטרת ההלוואה', String(purpose).trim()],
-        ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
-        ['סכום מבוקש', `₪${parsedAmount.toLocaleString('he-IL')}`],
-        ['מספר תשלומים', parsedInstallments],
-        ['תשלום חודשי משוער', `₪${Math.round(monthly_payment).toLocaleString('he-IL')}`],
-        ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
-        ['הערות', notes ? String(notes).trim() : ''],
-      ],
-      documents: docs,
-    })
     void (async () => {
+      const signedDocs = await Promise.all(docs.map(async d => ({ name: d.name, url: await signedDocUrl(admin, d.url) })))
+      const mailData = requestReceivedEmail({
+        type: 'loan', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
+        requestRows: [
+          ['מטרת ההלוואה', String(purpose).trim()],
+          ['פירוט', purpose_details ? String(purpose_details).trim() : ''],
+          ['סכום מבוקש', `₪${parsedAmount.toLocaleString('he-IL')}`],
+          ['מספר תשלומים', parsedInstallments],
+          ['תשלום חודשי משוער', `₪${Math.round(monthly_payment).toLocaleString('he-IL')}`],
+          ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
+          ['הערות', notes ? String(notes).trim() : ''],
+        ],
+        documents: signedDocs,
+      })
       const atts = (await Promise.all(docs.map(d => urlToAttachment(d.url, d.name)))).filter(Boolean) as { filename: string; mimeType: string; contentB64: string }[]
       await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined, mailFor('gemach'))
     })().catch(() => {})

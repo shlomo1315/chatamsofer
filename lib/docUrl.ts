@@ -24,3 +24,20 @@ export function docViewUrl(urlOrPath: string | null | undefined): string {
   if (!urlOrPath) return ''
   return `/api/files?p=${encodeURIComponent(urlOrPath)}`
 }
+
+// קישור חתום קצר-מועד לשימוש במיילים (ברירת מחדל 7 ימים) — נדרש כשהדלי פרטי.
+// admin הוא לקוח service-role. בכישלון מוחזר ה-URL המקורי כדי לא לשבור את המייל.
+export async function signedDocUrl(
+  admin: { storage: { from: (b: string) => { createSignedUrl: (p: string, e: number) => Promise<{ data: { signedUrl: string } | null }> } } },
+  urlOrPath: string,
+  expiresIn = 7 * 24 * 60 * 60,
+): Promise<string> {
+  const path = storagePath(urlOrPath)
+  if (!path) return urlOrPath
+  try {
+    const { data } = await admin.storage.from('documents').createSignedUrl(path, expiresIn)
+    return data?.signedUrl || urlOrPath
+  } catch {
+    return urlOrPath
+  }
+}
