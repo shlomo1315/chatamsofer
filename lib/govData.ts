@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 const CITIES_RESOURCE = '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba'
 const STREETS_RESOURCE = 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3'
 const GOV_URL = 'https://data.gov.il/api/3/action/datastore_search'
+const GOV_SQL_URL = 'https://data.gov.il/api/3/action/datastore_search_sql'
 
 const STALE_MS = 24 * 60 * 60 * 1000 // נתון נחשב "ישן" אחרי יממה
 
@@ -47,14 +48,36 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
 }
 
 // ── ערים ────────────────────────────────────────────────────────────────────
+
+// השלמת שמות יישובים ממאגר הרחובות (DISTINCT) — תופס יישובים שאולי חסרים
+// במרשם היישובים הראשי, ומבטיח כיסוי מלא של כל יישוב שיש לו רחובות.
+async function fetchCityNamesFromStreets(): Promise<string[]> {
+  const sql = `SELECT DISTINCT "שם_ישוב" AS c FROM "${STREETS_RESOURCE}"`
+  const res = await fetch(`${GOV_SQL_URL}?sql=${encodeURIComponent(sql)}`, { headers: GOV_HEADERS })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  const records: Record<string, string>[] = data?.result?.records ?? []
+  return records.map(r => (r.c ?? r['שם_ישוב'] ?? '').trim()).filter(Boolean)
+}
+
 export async function fetchCitiesFromGov(): Promise<string[]> {
-  const records = await fetchAll(CITIES_RESOURCE, ['שם_ישוב'])
-  const names = records
-    .map(r => (r['שם_ישוב'] ?? '').trim())
-    .filter(Boolean)
-    // מסננים את רשומת הדמה "לא רשום" (קוד יישוב 0) שאינה יישוב אמיתי
-    .filter(n => n !== 'לא רשום')
-  return [...new Set(names)].sort((a, b) => a.localeCompare(b, 'he'))
+  const set = new Set<string>()
+  // מקור ראשי: מרשם היישובים של משרד הפנים
+  try {
+    const records = await fetchAll(CITIES_RESOURCE, ['שם_ישוב'])
+    for (const r of records) {
+      const n = (r['שם_ישוב'] ?? '').trim()
+      // מסננים את רשומת הדמה "לא רשום" (קוד יישוב 0) שאינה יישוב אמיתי
+      if (n && n !== 'לא רשום') set.add(n)
+    }
+  } catch (e) {
+    if (set.size === 0) throw e // אם המקור הראשי נכשל לגמרי — מפיצים את השגיאה
+  }
+  // השלמה (best-effort) ממאגר הרחובות — מבטיח שכל יישוב (כגון עמנואל) ייכנס לרשימה
+  try {
+    for (const n of await fetchCityNamesFromStreets()) if (n && n !== 'לא רשום') set.add(n)
+  } catch { /* השלמה אופציונלית — לא חוסמת את סנכרון הערים */ }
+  return [...set].sort((a, b) => a.localeCompare(b, 'he'))
 }
 
 export async function syncCities(admin: SupabaseClient): Promise<number> {

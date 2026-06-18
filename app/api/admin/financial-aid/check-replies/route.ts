@@ -56,6 +56,10 @@ export async function POST() {
   try { gmail = await getGmailClient() }
   catch { return NextResponse.json({ error: 'Gmail לא מחובר' }, { status: 500 }) }
 
+  // כתובת החשבון שלנו — כדי להבחין בין הודעה שיצאה מאיתנו לבין תשובה נכנסת של הגורם המאשר
+  let selfEmail = ''
+  try { const prof = await gmail.users.getProfile({ userId: 'me' }); selfEmail = (prof.data.emailAddress ?? '').toLowerCase() } catch { /* לא חוסם */ }
+
   // תיוג כל התכתובת של "הגורם המאשר" כדי שלא תציף את הדואר הראשי
   const DECISION_LABEL = 'label-decision'
   const threadMsgIds = new Set<string>()
@@ -67,10 +71,15 @@ export async function POST() {
       const msgs = (thread.data.messages ?? []).map(parseMessage)
       for (const m of msgs) if (m.id) threadMsgIds.add(m.id)  // לתיוג בתווית "הגורם המאשר"
       const decision = (r.decision_email ?? '').toLowerCase()
-      // ההודעה האחרונה מהגורם המאשר שאינה ההודעה ששלחנו
-      const reply = [...msgs].reverse().find(m =>
+      // הודעות נכנסות בשרשור — לא ההודעה ששלחנו, ולא מהחשבון שלנו.
+      // הגורם המאשר עשוי להשיב מכתובת שונה מזו שהוגדרה; לכן מעדיפים התאמה לכתובת
+      // המוגדרת, ואם אין — לוקחים את ההודעה הנכנסת האחרונה בשרשור (כך לא "מפספסים" תשובה).
+      const inbound = msgs.filter(m =>
         m.id !== r.gmail_message_id &&
-        (!decision || m.fromEmail.toLowerCase() === decision))
+        !!m.fromEmail &&
+        (!selfEmail || m.fromEmail.toLowerCase() !== selfEmail))
+      const reply = (decision ? [...inbound].reverse().find(m => m.fromEmail.toLowerCase() === decision) : undefined)
+        ?? [...inbound].reverse()[0]
       if (!reply) continue
       const cleaned = cleanReplyText(reply.body || reply.snippet)
       const d = parseDecision(cleaned || reply.snippet)
