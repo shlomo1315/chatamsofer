@@ -37,17 +37,42 @@ export async function POST(request: NextRequest) {
   const toRaw = Array.isArray(data.to) ? data.to[0] : data.to
   const to = parseAddress(toRaw ?? '')
 
-  // attachments: שמירת המטא-דאטה בלבד (שם/סוג/גודל) — לא את התוכן הבינארי
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const attachments = Array.isArray(data.attachments) ? data.attachments.map((a: any) => ({
-    filename: a.filename ?? a.name ?? 'attachment',
-    mimeType: a.content_type ?? a.contentType ?? a.mimeType ?? 'application/octet-stream',
-    size: a.size ?? null,
-  })) : []
-
   const admin = getAdminClient()
+
+  const messageId = data.message_id ?? data.messageId ?? data.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  // attachments: העלאת התוכן הבינארי ל-Supabase storage כדי שיהיה ניתן לצפות/להוריד.
+  // Resend מספק את התוכן כ-base64 בשדה content. נשמר את שם/סוג/גודל + url ציבורי.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawAttachments: any[] = Array.isArray(data.attachments) ? data.attachments : []
+  const attachments: { filename: string; mimeType: string; size: number; url?: string }[] = []
+  for (let i = 0; i < rawAttachments.length; i++) {
+    const a = rawAttachments[i]
+    const filename = String(a.filename ?? a.name ?? `attachment-${i + 1}`)
+    const mimeType = String(a.content_type ?? a.contentType ?? a.mimeType ?? 'application/octet-stream')
+    const b64 = a.content ?? a.content_b64 ?? a.contentB64 ?? a.data ?? null
+    let url: string | undefined
+    let size = typeof a.size === 'number' ? a.size : 0
+    if (b64) {
+      try {
+        const buffer = Buffer.from(String(b64), 'base64')
+        size = buffer.length
+        const safe = filename.replace(/[^\w.\-]+/g, '_')
+        const path = `mail/${String(messageId).replace(/[^\w.\-]+/g, '_')}/${i}_${safe}`
+        const { error: upErr } = await admin.storage.from('documents').upload(path, buffer, { contentType: mimeType, upsert: true })
+        if (!upErr) {
+          url = admin.storage.from('documents').getPublicUrl(path).data.publicUrl
+        } else {
+          console.error('[resend-inbound] attachment upload error:', upErr.message)
+        }
+      } catch (e) {
+        console.error('[resend-inbound] attachment process error:', e instanceof Error ? e.message : String(e))
+      }
+    }
+    attachments.push({ filename, mimeType, size, url })
+  }
   const { error } = await admin.from('inbound_emails').upsert({
-    message_id: data.message_id ?? data.messageId ?? data.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    message_id: messageId,
     from_email: from.email,
     from_name: from.name,
     to_email: to.email,

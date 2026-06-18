@@ -85,6 +85,7 @@ export interface Attachment {
   mimeType: string
   size: number
   inlineData?: string  // base64url — present for small attachments (< 25KB) that Gmail embeds inline
+  url?: string         // public URL — present for inbound (Resend) attachments stored in Supabase storage
 }
 
 export interface ParsedMessage {
