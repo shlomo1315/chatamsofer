@@ -11,6 +11,8 @@ interface LogRow {
   callId: string
   cardLast4: string | null
   errorMsg: string | null
+  familyName: string | null
+  note: string | null
   entityId: string | null
   createdAt: string
 }
@@ -157,18 +159,26 @@ export default function YemotCallLog() {
                   </div>
 
                   {/* Details */}
-                  <div className="text-[11px] text-slate-600">
+                  <div className="text-[11px] text-slate-600 flex flex-col gap-0.5">
                     {r.cardLast4 && (
-                      <span className="font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">
+                      <span className="font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded w-fit">
                         ****{r.cardLast4}
                       </span>
                     )}
-                    {r.errorMsg && (
-                      <span className="text-red-600" title={r.errorMsg}>
-                        {r.errorMsg.length > 30 ? r.errorMsg.slice(0, 30) + '…' : r.errorMsg}
+                    {r.familyName && (
+                      <span className="text-slate-700 font-medium truncate max-w-[140px]" title={r.familyName}>
+                        {r.familyName}
                       </span>
                     )}
-                    {!r.cardLast4 && !r.errorMsg && '—'}
+                    {r.errorMsg && (
+                      <span className="text-red-600 truncate max-w-[140px]" title={r.errorMsg}>
+                        {r.errorMsg.length > 25 ? r.errorMsg.slice(0, 25) + '…' : r.errorMsg}
+                      </span>
+                    )}
+                    {r.note && !r.errorMsg && !r.familyName && (
+                      <span className="text-slate-500 italic">{r.note}</span>
+                    )}
+                    {!r.cardLast4 && !r.familyName && !r.errorMsg && !r.note && '—'}
                   </div>
                 </div>
               ))}

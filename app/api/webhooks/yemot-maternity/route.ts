@@ -80,13 +80,14 @@ async function findActiveAid(callerPhone: string) {
 
   if (!family) return { notFound: true }
 
+  // לא מסננים לפי status — כל לידה בתוך 6 שבועות תוקינה ללא קשר לסטטוס
   const { data: aids, error: aidErr } = await admin
     .from('maternity_aids')
     .select('id, birth_date, six_weeks_end, card_number, status')
     .eq('beneficiary_id', family.id)
-    .eq('status', 'active')
+    .not('status', 'eq', 'cancelled')
     .order('birth_date', { ascending: false })
-    .limit(5)
+    .limit(10)
 
   if (aidErr) return { error: aidErr.message }
 
@@ -98,9 +99,11 @@ async function findActiveAid(callerPhone: string) {
     return end >= now
   })
 
-  if (!active) return { noBirth: true, familyId: family.id }
+  const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
 
-  return { family, active }
+  if (!active) return { noBirth: true, familyId: family.id, familyName }
+
+  return { family, active, familyName }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -151,7 +154,7 @@ async function handle(req: NextRequest) {
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_phone_not_found', entity_type: 'phone',
-          entity_id: null, details: { caller: callerPhone, callId },
+          entity_id: null, details: { caller: callerPhone, callId, note: 'מספר לא קיים במערכת' },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -164,11 +167,11 @@ async function handle(req: NextRequest) {
     }
 
     if (result.noBirth) {
-      console.log(`[yemot-maternity] no active birth for family ${result.familyId}`)
+      console.log(`[yemot-maternity] no active birth for family ${result.familyId} (${result.familyName})`)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_no_active_birth', entity_type: 'beneficiary',
-          entity_id: result.familyId, details: { caller: callerPhone, callId },
+          entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -180,10 +183,16 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
-    const { family, active } = result!
+    const { family, active, familyName } = result!
 
     if (active.card_number) {
-      console.log(`[yemot-maternity] card already set for aid ${active.id}, allowing update`)
+      console.log(`[yemot-maternity] card already set for aid ${active.id} (${familyName}), allowing update`)
+      try {
+        await admin.from('activity_log').insert({
+          user_id: null, action: 'yemot_card_already_set', entity_type: 'maternity_aid',
+          entity_id: active.id, details: { caller: callerPhone, callId, family_name: familyName },
+        })
+      } catch { /* לא חוסם */ }
       return yemotText([
         ...say(
           'שלום! מצאנו את תיק הלידה שלך.',
@@ -194,7 +203,6 @@ async function handle(req: NextRequest) {
       ], callId)
     }
 
-    const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
     console.log(`[yemot-maternity] prompting card input for family "${familyName}", aid ${active.id}`)
 
     return yemotText([
@@ -224,7 +232,7 @@ async function handle(req: NextRequest) {
       return yemotText([...say('שגיאת מערכת, אנא חייגי שוב'), ...hangup()], callId)
     }
 
-    const { active } = result
+    const { active, familyName: fName } = result
 
     const { error: updateErr } = await admin
       .from('maternity_aids')
@@ -236,7 +244,7 @@ async function handle(req: NextRequest) {
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_error', entity_type: 'maternity_aid',
-          entity_id: active.id, details: { caller: callerPhone, callId, error: updateErr.message },
+          entity_id: active.id, details: { caller: callerPhone, callId, error: updateErr.message, family_name: fName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -251,11 +259,11 @@ async function handle(req: NextRequest) {
         action: 'yemot_card_registered',
         entity_type: 'maternity_aid',
         entity_id: active.id,
-        details: { card_number_last4: digits.slice(-4), caller: callerPhone, callId },
+        details: { card_number_last4: digits.slice(-4), caller: callerPhone, callId, family_name: fName },
       })
     } catch { /* לא חוסם */ }
 
-    console.log(`[yemot-maternity] card saved for aid ${active.id}, last4=${digits.slice(-4)}`)
+    console.log(`[yemot-maternity] card saved for aid ${active.id}, last4=${digits.slice(-4)}, family=${fName}`)
 
     return yemotText([
       ...say(
