@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Loader2, Check, AlertTriangle, Upload, X, Baby } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
+import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -253,7 +254,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         {/* Birth certificate */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-slate-600">אישור לידה (קובץ מצורף)</label>
-          <input type="file" ref={fileRef} className="hidden" accept="image/*,.pdf"
+          <input type="file" ref={fileRef} className="hidden" accept={UPLOAD_ACCEPT}
             onChange={e => setCertFile(e.target.files?.[0] ?? null)} />
           {certFile ? (
             <div className="flex items-center gap-2 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-green-700">
@@ -274,6 +275,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
               </button>
             </div>
           )}
+          <p className="text-xs text-slate-400">{UPLOAD_HINT}</p>
         </div>
       </div>
 

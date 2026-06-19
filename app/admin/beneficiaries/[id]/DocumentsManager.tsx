@@ -4,6 +4,7 @@ import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as Im
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
+import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
@@ -125,7 +126,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
         <input
           ref={fileRef}
           type="file"
-          accept="image/*,application/pdf"
+          accept={UPLOAD_ACCEPT}
           multiple
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
@@ -138,7 +139,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           העלה צילום
         </button>
-        <span className="text-xs text-slate-400">תמונה או PDF</span>
+        <span className="text-xs text-slate-400 w-full">{UPLOAD_HINT}</span>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}

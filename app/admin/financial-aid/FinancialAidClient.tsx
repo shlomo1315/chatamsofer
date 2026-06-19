@@ -6,6 +6,7 @@ import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
@@ -263,9 +264,10 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
                 ) : (
                   <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-3 text-sm text-slate-500 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40">
                     <Upload size={16} /> העלאת מסמך
-                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setNewFile(e.target.files?.[0] ?? null)} />
+                    <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setNewFile(e.target.files?.[0] ?? null)} />
                   </label>
                 )}
+                <p className="text-xs text-slate-400 mt-1">{UPLOAD_HINT}</p>
               </div>
 
               {saveErr && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{saveErr}</div>}
