@@ -39,9 +39,24 @@ export async function GET(request: NextRequest) {
 
   const admin = getAdminClient()
   const deptEmail = department && DEPARTMENTS[department as DepartmentKey]?.email
+  const nowIso = new Date().toISOString()
 
-  if (folder === 'SENT') {
-    let query = admin.from('sent_emails').select('*').order('sent_at', { ascending: false }).limit(50)
+  // תוויות לכל מייל — נשמרות ב-app_settings (messageId → labelId[])
+  const labelsFor = async (): Promise<Record<string, string[]>> => {
+    const { data } = await admin.from('app_settings').select('value').eq('key', 'mail_label_assignments').maybeSingle()
+    try { return data?.value ? JSON.parse(data.value as string) : {} } catch { return {} }
+  }
+
+  // ── דואר יוצא / מתוזמן ──
+  if (folder === 'SENT' || folder === 'SCHEDULED') {
+    const assignments = await labelsFor()
+    let query = admin.from('sent_emails').select('*').limit(50)
+    if (folder === 'SCHEDULED') {
+      query = query.gt('scheduled_at', nowIso).order('scheduled_at', { ascending: true })
+    } else {
+      // בדואר יוצא לא מציגים מיילים שעדיין ממתינים לתזמון
+      query = query.or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`).order('sent_at', { ascending: false })
+    }
     if (department) query = query.eq('department', department)
     if (q) query = query.or(`subject.ilike.%${q}%,to_email.ilike.%${q}%`)
     const { data, error } = await query
@@ -59,13 +74,16 @@ export async function GET(request: NextRequest) {
       isRead: true,
       body: m.html ?? '',
       attachments: m.attachments ?? [],
-      labelIds: [],
+      labelIds: assignments[m.id] ?? [],
+      scheduledAt: m.scheduled_at ?? null,
     }))
     return NextResponse.json({ messages })
   }
 
-  // INBOX
+  // ── דואר נכנס / ספאם ──
+  const assignments = await labelsFor()
   let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).limit(50)
+  query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
   if (deptEmail) query = query.eq('to_email', deptEmail)
   if (q) query = query.or(`subject.ilike.%${q}%,from_email.ilike.%${q}%,from_name.ilike.%${q}%`)
   const { data, error } = await query
@@ -84,8 +102,22 @@ export async function GET(request: NextRequest) {
     isRead: m.is_read,
     body: displayBody(m.html, m.plain_text),
     attachments: m.attachments ?? [],
-    labelIds: [],
+    labelIds: assignments[m.id] ?? [],
+    isSpam: !!m.is_spam,
+    followUpAt: m.follow_up_at ?? null,
   }))
+
+  // מיילים שסומנו לטיפול וזמנם הגיע — קופצים לראש הרשימה (העדכני-ביותר-לטיפול ראשון)
+  if (folder !== 'SPAM') {
+    messages.sort((a, b) => {
+      const aDue = a.followUpAt && a.followUpAt <= nowIso
+      const bDue = b.followUpAt && b.followUpAt <= nowIso
+      if (aDue && !bDue) return -1
+      if (!aDue && bDue) return 1
+      if (aDue && bDue) return (a.followUpAt as string) < (b.followUpAt as string) ? -1 : 1
+      return a.date < b.date ? 1 : -1
+    })
+  }
 
   return NextResponse.json({ messages })
 }

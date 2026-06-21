@@ -9,6 +9,7 @@ import {
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Trash2, BarChart2,
   Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
+  Clock, Tag, Ban, Flag, Plus, ShieldCheck,
 } from 'lucide-react'
 
 const EMOJIS = ['😊','🙏','👍','🙌','❤️','✨','🎉','✅','📌','📞','📧','📅','⏰','💡','🔔','⚠️','😇','🤝','💪','🌟','📝','📎','🏠','👶','💳','🕯️','✡️','🍀','😀','🙂','👏','🎊']
@@ -36,6 +37,8 @@ interface BeneficiarySuggestion { id: string; name: string; email: string }
 const FOLDER_ITEMS = [
   { key: 'INBOX', label: 'דואר נכנס', icon: Inbox },
   { key: 'SENT',  label: 'דואר יוצא', icon: Send },
+  { key: 'SCHEDULED', label: 'מתוזמנים', icon: Clock },
+  { key: 'SPAM',  label: 'ספאם', icon: Ban },
 ]
 
 const STATUS_COLORS: Record<string, string> = {
@@ -93,6 +96,8 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
   const [templates, setTemplates] = useState<{ id: string; name: string; file_url: string; file_name: string; mime_type: string }[]>([])
   const [showTpl, setShowTpl] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')   // datetime-local לתזמון שליחה
+  const [showSchedule, setShowSchedule] = useState(false)
   useEffect(() => { fetch('/api/admin/email-templates').then(r => r.json()).then(d => setTemplates(d.templates ?? [])).catch(() => {}) }, [])
 
   const syncBody = () => setBody(editorRef.current?.innerHTML ?? '')
@@ -152,8 +157,10 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
     setTo(''); setToName(''); setLocked(false); setQuery('')
   }
 
+  const scheduledIso = scheduleAt ? new Date(scheduleAt).toISOString() : undefined
   const send = async () => {
     if (!to || !subject) return
+    if (scheduledIso && new Date(scheduledIso).getTime() <= Date.now() + 30_000) { alert('יש לבחור מועד עתידי לתזמון'); return }
     setSending(true)
     const html = editorRef.current?.innerHTML ?? body
     await fetch('/api/admin/gmail/send', {
@@ -164,6 +171,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
         attachments,
         templateUrls: tplPicked.map(t => ({ url: t.url, filename: t.filename, mimeType: t.mimeType })),
         department,
+        scheduledAt: scheduledIso,
       }),
     })
     setSending(false)
@@ -178,7 +186,7 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
             <CheckCircle2 size={32} className="text-green-600" />
           </div>
-          <h3 className="text-lg font-bold text-slate-900">המייל נשלח בהצלחה</h3>
+          <h3 className="text-lg font-bold text-slate-900">{scheduleAt ? `המייל תוזמן ל-${new Date(scheduleAt).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : 'המייל נשלח בהצלחה'}</h3>
           <div className="w-full bg-slate-50 rounded-xl p-4 flex flex-col gap-2 text-sm text-right">
             <p className="text-slate-500 text-xs font-medium uppercase">אל:</p>
             <p className="font-medium text-slate-800">{sentInfo.toName || sentInfo.to}</p>
@@ -353,16 +361,35 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-slate-200">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>
-          <button
-            onClick={send}
-            disabled={sending || !canSend}
-            className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-          >
-            {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            שלח
-          </button>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-slate-200">
+          {/* תזמון שליחה */}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setShowSchedule(s => !s)}
+              title="תזמון שליחה"
+              className={`flex items-center gap-1.5 px-2.5 py-2 text-sm rounded-lg border transition-colors ${scheduleAt ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+              <Clock size={15} />
+              {scheduleAt ? new Date(scheduleAt).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'תזמון'}
+            </button>
+            {(showSchedule || scheduleAt) && (
+              <div className="flex items-center gap-1">
+                <input type="datetime-local" value={scheduleAt} min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)}
+                  onChange={e => setScheduleAt(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-400" />
+                {scheduleAt && <button type="button" onClick={() => { setScheduleAt(''); setShowSchedule(false) }} className="text-slate-400 hover:text-red-500"><X size={14} /></button>}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>
+            <button
+              onClick={send}
+              disabled={sending || !canSend}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {sending ? <Loader2 size={15} className="animate-spin" /> : (scheduleAt ? <Clock size={15} /> : <Send size={15} />)}
+              {scheduleAt ? 'תזמן שליחה' : 'שלח'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -831,6 +858,128 @@ function BeneficiaryCard({ email }: { email: string }) {
   )
 }
 
+// ─── Labels & per-message actions ───────────────────────────────────────────────
+
+type LabelDef = { id: string; name: string; color: string }
+
+function LabelChips({ ids, defs }: { ids?: string[]; defs: LabelDef[] }) {
+  if (!ids?.length) return null
+  return (
+    <>
+      {ids.map(id => {
+        const l = defs.find(d => d.id === id)
+        if (!l) return null
+        return (
+          <span key={id} className="inline-flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full"
+            style={{ backgroundColor: `${l.color}22`, color: l.color }}>
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />{l.name}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+function MailExtraActions({ msg, folder, labelDefs, onToggleLabel, onCreateLabel, onSetSpam, onSetFollowUp }: {
+  msg: ParsedMessage
+  folder: string
+  labelDefs: LabelDef[]
+  onToggleLabel: (msg: ParsedMessage, labelId: string) => void
+  onCreateLabel: (name: string) => Promise<string | null>
+  onSetSpam: (msg: ParsedMessage, isSpam: boolean) => void
+  onSetFollowUp: (msg: ParsedMessage, at: string | null) => void
+}) {
+  const [menu, setMenu] = useState<null | 'label' | 'follow'>(null)
+  const [newLabel, setNewLabel] = useState('')
+  const assigned = new Set(msg.labelIds ?? [])
+  const isInbound = folder !== 'SENT' && folder !== 'SCHEDULED'
+
+  const quick = () => {
+    const now = new Date()
+    const todayEve = new Date(now); todayEve.setHours(18, 0, 0, 0)
+    if (todayEve.getTime() <= now.getTime()) todayEve.setDate(todayEve.getDate() + 1)
+    const tomMorning = new Date(now); tomMorning.setDate(now.getDate() + 1); tomMorning.setHours(9, 0, 0, 0)
+    const nextWeek = new Date(now); nextWeek.setDate(now.getDate() + 7)
+    return [
+      { label: 'היום 18:00', iso: todayEve.toISOString() },
+      { label: 'מחר 09:00', iso: tomMorning.toISOString() },
+      { label: 'בעוד שבוע', iso: nextWeek.toISOString() },
+    ]
+  }
+
+  return (
+    <>
+      {/* תוויות */}
+      <div className="relative">
+        <button onClick={() => setMenu(menu === 'label' ? null : 'label')} title="תוויות"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+          <Tag size={14} /> תוויות
+        </button>
+        {menu === 'label' && (
+          <div className="absolute z-30 left-0 mt-1 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-2 max-h-72 overflow-y-auto">
+            {labelDefs.length === 0 && <p className="text-xs text-slate-400 text-center py-2">אין תוויות עדיין</p>}
+            {labelDefs.map(l => (
+              <button key={l.id} onClick={() => onToggleLabel(msg, l.id)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 text-right">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: l.color }} />
+                <span className="text-sm text-slate-700 flex-1 truncate">{l.name}</span>
+                {assigned.has(l.id) && <CheckCircle2 size={14} className="text-green-600" />}
+              </button>
+            ))}
+            <div className="flex items-center gap-1 mt-1 pt-2 border-t border-slate-100">
+              <input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="תווית חדשה..."
+                onKeyDown={async e => { if (e.key === 'Enter') { const id = await onCreateLabel(newLabel); if (id) { onToggleLabel(msg, id); setNewLabel('') } } }}
+                className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-400" />
+              <button onClick={async () => { const id = await onCreateLabel(newLabel); if (id) { onToggleLabel(msg, id); setNewLabel('') } }}
+                title="צור תווית" className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><Plus size={13} /></button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* סימון לטיפול — רק לדואר נכנס */}
+      {isInbound && (
+        <div className="relative">
+          <button onClick={() => setMenu(menu === 'follow' ? null : 'follow')} title="סמן לטיפול בהמשך"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-lg ${msg.followUpAt ? 'text-amber-700 border-amber-300 bg-amber-50' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            <Flag size={14} /> לטיפול
+          </button>
+          {menu === 'follow' && (
+            <div className="absolute z-30 left-0 mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-lg p-2">
+              {quick().map(o => (
+                <button key={o.label} onClick={() => { onSetFollowUp(msg, o.iso); setMenu(null) }}
+                  className="w-full text-right px-2 py-1.5 rounded-lg hover:bg-slate-50 text-sm text-slate-700">{o.label}</button>
+              ))}
+              <div className="flex items-center gap-1 mt-1 pt-2 border-t border-slate-100">
+                <input type="datetime-local" min={new Date(Date.now() + 5 * 60000).toISOString().slice(0, 16)}
+                  onChange={e => { if (e.target.value) { onSetFollowUp(msg, new Date(e.target.value).toISOString()); setMenu(null) } }}
+                  className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs outline-none" />
+              </div>
+              {msg.followUpAt && (
+                <button onClick={() => { onSetFollowUp(msg, null); setMenu(null) }}
+                  className="w-full text-right px-2 py-1.5 mt-1 rounded-lg hover:bg-red-50 text-sm text-red-600">בטל סימון לטיפול</button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ספאם */}
+      {folder === 'SPAM' ? (
+        <button onClick={() => onSetSpam(msg, false)} title="הוצא מספאם"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 border border-green-200 rounded-lg hover:bg-green-50">
+          <ShieldCheck size={14} /> לא ספאם
+        </button>
+      ) : isInbound ? (
+        <button onClick={() => onSetSpam(msg, true)} title="סמן כספאם"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-amber-50 hover:text-amber-700">
+          <Ban size={14} /> ספאם
+        </button>
+      ) : null}
+    </>
+  )
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export default function MailClient() {
@@ -869,6 +1018,13 @@ export default function MailClient() {
 
   // Handled messages (in-session tracking)
   const [handledIds, setHandledIds] = useState<Set<string>>(new Set())
+
+  // Labels — קטלוג התוויות (app_settings)
+  const [labelDefs, setLabelDefs] = useState<{ id: string; name: string; color: string }[]>([])
+  const loadLabels = useCallback(async () => {
+    try { const d = await (await fetch('/api/admin/mail/labels')).json(); setLabelDefs(d.labels ?? []) } catch { /* silent */ }
+  }, [])
+  useEffect(() => { loadLabels() }, [loadLabels])
 
   const recordEvent = useCallback(async (
     msg: ParsedMessage,
@@ -1019,6 +1175,58 @@ export default function MailClient() {
     setMessages(ms => ms.filter(m => m.id !== id))
     if (selected?.id === id) setSelected(null)
     loadUnreadCounts()
+  }
+
+  // עדכון מקומי של מייל ברשימה ובתצוגה
+  const patchMsg = (id: string, patch: Partial<ParsedMessage>) => {
+    setMessages(ms => ms.map(m => m.id === id ? { ...m, ...patch } : m))
+    setSelected(s => (s && s.id === id ? { ...s, ...patch } : s))
+  }
+
+  // תוויות: הוספה/הסרה למייל
+  const toggleLabel = async (msg: ParsedMessage, labelId: string) => {
+    const has = (msg.labelIds ?? []).includes(labelId)
+    const next = has ? (msg.labelIds ?? []).filter(l => l !== labelId) : [...(msg.labelIds ?? []), labelId]
+    patchMsg(msg.id, { labelIds: next })
+    try {
+      await fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: has ? 'unassign' : 'assign', messageId: msg.id, labelId }) })
+    } catch { /* silent */ }
+  }
+
+  // יצירת תווית חדשה ידנית; מחזיר את ה-id שנוצר
+  const createLabel = async (name: string): Promise<string | null> => {
+    const trimmed = name.trim()
+    if (!trimmed) return null
+    const palette = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6', '#14b8a6']
+    const color = palette[labelDefs.length % palette.length]
+    try {
+      const res = await fetch('/api/admin/mail/labels', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_label', name: trimmed, color }) })
+      const d = await res.json()
+      if (d.label) { setLabelDefs(defs => [...defs, d.label]); return d.label.id as string }
+    } catch { /* silent */ }
+    return null
+  }
+
+  // ספאם: סימון/ביטול — המייל עובר תיקייה ולכן יוצא מהרשימה הנוכחית
+  const setSpam = async (msg: ParsedMessage, isSpam: boolean) => {
+    setMessages(ms => ms.filter(m => m.id !== msg.id))
+    if (selected?.id === msg.id) setSelected(null)
+    try {
+      await fetch('/api/admin/mail/spam', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msg.id, isSpam }) })
+    } catch { /* silent */ }
+    loadUnreadCounts()
+  }
+
+  // סימון לטיפול-בהמשך (followUpAt=null לביטול)
+  const setFollowUp = async (msg: ParsedMessage, followUpAt: string | null) => {
+    patchMsg(msg.id, { followUpAt })
+    try {
+      await fetch('/api/admin/mail/follow-up', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId: msg.id, followUpAt }) })
+    } catch { /* silent */ }
   }
 
   const senderDisplay = (msg: ParsedMessage) => {
@@ -1187,6 +1395,20 @@ export default function MailClient() {
                             {msgDept.label}
                           </span>
                         )}
+                        {/* סימון לטיפול */}
+                        {msg.followUpAt && (
+                          <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${msg.followUpAt <= new Date().toISOString() ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`} title="לטיפול">
+                            <Flag size={10} /> {formatDate(msg.followUpAt)}
+                          </span>
+                        )}
+                        {/* מועד תזמון */}
+                        {folder === 'SCHEDULED' && msg.scheduledAt && (
+                          <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 flex-shrink-0" title="יישלח במועד">
+                            <Clock size={10} /> {formatDate(msg.scheduledAt)}
+                          </span>
+                        )}
+                        {/* תוויות */}
+                        <LabelChips ids={msg.labelIds} defs={labelDefs} />
                         {folder === 'SENT' && trackingStatus[msg.id] && (
                           trackingStatus[msg.id].opened ? (
                             <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
@@ -1225,6 +1447,9 @@ export default function MailClient() {
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold text-slate-900 text-base break-words whitespace-pre-wrap" title={selected.subject}>{selected.subject}</h2>
+              {(selected.labelIds ?? []).length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap mt-1"><LabelChips ids={selected.labelIds} defs={labelDefs} /></div>
+              )}
               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 {emailToInfo[selected.fromEmail] ? (
                   <>
@@ -1252,7 +1477,7 @@ export default function MailClient() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               {/* Handled toggle */}
               {handledIds.has(selected.id) ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg font-semibold">
@@ -1272,6 +1497,8 @@ export default function MailClient() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 <Forward size={14} /> העבר
               </button>
+              <MailExtraActions msg={selected} folder={folder} labelDefs={labelDefs}
+                onToggleLabel={toggleLabel} onCreateLabel={createLabel} onSetSpam={setSpam} onSetFollowUp={setFollowUp} />
               <button onClick={() => trashMessage(selected.id)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
                 title="העבר לאשפה">

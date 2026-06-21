@@ -102,6 +102,9 @@ export interface ParsedMessage {
   isRead: boolean
   labelIds: string[]
   attachments: Attachment[]
+  isSpam?: boolean
+  followUpAt?: string | null
+  scheduledAt?: string | null
 }
 
 function decodeBase64(data: string) {
