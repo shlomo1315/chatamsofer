@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, IdCard, Mail, Phone, Download } from 'lucide-react'
+import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PortalLoan {
@@ -205,85 +205,6 @@ function DisburseModal({ loan, onClose, onDone }: {
   )
 }
 
-// ── Loan Card ─────────────────────────────────────────────────────────────────
-function LoanCard({ loan, onDisburse }: { loan: PortalLoan; onDisburse: () => void }) {
-  const isDone = !!loan.disbursed_at
-  return (
-    <div className={`bg-white rounded-2xl border shadow-sm transition-all ${isDone ? 'border-emerald-200 opacity-75' : 'border-slate-200 hover:border-indigo-200 hover:shadow-md'}`}>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${isDone ? 'bg-emerald-100' : 'bg-indigo-100'}`}>
-              {isDone
-                ? <CheckCircle2 size={20} className="text-emerald-600" />
-                : <CreditCard size={20} className="text-indigo-600" />}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-slate-900 truncate">{borrowerName(loan.beneficiary)}</p>
-              {loan.beneficiary?.city && (
-                <p className="text-xs text-slate-500 mt-0.5">{loan.beneficiary.city}</p>
-              )}
-            </div>
-          </div>
-          <div className="flex-shrink-0 text-left">
-            <p className="text-xl font-bold text-slate-900 tabular-nums">{fmtCur(shownAmount(loan))}</p>
-            <p className="text-[10px] text-emerald-600 font-medium">סכום מאושר</p>
-            <p className="text-xs text-slate-500 text-left">{loan.installments} תשלומים</p>
-          </div>
-        </div>
-
-        {loan.purpose && (
-          <div className="mt-4 bg-slate-50 rounded-xl px-3 py-2">
-            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">מטרה</p>
-            <p className="text-sm text-slate-700 mt-0.5 truncate">{loan.purpose}</p>
-          </div>
-        )}
-
-        {/* פרטי מבקש ההלוואה */}
-        <div className="mt-3 flex flex-col gap-1.5">
-          {loan.beneficiary?.id_number && (
-            <p className="text-xs text-slate-600 flex items-center gap-1.5">
-              <IdCard size={13} className="text-slate-400 flex-shrink-0" />
-              <span className="text-slate-400">ת.ז.</span>
-              <span dir="ltr" className="tabular-nums">{loan.beneficiary.id_number}</span>
-            </p>
-          )}
-          {loan.beneficiary?.email && (
-            <a href={`mailto:${loan.beneficiary.email}`} className="text-xs text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
-              <Mail size={13} className="text-slate-400 flex-shrink-0" />
-              <span dir="ltr" className="truncate">{loan.beneficiary.email}</span>
-            </a>
-          )}
-          {loan.beneficiary?.phone && (
-            <a href={`tel:${loan.beneficiary.phone}`} className="text-xs text-slate-600 hover:text-indigo-600 flex items-center gap-1.5">
-              <Phone size={13} className="text-slate-400 flex-shrink-0" />
-              <span dir="ltr">{loan.beneficiary.phone}</span>
-            </a>
-          )}
-        </div>
-
-        {isDone ? (
-          <div className="mt-4 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5">
-            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-            <div className="text-xs">
-              <span className="font-semibold text-emerald-700">בוצעה ב-{fmtDate(loan.disbursed_at)}</span>
-              {loan.disbursed_by && <span className="text-emerald-600"> · על ידי {loan.disbursed_by}</span>}
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={onDisburse}
-            className="mt-4 w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-sm font-semibold py-2.5 shadow-md shadow-indigo-200 hover:opacity-90 transition-opacity"
-          >
-            <Clock3 size={15} />
-            סמן כבוצעה
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
-
 type FilterMode = 'all' | 'pending' | 'done'
 
 // ── Portal Screen ─────────────────────────────────────────────────────────────
@@ -439,14 +360,53 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                     הורד אקסל
                   </button>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {visibleLoans.map(l => (
-                    <LoanCard
-                      key={l.id}
-                      loan={l}
-                      onDisburse={l.disbursed_at ? () => {} : () => setActiveModal(l)}
-                    />
-                  ))}
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-sm text-right border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-500 text-xs">
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">שם</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ת.ז.</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">טלפון</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">מייל</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">מטרה</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">סכום מאושר</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-center">תשלומים</th>
+                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">סטטוס</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleLoans.map(l => {
+                        const isDone = !!l.disbursed_at
+                        return (
+                          <tr key={l.id} className={`border-t border-slate-100 ${isDone ? 'bg-emerald-50/40' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-2.5">
+                              <div className="font-semibold text-slate-900 whitespace-nowrap">{borrowerName(l.beneficiary)}</div>
+                              {l.beneficiary?.city && <div className="text-xs text-slate-400">{l.beneficiary.city}</div>}
+                            </td>
+                            <td className="px-3 py-2.5 tabular-nums text-slate-600 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {l.beneficiary?.phone
+                                ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600">{l.beneficiary.phone}</a>
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {l.beneficiary?.email
+                                ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600">{l.beneficiary.email}</a>
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5 text-slate-600 max-w-[220px] truncate" title={l.purpose ?? ''}>{l.purpose || '—'}</td>
+                            <td className="px-3 py-2.5 font-bold text-slate-900 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
+                            <td className="px-3 py-2.5 text-slate-600 text-center tabular-nums">{l.installments}</td>
+                            <td className="px-3 py-2.5 whitespace-nowrap">
+                              {isDone
+                                ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 size={14} /> בוצעה {fmtDate(l.disbursed_at)}</span>
+                                : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90 transition-opacity"><Clock3 size={13} /> סמן כבוצעה</button>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             ) : (
