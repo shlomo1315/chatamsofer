@@ -14,6 +14,18 @@ export interface StaffContext {
   email: string | null
   role: StaffRole
   permissions: Record<string, string>
+  department: string | null
+  mailOnly: boolean
+  allowedMailboxes: string[]
+}
+
+// מפתחות התיבות שמשתמש מורשה אליהן בתיבת המייל.
+// null = ללא הגבלה (מנהל, או משתמש ותיק ללא הגדרת תיבות). [] = ללא גישה לתיבות.
+export function allowedMailboxKeys(staff: StaffContext): string[] | null {
+  if (staff.role === 'admin') return null
+  if (staff.allowedMailboxes.length > 0) return staff.allowedMailboxes
+  if (staff.department) return [staff.department]
+  return staff.mailOnly ? [] : null
 }
 
 // לקוח service-role. נכשל סגור: אם המפתח חסר מחזירים null ולא נופלים ל-anon.
@@ -48,9 +60,10 @@ export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffCon
   const admin = getServiceClient()
   if (!admin) return null
 
+  // select('*') בכוונה — עמיד גם אם עמודות חדשות (mail_only/allowed_mailboxes) טרם נוספו במסד
   const { data: profile } = await admin
     .from('profiles')
-    .select('role, is_active, permissions, email')
+    .select('*')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -63,6 +76,9 @@ export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffCon
     email: profile.email ?? user.email ?? null,
     role: profile.role as StaffRole,
     permissions: (profile.permissions as Record<string, string>) ?? {},
+    department: (profile.department as string | null) ?? null,
+    mailOnly: profile.mail_only === true,
+    allowedMailboxes: (profile.allowed_mailboxes as string[] | null) ?? [],
   }
 }
 

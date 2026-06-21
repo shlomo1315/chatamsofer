@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, Profile } from '@/types'
-import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
   const [error, setError] = useState(false)
@@ -83,13 +83,20 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
     return () => { clearInterval(interval); window.removeEventListener('mail-unread-refresh', onRefresh) }
   }, [])
 
-  // מחלקות בתפריט המייל: מנהל רואה את כל המחלקות; משתמש רגיל רק את המחלקה שלו.
-  const allDepartments = Object.values(DEPARTMENTS)
-  const visibleDepartments = isAdmin
-    ? allDepartments
-    : (myProfile?.department && DEPARTMENTS[myProfile.department as DepartmentKey]
-        ? [DEPARTMENTS[myProfile.department as DepartmentKey]]
-        : allDepartments)
+  // מחלקות בתפריט המייל: מנהל רואה הכל; משתמש מוגבל רק את התיבות שהוקצו לו.
+  // mailOnly = משתמש "מייל בלבד" — רואה אך ורק את לשונית המייל.
+  const mailOnly = !isAdmin && myProfile?.mail_only === true
+  const allowedKeys: string[] | null = isAdmin
+    ? null
+    : (myProfile?.allowed_mailboxes && myProfile.allowed_mailboxes.length > 0
+        ? myProfile.allowed_mailboxes
+        : (myProfile?.department ? [myProfile.department] : (mailOnly ? [] : null)))
+  const visibleDepartments = allowedKeys === null
+    ? Object.values(DEPARTMENTS)
+    : Object.values(DEPARTMENTS).filter(d => allowedKeys.includes(d.key))
+
+  // משתמש "מייל בלבד" — פתח אוטומטית את תפריט המייל
+  useEffect(() => { if (mailOnly) setMailOpen(true) }, [mailOnly])
 
   const canSee = (section?: SectionKey) => {
     if (!section) return true
@@ -138,6 +145,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
 
+        {!mailOnly && (<>
         {/* Section: ניווט ראשי */}
         <p className="px-3 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
         {topVisible.map(renderLink)}
@@ -190,6 +198,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">שירותים</p>
         </div>
         {bottomVisible.map(renderLink)}
+        </>)}
 
         {/* Mail accordion */}
         <div className="pt-0.5">
@@ -246,6 +255,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
         </div>
 
         {/* Section divider: מערכת */}
+        {!mailOnly && (<>
         <div className="pt-3 pb-1">
           <div className="mx-1 h-px bg-slate-800 mb-2" />
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
@@ -269,6 +279,7 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             </Link>
           )
         })}
+        </>)}
       </nav>
 
       <div className="mx-4 h-px bg-gradient-to-l from-transparent via-slate-700 to-transparent" />

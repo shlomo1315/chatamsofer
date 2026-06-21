@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { DEPARTMENTS, BRAND_NAME, type DepartmentKey } from '@/lib/departments'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, forbidden, allowedMailboxKeys } from '@/lib/apiAuth'
 import { storagePath } from '@/lib/docUrl'
 
 export const dynamic = 'force-dynamic'
@@ -20,8 +20,15 @@ export async function POST(request: NextRequest) {
     return Number.isFinite(t) && t > Date.now() + 30_000 ? new Date(t).toISOString() : undefined
   })()
 
-  // המייל נשלח מכתובת המחלקה הנבחרת (לא מ-noreply), ותשובות חוזרות אליה
-  const deptKey = (department as DepartmentKey) ?? 'main'
+  // המייל נשלח מכתובת המחלקה הנבחרת (לא מ-noreply), ותשובות חוזרות אליה.
+  // אכיפה: משתמש מוגבל יכול לשלוח רק מתיבה שהוקצתה לו.
+  const allowed = allowedMailboxKeys(staff)
+  let deptKey = (department as DepartmentKey) ?? 'main'
+  if (allowed !== null) {
+    if (allowed.length === 0) return forbidden('אין לך תיבת מייל מורשית לשליחה')
+    if (!department) deptKey = allowed[0] as DepartmentKey
+    else if (!allowed.includes(department)) return forbidden('אין הרשאה לשלוח מתיבה זו')
+  }
   const dept = DEPARTMENTS[deptKey] ?? DEPARTMENTS.main
   const fromName = `${BRAND_NAME} · ${dept.label}`
   const fromEmail = dept.email

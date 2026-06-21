@@ -1244,6 +1244,18 @@ export default function MailClient() {
   const headerLabel = headerDept ? headerDept.label : (myProfile?.role === 'admin' ? 'כל המחלקות' : 'משרד ראשי')
   const headerEmail = headerDept ? headerDept.email : (myProfile?.role === 'admin' ? 'כל הכתובות' : 'office@chasamsofer.info')
 
+  // תיבות מורשות למשתמש (לבורר התיבות בתוך המייל). null = ללא הגבלה (מנהל).
+  const myAllowedKeys: string[] | null = myProfile?.role === 'admin'
+    ? null
+    : (myProfile?.allowed_mailboxes && myProfile.allowed_mailboxes.length > 0
+        ? myProfile.allowed_mailboxes
+        : (myProfile?.department ? [myProfile.department] : null))
+  const filterableDepts = myAllowedKeys === null
+    ? Object.values(DEPARTMENTS)
+    : Object.values(DEPARTMENTS).filter(d => myAllowedKeys.includes(d.key))
+  // מציגים בורר תיבות למנהל, או למשתמש מוגבל עם יותר מתיבה אחת
+  const showDeptFilter = myProfile?.role === 'admin' || filterableDepts.length > 1
+
   return (
     <div className="flex h-[calc(100vh-120px)] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
@@ -1281,21 +1293,21 @@ export default function MailClient() {
           ))}
         </nav>
 
-        {/* Departments filter — admins can filter by any department */}
-        {myProfile?.role === 'admin' && (
+        {/* Departments filter — admins: כל המחלקות; משתמש מוגבל עם כמה תיבות: התיבות שלו */}
+        {showDeptFilter && (
           <nav className="px-2 py-2 border-b border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-2 pb-1.5">מחלקות</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-2 pb-1.5">{myProfile?.role === 'admin' ? 'מחלקות' : 'התיבות שלי'}</p>
             <button onClick={() => setActiveDepartment(null)}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors text-right mb-0.5
                 ${!activeDepartment ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}>
-              <span className="flex-1 truncate">כל המחלקות</span>
+              <span className="flex-1 truncate">{myProfile?.role === 'admin' ? 'כל המחלקות' : 'כל התיבות שלי'}</span>
               {unreadCounts.total > 0 && (
                 <span className="text-[10px] font-bold bg-indigo-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
                   {unreadCounts.total}
                 </span>
               )}
             </button>
-            {Object.values(DEPARTMENTS).map(d => {
+            {filterableDepts.map(d => {
               const cnt = unreadCounts.byDepartment[d.key] ?? 0
               return (
                 <button key={d.key} onClick={() => setActiveDepartment(d.key)}

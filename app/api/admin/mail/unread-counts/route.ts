@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, allowedMailboxKeys } from '@/lib/apiAuth'
 import { DEPARTMENTS } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
@@ -22,6 +22,7 @@ export async function GET() {
     .from('inbound_emails')
     .select('to_email')
     .eq('is_read', false)
+    .eq('is_spam', false)
 
   if (error) {
     // אם הטבלה לא קיימת — מחזירים אפסים במקום שגיאה
@@ -33,9 +34,12 @@ export async function GET() {
     countByEmail[row.to_email] = (countByEmail[row.to_email] ?? 0) + 1
   }
 
+  // משתמש מוגבל רואה ספירות רק לתיבות שהוקצו לו
+  const allowed = allowedMailboxKeys(staff)
   const byDepartment: Record<string, number> = {}
   let total = 0
   for (const dep of Object.values(DEPARTMENTS)) {
+    if (allowed !== null && !allowed.includes(dep.key)) continue
     const c = countByEmail[dep.email] ?? 0
     byDepartment[dep.key] = c
     total += c
