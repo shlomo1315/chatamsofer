@@ -11,6 +11,21 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// המרת גוף טקסט-בלבד ל-HTML לתצוגה נאמנה: בריחה מתווי HTML, שמירת שורות ורווחים,
+// והפיכת קישורים ללחיצים — כדי שמייל ייראה כמו מייל רגיל ולא כגוש טקסט אחד.
+function plainToHtml(s: string): string {
+  const esc = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const linked = esc.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+  return linked.replace(/\r\n|\r|\n/g, '<br>')
+}
+
+// גוף מוכן-לתצוגה: HTML אמיתי אם קיים, אחרת טקסט שהומר ל-HTML עם שמירת שורות.
+function displayBody(html: string | null, plain: string | null): string {
+  if (html && html.trim()) return html
+  if (plain && plain.trim()) return plainToHtml(plain)
+  return ''
+}
+
 // טעינת מיילים מ-Supabase (החליף את Gmail). תומך בסינון לפי מחלקה ובחיפוש.
 export async function GET(request: NextRequest) {
   const staff = await requireStaff()
@@ -67,7 +82,7 @@ export async function GET(request: NextRequest) {
     snippet: (m.plain_text ?? m.html ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120),
     date: m.received_at,
     isRead: m.is_read,
-    body: m.html ?? m.plain_text ?? '',
+    body: displayBody(m.html, m.plain_text),
     attachments: m.attachments ?? [],
     labelIds: [],
   }))
