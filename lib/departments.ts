@@ -10,12 +10,17 @@ export type DepartmentKey =
   | 'widows'        // אלמנות ויתומים
   | 'medical'       // אגף סיוע רפואי
   | 'holidays'      // עזר לחגים
+  | 'yerid'         // יריד (תיבת דואר נוספת)
+  | 'inbox8'        // תיבה 8
+  | 'inbox9'        // תיבה 9
+  | 'inbox10'       // תיבה 10
 
 export interface Department {
   key: DepartmentKey
   label: string
   email: string
   color: string   // צבע התווית להצגה בתיבת המייל המאוחדת
+  mailboxOnly?: boolean  // תיבת דואר בלבד — לא מחלקה ארגונית שניתן לשייך אליה איש צוות
 }
 
 export const DEPARTMENTS: Record<DepartmentKey, Department> = {
@@ -26,6 +31,10 @@ export const DEPARTMENTS: Record<DepartmentKey, Department> = {
   widows:    { key: 'widows',    label: 'אלמנות ויתומים',    email: 'a@chasamsofer.info',      color: '#8b5cf6' },
   medical:   { key: 'medical',   label: 'אגף סיוע רפואי',    email: 'r@chasamsofer.info',      color: '#ef4444' },
   holidays:  { key: 'holidays',  label: 'עזר לחגים',         email: 'c@chasamsofer.info',      color: '#f59e0b' },
+  yerid:     { key: 'yerid',     label: 'יריד',             email: 'yerid@chasamsofer.info',  color: '#0ea5e9', mailboxOnly: true },
+  inbox8:    { key: 'inbox8',    label: 'תיבה 8',           email: '8@chasamsofer.info',      color: '#14b8a6', mailboxOnly: true },
+  inbox9:    { key: 'inbox9',    label: 'תיבה 9',           email: '9@chasamsofer.info',      color: '#a855f7', mailboxOnly: true },
+  inbox10:   { key: 'inbox10',   label: 'תיבה 10',          email: '10@chasamsofer.info',     color: '#f97316', mailboxOnly: true },
 }
 
 // איתור מחלקה לפי כתובת מייל (נכנס: to; יוצא: from). מחזיר null אם לא נמצא.
