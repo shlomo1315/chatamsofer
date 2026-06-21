@@ -79,6 +79,22 @@ export async function POST(request: NextRequest) {
   const toRaw = Array.isArray(data.to) ? data.to[0] : data.to
   const to = parseAddress(toRaw ?? '')
 
+  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרות (Subject) אם ריק
+  const headerSubject = (() => {
+    const h = data.headers
+    if (Array.isArray(h)) {
+      const found = h.find((x: { name?: string }) => String(x?.name ?? '').toLowerCase() === 'subject')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return found ? String((found as any).value ?? '') : ''
+    }
+    if (h && typeof h === 'object') {
+      const key = Object.keys(h).find(k => k.toLowerCase() === 'subject')
+      return key ? String((h as Record<string, unknown>)[key] ?? '') : ''
+    }
+    return ''
+  })()
+  const subject = String(data.subject ?? data.Subject ?? '').trim() || headerSubject.trim()
+
   const admin = getAdminClient()
 
   const messageId = data.message_id ?? data.messageId ?? data.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -151,7 +167,7 @@ export async function POST(request: NextRequest) {
     from_email: from.email,
     from_name: from.name,
     to_email: to.email,
-    subject: String(data.subject ?? ''),
+    subject,
     html: html ?? null,
     plain_text: plain ?? null,
     headers: data.headers ?? null,

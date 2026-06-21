@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Search, Loader2, Check, AlertTriangle, Upload, X, Baby, ExternalLink, GitBranch, ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
+import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -432,7 +433,7 @@ export default function NewMaternityPage() {
             {/* Birth certificate */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium text-slate-600">אישור לידה (קובץ מצורף) <span className="text-red-500">*</span></label>
-              <input type="file" ref={fileRef} className="hidden" accept="image/*,.pdf"
+              <input type="file" ref={fileRef} className="hidden" accept={UPLOAD_ACCEPT}
                 onChange={e => { setCertFile(e.target.files?.[0] ?? null); clearErr('certFile') }} />
               {certFile ? (
                 <div className="flex items-center gap-2 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-green-700">
@@ -445,9 +446,10 @@ export default function NewMaternityPage() {
                 <button onClick={() => fileRef.current?.click()}
                   className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-4 text-sm transition-colors ${fieldErrors.certFile ? 'border-red-400 text-red-500 hover:bg-red-50' : 'border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
                   <Upload size={16} />
-                  לחץ להעלאת קובץ (תמונה / PDF)
+                  לחץ להעלאת קובץ
                 </button>
               )}
+              <p className="text-xs text-slate-400">{UPLOAD_HINT}</p>
               {fieldErrors.certFile && <p className="text-xs text-red-600">{fieldErrors.certFile}</p>}
             </div>
           </div>

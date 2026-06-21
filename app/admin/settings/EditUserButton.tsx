@@ -236,7 +236,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                     className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
                   >
                     <option value="">ללא שיוך</option>
-                    {Object.values(DEPARTMENTS).map(d => (
+                    {Object.values(DEPARTMENTS).filter(d => !d.mailboxOnly).map(d => (
                       <option key={d.key} value={d.key}>{d.label} — {d.email}</option>
                     ))}
                   </select>

@@ -6,6 +6,7 @@ import EmailInput from '@/components/ui/EmailInput'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
+import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -1599,10 +1600,11 @@ export default function PublicPortalPage() {
           <div className="flex flex-col gap-2">
             <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
               <Upload size={16} className="text-slate-400" />
-              <span className="text-sm text-slate-500">לחץ להעלאת קובץ (תמונה / PDF)</span>
-              <input type="file" accept="image/*,application/pdf" className="hidden"
+              <span className="text-sm text-slate-500">לחץ להעלאת קובץ</span>
+              <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
                 onChange={e => setFile(e.target.files?.[0] ?? null)} />
             </label>
+            <p className="text-xs text-slate-400">{UPLOAD_HINT}</p>
             {existing && replacing && (
               <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: false }))}
                 className="text-xs text-slate-400 hover:text-slate-600 self-start">ביטול — השאר את הקובץ הקיים</button>
@@ -3069,7 +3071,7 @@ export default function PublicPortalPage() {
                   </Field>
                 </div>
                 <div className="col-span-2">
-                  <Field label="אישור לידה" required hint="צרף תמונה או PDF של אישור הלידה מבית החולים">
+                  <Field label="אישור לידה" required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
                     {birthCertFile ? (
                       <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <span className="text-sm text-green-700 flex items-center gap-2">
@@ -3082,8 +3084,8 @@ export default function PublicPortalPage() {
                     ) : (
                       <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-pink-50 border-2 border-dashed border-slate-300 hover:border-pink-400 rounded-xl px-4 py-3 transition-colors">
                         <Upload size={16} className="text-slate-400" />
-                        <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה (תמונה / PDF)</span>
-                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                        <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה</span>
+                        <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
                           onChange={e => setBirthCertFile(e.target.files?.[0] ?? null)} />
                       </label>
                     )}
@@ -3169,7 +3171,7 @@ export default function PublicPortalPage() {
                   )}
                   {loanForm.purpose === WEDDING_PURPOSE && (
                     <div className="col-span-2">
-                      <Field label="הזמנה של החתונה" required hint="יש לצרף הזמנה של החתונה (תמונה / PDF)">
+                      <Field label="הזמנה של החתונה" required hint={`יש לצרף הזמנה של החתונה. ${UPLOAD_HINT}`}>
                         {loanWeddingFile ? (
                           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                             <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanWeddingFile.name}</span></span>
@@ -3178,7 +3180,7 @@ export default function PublicPortalPage() {
                         ) : (
                           <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
                             <Upload size={16} /> לחץ לצירוף הזמנת החתונה
-                            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setLoanWeddingFile(e.target.files?.[0] ?? null)} />
+                            <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setLoanWeddingFile(e.target.files?.[0] ?? null)} />
                           </label>
                         )}
                       </Field>
@@ -3186,7 +3188,7 @@ export default function PublicPortalPage() {
                   )}
                   {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
                     <div className="col-span-2">
-                      <Field label="מסמך מצורף (לא חובה)" hint="ניתן לצרף מסמך תומך (תמונה / PDF)">
+                      <Field label="מסמך מצורף (לא חובה)" hint={`ניתן לצרף מסמך תומך. ${UPLOAD_HINT}`}>
                         {loanOtherFile ? (
                           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                             <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{loanOtherFile.name}</span></span>
@@ -3195,7 +3197,7 @@ export default function PublicPortalPage() {
                         ) : (
                           <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
                             <Upload size={16} /> לחץ לצירוף מסמך
-                            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setLoanOtherFile(e.target.files?.[0] ?? null)} />
+                            <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setLoanOtherFile(e.target.files?.[0] ?? null)} />
                           </label>
                         )}
                       </Field>
@@ -3311,7 +3313,7 @@ export default function PublicPortalPage() {
                     placeholder="לדוגמה: בעקבות אבחון רפואי נדרש טיפול בעלות גבוהה שאינו מכוסה... אנא פרט/י את המצב, הצרכים והעלויות המשוערות."
                     className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none w-full" />
                 </Field>
-                <Field label="מסמך מצורף" required hint="צרף מסמך תומך (תמונה / PDF)">
+                <Field label="מסמך מצורף" required hint={`צרף מסמך תומך. ${UPLOAD_HINT}`}>
                   {aidFile ? (
                     <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                       <span className="text-sm text-green-700 flex items-center gap-2 min-w-0"><CheckCircle2 size={14} className="flex-shrink-0" /><span className="truncate">{aidFile.name}</span></span>
@@ -3320,7 +3322,7 @@ export default function PublicPortalPage() {
                   ) : (
                     <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-emerald-400 hover:bg-emerald-50/40">
                       <Upload size={16} /> לחץ להעלאת מסמך
-                      <input type="file" accept="image/*,application/pdf" className="hidden" onChange={e => setAidFile(e.target.files?.[0] ?? null)} />
+                      <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={e => setAidFile(e.target.files?.[0] ?? null)} />
                     </label>
                   )}
                 </Field>

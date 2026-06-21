@@ -11,6 +11,7 @@ export interface MailOptions {
   department?: string  // מחלקה לתיוג בתיבת "דואר יוצא" (ברירת מחדל: לפי כתובת השולח/תשובה)
   sentBy?: string      // מי שלח (משתמש מערכת); ריק = מייל אוטומטי
   skipLog?: boolean    // דלג על תיעוד ב-sent_emails (כשהקורא מתעד בעצמו)
+  scheduledAt?: string // ISO 8601 — תזמון שליחה דרך Resend (אם מוגדר, המייל יישלח במועד זה)
 }
 
 // תיעוד מייל יוצא ב-Supabase כדי שיופיע בתיבת "דואר יוצא" של המחלקה. לא חוסם.
@@ -37,6 +38,7 @@ async function logSentEmail(
       reply_to: replyTo,
       sent_by: opts?.sentBy ?? null,
       attachments: (attachments ?? []).map(a => ({ filename: a.filename, mimeType: a.mimeType })),
+      ...(opts?.scheduledAt ? { scheduled_at: opts.scheduledAt } : {}),
     })
     if (error) console.error('[mail] sent_emails log error:', error.message)
   } catch (e) {
@@ -81,6 +83,7 @@ export async function deliverMail(
       html,
       ...(text ? { text } : {}),
       ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
+      ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
       ...(attachments?.length
         ? { attachments: attachments.map((a) => ({
             filename: a.filename,

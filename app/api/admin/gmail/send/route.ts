@@ -11,7 +11,14 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
 
-  const { to, subject, body, threadId, department, attachments, templateUrls } = await request.json()
+  const { to, subject, body, threadId, department, attachments, templateUrls, scheduledAt } = await request.json()
+
+  // תזמון: חייב להיות תאריך עתידי תקין; אחרת מתעלמים ושולחים מיד
+  const scheduledIso = (() => {
+    if (!scheduledAt) return undefined
+    const t = new Date(scheduledAt).getTime()
+    return Number.isFinite(t) && t > Date.now() + 30_000 ? new Date(t).toISOString() : undefined
+  })()
 
   // המייל נשלח מכתובת המחלקה הנבחרת (לא מ-noreply), ותשובות חוזרות אליה
   const deptKey = (department as DepartmentKey) ?? 'main'
@@ -54,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail, skipLog: true })
+  const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail, skipLog: true, scheduledAt: scheduledIso })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
 
   // תיעוד המייל היוצא ב-Supabase (לא חוסם)
@@ -73,6 +80,7 @@ export async function POST(request: NextRequest) {
       reply_to: replyTo,
       sent_by: staff.email,
       attachments: allAttachments.map(a => ({ filename: a.filename, mimeType: a.mimeType })),
+      ...(scheduledIso ? { scheduled_at: scheduledIso } : {}),
     }).then(({ error }) => { if (error) console.error('[mail/send] log error:', error.message) })
   } catch (e) { console.error('[mail/send] log threw:', e) }
 
