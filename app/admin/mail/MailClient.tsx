@@ -372,24 +372,49 @@ function ComposeModal({ onClose, replyTo, initialTo, department }: { onClose: ()
 // ─── Forward Modal ─────────────────────────────────────────────────────────────
 
 function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => void }) {
-  const deptList = Object.values(DEPARTMENTS)
-  const [target, setTarget] = useState<DepartmentKey>(deptList[0]?.key ?? 'main')
+  const [to, setTo] = useState('')
   const [note, setNote] = useState('')
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState('')
+
+  // הזהות שממנה יישלח המייל המועבר — התיבה שאליה הגיע המייל המקורי (או שולחה ממנה)
+  const deptKey = departmentByEmail(msg.toEmail)?.key ?? departmentByEmail(msg.fromEmail)?.key ?? 'main'
+  const fromDept = DEPARTMENTS[deptKey]
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
   const forward = async () => {
-    if (!target) return
-    setSending(true)
-    const res = await fetch('/api/admin/mail/forward', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messageId: msg.id, targetDepartment: target, note }),
-    })
-    setSending(false)
-    if (res.ok) {
-      setDone(true)
-      setTimeout(onClose, 1500)
+    const recipient = to.trim()
+    if (!isValidEmail(recipient)) { setError('נא להזין כתובת מייל תקינה'); return }
+    setError(''); setSending(true)
+    const noteHtml = note.trim()
+      ? `<p style="white-space:pre-wrap;">${note.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</p>`
+      : ''
+    const quoted =
+      `${noteHtml}<div style="border-right:3px solid #cbd5e1;padding-right:12px;margin-top:12px;">` +
+      `<p style="font-size:12px;color:#94a3b8;margin:0 0 8px;">---------- הודעה שהועברה ----------<br>` +
+      `מאת: ${msg.from}<br>תאריך: ${formatDate(msg.date)}<br>נושא: ${msg.subject}<br>אל: ${msg.toEmail}</p>` +
+      `${msg.body || ''}</div>`
+    const templateUrls = (msg.attachments ?? [])
+      .filter(a => a.url)
+      .map(a => ({ url: a.url, filename: a.filename, mimeType: a.mimeType }))
+    try {
+      const res = await fetch('/api/admin/gmail/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipient,
+          subject: msg.subject?.toLowerCase().startsWith('fwd:') ? msg.subject : `Fwd: ${msg.subject}`,
+          body: quoted,
+          department: deptKey,
+          templateUrls,
+        }),
+      })
+      setSending(false)
+      if (res.ok) { setDone(true); setTimeout(onClose, 1500) }
+      else { const d = await res.json().catch(() => ({})); setError(d.error || 'שגיאה בהעברת המייל') }
+    } catch {
+      setSending(false); setError('שגיאת רשת. נסה שוב.')
     }
   }
 
@@ -404,27 +429,31 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
         ) : (
           <>
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-slate-900">העבר מייל למחלקה</h3>
+              <h3 className="font-semibold text-slate-900">העבר מייל</h3>
               <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
             </div>
 
             <div className="bg-slate-50 rounded-xl p-3 text-sm text-slate-600">
               <p className="font-medium text-slate-700 truncate">{msg.subject}</p>
               <p className="text-xs text-slate-400 mt-0.5">{msg.from}</p>
+              {(msg.attachments ?? []).length > 0 && (
+                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1"><Paperclip size={11} /> {(msg.attachments ?? []).length} צרופות יועברו</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">העבר אל מחלקה:</label>
-              <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
-                {deptList.map(dep => (
-                  <label key={dep.key} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
-                    <input type="radio" name="target" value={dep.key} checked={target === dep.key} onChange={() => setTarget(dep.key)} />
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: dep.color }} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-slate-700">{dep.label}</p>
-                      <p className="text-xs text-slate-400 truncate">{dep.email}</p>
-                    </div>
-                  </label>
+              <label className="text-xs font-medium text-slate-600">העבר אל כתובת מייל:</label>
+              <input type="email" dir="ltr" value={to} onChange={e => { setTo(e.target.value); setError('') }}
+                placeholder="name@example.com"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
+              {/* מילוי מהיר של כתובות פנימיות */}
+              <div className="flex flex-wrap gap-1 mt-1">
+                {Object.values(DEPARTMENTS).map(dep => (
+                  <button key={dep.key} type="button" onClick={() => { setTo(dep.email); setError('') }}
+                    className="text-[11px] px-2 py-0.5 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    title={dep.email}>
+                    {dep.label}
+                  </button>
                 ))}
               </div>
             </div>
@@ -432,12 +461,15 @@ function ForwardModal({ msg, onClose }: { msg: ParsedMessage; onClose: () => voi
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-slate-600">הערה (אופציונלי):</label>
               <textarea className="border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none resize-none" rows={2}
-                value={note} onChange={e => setNote(e.target.value)} placeholder="הוסף הערה..." />
+                value={note} onChange={e => setNote(e.target.value)} placeholder="הוסף הערה לפני ההודעה המועברת..." />
             </div>
+
+            {error && <p className="text-xs text-red-600">{error}</p>}
+            {fromDept && <p className="text-[11px] text-slate-400">יישלח מהכתובת {fromDept.email}</p>}
 
             <div className="flex items-center justify-end gap-2">
               <button onClick={onClose} className="px-4 py-2 text-sm text-slate-500">ביטול</button>
-              <button onClick={forward} disabled={sending || !target}
+              <button onClick={forward} disabled={sending || !to.trim()}
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50">
                 {sending ? <Loader2 size={14} className="animate-spin" /> : <Forward size={14} />}
                 העבר
