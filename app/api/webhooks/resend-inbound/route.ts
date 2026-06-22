@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
+import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +9,55 @@ function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+}
+
+// העברת עותק של מייל נכנס ל-Gmail (כדי שאותו מייל יופיע גם במערכת וגם בגוגל).
+// יעדי ההעברה מוגדרים ב-app_settings תחת המפתח 'mail_forward':
+//   { "global": "x@gmail.com" }                 → כל הדואר הנכנס
+//   { "main": "a@gmail.com", "inbox8": "b@..." } → לפי תיבה (DepartmentKey), עם נפילה ל-global
+async function maybeForwardToGmail(admin: SupabaseClient, msg: {
+  fromEmail: string; fromName: string | null; toEmail: string; subject: string
+  html: string | null; plain: string | null
+  attachments: { filename: string; mimeType: string; url?: string }[]
+}) {
+  // הגנות לולאה: לא מעבירים דואר פנימי/אוטומטי
+  const from = (msg.fromEmail || '').toLowerCase()
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+
+  // יעד ההעברה לפי הגדרות
+  const { data: setting } = await admin.from('app_settings').select('value').eq('key', 'mail_forward').maybeSingle()
+  let map: Record<string, string> = {}
+  try { map = setting?.value ? JSON.parse(setting.value as string) : {} } catch { return }
+  const depKey = departmentByEmail(msg.toEmail)?.key
+  const target = (depKey && map[depKey]) || map.global
+  if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) return
+  if (target.toLowerCase() === from) return  // לא מעבירים בחזרה לשולח
+
+  // צרופות — מצרפים מחדש מתוך האחסון (best-effort)
+  const atts: MailAttachment[] = []
+  for (const a of msg.attachments) {
+    if (!a.url) continue
+    const built = await urlToAttachment(a.url, a.filename)
+    if (built) atts.push(built)
+  }
+
+  const origin = msg.fromName ? `${msg.fromName} &lt;${msg.fromEmail}&gt;` : msg.fromEmail
+  const bodyHtml = (msg.html && msg.html.trim())
+    ? msg.html
+    : `<pre style="white-space:pre-wrap;font-family:inherit;">${(msg.plain ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
+  const html =
+    `<div style="direction:rtl;text-align:right;font-family:Arial,sans-serif;">` +
+    `<div style="font-size:12px;color:#94a3b8;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">` +
+    `התקבל ב-${msg.toEmail} · מאת: ${origin}</div>${bodyHtml}</div>`
+
+  // נשלח מכתובת התיבה (כדי ש-DKIM יתאים), עם reply-to לשולח המקורי
+  await deliverMail(target, msg.subject || '(ללא נושא)', html, atts.length ? atts : undefined, {
+    fromName: `${BRAND_NAME} · התקבל ב-${msg.toEmail}`,
+    fromEmail: msg.toEmail,
+    replyTo: msg.fromEmail,
+    skipLog: true,
+  })
 }
 
 // פירוק שדה "שם <כתובת>" לשם וכתובת
@@ -162,7 +213,7 @@ export async function POST(request: NextRequest) {
     console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
   }
 
-  const { error } = await admin.from('inbound_emails').upsert({
+  const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
     from_name: from.name,
@@ -173,11 +224,25 @@ export async function POST(request: NextRequest) {
     headers: data.headers ?? null,
     attachments,
     is_read: false,
-  }, { onConflict: 'message_id', ignoreDuplicates: true })
+  }, { onConflict: 'message_id', ignoreDuplicates: true }).select('id')
 
   if (error) {
     console.error('[resend-inbound] DB error:', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // העברת עותק ל-Gmail רק עבור מייל חדש (לא בכפילות/ניסיון חוזר של ה-webhook)
+  const isNew = (insertedRows?.length ?? 0) > 0
+  if (isNew) {
+    try {
+      await maybeForwardToGmail(admin, {
+        fromEmail: from.email, fromName: from.name, toEmail: to.email, subject,
+        html: html ?? null, plain: plain ?? null, attachments,
+      })
+    } catch (e) {
+      console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
