@@ -836,6 +836,29 @@ export default function PublicPortalPage() {
     } catch { setStatusErr('שגיאת רשת. נסה שוב.') }
     setStatusSending(false)
   }, [beneficiary?.id])
+
+  // תזכורת השלמת שם הילד — לידות שסומנו עם מין אך ללא שם
+  const [pendingNames, setPendingNames] = useState<{ id: string; baby_gender: string | null; birth_date: string | null }[]>([])
+  const [nameInput, setNameInput] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  useEffect(() => {
+    if (step !== 'dashboard' || !beneficiary?.id) return
+    fetch(`/api/portal/baby-name?beneficiary_id=${beneficiary.id}`)
+      .then(r => r.json()).then(d => setPendingNames(d.pending ?? [])).catch(() => {})
+  }, [step, beneficiary?.id])
+  const saveBabyName = async () => {
+    const m = pendingNames[0]
+    if (!m || !nameInput.trim() || !beneficiary?.id) return
+    setSavingName(true)
+    try {
+      const res = await fetch('/api/portal/baby-name', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, maternity_id: m.id, baby_name: nameInput.trim() }),
+      })
+      if (res.ok) { setPendingNames(prev => prev.slice(1)); setNameInput('') }
+    } finally { setSavingName(false) }
+  }
+
   const [showRegSuccess, setShowRegSuccess] = useState(false)
   const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
@@ -1340,7 +1363,7 @@ export default function PublicPortalPage() {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
-    if (!birthForm.baby_name) { setError(birthForm.baby_gender === 'female' ? 'אנא הזן שם הנולדת' : 'אנא הזן שם הנולד'); return }
+    // שם הנולד/ת אינו חובה — ניתן להשלים בכניסה הבאה
     if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
     if (birthForm.baby_id_type === 'id' && !validateIsraeliId(birthForm.baby_id_number)) { setError('תעודת הזהות של הנולד/ת אינה תקינה'); return }
     if (babyIdError) { setError(babyIdError); return }
@@ -2735,6 +2758,36 @@ export default function PublicPortalPage() {
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
+            {/* תזכורת — השלמת שם הילד ללידות שסומנו ללא שם */}
+            {pendingNames.length > 0 && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
+                  <div className="bg-gradient-to-l from-pink-500 to-rose-500 px-6 py-4">
+                    <h2 className="text-white font-bold text-lg">השלמת שם הילד</h2>
+                    <p className="text-pink-100 text-xs mt-0.5">סימנת לידה ללא שם — נא להשלים את שם הילד</p>
+                  </div>
+                  <div className="px-6 py-5 flex flex-col gap-4">
+                    <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      לידה מתאריך {pendingNames[0].birth_date ? new Date(pendingNames[0].birth_date).toLocaleDateString('he-IL') : ''} ({pendingNames[0].baby_gender === 'female' ? 'בת' : 'בן'})
+                    </div>
+                    <input value={nameInput} onChange={e => setNameInput(e.target.value)}
+                      placeholder={pendingNames[0].baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'}
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                      onKeyDown={e => e.key === 'Enter' && saveBabyName()}
+                      autoFocus />
+                    <div className="flex items-center gap-2">
+                      <button onClick={saveBabyName} disabled={savingName || !nameInput.trim()}
+                        className="flex-1 flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
+                        {savingName ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} שמור שם
+                      </button>
+                      <button onClick={() => setPendingNames([])} className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700">אשלים מאוחר יותר</button>
+                    </div>
+                    {pendingNames.length > 1 && <p className="text-[11px] text-slate-400 text-center">נותרו {pendingNames.length} לידות להשלמת שם</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות) */}
             <Card>
               <div className="flex items-center gap-2 mb-3">
@@ -2997,12 +3050,14 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
-                {/* שם — מופיע רק אחרי בחירת מין, עם תווית דינמית (שם הנולד / שם הנולדת) */}
+                {/* שם — אופציונלי. אם עדיין אין שם ניתן להשאיר ריק ולהשלים בכניסה הבאה */}
                 {birthForm.baby_gender && (
                   <div className="col-span-2">
-                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required>
+                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, השאר ריק או הקש 'עדיין אין שם'">
                       <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')}
-                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required />
+                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} />
+                      <button type="button" onClick={() => setBirthForm(f => ({ ...f, baby_name: '' }))}
+                        className="mt-1.5 text-xs text-indigo-600 hover:underline">עדיין אין שם — אשלים בהמשך</button>
                     </Field>
                   </div>
                 )}
