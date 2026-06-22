@@ -7,8 +7,9 @@ import RecoveryBillingSummary from '../RecoveryBillingSummary'
 
 const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
-async function getData(): Promise<{ aids: MaternityAid[]; homes: string[] }> {
-  if (!isSupabaseConfigured()) return { aids: [], homes: DEFAULT_HOMES }
+async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeObjs: { name: string; availability: string }[] }> {
+  const defaultObjs = DEFAULT_HOMES.map(name => ({ name, availability: 'regular' }))
+  if (!isSupabaseConfigured()) return { aids: [], homes: DEFAULT_HOMES, homeObjs: defaultObjs }
   const supabase = await createClient()
   const [aidsRes, homesRes] = await Promise.all([
     supabase
@@ -16,17 +17,22 @@ async function getData(): Promise<{ aids: MaternityAid[]; homes: string[] }> {
       .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count)')
       .eq('status', 'active')
       .order('created_at', { ascending: false }),
-    supabase.from('recovery_homes').select('name'),
+    supabase.from('recovery_homes').select('*'),
   ])
   if (aidsRes.error) throw aidsRes.error
   // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
   if (homesRes.error && homesRes.error.code !== '42P01') throw homesRes.error
-  const homes = Array.from(new Set([...DEFAULT_HOMES, ...((homesRes.data ?? []).map(h => h.name as string))]))
-  return { aids: aidsRes.data ?? [], homes }
+  const map = new Map<string, string>()
+  for (const n of DEFAULT_HOMES) map.set(n, 'regular')
+  for (const r of (homesRes.data ?? []) as { name?: string; availability?: string }[]) {
+    if (r.name) map.set(r.name, r.availability ?? 'regular')
+  }
+  const homeObjs = [...map.entries()].map(([name, availability]) => ({ name, availability }))
+  return { aids: aidsRes.data ?? [], homes: homeObjs.map(h => h.name), homeObjs }
 }
 
 export default async function RecoveryPage() {
-  const { aids, homes } = await getData()
+  const { aids, homes, homeObjs } = await getData()
 
   return (
     <div className="flex flex-col gap-5">
@@ -60,7 +66,7 @@ export default async function RecoveryPage() {
           <span className="text-xs text-slate-400 group-open:hidden">לחץ להרחבה</span>
         </summary>
         <div className="px-2 pb-2">
-          <RecoveryHomeLinks homes={homes} />
+          <RecoveryHomeLinks homes={homeObjs} />
         </div>
       </details>
     </div>

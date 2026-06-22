@@ -26,6 +26,7 @@ type Step =
   | 'docs-needed'
   | 'widow-dashboard'
   | 'new-birth'
+  | 'new-silent-birth'
   | 'new-loan'
   | 'request-sent'
 
@@ -818,14 +819,47 @@ export default function PublicPortalPage() {
   const [authCodeSent, setAuthCodeSent] = useState(false)
   const [authIsSetup, setAuthIsSetup] = useState(false)
 
-  // הבקשות שהוגשו ע"י הצאצא (לתצוגה באזור האישי)
-  type MyReq = { id: string; kind: string; kindLabel: string; statusLabel: string; tone: 'pending' | 'progress' | 'approved' | 'rejected'; amount: number | null; created_at: string }
-  const [myRequests, setMyRequests] = useState<MyReq[]>([])
-  const loadMyRequests = useCallback(() => {
+  // סטטוס הבקשות נשלח למייל הרשום (במקום הצגתן בפורטל — שמירה על פרטיות)
+  const [statusSending, setStatusSending] = useState(false)
+  const [statusSentTo, setStatusSentTo] = useState<string | null>(null)
+  const [statusErr, setStatusErr] = useState('')
+  const sendStatusEmail = useCallback(async () => {
     if (!beneficiary?.id) return
-    fetch(`/api/portal/my-requests?beneficiary_id=${beneficiary.id}`).then(r => r.json()).then(d => setMyRequests(d.requests ?? [])).catch(() => {})
+    setStatusSending(true); setStatusErr('')
+    try {
+      const res = await fetch('/api/portal/request-status-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+      })
+      const d = await res.json()
+      if (res.ok) setStatusSentTo(d.email ?? '')
+      else setStatusErr(d.error || 'שליחת המייל נכשלה')
+    } catch { setStatusErr('שגיאת רשת. נסה שוב.') }
+    setStatusSending(false)
   }, [beneficiary?.id])
-  useEffect(() => { if (step === 'dashboard') loadMyRequests() }, [step, loadMyRequests])
+
+  // תזכורת השלמת שם הילד — לידות שסומנו עם מין אך ללא שם
+  const [pendingNames, setPendingNames] = useState<{ id: string; baby_gender: string | null; birth_date: string | null }[]>([])
+  const [nameInput, setNameInput] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  useEffect(() => {
+    if (step !== 'dashboard' || !beneficiary?.id) return
+    fetch(`/api/portal/baby-name?beneficiary_id=${beneficiary.id}`)
+      .then(r => r.json()).then(d => setPendingNames(d.pending ?? [])).catch(() => {})
+  }, [step, beneficiary?.id])
+  const saveBabyName = async () => {
+    const m = pendingNames[0]
+    if (!m || !nameInput.trim() || !beneficiary?.id) return
+    setSavingName(true)
+    try {
+      const res = await fetch('/api/portal/baby-name', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, maternity_id: m.id, baby_name: nameInput.trim() }),
+      })
+      if (res.ok) { setPendingNames(prev => prev.slice(1)); setNameInput('') }
+    } finally { setSavingName(false) }
+  }
+
   const [showRegSuccess, setShowRegSuccess] = useState(false)
   const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
@@ -915,6 +949,16 @@ export default function PublicPortalPage() {
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [babyIdError, setBabyIdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
+  const [recoveryHomesSilent, setRecoveryHomesSilent] = useState<string[]>([])
+  // לידה שקטה
+  const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
+  const [showSilentInfo, setShowSilentInfo] = useState(false)
+  useEffect(() => {
+    fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {
+      if (Array.isArray(d.regular) && d.regular.length) setRecoveryHomes(d.regular)
+      if (Array.isArray(d.silent)) setRecoveryHomesSilent(d.silent)
+    }).catch(() => {})
+  }, [])
 
   // Loan request form
   const [loanForm, setLoanForm] = useState({
@@ -1330,7 +1374,7 @@ export default function PublicPortalPage() {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
-    if (!birthForm.baby_name) { setError(birthForm.baby_gender === 'female' ? 'אנא הזן שם הנולדת' : 'אנא הזן שם הנולד'); return }
+    // שם הנולד/ת אינו חובה — ניתן להשלים בכניסה הבאה
     if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
     if (birthForm.baby_id_type === 'id' && !validateIsraeliId(birthForm.baby_id_number)) { setError('תעודת הזהות של הנולד/ת אינה תקינה'); return }
     if (babyIdError) { setError(babyIdError); return }
@@ -1499,6 +1543,44 @@ export default function PublicPortalPage() {
     setBirthCertFile(null)
     setDocFiles({})
     setStep('new-birth')
+  }
+  const goToSilentBirthForm = () => {
+    if (!canRequestBirth) { setError('בקשה זו זמינה לרשומים במצב נשואים בלבד.'); return }
+    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
+    setError(''); setShowSilentInfo(false)
+    setSilentForm({ birth_date: '', recovery_home: '', notes: '' })
+    setBirthCertFile(null)
+    setStep('new-silent-birth')
+  }
+  const handleSilentBirthRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!beneficiary) return
+    if (!silentForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    if (!silentForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
+    if (!birthCertFile) { setError('אנא צרף מסמך אישור'); return }
+    setError(''); setLoading(true)
+    try {
+      let certUrl = ''
+      const fd = new FormData()
+      fd.append('file', birthCertFile)
+      fd.append('beneficiary_id', beneficiary.id)
+      fd.append('doc_type', 'birth_cert')
+      const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const upData = await upRes.json()
+      if (upRes.ok) certUrl = upData.url ?? ''
+
+      const res = await fetch('/api/portal/birth-request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, notes: silentForm.notes, birth_certificate_url: certUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
+      setRequestType('birth')
+      setStep('request-sent')
+    } catch {
+      setError('שגיאת רשת. אנא נסה שוב.')
+    }
+    setLoading(false)
   }
   const goToLoanForm = () => {
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
@@ -1673,6 +1755,40 @@ export default function PublicPortalPage() {
         </div>
       )}
 
+      {/* חלון הסבר — בקשה לאחר לידה שקטה */}
+      {showSilentInfo && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
+            style={{ animation: 'pop-in 0.25s ease-out' }}>
+            <button type="button" onClick={() => setShowSilentInfo(false)}
+              className="absolute top-4 left-4 text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+            <div className="w-14 h-14 mx-auto bg-rose-100 rounded-2xl flex items-center justify-center mb-4">
+              <Heart size={26} className="text-rose-600" />
+            </div>
+            <h2 className="text-xl font-extrabold text-center text-rose-900 mb-4">בקשה לאחר לידה שקטה</h2>
+            <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-5 mb-5 text-sm text-rose-900 leading-relaxed space-y-3">
+              <p>
+                אנו משתתפים בצערכם. הסיוע מיועד לאמהות שעברו <strong>לידה שקטה משבוע 22 ואילך</strong>,
+                ומאפשר שהייה והבראה בבית החלמה לצורך החלמה גופנית ונפשית.
+              </p>
+              <p>
+                בבקשה זו <strong>אין צורך</strong> להזין שם, תעודת זהות או פרטי תינוק — אנא צרפו מסמך אישור בלבד.
+                פרטי האם נלקחים מהרישום הקיים שלכם במערכת.
+              </p>
+              <p className="font-semibold">
+                הסיוע ניתן בדיסקרטיה מלאה ובהבנה מירבית לרגישות התקופה.
+              </p>
+            </div>
+            <button type="button" onClick={goToSilentBirthForm}
+              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-3 transition-colors">
+              להמשך הבקשה
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Registration success popup */}
       {showRegSuccess && regSuccessDetails && (
         <ConfettiSuccess
@@ -1696,7 +1812,7 @@ export default function PublicPortalPage() {
           <div className="flex-1">
             <h1 className="font-bold text-slate-900 text-base leading-tight">היכל החתם סופר</h1>
           </div>
-          {(step === 'dashboard' || step === 'new-birth' || step === 'new-loan' || step === 'request-sent') && (
+          {(step === 'dashboard' || step === 'new-birth' || step === 'new-silent-birth' || step === 'new-loan' || step === 'request-sent') && (
             <button onClick={backToHome} className="text-xs text-slate-400 hover:text-indigo-600 underline">
               יציאה
             </button>
@@ -2725,36 +2841,61 @@ export default function PublicPortalPage() {
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
-            {/* הבקשות שלי */}
-            {myRequests.length > 0 && (
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText size={16} className="text-indigo-500" />
-                  <h3 className="font-semibold text-slate-800 text-sm">הבקשות שלי</h3>
-                  <span className="text-xs text-slate-400">({myRequests.length})</span>
+            {/* תזכורת — השלמת שם הילד ללידות שסומנו ללא שם */}
+            {pendingNames.length > 0 && (
+              <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
+                  <div className="bg-gradient-to-l from-pink-500 to-rose-500 px-6 py-4">
+                    <h2 className="text-white font-bold text-lg">השלמת שם הילד</h2>
+                    <p className="text-pink-100 text-xs mt-0.5">סימנת לידה ללא שם — נא להשלים את שם הילד</p>
+                  </div>
+                  <div className="px-6 py-5 flex flex-col gap-4">
+                    <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      לידה מתאריך {pendingNames[0].birth_date ? new Date(pendingNames[0].birth_date).toLocaleDateString('he-IL') : ''} ({pendingNames[0].baby_gender === 'female' ? 'בת' : 'בן'})
+                    </div>
+                    <input value={nameInput} onChange={e => setNameInput(e.target.value)}
+                      placeholder={pendingNames[0].baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'}
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+                      onKeyDown={e => e.key === 'Enter' && saveBabyName()}
+                      autoFocus />
+                    <div className="flex items-center gap-2">
+                      <button onClick={saveBabyName} disabled={savingName || !nameInput.trim()}
+                        className="flex-1 flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
+                        {savingName ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} שמור שם
+                      </button>
+                      <button onClick={() => setPendingNames([])} className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700">אשלים מאוחר יותר</button>
+                    </div>
+                    {pendingNames.length > 1 && <p className="text-[11px] text-slate-400 text-center">נותרו {pendingNames.length} לידות להשלמת שם</p>}
+                  </div>
                 </div>
-                <div className="flex flex-col divide-y divide-slate-100">
-                  {myRequests.map(r => {
-                    const tone = r.tone === 'approved' ? 'bg-green-100 text-green-700'
-                      : r.tone === 'rejected' ? 'bg-red-100 text-red-700'
-                      : r.tone === 'progress' ? 'bg-blue-100 text-blue-700'
-                      : 'bg-amber-100 text-amber-700'
-                    return (
-                      <div key={`${r.kind}-${r.id}`} className="flex items-center justify-between gap-3 py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800">{r.kindLabel}</p>
-                          <p className="text-xs text-slate-400">
-                            {new Date(r.created_at).toLocaleDateString('he-IL')}
-                            {r.amount != null ? ` · ₪${Number(r.amount).toLocaleString('he-IL')}` : ''}
-                          </p>
-                        </div>
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${tone}`}>{r.statusLabel}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Card>
+              </div>
             )}
+
+            {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות) */}
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                <FileText size={16} className="text-indigo-500" />
+                <h3 className="font-semibold text-slate-800 text-sm">סטטוס הבקשות שלי</h3>
+              </div>
+              {statusSentTo ? (
+                <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                  <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת ({statusSentTo}). בדוק/י את תיבת הדואר (כולל תיקיית ספאם).</span>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={sendStatusEmail}
+                    disabled={statusSending}
+                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm"
+                  >
+                    {statusSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                    לקבלת סטטוס הבקשה שלך למייל המעודכן במערכת על שמך — הקש כאן
+                  </button>
+                  {statusErr && <p className="text-xs text-red-600 mt-2">{statusErr}</p>}
+                </>
+              )}
+            </Card>
 
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (
@@ -2820,6 +2961,22 @@ export default function PublicPortalPage() {
                       <p className="text-xs text-slate-500 mt-0.5">שהייה בבית החלמה לאחר לידה</p>
                     </div>
                     <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
+                  </button>
+                )}
+
+                {canRequestBirth && (
+                  <button
+                    onClick={() => { setError(''); setShowSilentInfo(true) }}
+                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-rose-300 hover:bg-rose-50 transition-colors text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-rose-200 transition-colors">
+                      <Heart size={22} className="text-rose-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">בקשה לאחר לידה שקטה</p>
+                      <p className="text-xs text-slate-500 mt-0.5">סיוע והבראה לאחר לידה שקטה (משבוע 22)</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-rose-400" />
                   </button>
                 )}
 
@@ -2992,12 +3149,14 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
-                {/* שם — מופיע רק אחרי בחירת מין, עם תווית דינמית (שם הנולד / שם הנולדת) */}
+                {/* שם — אופציונלי. אם עדיין אין שם ניתן להשאיר ריק ולהשלים בכניסה הבאה */}
                 {birthForm.baby_gender && (
                   <div className="col-span-2">
-                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required>
+                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, השאר ריק או הקש 'עדיין אין שם'">
                       <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')}
-                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} required />
+                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} />
+                      <button type="button" onClick={() => setBirthForm(f => ({ ...f, baby_name: '' }))}
+                        className="mt-1.5 text-xs text-indigo-600 hover:underline">עדיין אין שם — אשלים בהמשך</button>
                     </Field>
                   </div>
                 )}
@@ -3119,6 +3278,118 @@ export default function PublicPortalPage() {
 
             <button type="submit" disabled={loading}
               className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+            >
+              {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
+              {loading ? 'שולח...' : 'שלח בקשה'}
+            </button>
+          </form>
+        )}
+
+        {/* ─── Step: New Silent Birth ─── */}
+        {step === 'new-silent-birth' && (
+          <form onSubmit={handleSilentBirthRequest} className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 mb-1">
+              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
+                <ArrowRight size={20} />
+              </button>
+              <h2 className="font-bold text-slate-900 text-lg">בקשה לאחר לידה שקטה</h2>
+            </div>
+
+            <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 leading-relaxed">
+              בבקשה זו אין צורך בפרטי תינוק (שם / ת.ז). אנא מלאו את תאריך הלידה, בחרו בית החלמה וצרפו מסמך אישור.
+            </div>
+
+            <Card>
+              <div className="flex items-center gap-2 mb-4">
+                <Heart size={18} className="text-rose-500" />
+                <h3 className="font-semibold text-slate-900">פרטי הבקשה</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label="תאריך הלידה" required>
+                    <HebrewDatePicker
+                      value={silentForm.birth_date}
+                      onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
+                      maxToday
+                    />
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="בית החלמה" required>
+                    <div className="flex flex-wrap gap-2">
+                      {recoveryHomesSilent.map(h => (
+                        <button key={h} type="button"
+                          onClick={() => setSilentForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                            silentForm.recovery_home === h
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:bg-rose-50'
+                          }`}
+                        >{h}</button>
+                      ))}
+                    </div>
+                    {recoveryHomesSilent.length === 0 && (
+                      <p className="text-xs text-slate-400 mt-1">לא הוגדרו בתי החלמה ללידה שקטה. אנא פנו למזכירות.</p>
+                    )}
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="הערות">
+                    <textarea value={silentForm.notes} onChange={e => setSilentForm(f => ({ ...f, notes: e.target.value }))} rows={3}
+                      placeholder="כל מידע רלוונטי נוסף..."
+                      className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent resize-none w-full"
+                    />
+                  </Field>
+                </div>
+                <div className="col-span-2">
+                  <Field label="מסמך אישור" required hint={`אישור רפואי / מסמך מבית החולים. ${UPLOAD_HINT}`}>
+                    {birthCertFile ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                        <span className="text-sm text-green-700 flex items-center gap-2">
+                          <CheckCircle2 size={14} /> {birthCertFile.name}
+                        </span>
+                        <button type="button" onClick={() => setBirthCertFile(null)} className="text-red-400 hover:text-red-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-rose-50 border-2 border-dashed border-slate-300 hover:border-rose-400 rounded-xl px-4 py-3 transition-colors">
+                        <Upload size={16} className="text-slate-400" />
+                        <span className="text-sm text-slate-500">לחץ להעלאת מסמך אישור</span>
+                        <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
+                          onChange={e => setBirthCertFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    )}
+                  </Field>
+                </div>
+              </div>
+            </Card>
+
+            {needsIdWithRequest && (
+              <Card>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <FileText size={20} className="text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900 mb-1">אימות זהות לאישור ראשוני</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      טרם אושרת סופית. כדי שנוכל לטפל בבקשה, אנא צרף/י גם צילומי תעודת זהות. הבקשה והמסמכים יישלחו יחד לאישור.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-4">
+                  {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+                    <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {error && <ErrorBox message={error} />}
+
+            <button type="submit" disabled={loading}
+              className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}

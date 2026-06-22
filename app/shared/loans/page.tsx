@@ -363,44 +363,44 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
                   <table className="w-full text-sm text-right border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-xs">
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">שם</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">ת.ז.</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">טלפון</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">מייל</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">מטרה</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">סכום מאושר</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-center">תשלומים</th>
-                        <th className="px-3 py-2.5 font-semibold whitespace-nowrap">סטטוס</th>
+                      <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">שם</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">ת.ז.</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">טלפון</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">מייל</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">מטרה</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">סכום מאושר</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">תשלומים</th>
+                        <th className="px-4 py-3 font-semibold whitespace-nowrap">סטטוס</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleLoans.map(l => {
+                      {visibleLoans.map((l, i) => {
                         const isDone = !!l.disbursed_at
                         return (
-                          <tr key={l.id} className={`border-t border-slate-100 ${isDone ? 'bg-emerald-50/40' : 'hover:bg-slate-50'}`}>
-                            <td className="px-3 py-2.5">
+                          <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
+                            <td className="px-4 py-3 align-middle">
                               <div className="font-semibold text-slate-900 whitespace-nowrap">{borrowerName(l.beneficiary)}</div>
-                              {l.beneficiary?.city && <div className="text-xs text-slate-400">{l.beneficiary.city}</div>}
+                              {l.beneficiary?.city && <div className="text-xs text-slate-400 mt-0.5">{l.beneficiary.city}</div>}
                             </td>
-                            <td className="px-3 py-2.5 tabular-nums text-slate-600 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-4 py-3 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
+                            <td className="px-4 py-3 align-middle whitespace-nowrap">
                               {l.beneficiary?.phone
-                                ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600">{l.beneficiary.phone}</a>
+                                ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{l.beneficiary.phone}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-3 py-2.5">
+                            <td className="px-4 py-3 align-middle">
                               {l.beneficiary?.email
                                 ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600">{l.beneficiary.email}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-3 py-2.5 text-slate-600 max-w-[220px] truncate" title={l.purpose ?? ''}>{l.purpose || '—'}</td>
-                            <td className="px-3 py-2.5 font-bold text-slate-900 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
-                            <td className="px-3 py-2.5 text-slate-600 text-center tabular-nums">{l.installments}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-4 py-3 align-middle text-slate-600 max-w-[220px] truncate" title={l.purpose ?? ''}>{l.purpose || '—'}</td>
+                            <td className="px-4 py-3 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
+                            <td className="px-4 py-3 align-middle text-slate-600 text-center tabular-nums">{l.installments}</td>
+                            <td className="px-4 py-3 align-middle whitespace-nowrap">
                               {isDone
-                                ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700"><CheckCircle2 size={14} /> בוצעה {fmtDate(l.disbursed_at)}</span>
-                                : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-xs font-semibold px-3 py-1.5 hover:opacity-90 transition-opacity"><Clock3 size={13} /> סמן כבוצעה</button>}
+                                ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1"><CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}</span>
+                                : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-xs font-semibold px-3 py-1.5 shadow-sm shadow-indigo-200 hover:opacity-90 transition-opacity"><Clock3 size={13} /> סמן כבוצעה</button>}
                             </td>
                           </tr>
                         )

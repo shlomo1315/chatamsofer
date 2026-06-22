@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
 import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 
@@ -197,21 +198,68 @@ export async function POST(request: NextRequest) {
     }, { onConflict: 'key' })
   } catch { /* אבחון בלבד — לא חוסם את הקליטה */ }
 
+  // ── שליפת גוף ההודעה והצרופות מ-Resend ──
+  // Resend Inbound שולח ל-webhook מטא-דאטה בלבד (email_id) — ללא גוף וללא תוכן הצרופות.
+  // לכן שולפים את ההודעה המלאה דרך ה-API: resend.emails.receiving.get(email_id).
+  const emailId = String(data.email_id ?? data.emailId ?? data.id ?? '').trim() || null
+  let fetchedHtml: string | null = null
+  let fetchedText: string | null = null
+  let fetchedAtts: { filename: string; mimeType: string; downloadUrl: string }[] = []
+  if (emailId && process.env.RESEND_API_KEY) {
+    try {
+      const resend = new Resend(process.env.RESEND_API_KEY)
+      const got = await resend.emails.receiving.get(emailId)
+      if (got.error) console.error('[resend-inbound] receiving.get error:', got.error)
+      const e = got.data
+      if (e) {
+        fetchedHtml = e.html ?? null
+        fetchedText = e.text ?? null
+        if (Array.isArray(e.attachments) && e.attachments.length) {
+          try {
+            const list = await resend.emails.receiving.attachments.list({ emailId })
+            fetchedAtts = (list.data?.data ?? []).map(a => ({
+              filename: a.filename ?? 'attachment',
+              mimeType: a.content_type ?? 'application/octet-stream',
+              downloadUrl: a.download_url,
+            }))
+          } catch (e2) {
+            console.error('[resend-inbound] attachments.list failed:', e2 instanceof Error ? e2.message : String(e2))
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[resend-inbound] receiving.get threw:', err instanceof Error ? err.message : String(err))
+    }
+  }
+
   // attachments: העלאת התוכן הבינארי ל-Supabase storage כדי שיהיה ניתן לצפות/להוריד.
-  // Resend מספק את התוכן כ-base64 בשדה content. נשמר את שם/סוג/גודל + url ציבורי.
+  // מקור התוכן: base64 בשדה content (ספקים אחרים) או download_url שנשלף מ-Resend.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rawAttachments: any[] = Array.isArray(data.attachments) ? data.attachments : []
   const attachments: { filename: string; mimeType: string; size: number; url?: string }[] = []
-  for (let i = 0; i < rawAttachments.length; i++) {
-    const a = rawAttachments[i]
-    const filename = String(a.filename ?? a.name ?? `attachment-${i + 1}`)
-    const mimeType = String(a.content_type ?? a.contentType ?? a.mimeType ?? 'application/octet-stream')
+  const attCount = Math.max(rawAttachments.length, fetchedAtts.length)
+  for (let i = 0; i < attCount; i++) {
+    const a = rawAttachments[i] ?? {}
+    const fetched = fetchedAtts[i]
+    const filename = String(fetched?.filename ?? a.filename ?? a.name ?? `attachment-${i + 1}`)
+    const mimeType = String(fetched?.mimeType ?? a.content_type ?? a.contentType ?? a.mimeType ?? 'application/octet-stream')
     const b64 = a.content ?? a.content_b64 ?? a.contentB64 ?? a.data ?? null
     let url: string | undefined
     let size = typeof a.size === 'number' ? a.size : 0
+    let buffer: Buffer | null = null
     if (b64) {
+      try { buffer = Buffer.from(String(b64), 'base64') } catch { /* תוכן לא תקין */ }
+    } else if (fetched?.downloadUrl) {
       try {
-        const buffer = Buffer.from(String(b64), 'base64')
+        const r = await fetch(fetched.downloadUrl)
+        if (r.ok) buffer = Buffer.from(await r.arrayBuffer())
+        else console.error('[resend-inbound] attachment download status:', r.status)
+      } catch (e) {
+        console.error('[resend-inbound] attachment download failed:', e instanceof Error ? e.message : String(e))
+      }
+    }
+    if (buffer) {
+      try {
         size = buffer.length
         const safe = filename.replace(/[^\w.\-]+/g, '_')
         const path = `mail/${String(messageId).replace(/[^\w.\-]+/g, '_')}/${i}_${safe}`
@@ -235,13 +283,40 @@ export async function POST(request: NextRequest) {
     }
     return null
   }
-  let html = pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody')
-  let plain = pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody')
+  // חיפוש רקורסיבי של גוף ההודעה בכל מבנה ה-payload (לכיסוי מבנים מקוננים של ספקים שונים)
+  const deepFindString = (obj: unknown, keyRe: RegExp, depth = 0): string | null => {
+    if (!obj || depth > 5) return null
+    if (Array.isArray(obj)) {
+      for (const it of obj) { const r = deepFindString(it, keyRe, depth + 1); if (r) return r }
+      return null
+    }
+    if (typeof obj === 'object') {
+      const entries = Object.entries(obj as Record<string, unknown>)
+      // קודם בדיקת מפתחות תואמים ברמה הנוכחית
+      for (const [k, v] of entries) {
+        if (keyRe.test(k) && typeof v === 'string' && v.trim()) return v
+      }
+      // ואז ירידה לעומק
+      for (const [, v] of entries) {
+        const r = deepFindString(v, keyRe, depth + 1); if (r) return r
+      }
+    }
+    return null
+  }
+  // עדיפות: גוף שנשלף מ-Resend (receiving.get) → שדות גוף ב-payload → MIME גולמי → חיפוש רקורסיבי
+  let html = (fetchedHtml && fetchedHtml.trim() ? fetchedHtml : null)
+    ?? pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody', 'Html')
+  let plain = (fetchedText && fetchedText.trim() ? fetchedText : null)
+    ?? pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody', 'Text')
   // אם אין גוף מפורק אך יש MIME גולמי — מחלצים ממנו
   if (!html && !plain) {
-    const raw = pickStr('raw', 'email', 'message', 'mime', 'body')
+    const raw = pickStr('raw', 'email', 'message', 'mime', 'body', 'rawEmail', 'raw_email')
+      ?? deepFindString(data, /^(raw|mime|rawEmail|raw_email)$/i)
     if (raw) { const ex = extractFromRawMime(raw); html = ex.html; plain = ex.text }
   }
+  // נפילה-לאחור אחרונה: חיפוש רקורסיבי של שדות גוף בכל מבנה ה-payload
+  if (!html) html = deepFindString(data, /^(html|body[_-]?html|htmlbody)$/i)
+  if (!plain) plain = deepFindString(data, /^(text|plain|plain[_-]?text|body[_-]?text|body[_-]?plain|textbody)$/i)
   if (!html && !plain) {
     console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
   }

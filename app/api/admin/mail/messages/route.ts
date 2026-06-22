@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
     date: m.received_at,
     isRead: m.is_read,
     body: displayBody(m.html, m.plain_text),
+    bodyText: (m.plain_text ?? '').trim() || null,
     attachments: m.attachments ?? [],
     labelIds: assignments[m.id] ?? [],
     isSpam: !!m.is_spam,

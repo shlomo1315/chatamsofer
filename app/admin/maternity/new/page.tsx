@@ -39,7 +39,6 @@ export default function NewMaternityPage() {
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
-  const [cardNumber, setCardNumber] = useState('')
   const [certFile, setCertFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -49,8 +48,14 @@ export default function NewMaternityPage() {
   // רשימת בתי החלמה — נטענת דינמית (כולל בתים שנוספו), עם נפילה לברירת המחדל
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES)
   useEffect(() => {
-    supabase.from('recovery_homes').select('name').order('name').then(({ data }) => {
-      if (data && data.length) setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...data.map((r: { name: string }) => r.name)])])
+    // לידה רגילה — מציגים בתי החלמה לכלל היולדות / "גם וגם" (לא silent-בלבד)
+    supabase.from('recovery_homes').select('*').order('name').then(({ data }) => {
+      if (data && data.length) {
+        const allowed = (data as { name?: string; availability?: string }[])
+          .filter(r => r.name && (r.availability ?? 'regular') !== 'silent')
+          .map(r => r.name as string)
+        setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...allowed])])
+      }
     })
   }, [supabase])
 
@@ -119,9 +124,6 @@ export default function NewMaternityPage() {
     if (!babyBirthDate) e.babyBirthDate = 'תאריך לידת תינוק חובה'
     if (!recoveryHome) e.recoveryHome = 'יש לבחור בית החלמה'
     if (!certFile) e.certFile = 'יש לצרף אישור לידה'
-    const cardDigits = cardNumber.replace(/\D/g, '')
-    if (!cardNumber.trim()) e.cardNumber = 'מספר כרטיס נדרים חובה'
-    else if (cardDigits.length !== 16) e.cardNumber = 'מספר כרטיס נדרים חייב להכיל 16 ספרות'
     return e
   }
 
@@ -170,7 +172,6 @@ export default function NewMaternityPage() {
           baby_gender: babyGender || null,
           birth_certificate_url: certUrl ?? null,
           recovery_home: recoveryHome || null,
-          card_number: cardNumber || null,
           six_weeks_end: sixEnd,
           total_weeks: 6,
           card_balance: 0,
@@ -454,26 +455,7 @@ export default function NewMaternityPage() {
             </div>
           </div>
 
-          {/* ── Step 3: Nedarim card ──────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
-            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">3</span>
-              כרטיס נדרים
-            </h2>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-slate-600">מספר כרטיס נדרים <span className="text-red-500">*</span> <span className="font-normal text-slate-400">(16 ספרות)</span></label>
-              <input
-                type="text" inputMode="numeric" value={cardNumber}
-                onChange={e => { setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16)); clearErr('cardNumber') }}
-                placeholder="0000000000000000"
-                maxLength={16}
-                className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left tracking-widest ${fieldErrors.cardNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
-                dir="ltr"
-              />
-              <p className="text-[11px] text-slate-400 text-left ltr-num">{cardNumber.replace(/\D/g, '').length}/16</p>
-              {fieldErrors.cardNumber && <p className="text-xs text-red-600">{fieldErrors.cardNumber}</p>}
-            </div>
-          </div>
+          {/* כרטיס הנדרים מוטען אוטומטית באישור — אין צורך להזין מספר כאן */}
 
           {/* Submit */}
           {saveError && (

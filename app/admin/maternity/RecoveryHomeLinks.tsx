@@ -7,25 +7,40 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Portal { home_name: string; updated_at: string }
 
-export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
+const AVAIL_OPTIONS = [
+  { value: 'regular', label: 'לכלל היולדות' },
+  { value: 'silent', label: 'רק לידה שקטה' },
+  { value: 'both', label: 'גם וגם' },
+] as const
+
+export default function RecoveryHomeLinks({ homes }: { homes: { name: string; availability: string }[] }) {
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
   const [portals, setPortals] = useState<Portal[]>([])
   const [adding, setAdding] = useState(false)
   const [newHome, setNewHome] = useState('')
+  const [newAvail, setNewAvail] = useState('regular')
   const [addingSaving, setAddingSaving] = useState(false)
   const [addError, setAddError] = useState('')
+
+  // זמינות בית החלמה: regular = לכלל היולדות · silent = רק לידה שקטה · both = גם וגם
+  const [availMap, setAvailMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(homes.map(h => [h.name, h.availability || 'regular'])))
+  const saveAvailability = async (name: string, value: string) => {
+    setAvailMap(m => ({ ...m, [name]: value }))
+    try { await supabase.from('recovery_homes').upsert({ name, availability: value }, { onConflict: 'name' }) } catch { /* silent */ }
+  }
 
   const addHome = async () => {
     const name = newHome.trim()
     if (!name) return
-    if (homes.includes(name)) { setAddError('בית החלמה זה כבר קיים ברשימה'); return }
+    if (homes.some(h => h.name === name)) { setAddError('בית החלמה זה כבר קיים ברשימה'); return }
     setAddingSaving(true); setAddError('')
     try {
-      const { error } = await supabase.from('recovery_homes').insert({ name })
+      const { error } = await supabase.from('recovery_homes').insert({ name, availability: newAvail })
       if (error) throw error
-      setNewHome(''); setAdding(false)
+      setNewHome(''); setNewAvail('regular'); setAdding(false)
       router.refresh()
     } catch (e) {
       setAddError(e instanceof Error ? e.message : 'שגיאה בהוספה')
@@ -125,6 +140,11 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
             className="flex-1 min-w-[180px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             autoFocus
           />
+          <select value={newAvail} onChange={e => setNewAvail(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="זמינות בית ההחלמה">
+            {AVAIL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
           <button onClick={addHome} disabled={addingSaving || !newHome.trim()}
             className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
             {addingSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} שמור
@@ -136,13 +156,19 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
       )}
 
       <div className="divide-y divide-slate-100">
-        {homes.map(home => (
+        {homes.map(h => { const home = h.name; return (
           <div key={home} className="px-5 py-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2.5">
                 <Building2 size={15} className="text-slate-400 flex-shrink-0" />
-                <div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-slate-800">{home}</span>
+                  {/* זמינות — לכלל / שקטה / גם וגם */}
+                  <select value={availMap[home] ?? 'regular'} onChange={e => saveAvailability(home, e.target.value)}
+                    className="text-[11px] rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    title="זמינות בית ההחלמה">
+                    {AVAIL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                   {hasPassword(home) ? (
                     <span className="mr-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 inline-flex items-center gap-1">
                       <Lock size={10} /> סיסמה מוגדרת
@@ -218,7 +244,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
               </div>
             )}
           </div>
-        ))}
+        ) })}
       </div>
 
       <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100">

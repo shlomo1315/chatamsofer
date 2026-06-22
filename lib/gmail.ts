@@ -99,6 +99,7 @@ export interface ParsedMessage {
   date: string
   snippet: string
   body: string
+  bodyText?: string | null
   isRead: boolean
   labelIds: string[]
   attachments: Attachment[]

@@ -705,7 +705,7 @@ export interface RequestApprovedBeneficiary {
 
 export function loanApprovedEmail(
   b: RequestApprovedBeneficiary,
-  loan: { amount?: number | null; installments?: number | null; monthly_payment?: number | null; purpose?: string | null },
+  loan: { amount?: number | null; approved_amount?: number | null; installments?: number | null; monthly_payment?: number | null; purpose?: string | null },
 ): BuiltEmail {
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
   const fmt = (n?: number | null) => (n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '')
@@ -719,7 +719,8 @@ export function loanApprovedEmail(
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
   ].join('')
   const loanRows = [
-    detailRow('סכום ההלוואה', fmt(loan.amount)),
+    // מציגים את הסכום שאושר בפועל (נפילה-לאחור לסכום המבוקש אם טרם הוזן)
+    detailRow('סכום ההלוואה', fmt(loan.approved_amount ?? loan.amount)),
     detailRow('מספר תשלומים', loan.installments != null ? String(loan.installments) : ''),
     detailRow('תשלום חודשי', fmt(loan.monthly_payment)),
     detailRow('מטרת ההלוואה', loan.purpose),

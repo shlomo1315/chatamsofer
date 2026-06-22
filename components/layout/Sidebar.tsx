@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, Profile } from '@/types'
@@ -35,6 +35,7 @@ const navTop: NavItem[] = [
 // "יולדות" — קטגוריית אם מתקפלת עם שני תתי-אגפים
 const maternityChildren: { href: string; label: string; section: SectionKey }[] = [
   { href: '/admin/maternity/recovery', label: 'עזר יולדות',        section: 'maternity' },
+  { href: '/admin/maternity/silent',   label: 'לידה שקטה',         section: 'maternity' },
   { href: '/admin/maternity/cards',    label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
 ]
 
@@ -110,7 +111,8 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
   const mailActive = pathname.startsWith('/admin/mail')
   const cardsActive = pathname.startsWith('/admin/maternity/cards')
   const recoveryActive = pathname.startsWith('/admin/maternity/recovery')
-  const maternityRootActive = pathname === '/admin/maternity' || /^\/admin\/maternity\/[^/]+$/.test(pathname) && !cardsActive && !recoveryActive
+  const silentActive = pathname.startsWith('/admin/maternity/silent')
+  const maternityRootActive = pathname === '/admin/maternity' || /^\/admin\/maternity\/[^/]+$/.test(pathname) && !cardsActive && !recoveryActive && !silentActive
 
   const renderLink = ({ href, label, icon: Icon }: NavItem) => {
     const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
@@ -173,8 +175,12 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
             {maternityOpen && (
               <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
                 {maternityVisible.map(child => {
-                  const active = child.href === '/admin/maternity/cards' ? cardsActive : recoveryActive
-                  const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed : Baby
+                  const active = child.href === '/admin/maternity/cards' ? cardsActive
+                    : child.href === '/admin/maternity/silent' ? silentActive
+                    : recoveryActive
+                  const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed
+                    : child.href === '/admin/maternity/silent' ? Heart
+                    : Baby
                   return (
                     <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
