@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
+import DocThumb from '@/components/ui/DocThumb'
 import Card from '@/components/ui/Card'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
@@ -114,13 +115,12 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             <FileText size={16} />
             <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים מצורפים</span>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-3">
             {loan.document_urls.map((d, i) => (
-              <a key={i} href={docViewUrl(d.url)} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 bg-slate-50 hover:bg-indigo-50 border border-slate-200 rounded-lg px-3 py-2 transition-colors">
-                <FileText size={14} className="flex-shrink-0" />
-                <span className="truncate">{d.name || `מסמך ${i + 1}`}</span>
-              </a>
+              <div key={i} className="flex flex-col gap-1 w-24">
+                <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
+                <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
+              </div>
             ))}
           </div>
         </Card>
@@ -174,14 +174,18 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
 function LoanDocCard({ label, url }: { label: string; url?: string }) {
   if (!url) return null
-  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
   const href = docViewUrl(url)
+  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  const isPdf = /\.pdf(\?|$)/i.test(url)
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+      ) : isPdf ? (
+        <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
+          className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
       ) : (
         <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={28} className="text-slate-400" />

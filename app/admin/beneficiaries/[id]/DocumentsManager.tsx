@@ -28,6 +28,7 @@ const formatUploaded = (raw?: string) => {
 }
 
 const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(name)
+const isPdf = (name?: string | null) => !!name && /\.pdf$/i.test(name)
 
 export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: string }) {
   const supabase = createClient()
@@ -156,9 +157,13 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
           {docs.map((doc) => (
             <div key={doc.id} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
               <a href={doc.file_url ? docViewUrl(doc.file_url) : '#'} target="_blank" rel="noopener noreferrer" className="block">
-                {isImage(doc.file_name) && doc.file_url ? (
+                {doc.file_url && isImage(doc.file_name) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={docViewUrl(doc.file_url)} alt={doc.file_name ?? ''} className="w-full h-28 object-cover" />
+                ) : doc.file_url && isPdf(doc.file_name) ? (
+                  <iframe src={`${docViewUrl(doc.file_url)}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+                    title={doc.file_name ?? 'PDF'} tabIndex={-1}
+                    className="border-0 bg-white pointer-events-none w-full h-28" />
                 ) : (
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
                     {isImage(doc.file_name) ? <ImageIcon size={28} /> : <FileText size={28} />}
