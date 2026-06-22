@@ -169,9 +169,15 @@ export async function POST(request: NextRequest) {
     ...extractEmails(getHeader(data.headers, 'cc')),
     ...extractEmails(getHeader(data.headers, 'delivered-to')),
     ...extractEmails(getHeader(data.headers, 'x-original-to')),
+    ...extractEmails(getHeader(data.headers, 'x-gm-original-to')),
     ...extractEmails(getHeader(data.headers, 'x-forwarded-to')),
   ]
-  const resolvedToEmail = candidates.find(addr => departmentByEmail(addr)) ?? to.email
+  // עדיפות: (1) תיבה מוכרת במערכת; (2) כל נמען אמיתי בדומיין הארגון (כך שכתובת חדשה
+  // שטרם הוגדרה כתיבה עדיין נשמרת תחת הכתובת האמיתית שלה, ולא תחת כתובת ה-copy של ה-subdomain);
+  // (3) נפילה-לאחור ל-to של ה-envelope.
+  const knownDept = candidates.find(addr => departmentByEmail(addr))
+  const orgRecipient = candidates.find(addr => addr.endsWith('@chasamsofer.info'))
+  const resolvedToEmail = knownDept ?? orgRecipient ?? to.email
 
   const admin = getAdminClient()
 
