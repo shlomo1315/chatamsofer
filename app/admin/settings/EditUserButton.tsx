@@ -50,6 +50,12 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   // Department state
   const [department, setDepartment] = useState<string>(profile.department ?? '')
 
+  // "מייל בלבד" + תיבות מורשות
+  const [mailOnly, setMailOnly] = useState<boolean>(profile.mail_only ?? false)
+  const [allowedMailboxes, setAllowedMailboxes] = useState<string[]>(profile.allowed_mailboxes ?? [])
+  const toggleMailbox = (key: string) =>
+    setAllowedMailboxes(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+
   const setSection = (key: SectionKey, level: PermissionLevel) =>
     setPermissions(p => ({ ...p, [key]: level }))
 
@@ -70,6 +76,8 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
     setPermissions(profile.permissions && Object.keys(profile.permissions).length > 0
       ? profile.permissions : defaultPerms())
     setDepartment(profile.department ?? '')
+    setMailOnly(profile.mail_only ?? false)
+    setAllowedMailboxes(profile.allowed_mailboxes ?? [])
   }
 
   const submit = async () => {
@@ -84,6 +92,8 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
           id: profile.id, full_name: fullName, phone, role, is_active: isActive,
           permissions: isAdmin ? {} : permissions,
           department: department || null,
+          mail_only: isAdmin ? false : mailOnly,
+          allowed_mailboxes: isAdmin ? [] : allowedMailboxes,
         }),
       })
       const data = await res.json()
@@ -244,6 +254,30 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                     <p className="text-xs text-slate-400">מיילים ייצאו עם כתובת תשובה: {DEPARTMENTS[department as keyof typeof DEPARTMENTS]?.email}</p>
                   )}
                 </div>
+
+                {/* מייל בלבד + תיבות מורשות */}
+                {!isAdmin && (
+                  <div className="flex flex-col gap-2 rounded-xl border border-slate-200 p-3">
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <span className="text-xs font-semibold text-slate-700">מייל בלבד — גישה רק ללשונית המייל</span>
+                      <input type="checkbox" checked={mailOnly} onChange={e => setMailOnly(e.target.checked)} className="w-4 h-4 accent-indigo-600" />
+                    </label>
+                    <p className="text-[11px] text-slate-400">כשמסומן, המשתמש נכנס ורואה אך ורק את המייל — ורק את התיבות שתבחר למטה.</p>
+                    <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-100">
+                      <span className="text-xs font-semibold text-slate-700">תיבות מורשות</span>
+                      <div className="grid grid-cols-2 gap-1 max-h-44 overflow-y-auto">
+                        {Object.values(DEPARTMENTS).map(d => (
+                          <label key={d.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+                            <input type="checkbox" checked={allowedMailboxes.includes(d.key)} onChange={() => toggleMailbox(d.key)} className="w-3.5 h-3.5 accent-indigo-600" />
+                            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                            <span className="text-xs text-slate-700 truncate" title={d.email}>{d.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-slate-400">אם לא נבחרה אף תיבה — המשתמש ישתמש בשיוך ה&quot;מחלקה&quot; שלמעלה.</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Active toggle */}
                 <div className="flex items-center justify-between py-2 border border-slate-200 rounded-lg px-3">

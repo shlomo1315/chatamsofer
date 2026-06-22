@@ -52,6 +52,23 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/dashboard', request.url))
   }
 
+  // יוזרים "מייל בלבד": חסומים מכל המערכת חוץ מלשונית המייל.
+  if (isAdminRoute && user) {
+    const path = request.nextUrl.pathname
+    const isMailPath = path === '/admin/mail' || path.startsWith('/admin/mail/')
+    if (!isMailPath) {
+      // select('*') עמיד גם אם העמודה mail_only טרם נוספה במסד
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (prof?.mail_only === true && prof.role !== 'admin') {
+        return NextResponse.redirect(new URL('/admin/mail', request.url))
+      }
+    }
+  }
+
   return isAdminRoute ? noCache(response) : response
 }
 

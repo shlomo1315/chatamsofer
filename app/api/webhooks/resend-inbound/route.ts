@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
+import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,12 +11,84 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// העברת עותק של מייל נכנס ל-Gmail (כדי שאותו מייל יופיע גם במערכת וגם בגוגל).
+// יעדי ההעברה מוגדרים ב-app_settings תחת המפתח 'mail_forward':
+//   { "global": "x@gmail.com" }                 → כל הדואר הנכנס
+//   { "main": "a@gmail.com", "inbox8": "b@..." } → לפי תיבה (DepartmentKey), עם נפילה ל-global
+async function maybeForwardToGmail(admin: SupabaseClient, msg: {
+  fromEmail: string; fromName: string | null; toEmail: string; subject: string
+  html: string | null; plain: string | null
+  attachments: { filename: string; mimeType: string; url?: string }[]
+}) {
+  // הגנות לולאה: לא מעבירים דואר פנימי/אוטומטי
+  const from = (msg.fromEmail || '').toLowerCase()
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+
+  // יעד ההעברה לפי הגדרות
+  const { data: setting } = await admin.from('app_settings').select('value').eq('key', 'mail_forward').maybeSingle()
+  let map: Record<string, string> = {}
+  try { map = setting?.value ? JSON.parse(setting.value as string) : {} } catch { return }
+  const depKey = departmentByEmail(msg.toEmail)?.key
+  const target = (depKey && map[depKey]) || map.global
+  if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) return
+  if (target.toLowerCase() === from) return  // לא מעבירים בחזרה לשולח
+
+  // צרופות — מצרפים מחדש מתוך האחסון (best-effort)
+  const atts: MailAttachment[] = []
+  for (const a of msg.attachments) {
+    if (!a.url) continue
+    const built = await urlToAttachment(a.url, a.filename)
+    if (built) atts.push(built)
+  }
+
+  const origin = msg.fromName ? `${msg.fromName} &lt;${msg.fromEmail}&gt;` : msg.fromEmail
+  const bodyHtml = (msg.html && msg.html.trim())
+    ? msg.html
+    : `<pre style="white-space:pre-wrap;font-family:inherit;">${(msg.plain ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
+  const html =
+    `<div style="direction:rtl;text-align:right;font-family:Arial,sans-serif;">` +
+    `<div style="font-size:12px;color:#94a3b8;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">` +
+    `התקבל ב-${msg.toEmail} · מאת: ${origin}</div>${bodyHtml}</div>`
+
+  // נשלח מכתובת התיבה (כדי ש-DKIM יתאים), עם reply-to לשולח המקורי
+  await deliverMail(target, msg.subject || '(ללא נושא)', html, atts.length ? atts : undefined, {
+    fromName: `${BRAND_NAME} · התקבל ב-${msg.toEmail}`,
+    fromEmail: msg.toEmail,
+    replyTo: msg.fromEmail,
+    skipLog: true,
+  })
+}
+
 // פירוק שדה "שם <כתובת>" לשם וכתובת
 function parseAddress(raw: string): { name: string | null; email: string } {
   const s = String(raw ?? '').trim()
   const m = s.match(/^(.*?)\s*<([^>]+)>$/)
   if (m) return { name: m[1].replace(/^"|"$/g, '').trim() || null, email: m[2].trim().toLowerCase() }
   return { name: null, email: s.toLowerCase() }
+}
+
+// קריאת ערך כותרת (case-insensitive) — תומך במערך [{name,value}] או באובייקט {name: value}
+function getHeader(headers: unknown, name: string): string {
+  const target = name.toLowerCase()
+  if (Array.isArray(headers)) {
+    const found = headers.find((h: { name?: string }) => String(h?.name ?? '').toLowerCase() === target)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return found ? String((found as any).value ?? '') : ''
+  }
+  if (headers && typeof headers === 'object') {
+    const key = Object.keys(headers as Record<string, unknown>).find(k => k.toLowerCase() === target)
+    return key ? String((headers as Record<string, unknown>)[key] ?? '') : ''
+  }
+  return ''
+}
+
+// חילוץ כל הכתובות מתוך ערך כותרת (To/Cc יכולים להכיל כמה נמענים מופרדים בפסיק)
+function extractEmails(raw: string): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map(s => parseAddress(s).email)
+    .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
 }
 
 // פענוח חלק MIME לפי Content-Transfer-Encoding (base64 / quoted-printable)
@@ -79,21 +153,31 @@ export async function POST(request: NextRequest) {
   const toRaw = Array.isArray(data.to) ? data.to[0] : data.to
   const to = parseAddress(toRaw ?? '')
 
-  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרות (Subject) אם ריק
-  const headerSubject = (() => {
-    const h = data.headers
-    if (Array.isArray(h)) {
-      const found = h.find((x: { name?: string }) => String(x?.name ?? '').toLowerCase() === 'subject')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return found ? String((found as any).value ?? '') : ''
-    }
-    if (h && typeof h === 'object') {
-      const key = Object.keys(h).find(k => k.toLowerCase() === 'subject')
-      return key ? String((h as Record<string, unknown>)[key] ?? '') : ''
-    }
-    return ''
-  })()
-  const subject = String(data.subject ?? data.Subject ?? '').trim() || headerSubject.trim()
+  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרת Subject אם ריק
+  const subject = String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim()
+
+  // ── זיהוי הנמען המקורי (לתמיכה ב-Dual Delivery מ-Google Workspace) ──
+  // כשהדואר מגיע כעותק דרך subdomain של Resend, ה-"to" של ה-envelope הוא כתובת ה-subdomain,
+  // אך הנמען האמיתי (תיבת המחלקה) נמצא בכותרות To/Cc/Delivered-To. בוחרים את הכתובת
+  // שמתאימה לתיבה מוכרת במערכת; אחרת נופלים ל-to של ה-envelope (התנהגות קודמת).
+  const envelopeRecipients = (Array.isArray(data.to) ? data.to : [data.to])
+    .map((t: unknown) => parseAddress(String(t ?? '')).email)
+    .filter(Boolean)
+  const candidates = [
+    ...envelopeRecipients,
+    ...extractEmails(getHeader(data.headers, 'to')),
+    ...extractEmails(getHeader(data.headers, 'cc')),
+    ...extractEmails(getHeader(data.headers, 'delivered-to')),
+    ...extractEmails(getHeader(data.headers, 'x-original-to')),
+    ...extractEmails(getHeader(data.headers, 'x-gm-original-to')),
+    ...extractEmails(getHeader(data.headers, 'x-forwarded-to')),
+  ]
+  // עדיפות: (1) תיבה מוכרת במערכת; (2) כל נמען אמיתי בדומיין הארגון (כך שכתובת חדשה
+  // שטרם הוגדרה כתיבה עדיין נשמרת תחת הכתובת האמיתית שלה, ולא תחת כתובת ה-copy של ה-subdomain);
+  // (3) נפילה-לאחור ל-to של ה-envelope.
+  const knownDept = candidates.find(addr => departmentByEmail(addr))
+  const orgRecipient = candidates.find(addr => addr.endsWith('@chasamsofer.info'))
+  const resolvedToEmail = knownDept ?? orgRecipient ?? to.email
 
   const admin = getAdminClient()
 
@@ -162,22 +246,36 @@ export async function POST(request: NextRequest) {
     console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
   }
 
-  const { error } = await admin.from('inbound_emails').upsert({
+  const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
     from_name: from.name,
-    to_email: to.email,
+    to_email: resolvedToEmail,
     subject,
     html: html ?? null,
     plain_text: plain ?? null,
     headers: data.headers ?? null,
     attachments,
     is_read: false,
-  }, { onConflict: 'message_id', ignoreDuplicates: true })
+  }, { onConflict: 'message_id', ignoreDuplicates: true }).select('id')
 
   if (error) {
     console.error('[resend-inbound] DB error:', error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  // העברת עותק ל-Gmail רק עבור מייל חדש (לא בכפילות/ניסיון חוזר של ה-webhook)
+  const isNew = (insertedRows?.length ?? 0) > 0
+  if (isNew) {
+    try {
+      await maybeForwardToGmail(admin, {
+        fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject,
+        html: html ?? null, plain: plain ?? null, attachments,
+      })
+    } catch (e) {
+      console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }

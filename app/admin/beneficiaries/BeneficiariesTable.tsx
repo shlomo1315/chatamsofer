@@ -108,32 +108,39 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
   },
   {
     key: 'phone',
-    header: 'יצירת קשר',
+    header: 'טלפון',
     sortable: false,
-    className: 'min-w-[160px]',
-    render: (row) => (
-      <div className="flex flex-col gap-1">
-        {row.phone ? (
-          <div dir="ltr" className="flex items-center gap-1.5 text-xs text-slate-600 tabular-nums">
-            <Phone size={11} className="text-slate-400 flex-shrink-0" />
-            <span>{row.phone}</span>
-          </div>
-        ) : null}
-        {row.email ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
-            dir="ltr"
-            title="שליחת מייל מתוך המערכת"
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 hover:underline text-left w-fit"
-          >
-            <Mail size={11} className="text-slate-400 flex-shrink-0" />
-            <span className="truncate max-w-[140px]">{row.email}</span>
-          </button>
-        ) : null}
-        {!row.phone && !row.email && <span className="text-slate-300">—</span>}
-      </div>
-    ),
+    className: 'min-w-[120px]',
+    render: (row) =>
+      row.phone ? (
+        <div dir="ltr" className="flex items-center gap-1.5 text-xs text-slate-600 tabular-nums w-fit">
+          <Phone size={11} className="text-slate-400 flex-shrink-0" />
+          <span>{row.phone}</span>
+        </div>
+      ) : (
+        <span className="text-slate-300">—</span>
+      ),
+  },
+  {
+    key: 'email',
+    header: 'מייל',
+    sortable: false,
+    className: 'min-w-[150px]',
+    render: (row) =>
+      row.email ? (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onEmail(row) }}
+          dir="ltr"
+          title="שליחת מייל מתוך המערכת"
+          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 hover:underline text-left w-fit"
+        >
+          <Mail size={11} className="text-slate-400 flex-shrink-0" />
+          <span className="truncate max-w-[160px]">{row.email}</span>
+        </button>
+      ) : (
+        <span className="text-slate-300">—</span>
+      ),
   },
   {
     key: 'city',

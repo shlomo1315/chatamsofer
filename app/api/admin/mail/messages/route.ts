@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, allowedMailboxKeys } from '@/lib/apiAuth'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
@@ -38,8 +38,20 @@ export async function GET(request: NextRequest) {
   const department = request.nextUrl.searchParams.get('department') ?? ''
 
   const admin = getAdminClient()
-  const deptEmail = department && DEPARTMENTS[department as DepartmentKey]?.email
   const nowIso = new Date().toISOString()
+
+  // אכיפת תיבות מורשות: null = ללא הגבלה; [] = ללא גישה; אחרת רשימת מפתחות מותרים.
+  // אם המשתמש ביקש תיבה מסוימת והיא מותרת — מסננים אליה; אחרת מסננים לכלל המותרות.
+  const allowed = allowedMailboxKeys(staff)
+  const reqIsAllowed = !!department && (allowed === null || allowed.includes(department))
+  const effectiveKeys: string[] | null = allowed === null
+    ? (department ? [department] : null)
+    : (reqIsAllowed ? [department] : allowed)
+  const effectiveEmails = (effectiveKeys ?? [])
+    .map(k => DEPARTMENTS[k as DepartmentKey]?.email)
+    .filter((e): e is string => !!e)
+  const blocked = allowed !== null && allowed.length === 0  // mail_only ללא תיבות
+  if (blocked) return NextResponse.json({ messages: [] })
 
   // תוויות לכל מייל — נשמרות ב-app_settings (messageId → labelId[])
   const labelsFor = async (): Promise<Record<string, string[]>> => {
@@ -57,7 +69,8 @@ export async function GET(request: NextRequest) {
       // בדואר יוצא לא מציגים מיילים שעדיין ממתינים לתזמון
       query = query.or(`scheduled_at.is.null,scheduled_at.lte.${nowIso}`).order('sent_at', { ascending: false })
     }
-    if (department) query = query.eq('department', department)
+    if (effectiveKeys && effectiveKeys.length === 1) query = query.eq('department', effectiveKeys[0])
+    else if (effectiveKeys && effectiveKeys.length > 1) query = query.in('department', effectiveKeys)
     if (q) query = query.or(`subject.ilike.%${q}%,to_email.ilike.%${q}%`)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -84,7 +97,8 @@ export async function GET(request: NextRequest) {
   const assignments = await labelsFor()
   let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).limit(50)
   query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
-  if (deptEmail) query = query.eq('to_email', deptEmail)
+  if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
+  else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
   if (q) query = query.or(`subject.ilike.%${q}%,from_email.ilike.%${q}%,from_name.ilike.%${q}%`)
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
