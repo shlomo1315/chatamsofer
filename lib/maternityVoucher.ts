@@ -1,25 +1,26 @@
-// יצירת שוברי PDF מעוצבים ליולדת — שובר הבראה (בית החלמה) ושובר כרטיס מזון (מוקד).
-// פונט Heebo מוטמע. טקסט עברי מסודר ל-RTL ויזואלי דרך lib/rtlText.
-import { PDFDocument, PDFFont, PDFPage, rgb, type RGB } from 'pdf-lib'
+// שוברי PDF מעוצבים ליולדת — שובר כרטיס מזון ושובר הבראה (בית החלמה).
+// פונט Heebo מוטמע. הטקסט נכתב בסדר לוגי (מנוע ה-PDF מיישם RTL בעצמו).
+import { PDFDocument, PDFFont, PDFImage, PDFPage, rgb, type RGB } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
-import { visualRtl, wrapRtl } from './rtlText'
+import { wrapText } from './rtlText'
 import type { MailAttachment } from './sendMail'
 
-// A4 לאורך
 const W = 595.28
 const H = 841.89
-const MX = 56 // שוליים אופקיים
+const MX = 42
 
-type Theme = { accent: RGB; soft: RGB; softBorder: RGB; ink: RGB; sub: RGB }
-const ROSE: Theme = {
-  accent: rgb(0.859, 0.153, 0.467), soft: rgb(0.992, 0.949, 0.972),
-  softBorder: rgb(0.965, 0.815, 0.894), ink: rgb(0.059, 0.09, 0.165), sub: rgb(0.392, 0.455, 0.545),
-}
-const AMBER: Theme = {
-  accent: rgb(0.706, 0.325, 0.035), soft: rgb(1, 0.984, 0.922),
-  softBorder: rgb(0.988, 0.827, 0.302), ink: rgb(0.059, 0.09, 0.165), sub: rgb(0.392, 0.455, 0.545),
-}
+// ערכת צבעים — כחול כהה + זהב (חגיגי ומכובד)
+const NAVY = rgb(0.106, 0.196, 0.337)
+const NAVY_SOFT = rgb(0.929, 0.945, 0.972)
+const GOLD = rgb(0.776, 0.616, 0.176)
+const GOLD_SOFT = rgb(0.984, 0.957, 0.882)
+const INK = rgb(0.094, 0.129, 0.196)
+const SUB = rgb(0.353, 0.4, 0.467)
+const RED = rgb(0.7, 0.106, 0.106)
+const CREAM = rgb(0.996, 0.992, 0.973)
 
 function fmtDate(d?: string | null): string {
   if (!d) return '—'
@@ -28,171 +29,249 @@ function fmtDate(d?: string | null): string {
   return dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-// ── עוזרי ציור ────────────────────────────────────────────────────────────────
-function rtlRight(page: PDFPage, font: PDFFont, str: string, xRight: number, y: number, size: number, color: RGB) {
-  const v = visualRtl(str)
-  const w = font.widthOfTextAtSize(v, size)
-  page.drawText(v, { x: xRight - w, y, size, font, color })
-}
-function rtlCenter(page: PDFPage, font: PDFFont, str: string, cx: number, y: number, size: number, color: RGB) {
-  const v = visualRtl(str)
-  const w = font.widthOfTextAtSize(v, size)
-  page.drawText(v, { x: cx - w / 2, y, size, font, color })
-}
-// יהלום דקורטיבי קטן
-function diamond(page: PDFPage, cx: number, cy: number, r: number, color: RGB) {
-  page.drawSvgPath(`M 0 ${-r} L ${r} 0 L 0 ${r} L ${-r} 0 Z`, { x: cx, y: cy, color, borderWidth: 0 })
+// לוגו (best-effort — אם לא נמצא, מדלגים)
+function loadLogo(): Buffer | null {
+  try { return readFileSync(join(process.cwd(), 'public', 'logo.png')) } catch { return null }
 }
 
-// ── ציור שובר בודד על עמוד ─────────────────────────────────────────────────────
-type VoucherContent = {
-  theme: Theme
-  badge: string          // כיתוב קטן מעל הכותרת
-  title: string          // כותרת ראשית
-  highlight?: string     // הדגשה גדולה (למשל "600 ₪")
-  highlightSub?: string  // טקסט מתחת להדגשה
-  intro: string          // פסקת פתיחה
-  rows: [string, string][] // שורות פרטים [תווית, ערך]
-  listTitle?: string     // כותרת רשימה (מוקדים)
-  list?: string[]        // שורות רשימה
-  note: string           // הערה בתחתית
+type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
+
+// ── עוזרי ציור (טקסט לוגי, יישור לימין) ─────────────────────────────────────────
+function rightText(c: Ctx, text: string, xRight: number, y: number, size: number, color: RGB) {
+  const w = c.font.widthOfTextAtSize(text, size)
+  c.page.drawText(text, { x: xRight - w, y, size, font: c.font, color })
+}
+function centerText(c: Ctx, text: string, cx: number, y: number, size: number, color: RGB) {
+  const w = c.font.widthOfTextAtSize(text, size)
+  c.page.drawText(text, { x: cx - w / 2, y, size, font: c.font, color })
+}
+// פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה
+function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
+  const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(s, size))
+  for (const ln of lines) { rightText(c, ln, xRight, y, size, color); y -= size + lineGap }
+  return y
+}
+// תיבת מסגרת מעוגלת (קו זהב)
+function roundedBox(c: Ctx, x: number, y: number, w: number, h: number, border: RGB, fill?: RGB) {
+  const r = 10
+  c.page.drawRectangle({ x, y, width: w, height: h, color: fill ?? rgb(1, 1, 1), borderColor: border, borderWidth: 1.2 })
+  // עיגול פינות מדומה — ריבועים לבנים קטנים בפינות (אפקט עדין); מדלגים לפשטות
+  void r
+}
+// פס דקורטיבי זהב עם מעוין
+function goldDivider(c: Ctx, cx: number, y: number, half = 70) {
+  c.page.drawLine({ start: { x: cx - half, y }, end: { x: cx + half, y }, thickness: 1, color: GOLD })
+  c.page.drawSvgPath('M 0 -3 L 3 0 L 0 3 L -3 0 Z', { x: cx, y, color: GOLD, borderWidth: 0 })
+}
+// "ברקוד" דקורטיבי — פסים אנכיים נגזרים ממחרוזת, עם מספר מתחת
+function barcode(c: Ctx, code: string, xRight: number, yTop: number, width: number, height: number) {
+  let seed = 0
+  for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) & 0xffff
+  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed >> 8) / 0x7fffff }
+  let x = xRight - width
+  const bottom = yTop - height
+  while (x < xRight - 1) {
+    const bw = 0.8 + rng() * 2.2
+    if (rng() > 0.45) c.page.drawRectangle({ x, y: bottom, width: bw, height, color: INK })
+    x += bw + (0.6 + rng() * 1.6)
+  }
+  centerText(c, code, xRight - width / 2, bottom - 12, 9, INK)
 }
 
-function drawVoucher(page: PDFPage, font: PDFFont, c: VoucherContent) {
-  const { theme: t } = c
-  // רקע
-  page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: rgb(1, 1, 1) })
-  // מסגרת חיצונית כפולה
-  page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: t.accent, borderWidth: 2, color: rgb(1, 1, 1) })
-  page.drawRectangle({ x: 30, y: 30, width: W - 60, height: H - 60, borderColor: t.softBorder, borderWidth: 1, color: rgb(1, 1, 1) })
+// כותרת עליונה משותפת (לוגו + שם הארגון על רקע כחול)
+function drawHeader(c: Ctx, subtitle: string): number {
+  c.page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: CREAM })
+  // מסגרת חיצונית כפולה (זהב + כחול)
+  c.page.drawRectangle({ x: 18, y: 18, width: W - 36, height: H - 36, borderColor: GOLD, borderWidth: 2.5, color: CREAM })
+  c.page.drawRectangle({ x: 24, y: 24, width: W - 48, height: H - 48, borderColor: NAVY, borderWidth: 0.8, color: CREAM })
 
-  // פס כותרת עליון
-  const bandH = 96
-  const bandY = H - 30 - bandH
-  page.drawRectangle({ x: 30, y: bandY, width: W - 60, height: bandH, color: t.accent })
-  rtlCenter(page, font, 'היכל החתם סופר', W / 2, bandY + bandH - 40, 24, rgb(1, 1, 1))
-  rtlCenter(page, font, 'קופת גמ״ח וחסד · עזר ליולדות', W / 2, bandY + bandH - 66, 12, rgb(1, 0.93, 0.96))
+  // בס"ד
+  rightText(c, 'בס"ד', W - 34, H - 44, 10, SUB)
 
-  let y = bandY - 40
+  const bandH = 92
+  const bandY = H - 34 - bandH
+  c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: bandH, color: NAVY })
+  c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: 4, color: GOLD })
 
-  // תג + כותרת
-  rtlCenter(page, font, c.badge, W / 2, y, 12, t.accent)
-  y -= 30
-  rtlCenter(page, font, c.title, W / 2, y, 28, t.ink)
-  y -= 16
-  // קו מפריד עם יהלומים
-  diamond(page, W / 2 - 60, y, 3, t.accent)
-  page.drawLine({ start: { x: W / 2 - 52, y }, end: { x: W / 2 + 52, y }, thickness: 1, color: t.softBorder })
-  diamond(page, W / 2 + 60, y, 3, t.accent)
-  y -= 34
-
-  // הדגשה גדולה (סכום) בתוך תיבה רכה
-  if (c.highlight) {
-    const boxH = 76
-    page.drawRectangle({ x: MX, y: y - boxH + 18, width: W - MX * 2, height: boxH, color: t.soft, borderColor: t.softBorder, borderWidth: 1 })
-    rtlCenter(page, font, c.highlight, W / 2, y - 24, 40, t.accent)
-    if (c.highlightSub) rtlCenter(page, font, c.highlightSub, W / 2, y - 46, 12, t.sub)
-    y -= boxH + 16
+  // לוגו בצד ימין של הפס
+  if (c.logo) {
+    const dim = 64
+    c.page.drawImage(c.logo, { x: W - 34 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
+    // שם הארגון לשמאל הלוגו
+    centerText(c, 'היכל החתם סופר', (W - 48) / 2 + 24 - 30, bandY + bandH - 38, 26, rgb(1, 1, 1))
+    centerText(c, subtitle, (W - 48) / 2 + 24 - 30, bandY + bandH - 62, 13, GOLD_SOFT)
+  } else {
+    centerText(c, 'היכל החתם סופר', W / 2, bandY + bandH - 38, 26, rgb(1, 1, 1))
+    centerText(c, subtitle, W / 2, bandY + bandH - 62, 13, GOLD_SOFT)
   }
-
-  // פסקת פתיחה
-  const introLines = wrapRtl(c.intro, W - MX * 2, s => font.widthOfTextAtSize(s, 13))
-  for (const ln of introLines) {
-    const w = font.widthOfTextAtSize(ln, 13)
-    page.drawText(ln, { x: W - MX - w, y, size: 13, font, color: t.sub })
-    y -= 21
-  }
-  y -= 12
-
-  // שורות פרטים
-  for (const [label, value] of c.rows) {
-    page.drawRectangle({ x: MX, y: y - 8, width: W - MX * 2, height: 30, color: rgb(0.976, 0.98, 0.984) })
-    rtlRight(page, font, value || '—', W - MX - 12, y, 14, t.ink)
-    rtlRight(page, font, label, MX + 110, y, 12, t.sub)
-    y -= 36
-  }
-
-  // רשימה (מוקדים)
-  if (c.list && c.list.length) {
-    y -= 4
-    if (c.listTitle) { rtlRight(page, font, c.listTitle, W - MX, y, 13, t.ink); y -= 24 }
-    for (const item of c.list) {
-      diamond(page, W - MX - 4, y + 4, 2.5, t.accent)
-      rtlRight(page, font, item, W - MX - 16, y, 12.5, t.sub)
-      y -= 22
-    }
-    y -= 8
-  }
-
-  // קו ניתוק מנוקב + הערה
-  y = Math.max(y, 150)
-  page.drawLine({ start: { x: MX, y }, end: { x: W - MX, y }, thickness: 1, color: t.softBorder, dashArray: [4, 4] })
-  y -= 26
-  const noteLines = wrapRtl(c.note, W - MX * 2, s => font.widthOfTextAtSize(s, 11))
-  for (const ln of noteLines) {
-    const w = font.widthOfTextAtSize(ln, 11)
-    page.drawText(ln, { x: W - MX - w, y, size: 11, font, color: t.sub })
-    y -= 17
-  }
-
-  // כותרת תחתית
-  rtlCenter(page, font, `הונפק בתאריך ${new Date().toLocaleDateString('he-IL')} · היכל החתם סופר`, W / 2, 52, 10, t.sub)
+  return bandY - 28
 }
 
-export type VoucherInput = {
+// תיבת פרטים עם כותרת מודגשת ושורות label/value
+function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], opts?: { barcode?: string }): number {
+  const padX = 18
+  const rowH = 22
+  const titleH = 26
+  const boxH = titleH + rows.length * rowH + 14
+  const x = MX
+  const w = W - MX * 2
+  roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
+  // כותרת
+  c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: NAVY })
+  rightText(c, title, x + w - 14, y - titleH + 8, 13, rgb(1, 1, 1))
+
+  let ry = y - titleH - 18
+  const valRight = x + w - 16
+  const barcodeReserve = opts?.barcode ? 150 : 0
+  for (const [label, value] of rows) {
+    // label בכחול מודגש, value בשחור — שניהם בצד ימין באותה שורה
+    const labelText = `${label}: `
+    rightText(c, value || '—', valRight, ry, 12, INK)
+    const vW = c.font.widthOfTextAtSize(value || '—', 12)
+    rightText(c, labelText, valRight - vW - 4, ry, 12, NAVY)
+    ry -= rowH
+  }
+  // ברקוד בצד שמאל של התיבה
+  if (opts?.barcode) {
+    barcode(c, opts.barcode, x + 16 + barcodeReserve - 10, y - titleH - 22, barcodeReserve - 20, 46)
+  }
+  return y - boxH - 16
+}
+
+// ── מסמך שובר בודד ──────────────────────────────────────────────────────────────
+type VoucherInput = {
   motherName: string
+  motherId?: string | null
+  address?: string | null
+  city?: string | null
+  phone?: string | null
+  spousePhone?: string | null
   birthDate?: string | null
   recoveryHome?: string | null
   centers?: { name: string; city?: string | null; address?: string | null }[]
 }
 
-async function renderSingle(content: VoucherContent): Promise<string> {
+async function renderFoodCard(input: VoucherInput): Promise<string> {
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const logoBytes = loadLogo()
+  const logo = logoBytes ? await doc.embedPng(logoBytes) : null
   const page = doc.addPage([W, H])
-  drawVoucher(page, font, content)
-  const bytes = await doc.save()
-  return Buffer.from(bytes).toString('base64')
+  const c: Ctx = { page, font, logo }
+
+  let y = drawHeader(c, 'אגף עזר ליולדות')
+
+  // תאריך
+  rightText(c, `הונפק בתאריך ${new Date().toLocaleDateString('he-IL')}`, W - MX, y, 10, SUB)
+  y -= 24
+
+  // כותרת ראשית
+  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 22, NAVY)
+  y -= 12
+  goldDivider(c, W / 2, y); y -= 26
+
+  // לכבוד
+  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 24
+
+  // פסקת פתיחה
+  y = paragraph(c,
+    'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס טעון על סך 600 ש"ח לרכישת מזון מוכן.',
+    W - MX, y, W - MX * 2, 12.5, SUB, 6)
+  y -= 8
+
+  // אזהרה אדומה
+  const warnH = 44
+  c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
+  let wy = y - 16
+  wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 12, RED, 4)
+  y = y - warnH - 18
+
+  // פרטי היולדת
+  y = detailsBox(c, 'פרטי היולדת', y, [
+    ['שם היולדת', input.motherName],
+    ['תעודת זהות', input.motherId || '—'],
+    ['כתובת', input.address || '—'],
+    ['עיר', input.city || '—'],
+    ['טלפון', input.phone || '—'],
+    ['תאריך לידת התינוק', fmtDate(input.birthDate)],
+  ], { barcode: `CS-${(input.motherId || '').replace(/\D/g, '').slice(-6) || '000000'}` })
+
+  // מוקד ותאריך איסוף
+  const centerList = (input.centers ?? []).map(cn => {
+    const place = [cn.city, cn.address].filter(Boolean).join(', ')
+    return place ? `${cn.name} — ${place}` : cn.name
+  })
+  const centerRows: [string, string][] = centerList.length
+    ? centerList.slice(0, 3).map((cn, i) => [i === 0 ? 'מוקד החלוקה' : 'מוקד נוסף', cn])
+    : [['מוקד החלוקה', 'רשימת המוקדים תימסר לכם על ידי המזכירות']]
+  y = detailsBox(c, 'מוקד ותאריך איסוף הכרטיס', y, centerRows)
+
+  // הערות בתחתית
+  y = paragraph(c,
+    'הכרטיס בתוקף לשימוש עד 6 שבועות ממועד הלידה, ורק עבור רכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
+    W - MX, y, W - MX * 2, 10.5, SUB, 4)
+  y -= 10
+
+  // ברכה וחתימה
+  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
+  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
+
+  return Buffer.from(await doc.save()).toString('base64')
 }
 
+async function renderRecovery(input: VoucherInput): Promise<string> {
+  const doc = await PDFDocument.create()
+  doc.registerFontkit(fontkit)
+  const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
+  const logoBytes = loadLogo()
+  const logo = logoBytes ? await doc.embedPng(logoBytes) : null
+  const page = doc.addPage([W, H])
+  const c: Ctx = { page, font, logo }
+
+  let y = drawHeader(c, 'אגף עזר ליולדות')
+
+  rightText(c, `הונפק בתאריך ${new Date().toLocaleDateString('he-IL')}`, W - MX, y, 10, SUB)
+  y -= 24
+
+  centerText(c, 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
+  y -= 12
+  goldDivider(c, W / 2, y); y -= 26
+
+  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 22
+  centerText(c, 'מזל טוב לרגל השמחה!', W / 2, y, 13, GOLD); y -= 26
+
+  y = paragraph(c,
+    'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.',
+    W - MX, y, W - MX * 2, 12.5, SUB, 6)
+  y -= 12
+
+  y = detailsBox(c, 'פרטי היולדת והשהייה', y, [
+    ['שם היולדת', input.motherName],
+    ['תעודת זהות', input.motherId || '—'],
+    ['תאריך הלידה', fmtDate(input.birthDate)],
+    ['בית החלמה', input.recoveryHome || 'ייקבע מול המזכירות'],
+    ['טלפון', input.phone || '—'],
+  ], { barcode: `CS-${(input.motherId || '').replace(/\D/g, '').slice(-6) || '000000'}` })
+
+  y -= 4
+  y = paragraph(c,
+    'לתשומת לבכם: יש לתאם מראש את מועד ההגעה מול בית ההחלמה. השובר אישי ואינו ניתן להעברה. לבירורים ניתן לפנות למזכירות היכל החתם סופר.',
+    W - MX, y, W - MX * 2, 10.5, SUB, 4)
+  y -= 12
+
+  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
+  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
+
+  return Buffer.from(await doc.save()).toString('base64')
+}
+
+export type { VoucherInput }
+
 export async function buildMaternityVouchers(input: VoucherInput): Promise<MailAttachment[]> {
-  // ── שובר 1 — הבראה בבית החלמה ──
-  const recoveryB64 = await renderSingle({
-    theme: ROSE,
-    badge: 'מזל טוב לרגל השמחה!',
-    title: 'שובר הבראה ליולדת',
-    intro: 'שובר זה מאשר את זכאותך לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.',
-    rows: [
-      ['שם היולדת', input.motherName],
-      ['תאריך הלידה', fmtDate(input.birthDate)],
-      ['בית החלמה', input.recoveryHome || 'ייקבע מול המזכירות'],
-    ],
-    note: 'לתשומת לבך: יש לתאם מראש את מועד ההגעה מול בית ההחלמה. השובר אישי ואינו ניתן להעברה. לבירורים ניתן לפנות למזכירות היכל החתם סופר.',
-  })
-
-  // ── שובר 2 — כרטיס מזון / מוקד ──
-  const centerList = (input.centers ?? []).map(c => {
-    const place = [c.city, c.address].filter(Boolean).join(', ')
-    return place ? `${c.name} — ${place}` : c.name
-  })
-  const cardB64 = await renderSingle({
-    theme: AMBER,
-    badge: 'הטבת יולדת',
-    title: 'שובר כרטיס מזון',
-    highlight: '600 ₪',
-    highlightSub: 'כרטיס מזון ליולדת',
-    intro: 'כיולדת את זכאית לכרטיס מזון בסך 600 ₪. ניתן לאסוף את הכרטיס באחד ממוקדי החלוקה המפורטים מטה, בהצגת שובר זה ותעודה מזהה.',
-    rows: [
-      ['שם היולדת', input.motherName],
-    ],
-    listTitle: centerList.length ? 'מוקדי החלוקה:' : undefined,
-    list: centerList.length ? centerList : ['רשימת המוקדים תימסר לך בהמשך על ידי המזכירות'],
-    note: 'השובר בתוקף לאיסוף עד 90 יום ממועד ההנפקה. השובר אישי ואינו ניתן להעברה. מומלץ לתאם מראש את מועד האיסוף מול המוקד.',
-  })
-
+  const [recovery, card] = await Promise.all([renderRecovery(input), renderFoodCard(input)])
   return [
-    { filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recoveryB64 },
-    { filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: cardB64 },
+    { filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recovery },
+    { filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card },
   ]
 }
