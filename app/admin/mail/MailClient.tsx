@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
+import DocThumb from '@/components/ui/DocThumb'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
@@ -712,22 +713,26 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
               : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
           return (
             <div key={att.attachmentId || att.url || `${att.filename}-${i}`}
-              className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700">
-              <FileText size={13} className="text-slate-400 flex-shrink-0" />
-              <span className="truncate max-w-[140px]">{att.filename}</span>
-              {att.size > 0 && <span className="text-slate-400">{formatBytes(att.size)}</span>}
-              <a href={href} target="_blank" rel="noopener noreferrer"
-                className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
-                <ExternalLink size={13} />
-              </a>
-              <a href={href} download={att.filename}
-                className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
-                <Download size={13} />
-              </a>
-              <button onClick={() => setAssigning(att)}
-                className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
-                <FolderOpen size={13} />
-              </button>
+              className="flex flex-col gap-1.5 bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-700">
+              <DocThumb href={href} rawUrl={att.url} name={att.filename} mimeType={att.mimeType} size={96} />
+              <div className="flex items-center gap-1">
+                <span className="truncate max-w-[96px]" title={att.filename}>{att.filename}</span>
+                {att.size > 0 && <span className="text-slate-400 flex-shrink-0">{formatBytes(att.size)}</span>}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <a href={href} target="_blank" rel="noopener noreferrer"
+                  className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                  <ExternalLink size={13} />
+                </a>
+                <a href={href} download={att.filename}
+                  className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+                  <Download size={13} />
+                </a>
+                <button onClick={() => setAssigning(att)}
+                  className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
+                  <FolderOpen size={13} />
+                </button>
+              </div>
             </div>
           )
         })}
