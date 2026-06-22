@@ -947,6 +947,7 @@ export default function PublicPortalPage() {
     baby_id_number: '', baby_id_type: 'id',
   })
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
+  const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
   const [babyIdError, setBabyIdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
   const [recoveryHomesSilent, setRecoveryHomesSilent] = useState<string[]>([])
@@ -1538,7 +1539,7 @@ export default function PublicPortalPage() {
   const goToBirthForm = () => {
     if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
-    setError(''); setBabyIdError('')
+    setError(''); setBabyIdError(''); setNoBabyName(false)
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
     setBirthCertFile(null)
     setDocFiles({})
@@ -2759,6 +2760,9 @@ export default function PublicPortalPage() {
                 {beneficiary.phone && (
                   <div><span className="text-slate-400 text-xs block">טלפון</span><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
                 )}
+                {beneficiary.email && (
+                  <div className="col-span-2"><span className="text-slate-400 text-xs block">מייל</span><span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span></div>
+                )}
                 {beneficiary.marital_status && (
                   <div><span className="text-slate-400 text-xs block">מצב משפחתי</span><span className="text-slate-700">{beneficiary.marital_status}</span></div>
                 )}
@@ -3149,14 +3153,30 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
-                {/* שם — אופציונלי. אם עדיין אין שם ניתן להשאיר ריק ולהשלים בכניסה הבאה */}
+                {/* שם — אופציונלי. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
                 {birthForm.baby_gender && (
                   <div className="col-span-2">
-                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, השאר ריק או הקש 'עדיין אין שם'">
-                      <TextInput value={birthForm.baby_name} onChange={setBirth('baby_name')}
-                        placeholder={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} />
-                      <button type="button" onClick={() => setBirthForm(f => ({ ...f, baby_name: '' }))}
-                        className="mt-1.5 text-xs text-indigo-600 hover:underline">עדיין אין שם — אשלים בהמשך</button>
+                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
+                      <TextInput value={birthForm.baby_name}
+                        disabled={noBabyName}
+                        className={noBabyName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
+                        onChange={e => { setBirthForm(f => ({ ...f, baby_name: e.target.value })); if (noBabyName) setNoBabyName(false) }}
+                        placeholder={noBabyName ? 'יושלם בהמשך' : (birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+                      <div className="mt-2">
+                        <button type="button"
+                          onClick={() => { const next = !noBabyName; setNoBabyName(next); if (next) setBirthForm(f => ({ ...f, baby_name: '' })) }}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                            noBabyName
+                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                              : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
+                          }`}>
+                          {noBabyName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+                          {noBabyName ? 'יושלם בהמשך' : 'עדיין אין שם'}
+                        </button>
+                        {noBabyName && (
+                          <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
+                        )}
+                      </div>
                     </Field>
                   </div>
                 )}
