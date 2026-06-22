@@ -34,7 +34,7 @@ export default function LoginPage() {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=/admin/dashboard` },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     })
     if (error) {
       setError('הכניסה עם Google נכשלה. נסה שוב או פנה למנהל המערכת.')
