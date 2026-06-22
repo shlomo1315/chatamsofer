@@ -114,5 +114,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(new URL(next, origin))
+  // כניסה תקינה — מפנים ליעד עם דגל welcome כדי שיוצג חלון "ברוך הבא" (כמו בכניסה עם סיסמה)
+  const dest = new URL(next, origin)
+  dest.searchParams.set('welcome', '1')
+  return NextResponse.redirect(dest)
 }

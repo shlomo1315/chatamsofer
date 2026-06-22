@@ -17,6 +17,18 @@ export default function WelcomeModal() {
       sessionStorage.removeItem('welcomeUser')
       setName(stored)
       setVisible(true)
+      return
+    }
+    // כניסה עם Google — מגיעה דרך callback בשרת (ללא sessionStorage). מזוהה בדגל welcome=1.
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('welcome') === '1') {
+      params.delete('welcome')
+      const clean = window.location.pathname + (params.toString() ? `?${params.toString()}` : '')
+      window.history.replaceState({}, '', clean)
+      fetch('/api/admin/me')
+        .then(r => r.json())
+        .then(d => { setName(d.profile?.full_name || 'משתמש'); setVisible(true) })
+        .catch(() => {})
     }
   }, [])
 
