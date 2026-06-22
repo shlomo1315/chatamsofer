@@ -991,6 +991,8 @@ export default function MailClient() {
   const [compose, setCompose] = useState(false)
   const [replyMsg, setReplyMsg] = useState<ParsedMessage | undefined>()
   const [search, setSearch] = useState('')
+  const searchRef = useRef('')
+  useEffect(() => { searchRef.current = search }, [search])
   const searchParams = useSearchParams()
   const [activeDepartment, setActiveDepartment] = useState<string | null>(searchParams.get('department'))
   const activeDepartmentRef = useRef<string | null>(searchParams.get('department'))
@@ -1147,12 +1149,19 @@ export default function MailClient() {
     setActiveDepartment(searchParams.get('department'))
   }, [searchParams])
 
-  // Background poll every 60s for new INBOX mail (for toast notifications) — שקט, ללא הבהוב טעינה
+  // Background poll every 25s for new mail (שקט, ללא הבהוב טעינה) + רענון מיידי
+  // כשחוזרים ללשונית/לחלון (visibilitychange/focus) — תחושת זמן-אמת כמו בג'ימייל.
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (folder === 'INBOX') load('INBOX', undefined, true)
-    }, 60_000)
-    return () => clearInterval(interval)
+    const refresh = () => load(folder, searchRef.current || undefined, true)
+    const interval = setInterval(refresh, 25_000)
+    const onFocus = () => { if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
   }, [folder, load])
 
   const openMessage = async (msg: ParsedMessage) => {
