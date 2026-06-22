@@ -74,9 +74,10 @@ type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 
 // בידוד מספרים (LTR isolate) כדי שיופיעו תקין גם כשהם בתוך טקסט עברי
 // (אחרת חלק מצופי ה-PDF הופכים מספר שאחריו עברית, למשל 600→006, 22.6.2026→6202.6.22).
-// טקסט נכתב לוגי; מספרים המוצגים לבדם (ערך נפרד / בסוף שורה) מרונדרים תקין.
+// בידוד מספרים (LTR isolate U+2066…U+2069) כדי שמספרים המשובצים בתוך טקסט עברי
+// (כתובות, שעות) יוצגו תקין במנועי bidi תקניים (כמו צופי ה-PDF הנפוצים).
 function isoNum(s: string): string {
-  return String(s ?? '')
+  return String(s ?? '').replace(/\d+(?:[.,:/\-]\d+)*/g, m => `⁦${m}⁩`)
 }
 // מדידת רוחב כולל בידוד מספרים
 function tw(c: Ctx, text: string, size: number): number {
@@ -183,6 +184,38 @@ function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], 
   return y - boxH - 16
 }
 
+// תיבת מוקדים — לכל מוקד: שם, כתובת, ימים ושעות
+type Center = { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }
+function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number {
+  const x = MX, w = W - MX * 2
+  const titleH = 24
+  const items = centers.filter(cn => cn.name)
+  const perH = 27
+  const contentH = items.length ? items.length * perH : 22
+  const boxH = titleH + contentH + 8
+  roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
+  c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: NAVY })
+  rightText(c, title, x + w - 14, y - titleH + 7, 12.5, rgb(1, 1, 1))
+
+  let ry = y - titleH - 15
+  if (!items.length) {
+    rightText(c, 'רשימת המוקדים תימסר לכם על ידי המזכירות', x + w - 16, ry, 11, SUB)
+  } else {
+    for (const cn of items) {
+      // שורה 1: נקודת זהב + שם המוקד
+      c.page.drawSvgPath('M 0 -2.2 L 2.2 0 L 0 2.2 L -2.2 0 Z', { x: x + w - 9, y: ry + 4, color: GOLD, borderWidth: 0 })
+      rightText(c, cn.name, x + w - 18, ry, 11.5, NAVY)
+      // שורה 2: כתובת · ימים שעות
+      const addr = [cn.address, cn.city].filter(Boolean).join(', ')
+      const sched = [cn.pickup_days, cn.pickup_hours].filter(Boolean).join(' ')
+      const detail = [addr, sched].filter(Boolean).join('  ·  ')
+      rightText(c, detail, x + w - 18, ry - 12.5, 9, SUB)
+      ry -= perH
+    }
+  }
+  return y - boxH - 14
+}
+
 // ── מסמך שובר בודד ──────────────────────────────────────────────────────────────
 type VoucherInput = {
   motherName: string
@@ -193,7 +226,7 @@ type VoucherInput = {
   spousePhone?: string | null
   birthDate?: string | null
   recoveryHome?: string | null
-  centers?: { name: string; city?: string | null; address?: string | null }[]
+  centers?: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
 }
 
 async function renderFoodCard(input: VoucherInput): Promise<string> {
@@ -255,15 +288,8 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     ['תאריך לידת התינוק', fmtDate(input.birthDate)],
   ], { barcode: `CS-${(input.motherId || '').replace(/\D/g, '').slice(-6) || '000000'}` })
 
-  // מוקד ותאריך איסוף
-  const centerList = (input.centers ?? []).map(cn => {
-    const place = [cn.city, cn.address].filter(Boolean).join(', ')
-    return place ? `${cn.name} — ${place}` : cn.name
-  })
-  const centerRows: [string, string][] = centerList.length
-    ? centerList.slice(0, 3).map((cn, i) => [i === 0 ? 'מוקד החלוקה' : 'מוקד נוסף', cn])
-    : [['מוקד החלוקה', 'רשימת המוקדים תימסר לכם על ידי המזכירות']]
-  y = detailsBox(c, 'מוקד ותאריך איסוף הכרטיס', y, centerRows)
+  // מוקדי האיסוף — שם, כתובת, ימים ושעות
+  y = centersBox(c, 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
 
   // הערות בתחתית
   y = paragraph(c,
