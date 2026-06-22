@@ -3303,17 +3303,17 @@ export default function PublicPortalPage() {
 
             {error && <ErrorBox message={error} />}
 
+            {/* קישור עדין ללידה שקטה */}
+            <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
+              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors">
+              <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
+            </button>
+
             <button type="submit" disabled={loading}
               className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}
-            </button>
-
-            {/* קישור עדין ללידה שקטה */}
-            <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
-              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors">
-              <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
             </button>
           </form>
         )}
