@@ -818,14 +818,24 @@ export default function PublicPortalPage() {
   const [authCodeSent, setAuthCodeSent] = useState(false)
   const [authIsSetup, setAuthIsSetup] = useState(false)
 
-  // הבקשות שהוגשו ע"י הצאצא (לתצוגה באזור האישי)
-  type MyReq = { id: string; kind: string; kindLabel: string; statusLabel: string; tone: 'pending' | 'progress' | 'approved' | 'rejected'; amount: number | null; created_at: string }
-  const [myRequests, setMyRequests] = useState<MyReq[]>([])
-  const loadMyRequests = useCallback(() => {
+  // סטטוס הבקשות נשלח למייל הרשום (במקום הצגתן בפורטל — שמירה על פרטיות)
+  const [statusSending, setStatusSending] = useState(false)
+  const [statusSentTo, setStatusSentTo] = useState<string | null>(null)
+  const [statusErr, setStatusErr] = useState('')
+  const sendStatusEmail = useCallback(async () => {
     if (!beneficiary?.id) return
-    fetch(`/api/portal/my-requests?beneficiary_id=${beneficiary.id}`).then(r => r.json()).then(d => setMyRequests(d.requests ?? [])).catch(() => {})
+    setStatusSending(true); setStatusErr('')
+    try {
+      const res = await fetch('/api/portal/request-status-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+      })
+      const d = await res.json()
+      if (res.ok) setStatusSentTo(d.email ?? '')
+      else setStatusErr(d.error || 'שליחת המייל נכשלה')
+    } catch { setStatusErr('שגיאת רשת. נסה שוב.') }
+    setStatusSending(false)
   }, [beneficiary?.id])
-  useEffect(() => { if (step === 'dashboard') loadMyRequests() }, [step, loadMyRequests])
   const [showRegSuccess, setShowRegSuccess] = useState(false)
   const [regSuccessDetails, setRegSuccessDetails] = useState<{ name: string; idNumber: string; phone: string; email: string } | null>(null)
 
@@ -2725,36 +2735,31 @@ export default function PublicPortalPage() {
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
-            {/* הבקשות שלי */}
-            {myRequests.length > 0 && (
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <FileText size={16} className="text-indigo-500" />
-                  <h3 className="font-semibold text-slate-800 text-sm">הבקשות שלי</h3>
-                  <span className="text-xs text-slate-400">({myRequests.length})</span>
+            {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות) */}
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                <FileText size={16} className="text-indigo-500" />
+                <h3 className="font-semibold text-slate-800 text-sm">סטטוס הבקשות שלי</h3>
+              </div>
+              {statusSentTo ? (
+                <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                  <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת ({statusSentTo}). בדוק/י את תיבת הדואר (כולל תיקיית ספאם).</span>
                 </div>
-                <div className="flex flex-col divide-y divide-slate-100">
-                  {myRequests.map(r => {
-                    const tone = r.tone === 'approved' ? 'bg-green-100 text-green-700'
-                      : r.tone === 'rejected' ? 'bg-red-100 text-red-700'
-                      : r.tone === 'progress' ? 'bg-blue-100 text-blue-700'
-                      : 'bg-amber-100 text-amber-700'
-                    return (
-                      <div key={`${r.kind}-${r.id}`} className="flex items-center justify-between gap-3 py-2.5">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-slate-800">{r.kindLabel}</p>
-                          <p className="text-xs text-slate-400">
-                            {new Date(r.created_at).toLocaleDateString('he-IL')}
-                            {r.amount != null ? ` · ₪${Number(r.amount).toLocaleString('he-IL')}` : ''}
-                          </p>
-                        </div>
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${tone}`}>{r.statusLabel}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Card>
-            )}
+              ) : (
+                <>
+                  <button
+                    onClick={sendStatusEmail}
+                    disabled={statusSending}
+                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm"
+                  >
+                    {statusSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                    לקבלת סטטוס הבקשה שלך למייל המעודכן במערכת על שמך — הקש כאן
+                  </button>
+                  {statusErr && <p className="text-xs text-red-600 mt-2">{statusErr}</p>}
+                </>
+              )}
+            </Card>
 
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (
