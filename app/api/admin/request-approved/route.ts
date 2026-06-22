@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const benSelect = 'id, full_name, family_name, id_number, spouse_name, marital_status, phone, city, children_count, email, eligibility_status'
+  const benSelect = 'id, full_name, family_name, id_number, spouse_name, marital_status, phone, address, city, children_count, email, eligibility_status'
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
     ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
@@ -69,8 +69,13 @@ export async function POST(request: NextRequest) {
       if ((birth.birth_type ?? 'live') !== 'silent') {
         try {
           const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
+          const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
           attachments = await buildMaternityVouchers({
             motherName,
+            motherId: b.id_number,
+            address: b.address,
+            city: b.city,
+            phone: b.phone,
             birthDate: birth.birth_date,
             recoveryHome: birth.recovery_home,
             centers,
