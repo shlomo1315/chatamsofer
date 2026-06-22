@@ -1,5 +1,8 @@
--- מוקדי חלוקה: שדות ימי ושעות איסוף + הזנת המוקדים בפועל.
+-- מוקדי חלוקה: שדות עיר/כתובת/ימים/שעות איסוף + הזנת המוקדים בפועל.
+-- city/address מתווספות כאן ליתר ביטחון (אם מיגרציית הכתובת לא רצה בסביבה זו).
 alter table public.card_centers
+  add column if not exists city         text,
+  add column if not exists address      text,
   add column if not exists pickup_days  text,
   add column if not exists pickup_hours text;
 
