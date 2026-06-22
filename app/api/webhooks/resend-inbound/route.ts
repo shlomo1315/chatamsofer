@@ -68,6 +68,29 @@ function parseAddress(raw: string): { name: string | null; email: string } {
   return { name: null, email: s.toLowerCase() }
 }
 
+// קריאת ערך כותרת (case-insensitive) — תומך במערך [{name,value}] או באובייקט {name: value}
+function getHeader(headers: unknown, name: string): string {
+  const target = name.toLowerCase()
+  if (Array.isArray(headers)) {
+    const found = headers.find((h: { name?: string }) => String(h?.name ?? '').toLowerCase() === target)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return found ? String((found as any).value ?? '') : ''
+  }
+  if (headers && typeof headers === 'object') {
+    const key = Object.keys(headers as Record<string, unknown>).find(k => k.toLowerCase() === target)
+    return key ? String((headers as Record<string, unknown>)[key] ?? '') : ''
+  }
+  return ''
+}
+
+// חילוץ כל הכתובות מתוך ערך כותרת (To/Cc יכולים להכיל כמה נמענים מופרדים בפסיק)
+function extractEmails(raw: string): string[] {
+  return String(raw ?? '')
+    .split(',')
+    .map(s => parseAddress(s).email)
+    .filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+}
+
 // פענוח חלק MIME לפי Content-Transfer-Encoding (base64 / quoted-printable)
 function decodeMimePart(content: string, encoding: string): string {
   const enc = (encoding || '').toLowerCase()
@@ -130,21 +153,25 @@ export async function POST(request: NextRequest) {
   const toRaw = Array.isArray(data.to) ? data.to[0] : data.to
   const to = parseAddress(toRaw ?? '')
 
-  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרות (Subject) אם ריק
-  const headerSubject = (() => {
-    const h = data.headers
-    if (Array.isArray(h)) {
-      const found = h.find((x: { name?: string }) => String(x?.name ?? '').toLowerCase() === 'subject')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return found ? String((found as any).value ?? '') : ''
-    }
-    if (h && typeof h === 'object') {
-      const key = Object.keys(h).find(k => k.toLowerCase() === 'subject')
-      return key ? String((h as Record<string, unknown>)[key] ?? '') : ''
-    }
-    return ''
-  })()
-  const subject = String(data.subject ?? data.Subject ?? '').trim() || headerSubject.trim()
+  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרת Subject אם ריק
+  const subject = String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim()
+
+  // ── זיהוי הנמען המקורי (לתמיכה ב-Dual Delivery מ-Google Workspace) ──
+  // כשהדואר מגיע כעותק דרך subdomain של Resend, ה-"to" של ה-envelope הוא כתובת ה-subdomain,
+  // אך הנמען האמיתי (תיבת המחלקה) נמצא בכותרות To/Cc/Delivered-To. בוחרים את הכתובת
+  // שמתאימה לתיבה מוכרת במערכת; אחרת נופלים ל-to של ה-envelope (התנהגות קודמת).
+  const envelopeRecipients = (Array.isArray(data.to) ? data.to : [data.to])
+    .map((t: unknown) => parseAddress(String(t ?? '')).email)
+    .filter(Boolean)
+  const candidates = [
+    ...envelopeRecipients,
+    ...extractEmails(getHeader(data.headers, 'to')),
+    ...extractEmails(getHeader(data.headers, 'cc')),
+    ...extractEmails(getHeader(data.headers, 'delivered-to')),
+    ...extractEmails(getHeader(data.headers, 'x-original-to')),
+    ...extractEmails(getHeader(data.headers, 'x-forwarded-to')),
+  ]
+  const resolvedToEmail = candidates.find(addr => departmentByEmail(addr)) ?? to.email
 
   const admin = getAdminClient()
 
@@ -217,7 +244,7 @@ export async function POST(request: NextRequest) {
     message_id: messageId,
     from_email: from.email,
     from_name: from.name,
-    to_email: to.email,
+    to_email: resolvedToEmail,
     subject,
     html: html ?? null,
     plain_text: plain ?? null,
@@ -236,7 +263,7 @@ export async function POST(request: NextRequest) {
   if (isNew) {
     try {
       await maybeForwardToGmail(admin, {
-        fromEmail: from.email, fromName: from.name, toEmail: to.email, subject,
+        fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject,
         html: html ?? null, plain: plain ?? null, attachments,
       })
     } catch (e) {
