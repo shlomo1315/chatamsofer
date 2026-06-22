@@ -17,8 +17,14 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const next = requestUrl.searchParams.get('next') ?? '/admin/dashboard'
 
+  // הכתובת הציבורית האמיתית — מאחורי פרוקסי/לואד-בלאנסר, requestUrl.origin עלול להיות
+  // הכתובת הפנימית (למשל http://localhost:8080). קוראים את ה-host האמיתי מהכותרות.
+  const fwdHost = request.headers.get('x-forwarded-host')
+  const fwdProto = request.headers.get('x-forwarded-proto') ?? 'https'
+  const origin = fwdHost ? `${fwdProto}://${fwdHost}` : requestUrl.origin
+
   if (!code) {
-    return NextResponse.redirect(new URL('/login?error=auth', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=auth', origin))
   }
 
   const cookieStore = await cookies()
@@ -40,7 +46,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
-    return NextResponse.redirect(new URL('/login?error=auth', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=auth', origin))
   }
 
   // Public registration flow — generate nonce and redirect to form
@@ -71,7 +77,7 @@ export async function GET(request: NextRequest) {
           status: existing.eligibility_status,
           reg_date: existing.created_at,
         })
-        return NextResponse.redirect(new URL(`/?${params}`, requestUrl.origin))
+        return NextResponse.redirect(new URL(`/?${params}`, origin))
       }
 
       const nonce = signNonce(userEmail)
@@ -80,10 +86,10 @@ export async function GET(request: NextRequest) {
         email: userEmail,
         nonce,
       })
-      return NextResponse.redirect(new URL(`/?${params}`, requestUrl.origin))
+      return NextResponse.redirect(new URL(`/?${params}`, origin))
     }
 
-    return NextResponse.redirect(new URL('/', requestUrl.origin))
+    return NextResponse.redirect(new URL('/', origin))
   }
 
   // Admin / staff flow — ודא שקיים פרופיל צוות פעיל (לפי id או אימייל, לתמיכה ב-Google)
@@ -104,9 +110,9 @@ export async function GET(request: NextRequest) {
     if (!prof || prof.is_active === false || !STAFF.includes(String(prof.role))) {
       // משתמש Google שאינו מורשה — ניתוק והודעה
       await supabase.auth.signOut()
-      return NextResponse.redirect(new URL('/login?error=unauthorized', requestUrl.origin))
+      return NextResponse.redirect(new URL('/login?error=unauthorized', origin))
     }
   }
 
-  return NextResponse.redirect(new URL(next, requestUrl.origin))
+  return NextResponse.redirect(new URL(next, origin))
 }
