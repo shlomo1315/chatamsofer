@@ -175,6 +175,8 @@ export interface CardCenter {
   notes?: string
   city?: string
   address?: string
+  pickup_days?: string | null
+  pickup_hours?: string | null
   created_at: string
   updated_at: string
   approved?: number   // אושרו וטרם נטענו

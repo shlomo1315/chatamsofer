@@ -5,8 +5,8 @@ import type { CardCenter } from '@/types'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 
-type Draft = { id?: string; name: string; stock: string; city: string; address: string }
-const emptyDraft: Draft = { name: '', stock: '', city: '', address: '' }
+type Draft = { id?: string; name: string; stock: string; city: string; address: string; pickup_days: string; pickup_hours: string }
+const emptyDraft: Draft = { name: '', stock: '', city: '', address: '', pickup_days: '', pickup_hours: '' }
 
 export default function CardCentersManager() {
   const { confirm, confirmDialog } = useConfirm()
@@ -30,7 +30,7 @@ export default function CardCentersManager() {
     if (!modal || !modal.name.trim()) { setErr('שם המוקד חובה'); return }
     setBusy(true); setErr('')
     const method = modal.id ? 'PATCH' : 'POST'
-    const body = { id: modal.id, name: modal.name, stock: modal.stock, city: modal.city, address: modal.address }
+    const body = { id: modal.id, name: modal.name, stock: modal.stock, city: modal.city, address: modal.address, pickup_days: modal.pickup_days, pickup_hours: modal.pickup_hours }
     const r = await fetch('/api/admin/card-centers', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const d = await r.json()
     if (d.error) { setErr(d.error) } else { setCenters(d.centers ?? []); setModal(null) }
@@ -121,7 +121,7 @@ export default function CardCentersManager() {
                     <td className={`px-5 py-4 border-l border-slate-100 ${available > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{available}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '' }) }}
+                        <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
                           className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
                         <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>
                       </div>
@@ -155,6 +155,19 @@ export default function CardCentersManager() {
                 onCityChange={city => setModal(m => m && { ...m, city })}
                 onAddressChange={address => setModal(m => m && { ...m, address })}
               />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-slate-700">ימי איסוף</label>
+                  <input value={modal.pickup_days} onChange={e => setModal(m => m && { ...m, pickup_days: e.target.value })}
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="לדוגמה: ימי שני ושלישי" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-slate-700">שעות איסוף</label>
+                  <input value={modal.pickup_hours} onChange={e => setModal(m => m && { ...m, pickup_hours: e.target.value })}
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="לדוגמה: 19:30 - 21:00" dir="ltr" />
+                </div>
+              </div>
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-700">מלאי כרטיסים</label>

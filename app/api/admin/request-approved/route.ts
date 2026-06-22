@@ -49,11 +49,11 @@ export async function POST(request: NextRequest) {
   // 1. מייל אישור הבקשה (לא חוסם)
   if (ben.email) {
     // אישור לידה → שולפים את רשימת המוקדים הפעילים לאיסוף כרטיס המזון (600 ₪)
-    let centers: { name: string; city?: string | null; address?: string | null }[] = []
+    let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
     if (type === 'maternity') {
       const { data: centerRows } = await admin
         .from('card_centers')
-        .select('name, city, address')
+        .select('name, city, address, pickup_days, pickup_hours')
         .eq('is_active', true)
         .order('name')
       centers = centerRows ?? []
