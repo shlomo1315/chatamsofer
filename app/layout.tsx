@@ -10,6 +10,8 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: 'היכל החתם סופר',
   description: 'מערכת מרכזית לניהול פעילות העמותה',
+  // מערכת ניהול ופורטל פרטי — לא לאינדוקס במנועי חיפוש (הטופס הציבורי לא יופיע בגוגל)
+  robots: { index: false, follow: false },
 }
 
 export default function RootLayout({

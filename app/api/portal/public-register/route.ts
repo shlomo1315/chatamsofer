@@ -5,6 +5,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
+import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +57,12 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // שער ההרשמה — חסום אם ההרשמה סגורה, אלא אם הוצג קוד עוקף תקין (לטסטים)
+  const gate = await getRegistrationGate(admin)
+  if (!registrationAllowed(gate, body.bypass as string | undefined)) {
+    return NextResponse.json({ error: 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.' }, { status: 403 })
+  }
 
   const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
   if (existing) return NextResponse.json({ error: 'תעודת זהות זו כבר רשומה במערכת' }, { status: 409 })

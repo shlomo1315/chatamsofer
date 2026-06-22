@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
+import { shell } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,21 +90,28 @@ export async function POST(request: NextRequest) {
         <td style="padding:11px 14px;white-space:nowrap;"><span style="display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;color:${TONE_COLOR[r.tone]};background:${TONE_BG[r.tone]};">${r.statusLabel}</span></td>
       </tr>`).join('')
 
-  const html = `
-    <div style="direction:rtl;text-align:right;font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.6;max-width:600px;">
-      <h2 style="margin:0 0 4px;color:#0f172a;font-size:20px;">שלום ${ben.full_name ?? ''},</h2>
-      <p style="margin:0 0 16px;color:#475569;">להלן סטטוס הבקשות הרשומות במערכת על שמך:</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;overflow:hidden;">
-        <thead><tr style="background:#f8fafc;color:#64748b;font-size:12px;">
-          <th style="padding:11px 14px;text-align:right;font-weight:700;">בקשה</th>
-          <th style="padding:11px 14px;text-align:right;font-weight:700;">תאריך</th>
-          <th style="padding:11px 14px;text-align:right;font-weight:700;">סכום</th>
-          <th style="padding:11px 14px;text-align:right;font-weight:700;">סטטוס</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-      <p style="margin:18px 0 0;color:#94a3b8;font-size:12px;">מייל זה נשלח לבקשתך מהאזור האישי בפורטל. לשאלות ניתן להשיב להודעה זו.</p>
-    </div>`
+  const emailBody = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אזור אישי</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${ben.full_name ?? ''},</h2>
+    <p style="margin:0 0 18px;color:#475569;font-size:14px;line-height:1.7;">להלן סטטוס הבקשות הרשומות במערכת על שמך:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;overflow:hidden;">
+      <thead><tr style="background:#f8fafc;color:#64748b;font-size:12px;">
+        <th style="padding:11px 14px;text-align:right;font-weight:700;">בקשה</th>
+        <th style="padding:11px 14px;text-align:right;font-weight:700;">תאריך</th>
+        <th style="padding:11px 14px;text-align:right;font-weight:700;">סכום</th>
+        <th style="padding:11px 14px;text-align:right;font-weight:700;">סטטוס</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">מייל זה נשלח לבקשתך מהאזור האישי בפורטל. לשאלות ניתן להשיב להודעה זו.</p>`
+
+  const html = shell({
+    preheader: 'סטטוס הבקשות הרשומות במערכת על שמך',
+    accent: '#4f46e5',
+    title: 'סטטוס הבקשות שלך',
+    subtitle: 'היכל החתם סופר',
+    body: emailBody,
+  })
 
   const result = await deliverMail(ben.email, 'סטטוס הבקשות שלך — היכל החתם סופר', html, undefined, mailFor('main'))
   if (!result.ok) return NextResponse.json({ error: 'שליחת המייל נכשלה. נסה שוב מאוחר יותר.' }, { status: 500 })
