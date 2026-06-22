@@ -48,8 +48,14 @@ export default function NewMaternityPage() {
   // רשימת בתי החלמה — נטענת דינמית (כולל בתים שנוספו), עם נפילה לברירת המחדל
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES)
   useEffect(() => {
-    supabase.from('recovery_homes').select('name').order('name').then(({ data }) => {
-      if (data && data.length) setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...data.map((r: { name: string }) => r.name)])])
+    // לידה רגילה — מציגים בתי החלמה לכלל היולדות / "גם וגם" (לא silent-בלבד)
+    supabase.from('recovery_homes').select('*').order('name').then(({ data }) => {
+      if (data && data.length) {
+        const allowed = (data as { name?: string; availability?: string }[])
+          .filter(r => r.name && (r.availability ?? 'regular') !== 'silent')
+          .map(r => r.name as string)
+        setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...allowed])])
+      }
     })
   }, [supabase])
 

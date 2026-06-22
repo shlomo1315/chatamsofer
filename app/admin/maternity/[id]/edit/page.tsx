@@ -27,8 +27,13 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES)
   useEffect(() => {
-    supabase.from('recovery_homes').select('name').order('name').then(({ data }) => {
-      if (data && data.length) setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...data.map((r: { name: string }) => r.name)])])
+    supabase.from('recovery_homes').select('*').order('name').then(({ data }) => {
+      if (data && data.length) {
+        const allowed = (data as { name?: string; availability?: string }[])
+          .filter(r => r.name && (r.availability ?? 'regular') !== 'silent')
+          .map(r => r.name as string)
+        setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...allowed])])
+      }
     })
   }, [supabase])
   const [loading, setLoading] = useState(true)

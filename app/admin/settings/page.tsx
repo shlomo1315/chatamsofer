@@ -25,20 +25,26 @@ async function getProfiles(): Promise<Profile[]> {
 // רשימת בתי ההחלמה הקבועה — תמיד מוצגת, גם אם אין כרגע אף יולדת בבית מסוים
 const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
-async function getRecoveryHomes(): Promise<string[]> {
-  if (!isSupabaseConfigured()) return RECOVERY_HOMES
+async function getRecoveryHomes(): Promise<{ name: string; availability: string }[]> {
+  if (!isSupabaseConfigured()) return RECOVERY_HOMES.map(name => ({ name, availability: 'regular' }))
   const supabase = await createClient()
   const [homesTable, maternity] = await Promise.all([
-    supabase.from('recovery_homes').select('name').order('name'),
+    // select('*') — עמיד גם אם עמודת availability טרם נוספה
+    supabase.from('recovery_homes').select('*').order('name'),
     supabase.from('maternity_aids').select('recovery_home').not('recovery_home', 'is', null),
   ])
   // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
   if (homesTable.error && homesTable.error.code !== '42P01') throw homesTable.error
   if (maternity.error) throw maternity.error
-  const fromTable = (homesTable.data ?? []).map((r: { name: string }) => r.name).filter(Boolean)
-  const fromMaternity = (maternity.data ?? []).map((r: { recovery_home: string }) => r.recovery_home).filter(Boolean)
-  // איחוד: ברירת מחדל + טבלת הבתים + בתים שנמצאו בתיקי לידה
-  return [...new Set([...RECOVERY_HOMES, ...fromTable, ...fromMaternity])]
+  const map = new Map<string, string>()
+  for (const n of RECOVERY_HOMES) map.set(n, 'regular')
+  for (const r of (homesTable.data ?? []) as { name?: string; availability?: string }[]) {
+    if (r.name) map.set(r.name, r.availability ?? 'regular')
+  }
+  for (const r of (maternity.data ?? []) as { recovery_home: string }[]) {
+    if (r.recovery_home && !map.has(r.recovery_home)) map.set(r.recovery_home, 'regular')
+  }
+  return [...map.entries()].map(([name, availability]) => ({ name, availability }))
 }
 
 export default async function SettingsPage() {
