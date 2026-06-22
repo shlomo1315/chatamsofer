@@ -98,7 +98,18 @@ function decodeMimePart(content: string, encoding: string): string {
   try {
     if (enc.includes('base64')) return Buffer.from(content.replace(/\s+/g, ''), 'base64').toString('utf8')
     if (enc.includes('quoted-printable')) {
-      return content.replace(/=\r?\n/g, '').replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+      // פענוח נכון של UTF-8 (עברית): אוספים בייטים ואז מפענחים כ-UTF-8, ולא תו-תו
+      const cleaned = content.replace(/=\r?\n/g, '')
+      const bytes: number[] = []
+      for (let i = 0; i < cleaned.length; i++) {
+        const c = cleaned[i]
+        if (c === '=' && /^[0-9A-Fa-f]{2}$/.test(cleaned.slice(i + 1, i + 3))) {
+          bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16)); i += 2
+        } else {
+          bytes.push(cleaned.charCodeAt(i) & 0xff)
+        }
+      }
+      return Buffer.from(bytes).toString('utf8')
     }
   } catch { /* נופלים לתוכן הגולמי */ }
   return content
@@ -204,6 +215,7 @@ export async function POST(request: NextRequest) {
   const emailId = String(data.email_id ?? data.emailId ?? data.id ?? '').trim() || null
   let fetchedHtml: string | null = null
   let fetchedText: string | null = null
+  let fetchedRawUrl: string | null = null
   let fetchedAtts: { filename: string; mimeType: string; downloadUrl: string }[] = []
   if (emailId && process.env.RESEND_API_KEY) {
     try {
@@ -214,6 +226,8 @@ export async function POST(request: NextRequest) {
       if (e) {
         fetchedHtml = e.html ?? null
         fetchedText = e.text ?? null
+        // לעיתים (במיוחד במייל מ-Gmail/multipart) Resend אינו מפרק html/text ומספק רק MIME גולמי
+        fetchedRawUrl = e.raw?.download_url ?? null
         if (Array.isArray(e.attachments) && e.attachments.length) {
           try {
             const list = await resend.emails.receiving.attachments.list({ emailId })
@@ -308,7 +322,24 @@ export async function POST(request: NextRequest) {
     ?? pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody', 'Html')
   let plain = (fetchedText && fetchedText.trim() ? fetchedText : null)
     ?? pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody', 'Text')
-  // אם אין גוף מפורק אך יש MIME גולמי — מחלצים ממנו
+  // אם Resend לא פירק את הגוף אך סיפק MIME גולמי (קישור הורדה) — שולפים ומפרקים בעצמנו.
+  // זהו המקרה הנפוץ במייל מ-Gmail (multipart/alternative) שהגיע דרך משלוח כפול.
+  if ((!html || !html.trim()) && (!plain || !plain.trim()) && fetchedRawUrl) {
+    try {
+      const r = await fetch(fetchedRawUrl)
+      if (r.ok) {
+        const rawMime = await r.text()
+        const ex = extractFromRawMime(rawMime)
+        if (ex.html) html = ex.html
+        if (ex.text) plain = ex.text
+      } else {
+        console.error('[resend-inbound] raw MIME download status:', r.status)
+      }
+    } catch (e) {
+      console.error('[resend-inbound] raw MIME fetch failed:', e instanceof Error ? e.message : String(e))
+    }
+  }
+  // אם אין גוף מפורק אך יש MIME גולמי בתוך ה-payload — מחלצים ממנו
   if (!html && !plain) {
     const raw = pickStr('raw', 'email', 'message', 'mime', 'body', 'rawEmail', 'raw_email')
       ?? deepFindString(data, /^(raw|mime|rawEmail|raw_email)$/i)
@@ -320,6 +351,20 @@ export async function POST(request: NextRequest) {
   if (!html && !plain) {
     console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
   }
+
+  // אבחון מקור הגוף — מאיפה הגיע (Resend html/text / raw MIME) ומה האורך הסופי
+  try {
+    await admin.from('app_settings').upsert({
+      key: 'mail_inbound_last_body_diag',
+      value: JSON.stringify({
+        at: new Date().toISOString(), emailId,
+        fetchedHtmlLen: (fetchedHtml ?? '').length, fetchedTextLen: (fetchedText ?? '').length,
+        hadRawUrl: !!fetchedRawUrl, finalHtmlLen: (html ?? '').length, finalTextLen: (plain ?? '').length,
+        attachments: attachments.length,
+      }),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'key' })
+  } catch { /* אבחון בלבד */ }
 
   const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,

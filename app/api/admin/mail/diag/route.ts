@@ -41,9 +41,12 @@ export async function GET() {
 
   // אבחון: ה-payload האחרון שהגיע ל-webhook הנכנס (כדי לאתר היכן נמצא גוף ההודעה)
   let lastPayload: unknown = null
+  let lastBodyDiag: unknown = null
   try {
     const { data: p } = await admin.from('app_settings').select('value').eq('key', 'mail_inbound_last_payload').maybeSingle()
     if (p?.value) { try { lastPayload = JSON.parse(p.value) } catch { lastPayload = p.value } }
+    const { data: bd } = await admin.from('app_settings').select('value').eq('key', 'mail_inbound_last_body_diag').maybeSingle()
+    if (bd?.value) { try { lastBodyDiag = JSON.parse(bd.value) } catch { lastBodyDiag = bd.value } }
   } catch { /* ignore */ }
 
   return NextResponse.json({
@@ -65,6 +68,7 @@ export async function GET() {
       })),
     },
     lastInboundPayload: lastPayload,
+    lastBodyDiag,
     sent: {
       tableExists: !sent.error,
       error: sent.error?.message ?? null,
