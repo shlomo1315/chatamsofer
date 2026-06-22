@@ -2991,22 +2991,6 @@ export default function PublicPortalPage() {
                   </button>
                 )}
 
-                {canRequestBirth && (
-                  <button
-                    onClick={() => { setError(''); setShowSilentInfo(true) }}
-                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-rose-300 hover:bg-rose-50 transition-colors text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-rose-200 transition-colors">
-                      <Heart size={22} className="text-rose-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">בקשה לאחר לידה שקטה</p>
-                      <p className="text-xs text-slate-500 mt-0.5">סיוע והבראה לאחר לידה שקטה (משבוע 22)</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-rose-400" />
-                  </button>
-                )}
-
                 <button
                   onClick={goToLoanForm}
                   className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
@@ -3324,6 +3308,12 @@ export default function PublicPortalPage() {
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}
+            </button>
+
+            {/* קישור עדין ללידה שקטה */}
+            <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
+              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors">
+              <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
             </button>
           </form>
         )}

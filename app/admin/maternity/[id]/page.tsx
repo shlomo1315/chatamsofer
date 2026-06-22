@@ -386,15 +386,19 @@ function DocCard({ label, url }: { label: string; url?: string }) {
     </div>
   )
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
+  const isPdf = /\.pdf(\?|$)/i.test(url)
   const href = docViewUrl(url)
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={label} className="w-full h-20 object-cover rounded-lg bg-slate-100" />
+        <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+      ) : isPdf ? (
+        <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
+          className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
       ) : (
-        <div className="w-full h-20 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+        <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={24} className="text-slate-400" />
         </div>
       )}
