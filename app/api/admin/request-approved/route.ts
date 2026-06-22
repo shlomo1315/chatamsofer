@@ -36,13 +36,13 @@ export async function POST(request: NextRequest) {
   const benSelect = 'id, full_name, family_name, id_number, spouse_name, marital_status, phone, city, children_count, email, eligibility_status'
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
-    ? `amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
+    ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
     : `baby_name, baby_gender, birth_date, recovery_home, beneficiary:beneficiaries(${benSelect})`
 
   const { data: req, error } = await admin.from(table).select(reqSelect).eq('id', id).maybeSingle()
   if (error || !req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
 
-  const ben = (req as Record<string, unknown>).beneficiary as (RequestApprovedBeneficiary & { id?: string; email?: string | null; eligibility_status?: string }) | null
+  const ben = (req as unknown as Record<string, unknown>).beneficiary as (RequestApprovedBeneficiary & { id?: string; email?: string | null; eligibility_status?: string }) | null
   if (!ben?.id) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
 
   // 1. מייל אישור הבקשה (לא חוסם)
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
       centers = centerRows ?? []
     }
     const mail = type === 'loan'
-      ? loanApprovedEmail(ben, req as { amount?: number; installments?: number; monthly_payment?: number; purpose?: string })
-      : birthApprovedEmail(ben, req as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, centers)
+      ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
+      : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, centers)
     deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor(type === 'loan' ? 'gemach' : 'maternity')).catch(e => console.error('[request-approved] mail failed:', e))
   }
 
