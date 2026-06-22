@@ -361,17 +361,27 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                   </button>
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full text-sm text-right border-collapse">
+                  <table className="w-full table-fixed text-sm text-right border-collapse">
+                    <colgroup>
+                      <col style={{ width: '17%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '15%' }} />
+                      <col style={{ width: '11%' }} />
+                      <col style={{ width: '7%' }} />
+                      <col style={{ width: '10%' }} />
+                    </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">שם</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">ת.ז.</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">טלפון</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">מייל</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">מטרה</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">סכום מאושר</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap text-center">תשלומים</th>
-                        <th className="px-4 py-3 font-semibold whitespace-nowrap">סטטוס</th>
+                        <th className="px-2.5 py-2.5 font-semibold">שם</th>
+                        <th className="px-2.5 py-2.5 font-semibold">ת.ז.</th>
+                        <th className="px-2.5 py-2.5 font-semibold">טלפון</th>
+                        <th className="px-2.5 py-2.5 font-semibold">מייל</th>
+                        <th className="px-2.5 py-2.5 font-semibold">מטרה</th>
+                        <th className="px-2.5 py-2.5 font-semibold">סכום מאושר</th>
+                        <th className="px-2.5 py-2.5 font-semibold text-center">תשלומים</th>
+                        <th className="px-2.5 py-2.5 font-semibold">סטטוס</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -379,28 +389,28 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                         const isDone = !!l.disbursed_at
                         return (
                           <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
-                            <td className="px-4 py-3 align-middle">
-                              <div className="font-semibold text-slate-900 whitespace-nowrap">{borrowerName(l.beneficiary)}</div>
+                            <td className="px-2.5 py-2.5 align-middle">
+                              <div className="font-semibold text-slate-900 break-words">{borrowerName(l.beneficiary)}</div>
                               {l.beneficiary?.city && <div className="text-xs text-slate-400 mt-0.5">{l.beneficiary.city}</div>}
                             </td>
-                            <td className="px-4 py-3 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
-                            <td className="px-4 py-3 align-middle whitespace-nowrap">
+                            <td className="px-2.5 py-2.5 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
+                            <td className="px-2.5 py-2.5 align-middle whitespace-nowrap">
                               {l.beneficiary?.phone
                                 ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{l.beneficiary.phone}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-4 py-3 align-middle">
+                            <td className="px-2.5 py-2.5 align-middle">
                               {l.beneficiary?.email
-                                ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600">{l.beneficiary.email}</a>
+                                ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 break-all text-xs">{l.beneficiary.email}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-4 py-3 align-middle text-slate-600 max-w-[220px] truncate" title={l.purpose ?? ''}>{l.purpose || '—'}</td>
-                            <td className="px-4 py-3 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
-                            <td className="px-4 py-3 align-middle text-slate-600 text-center tabular-nums">{l.installments}</td>
-                            <td className="px-4 py-3 align-middle whitespace-nowrap">
+                            <td className="px-2.5 py-2.5 align-middle text-slate-600 break-words text-xs" title={l.purpose ?? ''}>{l.purpose || '—'}</td>
+                            <td className="px-2.5 py-2.5 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
+                            <td className="px-2.5 py-2.5 align-middle text-slate-600 text-center tabular-nums">{l.installments}</td>
+                            <td className="px-2.5 py-2.5 align-middle">
                               {isDone
-                                ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1"><CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}</span>
-                                : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-xs font-semibold px-3 py-1.5 shadow-sm shadow-indigo-200 hover:opacity-90 transition-opacity"><Clock3 size={13} /> סמן כבוצעה</button>}
+                                ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1"><CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}</span>
+                                : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-l from-indigo-600 to-violet-600 text-white text-xs font-semibold px-2.5 py-1.5 shadow-sm shadow-indigo-200 hover:opacity-90 transition-opacity"><Clock3 size={13} /> סמן כבוצעה</button>}
                             </td>
                           </tr>
                         )
