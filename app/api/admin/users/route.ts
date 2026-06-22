@@ -40,12 +40,14 @@ export async function POST(request: NextRequest) {
 
   if (!full_name) return NextResponse.json({ error: 'שם מלא חובה' }, { status: 400 })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ error: 'אימייל לא תקין' }, { status: 400 })
-  if (password.length < 6) return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים' }, { status: 400 })
+  // סיסמה אופציונלית — משתמש "כניסה עם Google" אינו צריך סיסמה (יתחבר עם חשבון Google באותו אימייל).
+  if (password && password.length < 6) return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים' }, { status: 400 })
   if (!VALID_ROLES.includes(role)) return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
 
-  // יצירת משתמש האימות
+  // יצירת משתמש האימות — עם סיסמה אם הוזנה, אחרת ללא (כניסה עם Google בלבד)
   const { data: created, error: authErr } = await admin.auth.admin.createUser({
-    email, password, email_confirm: true, user_metadata: { full_name },
+    email, email_confirm: true, user_metadata: { full_name },
+    ...(password ? { password } : {}),
   })
   if (authErr || !created?.user) {
     const msg = authErr?.message ?? 'שגיאה ביצירת המשתמש'

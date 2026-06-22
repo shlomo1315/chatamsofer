@@ -86,6 +86,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/', requestUrl.origin))
   }
 
-  // Admin / staff flow
+  // Admin / staff flow — ודא שקיים פרופיל צוות פעיל (לפי id או אימייל, לתמיכה ב-Google)
+  const user = data.session?.user
+  if (user) {
+    const adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
+    let prof: { is_active?: boolean | null; role?: string | null } | null = null
+    const byId = await adminClient.from('profiles').select('is_active, role').eq('id', user.id).maybeSingle()
+    prof = byId.data
+    if (!prof && user.email) {
+      const byEmail = await adminClient.from('profiles').select('is_active, role').ilike('email', user.email).maybeSingle()
+      prof = byEmail.data
+    }
+    const STAFF = ['admin', 'secretary', 'reviewer', 'collections']
+    if (!prof || prof.is_active === false || !STAFF.includes(String(prof.role))) {
+      // משתמש Google שאינו מורשה — ניתוק והודעה
+      await supabase.auth.signOut()
+      return NextResponse.redirect(new URL('/login?error=unauthorized', requestUrl.origin))
+    }
+  }
+
   return NextResponse.redirect(new URL(next, requestUrl.origin))
 }

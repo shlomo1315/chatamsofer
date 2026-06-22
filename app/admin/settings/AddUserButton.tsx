@@ -138,7 +138,7 @@ export default function AddUserButton() {
                     className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-slate-600">סיסמה <span className="text-red-500">*</span> <span className="font-normal text-slate-400">(לפחות 6 תווים)</span></label>
+                  <label className="text-xs font-medium text-slate-600">סיסמה <span className="font-normal text-slate-400">(אופציונלי — לכניסה עם Google השאר ריק)</span></label>
                   <div className="relative">
                     <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} dir="ltr"
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -260,7 +260,7 @@ export default function AddUserButton() {
 
                 <div className="flex gap-2 justify-end mt-1">
                   <button onClick={close} disabled={saving} className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50">ביטול</button>
-                  <button onClick={submit} disabled={saving || !fullName.trim() || !email.trim() || !phone.trim() || password.length < 6}
+                  <button onClick={submit} disabled={saving || !fullName.trim() || !email.trim() || !phone.trim() || (password.length > 0 && password.length < 6)}
                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />} צור משתמש
                   </button>

@@ -61,11 +61,17 @@ export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffCon
   if (!admin) return null
 
   // select('*') בכוונה — עמיד גם אם עמודות חדשות (mail_only/allowed_mailboxes) טרם נוספו במסד
-  const { data: profile } = await admin
+  let { data: profile } = await admin
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .maybeSingle()
+
+  // נפילה-לאחור לפי אימייל — תמיכה בכניסה עם Google כאשר זהות ה-auth אינה מקושרת לאותו id
+  if (!profile && user.email) {
+    const r = await admin.from('profiles').select('*').ilike('email', user.email).maybeSingle()
+    profile = r.data
+  }
 
   if (!profile || profile.is_active === false) return null
   if (!STAFF_ROLES.includes(profile.role as StaffRole)) return null
