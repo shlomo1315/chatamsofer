@@ -113,20 +113,6 @@ function goldDivider(c: Ctx, cx: number, y: number, half = 70) {
   c.page.drawLine({ start: { x: cx - half, y }, end: { x: cx + half, y }, thickness: 1, color: GOLD })
   c.page.drawSvgPath('M 0 -3 L 3 0 L 0 3 L -3 0 Z', { x: cx, y, color: GOLD, borderWidth: 0 })
 }
-// "ברקוד" דקורטיבי — פסים אנכיים נגזרים ממחרוזת, עם מספר מתחת
-function barcode(c: Ctx, code: string, xRight: number, yTop: number, width: number, height: number) {
-  let seed = 0
-  for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) & 0xffff
-  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed >> 8) / 0x7fffff }
-  let x = xRight - width
-  const bottom = yTop - height
-  while (x < xRight - 1) {
-    const bw = 0.8 + rng() * 2.2
-    if (rng() > 0.45) c.page.drawRectangle({ x, y: bottom, width: bw, height, color: INK })
-    x += bw + (0.6 + rng() * 1.6)
-  }
-  centerText(c, code, xRight - width / 2, bottom - 12, 9, INK)
-}
 
 // כותרת עליונה משותפת (לוגו + שם הארגון על רקע כחול)
 function drawHeader(c: Ctx, subtitle: string): number {
@@ -154,9 +140,8 @@ function drawHeader(c: Ctx, subtitle: string): number {
 }
 
 // תיבת פרטים עם כותרת מודגשת ושורות label/value
-function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], opts?: { barcode?: string }): number {
-  const padX = 18
-  const rowH = 22
+function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][]): number {
+  const rowH = 20
   const titleH = 26
   const boxH = titleH + rows.length * rowH + 14
   const x = MX
@@ -168,7 +153,6 @@ function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], 
 
   let ry = y - titleH - 18
   const valRight = x + w - 16
-  const barcodeReserve = opts?.barcode ? 150 : 0
   for (const [label, value] of rows) {
     // קודם הכותרת (label) בצד ימין, ואחריה הערך (value) משמאלה — "שם היולדת: ויסברג גיטי"
     const labelText = `${label}: `
@@ -176,10 +160,6 @@ function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], 
     const lW = tw(c, labelText, 12)
     rightText(c, value || '—', valRight - lW, ry, 12, INK)
     ry -= rowH
-  }
-  // ברקוד בצד שמאל של התיבה
-  if (opts?.barcode) {
-    barcode(c, opts.barcode, x + 16 + barcodeReserve - 10, y - titleH - 22, barcodeReserve - 20, 46)
   }
   return y - boxH - 16
 }
@@ -190,7 +170,7 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   const x = MX, w = W - MX * 2
   const titleH = 24
   const items = centers.filter(cn => cn.name)
-  const perH = 27
+  const perH = 23
   const contentH = items.length ? items.length * perH : 22
   const boxH = titleH + contentH + 8
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
@@ -245,38 +225,38 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   y -= 24
 
   // כותרת ראשית
-  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 22, NAVY)
-  y -= 12
-  goldDivider(c, W / 2, y); y -= 26
+  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 21, NAVY)
+  y -= 11
+  goldDivider(c, W / 2, y); y -= 21
 
   // לכבוד
-  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 24
+  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 21
 
   // פסקת פתיחה (ללא סכום בתוך המשפט — הסכום מוצג כשדה נפרד כדי שיוצג תקין)
   y = paragraph(c,
     'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
-    W - MX, y, W - MX * 2, 12.5, SUB, 6)
-  y -= 6
+    W - MX, y, W - MX * 2, 12, SUB, 5)
+  y -= 3
 
   // סכום הכרטיס — תיבת הדגשה (המספר לבדו, מוצג תקין)
-  const amH = 38
+  const amH = 32
   c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
   // מצויר כך שייקרא "600 ש"ח": המספר לבדו (מוצג תקין) מימין, ו-ש"ח לשמאלו
   const amtLabel = 'סכום טעינת הכרטיס: '
-  rightText(c, amtLabel, W - MX - 14, y - 24, 14, NAVY)
+  rightText(c, amtLabel, W - MX - 14, y - 21, 14, NAVY)
   const amtLabelW = c.font.widthOfTextAtSize(amtLabel, 14)
   const numRight = W - MX - 14 - amtLabelW - 4
-  rightText(c, '600', numRight, y - 25, 18, NAVY)
+  rightText(c, '600', numRight, y - 22, 18, NAVY)
   const numW = c.font.widthOfTextAtSize('600', 18)
-  rightText(c, 'ש"ח', numRight - numW - 5, y - 24, 14, NAVY)
-  y = y - amH - 14
+  rightText(c, 'ש"ח', numRight - numW - 12, y - 21, 14, NAVY)
+  y = y - amH - 10
 
   // אזהרה אדומה
-  const warnH = 44
+  const warnH = 40
   c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
-  let wy = y - 16
+  let wy = y - 15
   wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 12, RED, 4)
-  y = y - warnH - 18
+  y = y - warnH - 12
 
   // פרטי היולדת
   y = detailsBox(c, 'פרטי היולדת', y, [
@@ -286,7 +266,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     ['עיר', input.city || '—'],
     ['טלפון', input.phone || '—'],
     ['תאריך לידת התינוק', fmtDate(input.birthDate)],
-  ], { barcode: `CS-${(input.motherId || '').replace(/\D/g, '').slice(-6) || '000000'}` })
+  ])
 
   // מוקדי האיסוף — שם, כתובת, ימים ושעות
   y = centersBox(c, 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
@@ -294,12 +274,13 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // הערות בתחתית
   y = paragraph(c,
     'הכרטיס בתוקף לשימוש עד 6 שבועות ממועד הלידה, ורק עבור רכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
-    W - MX, y, W - MX * 2, 10.5, SUB, 4)
-  y -= 10
+    W - MX, y, W - MX * 2, 10, SUB, 3)
+  y -= 6
 
-  // ברכה וחתימה
-  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
-  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
+  // ברכה וחתימה — לא יורד מתחת לשולי המסגרת (מינימום y=52)
+  const blessY = Math.max(y, 52)
+  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 12, NAVY)
+  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 16, 10.5, SUB)
 
   return Buffer.from(await doc.save()).toString('base64')
 }
@@ -336,7 +317,7 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
     ['תאריך הלידה', fmtDate(input.birthDate)],
     ['בית החלמה', input.recoveryHome || 'ייקבע מול המזכירות'],
     ['טלפון', input.phone || '—'],
-  ], { barcode: `CS-${(input.motherId || '').replace(/\D/g, '').slice(-6) || '000000'}` })
+  ])
 
   y -= 4
   y = paragraph(c,
