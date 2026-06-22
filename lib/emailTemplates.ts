@@ -79,7 +79,7 @@ function detailRow(label: string, value?: string | null): string {
 }
 
 // ─── מעטפת ───────────────────────────────────────────────────────────────────
-function shell(opts: {
+export function shell(opts: {
   preheader?: string
   accent: string      // hex colour for top bar + buttons
   title: string

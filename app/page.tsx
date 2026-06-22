@@ -961,6 +961,16 @@ export default function PublicPortalPage() {
     }).catch(() => {})
   }, [])
 
+  // שער ההרשמה הציבורית — סגור/פתוח (+ קוד עוקף סודי ?signup=CODE לטסטים)
+  const [registrationOpen, setRegistrationOpen] = useState(true)
+  const [signupCode, setSignupCode] = useState('')
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('signup') ?? ''
+    setSignupCode(code)
+    fetch(`/api/portal/registration-status${code ? `?signup=${encodeURIComponent(code)}` : ''}`)
+      .then(r => r.json()).then(d => setRegistrationOpen(d.open !== false)).catch(() => {})
+  }, [])
+
   // Loan request form
   const [loanForm, setLoanForm] = useState({
     amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '',
@@ -1295,6 +1305,7 @@ export default function PublicPortalPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...regForm,
+          bypass: signupCode,
           id_doc_type: regDocType,
           children_count: children.length,
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
@@ -2004,13 +2015,19 @@ export default function PublicPortalPage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => { setError(''); setStep('register') }}
-                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
-                >
-                  <User size={18} />
-                  רישום למערכת
-                </button>
+                {registrationOpen ? (
+                  <button
+                    onClick={() => { setError(''); setStep('register') }}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                  >
+                    <User size={18} />
+                    רישום למערכת
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed">
+                    ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.
+                  </div>
+                )}
                 <button
                   onClick={backToHome}
                   className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm"
@@ -2047,24 +2064,30 @@ export default function PublicPortalPage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3">
-                <button
-                  onClick={() => {
-                    // שמירת נתוני הילד — ימולאו לבעל/אשה לפי המין רק אחרי בחירת מצב משפחתי
-                    setChildSelf(childMatch.childData)
-                    setRegForm(f => ({
-                      ...f,
-                      id_number: '', full_name: '', birth_date: '', gender: '', marital_status: '',
-                      spouse_name: '', spouse_id_number: '', spouse_birth_date: '',
-                    }))
-                    setChildParentLineage(childMatch.parentLineage?.lineage_chain?.length ? childMatch.parentLineage : null)
-                    setError('')
-                    setStep('register')
-                  }}
-                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
-                >
-                  <User size={18} />
-                  רישום מהיר
-                </button>
+                {registrationOpen ? (
+                  <button
+                    onClick={() => {
+                      // שמירת נתוני הילד — ימולאו לבעל/אשה לפי המין רק אחרי בחירת מצב משפחתי
+                      setChildSelf(childMatch.childData)
+                      setRegForm(f => ({
+                        ...f,
+                        id_number: '', full_name: '', birth_date: '', gender: '', marital_status: '',
+                        spouse_name: '', spouse_id_number: '', spouse_birth_date: '',
+                      }))
+                      setChildParentLineage(childMatch.parentLineage?.lineage_chain?.length ? childMatch.parentLineage : null)
+                      setError('')
+                      setStep('register')
+                    }}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                  >
+                    <User size={18} />
+                    רישום מהיר
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed">
+                    ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.
+                  </div>
+                )}
                 <button onClick={backToHome}
                   className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm">
                   <ArrowRight size={16} />

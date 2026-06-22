@@ -1,4 +1,4 @@
-import { Bell, Database, Users } from 'lucide-react'
+import { Bell, Database, Users, UserPlus } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -12,6 +12,7 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
+import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 
 async function getProfiles(): Promise<Profile[]> {
@@ -155,6 +156,17 @@ export default async function SettingsPage() {
         {/* Yemot telephony log */}
         <Card>
           <YemotCallLog />
+        </Card>
+
+        {/* Public registration gate */}
+        <Card>
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <UserPlus size={16} className="text-indigo-500" />
+            </div>
+            <h2 className="text-sm font-semibold text-slate-700">הרשמה ציבורית</h2>
+          </div>
+          <RegistrationGate />
         </Card>
 
         {/* Notifications */}
