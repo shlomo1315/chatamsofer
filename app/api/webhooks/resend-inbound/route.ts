@@ -217,11 +217,29 @@ export async function POST(request: NextRequest) {
   let fetchedText: string | null = null
   let fetchedRawUrl: string | null = null
   let fetchedAtts: { filename: string; mimeType: string; downloadUrl: string }[] = []
+  // אבחון תגובת ה-API של Resend (נשמר ל-mail_inbound_last_body_diag)
+  let getDebug: Record<string, unknown> = {}
   if (emailId && process.env.RESEND_API_KEY) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
-      const got = await resend.emails.receiving.get(emailId)
+      // ניסיון ראשון מיידי; אם ריק — ניסיון נוסף אחרי השהיה קצרה (Resend עשוי לאנדקס באיחור)
+      let got = await resend.emails.receiving.get(emailId)
+      if (!got.data?.html && !got.data?.text && !got.error) {
+        await new Promise(r => setTimeout(r, 1500))
+        got = await resend.emails.receiving.get(emailId)
+      }
       if (got.error) console.error('[resend-inbound] receiving.get error:', got.error)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gd = got.data as any
+      getDebug = {
+        hasData: !!got.data,
+        error: got.error ? String((got.error as { message?: string })?.message ?? JSON.stringify(got.error)) : null,
+        dataKeys: got.data ? Object.keys(got.data) : [],
+        htmlType: gd ? typeof gd.html : 'none',
+        textType: gd ? typeof gd.text : 'none',
+        hasRaw: !!gd?.raw,
+        attCount: Array.isArray(gd?.attachments) ? gd.attachments.length : 0,
+      }
       const e = got.data
       if (e) {
         fetchedHtml = e.html ?? null
@@ -243,6 +261,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error('[resend-inbound] receiving.get threw:', err instanceof Error ? err.message : String(err))
+      getDebug = { ...getDebug, threw: err instanceof Error ? err.message : String(err) }
     }
   }
 
@@ -361,6 +380,7 @@ export async function POST(request: NextRequest) {
         fetchedHtmlLen: (fetchedHtml ?? '').length, fetchedTextLen: (fetchedText ?? '').length,
         hadRawUrl: !!fetchedRawUrl, finalHtmlLen: (html ?? '').length, finalTextLen: (plain ?? '').length,
         attachments: attachments.length,
+        getDebug,
       }),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'key' })
