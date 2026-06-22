@@ -189,7 +189,10 @@ export async function POST(request: NextRequest) {
   // (3) נפילה-לאחור ל-to של ה-envelope.
   const knownDept = candidates.find(addr => departmentByEmail(addr))
   const orgRecipient = candidates.find(addr => addr.endsWith('@chasamsofer.info'))
-  const resolvedToEmail = knownDept ?? orgRecipient ?? to.email
+  // (4) דואר שהגיע לכתובת ה-copy של ה-subdomain (in.chasamsofer.info) ללא נמען מקורי מזוהה —
+  // משייכים ל"משרד ראשי" כדי שלא יישאר יתום מחוץ לכל התיבות.
+  const isInboundCopy = (knownDept || orgRecipient) ? false : candidates.some(a => a.endsWith('.chasamsofer.info'))
+  const resolvedToEmail = knownDept ?? orgRecipient ?? (isInboundCopy ? 'office@chasamsofer.info' : to.email)
 
   const admin = getAdminClient()
 
