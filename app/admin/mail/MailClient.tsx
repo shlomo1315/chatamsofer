@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
+import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
@@ -1149,15 +1150,22 @@ export default function MailClient() {
     setActiveDepartment(searchParams.get('department'))
   }, [searchParams])
 
-  // Background poll every 25s for new mail (שקט, ללא הבהוב טעינה) + רענון מיידי
-  // כשחוזרים ללשונית/לחלון (visibilitychange/focus) — תחושת זמן-אמת כמו בג'ימייל.
+  // רענון מיידי לכל מייל בנפרד — Supabase Realtime: כל הוספה/שינוי בטבלת המיילים
+  // (נכנס/יוצא) דוחף עדכון מיידי למסך. גיבוי: פולינג שקט כל 10ש' + רענון בחזרה לחלון.
   useEffect(() => {
     const refresh = () => load(folder, searchRef.current || undefined, true)
-    const interval = setInterval(refresh, 25_000)
+    const supabase = createClient()
+    const ch = supabase
+      .channel('mail-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_emails' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sent_emails' }, () => refresh())
+      .subscribe()
+    const interval = setInterval(refresh, 10_000)
     const onFocus = () => { if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => {
+      supabase.removeChannel(ch)
       clearInterval(interval)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
