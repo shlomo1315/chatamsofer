@@ -11,11 +11,17 @@ export async function GET() {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ profile: null })
 
-  const { data: profile } = await admin
+  let { data: profile } = await admin
     .from('profiles')
     .select('*')
     .eq('id', staff.userId)
     .maybeSingle()
+
+  // נפילה-לאחור לפי אימייל (כניסה עם Google שאינה מקושרת לאותו id)
+  if (!profile && staff.email) {
+    const r = await admin.from('profiles').select('*').ilike('email', staff.email).maybeSingle()
+    profile = r.data
+  }
 
   return NextResponse.json({ profile })
 }
