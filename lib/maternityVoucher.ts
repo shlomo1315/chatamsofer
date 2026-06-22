@@ -29,6 +29,42 @@ function fmtDate(d?: string | null): string {
   return dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// המרת מספר לגימטריה עברית (1–999)
+const GEM_ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
+const GEM_TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
+const GEM_HUND = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק']
+function gematria(n: number): string {
+  let s = GEM_HUND[Math.floor(n / 100)] || ''
+  let r = n % 100
+  if (r === 15) s += 'טו'
+  else if (r === 16) s += 'טז'
+  else { s += GEM_TENS[Math.floor(r / 10)] || ''; s += GEM_ONES[r % 10] || '' }
+  return s
+}
+// מוסיף גרש/גרשיים לפי הכללים
+function withPunct(s: string): string {
+  if (s.length === 1) return s + '׳'
+  return s.slice(0, -1) + '״' + s.slice(-1)
+}
+// תאריך עברי מלא (גימטריה) — ז׳ תמוז תשפ״ו
+function hebrewDate(d: Date): string {
+  try {
+    const day = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric' }).format(d), 10)
+    const year = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' }).format(d), 10)
+    const month = new Intl.DateTimeFormat('he-u-ca-hebrew', { month: 'long' }).format(d).replace(/[֑-ׇ]/g, '')
+    const dayG = withPunct(gematria(day))
+    const yearG = withPunct(gematria(year % 1000)) // 5786 → 786 → תשפ״ו
+    return `${dayG} ${month} ${yearG}`
+  } catch { return '' }
+}
+// שורת "הונפק בתאריך" — תאריך עברי תחילה ולועזי בסוף (המספר בסוף השורה מוצג תקין)
+function issueDateLine(): string {
+  const now = new Date()
+  const greg = now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const he = hebrewDate(now)
+  return he ? `הונפק בתאריך ${he}  ·  ${greg}` : `הונפק בתאריך ${greg}`
+}
+
 // לוגו (best-effort — אם לא נמצא, מדלגים)
 function loadLogo(): Buffer | null {
   try { return readFileSync(join(process.cwd(), 'public', 'logo.png')) } catch { return null }
@@ -36,14 +72,27 @@ function loadLogo(): Buffer | null {
 
 type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 
+// בידוד מספרים (LTR isolate) כדי שיופיעו תקין גם כשהם בתוך טקסט עברי
+// (אחרת חלק מצופי ה-PDF הופכים מספר שאחריו עברית, למשל 600→006, 22.6.2026→6202.6.22).
+// טקסט נכתב לוגי; מספרים המוצגים לבדם (ערך נפרד / בסוף שורה) מרונדרים תקין.
+function isoNum(s: string): string {
+  return String(s ?? '')
+}
+// מדידת רוחב כולל בידוד מספרים
+function tw(c: Ctx, text: string, size: number): number {
+  return c.font.widthOfTextAtSize(isoNum(text), size)
+}
+
 // ── עוזרי ציור (טקסט לוגי, יישור לימין) ─────────────────────────────────────────
 function rightText(c: Ctx, text: string, xRight: number, y: number, size: number, color: RGB) {
-  const w = c.font.widthOfTextAtSize(text, size)
-  c.page.drawText(text, { x: xRight - w, y, size, font: c.font, color })
+  const t = isoNum(text)
+  const w = c.font.widthOfTextAtSize(t, size)
+  c.page.drawText(t, { x: xRight - w, y, size, font: c.font, color })
 }
 function centerText(c: Ctx, text: string, cx: number, y: number, size: number, color: RGB) {
-  const w = c.font.widthOfTextAtSize(text, size)
-  c.page.drawText(text, { x: cx - w / 2, y, size, font: c.font, color })
+  const t = isoNum(text)
+  const w = c.font.widthOfTextAtSize(t, size)
+  c.page.drawText(t, { x: cx - w / 2, y, size, font: c.font, color })
 }
 // פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה
 function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
@@ -93,17 +142,13 @@ function drawHeader(c: Ctx, subtitle: string): number {
   c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: bandH, color: NAVY })
   c.page.drawRectangle({ x: 24, y: bandY, width: W - 48, height: 4, color: GOLD })
 
-  // לוגו בצד ימין של הפס
+  // לוגו בצד ימין של הפס; שם הארגון ממורכז לרוחב העמוד
   if (c.logo) {
     const dim = 64
     c.page.drawImage(c.logo, { x: W - 34 - dim, y: bandY + (bandH - dim) / 2, width: dim, height: dim })
-    // שם הארגון לשמאל הלוגו
-    centerText(c, 'היכל החתם סופר', (W - 48) / 2 + 24 - 30, bandY + bandH - 38, 26, rgb(1, 1, 1))
-    centerText(c, subtitle, (W - 48) / 2 + 24 - 30, bandY + bandH - 62, 13, GOLD_SOFT)
-  } else {
-    centerText(c, 'היכל החתם סופר', W / 2, bandY + bandH - 38, 26, rgb(1, 1, 1))
-    centerText(c, subtitle, W / 2, bandY + bandH - 62, 13, GOLD_SOFT)
   }
+  centerText(c, 'היכל החתם סופר', W / 2, bandY + bandH - 40, 26, rgb(1, 1, 1))
+  centerText(c, subtitle, W / 2, bandY + bandH - 64, 13, GOLD_SOFT)
   return bandY - 28
 }
 
@@ -124,11 +169,11 @@ function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][], 
   const valRight = x + w - 16
   const barcodeReserve = opts?.barcode ? 150 : 0
   for (const [label, value] of rows) {
-    // label בכחול מודגש, value בשחור — שניהם בצד ימין באותה שורה
+    // קודם הכותרת (label) בצד ימין, ואחריה הערך (value) משמאלה — "שם היולדת: ויסברג גיטי"
     const labelText = `${label}: `
-    rightText(c, value || '—', valRight, ry, 12, INK)
-    const vW = c.font.widthOfTextAtSize(value || '—', 12)
-    rightText(c, labelText, valRight - vW - 4, ry, 12, NAVY)
+    rightText(c, labelText, valRight, ry, 12, NAVY)
+    const lW = tw(c, labelText, 12)
+    rightText(c, value || '—', valRight - lW, ry, 12, INK)
     ry -= rowH
   }
   // ברקוד בצד שמאל של התיבה
@@ -163,7 +208,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
   // תאריך
-  rightText(c, `הונפק בתאריך ${new Date().toLocaleDateString('he-IL')}`, W - MX, y, 10, SUB)
+  rightText(c, issueDateLine(), W - MX, y, 10, SUB)
   y -= 24
 
   // כותרת ראשית
@@ -174,11 +219,24 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // לכבוד
   rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 24
 
-  // פסקת פתיחה
+  // פסקת פתיחה (ללא סכום בתוך המשפט — הסכום מוצג כשדה נפרד כדי שיוצג תקין)
   y = paragraph(c,
-    'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס טעון על סך 600 ש"ח לרכישת מזון מוכן.',
+    'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
     W - MX, y, W - MX * 2, 12.5, SUB, 6)
-  y -= 8
+  y -= 6
+
+  // סכום הכרטיס — תיבת הדגשה (המספר לבדו, מוצג תקין)
+  const amH = 38
+  c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
+  // מצויר כך שייקרא "600 ש"ח": המספר לבדו (מוצג תקין) מימין, ו-ש"ח לשמאלו
+  const amtLabel = 'סכום טעינת הכרטיס: '
+  rightText(c, amtLabel, W - MX - 14, y - 24, 14, NAVY)
+  const amtLabelW = c.font.widthOfTextAtSize(amtLabel, 14)
+  const numRight = W - MX - 14 - amtLabelW - 4
+  rightText(c, '600', numRight, y - 25, 18, NAVY)
+  const numW = c.font.widthOfTextAtSize('600', 18)
+  rightText(c, 'ש"ח', numRight - numW - 5, y - 24, 14, NAVY)
+  y = y - amH - 14
 
   // אזהרה אדומה
   const warnH = 44
@@ -231,7 +289,7 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
 
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
-  rightText(c, `הונפק בתאריך ${new Date().toLocaleDateString('he-IL')}`, W - MX, y, 10, SUB)
+  rightText(c, issueDateLine(), W - MX, y, 10, SUB)
   y -= 24
 
   centerText(c, 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
