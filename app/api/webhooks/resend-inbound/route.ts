@@ -235,13 +235,37 @@ export async function POST(request: NextRequest) {
     }
     return null
   }
-  let html = pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody')
-  let plain = pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody')
+  // חיפוש רקורסיבי של גוף ההודעה בכל מבנה ה-payload (לכיסוי מבנים מקוננים של ספקים שונים)
+  const deepFindString = (obj: unknown, keyRe: RegExp, depth = 0): string | null => {
+    if (!obj || depth > 5) return null
+    if (Array.isArray(obj)) {
+      for (const it of obj) { const r = deepFindString(it, keyRe, depth + 1); if (r) return r }
+      return null
+    }
+    if (typeof obj === 'object') {
+      const entries = Object.entries(obj as Record<string, unknown>)
+      // קודם בדיקת מפתחות תואמים ברמה הנוכחית
+      for (const [k, v] of entries) {
+        if (keyRe.test(k) && typeof v === 'string' && v.trim()) return v
+      }
+      // ואז ירידה לעומק
+      for (const [, v] of entries) {
+        const r = deepFindString(v, keyRe, depth + 1); if (r) return r
+      }
+    }
+    return null
+  }
+  let html = pickStr('html', 'body_html', 'body-html', 'bodyHtml', 'stripped-html', 'HtmlBody', 'Html')
+  let plain = pickStr('text', 'plain_text', 'plainText', 'body_plain', 'body-plain', 'bodyPlain', 'stripped-text', 'TextBody', 'Text')
   // אם אין גוף מפורק אך יש MIME גולמי — מחלצים ממנו
   if (!html && !plain) {
-    const raw = pickStr('raw', 'email', 'message', 'mime', 'body')
+    const raw = pickStr('raw', 'email', 'message', 'mime', 'body', 'rawEmail', 'raw_email')
+      ?? deepFindString(data, /^(raw|mime|rawEmail|raw_email)$/i)
     if (raw) { const ex = extractFromRawMime(raw); html = ex.html; plain = ex.text }
   }
+  // נפילה-לאחור אחרונה: חיפוש רקורסיבי של שדות גוף בכל מבנה ה-payload
+  if (!html) html = deepFindString(data, /^(html|body[_-]?html|htmlbody)$/i)
+  if (!plain) plain = deepFindString(data, /^(text|plain|plain[_-]?text|body[_-]?text|body[_-]?plain|textbody)$/i)
   if (!html && !plain) {
     console.warn('[resend-inbound] empty body for message', messageId, '— payload keys:', Object.keys(data).join(','))
   }

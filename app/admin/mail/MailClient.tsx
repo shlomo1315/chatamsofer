@@ -1523,8 +1523,17 @@ export default function MailClient() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(selected.body || selected.snippet) }} />
+            {(() => {
+              const safe = sanitizeEmailHtml(selected.body || '')
+              if (safe.replace(/<[^>]*>/g, '').trim()) {
+                return <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed" dangerouslySetInnerHTML={{ __html: safe }} />
+              }
+              // נפילה-לאחור: אם ה-HTML ריק לאחר סניטציה — מציגים את גוף הטקסט הגולמי
+              const fallback = (selected.bodyText || selected.snippet || '').trim()
+              return fallback
+                ? <div className="px-6 py-5 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{fallback}</div>
+                : <div className="px-6 py-10 text-sm text-slate-400 text-center">לא נמצא תוכן בגוף ההודעה.</div>
+            })()}
             <AttachmentBar attachments={selected.attachments ?? []} messageId={selected.id} senderEmail={selected.fromEmail} />
             {folder === 'INBOX' && <BeneficiaryCard email={selected.fromEmail} />}
           </div>
