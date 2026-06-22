@@ -155,6 +155,8 @@ export interface MaternityAid {
   recovery_nights?: number
   recovery_receipt_number?: string
   status: MaternityStatus
+  // 'live' = לידה רגילה (ברירת מחדל) · 'silent' = לידה שקטה
+  birth_type?: 'live' | 'silent'
   card_status?: CardStatus
   card_center_id?: string
   approved_by?: string
