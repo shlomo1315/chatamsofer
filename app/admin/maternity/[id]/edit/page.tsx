@@ -43,7 +43,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
-  const [cardNumber, setCardNumber] = useState('')
   const [certUrl, setCertUrl] = useState<string | null>(null)
   const [certFile, setCertFile] = useState<File | null>(null)
   // האם הזכאות הוארכה ידנית — אם כן, לא נדרוס את six_weeks_end בעת שמירת העריכה
@@ -68,7 +67,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         setBabyGender(data.baby_gender ?? '')
         setBabyBirthDate(data.birth_date ?? '')
         setRecoveryHome(data.recovery_home ?? '')
-        setCardNumber(data.card_number ?? '')
         setCertUrl(data.birth_certificate_url ?? null)
         setEligibilityExtended(!!data.eligibility_extended)
         const ben = data.beneficiary as { id?: string; children?: Child[] } | undefined
@@ -95,9 +93,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
     if (!babyGender) e.babyGender = 'יש לבחור מין תינוק'
     if (!babyBirthDate) e.babyBirthDate = 'תאריך לידת תינוק חובה'
     if (!recoveryHome) e.recoveryHome = 'יש לבחור בית החלמה'
-    const cardDigits = cardNumber.replace(/\D/g, '')
-    if (!cardNumber.trim()) e.cardNumber = 'מספר כרטיס נדרים חובה'
-    else if (cardDigits.length !== 16) e.cardNumber = 'מספר כרטיס נדרים חייב להכיל 16 ספרות'
     return e
   }
 
@@ -127,7 +122,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         baby_gender: babyGender || null,
         birth_certificate_url: newCertUrl ?? null,
         recovery_home: recoveryHome || null,
-        card_number: cardNumber || null,
       }
       // אם הזכאות הוארכה ידנית — שומרים על תאריך הסיום הידני ולא דורסים אותו.
       // אחרת מחשבים מחדש לפי תאריך הלידה (ברירת מחדל: 6 שבועות).
@@ -277,18 +271,6 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           )}
           <p className="text-xs text-slate-400">{UPLOAD_HINT}</p>
         </div>
-      </div>
-
-      {/* Nedarim card */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-2">
-        <label className="text-xs font-medium text-slate-600">מספר כרטיס נדרים <span className="text-red-500">*</span> <span className="font-normal text-slate-400">(16 ספרות)</span></label>
-        <input type="text" inputMode="numeric" value={cardNumber}
-          onChange={e => { setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16)); clearErr('cardNumber') }}
-          maxLength={16}
-          className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left tracking-widest ${fieldErrors.cardNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
-          dir="ltr" />
-        <p className="text-[11px] text-slate-400 text-left ltr-num">{cardNumber.replace(/\D/g, '').length}/16</p>
-        {fieldErrors.cardNumber && <p className="text-xs text-red-600">{fieldErrors.cardNumber}</p>}
       </div>
 
       {saveError && (
