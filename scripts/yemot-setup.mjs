@@ -5,15 +5,17 @@
 // הרצה (מהמחשב שלך — מקום שיש בו גישת רשת ל-call2all.co.il, Node 18+):
 //
 //   # מצב הרצה-יבשה (לא משנה כלום, רק מדפיס מה ייכתב):
-//   YEMOT_TOKEN='0771234567:הסיסמה' node scripts/yemot-setup.mjs --ext 5
+//   YEMOT_TOKEN='<הטוקן>' node scripts/yemot-setup.mjs --ext 5
 //
 //   # ביצוע בפועל:
-//   YEMOT_TOKEN='0771234567:הסיסמה' node scripts/yemot-setup.mjs --ext 5 --apply
+//   YEMOT_TOKEN='<הטוקן>' node scripts/yemot-setup.mjs --ext 5 --apply
+//
+// הטוקן: מועבר כפרמטר token לכל בקשה. תקף הן לטוקן ה-API החדש שמופק בפאנל הניהול
+// של ימות, והן לפורמט הישן של מספר-מערכת:סיסמה — הסקריפט מעביר את הערך כפי שהוא.
 //
 // פרמטרים:
 //   --ext <מספר>     מספר/נתיב השלוחה שתהפוך לשלוחת API (חובה). דוגמה: 5  או  1/2
 //   --url <כתובת>    כתובת ה-webhook. ברירת מחדל: https://chasamsofer.co.il/api/webhooks/yemot-maternity
-//   --method GET|POST  שיטת הקריאה. ברירת מחדל: POST
 //   --apply          לבצע בפועל. בלעדיו — הרצה-יבשה בלבד.
 //
 // אבטחה: אל תשים את הטוקן בתוך פקודה שנשמרת בהיסטוריה. עדיף משתנה סביבה (YEMOT_TOKEN).
@@ -29,24 +31,21 @@ function arg(name, def) {
 const token = process.env.YEMOT_TOKEN || arg('token')
 const ext = arg('ext')
 const webhookUrl = arg('url', 'https://chasamsofer.co.il/api/webhooks/yemot-maternity')
-const method = (arg('method', 'POST') || 'POST').toUpperCase()
 const apply = args.includes('--apply')
 
 function die(msg) { console.error(`\n✖ ${msg}\n`); process.exit(1) }
-if (!token) die('חסר טוקן. הגדר YEMOT_TOKEN="מספר:סיסמה" או --token "מספר:סיסמה".')
+if (!token) die('חסר טוקן. הגדר YEMOT_TOKEN="<הטוקן>" או --token "<הטוקן>".')
 if (!ext) die('חסר מספר שלוחה. הוסף --ext <מספר>. דוגמה: --ext 5')
-if (!/^(GET|POST)$/.test(method)) die('--method חייב להיות GET או POST.')
 
 const what = `ivr2:/${ext}/ext.ini`
 
 // ── תוכן ext.ini של שלוחת API ────────────────────────────────────────────────
-// זהו ההגדרה שהופכת את השלוחה לשלוחה שמנותבת ע"י שרת חיצוני (ה-webhook).
-// הערה: אם כלי "בדיקת שלוחת API" של ימות לא מצליח אחרי ההרצה — ייתכן שצריך לכוון
-// את שמות המפתחות כאן בהתאם לחשבון שלך; שנֵה רק את השורות האלה והרץ שוב.
+// type=api הופך את השלוחה לשלוחה שמנותבת ע"י שרת חיצוני (ה-webhook), ו-api_link
+// היא כתובת ה-webhook. ה-webhook תומך גם ב-GET (ברירת המחדל של ימות) וגם ב-POST.
+// אבטחה אופציונלית: אפשר להוסיף ?ApiToken=<סוד> לכתובת ולהגדיר YEMOT_WEBHOOK_SECRET ב-Railway.
 const extIni = [
-  'type=api_dialing',
-  `api_dialing_url=${webhookUrl}`,
-  `api_dialing_method=${method}`,
+  'type=api',
+  `api_link=${webhookUrl}`,
 ].join('\r\n') + '\r\n'
 
 // ── עזרי API ─────────────────────────────────────────────────────────────────
@@ -65,7 +64,6 @@ async function call(fn, params, post = false) {
 // ── זרימה ────────────────────────────────────────────────────────────────────
 console.log(`\n• שלוחה:      ${ext}  (קובץ: ${what})`)
 console.log(`• webhook:    ${webhookUrl}`)
-console.log(`• שיטה:       ${method}`)
 console.log(`• מצב:        ${apply ? 'ביצוע בפועל (--apply)' : 'הרצה-יבשה (ללא --apply)'}\n`)
 console.log('תוכן ext.ini שייכתב:')
 console.log('────────────────────────────')
