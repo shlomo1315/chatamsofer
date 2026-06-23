@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { MapPin, Loader2, RefreshCw, Check, AlertTriangle } from 'lucide-react'
+import { MapPin, Loader2, RefreshCw, Check, AlertTriangle, Plus } from 'lucide-react'
 
 // תצוגת מצב + רענון יזום של מאגר הערים והרחובות ממשרד הפנים (data.gov.il).
 export default function GovDataSettings() {
@@ -9,6 +9,8 @@ export default function GovDataSettings() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [newCity, setNewCity] = useState('')
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/gov/refresh', { cache: 'no-store' })
@@ -42,6 +44,30 @@ export default function GovDataSettings() {
       setMsg({ type: 'err', text: 'שגיאת רשת — נסה שוב' })
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  const addCity = async () => {
+    const name = newCity.trim()
+    if (!name || adding) return
+    setAdding(true); setMsg(null)
+    try {
+      const r = await fetch('/api/admin/gov/cities', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+      })
+      const d = await r.json()
+      if (!r.ok || d.ok === false) { setMsg({ type: 'err', text: d.error || 'ההוספה נכשלה' }); return }
+      setCount(d.count ?? count)
+      setNewCity('')
+      setMsg({
+        type: 'ok',
+        text: `העיר "${name}" נוספה${d.streets ? ` (${d.streets} רחובות מהמאגר)` : ' — אין רחובות ב-data.gov.il, ניתן להזין רחוב ידנית בטופס'}`,
+      })
+      fetch('/api/gov/cities?fresh=1').catch(() => {})
+    } catch {
+      setMsg({ type: 'err', text: 'שגיאת רשת — נסה שוב' })
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -95,6 +121,30 @@ export default function GovDataSettings() {
               רענן עכשיו ממשרד הפנים
             </button>
             <p className="text-xs text-slate-400">מושך את רשימת היישובים המלאה והעדכנית. אם חסרות ערים — לחיצה כאן תשלים אותן.</p>
+          </div>
+
+          {/* הוספת עיר ידנית — לכיסוי יישובים שאינם ב-data.gov.il (למשל יו"ש) */}
+          <div className="border-t border-slate-100 pt-3">
+            <p className="text-xs font-medium text-slate-600 mb-1.5">הוספת עיר ידנית</p>
+            <div className="flex items-center gap-2">
+              <input
+                value={newCity}
+                onChange={(e) => setNewCity(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') addCity() }}
+                placeholder="לדוגמה: עמנואל"
+                dir="rtl"
+                className="flex-1 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-300"
+              />
+              <button
+                onClick={addCity}
+                disabled={adding || !newCity.trim()}
+                className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg px-3 py-2 transition-colors whitespace-nowrap"
+              >
+                {adding ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                הוסף
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1.5">עיר שתתווסף ידנית נשמרת ולא תימחק ברענון האוטומטי.</p>
           </div>
         </div>
       )}
