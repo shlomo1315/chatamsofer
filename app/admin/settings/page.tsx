@@ -1,5 +1,5 @@
-import { Bell, Database, Users, UserPlus } from 'lucide-react'
-import Card from '@/components/ui/Card'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText } from 'lucide-react'
+import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile, ROLE_LABELS } from '@/types'
@@ -56,15 +56,9 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6 max-w-3xl">
       <PageHeader title="הגדרות" subtitle="ניהול המערכת והמשתמשים" />
 
-      <div className="grid grid-cols-1 gap-5">
+      <div className="flex flex-col gap-3">
         {/* Supabase connection */}
-        <Card>
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-              <Database size={16} className="text-indigo-500" />
-            </div>
-            <h2 className="text-sm font-semibold text-slate-700">חיבור Supabase</h2>
-          </div>
+        <Collapsible title="חיבור Supabase" icon={<Database size={16} className="text-indigo-500" />}>
           <div className={`rounded-xl p-4 text-sm ${isSupabaseConfigured() ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
             {isSupabaseConfigured() ? (
               <div>
@@ -78,27 +72,18 @@ export default async function SettingsPage() {
               </div>
             )}
           </div>
-        </Card>
+        </Collapsible>
 
         {/* Users table */}
-        <Card padding="none">
-          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-                <Users size={16} className="text-indigo-500" />
-              </div>
-              <h2 className="text-sm font-semibold text-slate-700">משתמשי מערכת</h2>
-            </div>
-            <AddUserButton />
-          </div>
+        <Collapsible title={`משתמשי מערכת (${profiles.length})`} icon={<Users size={16} className="text-indigo-500" />} headerRight={<AddUserButton />}>
           {profiles.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 text-sm">
+            <div className="py-6 text-center text-slate-400 text-sm">
               {isSupabaseConfigured() ? 'לא נמצאו משתמשים' : 'חיבור Supabase נדרש לצפייה במשתמשים'}
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 -mx-1">
               {profiles.map((p) => (
-                <div key={p.id} className="px-5 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                <div key={p.id} className="px-1 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 text-sm font-bold flex-shrink-0">
                       {p.full_name.charAt(0)}
@@ -119,70 +104,60 @@ export default async function SettingsPage() {
               ))}
             </div>
           )}
-        </Card>
+        </Collapsible>
 
         {/* Lineage tree */}
-        <Card>
+        <Collapsible title="שיוך שושלת — עץ הדורות" icon={<GitBranch size={16} className="text-violet-500" />}>
           <LineageTreeManager />
-        </Card>
+        </Collapsible>
 
         {/* Recovery homes */}
-        <RecoveryHomeLinks homes={recoveryHomes} />
+        <Collapsible title="בתי החלמה ליולדות" icon={<Home size={16} className="text-emerald-500" />}>
+          <RecoveryHomeLinks homes={recoveryHomes} />
+        </Collapsible>
 
         {/* Doc types */}
-        <Card>
+        <Collapsible title="סוגי מסמכים" icon={<FileText size={16} className="text-sky-500" />}>
           <DocTypesManager />
-        </Card>
+        </Collapsible>
 
         {/* Gov address data (cities/streets from Ministry of Interior) */}
-        <Card>
+        <Collapsible title="נתוני כתובות (משרד הפנים)" icon={<MapPin size={16} className="text-rose-500" />}>
           <GovDataSettings />
-        </Card>
+        </Collapsible>
 
         {/* Email templates */}
-        <Card>
+        <Collapsible title="תבניות מייל" icon={<Mail size={16} className="text-indigo-500" />}>
           <EmailTemplatesManager />
-        </Card>
+        </Collapsible>
 
         {/* Nedarim Card connection */}
-        <Card>
+        <Collapsible title="נדרים קארד" icon={<CreditCard size={16} className="text-emerald-500" />}>
           <NedarimSettings />
-        </Card>
+        </Collapsible>
 
         {/* Loans portal */}
-        <Card>
+        <Collapsible title="פורטל הלוואות" icon={<Banknote size={16} className="text-amber-500" />}>
           <LoansPortalSettings />
-        </Card>
+        </Collapsible>
 
         {/* Yemot maternity messages (editable text / human recordings) */}
-        <Card>
+        <Collapsible title="הקלטות שלוחת יולדות (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
           <YemotMaternitySettings />
-        </Card>
+        </Collapsible>
 
         {/* Yemot telephony log */}
-        <Card>
+        <Collapsible title="יומן שיחות ימות" icon={<ScrollText size={16} className="text-teal-500" />}>
           <YemotCallLog />
-        </Card>
+        </Collapsible>
 
         {/* Public registration gate */}
-        <Card>
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-              <UserPlus size={16} className="text-indigo-500" />
-            </div>
-            <h2 className="text-sm font-semibold text-slate-700">הרשמה ציבורית</h2>
-          </div>
+        <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-indigo-500" />}>
           <RegistrationGate />
-        </Card>
+        </Collapsible>
 
         {/* Notifications */}
-        <Card>
-          <div className="flex items-center gap-2.5 mb-4">
-            <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-              <Bell size={16} className="text-indigo-500" />
-            </div>
-            <h2 className="text-sm font-semibold text-slate-700">הגדרות התראות</h2>
-          </div>
+        <Collapsible title="הגדרות התראות" icon={<Bell size={16} className="text-indigo-500" />}>
           <div className="space-y-1">
             {[
               { label: 'תזכורת תפוגת כרטיס יולדת', desc: '7 ימים לפני תפוגה' },
@@ -201,7 +176,7 @@ export default async function SettingsPage() {
               </div>
             ))}
           </div>
-        </Card>
+        </Collapsible>
       </div>
     </div>
   )
