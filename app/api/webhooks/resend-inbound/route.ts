@@ -88,6 +88,55 @@ async function maybeAutoReplyYerid(msg: { fromEmail: string; fromName: string | 
   await deliverMail(from, 'פנייתך התקבלה — היכל החתם סופר · יריד', html, undefined, { ...mailFor('yerid'), skipLog: true })
 }
 
+// מענה אוטומטי לפניות שמגיעות לתיבה 8 — הודעה על הגרלת כרטיסי טיסה
+async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string | null; toEmail: string }) {
+  if (departmentByEmail(msg.toEmail)?.key !== 'inbox8') return
+  const from = (msg.fromEmail || '').toLowerCase()
+  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  const body = `
+    <p style="margin:0 0 8px;color:#0d9488;font-size:13px;font-weight:700;letter-spacing:0.5px;">בעזרת ה'</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">הגרלת כרטיסי טיסה ✈️</h2>
+
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.9;">
+      בעזרת ה' בימים הקרובים יתקיימו הגרלות על כרטיסי טיסה<br/>
+      לציונו הקדוש של רבינו מרן החתם סופר זי"ע בפרשבורג
+    </p>
+
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.9;">
+      ההגרלה היא לכל מגידי השיעורים בתורתו של מרן החת"ס<br/>
+      וכן לכל המשתתפים הקבועים בשיעורים
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#f0fdfa;border-right:4px solid #14b8a6;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#0f766e;font-size:15px;font-weight:900;">⚠️ שימו לב!</p>
+        <p style="margin:0;color:#115e59;font-size:14px;line-height:1.9;">
+          כדי שנוכל לערוך את ההגרלה לכל משתתפי השיעור עליכם לשלוח
+          <strong>עד יום רביעי בלילה בשבוע זה פרשת בלק</strong>
+          את שמות המשתתפים הקבועים בשיעורים לאימייל
+          <a href="mailto:8@chasamsofer.info" style="color:#0d9488;font-weight:700;text-decoration:none;">8@chasamsofer.info</a>
+        </p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0;color:#334155;font-size:15px;line-height:1.8;text-align:center;font-weight:700;">
+      בברכת התורה<br/>
+      היכל החתם סופר
+    </p>`
+  const html = shell({
+    preheader: 'הגרלת כרטיסי טיסה לציונו הקדוש של מרן החתם סופר זי"ע בפרשבורג',
+    accent: '#14b8a6',
+    title: 'הגרלת כרטיסי טיסה',
+    subtitle: 'היכל החתם סופר',
+    body,
+  })
+  await deliverMail(from, 'הגרלת כרטיסי טיסה — היכל החתם סופר', html, undefined, { ...mailFor('inbox8'), skipLog: true })
+}
+
 // פירוק שדה "שם <כתובת>" לשם וכתובת
 function parseAddress(raw: string): { name: string | null; email: string } {
   const s = String(raw ?? '').trim()
@@ -450,6 +499,12 @@ export async function POST(request: NextRequest) {
       await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] yerid auto-reply error:', e instanceof Error ? e.message : String(e))
+    }
+    // מענה אוטומטי לפניות תיבה 8 — הודעה על הגרלת כרטיסי טיסה
+    try {
+      await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
+    } catch (e) {
+      console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
   }
 
