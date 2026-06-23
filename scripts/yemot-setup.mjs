@@ -94,6 +94,44 @@ async function writeExtIni(ext, contents) {
   return json
 }
 
+// יוצר/מגדיר שלוחה מסוג API (פונה לכתובת webhook חיצונית).
+// הטוקן הסודי נשלח כפרמטר קבוע api_add_0=ApiToken=<token> — ימות מצרפת אותו
+// לכל קריאה, והשרת דוחה בקשות בלי הסוד הנכון (YEMOT_WEBHOOK_SECRET).
+async function createApi({ ext, url, token, force }) {
+  if (!url) throw new Error('create-api דורש --url')
+  console.log(`▶ הגדרת שלוחה ${ext} מסוג API → ${url}`)
+
+  const exists = await extExists(ext)
+  if (exists && !force) {
+    const current = await readExtIni(ext)
+    console.error(`✋ שלוחה ${ext} כבר קיימת. תוכן נוכחי:\n${current ?? '(ללא ext.ini)'}\n`)
+    console.error('   להחלפה הוסף --force. עוצר ללא שינוי.')
+    process.exit(2)
+  }
+
+  const lines = ['type=api', `api_link=${url}`]
+  if (token) lines.push(`api_add_0=ApiToken=${token}`)
+  const contents = lines.join('\n') + '\n'
+
+  await writeExtIni(ext, contents)
+  console.log('✔ נכתב. מאמת מול השרת...')
+
+  const after = await readExtIni(ext)
+  // לא מדפיסים את הסוד במלואו
+  console.log(`   ext.ini עכשיו:\n${(after ?? '').replace(/(ApiToken=)(\S+)/, (_, p, v) => p + v.slice(0, 4) + '…')}`)
+
+  const dirs = await listDir('ivr2:/')
+  const entry = dirs.find((d) => d.name === String(ext))
+  console.log(`   ברשימת השורש: ${entry ? `נמצאה (extType=${entry.extType ?? entry.fileType})` : 'לא נמצאה!'}`)
+
+  const ok = (after ?? '').includes('type=api') && (after ?? '').includes(`api_link=${url}`)
+  if (!ok || !entry || entry.extType !== 'api') {
+    console.error('✗ האימות נכשל — type=api / api_link לא נמצאו או ש-extType אינו api.')
+    process.exit(3)
+  }
+  console.log(`\n✅ שלוחה ${ext} הוגדרה כשלוחת API בהצלחה.`)
+}
+
 // יוצר/מגדיר שלוחה מסוג תפריט.
 async function createMenu({ ext, title, force }) {
   console.log(`▶ יצירת שלוחה ${ext} מסוג תפריט (type=menu)...`)
@@ -167,6 +205,15 @@ async function main() {
         })
         break
 
+      case 'create-api':
+        await createApi({
+          ext: args.ext ?? '7',
+          url: args.url,
+          token: args.token ?? process.env.YEMOT_WEBHOOK_SECRET,
+          force: Boolean(args.force),
+        })
+        break
+
       case 'ls': {
         const dirs = await listDir(args.path ?? 'ivr2:/')
         console.log(`שלוחות ב-${args.path ?? 'ivr2:/'}:`)
@@ -186,7 +233,7 @@ async function main() {
 
       default:
         console.error(`פקודה לא מוכרת: ${cmd}`)
-        console.error('פקודות זמינות: create-menu | ls | cat')
+        console.error('פקודות זמינות: create-menu | create-api | ls | cat')
         process.exit(1)
     }
   } catch (err) {
