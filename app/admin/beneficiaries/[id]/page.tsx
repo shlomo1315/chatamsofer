@@ -14,6 +14,7 @@ import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import EmailRow from './EmailRow'
+import PhoneActivity from './PhoneActivity'
 
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
@@ -351,6 +352,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
+        { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
         ...(beneficiary.email ? [{
           key: 'mail',
           label: 'הודעות מיילים',

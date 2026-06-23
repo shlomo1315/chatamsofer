@@ -13,6 +13,9 @@ interface LogRow {
   errorMsg: string | null
   familyName: string | null
   note: string | null
+  center: string | null
+  centerStockAfter: number | null
+  nedarimId: string | null
   entityId: string | null
   createdAt: string
 }
@@ -168,6 +171,11 @@ export default function YemotCallLog() {
                     {r.familyName && (
                       <span className="text-slate-700 font-medium truncate max-w-[140px]" title={r.familyName}>
                         {r.familyName}
+                      </span>
+                    )}
+                    {r.center && (
+                      <span className="text-slate-500 truncate max-w-[140px]" title={r.center}>
+                        מוקד: {r.center}{r.centerStockAfter != null ? ` (נותר ${r.centerStockAfter})` : ''}
                       </span>
                     )}
                     {r.errorMsg && (
