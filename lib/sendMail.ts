@@ -84,6 +84,11 @@ export async function deliverMail(
       ...(text ? { text } : {}),
       ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
       ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+      // כותרות שמשפרות אמון ומסירה (פחות סיכוי לספאם בג'ימייל/אאוטלוק)
+      headers: {
+        'List-Unsubscribe': '<mailto:office@chasamsofer.info?subject=unsubscribe>',
+        'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      },
       ...(attachments?.length
         ? { attachments: attachments.map((a) => ({
             filename: a.filename,
