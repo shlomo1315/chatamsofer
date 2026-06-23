@@ -4,11 +4,12 @@
 //   1. חיפוש המשפחה לפי מספר טלפון (phone / phone2 / spouse_phone)
 //   2. בדיקה שיש לידה פעילה תוך 6 שבועות (status=active)
 //   3. בקשת מספר הכרטיס (DTMF)
-//   4. שמירת מספר הכרטיס ב-maternity_aids.card_number
+//   4. שמירת המספר ב-maternity_aids.card_number ושיוך הכרטיס לארנק הנדרים (SetClientMagneticCard)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
+import { linkMaternityCard } from '@/lib/maternityCards'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,14 +53,12 @@ function hangup() {
   return ['go_to_folder=hangup']
 }
 
-// read_v2: ימות אוספת DTMF ומעבירה לתיקייה.
-// פורמט: read_v2,<folder>,<type>,<min_digits>,<timeout_sec>,<max_digits>
-// type=1 → DTMF (tap)
+// read תקני של ימות: משמיע הנחיה ואוסף DTMF, והערך חוזר בבקשה הבאה תחת שם המשתנה.
+// פורמט: read=t-<הנחיה>.=<שם משתנה>,tap,<max_digits>,<min_digits>,<sec_wait>
+// הערך יחזור כפרמטר CardNumber בקריאה הבאה ל-webhook. המשתמשת מסיימת בהקשת סולמית.
 function readDigits(maxDigits: number = 20) {
-  return [
-    `id_list_message=t-אנא הקישו את מספר הכרטיס שקיבלתם, משמאל לימין, ולסיום הקישו סולמית.`,
-    `read_v2,collect_card,1,1,15,${maxDigits}`,
-  ]
+  const prompt = 'אנא הקישו את מספר הכרטיס שקיבלתם, ולסיום הקישו סולמית'
+  return [`read=t-${prompt}.=CardNumber,tap,${maxDigits},4,7`]
 }
 
 // ── חיפוש משפחה + לידה פעילה (שותף לשני השלבים) ────────────────────────────
@@ -138,8 +137,9 @@ async function handle(req: NextRequest) {
 
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
-  const step = String(params['ApiEnterID'] ?? '').trim() || 'start'
-  const digits = String(params['Digits'] ?? '').trim()
+  // הערך שאוסף ה-read חוזר תחת CardNumber. נוכחותו מסמנת שאנו בשלב איסוף הכרטיס.
+  const digits = String(params['CardNumber'] ?? '').trim()
+  const step = digits ? 'collect_card' : 'start'
 
   console.log(`[yemot-maternity] step=${step} phone=${apiPhone} callId=${callId} digits=${digits}`)
 
@@ -250,17 +250,15 @@ async function handle(req: NextRequest) {
 
     const { active, familyName: fName } = result
 
-    const { error: updateErr } = await admin
-      .from('maternity_aids')
-      .update({ card_number: digits })
-      .eq('id', active.id)
+    // שמירת המספר ושיוך הכרטיס לארנק הנדרים של המשפחה (best-effort).
+    const link = await linkMaternityCard(admin, active.id, digits)
 
-    if (updateErr) {
-      console.error('[yemot-maternity] update error', updateErr.message)
+    if (!link.ok) {
+      console.error('[yemot-maternity] link error', link.error)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_error', entity_type: 'maternity_aid',
-          entity_id: active.id, details: { caller: callerPhone, callId, error: updateErr.message, family_name: fName },
+          entity_id: active.id, details: { caller: callerPhone, callId, error: link.error, family_name: fName },
         })
       } catch { /* לא חוסם */ }
       return yemotText([
@@ -275,20 +273,29 @@ async function handle(req: NextRequest) {
         action: 'yemot_card_registered',
         entity_type: 'maternity_aid',
         entity_id: active.id,
-        details: { card_number_last4: digits.slice(-4), caller: callerPhone, callId, family_name: fName },
+        details: {
+          card_number_last4: digits.slice(-4), caller: callerPhone, callId, family_name: fName,
+          linked: link.linked, link_error: link.error ?? null, nedarim_not_configured: link.notConfigured ?? false,
+        },
       })
     } catch { /* לא חוסם */ }
 
-    console.log(`[yemot-maternity] card saved for aid ${active.id}, last4=${digits.slice(-4)}, family=${fName}`)
+    console.log(`[yemot-maternity] card saved for aid ${active.id}, last4=${digits.slice(-4)}, family=${fName}, linked=${link.linked}`)
 
-    return yemotText([
-      ...say(
-        'מספר הכרטיס נשמר בהצלחה!',
-        'תיק הלידה שלך עודכן.',
-        'שיהיה בריאות ומזל טוב!',
-      ),
-      ...hangup(),
-    ], callId)
+    // אם השיוך לנדרים הצליח — הכרטיס פעיל מיד; אחרת נשמר והמשרד ישלים את השיוך.
+    const closing = link.linked
+      ? [
+          'מספר הכרטיס נשמר והכרטיס שויך בהצלחה!',
+          'ניתן להשתמש בכרטיס.',
+          'שיהיה בריאות ומזל טוב!',
+        ]
+      : [
+          'מספר הכרטיס נשמר בהצלחה!',
+          'שיוך הכרטיס יושלם על ידי המשרד.',
+          'שיהיה בריאות ומזל טוב!',
+        ]
+
+    return yemotText([...say(...closing), ...hangup()], callId)
   }
 
   // שלב לא ידוע — חזרה להתחלה

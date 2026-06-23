@@ -2,10 +2,74 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
-import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard } from '@/lib/nedarim'
+import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, setMagneticCard, type NedarimCreds } from '@/lib/nedarim'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
 export const MATERNITY_LOAD_AMOUNT = 600
+
+// איתור/הקמת המשפחה בנדרים לפי ת.ז — מחזיר ClientId ושומר אותו בחזרה ב-beneficiaries.
+// best-effort: לא זורק. משמש גם בהטענת הזכאות וגם בשיוך הכרטיס המגנטי.
+export async function ensureNedarimClient(
+  admin: SupabaseClient, beneficiaryId: string, creds?: NedarimCreds,
+): Promise<{ clientId: string | null; error?: string; notConfigured?: boolean }> {
+  const c = creds ?? (await getNedarimCreds())
+  if (!c) return { clientId: null, notConfigured: true }
+
+  const { data: b } = await admin
+    .from('beneficiaries')
+    .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
+    .eq('id', beneficiaryId).maybeSingle()
+  if (!b) return { clientId: null, error: 'המשפחה לא נמצאה' }
+
+  let clientId = b.nedarim_id ? String(b.nedarim_id) : null
+  try {
+    if (!clientId && b.id_number) clientId = await findClientByZeout(c, String(b.id_number))
+    if (!clientId) clientId = await saveClientCard(c, b)
+    if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
+  } catch (e) { return { clientId: null, error: e instanceof Error ? e.message : 'שגיאת נדרים' } }
+  if (!clientId) return { clientId: null, error: 'לא ניתן לאתר או להקים את המשפחה בנדרים' }
+  return { clientId }
+}
+
+// שיוך כרטיס מגנטי לארנק הנדרים של היולדת, ושמירת המספר ב-maternity_aids.
+// best-effort: השמירה המקומית מתבצעת תמיד; אם נדרים לא מוגדר/השיוך נכשל — linked=false
+// (אך ok=true) כדי שהצוות יוכל להשלים ידנית. מתאים לקריאה מה-webhook ומכפתור ניהול עתידי.
+export async function linkMaternityCard(
+  admin: SupabaseClient, aidId: string, cardNumber: string,
+): Promise<{ ok: boolean; linked: boolean; error?: string; notConfigured?: boolean }> {
+  const { data: aid } = await admin
+    .from('maternity_aids')
+    .select('id, beneficiary_id')
+    .eq('id', aidId).maybeSingle()
+  if (!aid) return { ok: false, linked: false, error: 'התיק לא נמצא' }
+
+  // שמירה מקומית תמיד — גם אם השיוך לנדרים ייכשל
+  const { error: saveErr } = await admin.from('maternity_aids').update({ card_number: cardNumber }).eq('id', aid.id)
+  if (saveErr) return { ok: false, linked: false, error: saveErr.message }
+
+  const creds = await getNedarimCreds()
+  if (!creds) return { ok: true, linked: false, notConfigured: true }
+
+  const { clientId, error: clientErr } = await ensureNedarimClient(admin, aid.beneficiary_id, creds)
+  if (!clientId) {
+    await admin.from('maternity_aids').update({ card_load_error: clientErr ?? 'שיוך כרטיס: נדרים' }).eq('id', aid.id)
+    return { ok: true, linked: false, error: clientErr }
+  }
+
+  try {
+    const r = await setMagneticCard(creds, clientId, cardNumber)
+    if (!r.ok) {
+      await admin.from('maternity_aids').update({ card_load_error: `שיוך כרטיס: ${r.message}` }).eq('id', aid.id)
+      return { ok: true, linked: false, error: r.message }
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'שגיאת נדרים'
+    await admin.from('maternity_aids').update({ card_load_error: `שיוך כרטיס: ${msg}` }).eq('id', aid.id)
+    return { ok: true, linked: false, error: msg }
+  }
+
+  return { ok: true, linked: true }
+}
 
 // בעת אישור לידה: לוודא שהמשפחה קיימת בנדרים (לפי ת.ז, אחרת להקים אותה), ולהטעין 600 ₪ לארנק.
 // שיוך הכרטיס הפיזי/מוקד נעשה בהמשך ידנית. best-effort — לא חוסם את אישור הלידה.
@@ -22,20 +86,10 @@ export async function loadMaternityCardOnApproval(
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
   if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
 
-  const { data: b } = await admin
-    .from('beneficiaries')
-    .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
-    .eq('id', aid.beneficiary_id).maybeSingle()
-  if (!b) return { ok: false, error: 'המשפחה לא נמצאה' }
-
   // 1) איתור/הקמת המשפחה בנדרים לפי ת.ז
-  let clientId = b.nedarim_id ? String(b.nedarim_id) : null
-  try {
-    if (!clientId && b.id_number) clientId = await findClientByZeout(creds, String(b.id_number))
-    if (!clientId) clientId = await saveClientCard(creds, b)
-    if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים' } }
-  if (!clientId) return { ok: false, error: 'לא ניתן לאתר או להקים את המשפחה בנדרים' }
+  const ensured = await ensureNedarimClient(admin, aid.beneficiary_id, creds)
+  const clientId = ensured.clientId
+  if (!clientId) return { ok: false, error: ensured.error ?? 'לא ניתן לאתר או להקים את המשפחה בנדרים' }
 
   // 2) הטענת הזכאות
   let result: Awaited<ReturnType<typeof addTlush>>
