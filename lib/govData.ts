@@ -25,16 +25,18 @@ export function getAdminClient(): SupabaseClient | null {
 }
 
 // שליפת כל הרשומות מ-data.gov.il עם דפדוף (offset) — לא נחתך ב-5000 כמו קודם.
-// זו הסיבה שערים גדולות כמו ירושלים לא הציגו את כל הרחובות.
+// קריטי: sort=_id. בלי סדר יציב, דפדוף ב-offset על datastore מדלג על שורות
+// ומשכפל אחרות — וכך יישובים שלמים (למשל עמנואל ויישובי יו"ש) "נופלים" בין הדפים
+// ולא נכנסים לרשימה. הסדר היציב מבטיח כיסוי מלא ועקבי של כל הרשומות.
 async function fetchAll(resourceId: string, fields: string[], filters?: object): Promise<Record<string, string>[]> {
   const out: Record<string, string>[] = []
   const pageSize = 10000
   let offset = 0
-  for (let guard = 0; guard < 50; guard++) {
+  for (let guard = 0; guard < 200; guard++) {
     const res = await fetch(GOV_URL, {
       method: 'POST',
       headers: GOV_HEADERS,
-      body: JSON.stringify({ resource_id: resourceId, limit: pageSize, offset, fields, ...(filters ? { filters } : {}) }),
+      body: JSON.stringify({ resource_id: resourceId, limit: pageSize, offset, sort: '_id', fields, ...(filters ? { filters } : {}) }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
