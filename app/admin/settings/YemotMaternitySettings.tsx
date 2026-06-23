@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Phone, Loader2, Check, Upload, Mic, Trash2, Type } from 'lucide-react'
+import { Loader2, Check, Upload, Mic, Trash2, Type } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -94,21 +94,15 @@ export default function YemotMaternitySettings() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-2.5 mb-1">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
-            <Phone size={16} className="text-indigo-500" />
-          </div>
-          <h2 className="text-sm font-semibold text-slate-700">הקלטות שלוחת יולדות (ימות)</h2>
-        </div>
+      <div className="flex items-center justify-between gap-2.5 mb-4">
+        <p className="text-xs text-slate-500">
+          עריכת כל הודעה בנפרד — טקסט שיוקרא קולית, או העלאת הקלטה אנושית שתחליף אותו.
+        </p>
         <Button onClick={save} disabled={saving || loading} size="sm">
           {saving ? <Loader2 size={14} className="animate-spin" /> : savedOk ? <Check size={14} /> : null}
           {savedOk ? 'נשמר' : 'שמירת טקסטים'}
         </Button>
       </div>
-      <p className="text-xs text-slate-500 mb-4">
-        עריכת כל הודעה בנפרד — טקסט שיוקרא קולית, או העלאת הקלטה אנושית שתחליף אותו.
-      </p>
 
       {loading ? (
         <div className="py-8 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
