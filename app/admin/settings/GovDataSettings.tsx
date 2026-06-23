@@ -94,7 +94,7 @@ export default function GovDataSettings() {
               {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
               רענן עכשיו ממשרד הפנים
             </button>
-            <p className="text-xs text-slate-400">מושך את רשימת היישובים המלאה והעדכנית. אם חסרות ערים — לחיצה כאן תשלים אותן.</p>
+            <p className="text-xs text-slate-400">מושך את רשימת היישובים המלאה והעדכנית כולל יו״ש. אם חסרות ערים — לחיצה כאן תשלים אותן.</p>
           </div>
         </div>
       )}
