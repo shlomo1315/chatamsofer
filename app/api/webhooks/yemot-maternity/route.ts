@@ -1,14 +1,22 @@
 // Webhook לימות המשיח — שיוך כרטיס נדרים של יולדת לתיק הלידה הפעיל שלה.
-// ימות מצלצלת לכאן עם מספר הטלפון של המתקשרת.
-// הלוגיקה:
-//   1. חיפוש המשפחה לפי מספר טלפון (phone / phone2 / spouse_phone)
-//      • לא נמצא → הודעה + חזרה לתפריט הראשי
-//   2. בדיקה שיש לידה פעילה תוך 6 שבועות (six_weeks_end >= היום)
-//      • אין → "אין כרגע לידה מעודכנת... אין זכאות לכרטיס"
-//   3. בקשת מספר כרטיס הנדרים (DTMF) ושמירתו ב-maternity_aids.card_number
-//   4. בחירת מוקד: הקראת רשימת המוקדים (לפי code) + קליטת הקוד
-//   5. חיבור הכרטיס למשפחה בנדרים (SetClientMagneticCard) + הורדת כרטיס ממלאי המוקד
-//   6. החזרת טקסט הצלחה/כישלון לפי תשובת נדרים
+// שלוחת API (type=api): ימות פונה לכאן בכל שלב, והשרת מחזיר פקודות טקסט.
+//
+// פרוטוקול התגובה (לפי yemot-router2 / תיעוד ימות):
+//   • הודעת TTS:      id_list_message=t-<טקסט>           (כמה הודעות מופרדות ב-".")
+//   • קליטת הקשה:     read=t-<הודעה>=<valName>,<re_enter>,<max>,<min>,<sec>,No,no,no,,<digits_allowed>,,,,
+//   • מעבר/ניתוק:     go_to_folder=hangup  /  go_to_folder=/
+//   • פקודות מופרדות ב-"&". טקסט TTS אסור שיכיל: . - " ' & |
+//
+// ימות מחזירה את ערך ה-read תחת שם המשתנה (collect_card / collect_center),
+// ושולחת את כל הערכים שנאספו בכל קריאה. לכן מזהים את השלב לפי הערכים הקיימים.
+//
+// הזרימה:
+//   1. אין ערכים  → זיהוי משפחה + לידה פעילה → בקשת מספר כרטיס
+//      • טלפון לא מזוהה → הודעה + חזרה לתפריט הראשי
+//      • אין לידה פעילה → "אין כרגע לידה מעודכנת... אין זכאות"
+//   2. collect_card → שמירת המספר + הקראת רשימת מוקדים + בקשת קוד מוקד
+//   3. collect_center → חיבור הכרטיס בנדרים (SetClientMagneticCard) +
+//      הורדת כרטיס ממלאי המוקד + הודעת הצלחה/כישלון
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -36,57 +44,48 @@ function phoneMatches(stored: string | null | undefined, caller: string): boolea
   return normalizePhone(stored) === caller
 }
 
-// ── תגובות ימות ─────────────────────────────────────────────────────────────
-// ימות מצפה לתוכן מסוג text/plain; פקודות מופרדות ב-&.
+// ── בניית תגובת ימות ─────────────────────────────────────────────────────────
+// טקסט TTS — הסרת תווים שאסורים בימות (. - " ' & |) כדי לא לשבור את הפורמט.
+const TTS_INVALID = /[.\-"'&|]/g
+function tts(text: string): string {
+  return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// כמה הודעות → "t-הודעה1.t-הודעה2" (הנקודה היא מפריד ההודעות בימות)
+function messages(...texts: string[]): string {
+  return texts.filter(Boolean).map((t) => `t-${tts(t)}`).join('.')
+}
+
+function idMessage(...texts: string[]): string {
+  return `id_list_message=${messages(...texts)}`
+}
+
+type ReadOpts = { reEnter?: boolean; max?: number | ''; min?: number; wait?: number; allowed?: (string | number)[] }
+// פקודת read במצב tap (הקשות). סדר הפרמטרים לפי yemot-router2.
+function readTap(valName: string, prompts: string[], opts: ReadOpts = {}): string {
+  const { reEnter = true, max = '', min = 1, wait = 15, allowed } = opts
+  const ops = [
+    valName,
+    reEnter ? 'yes' : 'no',
+    max === '' ? '' : String(max),
+    String(min),
+    String(wait),
+    'No', 'no', 'no', '',
+    allowed && allowed.length ? allowed.join('.') : '',
+    '', '', '', '',
+  ]
+  return `read=${messages(...prompts)}=${ops.join(',')}`
+}
+
+function goToFolder(target: string): string {
+  return `go_to_folder=${target}`
+}
+
+// שליחת תגובת ימות (text/plain, פקודות מופרדות ב-& עם & בסוף)
 function yemotText(commands: string[], callId?: string) {
   const body = commands.join('&') + '&'
   console.log(`[yemot-maternity] response${callId ? ` (callId=${callId})` : ''}: ${body}`)
-  return new NextResponse(body, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-  })
-}
-
-// TTS: id_list_message=t-TEXT. (הנקודה בסוף חובה)
-function say(...msgs: string[]) {
-  return msgs.map((m) => `id_list_message=t-${m}.`)
-}
-
-// ניתוק שיחה — ימות מזהה go_to_folder=hangup כסיום תקין.
-// token בודד "hangup" *לא* עובד וגורם לימות לחזור ולקרוא ל-webhook (קריאה כפולה).
-function hangup() {
-  return ['go_to_folder=hangup']
-}
-
-// חזרה לתפריט הראשי (שורש מערכת ימות)
-function toMainMenu() {
-  return ['go_to_folder=/']
-}
-
-// read_v2: ימות אוספת DTMF ומעבירה לשלב הבא.
-// פורמט: read_v2,<step>,<type>,<min_digits>,<timeout_sec>,<max_digits>
-// type=1 → DTMF (tap). <step> חוזר אלינו כ-ApiEnterID, והערך ב-Digits.
-function readCard(maxDigits: number = 20) {
-  return [
-    `id_list_message=t-אנא הקישו את מספר הכרטיס של נדרים שקיבלתם, משמאל לימין, ולסיום הקישו סולמית.`,
-    `read_v2,collect_card,1,1,15,${maxDigits}`,
-  ]
-}
-
-// בקשת בחירת מוקד — מקריא את רשימת המוקדים הפעילים (לפי code) ואז קולט את הקוד.
-function readCenter(centers: CenterRow[]) {
-  const intro = 'אנא בחרו את המוקד שבו תקבלו את הכרטיס. הקישו את קוד המוקד.'
-  const items = centers.map((c) => `למוקד ${c.name} הקישו ${c.code}.`)
-  const maxLen = Math.max(1, ...centers.map((c) => String(c.code).length))
-  return [
-    ...say(intro, ...items),
-    `read_v2,collect_center,1,1,20,${maxLen}`,
-  ]
-}
-
-// ── קריאת ערך DTMF מהפרמטרים ──────────────────────────────────────────────
-// ימות עשויה להחזיר את הקלט ב-Digits או בשם השלב — קוראים מכל המקורות.
-function digitsFor(params: Record<string, string>, step: string): string {
-  return String(params['Digits'] ?? params[step] ?? '').trim()
+  return new NextResponse(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 }
 
 // ── מוקדים ──────────────────────────────────────────────────────────────────
@@ -102,7 +101,26 @@ async function activeCentersWithCode(admin: ReturnType<typeof adminClient>): Pro
   return (data ?? []) as CenterRow[]
 }
 
-// ── חיפוש משפחה + לידה פעילה (שותף לכל השלבים) ─────────────────────────────
+// פקודת ה-read לבחירת מוקד: הקראת רשימת המוקדים + הגבלת ההקשות לקודים הקיימים
+function centerReadCommand(centers: CenterRow[]): string {
+  const prompts = [
+    'אנא בחרו את המוקד שבו תקבלו את הכרטיס הקישו את קוד המוקד',
+    ...centers.map((c) => `למוקד ${c.name} הקישו ${c.code}`),
+  ]
+  const maxLen = Math.max(1, ...centers.map((c) => String(c.code).length))
+  return readTap('collect_center', prompts, { max: maxLen, allowed: centers.map((c) => c.code) })
+}
+
+// פקודת ה-read למספר הכרטיס
+function cardReadCommand(prefix?: string): string {
+  const prompts = [
+    prefix || '',
+    'אנא הקישו את מספר הכרטיס של נדרים שקיבלתם משמאל לימין ולסיום הקישו סולמית',
+  ].filter(Boolean)
+  return readTap('collect_card', prompts, { max: 20, min: 1 })
+}
+
+// ── חיפוש משפחה + לידה פעילה ─────────────────────────────────────────────────
 async function findActiveAid(callerPhone: string) {
   const admin = adminClient()
 
@@ -120,10 +138,8 @@ async function findActiveAid(callerPhone: string) {
       phoneMatches(b.spouse_phone, callerPhone),
   )
 
-  if (!family) return { notFound: true }
+  if (!family) return { notFound: true as const }
 
-  // מושכים את כל רשומות הלידה של המשפחה. *לא* מסננים status ב-SQL כי
-  // status=NULL היה נפסל ע"י .not(eq) — מסננים cancelled ב-JS במקום.
   const { data: allAids, error: aidErr } = await admin
     .from('maternity_aids')
     .select('id, birth_date, six_weeks_end, card_number, status')
@@ -137,38 +153,24 @@ async function findActiveAid(callerPhone: string) {
 
   const now = new Date()
   const active = aids.find((a) => {
-    const end = a.six_weeks_end
-      ? new Date(a.six_weeks_end)
-      : addDays(new Date(a.birth_date), 42)
+    const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
     return end >= now
   })
 
   const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
 
-  // אבחון: מה נמצא במסד הנתונים עבור משפחה זו
-  const diag = (allAids ?? []).map((a) => {
-    const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
-    return `${a.birth_date}→${end.toISOString().slice(0, 10)}(${a.status ?? 'null'})`
-  }).join(', ')
-  console.log(`[yemot-maternity] family ${family.id} (${familyName}): ${allAids?.length ?? 0} aids [${diag}], active=${active?.id ?? 'none'}`)
+  console.log(`[yemot-maternity] family ${family.id} (${familyName}): ${allAids?.length ?? 0} aids, active=${active?.id ?? 'none'}`)
 
   if (!active) {
-    const note = (allAids?.length ?? 0) === 0
-      ? 'אין רשומות לידה כלל'
-      : `נמצאו ${allAids!.length} רשומות אך אף אחת לא בחלון 6 שבועות: ${diag}`
-    return { noBirth: true, familyId: family.id, familyName, note }
+    return { noBirth: true as const, familyId: family.id, familyName }
   }
 
   return { family, active, familyName }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
-export async function POST(req: NextRequest) {
-  return handle(req)
-}
-export async function GET(req: NextRequest) {
-  return handle(req)
-}
+export async function POST(req: NextRequest) { return handle(req) }
+export async function GET(req: NextRequest) { return handle(req) }
 
 async function handle(req: NextRequest) {
   const params: Record<string, string> =
@@ -178,157 +180,48 @@ async function handle(req: NextRequest) {
 
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
-  const step = String(params['ApiEnterID'] ?? '').trim() || 'start'
+  // ערכי ה-read חוזרים תחת שמות המשתנים שהגדרנו
+  const cardVal = String(params['collect_card'] ?? '').trim()
+  const centerVal = String(params['collect_center'] ?? '').trim()
 
-  console.log(`[yemot-maternity] step=${step} phone=${apiPhone} callId=${callId} digits=${params['Digits'] ?? ''}`)
+  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${cardVal} center=${centerVal}`)
 
-  // אבטחה: ימות שולחת ApiToken=<סוד> (מוגדר בשלוחה כ-api_add_0). דוחים בלי הסוד.
+  // אבטחה: ימות שולחת ApiToken=<סוד> (api_add_0 בשלוחה). דוחים בלי הסוד.
   const secret = process.env.YEMOT_WEBHOOK_SECRET
   if (secret && params['ApiToken'] !== secret) {
-    return yemotText([...say('אין הרשאה'), ...hangup()], callId)
+    return yemotText([idMessage('אין הרשאה'), goToFolder('hangup')], callId)
   }
 
   if (!apiPhone) {
-    return yemotText([...say('שגיאה במספר המתקשר'), ...hangup()], callId)
+    return yemotText([idMessage('שגיאה במספר המתקשר'), goToFolder('hangup')], callId)
   }
 
   const callerPhone = normalizePhone(apiPhone)
   const admin = adminClient()
 
-  // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
-  if (step === 'start') {
-    const result = await findActiveAid(callerPhone)
-
-    if (result.error) {
-      console.error('[yemot-maternity] DB error', result.error)
-      return yemotText([...say('שגיאת מערכת, אנא נסי שוב מאוחר יותר'), ...hangup()], callId)
-    }
-
-    if (result.notFound) {
-      console.log(`[yemot-maternity] phone not found: ${callerPhone}`)
-      try {
-        await admin.from('activity_log').insert({
-          user_id: null, action: 'yemot_phone_not_found', entity_type: 'phone',
-          entity_id: null, details: { caller: callerPhone, callId, note: 'מספר לא קיים במערכת' },
-        })
-      } catch { /* לא חוסם */ }
-      // מספר לא מזוהה → הודעה וחזרה לתפריט הראשי
-      return yemotText([
-        ...say('מספר הטלפון שלכם לא קיים במערכת. מעבירים אתכם בחזרה לתפריט הראשי.'),
-        ...toMainMenu(),
-      ], callId)
-    }
-
-    if (result.noBirth) {
-      console.log(`[yemot-maternity] no active birth for family ${result.familyId} (${result.familyName})`)
-      try {
-        await admin.from('activity_log').insert({
-          user_id: null, action: 'yemot_no_active_birth', entity_type: 'beneficiary',
-          entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName, note: result.note },
-        })
-      } catch { /* לא חוסם */ }
-      return yemotText([
-        ...say(
-          'אין כרגע לידה מעודכנת במערכת.',
-          'אין כעת זכאות לקבלת כרטיס נדרים, מאחר שלא נמצאה לידה בשישה השבועות האחרונים.',
-          'אם את בתוך שישה שבועות מהלידה ועדיין מופיעה שגיאה, אנא פני למשרד.',
-        ),
-        ...hangup(),
-      ], callId)
-    }
-
-    const { active, familyName } = result as { family: NonNullable<typeof result['family']>; active: NonNullable<typeof result['active']>; familyName: string }
-
-    if (active.card_number) {
-      console.log(`[yemot-maternity] card already set for aid ${active.id} (${familyName}), allowing update`)
-      return yemotText([
-        ...say(
-          'שלום! מצאנו את תיק הלידה שלך.',
-          'כרטיס נדרים כבר רשום בתיק, וניתן לעדכן את המספר.',
-        ),
-        ...readCard(),
-      ], callId)
-    }
-
-    console.log(`[yemot-maternity] prompting card input for family "${familyName}", aid ${active.id}`)
-    return yemotText([
-      ...say('שלום! זוהית בהצלחה. נמצא תיק לידה פעיל בחשבונך.'),
-      ...readCard(),
-    ], callId)
-  }
-
-  // ── שלב 2: קבלת מספר הכרטיס → שמירה → מעבר לבחירת מוקד ──────────────────
-  if (step === 'collect_card') {
-    const digits = digitsFor(params, 'collect_card')
-    if (!digits || digits.length < 4) {
-      console.log(`[yemot-maternity] invalid card digits: "${digits}"`)
-      return yemotText([
-        ...say('מספר כרטיס לא תקין. אנא נסי שוב.'),
-        ...readCard(),
-      ], callId)
-    }
-
-    const result = await findActiveAid(callerPhone)
-    if (result.error || result.notFound || result.noBirth || !result.active) {
-      console.error('[yemot-maternity] re-lookup failed at collect_card', result)
-      return yemotText([...say('שגיאת מערכת, אנא חייגי שוב'), ...hangup()], callId)
-    }
-
-    // שמירת מספר הכרטיס על התיק (כדי שיישמר גם אם תנותק לפני בחירת מוקד)
-    const { error: updateErr } = await admin
-      .from('maternity_aids')
-      .update({ card_number: digits })
-      .eq('id', result.active.id)
-    if (updateErr) {
-      console.error('[yemot-maternity] card_number update error', updateErr.message)
-      return yemotText([...say('שגיאה בשמירת הכרטיס. אנא נסי שוב מאוחר יותר.'), ...hangup()], callId)
-    }
-
-    // מעבר לבחירת מוקד — אם אין מוקדים מוגדרים, מסיימים בהצלחה (רק נשמר הכרטיס)
-    const centers = await activeCentersWithCode(admin)
-    if (!centers.length) {
-      console.log('[yemot-maternity] no centers with code — skipping center step')
-      return yemotText([
-        ...say('מספר הכרטיס נשמר בהצלחה! שיהיה בריאות ומזל טוב.'),
-        ...hangup(),
-      ], callId)
-    }
-
-    console.log(`[yemot-maternity] card saved for aid ${result.active.id}, prompting center (${centers.length} centers)`)
-    return yemotText(readCenter(centers), callId)
-  }
-
   // ── שלב 3: בחירת מוקד → חיבור הכרטיס בנדרים → הורדת מלאי → תוצאה ────────
-  if (step === 'collect_center') {
-    const digits = digitsFor(params, 'collect_center')
+  if (centerVal) {
     const centers = await activeCentersWithCode(admin)
-    const center = centers.find((c) => String(c.code) === digits)
-
+    const center = centers.find((c) => String(c.code) === centerVal)
     if (!center) {
-      console.log(`[yemot-maternity] invalid center code: "${digits}"`)
-      return yemotText([
-        ...say('קוד מוקד שגוי. אנא נסי שוב.'),
-        ...readCenter(centers),
-      ], callId)
+      return yemotText([idMessage('קוד מוקד שגוי אנא נסו שוב'), centerReadCommand(centers)], callId)
     }
 
-    // איתור התיק + מספר הכרטיס שנשמר + מזהה המשפחה בנדרים
     const result = await findActiveAid(callerPhone)
-    if (result.error || result.notFound || result.noBirth || !result.active || !result.family) {
-      console.error('[yemot-maternity] re-lookup failed at collect_center', result)
-      return yemotText([...say('שגיאת מערכת, אנא חייגי שוב'), ...hangup()], callId)
+    if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active || !result.family) {
+      console.error('[yemot-maternity] re-lookup failed at center step', result)
+      return yemotText([idMessage('שגיאת מערכת אנא חייגי שוב'), goToFolder('hangup')], callId)
     }
     const { active, family, familyName } = result
     const cardNumber = String(active.card_number ?? '').trim()
     const nedarimId = family.nedarim_id ? String(family.nedarim_id) : null
 
     if (!cardNumber) {
-      return yemotText([...say('לא נמצא מספר כרטיס. אנא חייגי שוב.'), ...hangup()], callId)
+      return yemotText([idMessage('לא נמצא מספר כרטיס אנא חייגי שוב'), goToFolder('hangup')], callId)
     }
 
-    // המשפחה חייבת להיות רשומה בנדרים כדי לחבר אליה כרטיס
     if (!nedarimId) {
-      console.log(`[yemot-maternity] family ${family.id} has no nedarim_id — cannot link card`)
+      console.log(`[yemot-maternity] family ${family.id} has no nedarim_id`)
       try {
         await admin.from('activity_log').insert({
           user_id: null, action: 'yemot_error', entity_type: 'maternity_aid', entity_id: active.id,
@@ -336,16 +229,15 @@ async function handle(req: NextRequest) {
         })
       } catch { /* לא חוסם */ }
       return yemotText([
-        ...say('לא ניתן לחבר את הכרטיס מאחר שהמשפחה אינה רשומה במערכת נדרים. אנא פני למשרד.'),
-        ...hangup(),
+        idMessage('לא ניתן לחבר את הכרטיס מאחר שהמשפחה אינה רשומה במערכת נדרים אנא פני למשרד'),
+        goToFolder('hangup'),
       ], callId)
     }
 
-    // חיבור הכרטיס למשפחה בנדרים
     const creds = await getNedarimCreds()
     if (!creds) {
       console.error('[yemot-maternity] nedarim not configured')
-      return yemotText([...say('המערכת אינה זמינה כעת. אנא נסי שוב מאוחר יותר.'), ...hangup()], callId)
+      return yemotText([idMessage('המערכת אינה זמינה כעת אנא נסי שוב מאוחר יותר'), goToFolder('hangup')], callId)
     }
 
     let linkOk = false
@@ -367,17 +259,17 @@ async function handle(req: NextRequest) {
         })
       } catch { /* לא חוסם */ }
       return yemotText([
-        ...say('לא הצלחנו לחבר את הכרטיס. הפעולה לא בוצעה. אנא נסי שוב מאוחר יותר או פני למשרד.'),
-        ...hangup(),
+        idMessage('לא הצלחנו לחבר את הכרטיס הפעולה לא בוצעה אנא נסי שוב מאוחר יותר או פני למשרד'),
+        goToFolder('hangup'),
       ], callId)
     }
 
-    // הצלחה — הורדת כרטיס ממלאי המוקד (best-effort, אטומי דרך RPC)
+    // הצלחה — הורדת כרטיס ממלאי המוקד (אטומי דרך RPC)
     let newStock: number | null = null
     try {
       const { data: stockData } = await admin.rpc('decrement_card_center_stock', { p_center_id: center.id })
       newStock = typeof stockData === 'number' ? stockData : null
-      if (newStock === null) console.warn(`[yemot-maternity] center "${center.name}" out of stock — not decremented`)
+      if (newStock === null) console.warn(`[yemot-maternity] center "${center.name}" out of stock`)
     } catch (e) {
       console.error('[yemot-maternity] stock decrement failed', e)
     }
@@ -393,18 +285,91 @@ async function handle(req: NextRequest) {
       })
     } catch { /* לא חוסם */ }
 
-    console.log(`[yemot-maternity] card linked for aid ${active.id} (${familyName}), center=${center.name}, stockAfter=${newStock}`)
+    console.log(`[yemot-maternity] card linked, aid ${active.id} (${familyName}), center=${center.name}, stockAfter=${newStock}`)
     return yemotText([
-      ...say(
-        'הכרטיס חובר בהצלחה!',
-        `המוקד שנבחר: ${center.name}.`,
-        'שיהיה בריאות ומזל טוב!',
-      ),
-      ...hangup(),
+      idMessage('הכרטיס חובר בהצלחה', `המוקד שנבחר ${center.name}`, 'שיהיה בריאות ומזל טוב'),
+      goToFolder('hangup'),
     ], callId)
   }
 
-  // שלב לא ידוע — חזרה להתחלה
-  console.log(`[yemot-maternity] unknown step: "${step}"`)
-  return yemotText([...say('שגיאה, אנא חייגי שוב.'), ...hangup()], callId)
+  // ── שלב 2: קבלת מספר הכרטיס → שמירה → מעבר לבחירת מוקד ──────────────────
+  if (cardVal) {
+    if (cardVal.length < 4) {
+      return yemotText([cardReadCommand('מספר כרטיס לא תקין')], callId)
+    }
+
+    const result = await findActiveAid(callerPhone)
+    if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active) {
+      console.error('[yemot-maternity] re-lookup failed at card step', result)
+      return yemotText([idMessage('שגיאת מערכת אנא חייגי שוב'), goToFolder('hangup')], callId)
+    }
+
+    const { error: updateErr } = await admin
+      .from('maternity_aids')
+      .update({ card_number: cardVal })
+      .eq('id', result.active.id)
+    if (updateErr) {
+      console.error('[yemot-maternity] card_number update error', updateErr.message)
+      return yemotText([idMessage('שגיאה בשמירת הכרטיס אנא נסי שוב מאוחר יותר'), goToFolder('hangup')], callId)
+    }
+
+    const centers = await activeCentersWithCode(admin)
+    if (!centers.length) {
+      console.log('[yemot-maternity] no centers with code — finishing after card save')
+      return yemotText([
+        idMessage('מספר הכרטיס נשמר בהצלחה שיהיה בריאות ומזל טוב'),
+        goToFolder('hangup'),
+      ], callId)
+    }
+
+    console.log(`[yemot-maternity] card saved for aid ${result.active.id}, prompting center (${centers.length})`)
+    return yemotText([centerReadCommand(centers)], callId)
+  }
+
+  // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
+  const result = await findActiveAid(callerPhone)
+
+  if ('error' in result) {
+    console.error('[yemot-maternity] DB error', result.error)
+    return yemotText([idMessage('שגיאת מערכת אנא נסי שוב מאוחר יותר'), goToFolder('hangup')], callId)
+  }
+
+  if ('notFound' in result) {
+    console.log(`[yemot-maternity] phone not found: ${callerPhone}`)
+    try {
+      await admin.from('activity_log').insert({
+        user_id: null, action: 'yemot_phone_not_found', entity_type: 'phone',
+        entity_id: null, details: { caller: callerPhone, callId, note: 'מספר לא קיים במערכת' },
+      })
+    } catch { /* לא חוסם */ }
+    return yemotText([
+      idMessage('מספר הטלפון שלכם לא קיים במערכת מעבירים אתכם בחזרה לתפריט הראשי'),
+      goToFolder('/'),
+    ], callId)
+  }
+
+  if ('noBirth' in result) {
+    console.log(`[yemot-maternity] no active birth for family ${result.familyId} (${result.familyName})`)
+    try {
+      await admin.from('activity_log').insert({
+        user_id: null, action: 'yemot_no_active_birth', entity_type: 'beneficiary',
+        entity_id: result.familyId, details: { caller: callerPhone, callId, family_name: result.familyName },
+      })
+    } catch { /* לא חוסם */ }
+    return yemotText([
+      idMessage(
+        'אין כרגע לידה מעודכנת במערכת',
+        'אין כעת זכאות לקבלת כרטיס נדרים מאחר שלא נמצאה לידה בשישה השבועות האחרונים',
+        'אם את בתוך שישה שבועות מהלידה ועדיין מופיעה שגיאה אנא פני למשרד',
+      ),
+      goToFolder('hangup'),
+    ], callId)
+  }
+
+  const { active, familyName } = result
+  const prefix = active.card_number
+    ? 'שלום מצאנו את תיק הלידה שלך כרטיס נדרים כבר רשום וניתן לעדכן את המספר'
+    : 'שלום זוהית בהצלחה נמצא תיק לידה פעיל בחשבונך'
+  console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
+  return yemotText([cardReadCommand(prefix)], callId)
 }
