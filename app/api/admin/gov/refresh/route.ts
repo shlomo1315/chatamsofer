@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       cities: meta.count,            // סך הערים במאגר (מצטבר)
       fetched: detail.total,         // כמה נמשכו כעת ממשרד הפנים
       registry: detail.registry,     // מתוכן ממרשם היישובים
+      settlements: detail.settlements, // מתוכן מ"רשימת ישובים" המקיף (כולל יו"ש)
       streets: detail.streets,       // מתוכן ממאגר הרחובות
       streetsMethod: detail.streetsMethod,
       streetsForCity,

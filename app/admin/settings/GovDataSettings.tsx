@@ -31,7 +31,7 @@ export default function GovDataSettings() {
         // פירוט מקורות לאבחון: כמה ממרשם היישובים, כמה ממאגר הרחובות, ושגיאות אם היו
         const parts = [
           `סה״כ ${d.cities?.toLocaleString('he-IL') ?? ''} ערים במאגר`,
-          d.fetched != null ? `נמשכו כעת ${d.fetched?.toLocaleString('he-IL')} (מרשם ${d.registry ?? 0}, רחובות ${d.streets ?? 0}/${d.streetsMethod ?? '—'})` : '',
+          d.fetched != null ? `נמשכו כעת ${d.fetched?.toLocaleString('he-IL')} (מרשם ${d.registry ?? 0}, רשימת ישובים ${d.settlements ?? 0}, רחובות ${d.streets ?? 0}/${d.streetsMethod ?? '—'})` : '',
         ].filter(Boolean)
         const hasErr = Array.isArray(d.errors) && d.errors.length > 0
         setMsg({ type: hasErr ? 'err' : 'ok', text: parts.join(' · ') + (hasErr ? ` · שגיאות: ${d.errors.join(' | ')}` : '') })

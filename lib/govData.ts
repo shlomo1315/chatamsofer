@@ -2,6 +2,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // ── מקורות הנתונים של data.gov.il (משרד הפנים) ──────────────────────────────
 const CITIES_RESOURCE = '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba'
+// "רשימת ישובים בישראל" — המאגר הרשמי המקיף (~1,400 יישובים, כולל יו"ש).
+// המאגר הקודם (CITIES_RESOURCE) חלקי ולא כלל את יישובי יו"ש; זה משלים אותם.
+const SETTLEMENTS_RESOURCE = '55a24991-c3d3-4c5f-83bf-855db318d1b2'
 const STREETS_RESOURCE = 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3'
 const GOV_URL = 'https://data.gov.il/api/3/action/datastore_search'
 const GOV_SQL_URL = 'https://data.gov.il/api/3/action/datastore_search_sql'
@@ -36,7 +39,7 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
     const res = await fetch(GOV_URL, {
       method: 'POST',
       headers: GOV_HEADERS,
-      body: JSON.stringify({ resource_id: resourceId, limit: pageSize, offset, sort: '_id', fields, ...(filters ? { filters } : {}) }),
+      body: JSON.stringify({ resource_id: resourceId, limit: pageSize, offset, sort: '_id', ...(fields.length ? { fields } : {}), ...(filters ? { filters } : {}) }),
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
@@ -55,10 +58,28 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
 export interface CitiesSyncDetail {
   names: string[]
   registry: number                       // ממרשם היישובים
+  settlements: number                    // מ"רשימת ישובים בישראל" המקיף (כולל יו"ש)
   streets: number                        // ממאגר הרחובות (DISTINCT)
   streetsMethod: 'sql' | 'paged' | 'none'
   total: number
   errors: string[]
+}
+
+// שמות יישובים מ"רשימת ישובים בישראל" המקיף — המקור היחיד שכולל את יישובי יו"ש.
+// קוראים את כל השדות ומחלצים את שם היישוב לפי המפתח (עמיד לשינויי שמות עמודות).
+async function fetchCityNamesFromSettlements(): Promise<string[]> {
+  const records = await fetchAll(SETTLEMENTS_RESOURCE, [])
+  const out: string[] = []
+  for (const r of records) {
+    let name = r['שם_ישוב'] ?? r['שם_יישוב'] ?? r['שם ישוב'] ?? r['שם'] ?? ''
+    if (!name) {
+      const key = Object.keys(r).find(k => k.includes('שם') && (k.includes('ישוב') || k.includes('יישוב')))
+      if (key) name = r[key] ?? ''
+    }
+    const t = String(name).trim()
+    if (t && t !== 'לא רשום') out.push(t)
+  }
+  return out
 }
 
 // שמות יישובים ייחודיים ממאגר הרחובות דרך שאילתת SQL (מהיר — בקשה אחת).
@@ -104,6 +125,18 @@ export async function fetchCitiesDetailed(): Promise<CitiesSyncDetail> {
     errors.push(`מרשם יישובים: ${e instanceof Error ? e.message : 'שגיאה'}`)
   }
 
+  // 1b) "רשימת ישובים בישראל" המקיף — המקור שכולל את יישובי יו"ש
+  let settlements = 0
+  try {
+    const fromSettlements = await fetchCityNamesFromSettlements()
+    for (const n of fromSettlements) {
+      const t = n.trim()
+      if (t && t !== 'לא רשום') { if (!set.has(t)) settlements++; set.add(t) }
+    }
+  } catch (e) {
+    errors.push(`רשימת ישובים: ${e instanceof Error ? e.message : 'שגיאה'}`)
+  }
+
   // 2) השלמה ממאגר הרחובות — SQL מהיר, ואם נכשל נופלים לדפדוף מלא.
   // הדפדוף מביא בדיוק אותו כיסוי יישובים כמו ה-SQL (DISTINCT על אותו מאגר),
   // לכן אם ה-fallback הצליח הרשימה מלאה — *לא* מציגים שגיאה (רק לוג), כדי לא
@@ -132,7 +165,7 @@ export async function fetchCitiesDetailed(): Promise<CitiesSyncDetail> {
   }
 
   const names = [...set].sort((a, b) => a.localeCompare(b, 'he'))
-  return { names, registry, streets, streetsMethod, total: names.length, errors }
+  return { names, registry, settlements, streets, streetsMethod, total: names.length, errors }
 }
 
 export async function fetchCitiesFromGov(): Promise<string[]> {
