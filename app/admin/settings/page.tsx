@@ -12,6 +12,7 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
+import YemotMaternitySettings from './YemotMaternitySettings'
 import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 
@@ -151,6 +152,11 @@ export default async function SettingsPage() {
         {/* Loans portal */}
         <Card>
           <LoansPortalSettings />
+        </Card>
+
+        {/* Yemot maternity messages (editable text / human recordings) */}
+        <Card>
+          <YemotMaternitySettings />
         </Card>
 
         {/* Yemot telephony log */}

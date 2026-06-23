@@ -56,6 +56,9 @@ export async function GET(req: NextRequest) {
       errorMsg: d.error ?? null,
       familyName: d.family_name ?? null,
       note: d.note ?? null,
+      center: d.center ?? null,
+      centerStockAfter: (d.center_stock_after as string) ?? null,
+      nedarimId: d.nedarim_id ?? null,
       entityId: r.entity_id ?? null,
       createdAt: r.created_at,
     }
