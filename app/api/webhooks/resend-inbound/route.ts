@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
-import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
+import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
+import { shell } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +60,32 @@ async function maybeForwardToGmail(admin: SupabaseClient, msg: {
     replyTo: msg.fromEmail,
     skipLog: true,
   })
+}
+
+// מענה אוטומטי לפניות שמגיעות לתיבת "יריד" — "פנייתך התקבלה ותטופל בהקדם"
+async function maybeAutoReplyYerid(msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string }) {
+  if (departmentByEmail(msg.toEmail)?.key !== 'yerid') return
+  const from = (msg.fromEmail || '').toLowerCase()
+  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  const greet = msg.fromName ? ` ${msg.fromName}` : ''
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אישור קבלה</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">פנייתך התקבלה ✅</h2>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
+      שלום${greet},<br/>
+      תודה על פנייתך לאגף היריד של <strong>היכל החתם סופר</strong>. הודעתך התקבלה במערכת ותטופל בהקדם על ידי הצוות.
+    </p>
+    ${msg.subject ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr><td style="background:#f0f9ff;border-right:4px solid #0ea5e9;border-radius:0 10px 10px 0;padding:12px 16px;color:#075985;font-size:14px;">
+        נושא פנייתך: <strong>${msg.subject.replace(/</g, '&lt;')}</strong>
+      </td></tr></table>` : ''}
+    <p style="margin:0;color:#94a3b8;font-size:13px;">זהו מענה אוטומטי — אין צורך להשיב להודעה זו.</p>`
+  const html = shell({ preheader: 'פנייתך התקבלה ותטופל בהקדם', accent: '#0ea5e9', title: 'פנייתך התקבלה', subtitle: 'היכל החתם סופר · יריד', body })
+  await deliverMail(from, 'פנייתך התקבלה — היכל החתם סופר · יריד', html, undefined, { ...mailFor('yerid'), skipLog: true })
 }
 
 // פירוק שדה "שם <כתובת>" לשם וכתובת
@@ -417,6 +444,12 @@ export async function POST(request: NextRequest) {
       })
     } catch (e) {
       console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
+    }
+    // מענה אוטומטי לפניות יריד — "פנייתך התקבלה"
+    try {
+      await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+    } catch (e) {
+      console.error('[resend-inbound] yerid auto-reply error:', e instanceof Error ? e.message : String(e))
     }
   }
 
