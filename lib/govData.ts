@@ -60,9 +60,15 @@ export interface CitiesSyncDetail {
 }
 
 // שמות יישובים ייחודיים ממאגר הרחובות דרך שאילתת SQL (מהיר — בקשה אחת).
+// חובה POST: שאילתת SQL ב-query-string (GET) נחסמת ע"י Cloudflare WAF של data.gov.il
+// ומחזירה HTTP 403 (חתימת "SQL injection"). POST עם גוף JSON עובר — כמו שאר הקריאות.
 async function fetchCityNamesFromStreetsSql(): Promise<string[]> {
   const sql = `SELECT DISTINCT "שם_ישוב" AS c FROM "${STREETS_RESOURCE}"`
-  const res = await fetch(`${GOV_SQL_URL}?sql=${encodeURIComponent(sql)}`, { headers: GOV_HEADERS })
+  const res = await fetch(GOV_SQL_URL, {
+    method: 'POST',
+    headers: GOV_HEADERS,
+    body: JSON.stringify({ sql }),
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
   if (data?.success === false) throw new Error(String(data?.error?.info?.orig ?? data?.error?.message ?? 'SQL failed'))
@@ -96,7 +102,10 @@ export async function fetchCitiesDetailed(): Promise<CitiesSyncDetail> {
     errors.push(`מרשם יישובים: ${e instanceof Error ? e.message : 'שגיאה'}`)
   }
 
-  // 2) השלמה ממאגר הרחובות — SQL מהיר, ואם נכשל נופלים לדפדוף מלא
+  // 2) השלמה ממאגר הרחובות — SQL מהיר, ואם נכשל נופלים לדפדוף מלא.
+  // הדפדוף מביא בדיוק אותו כיסוי יישובים כמו ה-SQL (DISTINCT על אותו מאגר),
+  // לכן אם ה-fallback הצליח הרשימה מלאה — *לא* מציגים שגיאה (רק לוג), כדי לא
+  // להפחיד עם "403" כשבפועל הכל תקין.
   let streets = 0
   let streetsMethod: 'sql' | 'paged' | 'none' = 'none'
   let fromStreets: string[] | null = null
@@ -104,11 +113,14 @@ export async function fetchCitiesDetailed(): Promise<CitiesSyncDetail> {
     fromStreets = await fetchCityNamesFromStreetsSql()
     streetsMethod = 'sql'
   } catch (e1) {
-    errors.push(`רחובות(SQL): ${e1 instanceof Error ? e1.message : 'שגיאה'}`)
+    const sqlErr = e1 instanceof Error ? e1.message : 'שגיאה'
     try {
       fromStreets = await fetchCityNamesFromStreetsPaged()
       streetsMethod = 'paged'
+      console.warn(`[govData] streets SQL failed (${sqlErr}) — used paged fallback (coverage identical)`)
     } catch (e2) {
+      // שני המקורות של הרחובות נכשלו — זו שגיאה אמיתית (ייתכן כיסוי חסר)
+      errors.push(`רחובות(SQL): ${sqlErr}`)
       errors.push(`רחובות(דפדוף): ${e2 instanceof Error ? e2.message : 'שגיאה'}`)
     }
   }
