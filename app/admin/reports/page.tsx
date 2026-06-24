@@ -3,6 +3,8 @@ import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import ReportsCharts from './ReportsChartsLazy'
 import ReportBuilder from './ReportBuilder'
+import StaffActivityReport from './StaffActivityReport'
+import { requireStaff } from '@/lib/apiAuth'
 
 async function getReportData() {
   if (!isSupabaseConfigured()) {
@@ -28,6 +30,8 @@ async function getReportData() {
 
 export default async function ReportsPage() {
   const data = await getReportData()
+  const staff = await requireStaff()
+  const isAdmin = staff?.role === 'admin'
 
   const byEligibility = ['pending', 'approved', 'rejected', 'review'].map((s) => ({
     name: s === 'pending' ? 'ממתין' : s === 'approved' ? 'מאושר' : s === 'rejected' ? 'נדחה' : 'בבדיקה',
@@ -56,6 +60,9 @@ export default async function ReportsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="דוחות וניתוח נתונים" subtitle="סטטיסטיקות, מגמות ובונה דוחות להורדה" />
+
+      {/* דוח מזכירים — מי טיפל באילו בקשות/מיילים ומתי (למנהל בלבד) */}
+      {isAdmin && <StaffActivityReport />}
 
       {/* בונה דוחות יולדות — סינון לפי תאריכים/סכומים/בתי החלמה/כרטיסים + הורדה */}
       <ReportBuilder />
