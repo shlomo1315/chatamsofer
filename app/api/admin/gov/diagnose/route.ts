@@ -61,12 +61,19 @@ export async function GET(request: NextRequest) {
         inTableMatches = (data ?? []).map(r => r.street as string)
       }
     }
+    // בדיקת רחובות עבריים מוכרים — האם המקור מכיל אותם (לאבחון אם המשאב פגום)
+    const known = ['שמגר', 'מאה שערים', 'יפו', 'הרצל', 'בר אילן', 'מלכי ישראל', 'בן יהודה', 'אגריפס', 'סורוצקין', 'מלכה']
+    const knownCheck: Record<string, string[]> = {}
+    for (const k of known) knownCheck[k] = fromSource.filter(s => s.includes(k)).slice(0, 5)
+
     const result: Record<string, unknown> = {
       city,
       sourceStreetCount: fromSource.length,
       inTableCount,
       match: fromSource.length === inTableCount,
-      sample: fromSource.slice(0, 15),
+      // דגימה פרוסה על כל הא״ב (התחלה/אמצע/סוף) — לא רק 15 הראשונים
+      spreadSample: [0, 0.25, 0.5, 0.75, 0.95].map(p => fromSource[Math.floor(p * (fromSource.length - 1))]).filter(Boolean),
+      knownHebrewStreets: knownCheck,
     }
     if (streetQ) {
       result.streetQuery = streetQ
