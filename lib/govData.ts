@@ -330,23 +330,36 @@ export async function runGovSync(): Promise<{ cities: number; streetsCities: num
 }
 
 // מחזיר רחובות לעיר מהמאגר המקומי; אם ריק/ישן — מסנכרן ומחזיר. מהיר ברוב הפעמים.
-export async function getStreets(admin: SupabaseClient, city: string): Promise<string[]> {
-  const { data } = await admin
-    .from('gov_streets')
-    .select('street, synced_at')
-    .eq('city', city)
-    .order('street')
-    .range(0, 9999) // לעקוף את מגבלת 1000 השורות (ערים עם הרבה רחובות, כמו ירושלים)
+// קוראים בדפדוף (קבוצות של 1000) — Supabase חוסם 1000 שורות לבקשה, ולירושלים יש
+// ~4,279 רחובות. בלי הלולאה חזרו רק ה-1000 הראשונים אלפביתית (כל ה"א'").
+async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{ street: string; synced_at: string }[]> {
+  const all: { street: string; synced_at: string }[] = []
+  const pageSize = 1000
+  for (let from = 0; from < 200000; from += pageSize) {
+    const { data, error } = await admin
+      .from('gov_streets')
+      .select('street, synced_at')
+      .eq('city', city)
+      .order('street')
+      .range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    all.push(...(data as { street: string; synced_at: string }[]))
+    if (data.length < pageSize) break
+  }
+  return all
+}
 
-  const fresh = data && data.length > 0 && Date.now() - new Date(data[0].synced_at).getTime() < STALE_MS
-  if (fresh) return data!.map(r => r.street)
+export async function getStreets(admin: SupabaseClient, city: string): Promise<string[]> {
+  const data = await readAllStreetRows(admin, city)
+
+  const fresh = data.length > 0 && Date.now() - new Date(data[0].synced_at).getTime() < STALE_MS
+  if (fresh) return data.map(r => r.street)
 
   try {
     await syncStreetsForCity(admin, city)
-    const { data: re } = await admin.from('gov_streets').select('street').eq('city', city).order('street').range(0, 9999)
-    return (re ?? []).map(r => r.street)
+    return (await readAllStreetRows(admin, city)).map(r => r.street)
   } catch {
     // נפילה ל-API — מחזירים מה שיש (גם אם ישן), עדיף מכלום
-    return (data ?? []).map(r => r.street)
+    return data.map(r => r.street)
   }
 }
