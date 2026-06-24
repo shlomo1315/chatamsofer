@@ -235,21 +235,32 @@ export async function getCitiesMeta(admin: SupabaseClient): Promise<{ count: num
 }
 
 // ── רחובות ────────────────────────────────────────────────────────────────────
-export async function fetchStreetsFromGov(city: string): Promise<string[]> {
-  // ניסיון 1: התאמה מדויקת לפי שם היישוב (כולל דפדוף לכל הרחובות)
-  let records = await fetchAll(STREETS_RESOURCE, ['שם_רחוב', 'שם_ישוב'], { 'שם_ישוב': city })
+// מטמון מודול: כל הרחובות מקובצים לפי יישוב (אחרי trim). נבנה בפנייה אחת מלאה
+// ומשרת כל יישוב מיידית — במקום למשוך את כל המאגר מחדש לכל עיר (שמות היישובים
+// במאגר מרופדים ברווחים, ולכן סינון מדויק מול ה-API נכשל ונפל למשיכה מלאה כל פעם).
+let streetsMapCache: { map: Map<string, string[]>; at: number } | null = null
+const STREETS_MAP_TTL = 6 * 60 * 60 * 1000 // הרחובות משתנים לעיתים נדירות — מטמון 6 שעות
 
-  // ניסיון 2: חיפוש טקסט אם אין התאמה מדויקת (שמות עם רווחים/כתיב שונה)
-  if (records.length === 0) {
-    const all = await fetchAll(STREETS_RESOURCE, ['שם_רחוב', 'שם_ישוב'])
-    records = all.filter(r => (r['שם_ישוב'] ?? '').trim() === city)
+export async function getAllStreetsByCity(force = false): Promise<Map<string, string[]>> {
+  if (!force && streetsMapCache && Date.now() - streetsMapCache.at < STREETS_MAP_TTL) return streetsMapCache.map
+  const records = await fetchAll(STREETS_RESOURCE, ['שם_רחוב', 'שם_ישוב'])
+  const tmp = new Map<string, Set<string>>()
+  for (const r of records) {
+    const city = (r['שם_ישוב'] ?? '').trim()
+    const street = (r['שם_רחוב'] ?? '').trim()
+    if (!city || !street || street === 'אין שם רחוב' || street === 'ללא שם') continue
+    let s = tmp.get(city); if (!s) { s = new Set(); tmp.set(city, s) }
+    s.add(street)
   }
+  const map = new Map<string, string[]>()
+  for (const [c, s] of tmp) map.set(c, [...s].sort((a, b) => a.localeCompare(b, 'he')))
+  streetsMapCache = { map, at: Date.now() }
+  return map
+}
 
-  const raw = records
-    .map(r => (r['שם_רחוב'] ?? '').trim())
-    // מסננים ערכים טכניים של data.gov.il (למשל "אין שם רחוב")
-    .filter(s => s && s !== 'אין שם רחוב' && s !== 'ללא שם')
-  return [...new Set(raw)].sort((a, b) => a.localeCompare(b, 'he'))
+export async function fetchStreetsFromGov(city: string): Promise<string[]> {
+  const map = await getAllStreetsByCity()
+  return map.get(city.trim()) ?? []
 }
 
 export async function syncStreetsForCity(admin: SupabaseClient, city: string): Promise<number> {
