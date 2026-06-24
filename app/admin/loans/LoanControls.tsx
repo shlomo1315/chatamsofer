@@ -45,8 +45,12 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
   const applyStatus = async (next: LoanStatus, extra: Record<string, unknown> = {}) => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('loans').update({ status: next, ...extra }).eq('id', loan.id)
-      if (error) throw error
+      // עדכון סטטוס — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
+      const res = await fetch('/api/admin/request-status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'loan', id: loan.id, status: next, extra }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
       // באישור הבקשה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
       if (next === 'approved') {
         await fetch('/api/admin/request-approved', {

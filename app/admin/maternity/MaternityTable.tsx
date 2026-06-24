@@ -74,9 +74,12 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
     }
     setSaving(true)
     try {
-      // עדכון סטטוס התיק
-      const { error } = await supabase.from('maternity_aids').update({ status: next }).eq('id', aid.id)
-      if (error) throw error
+      // עדכון סטטוס התיק — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
+      const res = await fetch('/api/admin/request-status', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'maternity', id: aid.id, status: next }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
 
       // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת
       // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת

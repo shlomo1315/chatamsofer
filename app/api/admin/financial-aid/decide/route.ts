@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
+import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
@@ -16,7 +17,8 @@ function getAdminClient() {
 
 // עדכון ידני של החלטה (אישור עם סכום / דחייה / החזרה לממתין) + הודעה למבקש.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { id, status, amount } = await request.json()
   if (!id || !['approved', 'rejected', 'pending'].includes(status)) return NextResponse.json({ error: 'נתונים חסרים' }, { status: 400 })
 
@@ -33,12 +35,23 @@ export async function POST(request: NextRequest) {
     if (elig !== 'approved') return NextResponse.json({ error: 'המשפחה טרם אושרה במערכת. יש לאשר את המשפחה תחילה.' }, { status: 400 })
   }
 
+  const { data: prev } = await admin.from('financial_aid_requests').select('status').eq('id', id).maybeSingle()
+
   const { error } = await admin.from('financial_aid_requests').update({
     status,
     amount: status === 'approved' ? (Number(amount) || 0) : null,
+    reviewed_by: staff.userId,
     updated_at: new Date().toISOString(),
   }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await logActivity(admin, {
+    userId: staff.userId,
+    action: 'financial_aid_decided',
+    entityType: 'financial_aid_request',
+    entityId: String(id),
+    details: { from: (prev as { status?: string } | null)?.status ?? null, to: status, amount: status === 'approved' ? (Number(amount) || 0) : null },
+  })
 
   // הודעה למבקש על החלטה (לא בעת החזרה לממתין)
   if (status === 'approved' || status === 'rejected') {

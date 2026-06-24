@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,12 +29,15 @@ export async function POST(request: NextRequest) {
   const admin = getAdmin()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  const { data: prev } = await admin.from('widow_requests').select('status').eq('id', String(id)).maybeSingle()
+
   const { error } = await admin
     .from('widow_requests')
     .update({
       status: String(status),
       notes: notes ? String(notes) : undefined,
       reviewed_at: new Date().toISOString(),
+      reviewed_by: staff.userId,
     })
     .eq('id', String(id))
 
@@ -41,5 +45,14 @@ export async function POST(request: NextRequest) {
     console.error('[widow-request-status] update failed:', error.message)
     return NextResponse.json({ error: 'שגיאה בעדכון הבקשה' }, { status: 500 })
   }
+
+  await logActivity(admin, {
+    userId: staff.userId,
+    action: 'widow_request_status_changed',
+    entityType: 'widow_request',
+    entityId: String(id),
+    details: { from: (prev as { status?: string } | null)?.status ?? null, to: String(status) },
+  })
+
   return NextResponse.json({ ok: true })
 }
