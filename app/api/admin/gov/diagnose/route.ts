@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { fetchCitiesDetailed } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 180
 
-// כלי אבחון: רץ מהשרת (שמגיע ל-data.gov.il) ובודק באילו משאבים נמצא יישוב מסוים
-// ומהם שמות העמודות — כדי לאתר בדיוק מאיפה למשוך את יישובי יו"ש (למשל עמנואל).
-// שימוש: פתח בדפדפן (כמנהל מחובר): /api/admin/gov/diagnose?q=עמנואל
+// כלי אבחון לסנכרון הערים. שימוש (כמנהל מחובר): /api/admin/gov/diagnose?q=עמנואל
+// בודק: (1) האם היישוב קיים במאגרי data.gov.il ואיך שמו מאוחסן (ריפוד/רווחים),
+// (2) האם לוגיקת הסנכרון בפועל מפיקה אותו, (3) האם הוא קיים בטבלה המקומית gov_cities.
 
 const GOV_URL = 'https://data.gov.il/api/3/action/datastore_search'
 const GOV_HEADERS: Record<string, string> = {
@@ -16,28 +18,23 @@ const GOV_HEADERS: Record<string, string> = {
 }
 
 const RESOURCES: { id: string; label: string }[] = [
-  { id: '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba', label: 'מרשם יישובים (CITIES_RESOURCE הנוכחי)' },
-  { id: '55a24991-c3d3-4c5f-83bf-855db318d1b2', label: 'רשימת ישובים בישראל (SETTLEMENTS)' },
-  { id: '8f714b6f-c35c-4b40-a0e7-547b675eee0e', label: 'רשימת ישובים — כותרות אנגלית' },
-  { id: 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3', label: 'רחובות בישראל (STREETS)' },
+  { id: '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba', label: 'מרשם יישובים' },
+  { id: '55a24991-c3d3-4c5f-83bf-855db318d1b2', label: 'רשימת ישובים בישראל' },
+  { id: 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3', label: 'רחובות' },
 ]
 
 async function probe(resourceId: string, q: string) {
   try {
-    const res = await fetch(GOV_URL, {
-      method: 'POST',
-      headers: GOV_HEADERS,
-      body: JSON.stringify({ resource_id: resourceId, q, limit: 5 }),
-    })
+    const res = await fetch(GOV_URL, { method: 'POST', headers: GOV_HEADERS, body: JSON.stringify({ resource_id: resourceId, q, limit: 3 }) })
     if (!res.ok) return { ok: false, http: res.status }
     const data = await res.json()
     const records: Record<string, unknown>[] = data?.result?.records ?? []
-    return {
-      ok: true,
-      total: data?.result?.total ?? null,
-      fields: records[0] ? Object.keys(records[0]) : [],
-      sample: records.slice(0, 3),
-    }
+    // מציג את ערך שם_ישוב כפי שהוא (כדי לראות ריפוד/רווחים) ואת אורכו
+    const names = records.map(r => {
+      const v = (r['שם_ישוב'] ?? r['שם_יישוב'] ?? '') as string
+      return { raw: v, len: v.length, trimmed: v.trim() }
+    })
+    return { ok: true, total: data?.result?.total ?? null, names }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
@@ -46,9 +43,34 @@ async function probe(resourceId: string, q: string) {
 export async function GET(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   const q = (request.nextUrl.searchParams.get('q') ?? 'עמנואל').trim()
-  const out: Record<string, unknown> = { q }
-  for (const r of RESOURCES) {
-    out[r.label] = await probe(r.id, q)
+
+  // 1) מציאת היישוב במאגרי המקור
+  const sources: Record<string, unknown> = {}
+  for (const r of RESOURCES) sources[r.label] = await probe(r.id, q)
+
+  // 2) הרצת לוגיקת הסנכרון בפועל — האם q נכלל בתוצאה?
+  let syncResult: Record<string, unknown>
+  try {
+    const detail = await fetchCitiesDetailed()
+    const matches = detail.names.filter(n => n.includes(q))
+    syncResult = {
+      total: detail.total, registry: detail.registry, settlements: detail.settlements,
+      streets: detail.streets, streetsMethod: detail.streetsMethod, errors: detail.errors,
+      includesExact: detail.names.includes(q),
+      matchesContaining: matches,
+    }
+  } catch (e) {
+    syncResult = { error: e instanceof Error ? e.message : String(e) }
   }
-  return NextResponse.json(out, { headers: { 'Cache-Control': 'no-store' } })
+
+  // 3) האם קיים בטבלה המקומית gov_cities
+  let localTable: Record<string, unknown> = {}
+  const admin = getServiceClient()
+  if (admin) {
+    const { count } = await admin.from('gov_cities').select('name', { count: 'exact', head: true })
+    const { data: like } = await admin.from('gov_cities').select('name').ilike('name', `%${q}%`).limit(10)
+    localTable = { totalCities: count ?? 0, matchesInTable: (like ?? []).map(r => ({ name: r.name, len: (r.name as string).length })) }
+  }
+
+  return NextResponse.json({ q, sources, syncResult, localTable }, { headers: { 'Cache-Control': 'no-store' } })
 }
