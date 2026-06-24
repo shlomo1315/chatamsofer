@@ -337,10 +337,12 @@ export default function YemotMaternitySettings() {
                   onChange={(e) => setText(m.key, e.target.value)}
                   rows={2}
                   dir="rtl"
-                  className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y disabled:bg-slate-50"
-                  disabled={!!msg.audio}
+                  className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
                   placeholder={m.defaultText}
                 />
+                {msg.audio && (
+                  <p className="text-[11px] text-slate-400 mt-1">יש קול מוקלט להודעה זו — לאחר עריכת הטקסט לחצ/י &quot;צור קול מחדש&quot; כדי לעדכן את הקול.</p>
+                )}
                 {m.hint && <p className="text-[11px] text-amber-600 mt-1">{m.hint}</p>}
 
                 {m.allowAudio && (
