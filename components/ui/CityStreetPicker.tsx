@@ -91,13 +91,14 @@ export default function CityStreetPicker({
     onAddressChange(combined)
   }
 
+  // מציגים את כל הרשימה (נגללת) — גם לפני הקלדה. סינון לפי הטקסט שהוקלד.
   const filteredCities = cityInput.trim()
-    ? allCities.filter(c => c.includes(cityInput.trim())).slice(0, 20)
-    : allCities.slice(0, 15)
+    ? allCities.filter(c => c.includes(cityInput.trim()))
+    : allCities
 
   const filteredStreets = streetInput.trim()
-    ? streets.filter(s => s.includes(streetInput.trim())).slice(0, 15)
-    : streets.slice(0, 12)
+    ? streets.filter(s => s.includes(streetInput.trim()))
+    : streets
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -125,7 +126,7 @@ export default function CityStreetPicker({
             className={`${BASE} ${cityError ? ERR : ''}`}
           />
           {showCity && filteredCities.length > 0 && (
-            <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+            <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
               {filteredCities.map(c => (
                 <li key={c}>
                   <button
