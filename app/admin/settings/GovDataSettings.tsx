@@ -45,6 +45,24 @@ export default function GovDataSettings() {
     }
   }
 
+  const fullReset = async () => {
+    if (!window.confirm('פעולה זו תמחק את כל הערים והרחובות המקומיים ותסנכרן הכל מחדש ישירות ממשרד הפנים. להמשיך?')) return
+    setRefreshing(true); setMsg(null)
+    try {
+      const r = await fetch('/api/admin/gov/reset', { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok || d.ok === false) { setMsg({ type: 'err', text: d.error || 'האיפוס נכשל' }); return }
+      setCount(d.cities ?? count)
+      setLastSyncedAt(new Date().toISOString())
+      setMsg({ type: 'ok', text: `אופס וסונכרן ממשרד הפנים: ${d.cities?.toLocaleString('he-IL')} ערים, ${d.streets?.toLocaleString('he-IL')} רחובות ב-${d.streetsCities?.toLocaleString('he-IL')} ערים` })
+      fetch(`/api/gov/cities?_=${Date.now()}`).catch(() => {})
+    } catch {
+      setMsg({ type: 'err', text: 'שגיאת רשת — נסה שוב' })
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const fmtWhen = (iso: string | null) => {
     if (!iso) return 'מעולם לא'
     const d = new Date(iso)
@@ -94,7 +112,15 @@ export default function GovDataSettings() {
               {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
               רענן עכשיו ממשרד הפנים
             </button>
-            <p className="text-xs text-slate-400">מושך את רשימת היישובים המלאה והעדכנית כולל יו״ש. אם חסרות ערים — לחיצה כאן תשלים אותן.</p>
+            <button
+              onClick={fullReset}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+            >
+              {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              איפוס וסנכרון מלא
+            </button>
+            <p className="text-xs text-slate-400">"רענן" משלים ערים/רחובות. "איפוס וסנכרון מלא" מוחק הכל ובונה מחדש ישירות ממשרד הפנים (כדקה–שתיים).</p>
           </div>
         </div>
       )}
