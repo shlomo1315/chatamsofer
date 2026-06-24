@@ -9,8 +9,10 @@ type Msg = { text: string; audio?: string | null }
 type Meta = { key: string; label: string; defaultText: string; allowAudio: boolean; placeholders?: string[]; hint?: string }
 type Voice = { voiceId: string; name: string; labels?: Record<string, string> }
 
-// הודעה כשירה ליצירת קול נוירוני: ניתנת להקלטה ואינה דינמית (בלי {משתנים})
-const isEligible = (m: Meta) => m.allowAudio && !(m.placeholders && m.placeholders.length)
+// הודעה כשירה ליצירת קול נוירוני: ניתנת להקלטה ואין בטקסט הנוכחי משתנה {...}
+// (קובץ יחיד לא יכול לשרת ערכים משתנים — אם הוסר המשתנה מהטקסט, אפשר לייצר)
+const hasPlaceholder = (t: string) => /\{[^}]+\}/.test(t)
+const isEligible = (m: Meta, text: string) => m.allowAudio && !hasPlaceholder(text)
 // קול שנוצר אוטומטית מסומן בקידומת tts_ (לעומת rec_ של הקלטה אנושית)
 const isGenerated = (audio?: string | null) => !!audio && audio.startsWith('tts_')
 
@@ -221,7 +223,7 @@ export default function YemotMaternitySettings() {
   }
 
   const busyAny = saving || genAll || savingCfg
-  const eligibleCount = meta.filter(isEligible).length
+  const eligibleCount = meta.filter((m) => isEligible(m, messages[m.key]?.text ?? m.defaultText)).length
 
   return (
     <div>
@@ -361,7 +363,7 @@ export default function YemotMaternitySettings() {
 
                 {m.allowAudio && (
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {isEligible(m) && hasKey && voiceId && (
+                    {isEligible(m, msg.text) && hasKey && voiceId && (
                       <Button
                         type="button"
                         variant="outline"
@@ -373,7 +375,7 @@ export default function YemotMaternitySettings() {
                         {generated ? 'צור קול מחדש' : 'צור קול טבעי'}
                       </Button>
                     )}
-                    {isEligible(m) && hasKey && voiceId && (
+                    {isEligible(m, msg.text) && hasKey && voiceId && (
                       <Button
                         type="button"
                         variant="ghost"

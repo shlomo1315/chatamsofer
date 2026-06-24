@@ -14,10 +14,11 @@ function metaFor(key: string) {
 }
 
 // הודעה כשירה ליצירת קול נוירוני: ניתנת להקלטה ואינה דינמית (בלי {משתנים}),
-// כי קובץ יחיד לא יכול לשרת ערכים משתנים.
-function eligible(key: string): boolean {
+// כי קובץ יחיד לא יכול לשרת ערכים משתנים. נחסם רק אם הטקסט בפועל מכיל משתנה {...}.
+const hasPlaceholder = (t: string) => /\{[^}]+\}/.test(t)
+function eligible(key: string, text: string): boolean {
   const m = metaFor(key)
-  return !!m && m.allowAudio && !(m.placeholders && m.placeholders.length)
+  return !!m && m.allowAudio && !hasPlaceholder(text)
 }
 
 // יצירת קול נוירוני להודעה אחת — מייצר ב-ElevenLabs ומעלה לימות
@@ -49,12 +50,13 @@ export async function POST(request: NextRequest) {
   // יצירה לכל ההודעות הכשירות
   if (body.all) {
     const msgs = await getMaternityMessages()
-    const keys = MATERNITY_MESSAGE_META.filter((m) => eligible(m.key)).map((m) => m.key)
+    const keys = MATERNITY_MESSAGE_META.filter((m) => m.allowAudio).map((m) => m.key)
     const results: Record<string, string> = {}
     const errors: Record<string, string> = {}
     for (const key of keys) {
       const text = (msgs[key]?.text ?? metaFor(key)?.defaultText ?? '').trim()
       if (!text) { errors[key] = 'אין טקסט'; continue }
+      if (hasPlaceholder(text)) continue // הודעה דינמית — מדלגים בשקט
       const r = await generateOne(key, text)
       if (r.ok) results[key] = r.audio
       else errors[key] = r.error
@@ -70,10 +72,10 @@ export async function POST(request: NextRequest) {
   // יצירה להודעה בודדת
   const key = String(body.key ?? '').trim()
   if (!metaFor(key)) return NextResponse.json({ error: 'מפתח הודעה לא מוכר' }, { status: 400 })
-  if (!eligible(key)) return NextResponse.json({ error: 'להודעה זו לא ניתן לייצר קול (הודעה דינמית או ללא אפשרות אודיו)' }, { status: 400 })
 
   const text = String(body.text ?? '').trim() || (await getMaternityMessages())[key]?.text || metaFor(key)?.defaultText || ''
   if (!text) return NextResponse.json({ error: 'אין טקסט ליצירה' }, { status: 400 })
+  if (!eligible(key, text)) return NextResponse.json({ error: 'לא ניתן לייצר קול — הסר/י את המשתנה {...} מהטקסט תחילה' }, { status: 400 })
 
   const r = await generateOne(key, text)
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 502 })
