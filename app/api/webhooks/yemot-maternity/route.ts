@@ -385,13 +385,14 @@ async function handle(req: NextRequest) {
     return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
   }
 
-  // כרטיס כבר משויך ללידה זו — לא מבקשים שוב
-  if (String(active.card_number ?? '').trim()) {
+  // כרטיס כבר משויך ללידה זו — מודיעים עם מספר הכרטיס, לא מבקשים שוב
+  const existingCard = String(active.card_number ?? '').trim()
+  if (existingCard) {
     console.log(`[yemot-maternity] aid ${active.id} already has a card linked — already-linked message`)
     await logActivity(admin, 'yemot_card_already_linked', 'maternity_aid', active.id, {
-      caller: callerPhone, callId, family_name: familyName,
+      caller: callerPhone, callId, family_name: familyName, card_number_last4: existingCard.slice(-4),
     })
-    return yemotText([idMessage(tokenOf(M.card_already_linked)), goToFolder('hangup')], callId)
+    return yemotText([idMessage(tokenOf(M.card_already_linked, { card: existingCard })), goToFolder('hangup')], callId)
   }
 
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)

@@ -30,7 +30,7 @@ export const MATERNITY_MESSAGE_META: MsgMeta[] = [
   { key: 'not_found', label: 'טלפון לא מזוהה', defaultText: 'מספר הטלפון שלכם לא קיים במערכת מעבירים אתכם בחזרה לתפריט הראשי', allowAudio: true },
   { key: 'no_birth', label: 'אין לידה פעילה / אין זכאות', defaultText: 'אין כרגע לידה מעודכנת במערכת אין כעת זכאות לקבלת כרטיס נדרים מאחר שלא נמצאה לידה בשישה השבועות האחרונים אם את בתוך שישה שבועות מהלידה ועדיין מופיעה שגיאה אנא פני למשרד', allowAudio: true },
   { key: 'pending_approval', label: 'לידה ממתינה לאישור המזכירות', defaultText: 'שים לב כרגע אין אפשרות להטעין את הכרטיס היות ועדיין אינכם מאושרים במערכת הלידה הנוכחית ממתינה לאישור של המזכירות', allowAudio: true },
-  { key: 'card_already_linked', label: 'כרטיס כבר משויך ללידה זו', defaultText: 'כרטיס נדרים כבר משויך ללידה זו לא ניתן לשייך כרטיס נוסף אם יש צורך בעדכון אנא פני למשרד', allowAudio: true },
+  { key: 'card_already_linked', label: 'כרטיס כבר משויך ללידה זו', defaultText: 'כרטיס נדרים מספר {card} כבר מחובר למערכת לא ניתן לשייך כרטיס נוסף אם יש צורך בעדכון אנא פני למשרד', allowAudio: true, placeholders: ['card'], hint: 'ניתן לכלול {card} למספר הכרטיס. אם תועלה הקלטה אנושית — המספר לא יוקרא.' },
   { key: 'link_success', label: 'חיבור הכרטיס הצליח', defaultText: 'הכרטיס חובר בהצלחה המוקד שנבחר {center} שיהיה בריאות ומזל טוב', allowAudio: true, placeholders: ['center'], hint: 'ניתן לכלול {center} לשם המוקד. אם תעלה הקלטה אנושית — שם המוקד לא יוקרא.' },
   { key: 'link_fail', label: 'חיבור הכרטיס נכשל', defaultText: 'לא הצלחנו לחבר את הכרטיס הפעולה לא בוצעה אנא נסי שוב מאוחר יותר או פני למשרד', allowAudio: true },
   { key: 'not_in_nedarim', label: 'המשפחה אינה רשומה בנדרים', defaultText: 'לא ניתן לחבר את הכרטיס מאחר שהמשפחה אינה רשומה במערכת נדרים אנא פני למשרד', allowAudio: true },

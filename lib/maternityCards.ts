@@ -3,6 +3,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
 import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard } from '@/lib/nedarim'
+import { logActivity } from '@/lib/activityLog'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
 export const MATERNITY_LOAD_AMOUNT = 600
@@ -42,11 +43,14 @@ export async function loadMaternityCardOnApproval(
   try {
     result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר')
   } catch (e) {
-    await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: e instanceof Error ? e.message : String(e) }).eq('id', aid.id)
-    return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים', clientId }
+    const msg = e instanceof Error ? e.message : String(e)
+    await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)
+    await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, error: msg } })
+    return { ok: false, error: msg, clientId }
   }
   if (!result.ok) {
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: result.message }).eq('id', aid.id)
+    await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, error: result.message } })
     return { ok: false, error: result.message, clientId }
   }
 
@@ -63,6 +67,7 @@ export async function loadMaternityCardOnApproval(
     card_load_error: null,
   }).eq('id', aid.id)
 
+  await logActivity(admin, { action: 'maternity_card_loaded', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, tlushId: result.tlushId, trigger: 'auto_on_approval' } })
   return { ok: true, clientId }
 }
 

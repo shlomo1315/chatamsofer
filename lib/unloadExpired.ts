@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { getNedarimCreds, prikatTlush } from '@/lib/nedarim'
+import { getNedarimCreds, prikatTlush, setMagneticCard } from '@/lib/nedarim'
 
 // פריקה אוטומטית של כרטיסים שעברו 6 שבועות מהלידה.
 // משמש גם את נקודת-הקצה /api/nedarim/unload-expired וגם את המתזמן הפנימי (instrumentation).
@@ -15,9 +15,10 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
   const today = new Date().toISOString().slice(0, 10) // yyyy-mm-dd
 
   // תיקים שהוטענו, יש להם מזהה טעינה, ועברו 6 שבועות מהלידה (six_weeks_end <= היום)
+  // מושכים גם את מספר הכרטיס ואת מזהה המשפחה בנדרים — כדי למחוק את הכרטיס המגנטי בתום הפריקה.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, card_tlush_id, six_weeks_end')
+    .select('id, card_tlush_id, six_weeks_end, card_number, beneficiary:beneficiaries(nedarim_id)')
     .eq('card_load_status', 'loaded')
     .not('card_tlush_id', 'is', null)
     .lte('six_weeks_end', today)
@@ -28,17 +29,35 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
     try {
       const r = await prikatTlush(creds, String(aid.card_tlush_id))
       if (r.ok) {
+        // מחיקת הכרטיס המגנטי מהמשפחה בנדרים — כדי שבלידה הבאה יקבלו כרטיס חדש
+        const nedarimId = (aid.beneficiary as { nedarim_id?: string | null } | null)?.nedarim_id ?? null
+        const cardNumber = String(aid.card_number ?? '').trim()
+        let cardRemoved = false
+        let cardRemoveError: string | null = null
+        if (nedarimId && cardNumber) {
+          try {
+            const rm = await setMagneticCard(creds, String(nedarimId), cardNumber, { remove: true })
+            cardRemoved = rm.ok
+            if (!rm.ok) cardRemoveError = rm.message
+          } catch (e) { cardRemoveError = e instanceof Error ? e.message : String(e) }
+        }
+
         await admin.from('maternity_aids').update({
           card_load_status: 'unloaded',
           card_unloaded_at: new Date().toISOString(),
           card_balance: 0,
-          card_load_error: null,
+          // ניקוי מספר הכרטיס בתיק רק אם נמחק בנדרים בהצלחה (אחרת נשמר לניסיון חוזר)
+          card_number: cardRemoved ? null : aid.card_number,
+          card_load_error: cardRemoveError,
         }).eq('id', aid.id)
         await admin.from('activity_log').insert({
           action: 'maternity_card_unloaded',
           entity_type: 'maternity_aid',
           entity_id: aid.id,
-          details: { tlushId: aid.card_tlush_id, reason: 'פריקה אוטומטית בתום 6 שבועות', six_weeks_end: aid.six_weeks_end },
+          details: {
+            tlushId: aid.card_tlush_id, reason: 'פריקה אוטומטית בתום 6 שבועות', six_weeks_end: aid.six_weeks_end,
+            card_removed: cardRemoved, card_remove_error: cardRemoveError, card_number_last4: cardNumber.slice(-4),
+          },
         })
         processed++
       } else {
