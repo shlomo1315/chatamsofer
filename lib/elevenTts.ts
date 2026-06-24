@@ -10,6 +10,8 @@ const DEFAULT_MODEL = 'eleven_multilingual_v2' // תומך עברית, איכו�
 // מנוע שתומך באכיפת שפה (language_code) — לאכיפת עברית מדויקת
 const HEBREW_ENFORCE_MODEL = 'eleven_turbo_v2_5'
 const MULTILINGUAL_MODEL = 'eleven_multilingual_v2'
+// המנוע הטוב ביותר לעברית (תומך 70+ שפות כולל עברית) — מועדף ליצירה
+const V3_MODEL = 'eleven_v3'
 
 export type ElevenConfig = { apiKey: string; voiceId: string; modelId: string }
 
@@ -120,17 +122,15 @@ export async function generateSpeech(
   const voiceId = (opts?.voiceId && opts.voiceId.trim()) || cfg?.voiceId
   if (!cfg || !voiceId) return { ok: false, error: 'ElevenLabs אינו מוגדר — יש להזין מפתח API ולבחור קול בהגדרות' }
 
-  // ניסיון יחיד מול ElevenLabs. languageCode מאכף שפה (נתמך רק במודלי v2.5).
-  const attempt = async (modelId: string, languageCode?: string): Promise<{ ok: boolean; audio?: ArrayBuffer; status: number; errText?: string }> => {
+  // ניסיון יחיד מול ElevenLabs. languageCode מאכף שפה (v2.5). withSettings — v3 לא מקבל
+  // את אותם voice_settings, לכן עבורו שולחים גוף מינימלי.
+  const attempt = async (modelId: string, o?: { languageCode?: string; withSettings?: boolean }): Promise<{ ok: boolean; audio?: ArrayBuffer; status: number; errText?: string }> => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 60_000)
     try {
-      const reqBody: Record<string, unknown> = {
-        text: clean,
-        model_id: modelId,
-        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true },
-      }
-      if (languageCode) reqBody.language_code = languageCode
+      const reqBody: Record<string, unknown> = { text: clean, model_id: modelId }
+      if (o?.withSettings) reqBody.voice_settings = { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true }
+      if (o?.languageCode) reqBody.language_code = o.languageCode
       const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
         method: 'POST',
         headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
@@ -149,12 +149,16 @@ export async function generateSpeech(
     }
   }
 
-  // ראשי: מנוע עם אכיפת שפה עברית (he). נפילה-לאחור: מנוע רב-לשוני שקורא עברית מהכתב.
-  const primary = await attempt(HEBREW_ENFORCE_MODEL, 'he')
-  if (primary.ok) return { ok: true, audio: primary.audio }
+  // עברית מדויקת: מעדיפים את Eleven v3 (התמיכה הטובה ביותר בעברית). נפילה-לאחור:
+  // turbo v2.5 עם אכיפת he, ואז המנוע הרב-לשוני שקורא עברית מהכתב.
+  const v3 = await attempt(V3_MODEL)
+  if (v3.ok) return { ok: true, audio: v3.audio }
 
-  const fallback = await attempt(MULTILINGUAL_MODEL)
-  if (fallback.ok) return { ok: true, audio: fallback.audio }
+  const turbo = await attempt(HEBREW_ENFORCE_MODEL, { languageCode: 'he', withSettings: true })
+  if (turbo.ok) return { ok: true, audio: turbo.audio }
 
-  return { ok: false, error: `ElevenLabs החזיר שגיאה: ${primary.errText || fallback.errText || 'לא ידוע'}` }
+  const multi = await attempt(MULTILINGUAL_MODEL, { withSettings: true })
+  if (multi.ok) return { ok: true, audio: multi.audio }
+
+  return { ok: false, error: `ElevenLabs החזיר שגיאה: ${v3.errText || turbo.errText || multi.errText || 'לא ידוע'}` }
 }
