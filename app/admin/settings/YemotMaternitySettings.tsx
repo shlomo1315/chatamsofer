@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Upload, Mic, Trash2, Type, Wand2, Volume2, KeyRound, Play } from 'lucide-react'
+import { Loader2, Check, Upload, Mic, Trash2, Type, Wand2, Volume2, KeyRound, Play, Download } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -28,6 +28,7 @@ export default function YemotMaternitySettings() {
   const [genKey, setGenKey] = useState<string | null>(null)
   const [genAll, setGenAll] = useState(false)
   const [previewId, setPreviewId] = useState<string | null>(null)
+  const [downloadId, setDownloadId] = useState<string | null>(null)
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -222,6 +223,35 @@ export default function YemotMaternitySettings() {
     }
   }
 
+  // הורדת הקובץ שנוצר ב-ElevenLabs כקובץ MP3 למחשב
+  async function download(id: string, text: string, label: string) {
+    setDownloadId(id)
+    try {
+      const res = await fetch('/api/admin/elevenlabs/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: voiceId || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'שגיאה בהורדה')
+      if (!data?.audio) throw new Error('לא התקבל אודיו')
+      const bytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0))
+      const blob = new Blob([bytes], { type: data.mime || 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${label || id}.mp3`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהורדה')
+    } finally {
+      setDownloadId(null)
+    }
+  }
+
   const busyAny = saving || genAll || savingCfg
   const eligibleCount = meta.filter((m) => isEligible(m, messages[m.key]?.text ?? m.defaultText)).length
 
@@ -385,6 +415,18 @@ export default function YemotMaternitySettings() {
                       >
                         {previewId === m.key ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
                         השמע
+                      </Button>
+                    )}
+                    {isEligible(m, msg.text) && hasKey && voiceId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={downloadId === m.key || generating || busyAny}
+                        onClick={() => download(m.key, msg.text, m.label)}
+                      >
+                        {downloadId === m.key ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        הורד הקלטה
                       </Button>
                     )}
                     <input
