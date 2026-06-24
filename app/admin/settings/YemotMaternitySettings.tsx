@@ -267,7 +267,7 @@ export default function YemotMaternitySettings() {
         </div>
         <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
           <span className="inline-flex items-center bg-indigo-100 text-indigo-700 rounded-full px-2 py-0.5 font-medium">🇮🇱 עברית</span>
-          הקול מופק בעברית (מנוע רב-לשוני eleven_multilingual_v2). לאיכות מיטבית בחר/י קול שתומך בעברית — לחצ/י על כפתור ההשמעה כדי להשוות בין קולות.
+          הקול מוגדר לעברית (אכיפת שפה he) ברמת ה-API. אם המבטא נשמע אנגלי — הקול שנבחר הוא קול אנגלי; בחר/י קול שתומך בעברית והשווה עם כפתור ההשמעה.
         </p>
         {hasKey && voiceId && (
           <div className="mt-2.5 flex flex-wrap gap-2">

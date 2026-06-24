@@ -7,6 +7,9 @@ import { getServiceClient } from '@/lib/apiAuth'
 const ELEVEN_API = 'https://api.elevenlabs.io/v1'
 const SETTINGS_KEY = 'elevenlabs_tts'
 const DEFAULT_MODEL = 'eleven_multilingual_v2' // תומך עברית, איכות גבוהה
+// מנוע שתומך באכיפת שפה (language_code) — לאכיפת עברית מדויקת
+const HEBREW_ENFORCE_MODEL = 'eleven_turbo_v2_5'
+const MULTILINGUAL_MODEL = 'eleven_multilingual_v2'
 
 export type ElevenConfig = { apiKey: string; voiceId: string; modelId: string }
 
@@ -117,31 +120,41 @@ export async function generateSpeech(
   const voiceId = (opts?.voiceId && opts.voiceId.trim()) || cfg?.voiceId
   if (!cfg || !voiceId) return { ok: false, error: 'ElevenLabs אינו מוגדר — יש להזין מפתח API ולבחור קול בהגדרות' }
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 60_000)
-  try {
-    const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
-      method: 'POST',
-      headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({
+  // ניסיון יחיד מול ElevenLabs. languageCode מאכף שפה (נתמך רק במודלי v2.5).
+  const attempt = async (modelId: string, languageCode?: string): Promise<{ ok: boolean; audio?: ArrayBuffer; status: number; errText?: string }> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 60_000)
+    try {
+      const reqBody: Record<string, unknown> = {
         text: clean,
-        model_id: cfg.modelId,
+        model_id: modelId,
         voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true },
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '')
-      return { ok: false, error: `ElevenLabs החזיר שגיאה (${res.status}): ${errText.slice(0, 200)}` }
+      }
+      if (languageCode) reqBody.language_code = languageCode
+      const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
+        method: 'POST',
+        headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
+        body: JSON.stringify(reqBody),
+        signal: controller.signal,
+        cache: 'no-store',
+      })
+      if (!res.ok) return { ok: false, status: res.status, errText: (await res.text().catch(() => '')).slice(0, 200) }
+      const buf = await res.arrayBuffer()
+      if (!buf.byteLength) return { ok: false, status: res.status, errText: 'אודיו ריק' }
+      return { ok: true, audio: buf, status: res.status }
+    } catch (e) {
+      return { ok: false, status: 0, errText: e instanceof Error ? e.message : String(e) }
+    } finally {
+      clearTimeout(timer)
     }
-    const buf = await res.arrayBuffer()
-    if (!buf.byteLength) return { ok: false, error: 'ElevenLabs החזיר אודיו ריק' }
-    return { ok: true, audio: buf }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
-  } finally {
-    clearTimeout(timer)
   }
+
+  // ראשי: מנוע עם אכיפת שפה עברית (he). נפילה-לאחור: מנוע רב-לשוני שקורא עברית מהכתב.
+  const primary = await attempt(HEBREW_ENFORCE_MODEL, 'he')
+  if (primary.ok) return { ok: true, audio: primary.audio }
+
+  const fallback = await attempt(MULTILINGUAL_MODEL)
+  if (fallback.ok) return { ok: true, audio: fallback.audio }
+
+  return { ok: false, error: `ElevenLabs החזיר שגיאה: ${primary.errText || fallback.errText || 'לא ידוע'}` }
 }
