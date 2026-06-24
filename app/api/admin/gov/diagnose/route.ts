@@ -43,24 +43,37 @@ async function probe(resourceId: string, q: string) {
 export async function GET(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
-  // אימות רחובות לעיר: ?city=ירושלים — משווה כמה רחובות במקור מול כמה במאגר המקומי
+  // אימות רחובות לעיר: ?city=ירושלים — משווה כמה רחובות במקור מול כמה במאגר המקומי.
+  // אופציונלי ?street=שמגר — בודק אם רחוב מסוים קיים במקור ובמאגר.
   const city = request.nextUrl.searchParams.get('city')?.trim()
   if (city) {
+    const streetQ = request.nextUrl.searchParams.get('street')?.trim()
     const map = await getAllStreetsByCity(true)
     const fromSource = map.get(city) ?? []
     const admin = getServiceClient()
     let inTableCount = 0
+    let inTableMatches: string[] = []
     if (admin) {
       const { count } = await admin.from('gov_streets').select('street', { count: 'exact', head: true }).eq('city', city)
       inTableCount = count ?? 0
+      if (streetQ) {
+        const { data } = await admin.from('gov_streets').select('street').eq('city', city).ilike('street', `%${streetQ}%`).limit(20)
+        inTableMatches = (data ?? []).map(r => r.street as string)
+      }
     }
-    return NextResponse.json({
+    const result: Record<string, unknown> = {
       city,
       sourceStreetCount: fromSource.length,
       inTableCount,
       match: fromSource.length === inTableCount,
       sample: fromSource.slice(0, 15),
-    }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+    if (streetQ) {
+      result.streetQuery = streetQ
+      result.inSourceMatches = fromSource.filter(s => s.includes(streetQ))
+      result.inTableMatches = inTableMatches
+    }
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
   }
 
   const q = (request.nextUrl.searchParams.get('q') ?? 'עמנואל').trim()
