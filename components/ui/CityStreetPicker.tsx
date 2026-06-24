@@ -91,14 +91,15 @@ export default function CityStreetPicker({
     onAddressChange(combined)
   }
 
-  // מציגים את כל הרשימה (נגללת) — גם לפני הקלדה. סינון לפי הטקסט שהוקלד.
-  const filteredCities = cityInput.trim()
-    ? allCities.filter(c => c.includes(cityInput.trim()))
-    : allCities
-
-  const filteredStreets = streetInput.trim()
-    ? streets.filter(s => s.includes(streetInput.trim()))
-    : streets
+  // מסננים על *כל* הרשימה המלאה (כך מוצאים כל ערך בהקלדה), אבל מציגים עד 100
+  // תוצאות כדי שהדפדפן לא ייתקע על אלפי פריטים (למשל 4,279 רחובות בירושלים).
+  const RENDER_CAP = 100
+  const matchedCities = cityInput.trim() ? allCities.filter(c => c.includes(cityInput.trim())) : allCities
+  const matchedStreets = streetInput.trim() ? streets.filter(s => s.includes(streetInput.trim())) : streets
+  const filteredCities = matchedCities.slice(0, RENDER_CAP)
+  const filteredStreets = matchedStreets.slice(0, RENDER_CAP)
+  const moreCities = matchedCities.length - filteredCities.length
+  const moreStreets = matchedStreets.length - filteredStreets.length
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -146,6 +147,11 @@ export default function CityStreetPicker({
                   </button>
                 </li>
               ))}
+              {moreCities > 0 && (
+                <li className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
+                  ועוד {moreCities.toLocaleString('he-IL')} ערים — הקלד לסינון
+                </li>
+              )}
             </ul>
           )}
         </div>
@@ -197,6 +203,11 @@ export default function CityStreetPicker({
                   </button>
                 </li>
               ))}
+              {moreStreets > 0 && (
+                <li className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
+                  ועוד {moreStreets.toLocaleString('he-IL')} רחובות — הקלד לסינון
+                </li>
+              )}
             </ul>
           )}
         </div>
