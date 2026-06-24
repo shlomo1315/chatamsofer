@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Upload, Mic, Trash2, Type, Wand2, Volume2, KeyRound } from 'lucide-react'
+import { Loader2, Check, Upload, Mic, Trash2, Type, Wand2, Volume2, KeyRound, Play } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -24,7 +24,9 @@ export default function YemotMaternitySettings() {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [genKey, setGenKey] = useState<string | null>(null)
   const [genAll, setGenAll] = useState(false)
+  const [previewId, setPreviewId] = useState<string | null>(null)
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // הגדרות ElevenLabs
   const [hasKey, setHasKey] = useState(false)
@@ -179,6 +181,34 @@ export default function YemotMaternitySettings() {
     }
   }
 
+  // השמעה מקדימה — מייצר אודיו ומשמיע בדפדפן בלי להעלות לימות.
+  // id: מפתח הודעה או 'sample' לאודישן הקול הנבחר.
+  async function preview(id: string, text: string) {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setPreviewId(id)
+    try {
+      const res = await fetch('/api/admin/elevenlabs/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: voiceId || undefined }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'שגיאה בהשמעה')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => { URL.revokeObjectURL(url); if (audioRef.current === audio) audioRef.current = null }
+      await audio.play()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה')
+    } finally {
+      setPreviewId(null)
+    }
+  }
+
   const busyAny = saving || genAll || savingCfg
   const eligibleCount = meta.filter(isEligible).length
 
@@ -226,12 +256,23 @@ export default function YemotMaternitySettings() {
             שמור
           </Button>
         </div>
-        {hasKey && voiceId && eligibleCount > 0 && (
-          <div className="mt-2.5">
-            <Button onClick={generateAll} disabled={busyAny} variant="outline" size="sm">
-              {genAll ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
-              צור קול טבעי לכל ההודעות ({eligibleCount})
+        {hasKey && voiceId && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button
+              onClick={() => preview('sample', 'שלום זו דוגמה לקול הטבעי שישמיע המערכת למתקשרות')}
+              disabled={previewId === 'sample' || busyAny}
+              variant="outline"
+              size="sm"
+            >
+              {previewId === 'sample' ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+              השמע דוגמה
             </Button>
+            {eligibleCount > 0 && (
+              <Button onClick={generateAll} disabled={busyAny} variant="outline" size="sm">
+                {genAll ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+                צור קול טבעי לכל ההודעות ({eligibleCount})
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -301,6 +342,18 @@ export default function YemotMaternitySettings() {
                       >
                         {generating ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
                         {generated ? 'צור קול מחדש' : 'צור קול טבעי'}
+                      </Button>
+                    )}
+                    {isEligible(m) && hasKey && voiceId && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={previewId === m.key || generating || busyAny}
+                        onClick={() => preview(m.key, msg.text)}
+                      >
+                        {previewId === m.key ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+                        השמע
                       </Button>
                     )}
                     <input

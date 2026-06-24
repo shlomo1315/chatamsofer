@@ -101,17 +101,22 @@ async function getElevenStatusKey(): Promise<string> {
 }
 
 // יצירת דיבור מטקסט. מחזיר MP3 (ArrayBuffer). ימות ממירה אותו לפורמט הניגון שלה.
-export async function generateSpeech(text: string): Promise<{ ok: boolean; audio?: ArrayBuffer; error?: string }> {
+// voiceId אופציונלי — לאודישן של קול שעדיין לא נשמר כברירת מחדל.
+export async function generateSpeech(
+  text: string,
+  opts?: { voiceId?: string },
+): Promise<{ ok: boolean; audio?: ArrayBuffer; error?: string }> {
   const clean = String(text ?? '').trim()
   if (!clean) return { ok: false, error: 'אין טקסט ליצירה' }
 
   const cfg = await getElevenConfig()
-  if (!cfg) return { ok: false, error: 'ElevenLabs אינו מוגדר — יש להזין מפתח API ולבחור קול בהגדרות' }
+  const voiceId = (opts?.voiceId && opts.voiceId.trim()) || cfg?.voiceId
+  if (!cfg || !voiceId) return { ok: false, error: 'ElevenLabs אינו מוגדר — יש להזין מפתח API ולבחור קול בהגדרות' }
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 60_000)
   try {
-    const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(cfg.voiceId)}?output_format=mp3_44100_128`, {
+    const res = await fetch(`${ELEVEN_API}/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': cfg.apiKey, 'Content-Type': 'application/json', accept: 'audio/mpeg' },
       body: JSON.stringify({
