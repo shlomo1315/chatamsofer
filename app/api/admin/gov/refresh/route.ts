@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
-import { syncCitiesDetailed, syncStreetsForCity, getCitiesMeta } from '@/lib/govData'
+import { syncCitiesDetailed, syncStreetsForCity, getCitiesMeta, getAllStreetsByCity } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const detail = await syncCitiesDetailed(admin)
+    void getAllStreetsByCity().catch(() => {}) // חימום מפת הרחובות ברקע — שהטפסים יהיו מיידיים
     let streetsForCity: number | undefined
     if (body.city?.trim()) streetsForCity = await syncStreetsForCity(admin, body.city.trim())
     const meta = await getCitiesMeta(admin)
