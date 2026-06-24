@@ -343,7 +343,7 @@ export async function getStreets(admin: SupabaseClient, city: string): Promise<s
 
   try {
     await syncStreetsForCity(admin, city)
-    const { data: re } = await admin.from('gov_streets').select('street').eq('city', city).order('street')
+    const { data: re } = await admin.from('gov_streets').select('street').eq('city', city).order('street').range(0, 9999)
     return (re ?? []).map(r => r.street)
   } catch {
     // נפילה ל-API — מחזירים מה שיש (גם אם ישן), עדיף מכלום
