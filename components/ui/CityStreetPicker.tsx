@@ -51,7 +51,8 @@ export default function CityStreetPicker({
   const lbl = labelSize === 'xs' ? 'text-xs font-medium text-slate-600' : 'text-sm font-medium text-slate-700'
 
   useEffect(() => {
-    fetch('/api/gov/cities', { cache: 'no-store' })
+    // _=timestamp — כתובת ייחודית שעוקפת כל מטמון (דפדפן ו-CDN/Cloudflare)
+    fetch(`/api/gov/cities?_=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setAllCities(d.cities ?? []))
       .catch(() => {})
@@ -69,7 +70,7 @@ export default function CityStreetPicker({
   useEffect(() => {
     if (!city) { setStreets([]); return }
     setLoadingStreets(true)
-    fetch(`/api/gov/streets?city=${encodeURIComponent(city)}`, { cache: 'no-store' })
+    fetch(`/api/gov/streets?city=${encodeURIComponent(city)}&_=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setStreets(d.streets ?? []))
       .catch(() => setStreets([]))
