@@ -205,14 +205,11 @@ export default function YemotMaternitySettings() {
       }
       const data = await res.json()
       if (!data?.audio) throw new Error(data?.error || 'לא התקבל אודיו')
-      const bytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0))
-      const blob = new Blob([bytes], { type: data.mime || 'audio/mpeg' })
-      if (!blob.size) throw new Error('האודיו שהתקבל ריק')
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
+      // ניגון ישיר מ-data URL — הדפדפן מפענח את ה-base64 בעצמו (הכי תואם)
+      const audio = new Audio(`data:${data.mime || 'audio/mpeg'};base64,${data.audio}`)
       audioRef.current = audio
-      audio.onended = () => { URL.revokeObjectURL(url); if (audioRef.current === audio) audioRef.current = null }
-      audio.onerror = () => { toast.error('הדפדפן לא הצליח לנגן את האודיו'); URL.revokeObjectURL(url) }
+      audio.onended = () => { if (audioRef.current === audio) audioRef.current = null }
+      audio.onerror = () => toast.error('הדפדפן לא הצליח לנגן את האודיו')
       await audio.play()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה')
