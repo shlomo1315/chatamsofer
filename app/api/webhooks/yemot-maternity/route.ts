@@ -13,12 +13,21 @@
 // השלב לפי הערכים הקיימים.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
 import { getNedarimCreds, setMagneticCard } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
 
 export const dynamic = 'force-dynamic'
+
+// השוואת סודות בזמן קבוע (מונע timing attacks)
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(String(a))
+  const bb = Buffer.from(String(b))
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -213,15 +222,22 @@ async function handle(req: NextRequest) {
   const cardVal = String(params['collect_card'] ?? '').trim()
   const centerVal = String(params['collect_center'] ?? '').trim()
 
-  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${cardVal} center=${centerVal}`)
-
-  const M = await getMaternityMessages()
-
-  // אבטחה: ימות שולחת ApiToken=<סוד> (api_add_0 בשלוחה). דוחים בלי הסוד.
+  // ── אבטחה: חובה ApiToken תקין (api_add_0 בשלוחה) ───────────────────────────
+  // fail-closed: אם הסוד אינו מוגדר בשרת — דוחים הכל (מונע webhook פתוח).
   const secret = process.env.YEMOT_WEBHOOK_SECRET
-  if (secret && params['ApiToken'] !== secret) {
+  if (!secret) {
+    console.error('[yemot-maternity] YEMOT_WEBHOOK_SECRET חסר בשרת — דחייה (fail-closed)')
+    return yemotText([idMessage(tText('השירות אינו זמין כעת אנא נסי מאוחר יותר')), goToFolder('hangup')], callId)
+  }
+  if (!safeEqual(params['ApiToken'] ?? '', secret)) {
+    console.warn('[yemot-maternity] ApiToken שגוי — דחייה')
     return yemotText([idMessage(tText('אין הרשאה')), goToFolder('hangup')], callId)
   }
+
+  // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)
+  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${cardVal ? '****' + cardVal.slice(-4) : ''} center=${centerVal}`)
+
+  const M = await getMaternityMessages()
 
   if (!apiPhone) {
     return yemotText([idMessage(tText('שגיאה במספר המתקשר')), goToFolder('hangup')], callId)
