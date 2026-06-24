@@ -45,10 +45,12 @@ export type NedarimResponse = { Result?: string; Message?: string; [k: string]: 
 const isOk = (r: NedarimResponse) => String(r.Result ?? '').toUpperCase() === 'OK'
 
 // שליחת בקשה לנדרים (FORM urlencoded) והחזרת ה-JSON המפוענח
+// timeoutMs ניתן לקיצור בנתיבים אינטראקטיביים (שיחת ימות) כדי לא לחרוג מחלון התגובה של ימות.
 async function nedarimRequest(
   creds: NedarimCreds,
   action: string,
   params: Record<string, string | undefined>,
+  timeoutMs = 25_000,
 ): Promise<NedarimResponse> {
   const form = new URLSearchParams()
   form.set('Action', action)
@@ -60,7 +62,7 @@ async function nedarimRequest(
   }
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 25_000)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   let res: Response
   try {
     res = await fetch(NEDARIM_URL, {
@@ -183,14 +185,14 @@ export async function setMagneticCard(
   creds: NedarimCreds,
   clientId: string,
   magneticCard: string,
-  opts?: { cardId?: string; remove?: boolean },
+  opts?: { cardId?: string; remove?: boolean; timeoutMs?: number },
 ) {
   const r = await nedarimRequest(creds, 'SetClientMagneticCard', {
     ClientId: clientId,
     MagneticCard: magneticCard,
     CardId: opts?.cardId,
     Remove: opts?.remove ? '1' : undefined,
-  })
+  }, opts?.timeoutMs)
   return { ok: isOk(r), message: String(r.Message ?? ''), data: r }
 }
 

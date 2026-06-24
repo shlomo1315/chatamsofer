@@ -120,24 +120,53 @@ function cardReadCommand(M: MaternityMessages, prefixKey?: keyof MaternityMessag
   return readTap('collect_card', prompts, { max: 20, min: 1 })
 }
 
+// ── חיפוש משפחה לפי טלפון ─────────────────────────────────────────────────────
+// מהיר: מסננים ב-DB לפי 7 הספרות האחרונות (עמיד למקפים/רווחים/קידומת 972 בפורמט
+// השמור), ואז מאמתים בנרמול מלא ב-JS. אם לא נמצא — fallback לסריקה מלאה כדי שלא
+// נפספס פורמטים חריגים (הטלפונים נשמרים כפי שהוקלדו, בלי נרמול).
+const BENEFICIARY_COLS = 'id, full_name, family_name, phone, phone2, spouse_phone, nedarim_id'
+type FamilyRow = {
+  id: string; full_name: string | null; family_name: string | null
+  phone: string | null; phone2: string | null; spouse_phone: string | null; nedarim_id: string | null
+}
+
+async function findFamilyByPhone(
+  admin: ReturnType<typeof adminClient>,
+  callerPhone: string,
+): Promise<{ family?: FamilyRow; error?: string }> {
+  const matches = (b: FamilyRow) =>
+    phoneMatches(b.phone, callerPhone) ||
+    phoneMatches(b.phone2, callerPhone) ||
+    phoneMatches(b.spouse_phone, callerPhone)
+
+  // נתיב מהיר — סינון לפי 7 הספרות האחרונות (digits בלבד, בטוח ל-ilike)
+  const last7 = callerPhone.replace(/\D/g, '').slice(-7)
+  if (last7.length === 7) {
+    const { data, error } = await admin
+      .from('beneficiaries')
+      .select(BENEFICIARY_COLS)
+      .eq('is_active', true)
+      .or(`phone.ilike.%${last7}%,phone2.ilike.%${last7}%,spouse_phone.ilike.%${last7}%`)
+    if (error) return { error: error.message }
+    const hit = (data ?? []).find(matches)
+    if (hit) return { family: hit }
+  }
+
+  // fallback — סריקה מלאה (פורמט שמור חריג שהנתיב המהיר פספס, או מתקשר שאינו במערכת)
+  const { data: all, error: allErr } = await admin
+    .from('beneficiaries')
+    .select(BENEFICIARY_COLS)
+    .eq('is_active', true)
+  if (allErr) return { error: allErr.message }
+  return { family: (all ?? []).find(matches) }
+}
+
 // ── חיפוש משפחה + לידה פעילה ─────────────────────────────────────────────────
 async function findActiveAid(callerPhone: string) {
   const admin = adminClient()
 
-  const { data: beneficiaries, error } = await admin
-    .from('beneficiaries')
-    .select('id, full_name, family_name, phone, phone2, spouse_phone, nedarim_id')
-    .eq('is_active', true)
-
-  if (error) return { error: error.message }
-
-  const family = (beneficiaries ?? []).find(
-    (b) =>
-      phoneMatches(b.phone, callerPhone) ||
-      phoneMatches(b.phone2, callerPhone) ||
-      phoneMatches(b.spouse_phone, callerPhone),
-  )
-
+  const { family, error } = await findFamilyByPhone(admin, callerPhone)
+  if (error) return { error }
   if (!family) return { notFound: true as const }
 
   const { data: allAids, error: aidErr } = await admin
@@ -214,6 +243,10 @@ async function handle(req: NextRequest) {
       console.error('[yemot-maternity] re-lookup failed at center step', result)
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
     }
+    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס
+    if (result.active.status !== 'active') {
+      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
     const { active, family, familyName } = result
     const cardNumber = String(active.card_number ?? '').trim()
     const nedarimId = family.nedarim_id ? String(family.nedarim_id) : null
@@ -240,7 +273,9 @@ async function handle(req: NextRequest) {
     let linkOk = false
     let linkMsg = ''
     try {
-      const r = await setMagneticCard(creds, nedarimId, cardNumber)
+      // timeout קצר — ימות מוותרת על התגובה הרבה לפני 25ש'. עדיף להחזיר "נסי שוב"
+      // ברור מאשר להשאיר את המתקשר תקוע עד שימות מנתקת.
+      const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 10_000 })
       linkOk = r.ok
       linkMsg = r.message
     } catch (e) {
@@ -291,6 +326,11 @@ async function handle(req: NextRequest) {
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
     }
 
+    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס (גם אם הגיעה לשלב זה)
+    if (result.active.status !== 'active') {
+      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
+
     const { error: updateErr } = await admin
       .from('maternity_aids')
       .update({ card_number: cardVal })
@@ -328,15 +368,34 @@ async function handle(req: NextRequest) {
 
   if ('noBirth' in result) {
     console.log(`[yemot-maternity] no active birth for family ${result.familyId} (${result.familyName})`)
-    await logActivity(admin, 'yemot_no_active_birth', 'beneficiary', result.familyId, {
+    await logActivity(admin, 'yemot_no_active_birth', 'beneficiary', result.familyId ?? null, {
       caller: callerPhone, callId, beneficiary_id: result.familyId, family_name: result.familyName,
     })
     return yemotText([idMessage(tokenOf(M.no_birth)), goToFolder('hangup')], callId)
   }
 
   const { active, familyName } = result
+
+  // לידה שאינה מאושרת (ממתינה לאישור המזכירות) — אי אפשר להטעין כרטיס
+  if (active.status !== 'active') {
+    console.log(`[yemot-maternity] aid ${active.id} not approved (status=${active.status ?? 'null'}) — pending message`)
+    await logActivity(admin, 'yemot_pending_approval', 'maternity_aid', active.id, {
+      caller: callerPhone, callId, family_name: familyName, status: active.status ?? null,
+    })
+    return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+  }
+
+  // כרטיס כבר משויך ללידה זו — לא מבקשים שוב
+  if (String(active.card_number ?? '').trim()) {
+    console.log(`[yemot-maternity] aid ${active.id} already has a card linked — already-linked message`)
+    await logActivity(admin, 'yemot_card_already_linked', 'maternity_aid', active.id, {
+      caller: callerPhone, callId, family_name: familyName,
+    })
+    return yemotText([idMessage(tokenOf(M.card_already_linked)), goToFolder('hangup')], callId)
+  }
+
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
-  return yemotText([cardReadCommand(M, active.card_number ? 'welcome_card_exists' : 'welcome')], callId)
+  return yemotText([cardReadCommand(M, 'welcome')], callId)
 }
 
 // רישום פעולה ל-activity_log (best-effort — לא חוסם את התגובה לימות)
