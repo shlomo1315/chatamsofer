@@ -21,6 +21,7 @@ export default function YemotMaternitySettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
+  const [saved, setSaved] = useState<Record<string, Msg>>({}) // נוסח שמור אחרון — לזיהוי עריכות
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
   const [genKey, setGenKey] = useState<string | null>(null)
   const [genAll, setGenAll] = useState(false)
@@ -46,6 +47,7 @@ export default function YemotMaternitySettings() {
         if (!msgs.ok) { toast.error(msgs.data.error || 'שגיאה בטעינה'); return }
         setMeta(msgs.data.meta ?? [])
         setMessages(msgs.data.messages ?? {})
+        setSaved(msgs.data.messages ?? {})
         if (cfg.ok) {
           setHasKey(!!cfg.data.hasKey)
           setVoiceId(cfg.data.voiceId ?? '')
@@ -72,7 +74,7 @@ export default function YemotMaternitySettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאה בשמירה')
-      if (data.messages) setMessages(data.messages)
+      if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
       setSavedOk(true)
       toast.success('ההודעות נשמרו')
       setTimeout(() => setSavedOk(false), 2500)
@@ -170,7 +172,7 @@ export default function YemotMaternitySettings() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
-      if (data.messages) setMessages(data.messages)
+      if (data.messages) { setMessages(data.messages); setSaved(data.messages) }
       const errCount = data.errors ? Object.keys(data.errors).length : 0
       if (errCount > 0) toast.error(`נוצרו ${data.generated?.length ?? 0} הודעות, ${errCount} נכשלו`)
       else toast.success(`נוצר קול טבעי ל-${data.generated?.length ?? 0} הודעות`)
@@ -311,25 +313,37 @@ export default function YemotMaternitySettings() {
             const busy = uploadingKey === m.key
             const generating = genKey === m.key || genAll
             const generated = isGenerated(msg.audio)
+            const isDirty = (msg.text ?? '') !== (saved[m.key]?.text ?? m.defaultText)
             return (
               <div key={m.key} className="rounded-xl border border-slate-200 p-3">
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1.5 gap-2">
                   <span className="text-xs font-semibold text-slate-700">{m.label}</span>
-                  {msg.audio ? (
-                    generated ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5">
-                        <Volume2 size={11} /> קול נוירוני טבעי
-                      </span>
+                  <div className="flex items-center gap-1.5">
+                    {isDirty && (
+                      <button
+                        onClick={save}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1 text-[11px] bg-amber-500 text-white rounded-full px-2 py-0.5 hover:bg-amber-600 disabled:opacity-60"
+                      >
+                        {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} שמור טקסט
+                      </button>
+                    )}
+                    {msg.audio ? (
+                      generated ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5">
+                          <Volume2 size={11} /> קול נוירוני טבעי
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">
+                          <Mic size={11} /> הקלטה אנושית
+                        </span>
+                      )
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">
-                        <Mic size={11} /> הקלטה אנושית
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
+                        <Type size={11} /> קול ממוחשב
                       </span>
-                    )
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
-                      <Type size={11} /> קול ממוחשב
-                    </span>
-                  )}
+                    )}
+                  </div>
                 </div>
 
                 <textarea
