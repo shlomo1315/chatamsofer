@@ -193,14 +193,23 @@ export default function YemotMaternitySettings() {
         body: JSON.stringify({ text, voiceId: voiceId || undefined }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'שגיאה בהשמעה')
+        let msg = `שגיאה בהשמעה (${res.status})`
+        try {
+          const d = await res.clone().json()
+          if (d?.error) msg = d.error
+        } catch {
+          const t = await res.text().catch(() => '')
+          if (t) msg += `: ${t.slice(0, 150)}`
+        }
+        throw new Error(msg)
       }
       const blob = await res.blob()
+      if (!blob.size) throw new Error('האודיו שהתקבל ריק')
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
       audio.onended = () => { URL.revokeObjectURL(url); if (audioRef.current === audio) audioRef.current = null }
+      audio.onerror = () => { toast.error('הדפדפן לא הצליח לנגן את האודיו'); URL.revokeObjectURL(url) }
       await audio.play()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה')
