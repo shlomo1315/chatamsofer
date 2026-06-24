@@ -35,7 +35,10 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
   const out: Record<string, string>[] = []
   const pageSize = 10000
   let offset = 0
-  for (let guard = 0; guard < 200; guard++) {
+  let total = Infinity
+  // guard גבוה — מקדמים את ה-offset לפי מספר השורות שבאמת חזרו, לא בקפיצה קבועה,
+  // כדי שלא ייווצרו פערים אם השרת מחזיר פחות שורות לעמוד מהמבוקש (אז שורות — ורחובות — נופלים).
+  for (let guard = 0; guard < 5000 && out.length < total; guard++) {
     const res = await fetch(GOV_URL, {
       method: 'POST',
       headers: GOV_HEADERS,
@@ -44,10 +47,10 @@ async function fetchAll(resourceId: string, fields: string[], filters?: object):
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     const records: Record<string, string>[] = data?.result?.records ?? []
+    if (records.length === 0) break
     out.push(...records)
-    const total: number = data?.result?.total ?? out.length
-    offset += pageSize
-    if (out.length >= total || records.length === 0) break
+    total = typeof data?.result?.total === 'number' ? data.result.total : out.length
+    offset += records.length // קידום לפי השורות שחזרו בפועל — מונע דילוגים
   }
   return out
 }

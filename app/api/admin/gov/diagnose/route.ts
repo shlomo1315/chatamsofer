@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
-import { fetchCitiesDetailed } from '@/lib/govData'
+import { fetchCitiesDetailed, getAllStreetsByCity } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -42,6 +42,27 @@ async function probe(resourceId: string, q: string) {
 
 export async function GET(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+
+  // אימות רחובות לעיר: ?city=ירושלים — משווה כמה רחובות במקור מול כמה במאגר המקומי
+  const city = request.nextUrl.searchParams.get('city')?.trim()
+  if (city) {
+    const map = await getAllStreetsByCity(true)
+    const fromSource = map.get(city) ?? []
+    const admin = getServiceClient()
+    let inTableCount = 0
+    if (admin) {
+      const { count } = await admin.from('gov_streets').select('street', { count: 'exact', head: true }).eq('city', city)
+      inTableCount = count ?? 0
+    }
+    return NextResponse.json({
+      city,
+      sourceStreetCount: fromSource.length,
+      inTableCount,
+      match: fromSource.length === inTableCount,
+      sample: fromSource.slice(0, 15),
+    }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
   const q = (request.nextUrl.searchParams.get('q') ?? 'עמנואל').trim()
 
   // 1) מציאת היישוב במאגרי המקור
