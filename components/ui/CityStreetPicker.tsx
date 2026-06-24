@@ -91,15 +91,10 @@ export default function CityStreetPicker({
     onAddressChange(combined)
   }
 
-  // מסננים על *כל* הרשימה המלאה (כך מוצאים כל ערך בהקלדה), אבל מציגים עד 100
-  // תוצאות כדי שהדפדפן לא ייתקע על אלפי פריטים (למשל 4,279 רחובות בירושלים).
-  const RENDER_CAP = 100
-  const matchedCities = cityInput.trim() ? allCities.filter(c => c.includes(cityInput.trim())) : allCities
-  const matchedStreets = streetInput.trim() ? streets.filter(s => s.includes(streetInput.trim())) : streets
-  const filteredCities = matchedCities.slice(0, RENDER_CAP)
-  const filteredStreets = matchedStreets.slice(0, RENDER_CAP)
-  const moreCities = matchedCities.length - filteredCities.length
-  const moreStreets = matchedStreets.length - filteredStreets.length
+  // מציגים תוצאות *רק* כשמקלידים — סינון על הרשימה המלאה והעדכנית לפי מה שהוקלד.
+  // בלי הקלדה אין רשימה (אין תקיעה, ומופיע בדיוק מה שמחפשים).
+  const filteredCities = cityInput.trim() ? allCities.filter(c => c.includes(cityInput.trim())) : []
+  const filteredStreets = streetInput.trim() ? streets.filter(s => s.includes(streetInput.trim())) : []
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -129,7 +124,7 @@ export default function CityStreetPicker({
           {showCity && filteredCities.length > 0 && (
             <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
               {filteredCities.map(c => (
-                <li key={c}>
+                <li key={c} className="[content-visibility:auto] [contain-intrinsic-size:auto_38px]">
                   <button
                     type="button"
                     className="w-full text-right px-3 py-2 text-sm text-slate-900 hover:bg-indigo-50 transition-colors"
@@ -147,11 +142,6 @@ export default function CityStreetPicker({
                   </button>
                 </li>
               ))}
-              {moreCities > 0 && (
-                <li className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
-                  ועוד {moreCities.toLocaleString('he-IL')} ערים — הקלד לסינון
-                </li>
-              )}
             </ul>
           )}
         </div>
@@ -188,7 +178,7 @@ export default function CityStreetPicker({
           {showStreet && !loadingStreets && filteredStreets.length > 0 && (
             <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
               {filteredStreets.map(s => (
-                <li key={s}>
+                <li key={s} className="[content-visibility:auto] [contain-intrinsic-size:auto_38px]">
                   <button
                     type="button"
                     className="w-full text-right px-3 py-2 text-sm text-slate-900 hover:bg-indigo-50 transition-colors"
@@ -203,11 +193,6 @@ export default function CityStreetPicker({
                   </button>
                 </li>
               ))}
-              {moreStreets > 0 && (
-                <li className="px-3 py-2 text-xs text-slate-400 border-t border-slate-100 bg-slate-50">
-                  ועוד {moreStreets.toLocaleString('he-IL')} רחובות — הקלד לסינון
-                </li>
-              )}
             </ul>
           )}
         </div>
