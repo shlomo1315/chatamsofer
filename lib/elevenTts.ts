@@ -76,7 +76,11 @@ export async function listVoices(apiKeyOverride?: string): Promise<{ ok: boolean
   if (!apiKey) return { ok: false, error: 'לא מוגדר מפתח ElevenLabs' }
   try {
     const res = await fetch(`${ELEVEN_API}/voices`, { headers: { 'xi-api-key': apiKey }, cache: 'no-store' })
-    if (!res.ok) return { ok: false, error: `שגיאה (${res.status}) בשליפת הקולות` }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      const hint = res.status === 401 ? ' — המפתח שגוי או חסר הרשאות (Voices / Text-to-Speech)' : ''
+      return { ok: false, error: `שגיאה (${res.status}) בשליפת הקולות${hint}${detail ? `: ${detail.slice(0, 180)}` : ''}` }
+    }
     const json = await res.json() as { voices?: Array<Record<string, unknown>> }
     const voices: Voice[] = (json.voices ?? []).map((v) => ({
       voiceId: String(v.voice_id ?? ''),
