@@ -197,15 +197,31 @@ let citySyncInFlight = false
 // מחזיר את רשימת הערים מהמאגר המקומי. אם ריק — מסנכרן פעם אחת (חוסם) ומחזיר.
 // אם הנתונים ישנים (>יממה) — מרענן ברקע ממשרד הפנים בלי לעכב את הבקשה, כך
 // שהרשימה נשארת מלאה ומעודכנת גם אם המתזמן הלילי לא רץ.
+// קריאת כל שורות gov_cities — בדפדוף. בלי זה Supabase מחזיר רק 1000 שורות
+// (ברירת מחדל), וכל הערים שאחרי ה-1000 בא״ב (האות ע׳ והלאה — עמנואל וכו') נחתכות.
+async function readAllCities(admin: SupabaseClient): Promise<{ name: string; synced_at: string }[]> {
+  const all: { name: string; synced_at: string }[] = []
+  const pageSize = 1000
+  for (let from = 0; from < 100000; from += pageSize) {
+    const { data, error } = await admin
+      .from('gov_cities')
+      .select('name, synced_at')
+      .order('name')
+      .range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    all.push(...(data as { name: string; synced_at: string }[]))
+    if (data.length < pageSize) break
+  }
+  return all
+}
+
 export async function getCities(admin: SupabaseClient): Promise<string[]> {
-  const { data } = await admin.from('gov_cities').select('name, synced_at').order('name')
-  const rows = data ?? []
+  const rows = await readAllCities(admin)
 
   if (rows.length === 0) {
     try {
       await syncCities(admin)
-      const { data: fresh } = await admin.from('gov_cities').select('name').order('name')
-      return (fresh ?? []).map(r => r.name)
+      return (await readAllCities(admin)).map(r => r.name)
     } catch {
       return []
     }
@@ -303,6 +319,7 @@ export async function getStreets(admin: SupabaseClient, city: string): Promise<s
     .select('street, synced_at')
     .eq('city', city)
     .order('street')
+    .range(0, 9999) // לעקוף את מגבלת 1000 השורות (ערים עם הרבה רחובות, כמו ירושלים)
 
   const fresh = data && data.length > 0 && Date.now() - new Date(data[0].synced_at).getTime() < STALE_MS
   if (fresh) return data!.map(r => r.street)
