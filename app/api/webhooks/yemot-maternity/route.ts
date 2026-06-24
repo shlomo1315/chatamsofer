@@ -243,6 +243,10 @@ async function handle(req: NextRequest) {
       console.error('[yemot-maternity] re-lookup failed at center step', result)
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
     }
+    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס
+    if (result.active.status !== 'active') {
+      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
     const { active, family, familyName } = result
     const cardNumber = String(active.card_number ?? '').trim()
     const nedarimId = family.nedarim_id ? String(family.nedarim_id) : null
@@ -322,6 +326,11 @@ async function handle(req: NextRequest) {
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
     }
 
+    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס (גם אם הגיעה לשלב זה)
+    if (result.active.status !== 'active') {
+      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
+
     const { error: updateErr } = await admin
       .from('maternity_aids')
       .update({ card_number: cardVal })
@@ -366,8 +375,27 @@ async function handle(req: NextRequest) {
   }
 
   const { active, familyName } = result
+
+  // לידה שאינה מאושרת (ממתינה לאישור המזכירות) — אי אפשר להטעין כרטיס
+  if (active.status !== 'active') {
+    console.log(`[yemot-maternity] aid ${active.id} not approved (status=${active.status ?? 'null'}) — pending message`)
+    await logActivity(admin, 'yemot_pending_approval', 'maternity_aid', active.id, {
+      caller: callerPhone, callId, family_name: familyName, status: active.status ?? null,
+    })
+    return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+  }
+
+  // כרטיס כבר משויך ללידה זו — לא מבקשים שוב
+  if (String(active.card_number ?? '').trim()) {
+    console.log(`[yemot-maternity] aid ${active.id} already has a card linked — already-linked message`)
+    await logActivity(admin, 'yemot_card_already_linked', 'maternity_aid', active.id, {
+      caller: callerPhone, callId, family_name: familyName,
+    })
+    return yemotText([idMessage(tokenOf(M.card_already_linked)), goToFolder('hangup')], callId)
+  }
+
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
-  return yemotText([cardReadCommand(M, active.card_number ? 'welcome_card_exists' : 'welcome')], callId)
+  return yemotText([cardReadCommand(M, 'welcome')], callId)
 }
 
 // רישום פעולה ל-activity_log (best-effort — לא חוסם את התגובה לימות)
