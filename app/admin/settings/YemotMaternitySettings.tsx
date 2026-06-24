@@ -1,12 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Upload, Mic, Trash2, Type } from 'lucide-react'
+import { Loader2, Check, Upload, Mic, Trash2, Type, Wand2, Volume2, KeyRound } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
 type Msg = { text: string; audio?: string | null }
 type Meta = { key: string; label: string; defaultText: string; allowAudio: boolean; placeholders?: string[]; hint?: string }
+type Voice = { voiceId: string; name: string; labels?: Record<string, string> }
+
+// הודעה כשירה ליצירת קול נוירוני: ניתנת להקלטה ואינה דינמית (בלי {משתנים})
+const isEligible = (m: Meta) => m.allowAudio && !(m.placeholders && m.placeholders.length)
+// קול שנוצר אוטומטית מסומן בקידומת tts_ (לעומת rec_ של הקלטה אנושית)
+const isGenerated = (audio?: string | null) => !!audio && audio.startsWith('tts_')
 
 export default function YemotMaternitySettings() {
   const toast = useToast()
@@ -16,17 +22,33 @@ export default function YemotMaternitySettings() {
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
   const [uploadingKey, setUploadingKey] = useState<string | null>(null)
+  const [genKey, setGenKey] = useState<string | null>(null)
+  const [genAll, setGenAll] = useState(false)
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  // הגדרות ElevenLabs
+  const [hasKey, setHasKey] = useState(false)
+  const [voiceId, setVoiceId] = useState('')
+  const [voices, setVoices] = useState<Voice[]>([])
+  const [apiKeyInput, setApiKeyInput] = useState('')
+  const [savingCfg, setSavingCfg] = useState(false)
 
   useEffect(() => {
     let alive = true
-    fetch('/api/admin/yemot-maternity/messages')
-      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
-      .then(({ ok, data }) => {
+    Promise.all([
+      fetch('/api/admin/yemot-maternity/messages').then((r) => r.json().then((data) => ({ ok: r.ok, data }))),
+      fetch('/api/admin/elevenlabs/settings').then((r) => r.json().then((data) => ({ ok: r.ok, data }))).catch(() => ({ ok: false, data: {} })),
+    ])
+      .then(([msgs, cfg]) => {
         if (!alive) return
-        if (!ok) { toast.error(data.error || 'שגיאה בטעינה'); return }
-        setMeta(data.meta ?? [])
-        setMessages(data.messages ?? {})
+        if (!msgs.ok) { toast.error(msgs.data.error || 'שגיאה בטעינה'); return }
+        setMeta(msgs.data.meta ?? [])
+        setMessages(msgs.data.messages ?? {})
+        if (cfg.ok) {
+          setHasKey(!!cfg.data.hasKey)
+          setVoiceId(cfg.data.voiceId ?? '')
+          setVoices(cfg.data.voices ?? [])
+        }
       })
       .catch(() => { if (alive) toast.error('שגיאה בטעינת ההגדרות') })
       .finally(() => { if (alive) setLoading(false) })
@@ -59,6 +81,29 @@ export default function YemotMaternitySettings() {
     }
   }
 
+  async function saveCfg() {
+    setSavingCfg(true)
+    try {
+      const res = await fetch('/api/admin/elevenlabs/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKeyInput || undefined, voiceId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'שגיאה בשמירה')
+      setHasKey(!!data.hasKey)
+      setVoiceId(data.voiceId ?? voiceId)
+      setVoices(data.voices ?? [])
+      setApiKeyInput('')
+      if (data.voicesError) toast.error(`חיבור ל-ElevenLabs: ${data.voicesError}`)
+      else toast.success('הגדרות הקול נשמרו')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בשמירה')
+    } finally {
+      setSavingCfg(false)
+    }
+  }
+
   async function uploadRecording(key: string, file: File) {
     setUploadingKey(key)
     try {
@@ -84,7 +129,7 @@ export default function YemotMaternitySettings() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'שגיאה בהסרה')
       if (data.messages) setMessages(data.messages)
-      toast.success('ההקלטה הוסרה — חזרה לקול ממוחשב')
+      toast.success('הקול הוסר — חזרה לקול ממוחשב')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה בהסרה')
     } finally {
@@ -92,11 +137,108 @@ export default function YemotMaternitySettings() {
     }
   }
 
+  async function generateVoice(key: string) {
+    setGenKey(key)
+    try {
+      const res = await fetch('/api/admin/yemot-maternity/generate-voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, text: messages[key]?.text }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
+      if (data.messages) setMessages(data.messages)
+      toast.success('קול טבעי נוצר ויושמע בשיחה')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול')
+    } finally {
+      setGenKey(null)
+    }
+  }
+
+  async function generateAll() {
+    setGenAll(true)
+    try {
+      // שומרים תחילה את הטקסטים כדי שהיצירה תשתמש בנוסח המעודכן
+      await fetch('/api/admin/yemot-maternity/messages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages }),
+      })
+      const res = await fetch('/api/admin/yemot-maternity/generate-voice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת הקול')
+      if (data.messages) setMessages(data.messages)
+      const errCount = data.errors ? Object.keys(data.errors).length : 0
+      if (errCount > 0) toast.error(`נוצרו ${data.generated?.length ?? 0} הודעות, ${errCount} נכשלו`)
+      else toast.success(`נוצר קול טבעי ל-${data.generated?.length ?? 0} הודעות`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול')
+    } finally {
+      setGenAll(false)
+    }
+  }
+
+  const busyAny = saving || genAll || savingCfg
+  const eligibleCount = meta.filter(isEligible).length
+
   return (
     <div>
+      {/* פאנל קול נוירוני (ElevenLabs) */}
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 mb-4">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Volume2 size={15} className="text-indigo-600" />
+          <span className="text-xs font-semibold text-slate-700">קול נוירוני טבעי (ElevenLabs)</span>
+          {hasKey ? (
+            <span className="text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">מחובר</span>
+          ) : (
+            <span className="text-[11px] bg-amber-50 text-amber-700 rounded-full px-2 py-0.5">לא מוגדר</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1"><KeyRound size={11} /> מפתח API {hasKey && '(הזן רק להחלפה)'}</label>
+            <input
+              type="password"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              placeholder={hasKey ? '••••••••••••' : 'מפתח ElevenLabs'}
+              className="w-full text-sm rounded-lg border border-slate-200 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              dir="ltr"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-[11px] text-slate-500 mb-1">קול</label>
+            <select
+              value={voiceId}
+              onChange={(e) => setVoiceId(e.target.value)}
+              disabled={!voices.length}
+              className="w-full text-sm rounded-lg border border-slate-200 px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              {!voiceId && <option value="">{voices.length ? 'בחר קול' : 'הזן מפתח כדי לטעון קולות'}</option>}
+              {voices.map((v) => (
+                <option key={v.voiceId} value={v.voiceId}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+          <Button onClick={saveCfg} disabled={savingCfg} size="sm">
+            {savingCfg ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            שמור
+          </Button>
+        </div>
+        {hasKey && voiceId && eligibleCount > 0 && (
+          <div className="mt-2.5">
+            <Button onClick={generateAll} disabled={busyAny} variant="outline" size="sm">
+              {genAll ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+              צור קול טבעי לכל ההודעות ({eligibleCount})
+            </Button>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between gap-2.5 mb-4">
         <p className="text-xs text-slate-500">
-          עריכת כל הודעה בנפרד — טקסט שיוקרא קולית, או העלאת הקלטה אנושית שתחליף אותו.
+          עריכת כל הודעה בנפרד — טקסט שיוקרא קולית, יצירת קול טבעי, או העלאת הקלטה אנושית.
         </p>
         <Button onClick={save} disabled={saving || loading} size="sm">
           {saving ? <Loader2 size={14} className="animate-spin" /> : savedOk ? <Check size={14} /> : null}
@@ -113,14 +255,22 @@ export default function YemotMaternitySettings() {
           {meta.map((m) => {
             const msg = messages[m.key] ?? { text: m.defaultText, audio: null }
             const busy = uploadingKey === m.key
+            const generating = genKey === m.key || genAll
+            const generated = isGenerated(msg.audio)
             return (
               <div key={m.key} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-slate-700">{m.label}</span>
                   {msg.audio ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">
-                      <Mic size={11} /> מושמעת הקלטה אנושית
-                    </span>
+                    generated ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 rounded-full px-2 py-0.5">
+                        <Volume2 size={11} /> קול נוירוני טבעי
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5">
+                        <Mic size={11} /> הקלטה אנושית
+                      </span>
+                    )
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">
                       <Type size={11} /> קול ממוחשב
@@ -140,7 +290,19 @@ export default function YemotMaternitySettings() {
                 {m.hint && <p className="text-[11px] text-amber-600 mt-1">{m.hint}</p>}
 
                 {m.allowAudio && (
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {isEligible(m) && hasKey && voiceId && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || generating || busyAny}
+                        onClick={() => generateVoice(m.key)}
+                      >
+                        {generating ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+                        {generated ? 'צור קול מחדש' : 'צור קול טבעי'}
+                      </Button>
+                    )}
                     <input
                       ref={(el) => { fileInputs.current[m.key] = el }}
                       type="file"
@@ -156,15 +318,15 @@ export default function YemotMaternitySettings() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={busy}
+                      disabled={busy || generating}
                       onClick={() => fileInputs.current[m.key]?.click()}
                     >
                       {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-                      {msg.audio ? 'החלף הקלטה' : 'העלה הקלטה'}
+                      {msg.audio ? 'העלה הקלטה' : 'העלה הקלטה'}
                     </Button>
                     {msg.audio && (
-                      <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => removeRecording(m.key)}>
-                        <Trash2 size={13} /> הסר הקלטה
+                      <Button type="button" variant="ghost" size="sm" disabled={busy || generating} onClick={() => removeRecording(m.key)}>
+                        <Trash2 size={13} /> הסר קול
                       </Button>
                     )}
                   </div>
