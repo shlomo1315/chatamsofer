@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
   const speech = await generateSpeech(text, { voiceId: body.voiceId })
   if (!speech.ok || !speech.audio) return NextResponse.json({ error: speech.error ?? 'יצירת הקול נכשלה' }, { status: 502 })
 
-  return new NextResponse(speech.audio, {
-    headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' },
-  })
+  // מחזירים base64 בתוך JSON (ולא audio/mpeg גולמי) כדי לעקוף סינון תוכן (NetFree)
+  // שחוסם הזרמת אודיו. הדפדפן מפענח ומנגן מקומית מ-blob.
+  const b64 = Buffer.from(speech.audio).toString('base64')
+  return NextResponse.json({ audio: b64, mime: 'audio/mpeg' }, { headers: { 'Cache-Control': 'no-store' } })
 }

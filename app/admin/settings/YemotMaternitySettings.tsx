@@ -203,7 +203,10 @@ export default function YemotMaternitySettings() {
         }
         throw new Error(msg)
       }
-      const blob = await res.blob()
+      const data = await res.json()
+      if (!data?.audio) throw new Error(data?.error || 'לא התקבל אודיו')
+      const bytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0))
+      const blob = new Blob([bytes], { type: data.mime || 'audio/mpeg' })
       if (!blob.size) throw new Error('האודיו שהתקבל ריק')
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
