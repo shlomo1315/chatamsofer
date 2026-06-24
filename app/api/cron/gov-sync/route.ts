@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { getAdminClient, syncCities, syncStreetsForCity } from '@/lib/govData'
+import { getAdminClient, syncCities, syncAllStreets } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -26,18 +26,12 @@ export async function GET(request: NextRequest) {
     result.errors.push(`cities: ${e instanceof Error ? e.message : 'error'}`)
   }
 
-  // 2. רענון רחובות עבור ערים שכבר נטענו למאגר (אלו שבשימוש בפועל)
+  // 2. מירור מלא של כל הרחובות לכל הערים (לשליפה מיידית בטפסים)
   try {
-    const { data } = await admin.from('gov_streets').select('city')
-    const cities = [...new Set((data ?? []).map(r => r.city))]
-    let ok = 0
-    for (const city of cities) {
-      try { await syncStreetsForCity(admin, city); ok++ }
-      catch (e) { result.errors.push(`streets/${city}: ${e instanceof Error ? e.message : 'error'}`) }
-    }
-    result.streetsCities = ok
+    const r = await syncAllStreets(admin)
+    result.streetsCities = r.cities
   } catch (e) {
-    result.errors.push(`streets-scan: ${e instanceof Error ? e.message : 'error'}`)
+    result.errors.push(`streets: ${e instanceof Error ? e.message : 'error'}`)
   }
 
   return NextResponse.json({ ok: true, ...result })

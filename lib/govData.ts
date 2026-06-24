@@ -292,8 +292,25 @@ export async function syncStreetsForCity(admin: SupabaseClient, city: string): P
   return streets.length
 }
 
+// מירור מלא של כל הרחובות לכל הערים → gov_streets. מושך את כל מאגר הרחובות פעם
+// אחת (מפת city→streets), כותב הכל בקבוצות, ומסיר רחובות שכבר אינם במקור.
+// כך השליפה בטפסים מיידית מהמאגר המקומי, וזה מתרענן פעם ביום.
+export async function syncAllStreets(admin: SupabaseClient): Promise<{ cities: number; streets: number }> {
+  const map = await getAllStreetsByCity(true) // משיכה מלאה וטרייה
+  const now = new Date().toISOString()
+  const rows: { city: string; street: string; synced_at: string }[] = []
+  for (const [city, streets] of map) for (const street of streets) rows.push({ city, street, synced_at: now })
+
+  for (let i = 0; i < rows.length; i += 1000) {
+    await admin.from('gov_streets').upsert(rows.slice(i, i + 1000), { onConflict: 'city,street' })
+  }
+  // הסרת רחובות שלא רועננו בריצה זו (נמחקו מהמקור)
+  await admin.from('gov_streets').delete().lt('synced_at', now)
+  return { cities: map.size, streets: rows.length }
+}
+
 // רענון יומי מלא — נקרא מהמתזמן הפנימי (instrumentation) מדי לילה.
-// מרענן את רשימת הערים, ואת הרחובות של ערים שכבר נטענו למאגר (אלו שבשימוש).
+// מרענן את רשימת הערים, ומבצע מירור מלא של כל הרחובות לכל הערים.
 export async function runGovSync(): Promise<{ cities: number; streetsCities: number; error?: string }> {
   const admin = getAdminClient()
   if (!admin) return { cities: 0, streetsCities: 0, error: 'no admin client' }
@@ -301,11 +318,8 @@ export async function runGovSync(): Promise<{ cities: number; streetsCities: num
   let streetsCities = 0
   try { cities = await syncCities(admin) } catch (e) { return { cities, streetsCities, error: e instanceof Error ? e.message : 'cities error' } }
   try {
-    const { data } = await admin.from('gov_streets').select('city')
-    const list = [...new Set((data ?? []).map(r => r.city))]
-    for (const city of list) {
-      try { await syncStreetsForCity(admin, city); streetsCities++ } catch { /* ממשיכים לעיר הבאה */ }
-    }
+    const r = await syncAllStreets(admin)
+    streetsCities = r.cities
   } catch (e) {
     return { cities, streetsCities, error: e instanceof Error ? e.message : 'streets error' }
   }
