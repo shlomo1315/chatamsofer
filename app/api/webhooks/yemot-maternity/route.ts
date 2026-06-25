@@ -417,14 +417,27 @@ async function handle(req: NextRequest) {
     return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
   }
 
-  // כרטיס כבר משויך ללידה זו — מודיעים עם מספר הכרטיס, לא מבקשים שוב
+  // כרטיס כבר משויך? רק אם הוא *באמת* חובר בהצלחה בנדרים (קיים רישום yemot_card_registered),
+  // ולא רק נשמר מספר בשלב הקלדה שלא הושלם. אחרת — מנקים את המספר התקוע ומאפשרים לחבר שוב.
   const existingCard = String(active.card_number ?? '').trim()
   if (existingCard) {
-    console.log(`[yemot-maternity] aid ${active.id} already has a card linked — already-linked message`)
-    await logActivity(admin, 'yemot_card_already_linked', 'maternity_aid', active.id, {
-      caller: callerPhone, callId, family_name: familyName, card_number_last4: existingCard.slice(-4),
-    })
-    return yemotText([idMessage(tokenOf(M.card_already_linked, { card: existingCard })), goToFolder('hangup')], callId)
+    const { data: linkedLog } = await admin
+      .from('activity_log')
+      .select('id')
+      .eq('action', 'yemot_card_registered')
+      .eq('entity_id', active.id)
+      .limit(1)
+    const trulyLinked = Array.isArray(linkedLog) && linkedLog.length > 0
+    if (trulyLinked) {
+      console.log(`[yemot-maternity] aid ${active.id} already has a card linked — already-linked message`)
+      await logActivity(admin, 'yemot_card_already_linked', 'maternity_aid', active.id, {
+        caller: callerPhone, callId, family_name: familyName, card_number_last4: existingCard.slice(-4),
+      })
+      return yemotText([idMessage(tokenOf(M.card_already_linked, { card: existingCard })), goToFolder('hangup')], callId)
+    }
+    // מספר תקוע ללא חיבור בפועל — מנקים כדי לאפשר חיבור מחדש
+    console.log(`[yemot-maternity] aid ${active.id} had unconfirmed card_number — clearing to allow re-link`)
+    await admin.from('maternity_aids').update({ card_number: null }).eq('id', active.id)
   }
 
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
