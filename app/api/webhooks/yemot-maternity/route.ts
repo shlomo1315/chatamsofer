@@ -21,6 +21,9 @@ import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from 
 
 export const dynamic = 'force-dynamic'
 
+// מספר הספרות הנדרש בכרטיס נדרים
+const CARD_DIGITS = 16
+
 // השוואת סודות בזמן קבוע (מונע timing attacks)
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(String(a))
@@ -142,7 +145,7 @@ function cardReadCommand(M: MaternityMessages, prefixKey?: keyof MaternityMessag
     prefixKey ? tokenOf(M[prefixKey as string]) : '',
     tokenOf(M.ask_card),
   ].filter(Boolean)
-  return readTap('collect_card', prompts, { max: 20, min: 1 })
+  return readTap('collect_card', prompts, { max: CARD_DIGITS, min: 1 })
 }
 
 // קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
@@ -377,19 +380,20 @@ async function handle(req: NextRequest) {
       return yemotText([centerReadCommand(M, centers)], callId)
     }
 
-    // תיקון (2): אם הוקלד מספר חדש — שומרים ומבקשים אישור עליו; אחרת מבקשים מספר מחדש.
-    if (cardVal && cardVal.length >= 4 && cardVal !== savedCard) {
+    // תיקון (2): אם הוקלד מספר חדש תקין (16 ספרות) — שומרים ומבקשים אישור עליו; אחרת מבקשים מספר מחדש.
+    if (cardVal && cardVal.length === CARD_DIGITS && cardVal !== savedCard) {
       await admin.from('maternity_aids').update({ card_number: cardVal }).eq('id', result.active.id)
       return yemotText([confirmReadCommand(M, cardVal)], callId)
     }
     await admin.from('maternity_aids').update({ card_number: null }).eq('id', result.active.id)
-    return yemotText([readTap('collect_card', [tokenOf(M.ask_card)], { max: 20, min: 1 })], callId)
+    return yemotText([readTap('collect_card', [tokenOf(M.ask_card)], { max: CARD_DIGITS, min: 1 })], callId)
   }
 
   // ── שלב 2: קבלת מספר הכרטיס → חזרה על הספרות ובקשת אישור (תגובה מיידית) ──
   if (cardVal) {
-    if (cardVal.length < 4) {
-      return yemotText([readTap('collect_card', [tokenOf(M.invalid_card), tokenOf(M.ask_card)], { max: 20, min: 1 })], callId)
+    // חובה בדיוק 16 ספרות — אחרת מבקשים להקיש שוב
+    if (cardVal.length !== CARD_DIGITS) {
+      return yemotText([readTap('collect_card', [tokenOf(M.card_length), tokenOf(M.ask_card)], { max: CARD_DIGITS, min: 1 })], callId)
     }
 
     const result = await findActiveAid(callerPhone)
