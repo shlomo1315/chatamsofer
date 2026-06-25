@@ -148,15 +148,16 @@ function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixK
     prefixKey ? tokenOf(M[prefixKey as string]) : '',
     tokenOf(M.ask_card),
   ].filter(Boolean)
-  // min=max=16 — ימות אוכפת בדיוק 16 ספרות (לא תחזיר ערך קצר → אין לולאה)
-  return readTap(varName, prompts, { max: CARD_DIGITS, min: CARD_DIGITS })
+  // min:1 — ימות מעבירה את הערך לשרת (גם אם פחות מ-16), והשרת מאמת ומשמיע את
+  // הודעת card_length *שלנו* ומבקש שוב במשתנה חדש (לא לולאה). max:16 — נסגר ב-16.
+  return readTap(varName, prompts, { max: CARD_DIGITS, min: 1 })
 }
 
 // קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
 function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'collect_confirm'): string {
   // פסיקים בין הספרות → הקראה איטית עם הפסקות (ספרה-ספרה)
   const spaced = card.split('').join(', ')
-  return readTap(confirmVar, [tokenOf(M.confirm_card, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
+  return readTap(confirmVar, [tokenOf(M.card_readback, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
 }
 
 // ── חיפוש משפחה לפי טלפון ─────────────────────────────────────────────────────

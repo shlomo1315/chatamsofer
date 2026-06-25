@@ -25,7 +25,7 @@ export const MATERNITY_MESSAGE_META: MsgMeta[] = [
   { key: 'ask_card', label: 'בקשת מספר כרטיס', defaultText: 'אנא הקישו את מספר הכרטיס של נדרים שקיבלתם משמאל לימין ולסיום הקישו סולמית', allowAudio: true },
   { key: 'invalid_card', label: 'מספר כרטיס לא תקין', defaultText: 'מספר כרטיס לא תקין', allowAudio: true },
   { key: 'card_length', label: 'לא הוקשו 16 ספרות', defaultText: 'לא הקשתם את מינימום הספרות הנדרשות יש להקיש שש עשרה ספרות', allowAudio: true },
-  { key: 'confirm_card', label: 'אישור מספר הכרטיס (חזרה + 1/2)', defaultText: '{card} לאישור הקישי 1 לתיקון הקישי 2', allowAudio: false, placeholders: ['card'], hint: 'הודעה דינמית — מקריאה את הספרות שהוקשו ומבקשת אישור. חובה לכלול {card}. אין אפשרות הקלטה.' },
+  { key: 'card_readback', label: 'אישור מספר הכרטיס (הקראת ספרות + 1/2)', defaultText: '{card} לאישור הקישי 1 לתיקון הקישי 2', allowAudio: false, placeholders: ['card'], hint: 'הודעה דינמית — מקריאה את הספרות שהוקשו (עם הפסקות) ומבקשת אישור. חובה לכלול {card}. אין אפשרות הקלטה.' },
   { key: 'center_intro', label: 'הקדמה לבחירת מוקד', defaultText: 'אנא בחרו את המוקד שבו תקבלו את הכרטיס הקישו את קוד המוקד', allowAudio: true },
   { key: 'center_item', label: 'תבנית שורת מוקד', defaultText: 'למוקד {name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'], hint: 'הודעה דינמית — חובה לכלול את {name} ו-{code}. אין אפשרות הקלטה כי המוקדים משתנים.' },
   { key: 'invalid_center', label: 'קוד מוקד שגוי', defaultText: 'קוד מוקד שגוי אנא נסו שוב', allowAudio: true },
@@ -81,10 +81,14 @@ export async function saveMaternityMessages(input: MaternityMessages): Promise<b
   for (const key of Object.keys(current)) {
     const i = input[key]
     if (!i) continue
-    current[key] = {
-      text: typeof i.text === 'string' && i.text.trim() ? i.text.trim() : current[key].text,
-      audio: META_BY_KEY.get(key)?.allowAudio ? (i.audio ?? current[key].audio ?? null) : null,
-    }
+    const prevText = current[key].text
+    const prevAudio = current[key].audio ?? null
+    const newText = typeof i.text === 'string' && i.text.trim() ? i.text.trim() : prevText
+    let audio = META_BY_KEY.get(key)?.allowAudio ? (i.audio ?? prevAudio) : null
+    // אם הטקסט השתנה ויש קול נוירוני שנוצר (tts_) — מנקים אותו כדי שלא יושמע תוכן ישן
+    // (חוזר ל-TTS של הטקסט החדש; ניתן ליצור קול מחדש לקול טבעי).
+    if (audio && audio.startsWith('tts_') && newText !== prevText) audio = null
+    current[key] = { text: newText, audio: audio ?? null }
   }
 
   const { error } = await admin.from('app_settings').upsert(
