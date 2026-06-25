@@ -29,10 +29,26 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb)
 }
 
+// קליינט Supabase יחיד (singleton) — נמנע מיצירה מחדש בכל בקשה (מהירות)
+let _admin: ReturnType<typeof createClient> | null = null
 function adminClient() {
+  if (_admin) return _admin
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  _admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  return _admin
+}
+
+// מטמון הודעות בזיכרון — ההודעות כמעט ולא משתנות, אז שומרים אותן ל-60ש' כדי
+// לחסוך שאילתת DB בכל שיחה (תגובה ראשונה מיידית).
+let _msgCache: { at: number; data: MaternityMessages } | null = null
+const MSG_TTL_MS = 60_000
+async function getCachedMessages(): Promise<MaternityMessages> {
+  const now = Date.now()
+  if (_msgCache && now - _msgCache.at < MSG_TTL_MS) return _msgCache.data
+  const data = await getMaternityMessages()
+  _msgCache = { at: now, data }
+  return data
 }
 
 // נרמול מספר טלפון ישראלי לפורמט אחיד (10 ספרות: 05XXXXXXXX)
@@ -237,7 +253,7 @@ async function handle(req: NextRequest) {
   // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)
   console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${cardVal ? '****' + cardVal.slice(-4) : ''} center=${centerVal}`)
 
-  const M = await getMaternityMessages()
+  const M = await getCachedMessages()
 
   if (!apiPhone) {
     return yemotText([idMessage(tText('שגיאה במספר המתקשר')), goToFolder('hangup')], callId)
