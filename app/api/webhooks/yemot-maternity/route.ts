@@ -145,6 +145,12 @@ function cardReadCommand(M: MaternityMessages, prefixKey?: keyof MaternityMessag
   return readTap('collect_card', prompts, { max: 20, min: 1 })
 }
 
+// קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
+function confirmReadCommand(M: MaternityMessages, card: string): string {
+  const spaced = card.split('').join(' ') // כדי שה-TTS יקריא ספרה-ספרה
+  return readTap('collect_confirm', [tokenOf(M.confirm_card, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
+}
+
 // ── חיפוש משפחה לפי טלפון ─────────────────────────────────────────────────────
 // מהיר: מסננים ב-DB לפי 7 הספרות האחרונות (עמיד למקפים/רווחים/קידומת 972 בפורמט
 // השמור), ואז מאמתים בנרמול מלא ב-JS. אם לא נמצא — fallback לסריקה מלאה כדי שלא
@@ -237,6 +243,7 @@ async function handle(req: NextRequest) {
   // ערכי ה-read חוזרים תחת שמות המשתנים שהגדרנו
   const cardVal = String(params['collect_card'] ?? '').trim()
   const centerVal = String(params['collect_center'] ?? '').trim()
+  const confirmVal = String(params['collect_confirm'] ?? '').trim()
 
   // ── אבטחה: אם YEMOT_WEBHOOK_SECRET מוגדר — אוכפים ApiToken (constant-time). ──
   // אם אינו מוגדר — ממשיכים כדי לא לשבור את השירות, עם אזהרה חזקה (יש להגדירו בהקדם).
@@ -346,7 +353,40 @@ async function handle(req: NextRequest) {
     ], callId)
   }
 
-  // ── שלב 2: קבלת מספר הכרטיס → שמירה → מעבר לבחירת מוקד ──────────────────
+  // ── שלב אישור: 1 = אישור הספרות → מוקד · 2 = תיקון → הקלדה מחדש ──────────
+  if (confirmVal) {
+    const result = await findActiveAid(callerPhone)
+    if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active) {
+      console.error('[yemot-maternity] re-lookup failed at confirm step', result)
+      return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
+    }
+    if (result.active.status !== 'active') {
+      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
+    }
+    const savedCard = String(result.active.card_number ?? '').trim()
+
+    if (confirmVal === '1') {
+      // אישור — ממשיכים לבחירת מוקד
+      if (!savedCard) return yemotText([cardReadCommand(M, 'welcome')], callId)
+      const centers = await activeCentersWithCode(admin)
+      if (!centers.length) {
+        console.log('[yemot-maternity] no centers with code — finishing after card confirm')
+        return yemotText([idMessage(tokenOf(M.card_saved_no_center)), goToFolder('hangup')], callId)
+      }
+      console.log(`[yemot-maternity] card confirmed for aid ${result.active.id}, prompting center (${centers.length})`)
+      return yemotText([centerReadCommand(M, centers)], callId)
+    }
+
+    // תיקון (2): אם הוקלד מספר חדש — שומרים ומבקשים אישור עליו; אחרת מבקשים מספר מחדש.
+    if (cardVal && cardVal.length >= 4 && cardVal !== savedCard) {
+      await admin.from('maternity_aids').update({ card_number: cardVal }).eq('id', result.active.id)
+      return yemotText([confirmReadCommand(M, cardVal)], callId)
+    }
+    await admin.from('maternity_aids').update({ card_number: null }).eq('id', result.active.id)
+    return yemotText([readTap('collect_card', [tokenOf(M.ask_card)], { max: 20, min: 1 })], callId)
+  }
+
+  // ── שלב 2: קבלת מספר הכרטיס → חזרה על הספרות ובקשת אישור (תגובה מיידית) ──
   if (cardVal) {
     if (cardVal.length < 4) {
       return yemotText([readTap('collect_card', [tokenOf(M.invalid_card), tokenOf(M.ask_card)], { max: 20, min: 1 })], callId)
@@ -372,14 +412,9 @@ async function handle(req: NextRequest) {
       return yemotText([idMessage(tText('שגיאה בשמירת הכרטיס אנא נסי שוב מאוחר יותר')), goToFolder('hangup')], callId)
     }
 
-    const centers = await activeCentersWithCode(admin)
-    if (!centers.length) {
-      console.log('[yemot-maternity] no centers with code — finishing after card save')
-      return yemotText([idMessage(tokenOf(M.card_saved_no_center)), goToFolder('hangup')], callId)
-    }
-
-    console.log(`[yemot-maternity] card saved for aid ${result.active.id}, prompting center (${centers.length})`)
-    return yemotText([centerReadCommand(M, centers)], callId)
+    // תגובה מיידית: חזרה על הספרות + בקשת אישור (בלי חיפוש מוקדים — מהיר)
+    console.log(`[yemot-maternity] card saved for aid ${result.active.id}, asking confirm`)
+    return yemotText([confirmReadCommand(M, cardVal)], callId)
   }
 
   // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
