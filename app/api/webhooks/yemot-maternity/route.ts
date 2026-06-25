@@ -23,6 +23,9 @@ export const dynamic = 'force-dynamic'
 
 // מספר הספרות הנדרש בכרטיס נדרים
 const CARD_DIGITS = 16
+// משתנה חדש לכל ניסיון הקלדה — מונע re-read של משתנה מלא (שגורם ללולאה אינסופית בימות)
+const CARD_VARS = ['collect_card', 'collect_card2', 'collect_card3', 'collect_card4', 'collect_card5']
+const CONFIRM_VARS = ['collect_confirm', 'collect_confirm2', 'collect_confirm3', 'collect_confirm4', 'collect_confirm5']
 
 // השוואת סודות בזמן קבוע (מונע timing attacks)
 function safeEqual(a: string, b: string): boolean {
@@ -140,18 +143,19 @@ function centerReadCommand(M: MaternityMessages, centers: CenterRow[]): string {
 }
 
 // פקודת ה-read למספר הכרטיס (msgKey = welcome / welcome_card_exists / invalid_card להקדמה)
-function cardReadCommand(M: MaternityMessages, prefixKey?: keyof MaternityMessages): string {
+function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixKey?: keyof MaternityMessages): string {
   const prompts = [
     prefixKey ? tokenOf(M[prefixKey as string]) : '',
     tokenOf(M.ask_card),
   ].filter(Boolean)
-  return readTap('collect_card', prompts, { max: CARD_DIGITS, min: 1 })
+  // min=max=16 — ימות אוכפת בדיוק 16 ספרות (לא תחזיר ערך קצר → אין לולאה)
+  return readTap(varName, prompts, { max: CARD_DIGITS, min: CARD_DIGITS })
 }
 
 // קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
-function confirmReadCommand(M: MaternityMessages, card: string): string {
+function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'collect_confirm'): string {
   const spaced = card.split('').join(' ') // כדי שה-TTS יקריא ספרה-ספרה
-  return readTap('collect_confirm', [tokenOf(M.confirm_card, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
+  return readTap(confirmVar, [tokenOf(M.confirm_card, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
 }
 
 // ── חיפוש משפחה לפי טלפון ─────────────────────────────────────────────────────
@@ -243,10 +247,9 @@ async function handle(req: NextRequest) {
 
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
-  // ערכי ה-read חוזרים תחת שמות המשתנים שהגדרנו
-  const cardVal = String(params['collect_card'] ?? '').trim()
   const centerVal = String(params['collect_center'] ?? '').trim()
-  const confirmVal = String(params['collect_confirm'] ?? '').trim()
+  // הכרטיס שהוקלד באחרון מבין משתני הניסיון (לתצוגה בלוג בלבד)
+  const enteredCard = CARD_VARS.map((v) => String(params[v] ?? '').trim()).filter(Boolean).pop() ?? ''
 
   // ── אבטחה: אם YEMOT_WEBHOOK_SECRET מוגדר — אוכפים ApiToken (constant-time). ──
   // אם אינו מוגדר — ממשיכים כדי לא לשבור את השירות, עם אזהרה חזקה (יש להגדירו בהקדם).
@@ -261,7 +264,7 @@ async function handle(req: NextRequest) {
   }
 
   // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)
-  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${cardVal ? '****' + cardVal.slice(-4) : ''} center=${centerVal}`)
+  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${enteredCard ? '****' + enteredCard.slice(-4) : ''} center=${centerVal}`)
 
   const M = await getCachedMessages()
 
@@ -356,69 +359,58 @@ async function handle(req: NextRequest) {
     ], callId)
   }
 
-  // ── שלב אישור: 1 = אישור הספרות → מוקד · 2 = תיקון → הקלדה מחדש ──────────
-  if (confirmVal) {
+  // ── שלב הכרטיס + אישור (משתנה חדש לכל ניסיון — מונע לולאת re-read) ────────
+  // מאתרים את ניסיון ההקלדה האחרון (המשתנה האחרון מבין CARD_VARS שיש בו ערך).
+  let attempt = -1
+  for (let i = CARD_VARS.length - 1; i >= 0; i--) {
+    if (String(params[CARD_VARS[i]] ?? '').trim()) { attempt = i; break }
+  }
+  if (attempt >= 0) {
+    const aCard = String(params[CARD_VARS[attempt]] ?? '').trim()
+    const aConfirm = String(params[CONFIRM_VARS[attempt]] ?? '').trim()
+
     const result = await findActiveAid(callerPhone)
     if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active) {
-      console.error('[yemot-maternity] re-lookup failed at confirm step', result)
+      console.error('[yemot-maternity] re-lookup failed at card/confirm step', result)
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
     }
     if (result.active.status !== 'active') {
       return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
     }
-    const savedCard = String(result.active.card_number ?? '').trim()
+    const aidId = result.active.id
 
-    if (confirmVal === '1') {
-      // אישור — ממשיכים לבחירת מוקד
-      if (!savedCard) return yemotText([cardReadCommand(M, 'welcome')], callId)
+    // עדיין לא אישרה את הספרות → חזרה על הספרות + בקשת אישור (תגובה מיידית)
+    if (!aConfirm) {
+      if (aCard.length !== CARD_DIGITS) {
+        // הגנה (ימות אמורה לאכוף 16) — מבקשים מספר חדש במשתנה הבא
+        if (attempt + 1 < CARD_VARS.length) {
+          return yemotText([cardReadCommand(M, CARD_VARS[attempt + 1], 'card_length')], callId)
+        }
+        return yemotText([idMessage(tokenOf(M.card_length)), goToFolder('hangup')], callId)
+      }
+      await admin.from('maternity_aids').update({ card_number: aCard }).eq('id', aidId)
+      console.log(`[yemot-maternity] card entered for aid ${aidId}, asking confirm (attempt ${attempt})`)
+      return yemotText([confirmReadCommand(M, aCard, CONFIRM_VARS[attempt])], callId)
+    }
+
+    // אישרה (1) → בחירת מוקד
+    if (aConfirm === '1') {
       const centers = await activeCentersWithCode(admin)
       if (!centers.length) {
         console.log('[yemot-maternity] no centers with code — finishing after card confirm')
         return yemotText([idMessage(tokenOf(M.card_saved_no_center)), goToFolder('hangup')], callId)
       }
-      console.log(`[yemot-maternity] card confirmed for aid ${result.active.id}, prompting center (${centers.length})`)
+      console.log(`[yemot-maternity] card confirmed for aid ${aidId}, prompting center (${centers.length})`)
       return yemotText([centerReadCommand(M, centers)], callId)
     }
 
-    // תיקון (2): אם הוקלד מספר חדש תקין (16 ספרות) — שומרים ומבקשים אישור עליו; אחרת מבקשים מספר מחדש.
-    if (cardVal && cardVal.length === CARD_DIGITS && cardVal !== savedCard) {
-      await admin.from('maternity_aids').update({ card_number: cardVal }).eq('id', result.active.id)
-      return yemotText([confirmReadCommand(M, cardVal)], callId)
+    // תיקון (2) → מבקשים מספר חדש במשתנה הבא (כדי לא לקרוא מחדש משתנה מלא = לולאה)
+    if (attempt + 1 < CARD_VARS.length) {
+      await admin.from('maternity_aids').update({ card_number: null }).eq('id', aidId)
+      console.log(`[yemot-maternity] correction requested for aid ${aidId}, re-asking on ${CARD_VARS[attempt + 1]}`)
+      return yemotText([cardReadCommand(M, CARD_VARS[attempt + 1])], callId)
     }
-    await admin.from('maternity_aids').update({ card_number: null }).eq('id', result.active.id)
-    return yemotText([readTap('collect_card', [tokenOf(M.ask_card)], { max: CARD_DIGITS, min: 1 })], callId)
-  }
-
-  // ── שלב 2: קבלת מספר הכרטיס → חזרה על הספרות ובקשת אישור (תגובה מיידית) ──
-  if (cardVal) {
-    // חובה בדיוק 16 ספרות — אחרת מבקשים להקיש שוב
-    if (cardVal.length !== CARD_DIGITS) {
-      return yemotText([readTap('collect_card', [tokenOf(M.card_length), tokenOf(M.ask_card)], { max: CARD_DIGITS, min: 1 })], callId)
-    }
-
-    const result = await findActiveAid(callerPhone)
-    if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active) {
-      console.error('[yemot-maternity] re-lookup failed at card step', result)
-      return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
-    }
-
-    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס (גם אם הגיעה לשלב זה)
-    if (result.active.status !== 'active') {
-      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
-    }
-
-    const { error: updateErr } = await admin
-      .from('maternity_aids')
-      .update({ card_number: cardVal })
-      .eq('id', result.active.id)
-    if (updateErr) {
-      console.error('[yemot-maternity] card_number update error', updateErr.message)
-      return yemotText([idMessage(tText('שגיאה בשמירת הכרטיס אנא נסי שוב מאוחר יותר')), goToFolder('hangup')], callId)
-    }
-
-    // תגובה מיידית: חזרה על הספרות + בקשת אישור (בלי חיפוש מוקדים — מהיר)
-    console.log(`[yemot-maternity] card saved for aid ${result.active.id}, asking confirm`)
-    return yemotText([confirmReadCommand(M, cardVal)], callId)
+    return yemotText([idMessage(tText('יותר מדי ניסיונות אנא נסי שוב מאוחר יותר או פני למשרד')), goToFolder('hangup')], callId)
   }
 
   // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
@@ -480,7 +472,7 @@ async function handle(req: NextRequest) {
   }
 
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
-  return yemotText([cardReadCommand(M, 'welcome')], callId)
+  return yemotText([cardReadCommand(M, CARD_VARS[0], 'welcome')], callId)
 }
 
 // רישום פעולה ל-activity_log (best-effort — לא חוסם את התגובה לימות)
