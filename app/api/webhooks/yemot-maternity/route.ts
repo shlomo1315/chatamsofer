@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
 import { getNedarimCreds, setMagneticCard } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
@@ -30,7 +30,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 // קליינט Supabase יחיד (singleton) — נמנע מיצירה מחדש בכל בקשה (מהירות)
-let _admin: ReturnType<typeof createClient> | null = null
+let _admin: SupabaseClient | null = null
 function adminClient() {
   if (_admin) return _admin
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
