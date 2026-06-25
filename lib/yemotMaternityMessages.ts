@@ -25,7 +25,7 @@ export const MATERNITY_MESSAGE_META: MsgMeta[] = [
   { key: 'ask_card', label: 'בקשת מספר כרטיס', defaultText: 'אנא הקישו את מספר הכרטיס של נדרים שקיבלתם משמאל לימין ולסיום הקישו סולמית', allowAudio: true },
   { key: 'invalid_card', label: 'מספר כרטיס לא תקין', defaultText: 'מספר כרטיס לא תקין', allowAudio: true },
   { key: 'card_length', label: 'לא הוקשו 16 ספרות', defaultText: 'לא הקשתם את מינימום הספרות הנדרשות יש להקיש שש עשרה ספרות', allowAudio: true },
-  { key: 'confirm_card', label: 'אישור מספר הכרטיס (חזרה + 1/2)', defaultText: 'הקשת מספר כרטיס {card} לאישור הקישי 1 לתיקון הקישי 2', allowAudio: false, placeholders: ['card'], hint: 'הודעה דינמית — חוזרת על הספרות שהוקשו ומבקשת אישור. חובה לכלול {card}. אין אפשרות הקלטה.' },
+  { key: 'confirm_card', label: 'אישור מספר הכרטיס (חזרה + 1/2)', defaultText: '{card} לאישור הקישי 1 לתיקון הקישי 2', allowAudio: false, placeholders: ['card'], hint: 'הודעה דינמית — מקריאה את הספרות שהוקשו ומבקשת אישור. חובה לכלול {card}. אין אפשרות הקלטה.' },
   { key: 'center_intro', label: 'הקדמה לבחירת מוקד', defaultText: 'אנא בחרו את המוקד שבו תקבלו את הכרטיס הקישו את קוד המוקד', allowAudio: true },
   { key: 'center_item', label: 'תבנית שורת מוקד', defaultText: 'למוקד {name} הקישו {code}', allowAudio: false, placeholders: ['name', 'code'], hint: 'הודעה דינמית — חובה לכלול את {name} ו-{code}. אין אפשרות הקלטה כי המוקדים משתנים.' },
   { key: 'invalid_center', label: 'קוד מוקד שגוי', defaultText: 'קוד מוקד שגוי אנא נסו שוב', allowAudio: true },

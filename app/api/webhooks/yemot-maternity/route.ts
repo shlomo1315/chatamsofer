@@ -154,7 +154,8 @@ function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixK
 
 // קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
 function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'collect_confirm'): string {
-  const spaced = card.split('').join(' ') // כדי שה-TTS יקריא ספרה-ספרה
+  // פסיקים בין הספרות → הקראה איטית עם הפסקות (ספרה-ספרה)
+  const spaced = card.split('').join(', ')
   return readTap(confirmVar, [tokenOf(M.confirm_card, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
 }
 
