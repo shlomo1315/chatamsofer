@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
     return invalid()
   }
 
-  // הצלחה — ניקוי הקוד והנפקת סשן למוטב הזה בלבד
+  // הצלחה — ניקוי הקוד (hash + plain) והנפקת סשן למוטב הזה בלבד
   await admin
     .from('beneficiaries')
-    .update({ portal_phone_code_hash: null, portal_phone_code_expires: null, portal_phone_code_attempts: 0 })
+    .update({ portal_phone_code_hash: null, portal_phone_code_plain: null, portal_phone_code_expires: null, portal_phone_code_attempts: 0 })
     .eq('id', data.id)
 
   const { portal_phone_code_hash: _a, portal_phone_code_expires: _b, portal_phone_code_attempts: _c, ...beneficiary } = data

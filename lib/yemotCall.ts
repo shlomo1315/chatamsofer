@@ -1,58 +1,44 @@
-// שיחה יוצאת דרך ימות המשיח — מקריאה למתקשר קוד כניסה חד-פעמי (TTS inline).
-// מודול צד-שרת בלבד.
+// שיחה יוצאת דרך ימות המשיח — מנתבת את המתקשר לשלוחת ה-OTP (yemot-otp) שמקריאה
+// לו את הקוד החד-פעמי. מודול צד-שרת בלבד.
 //
-// ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_CALLER_ID (מספר ה-DID של המערכת).
-// כל עוד המשתנה לא מוגדר — yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
-// כך הפיצ'ר רדום עד שמפעילים אותו במכוון.
+// ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_TEMPLATE_ID (מזהה תבנית קמפיין
+// שהוגדרה בניהול ימות לניתוב לשלוחת ה-OTP, עם *ניסיון אחד בלבד*). כל עוד המשתנה
+// לא מוגדר — yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
 //
-// מנגנון: RunCampaign של call2all עם ttsMode=1 — שיחה יוצאת שמקריאה טקסט אישי.
-//   phones = אובייקט JSON { "<מספר>": "<טקסט אישי להקראה>" }   (לא מערך!)
-//   ttsMode=1 = חובה כדי שימות תקריא את הטקסט (בלעדיו השיחה מתנתקת בלי הקראה).
-// הערה: ימות מקדימה לטקסט את "ההודעה הכללית" של תבנית הקמפיין. כדי שתוקרא רק
-// הקוד — יש לרוקן את "ההודעה הכללית" בתבנית הקמפיין בניהול ימות (חד-פעמי).
+// מנגנון (השלוחה הייעודית):
+//   • התבנית בימות מוגדרת: "ניתוב לשלוחה" → שלוחת ה-OTP (type=api → /api/webhooks/yemot-otp),
+//     מספר ניסיונות = 1 (קריטי! ברירת המחדל של ימות היא 3 ניסיונות = שיחות חוזרות).
+//   • placeCodeCall מפעיל את התבנית למספר היחיד. השלוחה שולפת את הקוד מה-DB
+//     לפי מספר המתקשר ומקריאה אותו — בלי שום הודעה כללית/טקסט בקמפיין.
+// כך הקוד הדינמי אינו עובר דרך טקסט הקמפיין כלל, ואין תלות בתבניות/הודעות קיימות.
 
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
 export function yemotCallConfigured(): boolean {
-  return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_CALLER_ID
+  return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID
 }
 
-// טקסט בטוח להקראה. פסיקים נשמרים (הם יוצרים הפסקות בין הספרות); רק תווים
-// שעלולים לשבש את הפרמטר/ההקראה מוסרים.
-function ttsSafe(text: string): string {
-  return String(text ?? '').replace(/[.\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-// בונה את משפט ההקראה: הספרות ספרה-ספרה (פסיקים = הפסקות), פעמיים לבהירות.
-function spokenCode(code: string): string {
-  const digits = code.replace(/\D/g, '').split('').join(', ')
-  return ttsSafe(`קוד הכניסה שלך הוא ${digits} , שוב, ${digits}`)
-}
-
-// מבצע שיחה יוצאת למספר יחיד שמקריאה את הקוד. לעולם לא זורק; לא מתעד את הקוד.
+// מפעיל שיחה יוצאת יחידה שמנתבת את המתקשר לשלוחת ה-OTP. לעולם לא זורק.
 // מחזיר { ok, error? }. אם לא מוגדר — { ok:false, notConfigured:true }.
 export async function placeCodeCall(
   phone: string,
-  code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
   const token = process.env.YEMOT_TOKEN
-  const callerId = process.env.YEMOT_OTP_CALLER_ID
-  if (!token || !callerId) return { ok: false, notConfigured: true }
+  const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
+  const callerId = process.env.YEMOT_OTP_CALLER_ID // אופציונלי — נקבע גם בתבנית
+  if (!token || !templateId) return { ok: false, notConfigured: true }
 
   const tel = phone.replace(/\D/g, '')
   if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
 
-  // RunCampaign + ttsMode=1 — שיחה יוצאת שמקריאה את הקוד כטקסט אישי.
-  // phones חייב להיות אובייקט JSON { "<מספר>": "<טקסט>" } (לא מערך).
+  // RunCampaign עם templateId של תבנית שמנתבת לשלוחת ה-OTP. phones = המספר היחיד
+  // (פורמט אובייקט JSON שעובד בימות). הטקסט אינו בשימוש — השלוחה מקריאה את הקוד.
   const form = new URLSearchParams()
   form.set('token', token)
-  form.set('callerId', callerId)
-  form.set('phones', JSON.stringify({ [tel]: spokenCode(code) }))
-  // ttsMode=1 חובה כדי שימות תקריא את הטקסט האישי כ-TTS (בלעדיו השיחה מתנתקת בלי
-  // הקראה). חשוב: ימות מקדימה לטקסט את "ההודעה הכללית" של תבנית הקמפיין — לכן יש
-  // לרוקן את ההודעה הכללית בתבנית בימות, ואז מוקרא רק הקוד.
-  form.set('ttsMode', '1')
+  form.set('templateId', templateId)
+  form.set('phones', JSON.stringify({ [tel]: '' }))
   form.set('withSMS', '0')
+  if (callerId) form.set('callerId', callerId)
 
   try {
     const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })

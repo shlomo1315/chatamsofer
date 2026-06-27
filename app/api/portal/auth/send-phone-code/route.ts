@@ -76,18 +76,24 @@ export async function POST(request: NextRequest) {
   const code = generateCode()
   const codeHash = await hashCode(code)
   const expires = new Date(Date.now() + 5 * 60 * 1000).toISOString()
+  // hash — לאימות מה שיוקלד בפורטל; plain — כדי ששלוחת ה-OTP תוכל להקריא בשיחה.
   const { error: upErr } = await admin
     .from('beneficiaries')
-    .update({ portal_phone_code_hash: codeHash, portal_phone_code_expires: expires, portal_phone_code_attempts: 0 })
+    .update({
+      portal_phone_code_hash: codeHash,
+      portal_phone_code_plain: code,
+      portal_phone_code_expires: expires,
+      portal_phone_code_attempts: 0,
+    })
     .eq('id', data.id)
   if (upErr) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const call = await placeCodeCall(phone, code)
+  const call = await placeCodeCall(phone)
   if (!call.ok) {
     // ניקוי הקוד אם השיחה לא יצאה
     await admin
       .from('beneficiaries')
-      .update({ portal_phone_code_hash: null, portal_phone_code_expires: null })
+      .update({ portal_phone_code_hash: null, portal_phone_code_plain: null, portal_phone_code_expires: null })
       .eq('id', data.id)
     return NextResponse.json({ error: 'השיחה נכשלה. נסה שוב או היכנס עם סיסמה.' }, { status: 502 })
   }
