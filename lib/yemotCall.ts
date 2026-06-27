@@ -5,10 +5,12 @@
 // כל עוד המשתנה לא מוגדר — yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
 // כך הפיצ'ר רדום עד שמפעילים אותו במכוון.
 //
-// מנגנון: SendTTS של call2all — שיחה יוצאת יחידה שמקריאה טקסט (ttsMessage) ישירות
-// לשיחה שנענתה. בניגוד ל-RunCampaign (שמשמיע *תבנית* קבועה, ולכן ניתב את השיחה
-// למערכת הראשית/שלוחה 7 במקום להקריא את הקוד) — SendTTS מקריא את הטקסט שנשלח לו,
-// ולכן מתאים לקוד דינמי שונה בכל שיחה. פרמטרים: token, phones, callerId, ttsMessage.
+// מנגנון: RunCampaign של call2all עם ttsMode=1 — שיחה יוצאת שמקריאה טקסט אישי
+// לכל מספר. הפורמט הקריטי (לפי תיעוד ימות):
+//   phones = אובייקט JSON { "<מספר>": "<טקסט אישי להקראה>" }   (לא מערך!)
+//   ttsMode=1  → הקראת הטקסט האישי כ-TTS
+// בניסיון הראשון נשלח phones כמערך [{phone}] בפורמט שגוי, אז ימות התעלמה ונפלה
+// לתבנית ברירת מחדל (ההודעה על המוקדים). הפורמט כאן הוא הפורמט המתועד שעובד.
 
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
@@ -41,16 +43,17 @@ export async function placeCodeCall(
   const tel = phone.replace(/\D/g, '')
   if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
 
-  // SendTTS — שיחה יוצאת יחידה שמקריאה את הקוד כ-TTS. phones = המספר היחיד,
-  // callerId = ה-DID, ttsMessage = הטקסט להקראה.
+  // RunCampaign + ttsMode=1 — שיחה יוצאת שמקריאה את הקוד כטקסט אישי.
+  // phones חייב להיות אובייקט JSON { "<מספר>": "<טקסט>" } (לא מערך).
   const form = new URLSearchParams()
   form.set('token', token)
   form.set('callerId', callerId)
-  form.set('phones', tel)
-  form.set('ttsMessage', spokenCode(code))
+  form.set('phones', JSON.stringify({ [tel]: spokenCode(code) }))
+  form.set('ttsMode', '1')
+  form.set('withSMS', '0')
 
   try {
-    const res = await fetch(`${YEMOT_API}/SendTTS`, { method: 'POST', body: form })
+    const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
     const json = await res.json().catch(() => null)
     if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
       return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
