@@ -1,12 +1,14 @@
-// שיחה יוצאת (צינתוק) דרך ימות המשיח — מקריאה למתקשר קוד כניסה חד-פעמי.
+// שיחה יוצאת דרך ימות המשיח — מקריאה למתקשר קוד כניסה חד-פעמי (TTS inline).
 // מודול צד-שרת בלבד.
 //
 // ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_CALLER_ID (מספר ה-DID של המערכת).
 // כל עוד המשתנה לא מוגדר — yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
 // כך הפיצ'ר רדום עד שמפעילים אותו במכוון.
 //
-// הערה: המנגנון המדויק של ימות לשיחה יוצאת שמקריאה טקסט נבדק/מאומת ע"י בעל החשבון
-// על מספר פרטי בלבד. placeCodeCall היא הפונקציה היחידה שצריך לכוונן לפי תוצאת הבדיקה.
+// מנגנון: SendTTS של call2all — שיחה יוצאת יחידה שמקריאה טקסט (ttsMessage) ישירות
+// לשיחה שנענתה. בניגוד ל-RunCampaign (שמשמיע *תבנית* קבועה, ולכן ניתב את השיחה
+// למערכת הראשית/שלוחה 7 במקום להקריא את הקוד) — SendTTS מקריא את הטקסט שנשלח לו,
+// ולכן מתאים לקוד דינמי שונה בכל שיחה. פרמטרים: token, phones, callerId, ttsMessage.
 
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
@@ -14,7 +16,8 @@ export function yemotCallConfigured(): boolean {
   return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_CALLER_ID
 }
 
-// טקסט בטוח להקראה (ללא תווים שעלולים לשבור את פקודת ימות)
+// טקסט בטוח להקראה. פסיקים נשמרים (הם יוצרים הפסקות בין הספרות); רק תווים
+// שעלולים לשבש את הפרמטר/ההקראה מוסרים.
 function ttsSafe(text: string): string {
   return String(text ?? '').replace(/[.\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -22,7 +25,7 @@ function ttsSafe(text: string): string {
 // בונה את משפט ההקראה: הספרות ספרה-ספרה (פסיקים = הפסקות), פעמיים לבהירות.
 function spokenCode(code: string): string {
   const digits = code.replace(/\D/g, '').split('').join(', ')
-  return ttsSafe(`קוד הכניסה שלך הוא ${digits} . שוב, ${digits}`)
+  return ttsSafe(`קוד הכניסה שלך הוא ${digits} , שוב, ${digits}`)
 }
 
 // מבצע שיחה יוצאת למספר יחיד שמקריאה את הקוד. לעולם לא זורק; לא מתעד את הקוד.
@@ -38,18 +41,16 @@ export async function placeCodeCall(
   const tel = phone.replace(/\D/g, '')
   if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
 
-  // קמפיין חד-פעמי למספר יחיד, שמקריא את הקוד כ-TTS. withSMS=0 → שיחה בלבד, לא SMS.
-  // שמות הפרמטרים תואמים ל-RunCampaign של call2all; ניתן לכוונון לאחר אימות חי.
+  // SendTTS — שיחה יוצאת יחידה שמקריאה את הקוד כ-TTS. phones = המספר היחיד,
+  // callerId = ה-DID, ttsMessage = הטקסט להקראה.
   const form = new URLSearchParams()
   form.set('token', token)
   form.set('callerId', callerId)
-  form.set('phones', JSON.stringify([{ phone: tel }]))
-  form.set('text', spokenCode(code))
-  form.set('TTS', '1')
-  form.set('withSMS', '0')
+  form.set('phones', tel)
+  form.set('ttsMessage', spokenCode(code))
 
   try {
-    const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
+    const res = await fetch(`${YEMOT_API}/SendTTS`, { method: 'POST', body: form })
     const json = await res.json().catch(() => null)
     if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
       return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
