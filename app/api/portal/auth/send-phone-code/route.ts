@@ -90,12 +90,17 @@ export async function POST(request: NextRequest) {
 
   const call = await placeCodeCall(phone)
   if (!call.ok) {
+    console.error('[send-phone-code] placeCodeCall failed:', call.error)
     // ניקוי הקוד אם השיחה לא יצאה
     await admin
       .from('beneficiaries')
       .update({ portal_phone_code_hash: null, portal_phone_code_plain: null, portal_phone_code_expires: null })
       .eq('id', data.id)
-    return NextResponse.json({ error: 'השיחה נכשלה. נסה שוב או היכנס עם סיסמה.' }, { status: 502 })
+    // זמנית לאבחון: חושפים את שגיאת ימות במסך (אינה סוד — הודעת API). יוסר לאחר התיקון.
+    return NextResponse.json(
+      { error: `השיחה נכשלה: ${call.error ?? 'שגיאה לא ידועה'}` },
+      { status: 502 },
+    )
   }
 
   return NextResponse.json({ ok: true, sent: true, phoneHint: maskPhone(phone) })
