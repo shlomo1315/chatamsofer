@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_type } = body
+  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_type, card_center_id } = body
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
     baby_id_type: babyIdNorm ? (isPassport ? 'passport' : 'id') : null,
     birth_certificate_url: birth_certificate_url ? String(birth_certificate_url) : null,
     recovery_home: recovery_home ? String(recovery_home).trim() : null,
+    card_center_id: (!isSilent && card_center_id) ? String(card_center_id) : null,
     notes: notes ? String(notes).trim() : null,
     birth_type: isSilent ? 'silent' : 'live',
     status: 'pending',
