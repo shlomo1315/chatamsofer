@@ -1792,6 +1792,35 @@ export default function PublicPortalPage() {
     )
   }
 
+  // קטע העלאת צילומי ת"ז — מוצג בראש כל טופס בקשה כשהמשפחה טרם אושרה (לפני הבקשה עצמה).
+  const idDocLabel = (d: string) =>
+    d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך')
+      : d === 'id_wife' ? 'תעודת זהות — האשה'
+      : docLabel(d)
+  const renderIdDocsSection = () => {
+    if (!needsIdWithRequest) return null
+    return (
+      <Card>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <FileText size={20} className="text-amber-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900 mb-1">צילומי תעודות זהות</p>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              לצורך הגשת בקשה למערכת יש להעלות תחילה צילומי תעודות זהות. לאחר מכן ניתן למלא את הבקשה למטה — הבקשה והמסמכים יישלחו יחד.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+            <div key={d}>{renderIdDocSlot(d, idDocLabel(d))}</div>
+          ))}
+        </div>
+      </Card>
+    )
+  }
+
   const backToDashboard = () => {
     setStep('dashboard')
     setError('')
@@ -3298,6 +3327,8 @@ export default function PublicPortalPage() {
               <h2 className="font-bold text-slate-900 text-lg">בקשת הבראה ליולדת</h2>
             </div>
 
+            {renderIdDocsSection()}
+
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <Baby size={18} className="text-pink-500" />
@@ -3447,26 +3478,6 @@ export default function PublicPortalPage() {
               </div>
             </Card>
 
-            {needsIdWithRequest && (
-              <Card>
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FileText size={20} className="text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900 mb-1">אימות זהות לאישור ראשוני</p>
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      טרם אושרת סופית. כדי שנוכל לטפל בבקשה, אנא צרף/י גם צילומי תעודת זהות. הבקשה והמסמכים יישלחו יחד לאישור.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4">
-                  {requiredDocs.filter(d => !existingDocs[d]).map(d => (
-                    <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
-                  ))}
-                </div>
-              </Card>
-            )}
 
             {error && <ErrorBox message={error} />}
 
@@ -3498,6 +3509,8 @@ export default function PublicPortalPage() {
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 leading-relaxed">
               בבקשה זו אין צורך בפרטי תינוק (שם / ת.ז). אנא מלאו את תאריך הלידה, בחרו בית החלמה וצרפו מסמך אישור.
             </div>
+
+            {renderIdDocsSection()}
 
             <Card>
               <div className="flex items-center gap-2 mb-4">
@@ -3565,26 +3578,6 @@ export default function PublicPortalPage() {
               </div>
             </Card>
 
-            {needsIdWithRequest && (
-              <Card>
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <FileText size={20} className="text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900 mb-1">אימות זהות לאישור ראשוני</p>
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      טרם אושרת סופית. כדי שנוכל לטפל בבקשה, אנא צרף/י גם צילומי תעודת זהות. הבקשה והמסמכים יישלחו יחד לאישור.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-4">
-                  {requiredDocs.filter(d => !existingDocs[d]).map(d => (
-                    <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
-                  ))}
-                </div>
-              </Card>
-            )}
 
             {error && <ErrorBox message={error} />}
 
@@ -3615,6 +3608,7 @@ export default function PublicPortalPage() {
 
               {/* Modal body */}
               <form onSubmit={handleLoanRequest} className="p-6 flex flex-col gap-4">
+                {renderIdDocsSection()}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Field label="מטרת ההלוואה" required>
@@ -3735,19 +3729,6 @@ export default function PublicPortalPage() {
                   </div>
                 </div>
 
-                {needsIdWithRequest && (
-                  <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות לאישור ראשוני</p>
-                    <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                      טרם אושרת סופית. אנא צרף/י גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לאישור.
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      {requiredDocs.filter(d => !existingDocs[d]).map(d => (
-                        <div key={d}>{renderIdDocSlot(d, d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך') : docLabel(d))}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {error && <ErrorBox message={error} />}
 
@@ -3779,6 +3760,7 @@ export default function PublicPortalPage() {
                 <button type="button" onClick={() => { setAidModalOpen(false); setError('') }} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               <form onSubmit={handleFinancialAidRequest} className="p-6 flex flex-col gap-4">
+                {renderIdDocsSection()}
                 <Field label="סיבת הבקשה" required hint="פרט/י כמה שיותר על המקרה — הרקע, הצורך והנסיבות. אם מדובר במצב רפואי או דומה, נסח/י בקצרה ובאופן ענייני (אבחנה, טיפול נדרש, עלויות).">
                   <textarea value={aidReason} onChange={e => setAidReason(e.target.value)} rows={5}
                     placeholder="לדוגמה: בעקבות אבחון רפואי נדרש טיפול בעלות גבוהה שאינו מכוסה... אנא פרט/י את המצב, הצרכים והעלויות המשוערות."
