@@ -13,6 +13,7 @@ import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
+import RegistrationCallSettings from './RegistrationCallSettings'
 import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 
@@ -144,6 +145,11 @@ export default async function SettingsPage() {
         {/* Yemot maternity messages (editable text / human recordings) */}
         <Collapsible title="הקלטות שלוחת יולדות (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
           <YemotMaternitySettings />
+        </Collapsible>
+
+        {/* Registration call announcement (editable text + ElevenLabs preview) */}
+        <Collapsible title="הקלטת הודעת רישום (שיחה יוצאת)" icon={<Phone size={16} className="text-teal-500" />}>
+          <RegistrationCallSettings />
         </Collapsible>
 
         {/* Yemot telephony log */}

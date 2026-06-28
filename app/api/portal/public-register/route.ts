@@ -7,6 +7,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
+import { getRegistrationCallText } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
 
 export const dynamic = 'force-dynamic'
@@ -213,13 +214,14 @@ export async function POST(request: NextRequest) {
   // שיחה טלפונית יוצאת (לא-חוסמת): הקראת אישור קליטת הרישום למספר של הנרשם.
   // אם ימות אינו מוגדר — placeAnnouncementCall מחזיר notConfigured ולא מבצע שיחה.
   if (phone) {
-    // הכתובת מוקראת קודם בעברית מדוברת (שטרודל / נקודה) ואז שוב אות-אות באנגלית ברורה
-    placeAnnouncementCall(
-      String(phone),
-      'הרשמתך לאיגוד הצאצאים שעל ידי היכל החתם סופר נקלטה בהצלחה והועברה לטיפול המשרד בכדי לקבל אצלכם למייל את ההטבות המיוחדות לצאצאי רבינו החתם סופר שלחו מייל לכתובת איגוד שטרודל חסם סופר נקודה אינפו ושוב הכתובת באותיות אנגלית I G U D שטרודל C H A S A M S O F E R נקודה I N F O בהצלחה',
-    ).then((r) => {
-      if (!r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
-    }).catch((e) => console.error('[public-register] announcement call error:', e))
+    // הטקסט ניתן לעריכה מדף ההגדרות (registration_call_message). הכתובת מוקראת
+    // בעברית מדוברת ואז אות-אות באנגלית — לפי הנוסח השמור.
+    getRegistrationCallText()
+      .then((text) => placeAnnouncementCall(String(phone), text))
+      .then((r) => {
+        if (r && !r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
+      })
+      .catch((e) => console.error('[public-register] announcement call error:', e))
   }
 
   return NextResponse.json({ ok: true })
