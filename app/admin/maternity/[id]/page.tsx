@@ -301,6 +301,11 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 }
                 const m = meta[cs] ?? meta.pending
                 const center = (aid as { card_center?: { name?: string } }).card_center
+                const cardNum = (aid as { card_number?: string | null }).card_number
+                // ימים עד פריקה אוטומטית (סוף הזכאות: שישה שבועות מהלידה או six_weeks_end)
+                const endRaw = aid.six_weeks_end
+                  ?? (aid.birth_date ? format(new Date(new Date(aid.birth_date).getTime() + 42 * 86400000), 'yyyy-MM-dd') : null)
+                const daysToUnload = endRaw ? differenceInCalendarDays(new Date(endRaw), new Date()) : null
                 return (
                   <>
                     <div className="flex items-center gap-2">
@@ -308,12 +313,28 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${m.cls}`}>{m.label}</span>
                     </div>
                     {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
+                    {/* מספר כרטיס נדרים — או חיווי שטרם בוצע שיוך */}
+                    <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                      {cardNum ? (
+                        <>
+                          <p className="text-sm"><span className="text-slate-500">מספר כרטיס: </span><span className="font-semibold text-slate-800 ltr-num">{cardNum}</span></p>
+                          {daysToUnload != null && (
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {daysToUnload > 0 ? `${daysToUnload} ימים עד לפריקה` : 'הגיע מועד הפריקה'}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-amber-700 font-medium">עדיין לא בוצע שיוך כרטיס</p>
+                      )}
+                    </div>
                     {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
                   </>
                 )
               })()}
-              <Link href="/admin/maternity/cards" className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5 transition-colors self-start">
-                לניהול כרטיסי מזון
+              <Link href={`/admin/maternity/cards${aid.beneficiary?.id_number ? `?zeout=${encodeURIComponent(aid.beneficiary.id_number)}` : ''}`}
+                className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-1.5 transition-colors self-start">
+                ניהול הכרטיס
               </Link>
             </Card>
           ),

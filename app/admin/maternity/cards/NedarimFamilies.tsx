@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, RefreshCw, Search, X, CreditCard, Plus, Trash2, Wallet,
   Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
@@ -22,7 +22,16 @@ type Stats = {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transactions?: any[]
   unloadByZeout?: Record<string, UnloadInfo>
+  cardByClientId?: Record<string, string>
   error?: string
+}
+
+// תאריך ISO → dd/mm/yyyy
+function fmtBirth(s?: string): string {
+  if (!s) return '—'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 // פרטי פריקה/זכאות לכל ת.ז — כולל מזהה התיק לצורך הארכת זכאות ידנית
@@ -34,6 +43,7 @@ type UnloadInfo = {
   sixWeeksEnd?: string
   extended?: boolean
   reason?: string
+  centerName?: string
 }
 
 type Family = {
@@ -104,6 +114,16 @@ export default function NedarimFamilies() {
   }, [])
 
   useEffect(() => { load(); loadStats() }, [load, loadStats])
+
+  // פתיחת מודאל המשפחה אוטומטית בהגעה מקישור "ניהול הכרטיס" (?zeout=...)
+  const openedFromUrl = useRef(false)
+  useEffect(() => {
+    if (openedFromUrl.current || loading || families.length === 0) return
+    const z = new URLSearchParams(window.location.search).get('zeout')
+    if (!z) return
+    const fam = families.find(f => String(f.Zeout ?? '').trim() === z.trim())
+    if (fam) { setSelected(fam); openedFromUrl.current = true }
+  }, [loading, families])
 
   const q = search.trim()
   const filtered = q
@@ -195,6 +215,9 @@ export default function NedarimFamilies() {
                   <th className="px-5 py-4 font-bold border-l border-slate-200">שם משפחה</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">מזהה משפחה</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">ת.ז</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">מספר כרטיס</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">תאריך לידה</th>
+                  <th className="px-5 py-4 font-bold border-l border-slate-200">מוקד לאיסוף</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">טלפון</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">קטגוריה</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">יתרה בכרטיס</th>
@@ -209,6 +232,13 @@ export default function NedarimFamilies() {
                     <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Zeout || '—'}</span></td>
+                    <td className="px-5 py-4 text-right border-l border-slate-100">
+                      {stats?.cardByClientId?.[String(f.ClientId)]
+                        ? <span className="ltr-num font-mono text-slate-700">{stats.cardByClientId[String(f.ClientId)]}</span>
+                        : <span className="text-amber-600 text-sm">לא בוצע שיוך</span>}
+                    </td>
+                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{fmtBirth(info?.birthDate)}</span></td>
+                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{info?.centerName || '—'}</td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{cleanPhone(f.Phone)}</span></td>
                     <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{f.Groupe || '—'}</td>
                     <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{ils(f.Ytra)}</td>

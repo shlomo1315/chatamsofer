@@ -79,7 +79,7 @@ export async function GET() {
   type UnloadInfo = {
     unloadDate: string; daysRemaining: number
     aidId?: string; birthDate?: string; sixWeeksEnd?: string
-    extended?: boolean; reason?: string
+    extended?: boolean; reason?: string; centerName?: string
   }
   const unloadByZeout: Record<string, UnloadInfo> = {}
   try {
@@ -87,7 +87,7 @@ export async function GET() {
     if (admin) {
       const { data: aids } = await admin
         .from('maternity_aids')
-        .select('id, birth_date, six_weeks_end, status, eligibility_extended, eligibility_extension_reason, beneficiary:beneficiaries(id_number)')
+        .select('id, birth_date, six_weeks_end, status, eligibility_extended, eligibility_extension_reason, beneficiary:beneficiaries(id_number), card_center:card_centers(name)')
         .eq('status', 'active')
       const today0 = new Date(); today0.setHours(0, 0, 0, 0)
       for (const a of (aids ?? []) as Json[]) {
@@ -105,6 +105,7 @@ export async function GET() {
           sixWeeksEnd: a.six_weeks_end ?? undefined,
           extended: !!a.eligibility_extended,
           reason: a.eligibility_extension_reason ?? undefined,
+          centerName: a.card_center?.name ?? undefined,
         }
       }
     }
@@ -120,9 +121,14 @@ export async function GET() {
   let cntToday = 0, cntWeek = 0, cntMonth = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const transactions: any[] = []
+  // מספר הכרטיס המגנטי הפעיל לכל משפחה (לפי ClientId) — להצגה בטבלה
+  const cardByClientId: Record<string, string> = {}
 
   for (const { f, card } of cards) {
     if (!card) continue
+    const activeCard = (Array.isArray(card.Cards) ? card.Cards : []).find((c: Json) => !c.RemovedDate)
+    const cardNum = activeCard ? String(activeCard.CardNumber ?? activeCard.MagneticCard ?? '').trim() : ''
+    if (cardNum) cardByClientId[String(f.ClientId)] = cardNum
     remainingFromCards += num(card.TotalFreeAmount)
     const tlushim: Json[] = Array.isArray(card.Tlushim) ? card.Tlushim : []
     for (const t of tlushim) totalLoaded += num(t.Amount)
@@ -151,8 +157,9 @@ export async function GET() {
 
   // יתרה כללית — מקור אמת: Total מטבלת המשפחות, אחרת סכום Ytra, אחרת מהכרטיסים
   const totalRemaining = tableTotal || sumYtra || remainingFromCards
-  // נטען אי-פעם — אם לא הצלחנו לסכום טעינות, נשתמש לפחות ביתרה הנוכחית + הניצול
-  const loadedFinal = totalLoaded || (totalRemaining + usedTotal)
+  // "סה״כ מוטען בארנקים" = הסכום הזמין כעת בפועל בכל הכרטיסים (נמשך חי מנדרים בכל טעינה,
+  // ולכן מסתנכרן אוטומטית). נפילה-לאחור ליתרה הכללית / לסכום הטעינות ההיסטורי.
+  const loadedFinal = remainingFromCards || totalRemaining || totalLoaded
 
   return NextResponse.json({
     configured: true,
@@ -169,5 +176,6 @@ export async function GET() {
     cntToday, cntWeek, cntMonth,
     transactions,
     unloadByZeout,
+    cardByClientId,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
