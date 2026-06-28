@@ -6,6 +6,7 @@ import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
+import { placeAnnouncementCall } from '@/lib/yemotCall'
 
 export const dynamic = 'force-dynamic'
 
@@ -196,6 +197,17 @@ export async function POST(request: NextRequest) {
     })
     deliverMail(String(email), reg.subject, reg.html, undefined, mailFor('igud'))
       .catch(e => console.error('[public-register] confirmation email failed:', e))
+  }
+
+  // שיחה טלפונית יוצאת (לא-חוסמת): הקראת אישור קליטת הרישום למספר של הנרשם.
+  // אם ימות אינו מוגדר — placeAnnouncementCall מחזיר notConfigured ולא מבצע שיחה.
+  if (phone) {
+    placeAnnouncementCall(
+      String(phone),
+      'הרשמתך לאיגוד הצאצאים שעל ידי היכל החתם סופר נקלטה בהצלחה והועברה לטיפול המשרד',
+    ).then((r) => {
+      if (!r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
+    }).catch((e) => console.error('[public-register] announcement call error:', e))
   }
 
   return NextResponse.json({ ok: true })

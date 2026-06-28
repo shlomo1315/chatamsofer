@@ -28,11 +28,11 @@ function spokenCode(code: string): string {
   return ttsSafe(`קוד הכניסה שלך הוא ${digits} שוב ${digits}`)
 }
 
-// מבצע שיחה יוצאת יחידה שמקריאה את הקוד. לעולם לא זורק; לא מתעד את הקוד.
+// מבצע שיחה יוצאת יחידה שמקריאה טקסט TTS כלשהו. לעולם לא זורק.
 // מחזיר { ok, error? }. אם לא מוגדר — { ok:false, notConfigured:true }.
-export async function placeCodeCall(
+async function runTtsCall(
   phone: string,
-  code: string,
+  spokenText: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
   const token = process.env.YEMOT_TOKEN
   const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
@@ -45,7 +45,7 @@ export async function placeCodeCall(
   const form = new URLSearchParams()
   form.set('token', token)
   form.set('templateId', templateId)
-  form.set('phones', JSON.stringify({ [tel]: spokenCode(code) }))
+  form.set('phones', JSON.stringify({ [tel]: spokenText }))
   form.set('ttsMode', '1')
   form.set('withSMS', '0')
   if (callerId) form.set('callerId', callerId)
@@ -60,4 +60,20 @@ export async function placeCodeCall(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
+}
+
+// שיחה יוצאת שמקריאה למתקשר את קוד הכניסה החד-פעמי. לא מתעד את הקוד.
+export function placeCodeCall(
+  phone: string,
+  code: string,
+): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  return runTtsCall(phone, spokenCode(code))
+}
+
+// שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום). הטקסט עובר ttsSafe.
+export function placeAnnouncementCall(
+  phone: string,
+  text: string,
+): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  return runTtsCall(phone, ttsSafe(text))
 }
