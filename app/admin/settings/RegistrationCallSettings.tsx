@@ -3,7 +3,7 @@
 // עריכת הודעת השיחה הטלפונית לאחר רישום + השמעה/הורדה של גרסת ElevenLabs.
 // השיחה היוצאת מקריאה את הטקסט הזה (TTS) למספר של הנרשם בסיום הרישום.
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Play, Download, RotateCcw, Volume2 } from 'lucide-react'
+import { Loader2, Check, Play, Download, RotateCcw, Volume2, Wand2, Trash2, Mic } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -19,6 +19,9 @@ export default function RegistrationCallSettings() {
   const [downloading, setDownloading] = useState(false)
   const [hasKey, setHasKey] = useState(false)
   const [voiceId, setVoiceId] = useState('')
+  const [audio, setAudio] = useState<string | null>(null)
+  const [audioConfigured, setAudioConfigured] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -28,7 +31,10 @@ export default function RegistrationCallSettings() {
       fetch('/api/admin/elevenlabs/settings').then(r => r.json().then(d => ({ ok: r.ok, d }))).catch(() => ({ ok: false, d: {} })),
     ]).then(([msg, cfg]) => {
       if (!alive) return
-      if (msg.ok) { setText(msg.d.text ?? ''); setSaved(msg.d.text ?? ''); setDefaultText(msg.d.defaultText ?? '') }
+      if (msg.ok) {
+        setText(msg.d.text ?? ''); setSaved(msg.d.text ?? ''); setDefaultText(msg.d.defaultText ?? '')
+        setAudio(msg.d.audio ?? null); setAudioConfigured(!!msg.d.audioPlaybackConfigured)
+      }
       if (cfg.ok) { setHasKey(!!cfg.d.hasKey); setVoiceId(cfg.d.voiceId ?? '') }
     }).catch(() => { if (alive) toast.error('שגיאה בטעינה') })
       .finally(() => { if (alive) setLoading(false) })
@@ -66,6 +72,31 @@ export default function RegistrationCallSettings() {
       await audio.play()
     } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה') }
     finally { setPreviewing(false) }
+  }
+
+  async function generateVoice() {
+    setGenerating(true)
+    try {
+      // שומרים קודם את הטקסט כדי שהקול ייווצר מהנוסח המעודכן
+      if (text.trim() !== saved.trim()) await save()
+      const res = await fetch('/api/admin/registration-call/generate-voice', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'שגיאה ביצירת הקול')
+      setAudio(d.audio ?? 'reg_announce')
+      toast.success('נוצר קול טבעי ויונגן בשיחה (אם הוגדרה תבנית ניגון בימות)')
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה ביצירת הקול') }
+    finally { setGenerating(false) }
+  }
+
+  async function removeVoice() {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/admin/registration-call/generate-voice', { method: 'DELETE' })
+      if (!res.ok) throw new Error('שגיאה בהסרה')
+      setAudio(null)
+      toast.success('הקול הוסר — השיחה תקריא את הטקסט (TTS)')
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה בהסרה') }
+    finally { setGenerating(false) }
   }
 
   async function download() {
@@ -106,34 +137,61 @@ export default function RegistrationCallSettings() {
         className="w-full text-sm rounded-lg border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
       />
 
+      {/* חיווי מצב הקול הנוכחי של השיחה */}
+      <div>
+        {audio ? (
+          <span className="inline-flex items-center gap-1.5 text-[12px] bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-1">
+            <Volume2 size={13} /> קול טבעי פעיל (ElevenLabs)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-[12px] bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
+            <Mic size={13} /> קול ממוחשב (TTS)
+          </span>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={save} disabled={saving || !dirty} size="sm">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : savedOk ? <Check size={14} /> : <Check size={14} />}
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
           {savedOk ? 'נשמר' : 'שמירת טקסט'}
         </Button>
         {hasKey && voiceId && (
           <>
-            <Button onClick={preview} disabled={previewing} variant="outline" size="sm">
+            <Button onClick={generateVoice} disabled={generating} variant="outline" size="sm">
+              {generating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+              {audio ? 'צור קול טבעי מחדש' : 'צור קול טבעי'}
+            </Button>
+            <Button onClick={preview} disabled={previewing} variant="ghost" size="sm">
               {previewing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} השמעה
             </Button>
             <Button onClick={download} disabled={downloading} variant="ghost" size="sm">
-              {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} הורדת הקלטה (MP3)
+              {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} הורדת MP3
             </Button>
+            {audio && (
+              <Button onClick={removeVoice} disabled={generating} variant="ghost" size="sm">
+                <Trash2 size={14} /> הסר קול טבעי
+              </Button>
+            )}
           </>
         )}
         {defaultText && (
           <Button onClick={() => setText(defaultText)} variant="ghost" size="sm">
-            <RotateCcw size={14} /> שחזור לנוסח ברירת המחדל
+            <RotateCcw size={14} /> שחזור לברירת מחדל
           </Button>
         )}
       </div>
 
       {!hasKey && (
         <p className="text-[11px] text-amber-600 flex items-center gap-1.5">
-          <Volume2 size={12} /> כדי לשמוע/להוריד גרסת קול טבעי — הגדירו מפתח ElevenLabs בקטע &quot;הקלטות שלוחת יולדות&quot;.
+          <Volume2 size={12} /> כדי ליצור/לשמוע קול טבעי — הגדירו מפתח ElevenLabs בקטע &quot;הקלטות שלוחת יולדות&quot;.
         </p>
       )}
-      <p className="text-[11px] text-slate-400">השיחה מקריאה את הטקסט בקול ממוחשב (TTS) ותומכת במאות שיחות במקביל.</p>
+      {audio && !audioConfigured && (
+        <p className="text-[11px] text-amber-600 leading-relaxed">
+          ⚠️ נוצר קול טבעי, אך כדי שהשיחה היוצאת תנגן אותו (ולא תקריא TTS) נדרש להגדיר בימות תבנית קמפיין שמנגנת את הקובץ, ואת מזהה התבנית במשתנה הסביבה <span className="ltr-num">YEMOT_ANNOUNCE_TEMPLATE_ID</span>. עד אז השיחה תקריא את הטקסט.
+        </p>
+      )}
+      <p className="text-[11px] text-slate-400">השיחה תומכת במאות שיחות במקביל.</p>
     </div>
   )
 }

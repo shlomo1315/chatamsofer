@@ -7,7 +7,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
-import { getRegistrationCallText } from '@/lib/registrationCallMessage'
+import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
 
 export const dynamic = 'force-dynamic'
@@ -216,8 +216,8 @@ export async function POST(request: NextRequest) {
   if (phone) {
     // הטקסט ניתן לעריכה מדף ההגדרות (registration_call_message). הכתובת מוקראת
     // בעברית מדוברת ואז אות-אות באנגלית — לפי הנוסח השמור.
-    getRegistrationCallText()
-      .then((text) => placeAnnouncementCall(String(phone), text))
+    Promise.all([getRegistrationCallText(), getRegistrationCallAudio()])
+      .then(([text, audio]) => placeAnnouncementCall(String(phone), text, { audioFile: audio }))
       .then((r) => {
         if (r && !r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
       })

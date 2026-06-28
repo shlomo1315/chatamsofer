@@ -70,10 +70,41 @@ export function placeCodeCall(
   return runTtsCall(phone, spokenCode(code))
 }
 
-// שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום). הטקסט עובר ttsSafe.
+// שיחה יוצאת שמנגנת קובץ מוקלט (קול טבעי) דרך תבנית קמפיין ייעודית שמנגנת קובץ.
+// דורש YEMOT_ANNOUNCE_TEMPLATE_ID (תבנית בימות שמנגנת את קובץ ההודעה שהועלה).
+async function runFileCall(phone: string): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  const token = process.env.YEMOT_TOKEN
+  const templateId = process.env.YEMOT_ANNOUNCE_TEMPLATE_ID
+  const callerId = process.env.YEMOT_OTP_CALLER_ID
+  if (!token || !templateId) return { ok: false, notConfigured: true }
+  const tel = phone.replace(/\D/g, '')
+  if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
+
+  const form = new URLSearchParams()
+  form.set('token', token)
+  form.set('templateId', templateId)
+  form.set('phones', JSON.stringify({ [tel]: '' })) // התבנית מנגנת את הקובץ; אין טקסט אישי
+  form.set('withSMS', '0')
+  if (callerId) form.set('callerId', callerId)
+  try {
+    const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
+    const json = await res.json().catch(() => null)
+    if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
+      return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+// שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום).
+// אם הוגדר קול טבעי (opts.audioFile) ותבנית ניגון-קובץ — מנגנים את הקובץ; אחרת TTS של הטקסט.
 export function placeAnnouncementCall(
   phone: string,
   text: string,
+  opts: { audioFile?: string | null } = {},
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  if (opts.audioFile && process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) return runFileCall(phone)
   return runTtsCall(phone, ttsSafe(text))
 }

@@ -1,14 +1,18 @@
 // ניהול טקסט הודעת השיחה לאחר רישום (קריאה/שמירה) — admin בלבד.
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { getRegistrationCallText, saveRegistrationCallText, DEFAULT_REG_CALL_TEXT } from '@/lib/registrationCallMessage'
+import { getRegistrationCallText, getRegistrationCallAudio, saveRegistrationCallText, DEFAULT_REG_CALL_TEXT } from '@/lib/registrationCallMessage'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export async function GET() {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
-  return NextResponse.json({ text: await getRegistrationCallText(), defaultText: DEFAULT_REG_CALL_TEXT }, { headers: NO_STORE })
+  const [text, audio] = await Promise.all([getRegistrationCallText(), getRegistrationCallAudio()])
+  return NextResponse.json({
+    text, defaultText: DEFAULT_REG_CALL_TEXT, audio,
+    audioPlaybackConfigured: !!process.env.YEMOT_ANNOUNCE_TEMPLATE_ID,
+  }, { headers: NO_STORE })
 }
 
 export async function POST(request: NextRequest) {
