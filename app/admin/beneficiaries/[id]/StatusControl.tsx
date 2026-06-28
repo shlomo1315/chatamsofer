@@ -85,6 +85,15 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         })
       } catch { /* כשל בסנכרון נדרים לא חוסם את שינוי הסטטוס */ }
 
+      // סנכרון צבע צומת הדורות: אישור → ירוק (מאומת) · אחרת → ממתין. (best-effort)
+      try {
+        await fetch('/api/admin/approve-lineage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ beneficiaryId: id, approved: next === 'approved' }),
+        })
+      } catch { /* כשל בסנכרון עץ הדורות לא חוסם */ }
+
       setOpen(false)
       // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא
       if (advance && next !== 'pending') {
