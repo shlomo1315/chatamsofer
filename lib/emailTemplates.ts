@@ -160,7 +160,7 @@ function noReplyBox(): string {
       <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.7;font-family:Arial,sans-serif;text-align:center;">
         ⚠️ מייל זה נשלח <strong>באופן אוטומטי</strong> ואין להשיב אליו —
         הודעות הנשלחות לכתובת זו אינן נקראות.<br/>
-        בכל עניין יש לפנות למשרד: <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>
+        בכל עניין שאינו קשור להגשת בקשות בנושאים הנ"ל, ניתן לפנות למשרד בכתובת <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>
       </p>
     </td></tr>
   </table>`
