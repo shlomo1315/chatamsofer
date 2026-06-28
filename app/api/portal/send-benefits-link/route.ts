@@ -6,6 +6,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { benefitsLinkEmail } from '@/lib/emailTemplates'
+import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { maskEmail } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let ben: { full_name: string | null; family_name: string | null; email: string | null } | null = null
+  let ben: { full_name: string | null; family_name: string | null; email: string | null; id_number: string | null; eligibility_status: string | null } | null = null
 
   const idNumber = normalizeId(body.idType, body.id)
   if (idNumber && idNumber.length >= 5) {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
     const { data } = await admin
       .from('beneficiaries')
-      .select('full_name, family_name, email')
+      .select('full_name, family_name, email, id_number, eligibility_status')
       .eq('id_number', idNumber)
       .maybeSingle()
     ben = data
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
     const { data } = await admin
       .from('beneficiaries')
-      .select('full_name, family_name, email')
+      .select('full_name, family_name, email, id_number, eligibility_status')
       .eq('id', body.beneficiary_id)
       .maybeSingle()
     ben = data
@@ -65,7 +66,10 @@ export async function POST(request: NextRequest) {
   }
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
-  const mail = benefitsLinkEmail(name)
+  const draftLinks = ben.id_number
+    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved')
+    : []
+  const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
   if (!result.ok) {
     console.error('[send-benefits-link] deliverMail failed:', result.error)

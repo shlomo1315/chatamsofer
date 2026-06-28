@@ -4,6 +4,7 @@ import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
 import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
+import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,8 +152,8 @@ async function maybeAutoReplyIgud(
   if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
 
-  const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count'
-  type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null }
+  const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count, eligibility_status'
+  type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null; eligibility_status: string | null }
   let ben: Ben | null = null
 
   // 1) זיהוי לפי ת"ז מלאה (9 ספרות) בשורת הנושא — של הרשום או של בן/בת הזוג
@@ -180,7 +181,10 @@ async function maybeAutoReplyIgud(
     ['כתובת', [ben.address, ben.city].filter(Boolean).join(', ')],
     ['מספר ילדים', ben.children_count != null ? String(ben.children_count) : ''],
   ]
-  const mail = benefitsLinkEmail(name, undefined, details)
+  const draftLinks = ben.id_number
+    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved')
+    : []
+  const mail = benefitsLinkEmail(name, undefined, details, draftLinks)
   // מייל חדש (לא reply), עם הת"ז בשורת הנושא
   const subject = ben.id_number ? `${mail.subject} · ת.ז ${ben.id_number}` : mail.subject
   await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
@@ -555,11 +559,21 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
-    // מענה אוטומטי לפניות איגוד — מייל עם רשימת הטבות וקישורי בקשות (רק לרשומים)
-    try {
-      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
-    } catch (e) {
-      console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
+    // איגוד: אם זו בקשה (נושא "בקשת...") — קליטת הבקשה במייל; אחרת מענה אוטומטי עם הטבות
+    const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
+    if (isIgud && isRequestSubject(subject)) {
+      try {
+        const bodyText = (plain && plain.trim()) ? plain : String(html ?? '').replace(/<[^>]+>/g, ' ')
+        await handleEmailRequest(admin, { fromEmail: from.email, subject, body: bodyText, attachments })
+      } catch (e) {
+        console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
+      }
+    } else {
+      try {
+        await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      } catch (e) {
+        console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
+      }
     }
   }
 

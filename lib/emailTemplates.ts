@@ -164,10 +164,19 @@ export function benefitsLinkEmail(
   name: string,
   portalBase: string = PORTAL_BASE_DEFAULT,
   details?: [string, string | number | null | undefined][],
+  draftLinks?: { label: string; href: string }[],
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
   const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const draftBlock = (draftLinks && draftLinks.length) ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
+      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px 18px;">
+        <p style="margin:0 0 8px;color:#9a3412;font-size:13px;font-weight:800;font-family:Arial,sans-serif;">חסומים מהפורטל? ניתן להגיש גם במייל:</p>
+        <p style="margin:0 0 10px;color:#9a3412;font-size:12px;line-height:1.7;font-family:Arial,sans-serif;">לחצו על סוג הבקשה — ייפתח מייל עם טופס למילוי. מלאו כל פרט בדיוק ושלחו (ההגשה המומלצת היא דרך הפורטל).</p>
+        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 6px;color:#c2410c;font-size:13px;font-weight:700;text-decoration:underline;font-family:Arial,sans-serif;">📝 ${l.label} »</a><br/>`).join('')}
+      </td></tr>
+    </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
   const detailsTable = detailsRows ? `
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">הפרטים הרשומים אצלנו:</p>
@@ -185,10 +194,62 @@ export function benefitsLinkEmail(
     ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#22b8e6')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
     ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#34d399')}
+    ${draftBlock}
     ${noReplyBox()}`
   return {
     subject: 'הגשת בקשות והטבות — איגוד הצאצאים',
     html: shell({ preheader: 'קישורים להגשת בקשות לאיגוד הצאצאים', accent, title: 'איגוד הצאצאים', subtitle: 'הגשת בקשות והטבות', body }),
+  }
+}
+
+// ─── הגשת בקשה במייל: אישור קליטה ──────────────────────────────────────────
+export function emailIntakeConfirmedEmail(name: string, typeLabel: string): BuiltEmail {
+  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ ${typeLabel} שלך נקלטה במערכת ומועברת לטיפול המזכירות.</p>
+        <p style="margin:6px 0 0;color:#166534;font-size:13px;line-height:1.7;">תקבלו עדכון על המשך הטיפול בהמשך.</p>
+      </td></tr>
+    </table>
+    ${noReplyBox()}`
+  return {
+    subject: `התקבלה ${typeLabel} — היכל החתם סופר`,
+    html: shell({ preheader: `${typeLabel} נקלטה ומועברת לטיפול.`, accent: '#22c55e', title: 'הבקשה נקלטה', subtitle: 'איגוד הצאצאים', body }),
+  }
+}
+
+// ─── הגשת בקשה במייל: דחייה + טמפלט למילוי מחדש ─────────────────────────────
+export function emailIntakeRejectedEmail(opts: {
+  name: string; typeLabel: string; errors: string[]; draftText?: string | null; portalUrl?: string
+}): BuiltEmail {
+  const { name, typeLabel, errors, draftText, portalUrl = PORTAL_BASE_DEFAULT } = opts
+  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const errorList = errors.map(e => `<li style="margin:0 0 4px;">${e}</li>`).join('')
+  const draftBlock = draftText ? `
+    <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">להגשה חוזרת — העתיקו את הטופס הבא למייל חדש, מלאו ושלחו (אותו נושא):</p>
+    <pre style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:12px;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;direction:rtl;">${draftText.replace(/</g, '&lt;')}</pre>` : ''
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">⚠️ ${typeLabel} שלך לא נקלטה</p>
+        <p style="margin:0 0 8px;color:#991b1b;font-size:13px;">הסיבות:</p>
+        <ul style="margin:0;padding-inline-start:18px;color:#991b1b;font-size:13px;line-height:1.7;">${errorList}</ul>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">
+      💡 <strong>מומלץ להגיש דרך הפורטל</strong> (אם אינכם חסומים) — פשוט ומהיר:
+    </p>
+    ${btn(`${portalUrl.replace(/\/$/, '')}/`, 'הגשת בקשה בפורטל', '#4f46e5')}
+    ${draftBlock}
+    ${noReplyBox()}`
+  return {
+    subject: `${typeLabel} לא נקלטה — היכל החתם סופר`,
+    html: shell({ preheader: 'הבקשה לא נקלטה — נא לתקן ולשלוח שוב.', accent: '#dc2626', title: 'הבקשה לא נקלטה', subtitle: 'איגוד הצאצאים', body }),
   }
 }
 
