@@ -170,16 +170,24 @@ export function isRequestSubject(subject: string): boolean {
 }
 
 // בונה קישורי mailto לטיוטות הגשה במייל (לחסומים) — לכל סוג בקשה, עם הת"ז בנושא.
+// סיוע אלמנה מוצג רק אם מצב המשפחה אלמן/אלמנה, והתווית בהתאם (אלמן/אלמנה).
 export async function buildDraftLinks(
   admin: SupabaseClient,
   idNumber: string,
   pending: boolean,
+  maritalStatus?: string | null,
 ): Promise<{ label: string; href: string }[]> {
-  const types: ReqType[] = ['birth', 'silent_birth', 'loan', 'financial_aid', 'widow']
+  const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
+  const types: ReqType[] = ['birth', 'silent_birth', 'loan', 'financial_aid']
   const links: { label: string; href: string }[] = []
   for (const t of types) {
     const ctx = await loadCtx(admin, t, pending)
     links.push({ label: SUBJECT_PREFIX[t], href: draftMailto(t, idNumber, ctx) })
+  }
+  if (widower) {
+    const ctx = await loadCtx(admin, 'widow', pending)
+    const prefix = `בקשת סיוע ${maritalStatus}` // "בקשת סיוע אלמן" / "בקשת סיוע אלמנה"
+    links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix) })
   }
   return links
 }

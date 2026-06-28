@@ -182,7 +182,7 @@ async function maybeAutoReplyIgud(
     ['מספר ילדים', ben.children_count != null ? String(ben.children_count) : ''],
   ]
   const draftLinks = ben.id_number
-    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved')
+    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved', ben.marital_status)
     : []
   const mail = benefitsLinkEmail(name, undefined, details, draftLinks)
   // מייל חדש (לא reply), עם הת"ז בשורת הנושא

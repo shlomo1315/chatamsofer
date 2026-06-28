@@ -171,10 +171,10 @@ export function benefitsLinkEmail(
   const greet = name ? `שלום ${name},` : 'שלום רב,'
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
-      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:14px 18px;">
-        <p style="margin:0 0 8px;color:#9a3412;font-size:13px;font-weight:800;font-family:Arial,sans-serif;">חסומים מהפורטל? ניתן להגיש גם במייל:</p>
-        <p style="margin:0 0 10px;color:#9a3412;font-size:12px;line-height:1.7;font-family:Arial,sans-serif;">לחצו על סוג הבקשה — ייפתח מייל עם טופס למילוי. מלאו כל פרט בדיוק ושלחו (ההגשה המומלצת היא דרך הפורטל).</p>
-        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 6px;color:#c2410c;font-size:13px;font-weight:700;text-decoration:underline;font-family:Arial,sans-serif;">📝 ${l.label} »</a><br/>`).join('')}
+      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;font-family:'Segoe UI',Arial,sans-serif;">חסומים מהפורטל? ניתן להגיש גם במייל:</p>
+        <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;font-family:'Segoe UI',Arial,sans-serif;">לחצו על סוג הבקשה — ייפתח מייל עם טופס למילוי. מלאו כל פרט בדיוק ושלחו (ההגשה המומלצת היא דרך הפורטל).</p>
+        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;font-family:'Segoe UI',Arial,sans-serif;">📝 ${l.label} »</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
@@ -189,11 +189,11 @@ export function benefitsLinkEmail(
       אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
       לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
     </p>
-    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#ec4899')}
+    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#fce7f3', '#9d174d')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#22b8e6')}
+    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#e0f2fe', '#075985')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#34d399')}
+    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#dcfce7', '#166534')}
     ${draftBlock}
     ${noReplyBox()}`
   return {

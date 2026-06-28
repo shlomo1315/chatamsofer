@@ -2104,7 +2104,7 @@ export default function PublicPortalPage() {
                   {benefitsSentTo ? (
                     <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                       <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם ({benefitsSentTo}). בדקו את תיבת הדואר (כולל ספאם).</span>
+                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם (<span dir="ltr">{benefitsSentTo}</span>). בדקו את תיבת הדואר (כולל ספאם).</span>
                     </div>
                   ) : (
                     <>
@@ -2120,7 +2120,7 @@ export default function PublicPortalPage() {
                   {statusSentTo ? (
                     <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                       <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                      <span>הודעה עם פירוט סטטוס בקשתכם נשלחה כעת לכתובת המייל הרשומה על שמכם ({statusSentTo}).</span>
+                      <span>הודעה עם פירוט סטטוס בקשתכם נשלחה כעת לכתובת המייל הרשומה על שמכם (<span dir="ltr">{statusSentTo}</span>).</span>
                     </div>
                   ) : (
                     <>
@@ -3061,7 +3061,7 @@ export default function PublicPortalPage() {
                   {benefitsSentTo ? (
                     <div className="mt-3 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                       <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם ({benefitsSentTo}). בדקו את תיבת הדואר (כולל ספאם).</span>
+                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם (<span dir="ltr">{benefitsSentTo}</span>). בדקו את תיבת הדואר (כולל ספאם).</span>
                     </div>
                   ) : (
                     <>
@@ -3121,7 +3121,7 @@ export default function PublicPortalPage() {
               {statusSentTo ? (
                 <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                   <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת ({statusSentTo}). בדוק/י את תיבת הדואר (כולל תיקיית ספאם).</span>
+                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת (<span dir="ltr">{statusSentTo}</span>). בדוק/י את תיבת הדואר (כולל תיקיית ספאם).</span>
                 </div>
               ) : (
                 <>

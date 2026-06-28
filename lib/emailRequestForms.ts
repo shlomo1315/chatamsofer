@@ -21,7 +21,7 @@ export function detectReqType(subject: string): ReqType | null {
   if (s.includes('בקשת לידה')) return 'birth'
   if (s.includes('הלוואה')) return 'loan'
   if (s.includes('סיוע רפואי')) return 'financial_aid'
-  if (s.includes('אלמנה')) return 'widow'
+  if (s.includes('אלמנה') || s.includes('אלמן')) return 'widow'
   return null
 }
 
@@ -138,9 +138,9 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   return L.join('\n')
 }
 
-// קישור mailto מלא לטיוטה
-export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx): string {
-  const subject = `${SUBJECT_PREFIX[type]} · ת.ז ${idNumber}`
+// קישור mailto מלא לטיוטה (subjectPrefix לעקיפה — למשל "בקשת סיוע אלמן")
+export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPrefix?: string): string {
+  const subject = `${subjectPrefix ?? SUBJECT_PREFIX[type]} · ת.ז ${idNumber}`
   const body = buildDraftBody(type, idNumber, ctx)
   return `mailto:igud@chasamsofer.info?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }

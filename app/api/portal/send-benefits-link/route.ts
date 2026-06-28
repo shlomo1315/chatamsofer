@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let ben: { full_name: string | null; family_name: string | null; email: string | null; id_number: string | null; eligibility_status: string | null } | null = null
+  let ben: { full_name: string | null; family_name: string | null; email: string | null; id_number: string | null; eligibility_status: string | null; marital_status: string | null } | null = null
 
   const idNumber = normalizeId(body.idType, body.id)
   if (idNumber && idNumber.length >= 5) {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
     const { data } = await admin
       .from('beneficiaries')
-      .select('full_name, family_name, email, id_number, eligibility_status')
+      .select('full_name, family_name, email, id_number, eligibility_status, marital_status')
       .eq('id_number', idNumber)
       .maybeSingle()
     ben = data
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
     const { data } = await admin
       .from('beneficiaries')
-      .select('full_name, family_name, email, id_number, eligibility_status')
+      .select('full_name, family_name, email, id_number, eligibility_status, marital_status')
       .eq('id', body.beneficiary_id)
       .maybeSingle()
     ben = data
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
   const draftLinks = ben.id_number
-    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved')
+    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved', ben.marital_status)
     : []
   const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
