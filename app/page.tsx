@@ -2040,8 +2040,7 @@ export default function PublicPortalPage() {
             </div>
 
             <Card>
-              {authMode === 'login' ? (
-                phoneStep === 'choose' ? (
+              {phoneStep === 'choose' ? (
                   <div className="flex flex-col gap-3">
                     <p className="text-sm text-slate-600 text-center leading-relaxed">בחר/י מספר טלפון אליו נצלצל ונקריא את קוד הכניסה:</p>
                     {authPhones.map((p) => (
@@ -2079,7 +2078,8 @@ export default function PublicPortalPage() {
                         className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה לסיסמה</button>
                     </div>
                   </form>
-                ) : authView === 'intro' ? (
+                ) : authMode === 'login' ? (
+                authView === 'intro' ? (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -2179,6 +2179,10 @@ export default function PublicPortalPage() {
                         className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
                         {loading && <Loader2 size={20} className="animate-spin" />}
                         {loading ? 'שולח...' : 'שליחת קוד למייל'}
+                      </button>
+                      <button type="button" onClick={handleListPhones} disabled={loading}
+                        className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-colors text-sm">
+                        <Phone size={16} /> קבלת קוד זמני בשיחה לטלפון
                       </button>
                     </>
                   ) : (

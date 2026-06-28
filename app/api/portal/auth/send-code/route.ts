@@ -23,7 +23,10 @@ function codeEmailHtml(code: string): string {
         <p style="margin:0 0 12px;">קוד האימות שלך לכניסה / הגדרת סיסמה:</p>
         <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#4f46e5;text-align:center;background:#eef2ff;border-radius:12px;padding:16px 0;margin:8px 0 16px;">${code}</div>
         <p style="margin:0 0 8px;">הקוד תקף ל-<strong>10 דקות</strong>.</p>
-        <p style="margin:0;color:#64748b;font-size:13px;">אם לא ביקשת קוד זה, ניתן להתעלם מהודעה זו.</p>
+        <p style="margin:0 0 12px;color:#64748b;font-size:13px;">אם לא ביקשת קוד זה, ניתן להתעלם מהודעה זו.</p>
+      </div>
+      <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;">
+        <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">מייל זה נשלח ממערכת אוטומטית, אין להשיב למייל זה.</p>
       </div>
     </div>
   </body></html>`

@@ -706,20 +706,16 @@ export function registrationReceivedEmail(
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
     <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(fullName)}</h2>
     <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
-      תודה על פנייתך! בקשתך להירשם ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבלה במערכת והועברה לטיפול המשרד.
+      תודה על פנייתך! בקשתך להירשם ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבלה.
     </p>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הרישום שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 18px;">
-        <p style="margin:0;color:#1e40af;font-size:14px;font-weight:700;">📋 הבקשה בטיפול — נעדכן אותך בהקדם על המשך התהליך.</p>
-      </td></tr>
-    </table>
-    <p style="margin:0 0 14px;color:#334155;font-size:15px;font-weight:700;text-align:center;">כבר עכשיו ניתן להיכנס לאזור האישי ולהגיש בקשות</p>
-    ${btn(`${base}/`, '🔑  כניסה לאזור האישי והגשת בקשות', '#4f46e5')}
-    <p style="margin:18px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      בכניסה תתבקש/י להזין את מספר תעודת הזהות שלך לאימות.
-    </p>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;font-weight:700;text-align:center;">להגשת בקשה לאחת מההטבות, לחצו על הכפתור המתאים:</p>
+    ${btn(`${base}/?action=birth`, '🍼 להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d')}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/?action=loan`, '💳 להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985')}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/?action=aid`, '🩺 להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534')}
   `
   return {
     subject: 'קיבלנו את בקשתך — היכל החתם סופר',
