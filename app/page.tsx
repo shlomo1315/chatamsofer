@@ -1092,7 +1092,7 @@ export default function PublicPortalPage() {
           setAuthMode(data.needsSetup ? 'reset' : 'login')
           setAuthCodeSent(false)
           setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
-          setAuthView(data.needsSetup ? 'login' : 'intro')
+          setAuthView(data.needsSetup || intendedAction.current ? 'login' : 'intro')
           setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
@@ -1118,7 +1118,7 @@ export default function PublicPortalPage() {
           setAuthMode(data.needsSetup ? 'reset' : 'login')
           setAuthCodeSent(false)
           setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
-          setAuthView(data.needsSetup ? 'login' : 'intro')
+          setAuthView(data.needsSetup || intendedAction.current ? 'login' : 'intro')
           setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
@@ -2086,12 +2086,6 @@ export default function PublicPortalPage() {
                     </>
                   )}
 
-                  <div className="border-t border-slate-100 pt-3">
-                    <button type="button" onClick={() => { setError(''); setAuthView('login') }}
-                      className="w-full text-sm text-slate-500 hover:text-slate-700 underline">
-                      להגשת בקשה ישירות מהאתר — התחברות עם סיסמה או קוד טלפוני
-                    </button>
-                  </div>
                 </div>
                 ) : (
                 <form onSubmit={handlePortalLogin} className="flex flex-col gap-4">

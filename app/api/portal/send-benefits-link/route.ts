@@ -67,7 +67,11 @@ export async function POST(request: NextRequest) {
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
   const mail = benefitsLinkEmail(name)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
-  if (!result.ok) return NextResponse.json({ error: 'שליחת המייל נכשלה. נסה שוב מאוחר יותר.' }, { status: 500 })
+  if (!result.ok) {
+    console.error('[send-benefits-link] deliverMail failed:', result.error)
+    // זמנית לאבחון — נחשפת שגיאת השליחה (תוסר לאחר התיקון)
+    return NextResponse.json({ error: `שליחת המייל נכשלה: ${result.error ?? 'שגיאה לא ידועה'}` }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true, sent: true, email: maskEmail(ben.email) }, { headers: { 'Cache-Control': 'no-store' } })
 }
