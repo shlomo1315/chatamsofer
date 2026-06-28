@@ -137,11 +137,12 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
   await deliverMail(from, 'הגרלת כרטיסי טיסה — היכל החתם סופר', html, undefined, { ...mailFor('inbox8'), skipLog: true })
 }
 
-// מענה אוטומטי לפניות שמגיעות לתיבת "איגוד" — מייל עם רשימת ההטבות וקישורי
-// הגשת בקשות. נשלח רק אם השולח מזוהה כרשום במערכת (לפי כתובת המייל).
+// מענה אוטומטי לפניות שמגיעות לתיבת "איגוד" — מייל חדש עם הפרטים של הפונה +
+// קישורי הגשת בקשות. הזיהוי: מספר ת"ז מלא (9 ספרות, כולל ספרת ביקורת) בשורת
+// הנושא — של הרשום או של בן/בת הזוג; אם אין ת"ז בנושא, ננסה לפי כתובת השולח.
 async function maybeAutoReplyIgud(
   admin: SupabaseClient,
-  msg: { fromEmail: string; fromName: string | null; toEmail: string },
+  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string },
 ) {
   if (departmentByEmail(msg.toEmail)?.key !== 'igud') return
   const from = (msg.fromEmail || '').toLowerCase()
@@ -150,17 +151,39 @@ async function maybeAutoReplyIgud(
   if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
 
-  // מזוהה כרשום? רק אז עונים (כדי לא לשלוח לכל פונה אקראי)
-  const { data: ben } = await admin
-    .from('beneficiaries')
-    .select('full_name, family_name')
-    .ilike('email', from)
-    .maybeSingle()
+  const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count'
+  type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null }
+  let ben: Ben | null = null
+
+  // 1) זיהוי לפי ת"ז מלאה (9 ספרות) בשורת הנושא — של הרשום או של בן/בת הזוג
+  const idMatch = String(msg.subject ?? '').match(/\d{9}/)
+  if (idMatch) {
+    const id = idMatch[0]
+    const { data } = await admin
+      .from('beneficiaries')
+      .select(COLS)
+      .or(`id_number.eq.${id},spouse_id_number.eq.${id}`)
+      .maybeSingle()
+    ben = (data as Ben) ?? null
+  }
+  // 2) נפילה-לאחור — לפי כתובת השולח
+  if (!ben) {
+    const { data } = await admin.from('beneficiaries').select(COLS).ilike('email', from).maybeSingle()
+    ben = (data as Ben) ?? null
+  }
   if (!ben) return
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
-  const mail = benefitsLinkEmail(name)
-  await deliverMail(from, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+  const details: [string, string | number | null | undefined][] = [
+    ['שם מלא', name], ['ת.ז.', ben.id_number], ['טלפון', ben.phone], ['דוא״ל', ben.email],
+    ['מצב משפחתי', ben.marital_status], ['בן/בת זוג', ben.spouse_name],
+    ['כתובת', [ben.address, ben.city].filter(Boolean).join(', ')],
+    ['מספר ילדים', ben.children_count != null ? String(ben.children_count) : ''],
+  ]
+  const mail = benefitsLinkEmail(name, undefined, details)
+  // מייל חדש (לא reply), עם הת"ז בשורת הנושא
+  const subject = ben.id_number ? `${mail.subject} · ת.ז ${ben.id_number}` : mail.subject
+  await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
 // פירוק שדה "שם <כתובת>" לשם וכתובת
@@ -534,7 +557,7 @@ export async function POST(request: NextRequest) {
     }
     // מענה אוטומטי לפניות איגוד — מייל עם רשימת הטבות וקישורי בקשות (רק לרשומים)
     try {
-      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
+      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }

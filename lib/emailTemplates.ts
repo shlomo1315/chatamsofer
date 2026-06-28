@@ -160,13 +160,22 @@ function noReplyBox(): string {
 // ─── מייל "רשימת הטבות והגשת בקשות" (נשלח מ-igud בלחיצה בפורטל או בפנייה במייל) ─
 // כל כפתור מפנה ישירות לטופס ההגשה הספציפי בפורטל (?action=...). הנמען מתחבר
 // (סיסמה / קוד טלפוני) ואז הטופס נפתח אוטומטית.
-export function benefitsLinkEmail(name: string, portalBase: string = PORTAL_BASE_DEFAULT): BuiltEmail {
+export function benefitsLinkEmail(
+  name: string,
+  portalBase: string = PORTAL_BASE_DEFAULT,
+  details?: [string, string | number | null | undefined][],
+): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
   const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
+  const detailsTable = detailsRows ? `
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">הפרטים הרשומים אצלנו:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${detailsRows}</table>` : ''
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    ${detailsTable}
     <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.8;font-family:Arial,sans-serif;">
       אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
       לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:

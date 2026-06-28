@@ -1621,6 +1621,9 @@ export default function PublicPortalPage() {
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
     : ''
 
+  // קישור mailto ל-igud עם הת"ז (שאיתה התחבר) בשורת הנושא — כדי שהמענה האוטומטי יזהה אוטומטית
+  const igudMailto = `mailto:igud@chasamsofer.info?subject=${encodeURIComponent('תעודת זהות ' + (beneficiary?.id_number || pendingAuth?.id || ''))}`
+
   // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
   const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
   // האם עדיין חסרים מסמכים נדרשים (לכרטיס "העלאת מסמכים נדרשים" בדשבורד)
@@ -2078,7 +2081,7 @@ export default function PublicPortalPage() {
                       <p className="text-sm text-slate-600 leading-relaxed">
                         לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
                         כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
-                        <a href="mailto:igud@chasamsofer.info" className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
+                        <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
                         או קבלו כעת קישור ישירות למייל שלכם:
                       </p>
                     </div>
@@ -3037,7 +3040,7 @@ export default function PublicPortalPage() {
                   <p className="text-sm text-slate-600 leading-relaxed">
                     לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
                     כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
-                    <a href="mailto:igud@chasamsofer.info" className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
+                    <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
                     או קבלו כעת קישור ישירות למייל שלכם:
                   </p>
 
