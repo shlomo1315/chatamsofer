@@ -541,15 +541,15 @@ function beneficiaryDetailRows(b: ReceivedBeneficiary): string {
 
 // אישור קבלת בקשה — מעוצב עם פרטי המבקש + פרטי הבקשה + המסמכים המצורפים.
 export function requestReceivedEmail(opts: {
-  type: 'birth' | 'loan' | 'financial_aid'
+  type: 'birth' | 'loan' | 'financial_aid' | 'widow'
   firstTime: boolean
   beneficiary: ReceivedBeneficiary
   requestRows?: [string, string | number | null | undefined][]
   documents?: { name: string; url?: string }[]
 }): BuiltEmail {
   const { type, firstTime, beneficiary, requestRows = [], documents = [] } = opts
-  const reqLabel = type === 'birth' ? 'בקשת הבראה ליולדת' : type === 'financial_aid' ? 'בקשת סיוע רפואי' : 'בקשת הלוואה'
-  const accent   = type === 'birth' ? '#db2777' : type === 'financial_aid' ? '#10b981' : '#4f46e5'
+  const reqLabel = type === 'birth' ? 'בקשת הבראה ליולדת' : type === 'financial_aid' ? 'בקשת סיוע רפואי' : type === 'widow' ? 'בקשת סיוע' : 'בקשת הלוואה'
+  const accent   = type === 'birth' ? '#db2777' : type === 'financial_aid' ? '#10b981' : type === 'widow' ? '#7c3aed' : '#4f46e5'
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || (beneficiary.full_name ?? '')
 
   const firstTimeNote = firstTime ? `

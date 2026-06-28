@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
+import { requestReceivedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +42,7 @@ export async function POST(request: NextRequest) {
   // Verify the beneficiary is a widow/widower
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, marital_status, eligibility_status')
+    .select('id, full_name, family_name, email, id_number, phone, marital_status, eligibility_status')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
@@ -62,6 +65,25 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error('[widow-request]', error.message)
     return NextResponse.json({ error: 'שגיאה בשמירה' }, { status: 500 })
+  }
+
+  // אישור קבלה מהאיגוד (לא חוסם את הבקשה אם המייל נכשל)
+  if (ben.email) {
+    const benEmail = ben.email
+    const typeLabel = request_type === 'food' ? 'סיוע במזון' : request_type === 'general' ? 'בקשה כללית' : 'סיוע כספי'
+    void (async () => {
+      const mail = requestReceivedEmail({
+        type: 'widow',
+        firstTime: false,
+        beneficiary: ben,
+        requestRows: [
+          ['סוג הבקשה', typeLabel],
+          ['פירוט', description ? String(description).trim() : ''],
+          ['סכום מבוקש', amount ? `₪${Number(amount).toLocaleString('he-IL')}` : ''],
+        ],
+      })
+      await deliverMail(benEmail, mail.subject, mail.html, undefined, mailFor('igud'))
+    })().catch(() => {})
   }
 
   return NextResponse.json({ ok: true })
