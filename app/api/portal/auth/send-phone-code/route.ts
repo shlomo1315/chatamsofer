@@ -96,9 +96,8 @@ export async function POST(request: NextRequest) {
       .from('beneficiaries')
       .update({ portal_phone_code_hash: null, portal_phone_code_plain: null, portal_phone_code_expires: null })
       .eq('id', data.id)
-    // זמנית לאבחון: חושפים את שגיאת ימות במסך (אינה סוד — הודעת API). יוסר לאחר התיקון.
     return NextResponse.json(
-      { error: `השיחה נכשלה: ${call.error ?? 'שגיאה לא ידועה'}` },
+      { error: 'השיחה נכשלה. נסה שוב או היכנס עם סיסמה.' },
       { status: 502 },
     )
   }

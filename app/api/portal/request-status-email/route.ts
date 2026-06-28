@@ -65,7 +65,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   }
 
-  const { data: ben } = await admin.from('beneficiaries').select('full_name, family_name, email').eq('id', beneficiaryId).maybeSingle()
+  const { data: ben } = await admin
+    .from('beneficiaries')
+    .select('full_name, family_name, email, phone, id_number, city, address, marital_status, spouse_name, children_count')
+    .eq('id', beneficiaryId)
+    .maybeSingle()
   if (!ben) return NextResponse.json({ ok: true, sent: false }, { headers: { 'Cache-Control': 'no-store' } })
   if (!ben.email) {
     return NextResponse.json({ error: 'אין כתובת מייל מעודכנת במערכת על שמך. אנא פנה למשרד לעדכון פרטים.' }, { status: 400 })
@@ -99,9 +103,20 @@ export async function POST(request: NextRequest) {
         <td style="padding:11px 14px;white-space:nowrap;"><span style="display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;color:${TONE_COLOR[r.tone]};background:${TONE_BG[r.tone]};">${r.statusLabel}</span></td>
       </tr>`).join('')
 
+  const fullName = [ben.family_name, ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
+  const detail = (label: string, value?: string | number | null) =>
+    (value === null || value === undefined || value === '') ? '' : `
+      <tr>
+        <td style="padding:9px 14px;color:#64748b;font-size:13px;width:38%;border-bottom:1px solid #f1f5f9;font-weight:500;">${label}</td>
+        <td style="padding:9px 14px;color:#0f172a;font-size:14px;font-weight:700;border-bottom:1px solid #f1f5f9;">${value}</td>
+      </tr>`
+  const detailsHtml = `${detail('שם מלא', fullName)}${detail('ת.ז.', ben.id_number)}${detail('טלפון', ben.phone)}${detail('דוא״ל', ben.email)}${detail('מצב משפחתי', ben.marital_status)}${detail('בן/בת זוג', ben.spouse_name)}${detail('כתובת', [ben.address, ben.city].filter(Boolean).join(', '))}${detail('מספר ילדים', ben.children_count != null ? String(ben.children_count) : '')}`
+
   const emailBody = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אזור אישי</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${ben.full_name ?? ''},</h2>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים האישיים הרשומים במערכת:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${detailsHtml}</table>
     <p style="margin:0 0 18px;color:#475569;font-size:14px;line-height:1.7;">להלן סטטוס הבקשות הרשומות במערכת על שמך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:1px solid #e2e8f0;border-radius:12px;border-collapse:separate;overflow:hidden;">
       <thead><tr style="background:#f8fafc;color:#64748b;font-size:12px;">
@@ -111,8 +126,7 @@ export async function POST(request: NextRequest) {
         <th style="padding:11px 14px;text-align:right;font-weight:700;">סטטוס</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
-    </table>
-    <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;">מייל זה נשלח לבקשתך מהאזור האישי בפורטל. לשאלות ניתן להשיב להודעה זו.</p>`
+    </table>`
 
   const html = shell({
     preheader: 'סטטוס הבקשות הרשומות במערכת על שמך',

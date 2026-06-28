@@ -171,15 +171,11 @@ export function benefitsLinkEmail(name: string, portalBase: string = PORTAL_BASE
       אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
       לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
     </p>
-    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#db2777')}
+    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#ec4899')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#0891b2')}
+    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#22b8e6')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#16a34a')}
-    <p style="margin:22px 0 0;color:#64748b;font-size:13px;line-height:1.8;font-family:Arial,sans-serif;">
-      לסיוע בעת שמחה ולשאר ההטבות ניתן לפנות במייל לכתובת
-      <a href="mailto:igud@chasamsofer.info" style="color:${accent};font-weight:600;text-decoration:none;">igud@chasamsofer.info</a>.
-    </p>
+    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#34d399')}
     ${noReplyBox()}`
   return {
     subject: 'הגשת בקשות והטבות — איגוד הצאצאים',
