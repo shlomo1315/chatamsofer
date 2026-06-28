@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { processAwaitingStock } from '@/lib/maternityCards'
+import { notifyCenterStockReplenished } from '@/lib/cardVoucherNotify'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -86,8 +87,9 @@ export async function PATCH(request: NextRequest) {
   if (pickup_hours !== undefined) updates.pickup_hours = pickup_hours?.trim() || null
   const { error } = await admin.from('card_centers').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.code === '23505' ? 'מוקד בשם זה כבר קיים' : error.message }, { status: 400 })
-  // עדכון מלאי (למשל הגדלת כמות) → שיוך אוטומטי של יולדות בתור "ממתין למלאי" ושליחת שובר
+  // עדכון מלאי (למשל הגדלת כמות) → שיוך אוטומטי (טעינת נדרים) + שליחת שובר כרטיס לממתינים
   await processAwaitingStock(admin)
+  if (stock !== undefined) await notifyCenterStockReplenished(admin, String(id))
   return NextResponse.json({ centers: await listCenters(admin) })
 }
 

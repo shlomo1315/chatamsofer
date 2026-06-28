@@ -924,3 +924,29 @@ export function maternityCardEmail(
     html: shell({ preheader: 'כרטיס המזון שלך אושר וזמין לאיסוף.', accent: '#059669', title: 'כרטיס המזון אושר', subtitle: 'היכל החתם סופר', body }),
   }
 }
+
+// ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
+export function cardStockReplenishedEmail(name: string, centerName?: string | null): BuiltEmail {
+  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const body = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
+        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">📎 מצורף שובר לאיסוף כרטיס המזון!</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">הדפיסו את השובר והביאו אותו למוקד לצורך קבלת הכרטיס.</p>
+      </td></tr>
+    </table>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greet} המלאי במוקד התחדש 🎉</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">
+          שימו לב — המלאי במוקד${centerName ? ` <strong>${centerName}</strong>` : ' שבחרתם'} התחדש, וכעת ניתן לאסוף את כרטיס המזון.
+        </p>
+        <p style="margin:6px 0 0;color:#065f46;font-size:14px;line-height:1.7;">הדפיסו את השובר המצורף והביאו אותו למוקד לקבלת הכרטיס.</p>
+      </td></tr>
+    </table>
+  `
+  return {
+    subject: '🍞 המלאי התחדש — שובר כרטיס המזון מצורף — היכל החתם סופר',
+    html: shell({ preheader: 'המלאי במוקד התחדש — שובר כרטיס המזון מצורף לאיסוף.', accent: '#059669', title: 'המלאי התחדש', subtitle: 'היכל החתם סופר', body }),
+  }
+}
