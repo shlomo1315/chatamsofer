@@ -3182,27 +3182,12 @@ export default function PublicPortalPage() {
               )}
             </Card>
 
-            {/* Action buttons */}
+            {/* אזור אישי: השלמת מסמכים (לא מאושר) + עדכון פרטים אישיים. הגשת בקשות נעשית
+                דרך הקישורים שבמיילים (?action=...), לא מהדשבורד. */}
             {!isRejected && !isDocsPending && (
               <div className="flex flex-col gap-3">
-                {/* משפחה מאושרת: עדכון פרטים · אחרת: תזכורת השלמת מסמכים */}
-                {isApproved ? (
-                  <>
-                    <button
-                      onClick={openEditDetails}
-                      className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-colors text-right shadow-sm group"
-                    >
-                      <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200 transition-colors">
-                        <User size={22} className="text-indigo-600" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-slate-900">עדכון פרטים אישיים</p>
-                        <p className="text-xs text-slate-500 mt-0.5">טלפון, כתובת, מייל, מצב משפחתי ומסמכים</p>
-                      </div>
-                      <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                    </button>
-                  </>
-                ) : (
+                {/* תזכורת השלמת מסמכים — למי שעדיין לא אושר */}
+                {!isApproved && (
                   <>
                     <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">⚠️ עליך עדיין להשלים את המסמכים הנדרשים:</p>
                     <button
@@ -3226,70 +3211,20 @@ export default function PublicPortalPage() {
                   </>
                 )}
 
-                {/* מפריד ניכר בין מסמכים לבקשות */}
-                <div className="border-t-2 border-dashed border-slate-200 my-3" />
-
-                <h3 className="font-semibold text-slate-700 text-sm px-1">הגשת בקשה</h3>
-
-                {canRequestBirth && (
-                  <button
-                    onClick={goToBirthForm}
-                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-colors">
-                      <Baby size={22} className="text-pink-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
-                      <p className="text-xs text-slate-500 mt-0.5">שהייה בבית החלמה לאחר לידה</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                  </button>
-                )}
-
+                {/* עדכון פרטים אישיים — זמין לכל הסטטוסים */}
                 <button
-                  onClick={goToLoanForm}
-                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
+                  onClick={openEditDetails}
+                  className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-colors text-right shadow-sm group"
                 >
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-blue-200 transition-colors">
-                    <CreditCard size={22} className="text-blue-600" />
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200 transition-colors">
+                    <User size={22} className="text-indigo-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-900">הלוואה חדשה</p>
-                    <p className="text-xs text-slate-500 mt-0.5">בקשת הלוואה מגמ&quot;ח</p>
+                    <p className="font-semibold text-slate-900">עדכון פרטים אישיים</p>
+                    <p className="text-xs text-slate-500 mt-0.5">טלפון, כתובת, מייל ומצב משפחתי</p>
                   </div>
                   <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
                 </button>
-
-                <button
-                  onClick={() => { setError(''); setAidReason(''); setAidFile(null); setAidModalOpen(true) }}
-                  className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                >
-                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
-                    <HandCoins size={22} className="text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-slate-900">בקשת סיוע רפואי</p>
-                    <p className="text-xs text-slate-500 mt-0.5">פירוט הבקשה + צירוף מסמך</p>
-                  </div>
-                  <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                </button>
-
-                {!isPending && (
-                  <button
-                    onClick={() => alert('לבקשת חלוקה, אנא פנה ישירות לצוות המערכת')}
-                    className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 p-5 hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-colors">
-                      <Gift size={22} className="text-emerald-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">חלוקה</p>
-                      <p className="text-xs text-slate-500 mt-0.5">קבלת מוצרים / חבילות</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-indigo-400" />
-                  </button>
-                )}
               </div>
             )}
 
