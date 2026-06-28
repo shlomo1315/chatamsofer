@@ -7,6 +7,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
+import { verifyVerifyToken } from '@/lib/verifyToken'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,10 +35,20 @@ export async function POST(request: NextRequest) {
     id_number, id_doc_type, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
     spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
+    email_verify_token, phone_verify_token,
   } = body
 
   if (!id_number || !full_name || !family_name || !phone) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // אימות חובה: כתובת המייל והטלפון הראשי (של הבעל) חייבים להיות מאומתים בקוד.
+  // טלפון האשה אינו דורש אימות.
+  if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {
+    return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
+  }
+  if (!verifyVerifyToken(phone_verify_token as string | undefined, 'phone', String(phone))) {
+    return NextResponse.json({ error: 'יש לאמת את מספר הטלפון בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
   }
 
   const isPassport = String(id_doc_type ?? 'id') === 'passport'

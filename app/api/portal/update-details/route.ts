@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +18,8 @@ export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { beneficiary_id, phone, phone2, address, city, email, marital_status } = body
+  const { beneficiary_id, phone, phone2, address, city, email, marital_status,
+    email_verify_token, phone_verify_token } = body
   if (!beneficiary_id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   // אימות סשן הפורטל — מותר לעדכן רק את הרשומה של המוטב שאותר בסשן הנוכחי
@@ -31,21 +33,37 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status')
+    .select('id, eligibility_status, phone, email')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
-  if (ben.eligibility_status !== 'approved') {
-    return NextResponse.json({ error: 'עדכון פרטים זמין רק לאחר אישור החשבון' }, { status: 403 })
+  if (ben.eligibility_status === 'rejected') {
+    return NextResponse.json({ error: 'עדכון פרטים אינו זמין עבור חשבון זה' }, { status: 403 })
   }
 
   // עדכון השדות המותרים בלבד
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (phone !== undefined) update.phone = phone ? String(phone).trim() : null
+
+  // שינוי מייל/טלפון ראשי דורש אסימון אימות תקף לערך החדש (אם אכן השתנה).
+  if (email !== undefined) {
+    const newEmail = email ? String(email).toLowerCase().trim() : ''
+    const changed = normalizeVerifyValue('email', newEmail) !== normalizeVerifyValue('email', String(ben.email ?? ''))
+    if (changed && newEmail && !verifyVerifyToken(email_verify_token as string | undefined, 'email', newEmail)) {
+      return NextResponse.json({ error: 'יש לאמת את כתובת המייל החדשה בקוד שנשלח אליה.' }, { status: 400 })
+    }
+    update.email = newEmail || null
+  }
+  if (phone !== undefined) {
+    const newPhone = phone ? String(phone).trim() : ''
+    const changed = normalizeVerifyValue('phone', newPhone) !== normalizeVerifyValue('phone', String(ben.phone ?? ''))
+    if (changed && newPhone && !verifyVerifyToken(phone_verify_token as string | undefined, 'phone', newPhone)) {
+      return NextResponse.json({ error: 'יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.' }, { status: 400 })
+    }
+    update.phone = newPhone || null
+  }
   if (phone2 !== undefined) update.phone2 = phone2 ? String(phone2).trim() : null
   if (address !== undefined) update.address = address ? String(address).trim() : null
   if (city !== undefined) update.city = city ? String(city).trim() : null
-  if (email !== undefined) update.email = email ? String(email).toLowerCase().trim() : null
   if (marital_status !== undefined) update.marital_status = marital_status ? String(marital_status) : null
 
   const { error } = await admin.from('beneficiaries').update(update).eq('id', String(beneficiary_id))

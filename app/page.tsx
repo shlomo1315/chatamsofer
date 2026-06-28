@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import EmailInput from '@/components/ui/EmailInput'
+import VerifyControl from '@/components/VerifyControl'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
@@ -935,6 +936,12 @@ export default function PublicPortalPage() {
   const [childIdErrors, setChildIdErrors] = useState<Record<number, string>>({})
   const [phoneError, setPhoneError] = useState('')
   const [emailError, setEmailError] = useState('')
+  // אסימוני אימות מייל/טלפון (רישום)
+  const [regEmailToken, setRegEmailToken] = useState<string | null>(null)
+  const [regPhoneToken, setRegPhoneToken] = useState<string | null>(null)
+  // אסימוני אימות מייל/טלפון (עריכת פרטים בדשבורד)
+  const [editEmailToken, setEditEmailToken] = useState<string | null>(null)
+  const [editPhoneToken, setEditPhoneToken] = useState<string | null>(null)
   const [declaredReg, setDeclaredReg] = useState(false)
   // הטבות שהתקבלו בעבר מאיגוד הצאצאים
   const [pastBenefits, setPastBenefits] = useState({
@@ -1021,15 +1028,21 @@ export default function PublicPortalPage() {
       phone: beneficiary.phone ?? '', phone2: beneficiary.phone2 ?? '', address: beneficiary.address ?? '',
       city: beneficiary.city ?? '', email: beneficiary.email ?? '', marital_status: beneficiary.marital_status ?? '',
     })
+    setEditEmailToken(null); setEditPhoneToken(null)
     setError(''); setEditOpen(true)
   }
   const handleUpdateDetails = async () => {
     if (!beneficiary) return
+    // שינוי מייל/טלפון מחייב אימות הערך החדש
+    const emailChanged = (editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase()
+    const phoneChanged = (editForm.phone ?? '').replace(/\D/g, '') !== (beneficiary.phone ?? '').replace(/\D/g, '')
+    if (emailChanged && editForm.email && !editEmailToken) { setError('יש לאמת את כתובת המייל החדשה בקוד שנשלח אליה.'); return }
+    if (phoneChanged && editForm.phone && !editPhoneToken) { setError('יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.'); return }
     setEditSaving(true); setError('')
     try {
       const res = await fetch('/api/portal/update-details', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm, email_verify_token: editEmailToken, phone_verify_token: editPhoneToken }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בעדכון'); setEditSaving(false); return }
@@ -1358,6 +1371,8 @@ export default function PublicPortalPage() {
     if (regForm.email && !validateEmail(regForm.email)) {
       setEmailError('אנא הזן כתובת מייל תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
+    if (!regEmailToken) { setError('יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").'); return }
+    if (!regPhoneToken) { setError('יש לאמת את הטלפון הראשי בקוד שיוקרא בשיחה (כפתור "קבלת קוד אימות בשיחה לטלפון").'); return }
     if (!regForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (showSpouseFields && !regForm.spouse_birth_date) { setError('אנא הזן תאריך לידה של האשה'); return }
     if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
@@ -1397,6 +1412,8 @@ export default function PublicPortalPage() {
         body: JSON.stringify({
           ...regForm,
           bypass: signupCode,
+          email_verify_token: regEmailToken,
+          phone_verify_token: regPhoneToken,
           id_doc_type: regDocType,
           children_count: children.length,
           children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
@@ -2479,6 +2496,7 @@ export default function PublicPortalPage() {
                         className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
                       {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
+                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
@@ -2489,6 +2507,7 @@ export default function PublicPortalPage() {
                   <div className="col-span-2">
                     <Field label="דואר אלקטרוני" required>
                       <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
+                      <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken} />
                     </Field>
                   </div>
                 </div>
@@ -3881,9 +3900,19 @@ export default function PublicPortalPage() {
                   {beneficiary.spouse_id_number && <p><span className="text-slate-400 text-xs block">ת.ז בן/זוג (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.spouse_id_number}</span></p>}
                 </div>
 
-                <Field label="טלפון"><TextInput value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
+                <Field label="טלפון">
+                  <TextInput value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} dir="ltr" inputMode="tel" />
+                  {(editForm.phone ?? '').replace(/\D/g, '') !== (beneficiary.phone ?? '').replace(/\D/g, '') && (
+                    <VerifyControl channel="phone" value={editForm.phone} valid={validatePhone(editForm.phone)} onToken={setEditPhoneToken} />
+                  )}
+                </Field>
                 <Field label="טלפון נוסף"><TextInput value={editForm.phone2} onChange={e => setEditForm(f => ({ ...f, phone2: e.target.value }))} dir="ltr" inputMode="tel" /></Field>
-                <Field label="מייל"><TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" /></Field>
+                <Field label="מייל">
+                  <TextInput value={editForm.email} onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} dir="ltr" inputMode="email" />
+                  {(editForm.email ?? '').trim().toLowerCase() !== (beneficiary.email ?? '').trim().toLowerCase() && (
+                    <VerifyControl channel="email" value={editForm.email} valid={validateEmail(editForm.email)} onToken={setEditEmailToken} />
+                  )}
+                </Field>
                 <CityStreetPicker
                   city={editForm.city}
                   address={editForm.address}
