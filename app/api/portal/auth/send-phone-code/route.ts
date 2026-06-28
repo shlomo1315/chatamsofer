@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
     .eq('id', data.id)
   if (upErr) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const call = await placeCodeCall(phone)
+  const call = await placeCodeCall(phone, code)
   if (!call.ok) {
     console.error('[send-phone-code] placeCodeCall failed:', call.error)
     // ניקוי הקוד אם השיחה לא יצאה

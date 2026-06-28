@@ -1,16 +1,14 @@
-// שיחה יוצאת דרך ימות המשיח — מנתבת את המתקשר לשלוחת ה-OTP (yemot-otp) שמקריאה
-// לו את הקוד החד-פעמי. מודול צד-שרת בלבד.
+// שיחה יוצאת דרך ימות המשיח — מקריאה למתקשר קוד כניסה חד-פעמי (TTS). צד-שרת בלבד.
 //
-// ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_TEMPLATE_ID (מזהה תבנית קמפיין
-// שהוגדרה בניהול ימות לניתוב לשלוחת ה-OTP, עם *ניסיון אחד בלבד*). כל עוד המשתנה
-// לא מוגדר — yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
+// ⚠️ בטיחות: השיחה מתבצעת אך ורק כשמוגדר YEMOT_OTP_TEMPLATE_ID. כל עוד אינו מוגדר —
+// yemotCallConfigured() מחזיר false ו-placeCodeCall לא יוצר שום שיחה.
 //
-// מנגנון (השלוחה הייעודית):
-//   • התבנית בימות מוגדרת: "ניתוב לשלוחה" → שלוחת ה-OTP (type=api → /api/webhooks/yemot-otp),
-//     מספר ניסיונות = 1 (קריטי! ברירת המחדל של ימות היא 3 ניסיונות = שיחות חוזרות).
-//   • placeCodeCall מפעיל את התבנית למספר היחיד. השלוחה שולפת את הקוד מה-DB
-//     לפי מספר המתקשר ומקריאה אותו — בלי שום הודעה כללית/טקסט בקמפיין.
-// כך הקוד הדינמי אינו עובר דרך טקסט הקמפיין כלל, ואין תלות בתבניות/הודעות קיימות.
+// מנגנון: RunCampaign על תבנית *נקייה* (בלי הודעה כללית, maxDialAttempts=1) עם
+// ttsMode=1 והקוד כטקסט אישי ב-phones. כך מוקרא רק הקוד, שיחה אחת, בלי חזרות:
+//   • templateId = YEMOT_OTP_TEMPLATE_ID — תבנית ללא הודעה ועם ניסיון חיוג אחד.
+//   • ttsMode=1 — מקריא את הטקסט האישי כ-TTS (בלי זה השיחה מתנתקת בלי הקראה).
+//   • phones = { "<מספר>": "<קוד להקראה>" } — אובייקט JSON, ערך = הטקסט האישי.
+// אם התבנית כוללת הודעה כללית — היא תושמע לפני הקוד; לכן יש להשתמש בתבנית ריקה.
 
 const YEMOT_API = 'https://www.call2all.co.il/ym/api'
 
@@ -18,10 +16,22 @@ export function yemotCallConfigured(): boolean {
   return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID
 }
 
-// מפעיל שיחה יוצאת יחידה שמנתבת את המתקשר לשלוחת ה-OTP. לעולם לא זורק.
+// טקסט בטוח להקראה. פסיקים נשמרים (הפסקות בין ספרות); רק תווים שמשבשים מוסרים.
+function ttsSafe(text: string): string {
+  return String(text ?? '').replace(/[.\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// משפט ההקראה: הספרות ספרה-ספרה (פסיקים = הפסקות), פעמיים לבהירות.
+function spokenCode(code: string): string {
+  const digits = code.replace(/\D/g, '').split('').join(', ')
+  return ttsSafe(`קוד הכניסה שלך הוא ${digits} , שוב, ${digits}`)
+}
+
+// מבצע שיחה יוצאת יחידה שמקריאה את הקוד. לעולם לא זורק; לא מתעד את הקוד.
 // מחזיר { ok, error? }. אם לא מוגדר — { ok:false, notConfigured:true }.
 export async function placeCodeCall(
   phone: string,
+  code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
   const token = process.env.YEMOT_TOKEN
   const templateId = process.env.YEMOT_OTP_TEMPLATE_ID
@@ -31,12 +41,11 @@ export async function placeCodeCall(
   const tel = phone.replace(/\D/g, '')
   if (tel.length < 9) return { ok: false, error: 'מספר טלפון לא תקין' }
 
-  // RunCampaign עם templateId של תבנית שמנתבת לשלוחת ה-OTP. phones = המספר היחיד
-  // (פורמט אובייקט JSON שעובד בימות). הטקסט אינו בשימוש — השלוחה מקריאה את הקוד.
   const form = new URLSearchParams()
   form.set('token', token)
   form.set('templateId', templateId)
-  form.set('phones', JSON.stringify({ [tel]: '' }))
+  form.set('phones', JSON.stringify({ [tel]: spokenCode(code) }))
+  form.set('ttsMode', '1')
   form.set('withSMS', '0')
   if (callerId) form.set('callerId', callerId)
 
