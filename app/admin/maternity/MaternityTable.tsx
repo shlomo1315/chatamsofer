@@ -61,15 +61,16 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [familyGate, setFamilyGate] = useState(false) // חלונית: יש לאשר תחילה את המשפחה
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
   const setStatus = async (next: MaternityStatus) => {
-    // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת
+    // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת — חלונית מפורשת
     if (next === 'active' && familyApproved === false) {
       setOpen(false)
-      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
+      setFamilyGate(true)
       return
     }
     setSaving(true)
@@ -132,6 +133,18 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
 
   return (
     <div className="relative inline-block">
+      {familyGate && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl" onClick={() => setFamilyGate(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-7 py-6 flex flex-col items-center gap-3 max-w-sm text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center">
+              <Clock size={28} className="text-amber-600" />
+            </div>
+            <p className="font-bold text-slate-900 text-lg">עליך לאשר תחילה את המשפחה</p>
+            <p className="text-sm text-slate-500 leading-relaxed">לא ניתן לאשר את הלידה כל עוד המשפחה אינה מאושרת. אשרו תחילה את המשפחה (הפאנל הצהוב "המשפחה טרם אושרה"), ולאחר מכן ניתן לאשר את הלידה.</p>
+            <button onClick={() => setFamilyGate(false)} className="mt-1 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl px-6 py-2.5">הבנתי</button>
+          </div>
+        </div>
+      )}
       {showSuccess && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">

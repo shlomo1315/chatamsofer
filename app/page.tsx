@@ -3141,10 +3141,9 @@ export default function PublicPortalPage() {
             {/* Action buttons */}
             {!isRejected && !isDocsPending && (
               <div className="flex flex-col gap-3">
-                {/* שלב 1 — משפחה מאושרת: עדכון פרטים · אחרת: השלמת מסמכים */}
+                {/* משפחה מאושרת: עדכון פרטים · אחרת: תזכורת השלמת מסמכים */}
                 {isApproved ? (
                   <>
-                    <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · עדכון פרטים</h3>
                     <button
                       onClick={openEditDetails}
                       className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-colors text-right shadow-sm group"
@@ -3161,7 +3160,7 @@ export default function PublicPortalPage() {
                   </>
                 ) : (
                   <>
-                    <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 1 · השלמת מסמכים</h3>
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">⚠️ עליך עדיין להשלים את המסמכים הנדרשים:</p>
                     <button
                       onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
                       className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-colors text-right shadow-sm group"
@@ -3186,8 +3185,7 @@ export default function PublicPortalPage() {
                 {/* מפריד ניכר בין מסמכים לבקשות */}
                 <div className="border-t-2 border-dashed border-slate-200 my-3" />
 
-                {/* שלב 2 — הגשת בקשה */}
-                <h3 className="font-semibold text-slate-700 text-sm px-1">שלב 2 · הגשת בקשה</h3>
+                <h3 className="font-semibold text-slate-700 text-sm px-1">הגשת בקשה</h3>
 
                 {canRequestBirth && (
                   <button
