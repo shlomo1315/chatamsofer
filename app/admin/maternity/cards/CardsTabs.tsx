@@ -4,7 +4,14 @@ import { Warehouse, CreditCard } from 'lucide-react'
 import NedarimFamilies from './NedarimFamilies'
 
 export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
-  const [tab, setTab] = useState<'internal' | 'nedarim'>('internal')
+  // בהגעה מקישור "ניהול הכרטיס" (?zeout=...) פותחים ישירות את טאב נדרים קארד
+  const [tab, setTab] = useState<'internal' | 'nedarim'>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search)
+      if (p.get('zeout') || p.get('tab') === 'nedarim') return 'nedarim'
+    }
+    return 'internal'
+  })
 
   return (
     <div className="flex flex-col gap-5">

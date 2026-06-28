@@ -1,6 +1,6 @@
 'use client'
 import { useState, type ReactNode } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 export interface TabDef {
   key: string
@@ -20,7 +20,6 @@ const ACCENTS: Record<string, { active: string; idle: string }> = {
 }
 
 export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: string }) {
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   // הלשונית הפעילה נשמרת ב-URL (?tab=) כדי שחזרה אחורה תחזיר לאותה לשונית
@@ -30,9 +29,10 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
 
   const select = (key: string) => {
     setActive(key)
+    // עדכון ה-URL בלי ניווט/רענון שרת (מיידי) — אחרת כל החלפת לשונית מרעננת את הדף.
     const sp = new URLSearchParams(searchParams.toString())
     sp.set(param, key)
-    router.replace(`${pathname}?${sp.toString()}`, { scroll: false })
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', `${pathname}?${sp.toString()}`)
   }
 
   return (

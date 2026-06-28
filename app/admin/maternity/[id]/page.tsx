@@ -302,6 +302,9 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 const m = meta[cs] ?? meta.pending
                 const center = (aid as { card_center?: { name?: string } }).card_center
                 const cardNum = (aid as { card_number?: string | null }).card_number
+                // מציגים מספר כרטיס רק אם נדרים אישר את החיבור (card_picked_up_at נקבע בהצלחה),
+                // אחרת ייתכן שהמספר הוקש אך לא חובר בפועל — נציג "עדיין לא שויך כרטיס".
+                const cardLinked = !!(aid as { card_picked_up_at?: string | null }).card_picked_up_at
                 // ימים עד פריקה אוטומטית (סוף הזכאות: שישה שבועות מהלידה או six_weeks_end)
                 const endRaw = aid.six_weeks_end
                   ?? (aid.birth_date ? format(new Date(new Date(aid.birth_date).getTime() + 42 * 86400000), 'yyyy-MM-dd') : null)
@@ -313,9 +316,9 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${m.cls}`}>{m.label}</span>
                     </div>
                     {center?.name && <p className="text-sm mt-1"><span className="text-slate-500">מוקד: </span><span className="font-medium text-slate-800">{center.name}</span></p>}
-                    {/* מספר כרטיס נדרים — או חיווי שטרם בוצע שיוך */}
+                    {/* מספר כרטיס נדרים — רק אם החיבור אושר; אחרת חיווי שטרם שויך */}
                     <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                      {cardNum ? (
+                      {cardNum && cardLinked ? (
                         <>
                           <p className="text-sm"><span className="text-slate-500">מספר כרטיס: </span><span className="font-semibold text-slate-800 ltr-num">{cardNum}</span></p>
                           {daysToUnload != null && (
@@ -325,10 +328,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                           )}
                         </>
                       ) : (
-                        <p className="text-sm text-amber-700 font-medium">עדיין לא בוצע שיוך כרטיס</p>
+                        <p className="text-sm text-amber-700 font-medium">עדיין לא שויך כרטיס</p>
                       )}
                     </div>
-                    {aid.card_loaded_at && <p className="text-xs text-slate-400 ltr-num mt-1">נטען בתאריך: {fmtDate(aid.card_loaded_at)}</p>}
+                    {aid.card_loaded_at && <p className="text-xs text-slate-400 mt-1 text-right">נטען בתאריך: <span className="ltr-num">{fmtDate(aid.card_loaded_at)}</span></p>}
                   </>
                 )
               })()}

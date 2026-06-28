@@ -26,3 +26,23 @@ export async function saveRegistrationCallText(text: string): Promise<boolean> {
   )
   return !error
 }
+
+// קובץ קול טבעי (ElevenLabs) שהועלה לימות — שם הקובץ היחסי בשלוחה. null = אין (TTS).
+export const REG_CALL_AUDIO_KEY = 'registration_call_audio'
+
+export async function getRegistrationCallAudio(): Promise<string | null> {
+  const admin = getServiceClient()
+  if (!admin) return null
+  const { data } = await admin.from('app_settings').select('value').eq('key', REG_CALL_AUDIO_KEY).maybeSingle()
+  const a = (data?.value ?? '').trim()
+  return a || null
+}
+
+export async function setRegistrationCallAudio(audio: string | null): Promise<boolean> {
+  const admin = getServiceClient()
+  if (!admin) return false
+  const { error } = await admin.from('app_settings').upsert(
+    { key: REG_CALL_AUDIO_KEY, value: audio ?? '', updated_at: new Date().toISOString() }, { onConflict: 'key' },
+  )
+  return !error
+}
