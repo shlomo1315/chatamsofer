@@ -1798,7 +1798,8 @@ export default function PublicPortalPage() {
       : d === 'id_wife' ? 'תעודת זהות — האשה'
       : docLabel(d)
   const renderIdDocsSection = () => {
-    if (!needsIdWithRequest) return null
+    // מוצג כל עוד המשפחה לא אושרה (ממתינה לאישור ראשוני). מאושרת → לא מוצג (הגשה מיידית).
+    if (!beneficiary || isApproved) return null
     return (
       <Card>
         <div className="flex items-start gap-3 mb-4">
@@ -1813,7 +1814,7 @@ export default function PublicPortalPage() {
           </div>
         </div>
         <div className="flex flex-col gap-4">
-          {requiredDocs.filter(d => !existingDocs[d]).map(d => (
+          {requiredDocs.map(d => (
             <div key={d}>{renderIdDocSlot(d, idDocLabel(d))}</div>
           ))}
         </div>
