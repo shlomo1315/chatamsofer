@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         documents: signedDocs,
       })
       const atts = (await Promise.all(docs.map(d => urlToAttachment(d.url, d.name)))).filter(Boolean) as { filename: string; mimeType: string; contentB64: string }[]
-      await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined, mailFor('gemach'))
+      await deliverMail(benEmail, mailData.subject, mailData.html, atts.length ? atts : undefined, mailFor('igud'))
     })().catch(() => {})
   }
 

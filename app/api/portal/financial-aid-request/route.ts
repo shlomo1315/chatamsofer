@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
         documents: documentUrl ? [{ name: documentName || 'מסמך מצורף', url: await signedDocUrl(admin, documentUrl) }] : [],
       })
       const att = documentUrl ? await urlToAttachment(documentUrl, documentName || 'מסמך-מצורף') : null
-      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('medical'))
+      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('igud'))
     })().catch(() => {})
   }
 

@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
-import { shell } from '@/lib/emailTemplates'
+import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -135,6 +135,32 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
     body,
   })
   await deliverMail(from, 'הגרלת כרטיסי טיסה — היכל החתם סופר', html, undefined, { ...mailFor('inbox8'), skipLog: true })
+}
+
+// מענה אוטומטי לפניות שמגיעות לתיבת "איגוד" — מייל עם רשימת ההטבות וקישורי
+// הגשת בקשות. נשלח רק אם השולח מזוהה כרשום במערכת (לפי כתובת המייל).
+async function maybeAutoReplyIgud(
+  admin: SupabaseClient,
+  msg: { fromEmail: string; fromName: string | null; toEmail: string },
+) {
+  if (departmentByEmail(msg.toEmail)?.key !== 'igud') return
+  const from = (msg.fromEmail || '').toLowerCase()
+  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  // מזוהה כרשום? רק אז עונים (כדי לא לשלוח לכל פונה אקראי)
+  const { data: ben } = await admin
+    .from('beneficiaries')
+    .select('full_name, family_name')
+    .ilike('email', from)
+    .maybeSingle()
+  if (!ben) return
+
+  const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
+  const mail = benefitsLinkEmail(name)
+  await deliverMail(from, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
 // פירוק שדה "שם <כתובת>" לשם וכתובת
@@ -505,6 +531,12 @@ export async function POST(request: NextRequest) {
       await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
+    }
+    // מענה אוטומטי לפניות איגוד — מייל עם רשימת הטבות וקישורי בקשות (רק לרשומים)
+    try {
+      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
+    } catch (e) {
+      console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }
   }
 

@@ -592,7 +592,8 @@ export function requestReceivedEmail(opts: {
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הבקשה:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${reqRowsHtml}</table>` : ''}
     ${docsHtml}
-    <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;">תקבל/י עדכון על המשך הטיפול בהמשך.</p>
+    <p style="margin:0 0 4px;color:#94a3b8;font-size:13px;line-height:1.7;">תקבל/י עדכון על המשך הטיפול בהמשך.</p>
+    ${noReplyBox()}
   `
   return {
     subject: `התקבלה ${reqLabel} — היכל החתם סופר`,

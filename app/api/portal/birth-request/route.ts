@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         documents: [{ name: 'אישור לידה', url: certUrl ? await signedDocUrl(admin, certUrl) : undefined }],
       })
       const att = certUrl ? await urlToAttachment(certUrl, 'אישור-לידה') : null
-      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('maternity'))
+      await deliverMail(benEmail, mail.subject, mail.html, att ? [att] : undefined, mailFor('igud'))
     })().catch(() => {})
   }
 
