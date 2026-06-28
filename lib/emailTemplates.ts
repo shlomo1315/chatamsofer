@@ -319,7 +319,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, הרישום אושר 🎉</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       אנו שמחים לבשר לך כי הרישום שלך ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבל במערכת ואושר.
-      מעתה ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.
+      מעתה ניתן להגיש בקשות לאחת מההטבות ישירות מכאן — לחצו על הכפתור המתאים:
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
@@ -341,7 +341,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
       `${base}/?action=loan`,  '💳  בקשת הלוואה', '#e0e7ff', '#3730a3',
     )}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/`, '🏠  כניסה לפורטל האישי', '#0f172a')}
+    ${btn(`${base}/?action=aid`, '🩺  בקשת סיוע רפואי', '#dcfce7', '#166534')}
 
     <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות שלך לאימות.
