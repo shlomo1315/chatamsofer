@@ -16,15 +16,16 @@ export function yemotCallConfigured(): boolean {
   return !!process.env.YEMOT_TOKEN && !!process.env.YEMOT_OTP_TEMPLATE_ID
 }
 
-// טקסט בטוח להקראה. פסיקים נשמרים (הפסקות בין ספרות); רק תווים שמשבשים מוסרים.
+// טקסט בטוח להקראה. הפסיקים מוסרים! (פסיק בערך phones של RunCampaign חותך את
+// ההודעה — לכן שמענו רק את הספרה הראשונה.) הפרדת ספרות נעשית ברווחים בלבד.
 function ttsSafe(text: string): string {
-  return String(text ?? '').replace(/[.\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
+  return String(text ?? '').replace(/[.,\-"'&|=]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-// משפט ההקראה: הספרות ספרה-ספרה (פסיקים = הפסקות), פעמיים לבהירות.
+// משפט ההקראה: הספרות ספרה-ספרה (רווחים = הפרדה), פעמיים לבהירות.
 function spokenCode(code: string): string {
-  const digits = code.replace(/\D/g, '').split('').join(', ')
-  return ttsSafe(`קוד הכניסה שלך הוא ${digits} , שוב, ${digits}`)
+  const digits = code.replace(/\D/g, '').split('').join(' ')
+  return ttsSafe(`קוד הכניסה שלך הוא ${digits} שוב ${digits}`)
 }
 
 // מבצע שיחה יוצאת יחידה שמקריאה את הקוד. לעולם לא זורק; לא מתעד את הקוד.

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { normalizeId } from '@/lib/portalBeneficiary'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
@@ -36,22 +38,35 @@ const TONE_BG: Record<Tone, string> = { pending: '#fffbeb', progress: '#eff6ff',
 
 // שולח למוטב (לכתובת הרשומה במערכת) מייל עם סטטוס כל בקשותיו. דורש סשן פורטל תקף.
 export async function POST(request: NextRequest) {
-  let body: { beneficiary_id?: string }
+  let body: { beneficiary_id?: string; idType?: 'id' | 'passport'; id?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
-  const beneficiaryId = body.beneficiary_id
-  if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
-
-  // אימות סשן הפורטל — מותר רק למוטב שאותר בסשן הנוכחי
-  const sessionId = getPortalBeneficiaryId(request)
-  if (!sessionId || sessionId !== beneficiaryId) {
-    return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
-  }
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // זיהוי: לפי ת"ז (לפני כניסה — נשלח רק לכתובת הרשומה) או לפי סשן פורטל (אחרי כניסה)
+  let beneficiaryId: string
+  const idNumber = normalizeId(body.idType, body.id)
+  if (idNumber && idNumber.length >= 5) {
+    if (!rateLimit(`status-email:${clientIp(request)}`, 8, 15 * 60 * 1000) ||
+        !rateLimit(`status-email-id:${idNumber}`, 4, 15 * 60 * 1000)) {
+      return NextResponse.json({ error: 'כבר נשלח לאחרונה. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+    }
+    const { data } = await admin.from('beneficiaries').select('id').eq('id_number', idNumber).maybeSingle()
+    if (!data) return NextResponse.json({ ok: true, sent: false }, { headers: { 'Cache-Control': 'no-store' } })
+    beneficiaryId = data.id
+  } else if (body.beneficiary_id) {
+    const sessionId = getPortalBeneficiaryId(request)
+    if (!sessionId || sessionId !== body.beneficiary_id) {
+      return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+    }
+    beneficiaryId = body.beneficiary_id
+  } else {
+    return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
+  }
+
   const { data: ben } = await admin.from('beneficiaries').select('full_name, family_name, email').eq('id', beneficiaryId).maybeSingle()
-  if (!ben) return NextResponse.json({ error: 'מוטב לא נמצא' }, { status: 404 })
+  if (!ben) return NextResponse.json({ ok: true, sent: false }, { headers: { 'Cache-Control': 'no-store' } })
   if (!ben.email) {
     return NextResponse.json({ error: 'אין כתובת מייל מעודכנת במערכת על שמך. אנא פנה למשרד לעדכון פרטים.' }, { status: 400 })
   }

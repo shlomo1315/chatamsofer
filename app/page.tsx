@@ -805,6 +805,8 @@ export default function PublicPortalPage() {
   // ── אימות כניסה לפורטל: סיסמה + "שכחתי סיסמה"/הגדרת סיסמה ראשונה ──
   const [pendingAuth, setPendingAuth] = useState<{ idType: 'id' | 'passport'; id: string } | null>(null)
   const [authMode, setAuthMode] = useState<'login' | 'reset'>('login')
+  // מסך פתיחה לאחר זיהוי ת"ז: 'intro' = "כבר נרשמתם" + אפשרויות מייל; 'login' = הזנת סיסמה/קוד להגשת בקשה
+  const [authView, setAuthView] = useState<'intro' | 'login'>('intro')
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
   const [authCode, setAuthCode] = useState('')
@@ -820,39 +822,48 @@ export default function PublicPortalPage() {
   const [statusSending, setStatusSending] = useState(false)
   const [statusSentTo, setStatusSentTo] = useState<string | null>(null)
   const [statusErr, setStatusErr] = useState('')
+  // גוף זיהוי לבקשות מייל: לפי סשן (אחרי כניסה) או לפי ת"ז (לפני כניסה — נשלח רק לרשום)
+  const authIdentity = useCallback(() => {
+    if (beneficiary?.id) return { beneficiary_id: beneficiary.id }
+    if (pendingAuth) return { idType: pendingAuth.idType, id: pendingAuth.id }
+    return null
+  }, [beneficiary?.id, pendingAuth])
+
   const sendStatusEmail = useCallback(async () => {
-    if (!beneficiary?.id) return
+    const ident = authIdentity()
+    if (!ident) return
     setStatusSending(true); setStatusErr('')
     try {
       const res = await fetch('/api/portal/request-status-email', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+        body: JSON.stringify(ident),
       })
       const d = await res.json()
-      if (res.ok) setStatusSentTo(d.email ?? '')
+      if (res.ok) setStatusSentTo(d.email || 'המייל הרשום במערכת')
       else setStatusErr(d.error || 'שליחת המייל נכשלה')
     } catch { setStatusErr('שגיאת רשת. נסה שוב.') }
     setStatusSending(false)
-  }, [beneficiary?.id])
+  }, [authIdentity])
 
   // שליחת מייל "רשימת הטבות וקישורי בקשות" מהאיגוד
   const [benefitsSending, setBenefitsSending] = useState(false)
   const [benefitsSentTo, setBenefitsSentTo] = useState<string | null>(null)
   const [benefitsErr, setBenefitsErr] = useState('')
   const sendBenefitsLink = useCallback(async () => {
-    if (!beneficiary?.id) return
+    const ident = authIdentity()
+    if (!ident) return
     setBenefitsSending(true); setBenefitsErr('')
     try {
       const res = await fetch('/api/portal/send-benefits-link', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+        body: JSON.stringify(ident),
       })
       const d = await res.json()
-      if (res.ok) setBenefitsSentTo(d.email ?? '')
+      if (res.ok) setBenefitsSentTo(d.email || 'המייל הרשום במערכת')
       else setBenefitsErr(d.error || 'שליחת המייל נכשלה')
     } catch { setBenefitsErr('שגיאת רשת. נסה שוב.') }
     setBenefitsSending(false)
-  }, [beneficiary?.id])
+  }, [authIdentity])
 
   // תזכורת השלמת שם הילד — לידות שסומנו עם מין אך ללא שם
   const [pendingNames, setPendingNames] = useState<{ id: string; baby_gender: string | null; birth_date: string | null }[]>([])
@@ -1081,6 +1092,8 @@ export default function PublicPortalPage() {
           setAuthMode(data.needsSetup ? 'reset' : 'login')
           setAuthCodeSent(false)
           setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
+          setAuthView(data.needsSetup ? 'login' : 'intro')
+          setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
         else if (data.foundAsChild) {
@@ -1105,6 +1118,8 @@ export default function PublicPortalPage() {
           setAuthMode(data.needsSetup ? 'reset' : 'login')
           setAuthCodeSent(false)
           setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
+          setAuthView(data.needsSetup ? 'login' : 'intro')
+          setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
         else { setRegDocType('passport'); setRegForm(f => ({ ...f, id_number: raw })); setStep('not-found') }
@@ -2022,6 +2037,62 @@ export default function PublicPortalPage() {
                         className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה לסיסמה</button>
                     </div>
                   </form>
+                ) : authView === 'intro' ? (
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <CheckCircle2 size={20} className="text-indigo-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-900 mb-1">שים לב — אתם כבר רשומים אצלנו</p>
+                      <p className="text-sm text-slate-600 leading-relaxed">
+                        לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
+                        כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
+                        <a href="mailto:igud@chasamsofer.info" className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
+                        או קבלו כעת קישור ישירות למייל שלכם:
+                      </p>
+                    </div>
+                  </div>
+
+                  {benefitsSentTo ? (
+                    <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                      <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם ({benefitsSentTo}). בדקו את תיבת הדואר (כולל ספאם).</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button type="button" onClick={sendBenefitsLink} disabled={benefitsSending}
+                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                        {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                        קבלת קישור להגשת בקשות למייל
+                      </button>
+                      {benefitsErr && <p className="text-xs text-red-600">{benefitsErr}</p>}
+                    </>
+                  )}
+
+                  {statusSentTo ? (
+                    <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                      <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                      <span>הודעה עם פירוט סטטוס בקשתכם נשלחה כעת לכתובת המייל הרשומה על שמכם ({statusSentTo}).</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button type="button" onClick={sendStatusEmail} disabled={statusSending}
+                        className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                        {statusSending ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                        צפייה בסטטוס הבקשה שלי (יישלח למייל)
+                      </button>
+                      {statusErr && <p className="text-xs text-red-600">{statusErr}</p>}
+                    </>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-3">
+                    <button type="button" onClick={() => { setError(''); setAuthView('login') }}
+                      className="w-full text-sm text-slate-500 hover:text-slate-700 underline">
+                      להגשת בקשה ישירות מהאתר — התחברות עם סיסמה או קוד טלפוני
+                    </button>
+                  </div>
+                </div>
                 ) : (
                 <form onSubmit={handlePortalLogin} className="flex flex-col gap-4">
                   <Field label="סיסמה" required>
