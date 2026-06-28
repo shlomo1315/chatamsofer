@@ -143,6 +143,50 @@ export function shell(opts: {
 </html>`
 }
 
+// ─── הודעת "אל תשיבו" מודגשת (לתחתית מיילים אוטומטיים מהאיגוד) ───────────────
+function noReplyBox(): string {
+  return `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+    <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;">
+      <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.7;font-family:Arial,sans-serif;text-align:center;">
+        ⚠️ מייל זה נשלח <strong>באופן אוטומטי</strong> ואין להשיב אליו —
+        הודעות הנשלחות לכתובת זו אינן נקראות.<br/>
+        בכל עניין יש לפנות למשרד: <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>
+      </p>
+    </td></tr>
+  </table>`
+}
+
+// ─── מייל "רשימת הטבות והגשת בקשות" (נשלח מ-igud בלחיצה בפורטל או בפנייה במייל) ─
+// כל כפתור מפנה ישירות לטופס ההגשה הספציפי בפורטל (?action=...). הנמען מתחבר
+// (סיסמה / קוד טלפוני) ואז הטופס נפתח אוטומטית.
+export function benefitsLinkEmail(name: string, portalBase: string = PORTAL_BASE_DEFAULT): BuiltEmail {
+  const base = portalBase.replace(/\/$/, '')
+  const accent = '#4f46e5'
+  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.8;font-family:Arial,sans-serif;">
+      אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
+      לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
+    </p>
+    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#db2777')}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#0891b2')}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#16a34a')}
+    <p style="margin:22px 0 0;color:#64748b;font-size:13px;line-height:1.8;font-family:Arial,sans-serif;">
+      לסיוע בעת שמחה ולשאר ההטבות ניתן לפנות במייל לכתובת
+      <a href="mailto:igud@chasamsofer.info" style="color:${accent};font-weight:600;text-decoration:none;">igud@chasamsofer.info</a>.
+    </p>
+    ${noReplyBox()}`
+  return {
+    subject: 'הגשת בקשות והטבות — איגוד הצאצאים',
+    html: shell({ preheader: 'קישורים להגשת בקשות לאיגוד הצאצאים', accent, title: 'איגוד הצאצאים', subtitle: 'הגשת בקשות והטבות', body }),
+  }
+}
+
 // ─── דוח שבועי של הלוואות (נשלח לכתובת שמוגדרת בהגדרות הפורטל) ────────────────
 export interface ReportLoanRow {
   name: string

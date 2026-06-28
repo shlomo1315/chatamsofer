@@ -4,6 +4,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
+import { maskEmail } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,13 +33,6 @@ const fb = (m: Record<string, [string, Tone]>, s: string): [string, Tone] => m[s
 
 const TONE_COLOR: Record<Tone, string> = { pending: '#b45309', progress: '#1d4ed8', approved: '#15803d', rejected: '#b91c1c' }
 const TONE_BG: Record<Tone, string> = { pending: '#fffbeb', progress: '#eff6ff', approved: '#f0fdf4', rejected: '#fef2f2' }
-
-function maskEmail(e: string): string {
-  const [u, d] = e.split('@')
-  if (!d) return e
-  const masked = u.length <= 2 ? `${u[0]}*` : `${u[0]}${'*'.repeat(Math.max(1, u.length - 2))}${u[u.length - 1]}`
-  return `${masked}@${d}`
-}
 
 // שולח למוטב (לכתובת הרשומה במערכת) מייל עם סטטוס כל בקשותיו. דורש סשן פורטל תקף.
 export async function POST(request: NextRequest) {

@@ -105,13 +105,6 @@ const LOAN_PURPOSES = [
   { value: 'אחר' },
 ]
 
-const STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  pending:      { label: 'ממתין לאישור ראשוני',  color: 'text-amber-800',  bg: 'bg-amber-50',    border: 'border-amber-200' },
-  review:       { label: 'ממתין לאישור מסמכים',  color: 'text-violet-800', bg: 'bg-violet-50',   border: 'border-violet-200' },
-  approved:     { label: 'מאושר',            color: 'text-green-800',  bg: 'bg-green-50',  border: 'border-green-200' },
-  rejected:     { label: 'לא מאושר',         color: 'text-red-800',    bg: 'bg-red-50',    border: 'border-red-200' },
-  docs_pending: { label: 'השלמת מסמכים',    color: 'text-indigo-800', bg: 'bg-indigo-50', border: 'border-indigo-200' },
-}
 
 const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורים']
 
@@ -842,6 +835,25 @@ export default function PublicPortalPage() {
     setStatusSending(false)
   }, [beneficiary?.id])
 
+  // שליחת מייל "רשימת הטבות וקישורי בקשות" מהאיגוד
+  const [benefitsSending, setBenefitsSending] = useState(false)
+  const [benefitsSentTo, setBenefitsSentTo] = useState<string | null>(null)
+  const [benefitsErr, setBenefitsErr] = useState('')
+  const sendBenefitsLink = useCallback(async () => {
+    if (!beneficiary?.id) return
+    setBenefitsSending(true); setBenefitsErr('')
+    try {
+      const res = await fetch('/api/portal/send-benefits-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+      })
+      const d = await res.json()
+      if (res.ok) setBenefitsSentTo(d.email ?? '')
+      else setBenefitsErr(d.error || 'שליחת המייל נכשלה')
+    } catch { setBenefitsErr('שגיאת רשת. נסה שוב.') }
+    setBenefitsSending(false)
+  }, [beneficiary?.id])
+
   // תזכורת השלמת שם הילד — לידות שסומנו עם מין אך ללא שם
   const [pendingNames, setPendingNames] = useState<{ id: string; baby_gender: string | null; birth_date: string | null }[]>([])
   const [nameInput, setNameInput] = useState('')
@@ -935,7 +947,7 @@ export default function PublicPortalPage() {
   const [showOtherMarital, setShowOtherMarital] = useState(false)
 
   // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
-  const intendedAction = useRef<'birth' | 'loan' | 'docs' | null>(null)
+  const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | null>(null)
 
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
@@ -1575,7 +1587,6 @@ export default function PublicPortalPage() {
   }
 
   // ─── Status badge ───
-  const statusMeta = beneficiary ? (STATUS_META[beneficiary.eligibility_status] ?? STATUS_META.pending) : null
   const isPending = beneficiary?.eligibility_status === 'pending' || beneficiary?.eligibility_status === 'review'
   const isDocsPending = beneficiary?.eligibility_status === 'docs_pending'
   const isApproved = beneficiary?.eligibility_status === 'approved'
@@ -1658,10 +1669,10 @@ export default function PublicPortalPage() {
     setLoanModalOpen(true)
   }
 
-  // Read the intended action from the URL once on mount (from the festive email buttons)
+  // Read the intended action from the URL once on mount (from the email buttons)
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('action')
-    if (a === 'birth' || a === 'loan' || a === 'docs') intendedAction.current = a
+    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid') intendedAction.current = a
   }, [])
 
   // Once the beneficiary reaches their dashboard, jump straight to the intended form
@@ -1671,6 +1682,7 @@ export default function PublicPortalPage() {
     intendedAction.current = null
     if (a === 'birth') goToBirthForm()
     else if (a === 'loan') goToLoanForm()
+    else if (a === 'aid') { setError(''); setAidModalOpen(true) }
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, beneficiary])
@@ -2860,12 +2872,7 @@ export default function PublicPortalPage() {
                 <div className="flex-1 min-w-0">
                   <h2 className="font-bold text-slate-900 text-lg truncate">{displayName || beneficiary.full_name}</h2>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {/* בצד הלקוח לא מציגים סטטוס "ממתין לאישור" — רק מאושר / השלמת מסמכים / לא מאושר */}
-                    {statusMeta && !isPending && (
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${statusMeta.color} ${statusMeta.bg} ${statusMeta.border}`}>
-                        {statusMeta.label}
-                      </span>
-                    )}
+                    {/* לבקשת הלקוח — לא מציגים שום סטטוס על המסך. הסטטוס נשלח רק למייל. */}
                     {beneficiary.city && (
                       <span className="flex items-center gap-1 text-xs text-slate-500">
                         <MapPin size={11} />{beneficiary.city}
@@ -2924,47 +2931,42 @@ export default function PublicPortalPage() {
               )}
             </Card>
 
-            {/* Status banners */}
-            {isPending && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-4 text-sm text-indigo-800">
-                <div className="flex items-start gap-3">
-                  <FileText size={18} className="flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold mb-1">ברוכים הבאים</p>
-                    <p className="leading-relaxed">
-                      ניתן להגיש בקשה כבר עכשיו. בהגשה הראשונה תתבקש/י לצרף גם צילומי תעודת זהות — הבקשה והמסמכים יישלחו יחד לטיפול המזכירות.
-                      לאחר בדיקת המסמכים במזכירות תקבלו על כך הודעה מסודרת.
-                    </p>
-                  </div>
+            {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס) */}
+            <Card>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 size={20} className="text-indigo-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-slate-900 mb-1">שים לב — אתם כבר רשומים אצלנו</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
+                    כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
+                    <a href="mailto:igud@chasamsofer.info" className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
+                    או קבלו כעת קישור ישירות למייל שלכם:
+                  </p>
+
+                  {benefitsSentTo ? (
+                    <div className="mt-3 flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                      <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                      <span>מייל עם רשימת ההטבות וקישורי הבקשות נשלח לכתובת הרשומה על שמכם ({benefitsSentTo}). בדקו את תיבת הדואר (כולל ספאם).</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={sendBenefitsLink}
+                        disabled={benefitsSending}
+                        className="mt-3 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm"
+                      >
+                        {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+                        קבלת קישור להגשת בקשות למייל
+                      </button>
+                      {benefitsErr && <p className="text-xs text-red-600 mt-2">{benefitsErr}</p>}
+                    </>
+                  )}
                 </div>
               </div>
-            )}
-
-            {isDocsPending && (
-              <div className="bg-indigo-50 border border-indigo-200 rounded-2xl px-4 py-4 text-sm text-indigo-800">
-                <div className="flex items-start gap-3">
-                  <FileText size={18} className="flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold mb-1">המסמכים שלך התקבלו</p>
-                    <p className="leading-relaxed">הצוות בודק את המסמכים ויאשר את חשבונך בקרוב.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {isApproved && (
-              <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 text-sm text-green-800 flex items-center gap-2">
-                <CheckCircle2 size={16} className="flex-shrink-0" />
-                <span>חשבונך מאושר — ניתן להגיש בקשות ישירות.</span>
-              </div>
-            )}
-
-            {isRejected && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 text-sm text-red-800 flex items-center gap-2">
-                <AlertCircle size={16} className="flex-shrink-0" />
-                <span>חשבונך אינו מאושר. לבירורים פנה לצוות המערכת.</span>
-              </div>
-            )}
+            </Card>
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
