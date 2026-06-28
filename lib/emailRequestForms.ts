@@ -105,7 +105,7 @@ export function attachmentsFor(type: ReqType, ctx: Ctx): AttachmentSpec[] {
 export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): string {
   const L: string[] = []
   L.push('⚠️ שימו לב — מלאו כל פרט בדיוק. אם פרט אחד חסר או אינו תקין, הבקשה לא תיקלט.')
-  L.push('ההגשה המומלצת היא דרך הפורטל; אפשרות זו מיועדת לחסומים בלבד.')
+  L.push('ההגשה המומלצת היא דרך המערכת הדיגיטלית שלנו; אפשרות זו מיועדת לחסומים בלבד.')
   L.push('אנא השאירו את שמות השדות (לפני הנקודתיים) ללא שינוי, ומלאו רק אחרי הנקודתיים.')
   L.push('')
   L.push('━━━ פרטי הבקשה ━━━')

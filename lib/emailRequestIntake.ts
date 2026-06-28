@@ -63,7 +63,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     .maybeSingle()
   const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : ''
   if (!ben) {
-    await reject(from, '', type, [`לא נמצאה רשומה לתעודת זהות ${idNumber}. ודאו שנרשמתם, או הירשמו בפורטל`], buildDraftBody(type, idNumber, generic))
+    await reject(from, '', type, [`לא נמצאה רשומה לתעודת זהות ${idNumber}. ודאו שנרשמתם, או הירשמו במערכת הדיגיטלית שלנו`], buildDraftBody(type, idNumber, generic))
     return true
   }
   if (ben.eligibility_status === 'rejected') {
@@ -154,7 +154,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   if (insErr) {
     console.error('[emailRequestIntake] insert failed:', insErr)
-    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו בפורטל'], buildDraftBody(type, idNumber, ctx))
+    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו דרך המערכת הדיגיטלית שלנו'], buildDraftBody(type, idNumber, ctx))
     return true
   }
 
@@ -178,11 +178,17 @@ export async function buildDraftLinks(
   maritalStatus?: string | null,
 ): Promise<{ label: string; href: string }[]> {
   const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
+  const LABELS: Partial<Record<ReqType, string>> = {
+    birth: 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה',
+    silent_birth: 'להגשת בקשה להחלמה ומזון לאחר לידה שקטה',
+    loan: 'להגשת בקשת הלוואה (גמ״ח)',
+    financial_aid: 'להגשת בקשת סיוע רפואי',
+  }
   const types: ReqType[] = ['birth', 'silent_birth', 'loan', 'financial_aid']
   const links: { label: string; href: string }[] = []
   for (const t of types) {
     const ctx = await loadCtx(admin, t, pending)
-    links.push({ label: SUBJECT_PREFIX[t], href: draftMailto(t, idNumber, ctx) })
+    links.push({ label: LABELS[t] ?? SUBJECT_PREFIX[t], href: draftMailto(t, idNumber, ctx) })
   }
   if (widower) {
     const ctx = await loadCtx(admin, 'widow', pending)

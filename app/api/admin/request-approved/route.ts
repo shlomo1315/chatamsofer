@@ -105,6 +105,10 @@ export async function POST(request: NextRequest) {
       card_voucher_status: stockAvailable ? 'issued' : 'awaiting_stock',
     }).eq('id', id).then(undefined, () => {})
     if (stockAvailable && birth.card_center_id) {
+      // שריון מיידי של כרטיס: מורידים כרטיס אחד מהמלאי של המוקד כבר בעת אישור הלידה
+      // (המשפחה תבוא לאסוף אותו — הכרטיס כבר "תפוס" עבורה), ומעלים מונה ממתינים לאיסוף.
+      // החיבור בטלפון לא יוריד שוב מהמלאי כדי למנוע הורדה כפולה.
+      await admin.rpc('decrement_card_center_stock', { p_center_id: birth.card_center_id }).then(undefined, () => {})
       await admin.rpc('bump_center_pending_pickups', { p_center_id: birth.card_center_id, p_delta: 1 }).then(undefined, () => {})
     }
   }

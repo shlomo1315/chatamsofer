@@ -320,25 +320,21 @@ async function handle(req: NextRequest) {
         })
         return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
       }
-      // הצלחה — הורדת כרטיס ממלאי המוקד שנבחר בטופס + רישום איסוף + מונה ממתינים -1
+      // הצלחה — רישום איסוף בפועל + מונה ממתינים -1.
+      // הכרטיס כבר הורד מהמלאי בעת אישור הלידה (שריון מראש), לכן לא מורידים שוב כאן.
       const centerId = (result.active as { card_center_id?: string | null }).card_center_id ?? null
       let centerName = ''
-      let newStock: number | null = null
       if (centerId) {
         const { data: ctr } = await admin.from('card_centers').select('name').eq('id', centerId).maybeSingle()
         centerName = ctr?.name ?? ''
-        try {
-          const { data: s } = await admin.rpc('decrement_card_center_stock', { p_center_id: centerId })
-          newStock = typeof s === 'number' ? s : null
-        } catch (e) { console.error('[yemot-maternity] stock decrement failed', e) }
         try { await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: -1 }) } catch { /* לא חוסם */ }
       }
       await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString() }).eq('id', aidId)
       await logActivity(admin, 'yemot_card_registered', 'maternity_aid', aidId, {
         caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
-        nedarim_id: nedarimId, center: centerName, center_stock_after: newStock,
+        nedarim_id: nedarimId, center: centerName,
       })
-      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, stockAfter=${newStock}`)
+      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName} (stock reserved at approval)`)
       return yemotText([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')], callId)
     }
 

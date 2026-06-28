@@ -98,7 +98,7 @@ export function templateDocsPending(name: string): EmailPayload {
         קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
       </p>
       <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך הפורטל האישי שלך.</p>
+        <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
@@ -161,7 +161,7 @@ export function templateDocsPendingWithNotes(name: string, notes?: string): Emai
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
         קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
       </p>
-      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך הפורטל האישי שלך.</p></div>'}
+      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p></div>'}
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }

@@ -12,6 +12,12 @@ const PORTAL_BASE_DEFAULT =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
 const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
 
+// פתיח מכובד אחיד לכל המיילים: "שלום וברכה, הרב <שם> הי״ו,"
+export function greetHe(name?: string | null): string {
+  const n = (name ?? '').trim()
+  return n ? `שלום וברכה, הרב ${n} הי״ו,` : 'שלום וברכה,'
+}
+
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
 function autoReplyNote(): string {
   return `
@@ -93,8 +99,11 @@ export function shell(opts: {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>${title}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+  <style>* { font-family: 'Heebo', Arial, sans-serif !important; }</style>
 </head>
-<body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,'Segoe UI',sans-serif;direction:rtl;">
+<body style="margin:0;padding:0;background:#eef2f7;font-family:'Heebo',Arial,sans-serif;direction:rtl;">
   <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${preheader}</span>
 
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
@@ -168,13 +177,13 @@ export function benefitsLinkEmail(
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
-  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const greet = greetHe(name)
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;font-family:'Segoe UI',Arial,sans-serif;">חסומים מהפורטל? ניתן להגיש גם במייל:</p>
-        <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;font-family:'Segoe UI',Arial,sans-serif;">לחצו על סוג הבקשה — ייפתח מייל עם טופס למילוי. מלאו כל פרט בדיוק ושלחו (ההגשה המומלצת היא דרך הפורטל).</p>
-        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;font-family:'Segoe UI',Arial,sans-serif;">📝 ${l.label} »</a><br/>`).join('')}
+        <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;">להגשה גם דרך האימייל:</p>
+        <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;">רק באם אינכם מצליחים להיכנס למערכת הדיגיטלית שלנו, פיתחנו עבורכם אפשרות לשליחת טפסים גם דרך האימייל. עם זאת שימו לב! היות וגם הקליטה דרך המייל הינה במערכת אוטומטית — ייתכנו בה שיבושים, וככל שמתאפשר לכם מומלץ מאוד להגיש ישירות דרך המערכת הממוחשבת שלנו בהקשה על הלחצנים לעיל.</p>
+        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">📝 ${l.label} »</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
@@ -189,11 +198,11 @@ export function benefitsLinkEmail(
       אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
       לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
     </p>
-    ${btn(`${base}/?action=birth`, '🍼 בקשת הבראה ליולדת', '#fce7f3', '#9d174d')}
+    ${btn(`${base}/?action=birth`, '🍼 להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=loan`, '💳 בקשת הלוואה (גמ״ח)', '#e0f2fe', '#075985')}
+    ${btn(`${base}/?action=loan`, '💳 להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985')}
     <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=aid`, '🩺 בקשת סיוע רפואי', '#dcfce7', '#166534')}
+    ${btn(`${base}/?action=aid`, '🩺 להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534')}
     ${draftBlock}
     ${noReplyBox()}`
   return {
@@ -204,7 +213,7 @@ export function benefitsLinkEmail(
 
 // ─── הגשת בקשה במייל: אישור קליטה ──────────────────────────────────────────
 export function emailIntakeConfirmedEmail(name: string, typeLabel: string): BuiltEmail {
-  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const greet = greetHe(name)
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
@@ -226,7 +235,7 @@ export function emailIntakeRejectedEmail(opts: {
   name: string; typeLabel: string; errors: string[]; draftText?: string | null; portalUrl?: string
 }): BuiltEmail {
   const { name, typeLabel, errors, draftText, portalUrl = PORTAL_BASE_DEFAULT } = opts
-  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const greet = greetHe(name)
   const errorList = errors.map(e => `<li style="margin:0 0 4px;">${e}</li>`).join('')
   const draftBlock = draftText ? `
     <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">להגשה חוזרת — העתיקו את הטופס הבא למייל חדש, מלאו ושלחו (אותו נושא):</p>
@@ -242,9 +251,9 @@ export function emailIntakeRejectedEmail(opts: {
       </td></tr>
     </table>
     <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">
-      💡 <strong>מומלץ להגיש דרך הפורטל</strong> (אם אינכם חסומים) — פשוט ומהיר:
+      💡 <strong>מומלץ להגיש דרך המערכת הדיגיטלית שלנו</strong> (אם אינכם חסומים) — פשוט ומהיר:
     </p>
-    ${btn(`${portalUrl.replace(/\/$/, '')}/`, 'הגשת בקשה בפורטל', '#4f46e5')}
+    ${btn(`${portalUrl.replace(/\/$/, '')}/`, 'הגשת בקשה במערכת הדיגיטלית', '#4f46e5')}
     ${draftBlock}
     ${noReplyBox()}`
   return {
@@ -330,7 +339,7 @@ export function weeklyLoansReportEmail(
     <div style="margin:28px 0 0;">${btn(portalUrl, 'לחץ כאן לכניסה לאישור ההלוואות ←', accent)}</div>
 
     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
-      בפורטל ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
+      במערכת ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
     </p>`
 
   return {
@@ -377,7 +386,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name}, הרישום אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)} הרישום אושר 🎉</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       אנו שמחים לבשר לך כי הרישום שלך ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבל במערכת ואושר.
       מעתה ניתן להגיש בקשות לאחת מההטבות ישירות מכאן — לחצו על הכפתור המתאים:
@@ -442,7 +451,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.name},</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.name)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       תודה שפנית אלינו. ריכזנו עבורך את הפרטים הרשומים במערכת:
     </p>
@@ -466,7 +475,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
     </table>
 
     <p style="margin:0 0 18px;color:#334155;font-size:15px;font-weight:700;text-align:center;">
-      ${isApproved ? 'ניתן להגיש בקשה ישירות דרך הפורטל:' : 'לטיפול בבקשתך:'}
+      ${isApproved ? 'ניתן להגיש בקשה ישירות דרך המערכת הדיגיטלית שלנו:' : 'לטיפול בבקשתך:'}
     </p>
 
     ${btnPair(
@@ -514,24 +523,24 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
         <p style="margin:0 0 6px;color:#3730a3;font-size:14px;font-weight:800;">📋 אם עדיין לא נרשמת:</p>
         <p style="margin:0;color:#4338ca;font-size:13px;line-height:1.6;">
           ההרשמה פשוטה ומהירה — מזינים מספר תעודת זהות ומספר פרטים.<br/>
-          לאחר אישור הזכאות תוכל/י להגיש בקשות ישירות דרך הפורטל.
+          לאחר אישור הזכאות תוכל/י להגיש בקשות ישירות דרך המערכת הדיגיטלית שלנו.
         </p>
       </td></tr>
     </table>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:12px;">
       <tr><td align="center">
-        ${btn(`${base}/`, 'כניסה לפורטל', '#4f46e5')}
+        ${btn(`${base}/`, 'כניסה למערכת הדיגיטלית', '#4f46e5')}
       </td></tr>
     </table>
 
     <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      בלחיצה תגיע לפורטל — הזן/י תעודת זהות לכניסה, או מלא/י פרטים להרשמה חדשה.
+      בלחיצה תגיע/י למערכת הדיגיטלית שלנו — הזן/י תעודת זהות לכניסה, או מלא/י פרטים להרשמה חדשה.
     </p>
   `
   return {
     subject: 'קיבלנו את פנייתך — היכל החתם סופר',
-    html: shell({ preheader: 'כתובת המייל שלך לא נמצאה — כנס לפורטל לבדיקה.', accent: '#6366f1', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר', body }),
+    html: shell({ preheader: 'כתובת המייל שלך לא נמצאה — כנס/י למערכת הדיגיטלית לבדיקה.', accent: '#6366f1', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר', body }),
   }
 }
 
@@ -551,10 +560,10 @@ export function docsPendingEmail(
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">פעולה נדרשת</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.
-      ניתן להעלות אותם ישירות דרך הפורטל — מהמחשב או מהנייד.
+      ניתן להעלות אותם ישירות דרך המערכת הדיגיטלית שלנו — מהמחשב או מהנייד.
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
@@ -649,7 +658,7 @@ export function requestReceivedEmail(opts: {
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${fullName},</h2>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(fullName)}</h2>
     <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">
       <strong>${reqLabel}</strong> שלך התקבלה במערכת היכל החתם סופר ומועברת לטיפול המזכירות.
     </p>
@@ -695,7 +704,7 @@ export function registrationReceivedEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${fullName},</h2>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(fullName)}</h2>
     <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
       תודה על פנייתך! בקשתך להירשם ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבלה במערכת והועברה לטיפול המשרד.
     </p>
@@ -763,7 +772,7 @@ export function financialAidInquiryEmail(
 export function financialAidReceivedEmail(name: string): BuiltEmail {
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">
       בקשתך ל<strong>סיוע רפואי</strong> התקבלה במערכת היכל החתם סופר והועברה לטיפול המזכירות.
     </p>
@@ -779,7 +788,7 @@ export function financialAidReceivedEmail(name: string): BuiltEmail {
 export function financialAidDecisionEmail(name: string, approved: boolean, amount?: number | null): BuiltEmail {
   const body = approved ? `
     <p style="margin:0 0 8px;color:#059669;font-size:13px;font-weight:700;letter-spacing:0.5px;">בשורה משמחת</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 18px;color:#334155;font-size:15px;line-height:1.8;">
       שמחים לבשר כי בקשתך לסיוע רפואי <strong>אושרה</strong>.
     </p>
@@ -792,7 +801,7 @@ export function financialAidDecisionEmail(name: string, approved: boolean, amoun
     <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">צוות המזכירות יצור עמך קשר להמשך התהליך. בברכה, היכל החתם סופר.</p>
   ` : `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">עדכון בנוגע לבקשתך</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${name},</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">
       בקשתך לסיוע רפואי נבדקה, ולצערנו לא אושרה בשלב זה.
     </p>
@@ -840,7 +849,7 @@ export function loanApprovedEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההלוואה שלך אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.full_name)} בקשת ההלוואה שלך אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ בקשת ההלוואה שלך טופלה ואושרה.</p>
@@ -925,7 +934,7 @@ export function birthApprovedEmail(
       </td></tr>
     </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההבראה ליולדת אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.full_name)} בקשת ההבראה ליולדת אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
@@ -963,7 +972,7 @@ export function maternityCardEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${greet}, כרטיס המזון אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(greet)} כרטיס המזון אושר 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">✅ כרטיס המזון שלך אושר וזמין לאיסוף.</p>
@@ -988,7 +997,7 @@ export function maternityCardEmail(
 
 // ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
 export function cardStockReplenishedEmail(name: string, centerName?: string | null): BuiltEmail {
-  const greet = name ? `שלום ${name},` : 'שלום רב,'
+  const greet = greetHe(name)
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
