@@ -15,6 +15,9 @@ export default function CardCentersManager() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [modal, setModal] = useState<Draft | null>(null) // null=closed; id present=edit, else add
+  const [filter, setFilter] = useState<'' | 'stock' | 'approved' | 'loaded' | 'remaining'>('')
+  const [addStock, setAddStock] = useState<{ id: string; name: string; current: number } | null>(null)
+  const [addAmount, setAddAmount] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +56,27 @@ export default function CardCentersManager() {
 
   const fullAddress = (c: CardCenter) => [c.address, c.city].filter(Boolean).join(', ')
 
+  // סינון חי לפי הקובייה שנלחצה (לחיצה נוספת מבטלת)
+  const shown = centers.filter(c => {
+    if (filter === 'stock') return c.stock > 0
+    if (filter === 'approved') return (c.approved ?? 0) > 0
+    if (filter === 'loaded') return (c.loaded ?? 0) > 0
+    if (filter === 'remaining') return (c.remaining ?? 0) > 0
+    return true
+  })
+
+  // הוספת מלאי מיידית למוקד (stock = נוכחי + תוספת) — מפעיל שליחת שובר לממתינים
+  const saveAddStock = async () => {
+    if (!addStock) return
+    const add = parseInt(addAmount, 10)
+    if (!add || add <= 0) { setErr('הזן כמות חיובית'); return }
+    setBusy(true); setErr('')
+    const r = await fetch('/api/admin/card-centers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: addStock.id, stock: addStock.current + add }) })
+    const d = await r.json()
+    if (d.error) setErr(d.error); else { setCenters(d.centers ?? []); setAddStock(null) }
+    setBusy(false)
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
       <div className="flex items-center justify-between gap-2 mb-4">
@@ -66,19 +90,24 @@ export default function CardCentersManager() {
         </button>
       </div>
 
-      {/* סיכום מלאי */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-        {[
-          { label: 'סה״כ מלאי', value: totStock, cls: 'text-slate-800', bg: 'bg-slate-50 border-slate-200' },
-          { label: 'אושרו', value: totApproved, cls: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
-          { label: 'נטענו', value: totLoaded, cls: 'text-green-700', bg: 'bg-green-50 border-green-200' },
-          { label: 'נשאר', value: totRemaining, cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
-        ].map(s => (
-          <div key={s.label} className={`rounded-2xl border px-4 py-3.5 text-center ${s.bg}`}>
+      {/* סיכום מלאי — לחיצה מסננת את הטבלה בלייב (לחיצה נוספת מבטלת) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+        {([
+          { key: 'stock', label: 'סה״כ מלאי', value: totStock, cls: 'text-slate-800', bg: 'bg-slate-50 border-slate-200', ring: 'ring-slate-400' },
+          { key: 'approved', label: 'אושרו', value: totApproved, cls: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', ring: 'ring-blue-400' },
+          { key: 'loaded', label: 'נטענו', value: totLoaded, cls: 'text-green-700', bg: 'bg-green-50 border-green-200', ring: 'ring-green-400' },
+          { key: 'remaining', label: 'נשאר', value: totRemaining, cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', ring: 'ring-emerald-400' },
+        ] as const).map(s => (
+          <button key={s.key} type="button"
+            onClick={() => setFilter(f => f === s.key ? '' : s.key)}
+            className={`rounded-2xl border px-4 py-3.5 text-center transition-all ${s.bg} ${filter === s.key ? `ring-2 ${s.ring} shadow-sm` : 'hover:shadow-sm hover:brightness-95'}`}>
             <p className="text-xs text-slate-500 mb-0.5">{s.label}</p>
             <p className={`text-3xl font-extrabold ${s.cls}`}>{s.value}</p>
-          </div>
+          </button>
         ))}
+      </div>
+      <div className="h-5 mb-3">
+        {filter && <button onClick={() => setFilter('')} className="text-xs text-slate-500 hover:text-slate-800 underline">בטל סינון · הצג את כל המוקדים</button>}
       </div>
 
       {err && !modal && <p className="text-sm text-red-600 mb-3">{err}</p>}
@@ -103,7 +132,7 @@ export default function CardCentersManager() {
               </tr>
             </thead>
             <tbody>
-              {centers.map(c => {
+              {shown.map(c => {
                 const remaining = c.remaining ?? 0
                 const available = c.available ?? 0
                 return (
@@ -121,6 +150,9 @@ export default function CardCentersManager() {
                     <td className={`px-5 py-4 border-l border-slate-100 ${available > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{available}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
+                        <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock }) }}
+                          title="הוסף מלאי מיידי"
+                          className="text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg p-1.5"><Plus size={16} /></button>
                         <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
                           className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
                         <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>
@@ -182,6 +214,35 @@ export default function CardCentersManager() {
                 <button onClick={save} disabled={busy || !modal.name.trim()}
                   className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-5 py-2">
                   {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} {modal.id ? 'שמירה' : 'הוסף'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* מודאל הוספת מלאי מיידית */}
+      {addStock && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={() => setAddStock(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-900">הוספת מלאי — {addStock.name}</h3>
+              <button onClick={() => setAddStock(null)} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <p className="text-sm text-slate-600">מלאי נוכחי: <strong>{addStock.current}</strong>. כמה כרטיסים להוסיף?</p>
+              <input type="number" min="1" value={addAmount} autoFocus
+                onChange={e => setAddAmount(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveAddStock() }}
+                className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="0" />
+              {addAmount && parseInt(addAmount, 10) > 0 && (
+                <p className="text-xs text-slate-500">מלאי חדש יהיה: <strong>{addStock.current + parseInt(addAmount, 10)}</strong>. יישלח שובר אוטומטי לכל יולדת שממתינה למלאי במוקד זה.</p>
+              )}
+              {err && <p className="text-sm text-red-600">{err}</p>}
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button onClick={() => setAddStock(null)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>
+                <button onClick={saveAddStock} disabled={busy || !addAmount || parseInt(addAmount, 10) <= 0}
+                  className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold rounded-lg px-5 py-2">
+                  {busy ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} הוסף מלאי
                 </button>
               </div>
             </div>
