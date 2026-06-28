@@ -808,8 +808,10 @@ export type FoodCardCenter = { name: string; city?: string | null; address?: str
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
-  centers: FoodCardCenter[] = [],
+  opts: { center?: FoodCardCenter | null; stockAvailable?: boolean; serial?: string | null } = {},
 ): BuiltEmail {
+  const center = opts.center ?? null
+  const stockAvailable = !!opts.stockAvailable
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
   const genderLabel = birth.baby_gender === 'male' ? 'בן' : birth.baby_gender === 'female' ? 'בת' : ''
   const nameLabel = birth.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'
@@ -828,32 +830,39 @@ export function birthApprovedEmail(
     detailRow('עיר', b.city),
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
   ].join('')
-  // רשימת המוקדים לאיסוף כרטיס המזון — נשלפת אוטומטית מהמערכת
-  const centerRows = centers
-    .map((c) => {
-      const place = [c.city, c.address].filter(Boolean).join(', ')
-      return `<tr>
-        <td style="padding:10px 16px;border-bottom:1px solid #fde68a;color:#92400e;font-size:14px;font-weight:800;">${c.name}</td>
-        <td style="padding:10px 16px;border-bottom:1px solid #fde68a;color:#b45309;font-size:13px;text-align:left;">${place || '—'}</td>
-      </tr>`
-    })
-    .join('')
-  const foodCardBlock = `
+  // בלוק כרטיס המזון — לפי המוקד שנבחר ולפי זמינות המלאי בו
+  const centerPlace = center ? [center.city, center.address].filter(Boolean).join(', ') : ''
+  const foodCardBlock = stockAvailable
+    ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">🍞 כרטיס מזון על סך 600 ₪</p>
         <p style="margin:0;color:#92400e;font-size:14px;line-height:1.7;">
-          כיולדת אתם זכאים לכרטיס מזון על סך <strong>600 ₪</strong>. לאיסוף הכרטיס עליכם לפנות לאחד המוקדים הבאים:
+          מצורף שובר לאיסוף כרטיס המזון. יש להדפיס את השובר ולהביאו ל<strong>מוקד שבחרתם</strong>:
         </p>
-        ${centers.length
-          ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">
-              <tr><td style="padding:8px 16px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:800;">שם המוקד</td><td style="padding:8px 16px;background:#fef3c7;color:#92400e;font-size:12px;font-weight:800;text-align:left;">כתובת</td></tr>
-              ${centerRows}
-            </table>`
-          : `<p style="margin:10px 0 0;color:#92400e;font-size:13px;">רשימת המוקדים תימסר לכם בהמשך.</p>`}
+        ${center ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">
+          <tr><td style="padding:10px 16px;color:#92400e;font-size:15px;font-weight:800;">${center.name}</td>
+              <td style="padding:10px 16px;color:#b45309;font-size:13px;text-align:left;">${centerPlace || '—'}</td></tr>
+        </table>` : ''}
+      </td></tr>
+    </table>`
+    : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">🍞 כרטיס מזון על סך 600 ₪ — ממתין למלאי</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.7;">
+          שימו לב: במוקד שבחרתם${center ? ` (<strong>${center.name}</strong>)` : ''} אין כרגע כרטיסים זמינים.
+          ברגע שהמלאי יתחדש נשלח אליכם עדכון במייל עם שובר הכרטיס לאיסוף. (שובר ההבראה לבית ההחלמה מצורף כבר עכשיו.)
+        </p>
       </td></tr>
     </table>`
   const body = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
+        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">📎 מצורפים למייל זה שוברים למימוש ההטבה!</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">הדפיסו את השוברים והביאו אותם לבית החלמה ו/או למוקדים לצורך מימוש ההטבה.</p>
+      </td></tr>
+    </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום ${b.full_name ?? ''}, בקשת ההבראה ליולדת אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">

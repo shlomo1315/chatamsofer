@@ -22,11 +22,15 @@ const SUB = rgb(0.353, 0.4, 0.467)
 const RED = rgb(0.7, 0.106, 0.106)
 const CREAM = rgb(0.996, 0.992, 0.973)
 
+// תאריך לועזי בפורמט DD/MM/YYYY (בנייה ידנית — toLocaleDateString גרם להיפוך/בלבול).
 function fmtDate(d?: string | null): string {
   if (!d) return '—'
   const dt = new Date(d)
   if (isNaN(dt.getTime())) return String(d)
-  return dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dd = String(dt.getDate()).padStart(2, '0')
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const yyyy = dt.getFullYear()
+  return `${dd}/${mm}/${yyyy}`
 }
 
 // המרת מספר לגימטריה עברית (1–999)
@@ -60,7 +64,7 @@ function hebrewDate(d: Date): string {
 // שורת "הונפק בתאריך" — תאריך עברי תחילה ולועזי בסוף (המספר בסוף השורה מוצג תקין)
 function issueDateLine(): string {
   const now = new Date()
-  const greg = now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const greg = fmtDate(now.toISOString())
   const he = hebrewDate(now)
   return he ? `הונפק בתאריך ${he}  ·  ${greg}` : `הונפק בתאריך ${greg}`
 }
@@ -206,7 +210,14 @@ type VoucherInput = {
   spousePhone?: string | null
   birthDate?: string | null
   recoveryHome?: string | null
+  serial?: string | null
   centers?: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
+}
+
+// שורת מספר סידורי לשובר (פינה שמאלית עליונה)
+function serialLine(c: Ctx, serial: string | null | undefined, y: number) {
+  if (!serial) return
+  rightText(c, `מס׳ שובר: ${serial}`, MX + 150, y, 9, SUB)
 }
 
 async function renderFoodCard(input: VoucherInput): Promise<string> {
@@ -220,8 +231,9 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
-  // תאריך
+  // תאריך + מספר סידורי
   rightText(c, issueDateLine(), W - MX, y, 10, SUB)
+  serialLine(c, input.serial, y)
   y -= 24
 
   // כותרת ראשית
@@ -297,6 +309,7 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
   rightText(c, issueDateLine(), W - MX, y, 10, SUB)
+  serialLine(c, input.serial, y)
   y -= 24
 
   centerText(c, 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
@@ -333,10 +346,24 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
 
 export type { VoucherInput }
 
-export async function buildMaternityVouchers(input: VoucherInput): Promise<MailAttachment[]> {
-  const [recovery, card] = await Promise.all([renderRecovery(input), renderFoodCard(input)])
-  return [
+export async function buildMaternityVouchers(
+  input: VoucherInput,
+  opts: { includeCard?: boolean } = {},
+): Promise<MailAttachment[]> {
+  const includeCard = opts.includeCard !== false // ברירת מחדל: כולל את שובר הכרטיס
+  const recovery = await renderRecovery(input)
+  const out: MailAttachment[] = [
     { filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recovery },
-    { filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card },
   ]
+  if (includeCard) {
+    const card = await renderFoodCard(input)
+    out.push({ filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card })
+  }
+  return out
+}
+
+// בונה רק את שובר הכרטיס (לשליחה כשהמלאי מתחדש)
+export async function buildCardVoucherOnly(input: VoucherInput): Promise<MailAttachment[]> {
+  const card = await renderFoodCard(input)
+  return [{ filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card }]
 }

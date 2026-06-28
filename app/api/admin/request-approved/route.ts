@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { randomUUID } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
     ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
-    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, beneficiary:beneficiaries(${benSelect})`
+    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, card_center_id, voucher_serial, beneficiary:beneficiaries(${benSelect})`
 
   const { data: req, error } = await admin.from(table).select(reqSelect).eq('id', id).maybeSingle()
   if (error || !req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
@@ -46,45 +47,58 @@ export async function POST(request: NextRequest) {
   const ben = (req as unknown as Record<string, unknown>).beneficiary as (RequestApprovedBeneficiary & { id?: string; email?: string | null; eligibility_status?: string }) | null
   if (!ben?.id) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
 
+  // ── אישור לידה: איתור המוקד שנבחר + בדיקת מלאי + מספר סידורי ──
+  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; card_center_id?: string | null; voucher_serial?: string | null }
+  let center: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null } | null = null
+  let stockAvailable = false
+  let serial = birth.voucher_serial ?? null
+  if (type === 'maternity') {
+    if (birth.card_center_id) {
+      const { data: ctr } = await admin
+        .from('card_centers')
+        .select('id, name, city, address, pickup_days, pickup_hours, stock')
+        .eq('id', birth.card_center_id)
+        .maybeSingle()
+      if (ctr) {
+        center = { name: ctr.name, city: ctr.city, address: ctr.address, pickup_days: ctr.pickup_days, pickup_hours: ctr.pickup_hours }
+        stockAvailable = (ctr.stock ?? 0) > 0
+      }
+    }
+    if (!serial) serial = `MV-${new Date().getFullYear()}-${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`
+  }
+
   // 1. מייל אישור הבקשה (לא חוסם)
   if (ben.email) {
-    // אישור לידה → שולפים את רשימת המוקדים הפעילים לאיסוף כרטיס המזון (600 ₪)
-    let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
-    if (type === 'maternity') {
-      const { data: centerRows } = await admin
-        .from('card_centers')
-        .select('name, city, address, pickup_days, pickup_hours')
-        .eq('is_active', true)
-        .order('name')
-      centers = centerRows ?? []
-    }
     const mail = type === 'loan'
       ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-      : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, centers)
+      : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial })
 
-    // אישור לידה (רגילה, לא שקטה) → צירוף שני שוברי PDF מעוצבים: הבראה בבית החלמה + כרטיס מזון
+    // אישור לידה (רגילה, לא שקטה) → שובר הבראה תמיד; שובר כרטיס רק אם יש מלאי במוקד שנבחר
     let attachments: MailAttachment[] | undefined
-    if (type === 'maternity') {
-      const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string }
-      if ((birth.birth_type ?? 'live') !== 'silent') {
-        try {
-          const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
-          const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
-          attachments = await buildMaternityVouchers({
-            motherName,
-            motherId: b.id_number,
-            address: b.address,
-            city: b.city,
-            phone: b.phone,
-            birthDate: birth.birth_date,
-            recoveryHome: birth.recovery_home,
-            centers,
-          })
-        } catch (e) { console.error('[request-approved] voucher build failed:', e) }
-      }
+    if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
+      try {
+        const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
+        const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
+        attachments = await buildMaternityVouchers({
+          motherName, motherId: b.id_number, address: b.address, city: b.city, phone: b.phone,
+          birthDate: birth.birth_date, recoveryHome: birth.recovery_home, serial,
+          centers: center ? [center] : [],
+        }, { includeCard: stockAvailable })
+      } catch (e) { console.error('[request-approved] voucher build failed:', e) }
     }
 
     deliverMail(ben.email, mail.subject, mail.html, attachments, mailFor(type === 'loan' ? 'gemach' : 'maternity')).catch(e => console.error('[request-approved] mail failed:', e))
+  }
+
+  // ── עדכון הלידה: מספר סידורי + סטטוס שובר; אם יש מלאי — מונה "ממתינים לאיסוף" +1 ──
+  if (type === 'maternity') {
+    await admin.from('maternity_aids').update({
+      voucher_serial: serial,
+      card_voucher_status: stockAvailable ? 'issued' : 'awaiting_stock',
+    }).eq('id', id).then(undefined, () => {})
+    if (stockAvailable && birth.card_center_id) {
+      await admin.rpc('bump_center_pending_pickups', { p_center_id: birth.card_center_id, p_delta: 1 }).then(undefined, () => {})
+    }
   }
 
   // 2. הפיכה אוטומטית ל"מאושר" אם טרם אושר — ללא מייל נפרד
