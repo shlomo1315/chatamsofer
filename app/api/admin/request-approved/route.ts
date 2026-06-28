@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { randomUUID } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
@@ -64,7 +63,16 @@ export async function POST(request: NextRequest) {
         stockAvailable = (ctr.stock ?? 0) > 0
       }
     }
-    if (!serial) serial = `MV-${new Date().getFullYear()}-${randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`
+    // מספר סידורי: תאריך הלידה DDMMYYYY + נקודה + 4 ספרות אחרונות של ת.ז היולדת
+    // (למשל 22062026.4488)
+    if (!serial) {
+      const bd = birth.birth_date ? new Date(birth.birth_date) : null
+      const ds = bd && !isNaN(bd.getTime())
+        ? `${String(bd.getDate()).padStart(2, '0')}${String(bd.getMonth() + 1).padStart(2, '0')}${bd.getFullYear()}`
+        : '00000000'
+      const idLast4 = String((ben as { id_number?: string | null }).id_number ?? '').replace(/\D/g, '').slice(-4).padStart(4, '0')
+      serial = `${ds}.${idLast4}`
+    }
   }
 
   // 1. מייל אישור הבקשה (לא חוסם)

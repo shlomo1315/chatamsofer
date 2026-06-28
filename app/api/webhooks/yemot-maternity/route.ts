@@ -120,27 +120,8 @@ function yemotText(commands: string[], callId?: string) {
 }
 
 // ── מוקדים ──────────────────────────────────────────────────────────────────
-type CenterRow = { id: string; name: string; code: number; stock: number }
-
-async function activeCentersWithCode(admin: ReturnType<typeof adminClient>): Promise<CenterRow[]> {
-  const { data } = await admin
-    .from('card_centers')
-    .select('id, name, code, stock')
-    .eq('is_active', true)
-    .not('code', 'is', null)
-    .order('code', { ascending: true })
-  return (data ?? []) as CenterRow[]
-}
-
-// פקודת ה-read לבחירת מוקד: הקראת רשימת המוקדים + הגבלת ההקשות לקודים הקיימים
-function centerReadCommand(M: MaternityMessages, centers: CenterRow[]): string {
-  const prompts = [
-    tokenOf(M.center_intro),
-    ...centers.map((c) => tokenOf(M.center_item, { name: c.name, code: String(c.code) })),
-  ]
-  const maxLen = Math.max(1, ...centers.map((c) => String(c.code).length))
-  return readTap('collect_center', prompts, { max: maxLen, allowed: centers.map((c) => c.code) })
-}
+// בחירת המוקד עברה לטופס הלידה בפורטל (card_center_id), לכן אין יותר הקשת מוקד
+// בשיחה. הכרטיס מחובר למוקד שנבחר מראש, והמלאי יורד בעת שיוך הכרטיס בטלפון.
 
 // פקודת ה-read למספר הכרטיס (msgKey = welcome / welcome_card_exists / invalid_card להקדמה)
 function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixKey?: keyof MaternityMessages): string {
@@ -211,7 +192,7 @@ async function findActiveAid(callerPhone: string) {
 
   const { data: allAids, error: aidErr } = await admin
     .from('maternity_aids')
-    .select('id, birth_date, six_weeks_end, card_number, status')
+    .select('id, birth_date, six_weeks_end, card_number, status, card_center_id')
     .eq('beneficiary_id', family.id)
     .order('birth_date', { ascending: false })
     .limit(20)
@@ -249,7 +230,6 @@ async function handle(req: NextRequest) {
 
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
-  const centerVal = String(params['collect_center'] ?? '').trim()
   // הכרטיס שהוקלד באחרון מבין משתני הניסיון (לתצוגה בלוג בלבד)
   const enteredCard = CARD_VARS.map((v) => String(params[v] ?? '').trim()).filter(Boolean).pop() ?? ''
 
@@ -266,7 +246,7 @@ async function handle(req: NextRequest) {
   }
 
   // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)
-  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${enteredCard ? '****' + enteredCard.slice(-4) : ''} center=${centerVal}`)
+  console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${enteredCard ? '****' + enteredCard.slice(-4) : ''}`)
 
   const M = await getCachedMessages()
 
@@ -276,90 +256,6 @@ async function handle(req: NextRequest) {
 
   const callerPhone = normalizePhone(apiPhone)
   const admin = adminClient()
-
-  // ── שלב 3: בחירת מוקד → חיבור הכרטיס בנדרים → הורדת מלאי → תוצאה ────────
-  if (centerVal) {
-    const centers = await activeCentersWithCode(admin)
-    const center = centers.find((c) => String(c.code) === centerVal)
-    if (!center) {
-      return yemotText([idMessage(tokenOf(M.invalid_center)), centerReadCommand(M, centers)], callId)
-    }
-
-    const result = await findActiveAid(callerPhone)
-    if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active || !result.family) {
-      console.error('[yemot-maternity] re-lookup failed at center step', result)
-      return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
-    }
-    // הגנה: לידה שאינה מאושרת לא יכולה להטעין כרטיס
-    if (result.active.status !== 'active') {
-      return yemotText([idMessage(tokenOf(M.pending_approval)), goToFolder('hangup')], callId)
-    }
-    const { active, family, familyName } = result
-    const cardNumber = String(active.card_number ?? '').trim()
-    const nedarimId = family.nedarim_id ? String(family.nedarim_id) : null
-
-    if (!cardNumber) {
-      return yemotText([idMessage(tokenOf(M.no_card_found)), goToFolder('hangup')], callId)
-    }
-
-    if (!nedarimId) {
-      console.log(`[yemot-maternity] family ${family.id} has no nedarim_id`)
-      await logActivity(admin, 'yemot_error', 'maternity_aid', active.id, {
-        caller: callerPhone, callId, beneficiary_id: family.id, family_name: familyName,
-        error: 'אין nedarim_id למשפחה', center: center.name, center_code: center.code,
-      })
-      return yemotText([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')], callId)
-    }
-
-    const creds = await getNedarimCreds()
-    if (!creds) {
-      console.error('[yemot-maternity] nedarim not configured')
-      return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
-    }
-
-    let linkOk = false
-    let linkMsg = ''
-    try {
-      // timeout קצר — ימות מוותרת על התגובה הרבה לפני 25ש'. עדיף להחזיר "נסי שוב"
-      // ברור מאשר להשאיר את המתקשר תקוע עד שימות מנתקת.
-      const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 10_000 })
-      linkOk = r.ok
-      linkMsg = r.message
-    } catch (e) {
-      linkMsg = e instanceof Error ? e.message : String(e)
-    }
-
-    if (!linkOk) {
-      console.error(`[yemot-maternity] setMagneticCard failed: ${linkMsg}`)
-      await logActivity(admin, 'yemot_error', 'maternity_aid', active.id, {
-        caller: callerPhone, callId, beneficiary_id: family.id, family_name: familyName,
-        error: linkMsg, center: center.name, center_code: center.code, card_number_last4: cardNumber.slice(-4),
-      })
-      return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
-    }
-
-    // הצלחה — הורדת כרטיס ממלאי המוקד (אטומי דרך RPC)
-    let newStock: number | null = null
-    try {
-      const { data: stockData } = await admin.rpc('decrement_card_center_stock', { p_center_id: center.id })
-      newStock = typeof stockData === 'number' ? stockData : null
-      if (newStock === null) console.warn(`[yemot-maternity] center "${center.name}" out of stock`)
-    } catch (e) {
-      console.error('[yemot-maternity] stock decrement failed', e)
-    }
-
-    await logActivity(admin, 'yemot_card_registered', 'maternity_aid', active.id, {
-      caller: callerPhone, callId, beneficiary_id: family.id, family_name: familyName,
-      card_number_last4: cardNumber.slice(-4), nedarim_id: nedarimId,
-      center: center.name, center_code: center.code, center_stock_after: newStock,
-    })
-
-    console.log(`[yemot-maternity] card linked, aid ${active.id} (${familyName}), center=${center.name}, stockAfter=${newStock}`)
-    return yemotText([
-      idMessage(tokenOf(M.link_success, { center: center.name })),
-      goToFolder('hangup'),
-    ], callId)
-  }
 
   // ── שלב הכרטיס + אישור (משתנה חדש לכל ניסיון — מונע לולאת re-read) ────────
   // מאתרים את ניסיון ההקלדה האחרון (המשתנה האחרון מבין CARD_VARS שיש בו ערך).
@@ -395,15 +291,55 @@ async function handle(req: NextRequest) {
       return yemotText([confirmReadCommand(M, aCard, CONFIRM_VARS[attempt])], callId)
     }
 
-    // אישרה (1) → בחירת מוקד
+    // אישרה (1) → חיבור הכרטיס בנדרים + הורדת מלאי מהמוקד שנבחר בטופס הלידה
     if (aConfirm === '1') {
-      const centers = await activeCentersWithCode(admin)
-      if (!centers.length) {
-        console.log('[yemot-maternity] no centers with code — finishing after card confirm')
-        return yemotText([idMessage(tokenOf(M.card_saved_no_center)), goToFolder('hangup')], callId)
+      const family = result.family
+      const familyName = result.familyName ?? ''
+      const cardNumber = aCard
+      const nedarimId = family?.nedarim_id ? String(family.nedarim_id) : null
+      if (!nedarimId) {
+        await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
+          caller: callerPhone, callId, family_name: familyName, error: 'אין nedarim_id למשפחה',
+        })
+        return yemotText([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')], callId)
       }
-      console.log(`[yemot-maternity] card confirmed for aid ${aidId}, prompting center (${centers.length})`)
-      return yemotText([centerReadCommand(M, centers)], callId)
+      const creds = await getNedarimCreds()
+      if (!creds) {
+        console.error('[yemot-maternity] nedarim not configured')
+        return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
+      }
+      let linkOk = false, linkMsg = ''
+      try {
+        const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 10_000 })
+        linkOk = r.ok; linkMsg = r.message
+      } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
+      if (!linkOk) {
+        console.error(`[yemot-maternity] setMagneticCard failed: ${linkMsg}`)
+        await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
+          caller: callerPhone, callId, family_name: familyName, error: linkMsg, card_number_last4: cardNumber.slice(-4),
+        })
+        return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
+      }
+      // הצלחה — הורדת כרטיס ממלאי המוקד שנבחר בטופס + רישום איסוף + מונה ממתינים -1
+      const centerId = (result.active as { card_center_id?: string | null }).card_center_id ?? null
+      let centerName = ''
+      let newStock: number | null = null
+      if (centerId) {
+        const { data: ctr } = await admin.from('card_centers').select('name').eq('id', centerId).maybeSingle()
+        centerName = ctr?.name ?? ''
+        try {
+          const { data: s } = await admin.rpc('decrement_card_center_stock', { p_center_id: centerId })
+          newStock = typeof s === 'number' ? s : null
+        } catch (e) { console.error('[yemot-maternity] stock decrement failed', e) }
+        try { await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: -1 }) } catch { /* לא חוסם */ }
+      }
+      await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString() }).eq('id', aidId)
+      await logActivity(admin, 'yemot_card_registered', 'maternity_aid', aidId, {
+        caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
+        nedarim_id: nedarimId, center: centerName, center_stock_after: newStock,
+      })
+      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, stockAfter=${newStock}`)
+      return yemotText([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')], callId)
     }
 
     // תיקון (2) → מבקשים מספר חדש במשתנה הבא (כדי לא לקרוא מחדש משתנה מלא = לולאה)
