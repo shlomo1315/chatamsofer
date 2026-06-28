@@ -61,12 +61,13 @@ function hebrewDate(d: Date): string {
     return `${dayG} ${month} ${yearG}`
   } catch { return '' }
 }
-// שורת "הונפק בתאריך" — תאריך עברי תחילה ולועזי בסוף (המספר בסוף השורה מוצג תקין)
-function issueDateLine(): string {
+// חלקי שורת "הונפק בתאריך": טקסט עברי (ימני) + תאריך לועזי כמספר עצמאי (משמאלו).
+// המספר מצויר בנפרד כדי שיוצג תקין (כמו ערכי שדות בתיבת הפרטים), ולא הפוך.
+function issueDateParts(): { prefix: string; greg: string } {
   const now = new Date()
   const greg = fmtDate(now.toISOString())
   const he = hebrewDate(now)
-  return he ? `הונפק בתאריך ${he}  ·  ${greg}` : `הונפק בתאריך ${greg}`
+  return { prefix: he ? `הונפק בתאריך ${he}  ·  ` : 'הונפק בתאריך ', greg }
 }
 
 // לוגו (best-effort — אם לא נמצא, מדלגים)
@@ -214,10 +215,23 @@ type VoucherInput = {
   centers?: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
 }
 
-// שורת מספר סידורי לשובר (פינה שמאלית עליונה)
+// שורת מספר סידורי לשובר (פינה שמאלית עליונה).
+// התווית (עברית) והמספר מצוירים בנפרד — המספר עומד בפני עצמו ולכן מוצג תקין (DDMMYYYY.XXXX),
+// ולא הפוך כפי שקרה כשהוא היה משובץ בתוך מחרוזת עברית.
 function serialLine(c: Ctx, serial: string | null | undefined, y: number) {
   if (!serial) return
-  rightText(c, `מס׳ שובר: ${serial}`, MX + 150, y, 9, SUB)
+  const label = 'מס׳ שובר: '
+  rightText(c, label, MX + 150, y, 9, SUB)
+  const lW = tw(c, label, 9)
+  rightText(c, serial, MX + 150 - lW, y, 9, SUB)
+}
+
+// שורת "הונפק בתאריך": חלק עברי מימין + תאריך לועזי כמספר עצמאי משמאלו (מוצג תקין).
+function drawIssueDate(c: Ctx, y: number) {
+  const { prefix, greg } = issueDateParts()
+  rightText(c, prefix, W - MX, y, 10, SUB)
+  const pW = tw(c, prefix, 10)
+  rightText(c, greg, W - MX - pW, y, 10, SUB)
 }
 
 async function renderFoodCard(input: VoucherInput): Promise<string> {
@@ -232,7 +246,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
   // תאריך + מספר סידורי
-  rightText(c, issueDateLine(), W - MX, y, 10, SUB)
+  drawIssueDate(c, y)
   serialLine(c, input.serial, y)
   y -= 24
 
@@ -308,7 +322,7 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
 
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
-  rightText(c, issueDateLine(), W - MX, y, 10, SUB)
+  drawIssueDate(c, y)
   serialLine(c, input.serial, y)
   y -= 24
 
