@@ -1341,7 +1341,10 @@ export default function PublicPortalPage() {
         }
       } catch { /* network error — continue */ }
     }
-    if (showSpouseFields && regForm.spouse_phone) {
+    if (showSpouseFields) {
+      if (!regForm.spouse_phone || !regForm.spouse_phone.trim()) {
+        setSpousePhoneError('אנא הזן מספר טלפון של האשה'); setError('אנא תקן את שגיאות הטופס'); return
+      }
       if (!validatePhone(regForm.spouse_phone)) {
         setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
       }
@@ -2439,87 +2442,6 @@ export default function PublicPortalPage() {
                   </div>
                 </div>
 
-                {/* Spouse — only if married */}
-                {showSpouseFields && (
-                  <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
-                    <p className="col-span-2 text-sm font-semibold text-slate-700">
-                      פרטי האשה
-                    </p>
-                    <div className="col-span-2 sm:col-span-1">
-                      <Field label="שם פרטי" required>
-                        <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" required />
-                      </Field>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <div className="flex rounded-xl border border-slate-200 overflow-hidden mb-2">
-                        {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
-                          <button key={v} type="button"
-                            onClick={() => { setSpouseDocType(v); setReg('spouse_id_number')({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>); setSpouseIdError('') }}
-                            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${spouseDocType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
-                          >{l}</button>
-                        ))}
-                      </div>
-                      <Field label={spouseDocType === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
-                        <TextInput
-                          value={regForm.spouse_id_number}
-                          onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
-                          onBlur={async () => {
-                            const sid = regForm.spouse_id_number.trim()
-                            if (!sid) { setSpouseIdError(''); return }
-                            if (spouseDocType === 'id' && !validateIsraeliId(sid)) {
-                              setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); return
-                            }
-                            const cleanSid = spouseDocType === 'passport' ? sid : sid.replace(/\D/g, '')
-                            if (cleanSid === (regDocType === 'passport' ? regForm.id_number.trim() : regForm.id_number.replace(/\D/g, ''))) {
-                              setSpouseIdError('המספר שהזנת זהה לזה של הבעל'); return
-                            }
-                            // בדיקה מול המערכת
-                            try {
-                              const param = spouseDocType === 'passport' ? `passport=${encodeURIComponent(cleanSid)}` : `id=${cleanSid}`
-                              const res = await fetch(`/api/portal/lookup?${param}`)
-                              const d = await res.json()
-                              if (d.found) { setSpouseIdError('מספר זה כבר קיים במערכת — לא ניתן לרשום אותו שוב'); return }
-                            } catch { /* network error — ignore on blur */ }
-                            setSpouseIdError('')
-                          }}
-                          placeholder={spouseDocType === 'passport' ? 'AA000000' : '000000000'}
-                          inputMode={spouseDocType === 'passport' ? 'text' : 'numeric'}
-                          maxLength={spouseDocType === 'passport' ? 20 : 9}
-                          dir="ltr" required
-                          className={spouseIdError ? 'border-red-400 focus:ring-red-400' : ''}
-                        />
-                        {spouseIdError && <p className="text-xs text-red-600 mt-1">{spouseIdError}</p>}
-                      </Field>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <Field label="טלפון האשה">
-                        <TextInput type="tel"
-                          value={regForm.spouse_phone}
-                          onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
-                          onBlur={() => {
-                            const sp = regForm.spouse_phone.trim()
-                            if (!sp) { setSpousePhoneError(''); return }
-                            if (!validatePhone(sp)) {
-                              setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05')
-                            } else if (regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) {
-                              setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
-                            } else {
-                              setSpousePhoneError('')
-                            }
-                          }}
-                          placeholder="0500000000" dir="ltr" maxLength={11}
-                          className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
-                        />
-                        {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
-                      </Field>
-                    </div>
-                    <div className="col-span-2 sm:col-span-1">
-                      <Field label="תאריך לידה של האשה" required>
-                        <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
-                      </Field>
-                    </div>
-                  </div>
-                )}
               </Card>
             )}
 
@@ -2539,7 +2461,16 @@ export default function PublicPortalPage() {
                     <Field label="טלפון ראשי" required hint="מספר נייד ישראלי המתחיל ב-05">
                       <TextInput type="tel" value={regForm.phone}
                         onChange={e => { setReg('phone')(e); setPhoneError('') }}
-                        onBlur={() => { if (regForm.phone && !validatePhone(regForm.phone)) setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); else setPhoneError('') }}
+                        onBlur={() => {
+                          if (regForm.phone && !validatePhone(regForm.phone)) { setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); return }
+                          setPhoneError('')
+                          // התרעה מיידית על טלפון זהה בין הבעל לאשה
+                          if (regForm.phone && regForm.spouse_phone && regForm.phone.replace(/\D/g, '') === regForm.spouse_phone.replace(/\D/g, '')) {
+                            setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
+                          } else if (spousePhoneError === 'מספר הטלפון של האישה זהה למספר הטלפון של הבעל') {
+                            setSpousePhoneError('')
+                          }
+                        }}
                         placeholder="0500000000" dir="ltr" maxLength={11} required
                         className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
@@ -2554,6 +2485,96 @@ export default function PublicPortalPage() {
                   <div className="col-span-2">
                     <Field label="דואר אלקטרוני" required>
                       <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
+                    </Field>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Spouse — own card, after contact details, only if married */}
+            {regForm.marital_status && showSpouseFields && (
+              <Card>
+                <div className="flex items-center gap-2 mb-4">
+                  <User size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">פרטי האשה</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* סוג מסמך זיהוי — שורה נפרדת מלאה כדי שכל השדות יישארו מיושרים */}
+                  <div className="col-span-2">
+                    <Field label="סוג מסמך זיהוי של האשה" required>
+                      <div className="flex rounded-xl border border-slate-200 overflow-hidden w-full sm:max-w-xs">
+                        {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                          <button key={v} type="button"
+                            onClick={() => { setSpouseDocType(v); setReg('spouse_id_number')({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>); setSpouseIdError('') }}
+                            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${spouseDocType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                          >{l}</button>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="שם פרטי" required>
+                      <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" required />
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label={spouseDocType === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
+                      <TextInput
+                        value={regForm.spouse_id_number}
+                        onChange={e => { setReg('spouse_id_number')(e); setSpouseIdError('') }}
+                        onBlur={async () => {
+                          const sid = regForm.spouse_id_number.trim()
+                          if (!sid) { setSpouseIdError(''); return }
+                          if (spouseDocType === 'id' && !validateIsraeliId(sid)) {
+                            setSpouseIdError('תעודת הזהות שהזנתם אינה תקינה'); return
+                          }
+                          const cleanSid = spouseDocType === 'passport' ? sid : sid.replace(/\D/g, '')
+                          if (cleanSid === (regDocType === 'passport' ? regForm.id_number.trim() : regForm.id_number.replace(/\D/g, ''))) {
+                            setSpouseIdError('המספר שהזנת זהה לזה של הבעל'); return
+                          }
+                          // בדיקה מול המערכת
+                          try {
+                            const param = spouseDocType === 'passport' ? `passport=${encodeURIComponent(cleanSid)}` : `id=${cleanSid}`
+                            const res = await fetch(`/api/portal/lookup?${param}`)
+                            const d = await res.json()
+                            if (d.found) { setSpouseIdError('מספר זה כבר קיים במערכת — לא ניתן לרשום אותו שוב'); return }
+                          } catch { /* network error — ignore on blur */ }
+                          setSpouseIdError('')
+                        }}
+                        placeholder={spouseDocType === 'passport' ? 'AA000000' : '000000000'}
+                        inputMode={spouseDocType === 'passport' ? 'text' : 'numeric'}
+                        maxLength={spouseDocType === 'passport' ? 20 : 9}
+                        dir="ltr" required
+                        className={spouseIdError ? 'border-red-400 focus:ring-red-400' : ''}
+                      />
+                      {spouseIdError && <p className="text-xs text-red-600 mt-1">{spouseIdError}</p>}
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="טלפון האשה" required hint="מספר נייד ישראלי המתחיל ב-05">
+                      <TextInput type="tel"
+                        value={regForm.spouse_phone}
+                        onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
+                        onBlur={() => {
+                          const sp = regForm.spouse_phone.trim()
+                          if (!sp) { setSpousePhoneError('אנא הזן מספר טלפון של האשה'); return }
+                          if (!validatePhone(sp)) {
+                            setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05')
+                          } else if (regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) {
+                            setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
+                          } else {
+                            setSpousePhoneError('')
+                          }
+                        }}
+                        placeholder="0500000000" dir="ltr" maxLength={11} required
+                        className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
+                      />
+                      {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
+                    </Field>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label="תאריך לידה של האשה" required>
+                      <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
                     </Field>
                   </div>
                 </div>
