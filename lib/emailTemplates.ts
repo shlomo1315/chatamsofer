@@ -440,8 +440,10 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
       <tr><td style="background:#fefce8;border-right:4px solid #eab308;border-radius:0 12px 12px 0;padding:18px 20px;">
         <p style="margin:0 0 8px;color:#854d0e;font-size:14px;font-weight:800;">💡 אם אתה/את כבר רשום/ה אצלנו:</p>
         <p style="margin:0;color:#713f12;font-size:13px;line-height:1.7;">
-          ייתכן שכתובת המייל שלך במערכת שונה מהכתובת שממנה שלחת הודעה זו.<br/>
-          ניתן להיכנס לפורטל ולהזין את מספר תעודת הזהות — אם אתה/את רשום/ה, הכניסה תצליח מיד.
+          ניתן לכתוב לנו ב<strong>מייל חדש</strong> לכתובת
+          <a href="mailto:igud@chasamsofer.info" style="color:#854d0e;font-weight:700;text-decoration:none;">igud@chasamsofer.info</a>,
+          וב<strong>שורת הנושא</strong> לכתוב את <strong>מספר תעודת הזהות שלך במלואו (כולל ספרת ביקורת)</strong> —
+          והמערכת תשלח אליך אוטומטית מייל עם הפרטים שלך וקישורים להגשת בקשות.
         </p>
       </td></tr>
     </table>

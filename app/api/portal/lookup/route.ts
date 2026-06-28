@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
-import { maskEmail } from '@/lib/portalPassword'
+import { maskEmail } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
 

@@ -2084,6 +2084,11 @@ export default function PublicPortalPage() {
                         <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>,
                         או קבלו כעת קישור ישירות למייל שלכם:
                       </p>
+                      {authEmailHint && (
+                        <p className="text-xs text-slate-500 mt-2">
+                          המייל יישלח לכתובת הרשומה על שמכם: <span className="font-semibold text-slate-700" dir="ltr">{authEmailHint}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 
