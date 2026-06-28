@@ -202,9 +202,10 @@ export async function POST(request: NextRequest) {
   // שיחה טלפונית יוצאת (לא-חוסמת): הקראת אישור קליטת הרישום למספר של הנרשם.
   // אם ימות אינו מוגדר — placeAnnouncementCall מחזיר notConfigured ולא מבצע שיחה.
   if (phone) {
+    // הכתובת מוקראת בעברית מדוברת (שטרודל / נקודה) כדי שמנוע ההקראה יבטא אותה ברור
     placeAnnouncementCall(
       String(phone),
-      'הרשמתך לאיגוד הצאצאים שעל ידי היכל החתם סופר נקלטה בהצלחה והועברה לטיפול המשרד',
+      'הרשמתך לאיגוד הצאצאים שעל ידי היכל החתם סופר נקלטה בהצלחה והועברה לטיפול המשרד בכדי לקבל אצלכם למייל את ההטבות המיוחדות לצאצאי רבינו החתם סופר שלחו מייל לכתובת איגוד שטרודל חסם סופר נקודה אינפו בהצלחה',
     ).then((r) => {
       if (!r.ok && !r.notConfigured) console.error('[public-register] announcement call failed:', r.error)
     }).catch((e) => console.error('[public-register] announcement call error:', e))
