@@ -1,4 +1,4 @@
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -14,6 +14,7 @@ import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
+import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 
@@ -145,6 +146,11 @@ export default async function SettingsPage() {
         {/* Yemot maternity messages (editable text / human recordings) */}
         <Collapsible title="הקלטות שלוחת יולדות (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
           <YemotMaternitySettings />
+        </Collapsible>
+
+        {/* Full system backup (DB + files) to Google Drive */}
+        <Collapsible title="גיבוי מערכת (Google Drive)" icon={<HardDriveDownload size={16} className="text-green-600" />}>
+          <BackupSettings />
         </Collapsible>
 
         {/* Registration call announcement (editable text + ElevenLabs preview) */}
