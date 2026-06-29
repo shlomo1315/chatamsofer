@@ -2,7 +2,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { generateBackup, backupFilename } from '@/lib/backup'
-import { uploadBackup, listBackups, driveConfigured } from '@/lib/googleDrive'
+import { uploadBackup, listBackups, driveReady } from '@/lib/googleDrive'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
   if (request.nextUrl.searchParams.get('list') === '1') {
-    return NextResponse.json({ driveConfigured: driveConfigured(), backups: await listBackups() }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({ driveConfigured: await driveReady(), backups: await listBackups() }, { headers: { 'Cache-Control': 'no-store' } })
   }
 
   const admin = getServiceClient()
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 // העלאת גיבוי ל-Drive עכשיו (ידני)
 export async function POST() {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
-  if (!driveConfigured()) return NextResponse.json({ error: 'Google Drive אינו מוגדר (GOOGLE_DRIVE_SA_KEY / GOOGLE_DRIVE_BACKUP_FOLDER_ID).' }, { status: 503 })
+  if (!(await driveReady())) return NextResponse.json({ error: 'Google Drive אינו מחובר — חברו מחדש את חשבון Google (עם הרשאת Drive) והגדירו GOOGLE_DRIVE_BACKUP_FOLDER_ID.' }, { status: 503 })
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 

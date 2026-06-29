@@ -3,7 +3,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient } from '@/lib/apiAuth'
 import { generateBackup, backupFilename } from '@/lib/backup'
-import { uploadBackup, listBackups, deleteBackup, driveConfigured } from '@/lib/googleDrive'
+import { uploadBackup, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   if (secret && auth !== `Bearer ${secret}` && token !== secret) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  if (!driveConfigured()) return NextResponse.json({ error: 'Google Drive אינו מוגדר' }, { status: 503 })
+  if (!(await driveReady())) return NextResponse.json({ error: 'Google Drive אינו מחובר' }, { status: 503 })
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'no admin client' }, { status: 500 })
 

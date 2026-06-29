@@ -24,6 +24,8 @@ export function getAuthUrl() {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/gmail.modify',
+      // הרשאת Drive — לגיבוי אוטומטי לתיקיית Drive של החשבון
+      'https://www.googleapis.com/auth/drive',
     ],
   })
 }

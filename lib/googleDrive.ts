@@ -1,34 +1,38 @@
-// העלאת גיבויים ל-Google Drive דרך Service Account (חשבון מערכת).
-// דורש: GOOGLE_DRIVE_SA_KEY (תוכן ה-JSON של מפתח ה-Service Account) +
-// GOOGLE_DRIVE_BACKUP_FOLDER_ID (מזהה תיקיית הגיבויים, ששותפה עם ה-Service Account).
+// העלאת גיבויים ל-Google Drive דרך חיבור ה-OAuth הקיים של Google (אותו אחד של Gmail),
+// עם הרשאת Drive. כך אין צורך במפתח Service Account (שחסום במדיניות הארגון).
+// דורש: חיבור Google מחדש (עם scope של drive) + GOOGLE_DRIVE_BACKUP_FOLDER_ID.
 import { google } from 'googleapis'
 import { Readable } from 'stream'
+import { getOAuthClient } from './gmail'
+import { getServiceClient } from './apiAuth'
 
+// מוגדר ברמת ההגדרות אם תיקיית היעד הוגדרה (החיבור עצמו נבדק בזמן אמת).
 export function driveConfigured(): boolean {
-  return !!process.env.GOOGLE_DRIVE_SA_KEY && !!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
+  return !!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
 }
 
-function driveClient() {
-  const raw = process.env.GOOGLE_DRIVE_SA_KEY
-  if (!raw) return null
-  let creds: { client_email?: string; private_key?: string }
-  try { creds = JSON.parse(raw) } catch { return null }
-  if (!creds.client_email || !creds.private_key) return null
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key.replace(/\\n/g, '\n'),
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  })
-  return google.drive({ version: 'v3', auth })
+async function driveClient() {
+  if (!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID) return null
+  const admin = getServiceClient()
+  if (!admin) return null
+  const { data } = await admin.from('app_settings').select('value').eq('key', 'gmail_refresh_token').maybeSingle()
+  if (!data?.value) return null
+  const oauth = getOAuthClient()
+  oauth.setCredentials({ refresh_token: data.value })
+  return google.drive({ version: 'v3', auth: oauth })
 }
 
-// העלאת קובץ לתיקיית הגיבויים. מחזיר את מזהה הקובץ ב-Drive.
+// האם הגיבוי ל-Drive מוכן בפועל (תיקייה + חיבור Google עם הרשאה)
+export async function driveReady(): Promise<boolean> {
+  return !!(await driveClient())
+}
+
 export async function uploadBackup(
   filename: string, data: Buffer, mimeType = 'application/zip',
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const drive = driveClient()
+  const drive = await driveClient()
   const folderId = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
-  if (!drive || !folderId) return { ok: false, error: 'Google Drive אינו מוגדר' }
+  if (!drive || !folderId) return { ok: false, error: 'Google Drive אינו מחובר' }
   try {
     const res = await drive.files.create({
       requestBody: { name: filename, parents: [folderId] },
@@ -44,9 +48,8 @@ export async function uploadBackup(
 
 type DriveFile = { id: string; name: string; createdTime: string; size: number }
 
-// רשימת קבצי הגיבוי בתיקייה (החדשים תחילה)
 export async function listBackups(): Promise<DriveFile[]> {
-  const drive = driveClient()
+  const drive = await driveClient()
   const folderId = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
   if (!drive || !folderId) return []
   const out: DriveFile[] = []
@@ -70,7 +73,7 @@ export async function listBackups(): Promise<DriveFile[]> {
 }
 
 export async function deleteBackup(fileId: string): Promise<void> {
-  const drive = driveClient()
+  const drive = await driveClient()
   if (!drive) return
   try { await drive.files.delete({ fileId, supportsAllDrives: true }) } catch { /* best-effort */ }
 }

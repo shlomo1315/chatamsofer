@@ -85,7 +85,7 @@ export default function BackupSettings() {
         </span>
       ) : (
         <span className="inline-flex items-center gap-1.5 text-[12px] bg-amber-50 text-amber-700 rounded-full px-2.5 py-1 self-start">
-          <AlertTriangle size={13} /> Google Drive אינו מוגדר — הגדירו GOOGLE_DRIVE_SA_KEY ו-GOOGLE_DRIVE_BACKUP_FOLDER_ID
+          <AlertTriangle size={13} /> Google Drive אינו מחובר — חברו מחדש חשבון Google (עם הרשאת Drive) והגדירו GOOGLE_DRIVE_BACKUP_FOLDER_ID
         </span>
       )}
 
