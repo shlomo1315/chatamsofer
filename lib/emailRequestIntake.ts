@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
-import { emailIntakeConfirmedEmail, emailIntakeRejectedEmail } from './emailTemplates'
+import { emailIntakeConfirmedEmail, emailIntakeRejectedEmail, requestBlockedRejectedEmail } from './emailTemplates'
 import {
   detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
   buildDraftBody, draftMailto, type ReqType,
@@ -58,7 +58,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, eligibility_status')
+    .select('id, full_name, family_name, eligibility_status, rejection_reason, marital_status')
     .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
     .maybeSingle()
   const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : ''
@@ -67,7 +67,12 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     return true
   }
   if (ben.eligibility_status === 'rejected') {
-    await reject(from, name, type, ['הגשת בקשה אינה זמינה עבור חשבון זה'], buildDraftBody(type, idNumber, generic))
+    // נדחה שמנסה להגיש — מקבל הודעה שהרישום לא אושר (עם הסיבה), במקום טופס חוזר
+    const mail = requestBlockedRejectedEmail({
+      family_name: ben.family_name, full_name: ben.full_name,
+      marital_status: ben.marital_status, reason: ben.rejection_reason,
+    })
+    await deliverMail(from, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
     return true
   }
 

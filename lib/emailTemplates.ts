@@ -243,6 +243,31 @@ export function emailIntakeConfirmedEmail(name: string, typeLabel: string): Buil
   }
 }
 
+// ─── בקשה נחסמה כי הרישום נדחה (נשלח רק כשנדחה מנסה להגיש בקשה) ───────────────
+export function requestBlockedRejectedEmail(opts: {
+  family_name?: string | null; full_name?: string | null; marital_status?: string | null; reason?: string | null
+}): BuiltEmail {
+  const greet = greetByStatus(opts.family_name, opts.full_name, opts.marital_status)
+  const reason = (opts.reason ?? '').trim()
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">לא ניתן לטפל בבקשתך</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.8;">
+          הבקשה שהגשת התקבלה, אך לא ניתן לטפל בה כיוון שהרישום שלך לאיגוד הצאצאים <strong>לא אושר</strong>${reason ? ` — ${reason}` : ''}.
+        </p>
+      </td></tr>
+    </table>
+    <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">לבירורים ניתן לפנות למשרד: <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a></p>
+    ${noReplyBox()}`
+  return {
+    subject: 'בנוגע לבקשתך — היכל החתם סופר',
+    html: shell({ preheader: 'לא ניתן לטפל בבקשה — הרישום לא אושר.', accent: '#dc2626', title: 'בנוגע לבקשתך', subtitle: 'איגוד הצאצאים', body }),
+  }
+}
+
 // ─── הגשת בקשה במייל: דחייה + טמפלט למילוי מחדש ─────────────────────────────
 export function emailIntakeRejectedEmail(opts: {
   name: string; typeLabel: string; errors: string[]; draftText?: string | null; portalUrl?: string

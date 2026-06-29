@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { templateStatusRejected } from '@/lib/email'
-import { docsPendingEmail, approvalEmail } from '@/lib/emailTemplates'
+import { docsPendingEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { getDocTypes } from '@/lib/serverDocTypes'
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
 
-  const { id, status, reason, docsNotes } = await request.json()
+  const { id, status, docsNotes } = await request.json()
   if (!id || !status) return NextResponse.json({ error: 'missing fields' }, { status: 400 })
 
   const client = getClient()
@@ -32,19 +31,12 @@ export async function POST(request: NextRequest) {
   if (error || !ben) return NextResponse.json({ error: 'beneficiary not found' }, { status: 404 })
   if (!ben.email) return NextResponse.json({ ok: true, skipped: 'no email' })
 
+  // סטטוס "צאצא" (מאושר/נדחה) הוא מידע פנימי בלבד — לא שולחים עליו מייל לצאצא.
+  // הצאצא יקבל מייל רק על בקשת סיוע ספציפית (לידה/הלוואה/סיוע), ומי שנדחה — יקבל
+  // הודעת דחייה רק אם ינסה להגיש בקשה. "השלמת מסמכים" כן נשלח (דורש פעולה מצידו).
   let payload
-  if (status === 'approved') {
-    payload = approvalEmail(ben.full_name, undefined, {
-      family_name: ben.family_name,
-      id_number: ben.id_number,
-      phone: ben.phone,
-      city: ben.city,
-      marital_status: ben.marital_status,
-      spouse_name: ben.spouse_name,
-      children_count: ben.children_count,
-    })
-  } else if (status === 'rejected') {
-    payload = templateStatusRejected(ben.full_name, reason)
+  if (status === 'approved' || status === 'rejected') {
+    return NextResponse.json({ ok: true, skipped: 'eligibility status is internal — no email' })
   } else if (status === 'docs_pending') {
     // רשימת המסמכים מהצ'קליסט שהמזכירות סימנה (נשמרה ב-required_docs), עם נפילה לפי מצב משפחתי
     const types = await getDocTypes()

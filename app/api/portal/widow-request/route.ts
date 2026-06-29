@@ -4,6 +4,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,13 +43,17 @@ export async function POST(request: NextRequest) {
   // Verify the beneficiary is a widow/widower
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, email, id_number, phone, marital_status, eligibility_status')
+    .select('id, full_name, family_name, email, id_number, phone, marital_status, eligibility_status, rejection_reason')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
   if (!ben) return NextResponse.json({ error: 'צאצא לא נמצא' }, { status: 404 })
   if (!['אלמן', 'אלמנה'].includes(ben.marital_status ?? '')) {
     return NextResponse.json({ error: 'לא רשאי להגיש בקשה זו' }, { status: 403 })
+  }
+  if (ben.eligibility_status === 'rejected') {
+    notifyRejectedRequest(ben)
+    return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
   if (ben.eligibility_status !== 'approved') {
     return NextResponse.json({ error: 'הפרופיל אינו מאושר עדיין' }, { status: 403 })

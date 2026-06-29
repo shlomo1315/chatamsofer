@@ -6,6 +6,7 @@ import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { signedDocUrl } from '@/lib/docUrl'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,12 +54,13 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
+    .select('id, eligibility_status, rejection_reason, email, full_name, family_name, id_number, phone, address, city, marital_status, spouse_name, spouse_id_number, children_count')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
 
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
   if (ben.eligibility_status === 'rejected') {
+    notifyRejectedRequest(ben)
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
 
