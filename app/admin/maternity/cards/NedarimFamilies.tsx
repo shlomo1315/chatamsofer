@@ -283,6 +283,9 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
   const [tlushExp, setTlushExp] = useState('')
   // magnetic
   const [newCard, setNewCard] = useState('')
+  // לידות המשפחה — "סיבת הטעינות" (כל טעינה = לידה)
+  type Birth = { id: string; birthDate: string | null; babyName: string | null; babyGender: string | null; recoveryHome: string | null; status: string | null }
+  const [births, setBirths] = useState<Birth[]>([])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -291,6 +294,14 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
     setLoading(false)
   }, [family.ClientId])
   useEffect(() => { refresh() }, [refresh])
+
+  // שליפת לידות המשפחה לפי ת"ז (סיבת הטעינות)
+  useEffect(() => {
+    const z = String(family.Zeout ?? '').trim()
+    if (!z) return
+    fetch(`/api/admin/nedarim/family-births?zeout=${encodeURIComponent(z)}`)
+      .then(r => r.json()).then(d => setBirths(d.births ?? [])).catch(() => {})
+  }, [family.Zeout])
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 2500) }
 
@@ -429,6 +440,29 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
                     </div>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {/* לידות המשפחה — סיבת הטעינות (כל טעינה = לידה) */}
+            {births.length > 0 && (
+              <section>
+                <h3 className="text-sm font-semibold text-slate-700 mb-2">סיבת הטעינות — לידות המשפחה ({births.length})</h3>
+                <div className="flex flex-col gap-1.5">
+                  {births.map((b) => {
+                    const gender = b.babyGender === 'male' ? 'בן' : b.babyGender === 'female' ? 'בת' : ''
+                    const date = b.birthDate ? new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(b.birthDate)) : '—'
+                    return (
+                      <div key={b.id} className="flex items-center justify-between gap-2 bg-pink-50/60 border border-pink-100 rounded-lg px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-700">🍼 {b.babyName || (gender ? `${gender} שנולד/ה` : 'לידה')}</span>
+                          {b.recoveryHome && <span className="text-slate-400 text-xs mr-2">· {b.recoveryHome}</span>}
+                        </div>
+                        <span className="text-slate-500 text-xs ltr-num flex-shrink-0">{date}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">כל לידה מזכה בטעינת כרטיס מזון על סך 600 ₪.</p>
               </section>
             )}
 

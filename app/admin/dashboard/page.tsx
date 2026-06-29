@@ -127,7 +127,10 @@ export default async function DashboardPage() {
           <p className="text-slate-500 mt-1 text-sm">ברוך הבא ללוח הבקרה של היכל החתם סופר</p>
         </div>
         <Link href="/admin/reports"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors">
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-white text-sm
+                     bg-gradient-to-b from-indigo-500 to-indigo-600 ring-1 ring-inset ring-white/15
+                     shadow-[0_1px_2px_rgba(15,23,42,0.18),0_8px_18px_-6px_rgba(79,70,229,0.55)]
+                     transition-all duration-150 hover:from-indigo-500 hover:to-indigo-700 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]">
           <Download size={15} />
           הורדת דוחות
         </Link>
@@ -274,7 +277,7 @@ function KpiCard({ label, value, sub, subPositive, subWarning, icon, color, href
   const c = colorMap[color] ?? colorMap.indigo
   return (
     <Link href={href}
-      className={`group relative flex flex-col gap-3 rounded-2xl border border-slate-100 ${c.bg} p-5 hover:shadow-md hover:-translate-y-0.5 transition-all`}>
+      className={`group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 ${c.bg} p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200`}>
       <div className="flex items-center justify-between">
         <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon} shadow-sm`}>
           {icon}
@@ -311,7 +314,7 @@ function DeptCard({ title, icon, href, accent, rows }: {
 }) {
   return (
     <Link href={href}
-      className="group flex flex-col rounded-2xl border border-slate-100 bg-white hover:shadow-lg hover:border-slate-200 transition-all overflow-hidden">
+      className="group flex flex-col rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_6px_16px_rgba(15,23,42,0.1),0_22px_44px_-18px_rgba(79,70,229,0.35)] hover:border-indigo-200 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
         <div className="flex items-center gap-3">
