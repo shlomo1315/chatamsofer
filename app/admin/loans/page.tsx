@@ -5,6 +5,7 @@ import { Loan } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import LoansTable from './LoansTable'
+import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
@@ -23,6 +24,7 @@ export default async function LoansPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="הלוואות" subtitle={`${loans.length} הלוואות`}>
+        <ExportExcelButton type="loans" />
         <Link href="/shared/loans" target="_blank" rel="noopener noreferrer">
           <Button variant="secondary">
             <ExternalLink size={16} />

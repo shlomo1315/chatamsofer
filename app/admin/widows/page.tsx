@@ -2,6 +2,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
 import WidowsDashboard from './WidowsDashboard'
+import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
 async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[] }> {
   if (!isSupabaseConfigured()) return { widows: [], requests: [], payments: [] }
@@ -37,7 +38,9 @@ export default async function WidowsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="אגף אלמנות ויתומים" subtitle={`${widows.length} תיקי משפחות`} />
+      <PageHeader title="אגף אלמנות ויתומים" subtitle={`${widows.length} תיקי משפחות`}>
+        <ExportExcelButton type="widows" />
+      </PageHeader>
       <WidowsDashboard widows={widows} requests={requests} payments={payments} />
     </div>
   )

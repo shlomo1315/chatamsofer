@@ -5,6 +5,7 @@ import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import MaternityTable from './MaternityTable'
+import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -40,6 +41,7 @@ export default async function MaternityPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="יולדות" subtitle={`כל הלידות · ${aids.length}`}>
+        <ExportExcelButton type="maternity" />
         <Link href="/admin/maternity/new">
           <Button>
             <Plus size={16} />

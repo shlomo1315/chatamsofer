@@ -1,8 +1,21 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, ChevronDown, ChevronUp, Mail, FileText } from 'lucide-react'
+import Link from 'next/link'
+import { Loader2, ChevronDown, ChevronUp, Mail, FileText, ExternalLink } from 'lucide-react'
 import Card from '@/components/ui/Card'
+
+// קישור ישיר לכרטסת הבקשה לפי הקטגוריה והמזהה
+function cardHref(category: string, entityId: string | null): string | null {
+  if (!entityId) return null
+  switch (category) {
+    case 'maternity': return `/admin/maternity/${entityId}`
+    case 'loan': return `/admin/loans/${entityId}`
+    case 'financial_aid': return `/admin/financial-aid/${entityId}`
+    case 'widow': return '/admin/widows'
+    default: return null
+  }
+}
 
 type Item = { kind: 'request' | 'email'; action: string; category: string; entityId: string | null; detail: string; at: string }
 type StaffRow = {
@@ -154,16 +167,29 @@ export default function StaffActivityReport() {
                   <div className="border-t border-slate-100 divide-y divide-slate-50 max-h-80 overflow-y-auto">
                     {r.items.length === 0 ? (
                       <p className="text-xs text-slate-400 p-3">אין פירוט</p>
-                    ) : r.items.map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {it.kind === 'email' ? <Mail size={12} className="text-emerald-500 flex-shrink-0" /> : <FileText size={12} className="text-indigo-500 flex-shrink-0" />}
-                          <span className="text-slate-700 flex-shrink-0">{ACTION_LABEL[it.action] ?? it.action}</span>
-                          {it.detail && <span className="text-slate-400 truncate">— {it.detail}</span>}
+                    ) : r.items.map((it, i) => {
+                      const href = it.kind === 'request' ? cardHref(it.category, it.entityId) : null
+                      const content = (
+                        <>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {it.kind === 'email' ? <Mail size={12} className="text-emerald-500 flex-shrink-0" /> : <FileText size={12} className="text-indigo-500 flex-shrink-0" />}
+                            <span className="text-slate-700 flex-shrink-0">{ACTION_LABEL[it.action] ?? it.action}</span>
+                            {it.detail && <span className="text-slate-400 truncate">— {it.detail}</span>}
+                            {href && <ExternalLink size={11} className="text-indigo-400 flex-shrink-0" />}
+                          </div>
+                          <span className="text-slate-400 flex-shrink-0 ltr-num">{fmtDateTime(it.at)}</span>
+                        </>
+                      )
+                      return href ? (
+                        <Link key={i} href={href} className="flex items-center justify-between gap-2 px-3 py-2 text-xs hover:bg-indigo-50/60 transition-colors">
+                          {content}
+                        </Link>
+                      ) : (
+                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                          {content}
                         </div>
-                        <span className="text-slate-400 flex-shrink-0 ltr-num">{fmtDateTime(it.at)}</span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

@@ -67,32 +67,19 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
       const { error } = await supabase.from('beneficiaries').update(update).eq('id', id)
       if (error) throw error
 
-      // Send email notification
-      await fetch('/api/admin/send-status-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // פעולות הלוואי (מייל, סנכרון נדרים, צביעת עץ הדורות) רצות ברקע ולא חוסמות את ה-UI —
+      // כך שינוי הסטטוס מגיב מיידית. כולן best-effort.
+      void fetch('/api/admin/send-status-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
-      })
-
-      // סנכרון נדרים קארד: רק משפחה מאושרת קיימת בנדרים.
-      // אישור → הקמה/עדכון עם כל הפרטים · כל סטטוס אחר → מחיקה מנדרים. (best-effort, לא חוסם)
-      try {
-        const endpoint = next === 'approved' ? '/api/nedarim/save-client' : '/api/nedarim/delete-client'
-        await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ beneficiaryId: id }),
-        })
-      } catch { /* כשל בסנכרון נדרים לא חוסם את שינוי הסטטוס */ }
-
-      // סנכרון צבע צומת הדורות: אישור → ירוק (מאומת) · אחרת → ממתין. (best-effort)
-      try {
-        await fetch('/api/admin/approve-lineage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ beneficiaryId: id, approved: next === 'approved' }),
-        })
-      } catch { /* כשל בסנכרון עץ הדורות לא חוסם */ }
+      }).catch(() => {})
+      void fetch(next === 'approved' ? '/api/nedarim/save-client' : '/api/nedarim/delete-client', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beneficiaryId: id }),
+      }).catch(() => {})
+      void fetch('/api/admin/approve-lineage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiaryId: id, approved: next === 'approved' }),
+      }).catch(() => {})
 
       setOpen(false)
       // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא

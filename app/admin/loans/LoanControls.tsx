@@ -51,9 +51,9 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
         body: JSON.stringify({ type: 'loan', id: loan.id, status: next, extra }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
-      // באישור הבקשה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      // באישור הבקשה — מייל "בקשתך אושרה" + הפיכת המשפחה ל"מאושר" — רץ ברקע (לא חוסם UI)
       if (next === 'approved') {
-        await fetch('/api/admin/request-approved', {
+        void fetch('/api/admin/request-approved', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'loan', id: loan.id }),
         }).catch(() => {})

@@ -2,6 +2,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { FinancialAidRequest } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
 import FinancialAidClient from './FinancialAidClient'
+import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
 async function getRequests(): Promise<FinancialAidRequest[]> {
   if (!isSupabaseConfigured()) return []
@@ -18,7 +19,9 @@ export default async function FinancialAidPage() {
   const requests = await getRequests()
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="סיוע רפואי" subtitle="בקשות סיוע ואישור דרך הגורם המאשר" />
+      <PageHeader title="סיוע רפואי" subtitle="בקשות סיוע ואישור דרך הגורם המאשר">
+        <ExportExcelButton type="financial_aid" />
+      </PageHeader>
       <FinancialAidClient requests={requests} />
     </div>
   )

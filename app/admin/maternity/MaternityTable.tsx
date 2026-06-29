@@ -86,25 +86,19 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
       // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
       await syncBabyStatusInFamily(supabase, aid, next)
 
-      // באישור הלידה — מייל "בקשתך אושרה" לנרשם + הפיכת המשפחה ל"מאושר" אוטומטית
+      // באישור הלידה — מייל+שוברים והפיכת המשפחה ל"מאושר", וסנכרון נדרים — רצים ברקע
+      // (לא חוסמים את ה-UI). השרת משלים אותם גם בלי שנמתין לתשובה.
       if (next === 'active') {
-        await fetch('/api/admin/request-approved', {
+        void fetch('/api/admin/request-approved', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'maternity', id: aid.id }),
         }).catch(() => {})
-      }
-
-      // באישור הלידה — סנכרון המשפחה לנדרים פלוס (כרטיס נדרים). נכשל בשקט אם לא מוגדר.
-      if (next === 'active') {
         const mother = aid.beneficiary as MotherRef | undefined
         if (mother?.id) {
-          try {
-            await fetch('/api/nedarim/save-client', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ beneficiaryId: mother.id }),
-            })
-          } catch { /* לא חוסם את האישור */ }
+          void fetch('/api/nedarim/save-client', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beneficiaryId: mother.id }),
+          }).catch(() => {})
         }
       }
       setOpen(false)

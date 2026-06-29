@@ -5,6 +5,7 @@ import { Beneficiary } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import BeneficiariesTable from './BeneficiariesTable'
+import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
 async function getBeneficiaries(): Promise<Beneficiary[]> {
   if (!isSupabaseConfigured()) return []
@@ -26,6 +27,7 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="צאצאים" subtitle={`${beneficiaries.length} רשומות`}>
+        <ExportExcelButton type="beneficiaries" />
         <Link href="/admin/beneficiaries/new">
           <Button>
             <Plus size={16} />
