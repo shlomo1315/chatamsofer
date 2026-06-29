@@ -422,14 +422,22 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
               <section>
                 <h3 className="text-sm font-semibold text-slate-700 mb-2">טעינות ({tlushim.length})</h3>
                 <div className="flex flex-col gap-1.5">
-                  {tlushim.map((t, i) => (
-                    <div key={t.TlushId ?? i} className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm">
-                      <div className="min-w-0">
+                  {tlushim.map((t, i) => {
+                    // פרטי הלידה שעבורה בוצעה הטעינה (לפי סדר), מוצגים באמצע השורה ללא אייקון
+                    const b = births[i]
+                    const bGender = b?.babyGender === 'male' ? 'בן' : b?.babyGender === 'female' ? 'בת' : ''
+                    const bDate = b?.birthDate ? new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(b.birthDate)) : ''
+                    const bLabel = b ? [b.babyName || (bGender ? `${bGender} שנולד/ה` : 'לידה'), bDate, b.recoveryHome].filter(Boolean).join(' · ') : ''
+                    return (
+                    <div key={t.TlushId ?? i} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 text-sm">
+                      <div className="min-w-0 flex-shrink-0">
                         <span className="font-medium text-slate-700">{ils(t.Amount)}</span>
                         <span className="text-slate-400 mx-2">·</span>
                         <span className="text-slate-500">נותר {ils(t.FreeAmount)}</span>
                         {t.Expiration && <span className="text-xs text-slate-400 mr-2">תפוגה {t.Expiration}</span>}
                       </div>
+                      {/* פרטי הלידה (סיבת הטעינה) — באמצע */}
+                      <div className="flex-1 min-w-0 text-center text-xs text-slate-500 truncate">{bLabel}</div>
                       {/* כפתור פריקה רק לטעינה שנותר בה סכום כלשהו */}
                       {t.TlushId && Number(String(t.FreeAmount ?? '').replace(/[^\d.-]/g, '')) > 0 && (
                         <button onClick={() => unload(String(t.TlushId))} disabled={busy === 'unload' + t.TlushId}
@@ -438,31 +446,9 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* לידות המשפחה — סיבת הטעינות (כל טעינה = לידה) */}
-            {births.length > 0 && (
-              <section>
-                <h3 className="text-sm font-semibold text-slate-700 mb-2">סיבת הטעינות — לידות המשפחה ({births.length})</h3>
-                <div className="flex flex-col gap-1.5">
-                  {births.map((b) => {
-                    const gender = b.babyGender === 'male' ? 'בן' : b.babyGender === 'female' ? 'בת' : ''
-                    const date = b.birthDate ? new Intl.DateTimeFormat('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(b.birthDate)) : '—'
-                    return (
-                      <div key={b.id} className="flex items-center justify-between gap-2 bg-pink-50/60 border border-pink-100 rounded-lg px-3 py-2 text-sm">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-slate-700">🍼 {b.babyName || (gender ? `${gender} שנולד/ה` : 'לידה')}</span>
-                          {b.recoveryHome && <span className="text-slate-400 text-xs mr-2">· {b.recoveryHome}</span>}
-                        </div>
-                        <span className="text-slate-500 text-xs ltr-num flex-shrink-0">{date}</span>
-                      </div>
                     )
                   })}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">כל לידה מזכה בטעינת כרטיס מזון על סך 600 ₪.</p>
               </section>
             )}
 

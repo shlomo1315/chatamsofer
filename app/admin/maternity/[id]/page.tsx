@@ -328,7 +328,14 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                           )}
                         </>
                       ) : (
-                        <p className="text-sm text-amber-700 font-medium">עדיין לא שויך כרטיס</p>
+                        <>
+                          <p className="text-sm text-amber-700 font-medium">עדיין לא שויך כרטיס</p>
+                          {daysToUnload != null && (
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {daysToUnload > 0 ? `${daysToUnload} ימים עד לפריקה` : 'הגיע מועד הפריקה'}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                     {aid.card_loaded_at && <p className="text-xs text-slate-400 mt-1 text-right">נטען בתאריך: <span className="ltr-num">{fmtDate(aid.card_loaded_at)}</span></p>}

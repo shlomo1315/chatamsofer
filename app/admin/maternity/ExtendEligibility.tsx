@@ -6,6 +6,7 @@ import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import { toHebrewDate } from '@/lib/hebrewDate'
 import type { MaternityAid } from '@/types'
 
 const fmt = (d?: string | null) => (d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—')
@@ -87,14 +88,18 @@ export default function ExtendEligibility({
         <div className="flex flex-col gap-4">
           {/* סיכום המצב הנוכחי */}
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-3.5 text-sm flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">ברירת מחדל (6 שבועות מהלידה):</span>
-              <span className="ltr-num font-medium text-slate-700">{fmt(defaultEnd)}</span>
+              <span className="font-medium text-slate-700 text-left">
+                <span className="ltr-num">{fmt(defaultEnd)}</span>
+                {toHebrewDate(defaultEnd) && <span className="block text-[11px] text-slate-400">{toHebrewDate(defaultEnd)}</span>}
+              </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">סיום זכאות נוכחי:</span>
-              <span className={`ltr-num font-semibold ${extended ? 'text-indigo-700' : 'text-slate-800'}`}>
-                {fmt(currentEnd)}{extended && <span className="mr-1.5 text-[11px] font-medium text-indigo-600">(הוארך ידנית)</span>}
+              <span className={`font-semibold text-left ${extended ? 'text-indigo-700' : 'text-slate-800'}`}>
+                <span className="ltr-num">{fmt(currentEnd)}</span>{extended && <span className="mr-1.5 text-[11px] font-medium text-indigo-600">(הוארך ידנית)</span>}
+                {toHebrewDate(currentEnd) && <span className="block text-[11px] font-normal text-slate-400">{toHebrewDate(currentEnd)}</span>}
               </span>
             </div>
           </div>
