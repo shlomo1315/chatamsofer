@@ -18,6 +18,19 @@ export function greetHe(name?: string | null): string {
   return n ? `שלום וברכה, הרב ${n} הי״ו,` : 'שלום וברכה,'
 }
 
+// פתיח לפי מצב משפחתי: ברירת מחדל "הרב <משפחה> <שם הבעל> הי״ו".
+// באלמנה/גרושה: "הרבנית <משפחה> <שם האשה> תחי׳" (השם נלקח מ-full_name של הרשומה).
+export function greetByStatus(
+  familyName?: string | null,
+  fullName?: string | null,
+  maritalStatus?: string | null,
+): string {
+  const nm = [familyName, fullName].filter(Boolean).join(' ').trim()
+  if (!nm) return 'שלום וברכה,'
+  const female = maritalStatus === 'אלמנה' || maritalStatus === 'גרושה'
+  return female ? `שלום וברכה, הרבנית ${nm} תחי׳,` : `שלום וברכה, הרב ${nm} הי״ו,`
+}
+
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
 function autoReplyNote(): string {
   return `
@@ -386,7 +399,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)} הרישום אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(details.family_name, name, details.marital_status)} הרישום אושר 🎉</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       אנו שמחים לבשר לך כי הרישום שלך ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבל במערכת ואושר.
       מעתה ניתן להגיש בקשות לאחת מההטבות ישירות מכאן — לחצו על הכפתור המתאים:
@@ -451,7 +464,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.name)}</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(null, b.name, b.marital_status)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       תודה שפנית אלינו. ריכזנו עבורך את הפרטים הרשומים במערכת:
     </p>
@@ -560,7 +573,7 @@ export function docsPendingEmail(
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">פעולה נדרשת</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(null, name, maritalStatus)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.
       ניתן להעלות אותם ישירות דרך המערכת הדיגיטלית שלנו — מהמחשב או מהנייד.
@@ -658,7 +671,7 @@ export function requestReceivedEmail(opts: {
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(fullName)}</h2>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(beneficiary.family_name, beneficiary.full_name, beneficiary.marital_status)}</h2>
     <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">
       <strong>${reqLabel}</strong> שלך התקבלה במערכת היכל החתם סופר ומועברת לטיפול המזכירות.
     </p>
@@ -704,7 +717,7 @@ export function registrationReceivedEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(fullName)}</h2>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(d.family_name, d.full_name, d.marital_status)}</h2>
     <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
       תודה על פנייתך! בקשתך להירשם ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבלה.
     </p>
@@ -845,7 +858,7 @@ export function loanApprovedEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.full_name)} בקשת ההלוואה שלך אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההלוואה שלך אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ בקשת ההלוואה שלך טופלה ואושרה.</p>
@@ -930,7 +943,7 @@ export function birthApprovedEmail(
       </td></tr>
     </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(b.full_name)} בקשת ההבראה ליולדת אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההבראה ליולדת אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
@@ -961,14 +974,13 @@ export function maternityCardEmail(
   b: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null },
   opts: { centerName?: string | null } = {},
 ): BuiltEmail {
-  const greet = b.full_name ?? [b.family_name, b.spouse_name].filter(Boolean).join(' ') ?? ''
   const rows = [
-    detailRow('שם המשפחה', [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ')),
+    detailRow('שם המשפחה', [b.family_name, b.full_name].filter(Boolean).join(' ')),
     detailRow('מוקד החלוקה', opts.centerName),
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(greet)} כרטיס המזון אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name)} כרטיס המזון אושר 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">✅ כרטיס המזון שלך אושר וזמין לאיסוף.</p>

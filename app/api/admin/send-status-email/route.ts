@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const labelOf = (k: string) => types.find(t => t.value === k)?.label ?? k
     const keys = (ben.required_docs ?? '').split(',').map((s: string) => s.trim()).filter(Boolean)
     const labels = keys.map(labelOf)
-    payload = docsPendingEmail(ben.full_name, undefined, ben.marital_status, labels, docsNotes)
+    payload = docsPendingEmail([ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name, undefined, ben.marital_status, labels, docsNotes)
   } else {
     return NextResponse.json({ ok: true, skipped: 'no template for status' })
   }
