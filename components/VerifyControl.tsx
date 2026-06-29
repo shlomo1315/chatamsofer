@@ -85,12 +85,12 @@ export default function VerifyControl({
           <p className="text-xs text-slate-600">
             {channel === 'email' ? 'נשלח קוד בן 6 ספרות לכתובת המייל.' : 'מתקשרים אליך כעת ומקריאים קוד בן 6 ספרות.'} הזינו אותו כאן:
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-stretch gap-2">
             <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-center text-base font-semibold tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-center text-base font-semibold tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             <button type="button" onClick={confirm} disabled={loading || code.length < 4}
-              className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold py-2 px-4 rounded-lg text-sm">
+              className="shrink-0 whitespace-nowrap inline-flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold px-5 rounded-lg text-sm">
               {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />} אימות
             </button>
           </div>
