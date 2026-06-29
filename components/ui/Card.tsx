@@ -29,13 +29,15 @@ const accentBorder: Record<AccentColor, string> = {
   red:     'border-t-[3px] border-t-red-500',
 }
 
+// צל מרובד עדין שנותן תחושת עומק "תלת-מימדי" נקייה ומקצועית.
+const SOFT_SHADOW = 'shadow-[0_1px_2px_rgba(15,23,42,0.04),0_2px_8px_rgba(15,23,42,0.04),0_12px_28px_-12px_rgba(15,23,42,0.12)]'
+
 export default function Card({ children, className = '', padding = 'md', accent }: CardProps) {
   const padClasses = { none: '', sm: 'p-4', md: 'p-5', lg: 'p-6' }
   return (
     <div
       className={`
-        bg-white rounded-xl border border-zinc-200
-        shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)]
+        bg-white rounded-2xl border border-slate-200/80 ${SOFT_SHADOW}
         ${accent ? accentBorder[accent] : ''}
         ${padClasses[padding]}
         ${className}
@@ -49,7 +51,7 @@ export default function Card({ children, className = '', padding = 'md', accent 
 export function StatCard({ title, value, subtitle, icon, iconBg, trend, href }: StatCardProps) {
   const iconContainer = iconBg ?? 'bg-gradient-to-br from-indigo-500 to-violet-600'
   const iconEl = (
-    <div className={`flex-shrink-0 rounded-xl p-3 ${iconContainer} flex items-center justify-center`}>
+    <div className={`flex-shrink-0 rounded-2xl p-3 ${iconContainer} flex items-center justify-center shadow-[0_6px_14px_-4px_rgba(79,70,229,0.5)]`}>
       <span className="[&>svg]:text-white [&>svg]:stroke-white">{icon}</span>
     </div>
   )
@@ -74,16 +76,16 @@ export function StatCard({ title, value, subtitle, icon, iconBg, trend, href }: 
     return (
       <Link
         href={href}
-        className="block bg-white rounded-xl border border-zinc-200 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] p-5 hover:border-blue-300 hover:shadow-md transition-all group"
+        className={`block bg-white rounded-2xl border border-slate-200/80 ${SOFT_SHADOW} p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.35)] group`}
       >
         {inner}
-        <p className="mt-2 text-xs text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">לחץ לצפייה ←</p>
+        <p className="mt-2 text-xs text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">לחץ לצפייה ←</p>
       </Link>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 shadow-[0_1px_4px_rgba(0,0,0,0.06),0_4px_12px_rgba(0,0,0,0.04)] p-5">
+    <div className={`bg-white rounded-2xl border border-slate-200/80 ${SOFT_SHADOW} p-5`}>
       {inner}
     </div>
   )
