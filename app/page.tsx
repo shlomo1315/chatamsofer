@@ -139,7 +139,7 @@ function Field({ label, required, children, hint }: {
 function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder:text-slate-400 ${className}`}
+      className={`rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 bg-white shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:outline-none focus:ring-2 focus:ring-indigo-500/80 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.12)] placeholder:text-slate-400 transition-all duration-150 ${className}`}
       {...props}
     />
   )
@@ -148,7 +148,7 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
 function SelectInput({ className = '', children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent ${className}`}
+      className={`rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 bg-white shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:outline-none focus:ring-2 focus:ring-indigo-500/80 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.12)] transition-all duration-150 ${className}`}
       {...props}
     >
       {children}
@@ -167,7 +167,7 @@ function ErrorBox({ message }: { message: string }) {
 
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(15,23,42,0.04),0_12px_28px_-12px_rgba(15,23,42,0.12)] ${className}`}>
       {children}
     </div>
   )
@@ -510,7 +510,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
             <span className="text-[10px] text-green-100">בן/חתן:</span>
             {(['son', 'son_in_law'] as const).map(r => (
               <button key={r} type="button" onClick={() => setSelfRel(r)}
-                className={`text-xs font-semibold rounded-full px-2.5 py-0.5 border transition-colors ${selfRel === r ? 'bg-white text-green-700 border-white' : 'bg-green-500/40 text-white border-green-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                className={`text-xs font-semibold rounded-full px-2.5 py-0.5 border transition-all duration-150 ${selfRel === r ? 'bg-white text-green-700 border-white' : 'bg-green-500/40 text-white border-green-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
             ))}
             <button type="button" onClick={() => { setSelfAdded(false); setSelfRel(null) }} className="text-green-100 hover:text-white flex-shrink-0" title="בטל"><X size={15} /></button>
           </div>
@@ -528,7 +528,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {options.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
                       <button key={node.id} type="button" onClick={() => pickVerified(node)}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-colors">
+                        className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
                         {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
                       </button>
                     ))}
@@ -537,14 +537,14 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               )}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => { setAddOpen(true); setNewErr('') }}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-colors">
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-all duration-150">
                   <Plus size={13} /> {lastIsNew || options.length === 0 ? 'הוסף את הדור הבא' : 'הדור הבא לא ברשימה — הוסף "אחר"'}
                 </button>
               </div>
               {canAddSelf && (
                 <div className="mt-4">
                   <button type="button" onClick={() => setSelfAdded(true)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-lg px-3 py-2.5 transition-colors shadow-sm">
+                    className="w-full inline-flex items-center justify-center gap-1.5 text-sm font-bold text-white bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 shadow-sm hover:shadow-md active:scale-[0.98] rounded-lg px-3 py-2.5 transition-all duration-150 shadow-sm">
                     <Check size={15} /> הוסף אותי כעת (סיימתי את האבות)
                   </button>
                 </div>
@@ -558,12 +558,12 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                 <span className="text-xs text-slate-500">בן/חתן של הדור הקודם:</span>
                 {(['son', 'son_in_law'] as const).map(r => (
                   <button key={r} type="button" onClick={() => setNewRel(r)}
-                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-colors ${newRel === r ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400') : 'bg-white text-slate-500 border-slate-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-all duration-150 ${newRel === r ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400') : 'bg-white text-slate-500 border-slate-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
                 ))}
               </div>
               {newErr && <p className="text-xs text-red-600">{newErr}</p>}
               <div className="flex gap-2">
-                <button type="button" onClick={confirmNew} className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-4 py-2"><Check size={12} /> הוסף</button>
+                <button type="button" onClick={confirmNew} className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-[0_6px_16px_-6px_rgba(217,119,6,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(217,119,6,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] rounded-lg px-4 py-2"><Check size={12} /> הוסף</button>
                 <button type="button" onClick={() => { setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('') }} className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">ביטול</button>
               </div>
             </div>
@@ -661,7 +661,7 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
           <button
             key={t.key}
             onClick={() => setTab(t.key as typeof tab)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
               tab === t.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -676,7 +676,7 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
           {!showForm && (
             <button
               onClick={() => setShowForm(true)}
-              className="w-full py-3 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700 transition-all duration-150 flex items-center justify-center gap-2"
             >
               <Plus size={16} /> הגש בקשה חדשה
             </button>
@@ -692,7 +692,7 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
                     key={t.value}
                     type="button"
                     onClick={() => setReqType(t.value)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border text-right transition-colors ${
+                    className={`flex items-center gap-3 p-3 rounded-xl border text-right transition-all duration-150 ${
                       reqType === t.value
                         ? 'border-indigo-400 bg-indigo-50'
                         : 'border-slate-200 hover:border-slate-300'
@@ -737,14 +737,14 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-all duration-150"
                 >
                   {submitting ? 'שולח...' : 'שלח בקשה'}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setShowForm(false); setError('') }}
-                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-600 hover:bg-slate-50 transition-all duration-150"
                 >
                   ביטול
                 </button>
@@ -1298,7 +1298,7 @@ export default function PublicPortalPage() {
       {(['son', 'son_in_law'] as const).map(r => (
         <button type="button" key={r}
           onClick={() => setLineageRelations(prev => ({ ...prev, [relKey]: r }))}
-          className={`text-xs px-3 py-1 rounded-full border transition-colors font-semibold ${
+          className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 font-semibold ${
             lineageRelations[relKey] === r ? REL_SEL[r] : 'bg-white text-slate-400 border-slate-300 hover:border-slate-400'
           }`}>
           {r === 'son' ? 'בן' : 'חתן'}
@@ -1804,7 +1804,7 @@ export default function PublicPortalPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-colors">
+            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-indigo-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-xl px-4 py-3 transition-all duration-150">
               <Upload size={16} className="text-slate-400" />
               <span className="text-sm text-slate-500">לחץ להעלאת קובץ</span>
               <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
@@ -1895,14 +1895,14 @@ export default function PublicPortalPage() {
                 גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
               </p>
             </div>
-            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-colors">
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-all duration-150">
               <input type="checkbox" checked={lineageDeclared}
                 onChange={e => setLineageDeclared(e.target.checked)}
                 className="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0" />
               <span className="text-sm font-semibold text-slate-800">הרינו מצהיר כי אני עומד בקריטריון הנ&quot;ל</span>
             </label>
             <button type="button" disabled={!lineageDeclared} onClick={() => setDeclModalOpen(false)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 transition-colors">
+              className="w-full bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 transition-all duration-150">
               להמשך — בחירת סדר הדורות
             </button>
           </div>
@@ -1936,7 +1936,7 @@ export default function PublicPortalPage() {
               </p>
             </div>
             <button type="button" onClick={goToSilentBirthForm}
-              className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl py-3 transition-colors">
+              className="w-full bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800 disabled:from-rose-300 disabled:to-rose-300 shadow-[0_6px_16px_-6px_rgba(225,29,72,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(225,29,72,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold rounded-xl py-3 transition-all duration-150">
               להמשך הבקשה
             </button>
           </div>
@@ -1997,7 +1997,7 @@ export default function PublicPortalPage() {
                   {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
                     <button key={v} type="button"
                       onClick={() => { setDocType(v); setIdInput(''); setError('') }}
-                      className={`flex-1 py-2 text-sm font-medium transition-colors ${docType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                      className={`flex-1 py-2 text-sm font-medium transition-all duration-150 ${docType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
                     >{l}</button>
                   ))}
                 </div>
@@ -2032,7 +2032,7 @@ export default function PublicPortalPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+                  className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
                 >
                   {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                   {loading ? 'מחפש...' : 'כניסה למערכת'}
@@ -2063,7 +2063,7 @@ export default function PublicPortalPage() {
                     {authPhones.map((p) => (
                       <button key={p.index} type="button" disabled={loading}
                         onClick={() => handleSendPhoneCode(p.index)}
-                        className="flex items-center justify-center gap-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-800 font-semibold py-3 px-4 rounded-xl transition-colors text-base ltr-num">
+                        className="flex items-center justify-center gap-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 text-indigo-800 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ltr-num">
                         <Phone size={18} /> {p.hint}
                       </button>
                     ))}
@@ -2084,7 +2084,7 @@ export default function PublicPortalPage() {
                     </Field>
                     {error && <ErrorBox message={error} />}
                     <button type="submit" disabled={loading}
-                      className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                      className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
                       {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                       {loading ? 'מאמת...' : 'כניסה'}
                     </button>
@@ -2129,7 +2129,7 @@ export default function PublicPortalPage() {
                   ) : (
                     <>
                       <button type="button" onClick={sendBenefitsLink} disabled={benefitsSending}
-                        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
                         {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
                         קבלת קישור להגשת בקשות למייל
                       </button>
@@ -2145,7 +2145,7 @@ export default function PublicPortalPage() {
                   ) : (
                     <>
                       <button type="button" onClick={sendStatusEmail} disabled={statusSending}
-                        className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                        className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
                         {statusSending ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
                         צפייה בסטטוס הבקשה שלי (יישלח למייל)
                       </button>
@@ -2166,12 +2166,12 @@ export default function PublicPortalPage() {
                   </Field>
                   {error && <ErrorBox message={error} />}
                   <button type="submit" disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                    className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
                     {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                     {loading ? 'מאמת...' : 'כניסה'}
                   </button>
                   <button type="button" onClick={handleListPhones} disabled={loading}
-                    className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-colors text-sm">
+                    className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-all duration-150 text-sm">
                     <Phone size={16} /> כניסה באמצעות שיחה לטלפון
                   </button>
                   <button type="button"
@@ -2193,12 +2193,12 @@ export default function PublicPortalPage() {
                       </p>
                       {error && <ErrorBox message={error} />}
                       <button type="button" onClick={handleSendCode} disabled={loading}
-                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                        className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
                         {loading && <Loader2 size={20} className="animate-spin" />}
                         {loading ? 'שולח...' : 'שליחת קוד למייל'}
                       </button>
                       <button type="button" onClick={handleListPhones} disabled={loading}
-                        className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-colors text-sm">
+                        className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-all duration-150 text-sm">
                         <Phone size={16} /> קבלת קוד זמני בשיחה לטלפון
                       </button>
                     </>
@@ -2225,7 +2225,7 @@ export default function PublicPortalPage() {
                       </Field>
                       {error && <ErrorBox message={error} />}
                       <button type="submit" disabled={loading}
-                        className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base">
+                        className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
                         {loading && <Loader2 size={20} className="animate-spin" />}
                         {loading ? 'שומר...' : 'שמירת סיסמה וכניסה'}
                       </button>
@@ -2266,7 +2266,7 @@ export default function PublicPortalPage() {
                 {registrationOpen ? (
                   <button
                     onClick={() => { setError(''); setStep('register') }}
-                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150"
                   >
                     <User size={18} />
                     רישום למערכת
@@ -2326,7 +2326,7 @@ export default function PublicPortalPage() {
                       setError('')
                       setStep('register')
                     }}
-                    className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl transition-colors"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150"
                   >
                     <User size={18} />
                     רישום מהיר
@@ -2377,7 +2377,7 @@ export default function PublicPortalPage() {
               {(() => {
                 const otherActive = showOtherMarital || OTHER_MARITAL_OPTIONS.some(o => o.value === regForm.marital_status)
                 const btnCls = (active: boolean) =>
-                  `px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  `px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
                     active
                       ? 'bg-indigo-600 text-white border-indigo-600'
                       : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
@@ -2529,7 +2529,7 @@ export default function PublicPortalPage() {
                         {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
                           <button key={v} type="button"
                             onClick={() => { setSpouseDocType(v); setReg('spouse_id_number')({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>); setSpouseIdError('') }}
-                            className={`flex-1 py-1.5 text-xs font-medium transition-colors ${spouseDocType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                            className={`flex-1 py-1.5 text-xs font-medium transition-all duration-150 ${spouseDocType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
                           >{l}</button>
                         ))}
                       </div>
@@ -2677,7 +2677,7 @@ export default function PublicPortalPage() {
                     <p className="text-sm font-bold text-amber-900 mb-2">לפני בחירת סדר הדורות נדרשת הצהרה</p>
                     <p className="text-xs text-amber-700 mb-4 leading-relaxed">הרישום מיועד אך ורק לנכדי רבינו החתם סופר בעלי יחוס ברור ומוסמך דור אחר דור.</p>
                     <button type="button" onClick={() => setDeclModalOpen(true)}
-                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-colors">
+                      className="inline-flex items-center gap-2 bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-[0_6px_16px_-6px_rgba(217,119,6,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(217,119,6,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-all duration-150">
                       הקש כאן למעבר לקריאת ההצהרה ובחירת סדר הדורות
                     </button>
                   </div>
@@ -2729,7 +2729,7 @@ export default function PublicPortalPage() {
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
                           <button type="button" onClick={() => { setChildren(cs => cs.filter((_, i) => i !== idx)); setEditingChildIdx(null) }}
-                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-colors">
+                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-all duration-150">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -2777,7 +2777,7 @@ export default function PublicPortalPage() {
                                 {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
                                   <button key={v} type="button"
                                     onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
-                                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
                                       child.gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
                                     }`}
                                   >{l}</button>
@@ -2792,7 +2792,7 @@ export default function PublicPortalPage() {
                                 {maritalFor(child.gender).map(({ v, l }) => (
                                   <button key={v} type="button"
                                     onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
-                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
                                       child.marital_status === v
                                         ? 'bg-indigo-600 text-white border-indigo-600'
                                         : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
@@ -2813,7 +2813,7 @@ export default function PublicPortalPage() {
                           }
                           setEditingChildIdx(null)
                         }}
-                          className="mt-4 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-sm transition-colors">
+                          className="mt-4 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium py-2 rounded-lg text-sm transition-all duration-150">
                           <Check size={14} /> שמור
                         </button>
                       </div>
@@ -2861,7 +2861,7 @@ export default function PublicPortalPage() {
                     ['holiday_grant', 'מענק לקראת החגים'],
                     ['catering', 'קייטרינג מוזל "ויגילו בשמחה"'],
                   ] as const).map(([k, label]) => (
-                    <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                       <input type="checkbox" checked={pastBenefits[k] as boolean} onChange={e => setPastBenefits(p => ({ ...p, [k]: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
                       {label}
                     </label>
@@ -2928,7 +2928,7 @@ export default function PublicPortalPage() {
             {regForm.marital_status && (
               <button
                 type="submit" disabled={loading}
-                className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+                className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
               >
                 {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
                 {loading ? 'שולח...' : 'שלח בקשת רישום'}
@@ -3008,7 +3008,7 @@ export default function PublicPortalPage() {
               })()}
 
               <button onClick={backToHome}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl py-3 text-sm transition-colors">
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium rounded-xl py-3 text-sm transition-all duration-150">
                 <ArrowRight size={16} /> חזרה לדף הכניסה
               </button>
             </div>
@@ -3112,7 +3112,7 @@ export default function PublicPortalPage() {
                       <button
                         onClick={sendBenefitsLink}
                         disabled={benefitsSending}
-                        className="mt-3 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm"
+                        className="mt-3 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
                       >
                         {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
                         קבלת קישור להגשת בקשות למייל
@@ -3145,7 +3145,7 @@ export default function PublicPortalPage() {
                       autoFocus />
                     <div className="flex items-center gap-2">
                       <button onClick={saveBabyName} disabled={savingName || !nameInput.trim()}
-                        className="flex-1 flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
+                        className="flex-1 flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-all duration-150">
                         {savingName ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} שמור שם
                       </button>
                       <button onClick={() => setPendingNames([])} className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700">אשלים מאוחר יותר</button>
@@ -3172,7 +3172,7 @@ export default function PublicPortalPage() {
                   <button
                     onClick={sendStatusEmail}
                     disabled={statusSending}
-                    className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-colors text-sm"
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
                   >
                     {statusSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
                     לקבלת סטטוס הבקשה שלך למייל המעודכן במערכת על שמך — הקש כאן
@@ -3192,9 +3192,9 @@ export default function PublicPortalPage() {
                     <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">⚠️ עליך עדיין להשלים את המסמכים הנדרשים:</p>
                     <button
                       onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
-                      className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-colors text-right shadow-sm group"
+                      className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-all duration-150 text-right shadow-sm group"
                     >
-                      <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-colors">
+                      <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-all duration-150">
                         <FileText size={22} className="text-amber-600" />
                       </div>
                       <div className="flex-1">
@@ -3214,9 +3214,9 @@ export default function PublicPortalPage() {
                 {/* עדכון פרטים אישיים — זמין לכל הסטטוסים */}
                 <button
                   onClick={openEditDetails}
-                  className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-colors text-right shadow-sm group"
+                  className="flex items-center gap-4 bg-indigo-50 rounded-2xl border-2 border-indigo-200 p-5 hover:border-indigo-400 transition-all duration-150 text-right shadow-sm group"
                 >
-                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200 transition-colors">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-200 transition-all duration-150">
                     <User size={22} className="text-indigo-600" />
                   </div>
                   <div className="flex-1">
@@ -3298,7 +3298,7 @@ export default function PublicPortalPage() {
                   : hasNew ? 'שלח מסמכים לאישור' : (allExist ? 'המשך' : 'שלח מסמכים לאישור')
                 return (
                   <button type="button" onClick={handleDocsUpload} disabled={docsUploading}
-                    className="mt-5 w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors">
+                    className="mt-5 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150">
                     {docsUploading ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
                     {label}
                   </button>
@@ -3345,7 +3345,7 @@ export default function PublicPortalPage() {
                       {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
                         <button key={v} type="button"
                           onClick={() => setBirthForm(f => ({ ...f, baby_gender: v }))}
-                          className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                          className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
                             birthForm.baby_gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
                           }`}
                         >{l}</button>
@@ -3365,7 +3365,7 @@ export default function PublicPortalPage() {
                       <div className="mt-2">
                         <button type="button"
                           onClick={() => { const next = !noBabyName; setNoBabyName(next); if (next) setBirthForm(f => ({ ...f, baby_name: '' })) }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
                             noBabyName
                               ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
                               : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
@@ -3386,7 +3386,7 @@ export default function PublicPortalPage() {
                       <div className="flex gap-2 mb-2">
                         {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
                           <button key={v} type="button" onClick={() => setBirthForm(f => ({ ...f, baby_id_type: v }))}
-                            className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${birthForm.baby_id_type === v ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                            className={`px-3 py-1.5 rounded-lg text-sm border transition-all duration-150 ${birthForm.baby_id_type === v ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
                             {l}
                           </button>
                         ))}
@@ -3431,7 +3431,7 @@ export default function PublicPortalPage() {
                       {recoveryHomes.map(h => (
                         <button key={h} type="button"
                           onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
-                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
                             birthForm.recovery_home === h
                               ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
                               : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
@@ -3448,7 +3448,7 @@ export default function PublicPortalPage() {
                         {cardCenters.map(ctr => (
                           <button key={ctr.id} type="button"
                             onClick={() => setBirthForm(f => ({ ...f, card_center_id: f.card_center_id === ctr.id ? '' : ctr.id }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
                               birthForm.card_center_id === ctr.id
                                 ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
                                 : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
@@ -3479,7 +3479,7 @@ export default function PublicPortalPage() {
                         </button>
                       </div>
                     ) : (
-                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-pink-50 border-2 border-dashed border-slate-300 hover:border-pink-400 rounded-xl px-4 py-3 transition-colors">
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-pink-50 border-2 border-dashed border-slate-300 hover:border-pink-400 rounded-xl px-4 py-3 transition-all duration-150">
                         <Upload size={16} className="text-slate-400" />
                         <span className="text-sm text-slate-500">לחץ להעלאת אישור לידה</span>
                         <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
@@ -3496,12 +3496,12 @@ export default function PublicPortalPage() {
 
             {/* קישור עדין ללידה שקטה */}
             <button type="button" onClick={() => { setError(''); setShowSilentInfo(true) }}
-              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors">
+              className="mx-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-all duration-150">
               <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
             </button>
 
             <button type="submit" disabled={loading}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+              className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}
@@ -3546,7 +3546,7 @@ export default function PublicPortalPage() {
                       {recoveryHomesSilent.map(h => (
                         <button key={h} type="button"
                           onClick={() => setSilentForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
-                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
                             silentForm.recovery_home === h
                               ? 'bg-rose-100 text-rose-800 border-rose-300'
                               : 'bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:bg-rose-50'
@@ -3579,7 +3579,7 @@ export default function PublicPortalPage() {
                         </button>
                       </div>
                     ) : (
-                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-rose-50 border-2 border-dashed border-slate-300 hover:border-rose-400 rounded-xl px-4 py-3 transition-colors">
+                      <label className="flex items-center gap-2 cursor-pointer bg-slate-50 hover:bg-rose-50 border-2 border-dashed border-slate-300 hover:border-rose-400 rounded-xl px-4 py-3 transition-all duration-150">
                         <Upload size={16} className="text-slate-400" />
                         <span className="text-sm text-slate-500">לחץ להעלאת מסמך אישור</span>
                         <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
@@ -3595,7 +3595,7 @@ export default function PublicPortalPage() {
             {error && <ErrorBox message={error} />}
 
             <button type="submit" disabled={loading}
-              className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-semibold py-3 px-4 rounded-xl transition-colors text-base"
+              className="flex items-center justify-center gap-2 bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800 disabled:from-rose-300 disabled:to-rose-300 shadow-[0_6px_16px_-6px_rgba(225,29,72,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(225,29,72,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-rose-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}
@@ -3747,11 +3747,11 @@ export default function PublicPortalPage() {
 
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
-                    className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors">
+                    className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
                     ביטול
                   </button>
                   <button type="submit" disabled={loading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm">
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
                     {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                     {loading ? 'שולח...' : 'שלח בקשה'}
                   </button>
@@ -3807,7 +3807,7 @@ export default function PublicPortalPage() {
                 )}
                 {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
                 <button type="submit" disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-colors">
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 disabled:from-emerald-300 disabled:to-emerald-300 shadow-[0_6px_16px_-6px_rgba(5,150,105,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(5,150,105,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-emerald-400 text-white font-semibold py-3 rounded-xl transition-all duration-150">
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שלח בקשה
                 </button>
               </form>
@@ -3862,7 +3862,7 @@ export default function PublicPortalPage() {
                 </Field>
                 {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
                 <button onClick={handleUpdateDetails} disabled={editSaving}
-                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl">
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl">
                   {editSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />} שמירת השינויים
                 </button>
               </div>
@@ -3885,7 +3885,7 @@ export default function PublicPortalPage() {
               </p>
               <div className="flex flex-col gap-2">
                 <button onClick={backToDashboard}
-                  className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors text-sm"
+                  className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-150 text-sm"
                 >
                   <User size={16} /> חזרה לאזור האישי
                 </button>
