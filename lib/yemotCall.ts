@@ -100,13 +100,21 @@ async function runFileCall(phone: string): Promise<{ ok: boolean; notConfigured?
 
 // שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום).
 // אם הוגדרה תבנית קמפיין שמנגנת קובץ (YEMOT_ANNOUNCE_TEMPLATE_ID) — מפעילים אותה
-// (התבנית מנגנת את ההקלטה שהוטמעה בה); אחרת מקריאים את הטקסט ב-TTS.
-export function placeAnnouncementCall(
+// (מנגנת את ההקלטה הטבעית). אם הקמפיין נכשל (לא חויג) — נפילה-לאחור ל-TTS כדי שבכל
+// מקרה תצא שיחה אחת. מחזיר גם mode/error לאבחון.
+export async function placeAnnouncementCall(
   phone: string,
   text: string,
   _opts: { audioFile?: string | null } = {},
-): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+): Promise<{ ok: boolean; notConfigured?: boolean; error?: string; mode?: 'file' | 'tts' }> {
   void _opts
-  if (process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) return runFileCall(phone)
-  return runTtsCall(phone, ttsSafe(text))
+  if (process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) {
+    const r = await runFileCall(phone)
+    if (r.ok) return { ...r, mode: 'file' }
+    // קמפיין הקובץ החזיר שגיאה → לא בוצע חיוג; מנסים TTS (שיחה אחת בלבד).
+    const t = await runTtsCall(phone, ttsSafe(text))
+    return { ok: t.ok, notConfigured: t.notConfigured, mode: 'tts', error: `קמפיין הקובץ נכשל: ${r.error}${t.ok ? ' — בוצעה שיחת TTS במקום' : `; גם TTS נכשל: ${t.error}`}` }
+  }
+  const t = await runTtsCall(phone, ttsSafe(text))
+  return { ...t, mode: 'tts' }
 }

@@ -3,7 +3,7 @@
 // עריכת הודעת השיחה הטלפונית לאחר רישום + השמעה/הורדה של גרסת ElevenLabs.
 // השיחה היוצאת מקריאה את הטקסט הזה (TTS) למספר של הנרשם בסיום הרישום.
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Play, Download, RotateCcw, Volume2, Wand2, Trash2, Mic } from 'lucide-react'
+import { Loader2, Check, Play, Download, RotateCcw, Volume2, Wand2, Trash2, Mic, PhoneCall } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -22,6 +22,9 @@ export default function RegistrationCallSettings() {
   const [audio, setAudio] = useState<string | null>(null)
   const [audioConfigured, setAudioConfigured] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [testPhone, setTestPhone] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
@@ -118,6 +121,27 @@ export default function RegistrationCallSettings() {
     finally { setDownloading(false) }
   }
 
+  async function testCall() {
+    const p = testPhone.trim()
+    if (p.replace(/\D/g, '').length < 9) { setTestResult('מספר טלפון לא תקין'); return }
+    setTesting(true); setTestResult(null)
+    try {
+      const res = await fetch('/api/admin/registration-call/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: p }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setTestResult(`❌ ${d.error || 'שגיאה'}`); return }
+      if (d.ok) {
+        setTestResult(d.mode === 'file'
+          ? '✅ השיחה יצאה דרך קמפיין ההקלטה (קול טבעי). אמורה להגיע אליך כעת.'
+          : `✅ השיחה יצאה בקול ממוחשב (TTS).${d.error ? ` (${d.error})` : ''}`)
+      } else {
+        setTestResult(`❌ השיחה לא יצאה: ${d.error || 'שגיאה לא ידועה'}`)
+      }
+    } catch { setTestResult('❌ שגיאת רשת') }
+    finally { setTesting(false) }
+  }
+
   if (loading) return <div className="py-8 text-center text-slate-400 text-sm flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> טוען…</div>
 
   const dirty = text.trim() !== saved.trim()
@@ -197,6 +221,20 @@ export default function RegistrationCallSettings() {
             : <p className="text-amber-600 mt-1">כרגע מזהה הקמפיין אינו מוגדר — השיחה מקריאה את הטקסט (TTS).</p>}
         </div>
       )}
+      {/* בדיקת שיחה למספר שלך — שיחה אחת בלבד למספר שתזין */}
+      <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2.5 flex flex-col gap-2">
+        <p className="text-[11px] font-semibold text-slate-600 flex items-center gap-1.5"><PhoneCall size={12} /> בדיקת שיחה (למספר שלך בלבד)</p>
+        <div className="flex items-stretch gap-2">
+          <input value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="0500000000" dir="ltr"
+            className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          <button type="button" onClick={testCall} disabled={testing}
+            className="shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold px-4 rounded-lg text-sm">
+            {testing ? <Loader2 size={14} className="animate-spin" /> : <PhoneCall size={14} />} התקשר אליי לבדיקה
+          </button>
+        </div>
+        {testResult && <p className="text-[12px] leading-relaxed text-slate-700">{testResult}</p>}
+      </div>
+
       <p className="text-[11px] text-slate-400">השיחה תומכת במאות שיחות במקביל.</p>
     </div>
   )
