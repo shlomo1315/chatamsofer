@@ -1,17 +1,16 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Warehouse, CreditCard } from 'lucide-react'
 import NedarimFamilies from './NedarimFamilies'
 
 export default function CardsTabs({ internal }: { internal: React.ReactNode }) {
-  // בהגעה מקישור "ניהול הכרטיס" (?zeout=...) פותחים ישירות את טאב נדרים קארד
-  const [tab, setTab] = useState<'internal' | 'nedarim'>(() => {
-    if (typeof window !== 'undefined') {
-      const p = new URLSearchParams(window.location.search)
-      if (p.get('zeout') || p.get('tab') === 'nedarim') return 'nedarim'
-    }
-    return 'internal'
-  })
+  const [tab, setTab] = useState<'internal' | 'nedarim'>('internal')
+  // בהגעה מקישור "ניהול הכרטיס" (?zeout=...) פותחים ישירות את טאב נדרים קארד.
+  // נעשה ב-useEffect (צד-לקוח) — ב-SSR אין window, ולכן initializer לבדו לא מספיק.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('zeout') || p.get('tab') === 'nedarim') setTab('nedarim')
+  }, [])
 
   return (
     <div className="flex flex-col gap-5">

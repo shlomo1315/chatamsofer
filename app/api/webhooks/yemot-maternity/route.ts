@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
-import { getNedarimCreds, setMagneticCard } from '@/lib/nedarim'
+import { getNedarimCreds, setMagneticCard, findClientByZeout } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
 
 export const dynamic = 'force-dynamic'
@@ -145,9 +145,9 @@ function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'co
 // מהיר: מסננים ב-DB לפי 7 הספרות האחרונות (עמיד למקפים/רווחים/קידומת 972 בפורמט
 // השמור), ואז מאמתים בנרמול מלא ב-JS. אם לא נמצא — fallback לסריקה מלאה כדי שלא
 // נפספס פורמטים חריגים (הטלפונים נשמרים כפי שהוקלדו, בלי נרמול).
-const BENEFICIARY_COLS = 'id, full_name, family_name, phone, phone2, spouse_phone, nedarim_id'
+const BENEFICIARY_COLS = 'id, full_name, family_name, id_number, phone, phone2, spouse_phone, nedarim_id'
 type FamilyRow = {
-  id: string; full_name: string | null; family_name: string | null
+  id: string; full_name: string | null; family_name: string | null; id_number: string | null
   phone: string | null; phone2: string | null; spouse_phone: string | null; nedarim_id: string | null
 }
 
@@ -296,17 +296,27 @@ async function handle(req: NextRequest) {
       const family = result.family
       const familyName = result.familyName ?? ''
       const cardNumber = aCard
-      const nedarimId = family?.nedarim_id ? String(family.nedarim_id) : null
-      if (!nedarimId) {
-        await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
-          caller: callerPhone, callId, family_name: familyName, error: 'אין nedarim_id למשפחה',
-        })
-        return yemotText([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')], callId)
-      }
       const creds = await getNedarimCreds()
       if (!creds) {
         console.error('[yemot-maternity] nedarim not configured')
         return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
+      }
+      // מזהה נדרים: מהרשומה; ואם חסר — חיפוש בנדרים לפי ת"ז ושמירה חזרה (כדי שמספר תקין
+      // תמיד ישויך, גם אם nedarim_id לא נשמר בעבר).
+      let nedarimId = family?.nedarim_id ? String(family.nedarim_id) : null
+      if (!nedarimId && family?.id_number) {
+        try {
+          nedarimId = await findClientByZeout(creds, String(family.id_number))
+          if (nedarimId && family?.id) {
+            await admin.from('beneficiaries').update({ nedarim_id: nedarimId }).eq('id', family.id).then(undefined, () => {})
+          }
+        } catch (e) { console.error('[yemot-maternity] findClientByZeout failed', e) }
+      }
+      if (!nedarimId) {
+        await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
+          caller: callerPhone, callId, family_name: familyName, error: 'אין nedarim_id למשפחה (גם לא נמצא לפי ת"ז)',
+        })
+        return yemotText([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')], callId)
       }
       let linkOk = false, linkMsg = ''
       try {
@@ -329,7 +339,7 @@ async function handle(req: NextRequest) {
         centerName = ctr?.name ?? ''
         try { await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: -1 }) } catch { /* לא חוסם */ }
       }
-      await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString() }).eq('id', aidId)
+      await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString(), card_number: cardNumber }).eq('id', aidId)
       await logActivity(admin, 'yemot_card_registered', 'maternity_aid', aidId, {
         caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
         nedarim_id: nedarimId, center: centerName,
