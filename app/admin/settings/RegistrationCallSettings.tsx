@@ -139,9 +139,9 @@ export default function RegistrationCallSettings() {
 
       {/* חיווי מצב הקול הנוכחי של השיחה */}
       <div>
-        {audio ? (
+        {audioConfigured ? (
           <span className="inline-flex items-center gap-1.5 text-[12px] bg-indigo-50 text-indigo-700 rounded-full px-2.5 py-1">
-            <Volume2 size={13} /> קול טבעי פעיל (ElevenLabs)
+            <Volume2 size={13} /> השיחה מנגנת הקלטה דרך קמפיין ימות
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-[12px] bg-slate-100 text-slate-600 rounded-full px-2.5 py-1">
@@ -186,10 +186,16 @@ export default function RegistrationCallSettings() {
           <Volume2 size={12} /> כדי ליצור/לשמוע קול טבעי — הגדירו מפתח ElevenLabs בקטע &quot;הקלטות שלוחת יולדות&quot;.
         </p>
       )}
-      {audio && !audioConfigured && (
-        <p className="text-[11px] text-amber-600 leading-relaxed">
-          ⚠️ נוצר קול טבעי, אך כדי שהשיחה היוצאת תנגן אותו (ולא תקריא TTS) נדרש להגדיר בימות תבנית קמפיין שמנגנת את הקובץ, ואת מזהה התבנית במשתנה הסביבה <span className="ltr-num">YEMOT_ANNOUNCE_TEMPLATE_ID</span>. עד אז השיחה תקריא את הטקסט.
-        </p>
+      {hasKey && voiceId && (
+        <div className="text-[11px] text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+          <p className="font-semibold text-slate-600 mb-1">להשמעת קול טבעי בשיחה (ElevenLabs):</p>
+          <p>1. לחצו <strong>&quot;הורדת MP3&quot;</strong> ושמרו את ההקלטה.</p>
+          <p>2. בפאנל ימות → קמפיין ההודעה → העלו את קובץ ה-MP3 כהודעה שהקמפיין משמיע.</p>
+          <p>3. ודאו ש-<span className="ltr-num">YEMOT_ANNOUNCE_TEMPLATE_ID</span> מוגדר עם מזהה הקמפיין ב-Railway.</p>
+          {audioConfigured
+            ? <p className="text-emerald-600 mt-1">✓ מזהה הקמפיין מוגדר — השיחה תנגן את הקלטת הקמפיין.</p>
+            : <p className="text-amber-600 mt-1">כרגע מזהה הקמפיין אינו מוגדר — השיחה מקריאה את הטקסט (TTS).</p>}
+        </div>
       )}
       <p className="text-[11px] text-slate-400">השיחה תומכת במאות שיחות במקביל.</p>
     </div>

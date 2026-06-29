@@ -99,12 +99,14 @@ async function runFileCall(phone: string): Promise<{ ok: boolean; notConfigured?
 }
 
 // שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום).
-// אם הוגדר קול טבעי (opts.audioFile) ותבנית ניגון-קובץ — מנגנים את הקובץ; אחרת TTS של הטקסט.
+// אם הוגדרה תבנית קמפיין שמנגנת קובץ (YEMOT_ANNOUNCE_TEMPLATE_ID) — מפעילים אותה
+// (התבנית מנגנת את ההקלטה שהוטמעה בה); אחרת מקריאים את הטקסט ב-TTS.
 export function placeAnnouncementCall(
   phone: string,
   text: string,
-  opts: { audioFile?: string | null } = {},
+  _opts: { audioFile?: string | null } = {},
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  if (opts.audioFile && process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) return runFileCall(phone)
+  void _opts
+  if (process.env.YEMOT_ANNOUNCE_TEMPLATE_ID) return runFileCall(phone)
   return runTtsCall(phone, ttsSafe(text))
 }
