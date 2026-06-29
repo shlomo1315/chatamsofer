@@ -25,5 +25,8 @@ export async function GET(request: NextRequest) {
   }
 
   await saveRefreshToken(tokens.refresh_token)
-  return NextResponse.redirect(new URL('/admin/mail', request.url))
+  // ההפניה הסופית נבנית לפי הכתובת הציבורית (מאחורי פרוקסי request.url מצביע לכתובת פנימית
+  // כמו localhost:8080 — מה שגרם ל-ERR_CONNECTION_REFUSED).
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin).replace(/\/$/, '')
+  return NextResponse.redirect(`${base}/admin/settings`)
 }

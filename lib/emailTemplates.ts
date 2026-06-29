@@ -31,6 +31,12 @@ export function greetByStatus(
   return female ? `שלום וברכה, הרבנית ${nm} תחי׳,` : `שלום וברכה, הרב ${nm} הי״ו,`
 }
 
+// פתיח למיילי יולדות — הפנייה ליולדת (האשה): "שלום וברכה, מרת <משפחה> <שם האשה> תחי׳,"
+export function greetMrs(familyName?: string | null, motherName?: string | null): string {
+  const nm = [familyName, motherName].filter(Boolean).join(' ').trim()
+  return nm ? `שלום וברכה, מרת ${nm} תחי׳,` : 'שלום וברכה,'
+}
+
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
 function autoReplyNote(): string {
   return `
@@ -696,7 +702,7 @@ export function requestReceivedEmail(opts: {
 
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(beneficiary.family_name, beneficiary.full_name, beneficiary.marital_status)}</h2>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${type === 'birth' ? greetMrs(beneficiary.family_name, beneficiary.spouse_name || beneficiary.full_name) : greetByStatus(beneficiary.family_name, beneficiary.full_name, beneficiary.marital_status)}</h2>
     <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">
       <strong>${reqLabel}</strong> שלך התקבלה במערכת היכל החתם סופר ומועברת לטיפול המזכירות.
     </p>
@@ -968,7 +974,7 @@ export function birthApprovedEmail(
       </td></tr>
     </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההבראה ליולדת אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} בקשת ההבראה ליולדת אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
@@ -1005,7 +1011,7 @@ export function maternityCardEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name)} כרטיס המזון אושר 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} כרטיס המזון אושר 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">✅ כרטיס המזון שלך אושר וזמין לאיסוף.</p>
@@ -1030,7 +1036,7 @@ export function maternityCardEmail(
 
 // ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
 export function cardStockReplenishedEmail(name: string, centerName?: string | null): BuiltEmail {
-  const greet = greetHe(name)
+  const greet = greetMrs(null, name)
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
