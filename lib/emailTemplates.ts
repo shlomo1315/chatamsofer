@@ -977,7 +977,7 @@ export function birthApprovedEmail(
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} בקשת ההבראה ליולדת אושרה 🎉</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ בקשת ההבראה ליולדת שלך טופלה ואושרה. מזל טוב!</p>
+        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">✅ הבקשה שלכם טופלה ואושרה, מזל טוב!</p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
