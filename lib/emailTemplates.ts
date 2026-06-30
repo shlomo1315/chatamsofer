@@ -889,7 +889,7 @@ export function loanApprovedEmail(
   ].join('')
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההלוואה שלך אושרה 🎉</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההלוואה שלך אושרה</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">✅ בקשת ההלוואה שלך טופלה ואושרה.</p>
