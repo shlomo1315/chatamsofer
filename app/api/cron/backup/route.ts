@@ -11,29 +11,21 @@ export const maxDuration = 300
 
 const REPORT_TO = 'office@chasamsofer.info'
 
-// קובע אילו גיבויים לשמור: כל היומיים מ-30 הימים האחרונים + שבועי (12) + חודשי (12).
-function idsToKeep(backups: { id: string; createdTime: string }[]): Set<string> {
-  const keep = new Set<string>()
-  const now = Date.now()
-  const DAY = 86400000
-  const wk = (t: number) => { const d = new Date(t); const day = (d.getUTCDay() + 6) % 7; return `${Math.floor((t - day * DAY) / (7 * DAY))}` }
-  const mk = (t: number) => { const d = new Date(t); return `${d.getUTCFullYear()}-${d.getUTCMonth()}` }
-  const weeks = new Map<string, string>(), months = new Map<string, string>()
-  for (const b of backups) { // backups ממוינים מהחדש לישן
-    const t = new Date(b.createdTime).getTime()
-    if (now - t <= 30 * DAY) keep.add(b.id)
-    const w = wk(t); if (!weeks.has(w)) weeks.set(w, b.id)
-    const m = mk(t); if (!months.has(m)) months.set(m, b.id)
-  }
-  ;[...weeks.values()].slice(0, 12).forEach(id => keep.add(id))
-  ;[...months.values()].slice(0, 12).forEach(id => keep.add(id))
-  return keep
+// מפתח חודשי לזיהוי "התחלף חודש" — לפי שעון ישראל (כך שגיבוי חצות נספר נכון).
+const ISRAEL_TZ = 'Asia/Jerusalem'
+function monthKey(d: Date): string {
+  // YYYY-MM לפי אזור הזמן של ישראל
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: ISRAEL_TZ, year: 'numeric', month: '2-digit' }).format(d)
+  return parts // למשל "2026-06"
 }
+// רק קבצי הגיבוי שלנו (לא נוגעים בקבצים אחרים בתיקייה)
+const isOurBackup = (name: string) => /^backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/.test(name)
+const MIN_KEEP = 7 // רשת ביטחון — תמיד שומרים לפחות 7 האחרונים
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
   const auth = request.headers.get('authorization')
-  const token = request.nextUrl.searchParams.get('token')
+  const token = request.nextUrl.searchParams.get('token') || request.nextUrl.searchParams.get('secret')
   if (secret && auth !== `Bearer ${secret}` && token !== secret) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
@@ -42,25 +34,41 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'no admin client' }, { status: 500 })
 
   try {
+    const now = new Date()
     const { buffer, manifest } = await generateBackup(admin)
-    const filename = backupFilename(new Date())
+    const filename = backupFilename(now)
     const up = await uploadBackup(filename, buffer)
     if (!up.ok) throw new Error(up.error || 'העלאה ל-Drive נכשלה')
 
-    // שמירה: מחיקת גיבויים מעבר למדיניות
-    let deleted = 0
+    // ניקוי פעם בחודש: רק כשמתחלף החודש מאז הניקוי האחרון.
+    // מוחק את כל הגיבויים מהחודשים הקודמים (משאיר רק את החודש הנוכחי),
+    // ותמיד שומר לפחות MIN_KEEP האחרונים כרשת ביטחון.
+    let deleted = 0, purged = false
+    const curMonth = monthKey(now)
     try {
-      const all = await listBackups()
-      const keep = idsToKeep(all)
-      for (const b of all) if (!keep.has(b.id)) { await deleteBackup(b.id); deleted++ }
+      const { data: marker } = await admin.from('app_settings').select('value').eq('key', 'backup_last_purge_month').maybeSingle()
+      if (marker?.value !== curMonth) {
+        const all = (await listBackups()).filter(b => isOurBackup(b.name))
+        // all ממוין מהחדש לישן (orderBy createdTime desc) — שומרים את MIN_KEEP הראשונים תמיד
+        const protectedIds = new Set(all.slice(0, MIN_KEEP).map(b => b.id))
+        for (const b of all) {
+          if (protectedIds.has(b.id)) continue
+          if (monthKey(new Date(b.createdTime)) !== curMonth) { await deleteBackup(b.id); deleted++ }
+        }
+        await admin.from('app_settings').upsert({ key: 'backup_last_purge_month', value: curMonth }, { onConflict: 'key' })
+        purged = true
+      }
     } catch { /* ניקוי best-effort */ }
 
     const sizeMB = Math.round(buffer.length / 1048576 * 10) / 10
-    deliverMail(REPORT_TO, `✅ גיבוי יומי הושלם — ${filename}`,
-      `<div dir="rtl" style="font-family:Arial">גיבוי יומי הועלה ל-Google Drive בהצלחה.<br/>קובץ: ${filename}<br/>גודל: ${sizeMB}MB<br/>קבצים: ${manifest.storageFiles ?? '?'}<br/>נמחקו ${deleted} גיבויים ישנים (שמירה).</div>`,
+    const purgeLine = purged
+      ? `ניקוי חודשי בוצע — נמחקו ${deleted} גיבויים מחודשים קודמים (נשמר רק החודש הנוכחי).`
+      : 'אין ניקוי הפעם — הניקוי רץ פעם בחודש בעת התחלפות החודש.'
+    deliverMail(REPORT_TO, `✅ גיבוי לילי הושלם — ${filename}`,
+      `<div dir="rtl" style="font-family:Arial">גיבוי לילי הועלה ל-Google Drive בהצלחה.<br/>קובץ: ${filename}<br/>גודל: ${sizeMB}MB<br/>קבצים: ${manifest.storageFiles ?? '?'}<br/>${purgeLine}</div>`,
       undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
 
-    return NextResponse.json({ ok: true, filename, sizeMB, deleted, manifest })
+    return NextResponse.json({ ok: true, filename, sizeMB, deleted, purged, manifest })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     deliverMail(REPORT_TO, '⚠️ כשל בגיבוי היומי',
