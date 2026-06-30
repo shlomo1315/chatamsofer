@@ -61,12 +61,13 @@ export async function GET(request: NextRequest) {
     } catch { /* ניקוי best-effort */ }
 
     const sizeMB = Math.round(buffer.length / 1048576 * 10) / 10
-    const purgeLine = purged
-      ? `ניקוי חודשי בוצע — נמחקו ${deleted} גיבויים מחודשים קודמים (נשמר רק החודש הנוכחי).`
-      : 'אין ניקוי הפעם — הניקוי רץ פעם בחודש בעת התחלפות החודש.'
-    deliverMail(REPORT_TO, `✅ גיבוי לילי הושלם — ${filename}`,
-      `<div dir="rtl" style="font-family:Arial">גיבוי לילי הועלה ל-Google Drive בהצלחה.<br/>קובץ: ${filename}<br/>גודל: ${sizeMB}MB<br/>קבצים: ${manifest.storageFiles ?? '?'}<br/>${purgeLine}</div>`,
-      undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
+    // לא שולחים מייל על כל גיבוי יומי מוצלח (מיותר). שולחים מייל רק כשמתבצע
+    // הניקוי החודשי (פעם בחודש) — כסיכום קצר, וכן במקרה כשל (ב-catch).
+    if (purged) {
+      deliverMail(REPORT_TO, `🗂️ ניקוי גיבויים חודשי בוצע — נשמר החודש האחרון`,
+        `<div dir="rtl" style="font-family:Arial">הגיבוי הלילי ממשיך לרוץ כרגיל.<br/>בוצע ניקוי חודשי: נמחקו ${deleted} גיבויים מחודשים קודמים (נשמר רק החודש האחרון).<br/>גיבוי אחרון: ${filename} (${sizeMB}MB).</div>`,
+        undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
+    }
 
     return NextResponse.json({ ok: true, filename, sizeMB, deleted, purged, manifest })
   } catch (e) {
