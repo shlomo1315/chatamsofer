@@ -157,18 +157,21 @@ export async function deleteClient(creds: NedarimCreds, clientId: string) {
 }
 
 // הוספת טעינה למשפחה → { ok, tlushId, message }
+// groupe = שיוך הטעינה לקבוצה/קטגוריה בנדרים (הגבלת חנויות), למשל "עזר יולדות אוכל מוכן".
 export async function addTlush(
   creds: NedarimCreds,
   clientId: string,
   amount: number,
   expiration?: string,
   comments?: string,
+  groupe?: string,
 ) {
   const r = await nedarimRequest(creds, 'AddTlush', {
     ClientId: clientId,
     Amount: String(amount),
     Expiration: expiration,
     Comments: comments,
+    Groupe: groupe,
   })
   const ok = isOk(r)
   return { ok, tlushId: ok ? String(r.Message ?? '').trim() : null, message: String(r.Message ?? '') }

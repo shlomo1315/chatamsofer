@@ -7,6 +7,8 @@ import { logActivity } from '@/lib/activityLog'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
 export const MATERNITY_LOAD_AMOUNT = 600
+// הקבוצה/קטגוריה בנדרים שאליה משויכת כל טעינת לידה (הגבלת חנויות)
+export const MATERNITY_LOAD_CATEGORY = 'עזר יולדות אוכל מוכן'
 
 // בעת אישור לידה: לוודא שהמשפחה קיימת בנדרים (לפי ת.ז, אחרת להקים אותה), ולהטעין 600 ₪ לארנק.
 // שיוך הכרטיס הפיזי/מוקד נעשה בהמשך ידנית. best-effort — לא חוסם את אישור הלידה.
@@ -41,7 +43,7 @@ export async function loadMaternityCardOnApproval(
   // 2) הטענת הזכאות
   let result: Awaited<ReturnType<typeof addTlush>>
   try {
-    result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר')
+    result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר', MATERNITY_LOAD_CATEGORY)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)

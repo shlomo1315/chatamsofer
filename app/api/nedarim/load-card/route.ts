@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
+import { MATERNITY_LOAD_CATEGORY } from '@/lib/maternityCards'
 import { format } from 'date-fns'
 import {
   getNedarimCreds,
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
   let result: Awaited<ReturnType<typeof addTlush>>
   try {
-    result = await addTlush(creds, clientId, amount, expiration, 'הטענת כרטיס יולדת ממערכת היכל החתם סופר')
+    result = await addTlush(creds, clientId, amount, expiration, 'הטענת כרטיס יולדת ממערכת היכל החתם סופר', MATERNITY_LOAD_CATEGORY)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)
