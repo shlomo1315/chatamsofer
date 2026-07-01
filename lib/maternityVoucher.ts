@@ -82,7 +82,10 @@ type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 // משתמשים ב-LEFT-TO-RIGHT OVERRIDE (U+202D) … POP (U+202C) — כפייה חזקה שמכובדת
 // על ידי יותר צופי PDF מאשר ISOLATE (U+2066), שלא תמיד נתמך.
 function isoNum(s: string): string {
-  return String(s ?? '').replace(/\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g, m => `‭${m}‬`)
+  // עוטפים כל מספר/טווח ב-LRO…POP; בטווח שעות ("19:00 - 21:00") מסירים את הרווחים
+  // הפנימיים כדי שכל הטווח יהיה טוקן LTR צמוד אחד — כך הוא מוצג תקין בכל צופה PDF
+  // (בדיוק כמו מספר השובר "01072026.2911" שמוצג נכון).
+  return String(s ?? '').replace(/\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g, m => `‭${m.replace(/\s*([-–])\s*/g, ' $1 ').replace(/\s+/g, ' ')}‬`)
 }
 // מדידת רוחב כולל בידוד מספרים
 function tw(c: Ctx, text: string, size: number): number {

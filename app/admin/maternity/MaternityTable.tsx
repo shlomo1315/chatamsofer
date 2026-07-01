@@ -319,7 +319,9 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       .channel('maternity-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'maternity_aids' }, () => router.refresh())
       .subscribe()
-    const poll = setInterval(() => router.refresh(), 15000)
+    // עדכון חי מתבצע דרך ה-realtime למעלה; ה-poll הוא רק גיבוי — בתדירות נמוכה
+    // כדי לא להעמיס רענוני-עמוד ברקע שמאטים את התגובה ללחיצות.
+    const poll = setInterval(() => router.refresh(), 60000)
     return () => { supabase.removeChannel(ch); clearInterval(poll) }
   }, [router])
 
