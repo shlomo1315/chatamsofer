@@ -325,7 +325,10 @@ async function handle(req: NextRequest) {
         const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 20_000 })
         linkOk = r.ok; linkMsg = r.message
       } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
-      if (!linkOk) {
+      // נדרים מדווח שהכרטיס כבר משויך למשפחה זו — קורה כשימות שולחת את הבקשה פעמיים
+      // (הראשונה הצליחה). זו בדיוק המטרה, לכן מתייחסים לזה כהצלחה ולא כשגיאה.
+      const alreadyOnFamily = !linkOk && /כבר\s*(מוגדר|מוגד|משוי|משויך)/.test(linkMsg)
+      if (!linkOk && !alreadyOnFamily) {
         console.error(`[yemot-maternity] setMagneticCard failed: ${linkMsg}`)
         await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
           caller: callerPhone, callId, family_name: familyName, error: linkMsg, card_number_last4: cardNumber.slice(-4), nedarim_id: nedarimId,
@@ -334,21 +337,25 @@ async function handle(req: NextRequest) {
         await admin.from('maternity_aids').update({ card_load_error: `שיוך כרטיס בטלפון נכשל — תגובת נדרים: ${linkMsg}` }).eq('id', aidId).then(undefined, () => {})
         return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
       }
-      // הצלחה — רישום איסוף בפועל + מונה ממתינים -1.
-      // הכרטיס כבר הורד מהמלאי בעת אישור הלידה (שריון מראש), לכן לא מורידים שוב כאן.
+      // הצלחה (חיבור חדש או כרטיס שכבר משויך למשפחה) — רישום איסוף + מונה ממתינים -1.
+      // אידמפוטנטי: אם כבר נרשם איסוף (שיחה/ניסיון כפול) — לא סופרים ולא מעדכנים שוב.
+      const { data: curAid } = await admin.from('maternity_aids').select('card_picked_up_at').eq('id', aidId).maybeSingle()
+      const firstTime = !curAid?.card_picked_up_at
       const centerId = (result.active as { card_center_id?: string | null }).card_center_id ?? null
       let centerName = ''
       if (centerId) {
         const { data: ctr } = await admin.from('card_centers').select('name').eq('id', centerId).maybeSingle()
         centerName = ctr?.name ?? ''
-        try { await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: -1 }) } catch { /* לא חוסם */ }
+        if (firstTime) { try { await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: -1 }) } catch { /* לא חוסם */ } }
       }
-      await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString(), card_number: cardNumber }).eq('id', aidId)
-      await logActivity(admin, 'yemot_card_registered', 'maternity_aid', aidId, {
-        caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
-        nedarim_id: nedarimId, center: centerName,
-      })
-      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName} (stock reserved at approval)`)
+      if (firstTime) {
+        await admin.from('maternity_aids').update({ card_picked_up_at: new Date().toISOString(), card_number: cardNumber, card_load_error: null }).eq('id', aidId)
+        await logActivity(admin, 'yemot_card_registered', 'maternity_aid', aidId, {
+          caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
+          nedarim_id: nedarimId, center: centerName,
+        })
+      }
+      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, firstTime=${firstTime}, already=${alreadyOnFamily}`)
       return yemotText([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')], callId)
     }
 
