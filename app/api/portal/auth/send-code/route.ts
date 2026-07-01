@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode, maskEmail } from '@/lib/portalPassword'
-import { normalizeId } from '@/lib/portalBeneficiary'
+import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
@@ -52,11 +52,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data } = await admin
-    .from('beneficiaries')
-    .select('id, email')
-    .eq('id_number', idNumber)
-    .maybeSingle()
+  const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null }>(admin, idNumber, 'id, email')
 
   // לא חושפים אם הת"ז קיימת; אך אם אין מייל אין לאן לשלוח.
   if (!data) {

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { maskEmail } from '@/lib/phone'
+import { resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,9 +33,8 @@ export async function GET(request: NextRequest) {
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
 
-    // 1. Check main beneficiaries table
-    const { data, error } = await admin.from('beneficiaries').select(gateSelect).eq('id_number', idParam).maybeSingle()
-    if (error) { console.error('[lookup] db error:', error.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
+    // 1. Check main beneficiaries table — לפי ת"ז הרשומה או ת"ז האישה (נשואים)
+    const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_password_hash: string | null }>(admin, idParam, gateSelect)
     if (data) {
       const hasPassword = !!data.portal_password_hash
       return NextResponse.json({

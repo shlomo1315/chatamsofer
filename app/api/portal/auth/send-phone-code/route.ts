@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode } from '@/lib/portalPassword'
-import { normalizeId } from '@/lib/portalBeneficiary'
+import { normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 import { normalizePhone, maskPhone } from '@/lib/phone'
 import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
 
@@ -39,11 +39,9 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data } = await admin
-    .from('beneficiaries')
-    .select('id, phone, phone2, spouse_phone')
-    .eq('id_number', idNumber)
-    .maybeSingle()
+  const data = await resolveBeneficiaryByEnteredId<{ id: string; phone: string | null; phone2: string | null; spouse_phone: string | null }>(
+    admin, idNumber, 'id, phone, phone2, spouse_phone',
+  )
 
   // רשימת המספרים הקיימים (לפי סדר קבוע), עם המספר המנורמל לשימוש פנימי בלבד
   const available = data

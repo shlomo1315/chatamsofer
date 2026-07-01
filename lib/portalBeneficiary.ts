@@ -28,3 +28,22 @@ export async function loadDashboardDocs(
 export function normalizeId(idType: unknown, id: unknown): string {
   return idType === 'passport' ? String(id ?? '').trim() : String(id ?? '').replace(/\D/g, '')
 }
+
+// מאתר מוטב לפי המזהה שהוזן: קודם לפי ת"ז הרשומה (הבעל/הרשום), ואם לא נמצא —
+// לפי ת"ז בן/בת הזוג (spouse_id_number) עבור משפחה בסטטוס "נשואים" בלבד.
+// כך גם הקלדת ת"ז האישה מזהה ומאפשרת כניסה לאותה כרטסת משפחה.
+export async function resolveBeneficiaryByEnteredId<T = Record<string, unknown>>(
+  admin: SupabaseClient,
+  idNumber: string,
+  select: string,
+): Promise<T | null> {
+  const byId = await admin.from('beneficiaries').select(select).eq('id_number', idNumber).maybeSingle()
+  if (byId.data) return byId.data as T
+  const bySpouse = await admin
+    .from('beneficiaries')
+    .select(select)
+    .eq('spouse_id_number', idNumber)
+    .ilike('marital_status', 'נשו%')
+    .maybeSingle()
+  return (bySpouse.data as T | null) ?? null
+}

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { setPortalSession } from '@/lib/portalSession'
 import { verifyPassword } from '@/lib/portalPassword'
-import { BENEFICIARY_SELECT, loadDashboardDocs, normalizeId } from '@/lib/portalBeneficiary'
+import { BENEFICIARY_SELECT, loadDashboardDocs, normalizeId, resolveBeneficiaryByEnteredId } from '@/lib/portalBeneficiary'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,11 +35,9 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data } = await admin
-    .from('beneficiaries')
-    .select(`${BENEFICIARY_SELECT}, portal_password_hash`)
-    .eq('id_number', idNumber)
-    .maybeSingle()
+  const data = await resolveBeneficiaryByEnteredId<{ id: string; portal_password_hash: string | null } & Record<string, unknown>>(
+    admin, idNumber, `${BENEFICIARY_SELECT}, portal_password_hash`,
+  )
 
   const ok = data && (await verifyPassword(password, data.portal_password_hash))
   if (!ok || !data) {
