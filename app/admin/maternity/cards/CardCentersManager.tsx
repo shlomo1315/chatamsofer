@@ -51,7 +51,6 @@ export default function CardCentersManager() {
 
   const totStock = centers.reduce((s, c) => s + c.stock, 0)
   const totLoaded = centers.reduce((s, c) => s + (c.loaded ?? 0), 0)
-  const totApproved = centers.reduce((s, c) => s + (c.approved ?? 0), 0)
   const totRemaining = totStock - totLoaded
 
   const fullAddress = (c: CardCenter) => [c.address, c.city].filter(Boolean).join(', ')
@@ -91,11 +90,10 @@ export default function CardCentersManager() {
       </div>
 
       {/* סיכום מלאי — לחיצה מסננת את הטבלה בלייב (לחיצה נוספת מבטלת) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+      <div className="grid grid-cols-3 gap-3 mb-2">
         {([
           { key: 'stock', label: 'סה״כ מלאי', value: totStock, cls: 'text-slate-800', bg: 'bg-slate-50 border-slate-200', ring: 'ring-slate-400' },
-          { key: 'approved', label: 'אושרו', value: totApproved, cls: 'text-blue-700', bg: 'bg-blue-50 border-blue-200', ring: 'ring-blue-400' },
-          { key: 'loaded', label: 'נטענו', value: totLoaded, cls: 'text-green-700', bg: 'bg-green-50 border-green-200', ring: 'ring-green-400' },
+          { key: 'loaded', label: 'מומשו', value: totLoaded, cls: 'text-green-700', bg: 'bg-green-50 border-green-200', ring: 'ring-green-400' },
           { key: 'remaining', label: 'נשאר', value: totRemaining, cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200', ring: 'ring-emerald-400' },
         ] as const).map(s => (
           <button key={s.key} type="button"
@@ -124,17 +122,14 @@ export default function CardCentersManager() {
                 <th className="px-5 py-4 font-bold border-l border-slate-200">שם המוקד</th>
                 <th className="px-5 py-4 font-bold border-l border-slate-200">כתובת</th>
                 <th className="px-5 py-4 font-bold border-l border-slate-200">מלאי</th>
-                <th className="px-5 py-4 font-bold border-l border-slate-200">אושרו</th>
-                <th className="px-5 py-4 font-bold border-l border-slate-200">נטענו</th>
+                <th className="px-5 py-4 font-bold border-l border-slate-200">מומשו</th>
                 <th className="px-5 py-4 font-bold border-l border-slate-200">נשאר</th>
-                <th className="px-5 py-4 font-bold border-l border-slate-200">פנוי לאישור</th>
                 <th className="px-5 py-4 font-bold">פעולות</th>
               </tr>
             </thead>
             <tbody>
               {shown.map(c => {
                 const remaining = c.remaining ?? 0
-                const available = c.available ?? 0
                 return (
                   <tr key={c.id} className="border-b border-slate-100 hover:bg-emerald-50/30">
                     <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{c.name}</td>
@@ -144,10 +139,8 @@ export default function CardCentersManager() {
                       ) : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{c.stock}</td>
-                    <td className="px-5 py-4 text-blue-700 border-l border-slate-100">{c.approved ?? 0}</td>
                     <td className="px-5 py-4 text-green-700 border-l border-slate-100">{c.loaded ?? 0}</td>
                     <td className={`px-5 py-4 font-bold border-l border-slate-100 ${remaining > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{remaining}</td>
-                    <td className={`px-5 py-4 border-l border-slate-100 ${available > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{available}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
                         <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock }) }}
