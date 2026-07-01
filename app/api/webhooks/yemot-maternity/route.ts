@@ -53,7 +53,7 @@ const MSG_TTL_MS = 60_000
 // דדופ שיוך כרטיס לפי מזהה שיחה — מונע ביצוע כפול כשימות שולחת את אותה בקשה שוב.
 // (Railway מריץ רפליקה יחידה, לכן זיכרון-תהליך אמין כאן.)
 const _linkDedup = new Map<string, { at: number; body: string }>()
-const LINK_DEDUP_MS = 5 * 60_000
+const LINK_DEDUP_MS = 90_000 // חלון קצר — רק כדי לתפוס webhook כפול של אותה שיחה+כרטיס
 function pruneDedup(now: number) {
   for (const [k, v] of _linkDedup) if (now - v.at > LINK_DEDUP_MS) _linkDedup.delete(k)
 }
@@ -306,18 +306,20 @@ async function handle(req: NextRequest) {
       const family = result.family
       const familyName = result.familyName ?? ''
       const cardNumber = aCard
-      // דדופ: ימות עלולה לשלוח את אותה בקשה פעמיים — מבצעים את השיוך פעם אחת בלבד
-      // ומחזירים לניסיון הכפול את אותה תשובה שכבר חושבה.
-      const dedupKey = `link:${callId || callerPhone}:${aidId}`
-      const cachedResp = _linkDedup.get(dedupKey)
-      if (cachedResp && Date.now() - cachedResp.at < LINK_DEDUP_MS) {
-        console.log(`[yemot-maternity] dedup hit ${dedupKey}`)
-        return new NextResponse(cachedResp.body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+      // דדופ: ימות עלולה לשלוח את אותה בקשה פעמיים — מבצעים את השיוך פעם אחת בלבד.
+      // מפתח לפי מזהה-שיחה + מספר הכרטיס בלבד (ורק אם יש מזהה-שיחה), כדי שלא נתפוס
+      // שיחות נפרדות. כך אחרי ניתוק כרטיס — שיחה חדשה תמיד תעבד מחדש ותאפשר חיבור.
+      const dedupKey = callId ? `link:${callId}:${cardNumber.replace(/\D/g, '')}` : ''
+      if (dedupKey) {
+        const cachedResp = _linkDedup.get(dedupKey)
+        if (cachedResp && Date.now() - cachedResp.at < LINK_DEDUP_MS) {
+          console.log(`[yemot-maternity] dedup hit ${dedupKey}`)
+          return new NextResponse(cachedResp.body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+        }
       }
       const respond = (commands: string[]) => {
         const body = commands.join('&') + '&'
-        pruneDedup(Date.now())
-        _linkDedup.set(dedupKey, { at: Date.now(), body })
+        if (dedupKey) { pruneDedup(Date.now()); _linkDedup.set(dedupKey, { at: Date.now(), body }) }
         console.log(`[yemot-maternity] link response (callId=${callId}): ${body}`)
         return new NextResponse(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
       }
