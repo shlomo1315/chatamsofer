@@ -137,9 +137,9 @@ function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixK
 
 // קריאת אישור: חוזרת על הספרות (ספרה-ספרה) ומבקשת 1=אישור / 2=תיקון
 function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'collect_confirm'): string {
-  // פסיקים בין הספרות → הקראה איטית עם הפסקות (ספרה-ספרה)
-  const spaced = card.split('').join(', ')
-  return readTap(confirmVar, [tokenOf(M.card_readback, { card: spaced })], { max: 1, min: 1, allowed: [1, 2] })
+  // פסיקים בין הספרות → הקראה איטית עם הפסקות (ספרה-ספרה); פסיקים בסוף → השהיה קצרה לפני "לאישור"
+  const spaced = card.split('').join(', ') + ' , ,'
+  return readTap(confirmVar, [tokenOf(M.card_readback, { card: spaced })], { max: 1, min: 1, allowed: [1, 2], wait: 20 })
 }
 
 // ── חיפוש משפחה לפי טלפון ─────────────────────────────────────────────────────
@@ -322,14 +322,16 @@ async function handle(req: NextRequest) {
       }
       let linkOk = false, linkMsg = ''
       try {
-        const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 10_000 })
+        const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 20_000 })
         linkOk = r.ok; linkMsg = r.message
       } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
       if (!linkOk) {
         console.error(`[yemot-maternity] setMagneticCard failed: ${linkMsg}`)
         await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
-          caller: callerPhone, callId, family_name: familyName, error: linkMsg, card_number_last4: cardNumber.slice(-4),
+          caller: callerPhone, callId, family_name: familyName, error: linkMsg, card_number_last4: cardNumber.slice(-4), nedarim_id: nedarimId,
         })
+        // שמירת סיבת הכישלון המדויקת מנדרים על התיק — כדי שתהיה גלויה במסך הכרטיס
+        await admin.from('maternity_aids').update({ card_load_error: `שיוך כרטיס בטלפון נכשל — תגובת נדרים: ${linkMsg}` }).eq('id', aidId).then(undefined, () => {})
         return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
       }
       // הצלחה — רישום איסוף בפועל + מונה ממתינים -1.
@@ -418,8 +420,8 @@ async function handle(req: NextRequest) {
   }
 
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
-  // לפני בקשת מספר הכרטיס — הקראת ברכת זיהוי אישית עם שם המשפחה והיולדת
-  return yemotText([cardReadCommand(M, CARD_VARS[0], undefined, tokenOf(M.identify, { name: familyName }))], callId)
+  // לפני בקשת מספר הכרטיס — ברכת זיהוי אישית עם השם, ואז הודעת ה"welcome" (נולד לכם בשש שבועות)
+  return yemotText([cardReadCommand(M, CARD_VARS[0], 'welcome', tokenOf(M.identify, { name: familyName }))], callId)
 }
 
 // רישום פעולה ל-activity_log (best-effort — לא חוסם את התגובה לימות)
