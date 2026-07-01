@@ -124,8 +124,9 @@ function yemotText(commands: string[], callId?: string) {
 // בשיחה. הכרטיס מחובר למוקד שנבחר מראש, והמלאי יורד בעת שיוך הכרטיס בטלפון.
 
 // פקודת ה-read למספר הכרטיס (msgKey = welcome / welcome_card_exists / invalid_card להקדמה)
-function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixKey?: keyof MaternityMessages): string {
+function cardReadCommand(M: MaternityMessages, varName = 'collect_card', prefixKey?: keyof MaternityMessages, leadToken?: string): string {
   const prompts = [
+    leadToken || '',
     prefixKey ? tokenOf(M[prefixKey as string]) : '',
     tokenOf(M.ask_card),
   ].filter(Boolean)
@@ -145,9 +146,9 @@ function confirmReadCommand(M: MaternityMessages, card: string, confirmVar = 'co
 // מהיר: מסננים ב-DB לפי 7 הספרות האחרונות (עמיד למקפים/רווחים/קידומת 972 בפורמט
 // השמור), ואז מאמתים בנרמול מלא ב-JS. אם לא נמצא — fallback לסריקה מלאה כדי שלא
 // נפספס פורמטים חריגים (הטלפונים נשמרים כפי שהוקלדו, בלי נרמול).
-const BENEFICIARY_COLS = 'id, full_name, family_name, id_number, phone, phone2, spouse_phone, nedarim_id'
+const BENEFICIARY_COLS = 'id, full_name, family_name, spouse_name, id_number, phone, phone2, spouse_phone, nedarim_id'
 type FamilyRow = {
-  id: string; full_name: string | null; family_name: string | null; id_number: string | null
+  id: string; full_name: string | null; family_name: string | null; spouse_name: string | null; id_number: string | null
   phone: string | null; phone2: string | null; spouse_phone: string | null; nedarim_id: string | null
 }
 
@@ -207,7 +208,8 @@ async function findActiveAid(callerPhone: string) {
     return end >= now
   })
 
-  const familyName = [family.family_name, family.full_name].filter(Boolean).join(' ')
+  // שם לזיהוי בשיחה — שם המשפחה + שם היולדת (בת הזוג), עם נפילה-לאחור לשם הרשום
+  const familyName = [family.family_name, family.spouse_name || family.full_name].filter(Boolean).join(' ')
 
   console.log(`[yemot-maternity] family ${family.id} (${familyName}): ${allAids?.length ?? 0} aids, active=${active?.id ?? 'none'}`)
 
@@ -416,7 +418,8 @@ async function handle(req: NextRequest) {
   }
 
   console.log(`[yemot-maternity] prompting card for "${familyName}", aid ${active.id}`)
-  return yemotText([cardReadCommand(M, CARD_VARS[0], 'welcome')], callId)
+  // לפני בקשת מספר הכרטיס — הקראת ברכת זיהוי אישית עם שם המשפחה והיולדת
+  return yemotText([cardReadCommand(M, CARD_VARS[0], undefined, tokenOf(M.identify, { name: familyName }))], callId)
 }
 
 // רישום פעולה ל-activity_log (best-effort — לא חוסם את התגובה לימות)

@@ -20,6 +20,7 @@ export type MsgMeta = {
 }
 
 export const MATERNITY_MESSAGE_META: MsgMeta[] = [
+  { key: 'identify', label: 'ברכת זיהוי אישית (עם שם היולדת)', defaultText: 'שלום וברכה המערכת זיהתה אתכם בשם {name}', allowAudio: false, placeholders: ['name'], hint: 'מוקראת לפני בקשת מספר הכרטיס עם שם המשפחה והיולדת. הודעה דינמית — חובה לכלול {name} ואין אפשרות הקלטה. להימנע מפסיקים ונקודות (משבשים את ההקראה).' },
   { key: 'welcome', label: 'ברכת זיהוי', defaultText: 'שלום זוהית בהצלחה נמצא תיק לידה פעיל בחשבונך', allowAudio: true },
   { key: 'welcome_card_exists', label: 'ברכה כשכרטיס כבר רשום', defaultText: 'שלום מצאנו את תיק הלידה שלך כרטיס נדרים כבר רשום וניתן לעדכן את המספר', allowAudio: true },
   { key: 'ask_card', label: 'בקשת מספר כרטיס', defaultText: 'אנא הקישו את מספר הכרטיס של נדרים שקיבלתם משמאל לימין ולסיום הקישו סולמית', allowAudio: true },
