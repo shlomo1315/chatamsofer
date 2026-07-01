@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
-import { getNedarimCreds, setMagneticCard, findClientByZeout } from '@/lib/nedarim'
+import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
 
 export const dynamic = 'force-dynamic'
@@ -49,6 +49,14 @@ function adminClient() {
 // לחסוך שאילתת DB בכל שיחה (תגובה ראשונה מיידית).
 let _msgCache: { at: number; data: MaternityMessages } | null = null
 const MSG_TTL_MS = 60_000
+
+// דדופ שיוך כרטיס לפי מזהה שיחה — מונע ביצוע כפול כשימות שולחת את אותה בקשה שוב.
+// (Railway מריץ רפליקה יחידה, לכן זיכרון-תהליך אמין כאן.)
+const _linkDedup = new Map<string, { at: number; body: string }>()
+const LINK_DEDUP_MS = 5 * 60_000
+function pruneDedup(now: number) {
+  for (const [k, v] of _linkDedup) if (now - v.at > LINK_DEDUP_MS) _linkDedup.delete(k)
+}
 async function getCachedMessages(): Promise<MaternityMessages> {
   const now = Date.now()
   if (_msgCache && now - _msgCache.at < MSG_TTL_MS) return _msgCache.data
@@ -298,10 +306,25 @@ async function handle(req: NextRequest) {
       const family = result.family
       const familyName = result.familyName ?? ''
       const cardNumber = aCard
+      // דדופ: ימות עלולה לשלוח את אותה בקשה פעמיים — מבצעים את השיוך פעם אחת בלבד
+      // ומחזירים לניסיון הכפול את אותה תשובה שכבר חושבה.
+      const dedupKey = `link:${callId || callerPhone}:${aidId}`
+      const cachedResp = _linkDedup.get(dedupKey)
+      if (cachedResp && Date.now() - cachedResp.at < LINK_DEDUP_MS) {
+        console.log(`[yemot-maternity] dedup hit ${dedupKey}`)
+        return new NextResponse(cachedResp.body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+      }
+      const respond = (commands: string[]) => {
+        const body = commands.join('&') + '&'
+        pruneDedup(Date.now())
+        _linkDedup.set(dedupKey, { at: Date.now(), body })
+        console.log(`[yemot-maternity] link response (callId=${callId}): ${body}`)
+        return new NextResponse(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+      }
       const creds = await getNedarimCreds()
       if (!creds) {
         console.error('[yemot-maternity] nedarim not configured')
-        return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
+        return respond([idMessage(tokenOf(M.system_error)), goToFolder('hangup')])
       }
       // מזהה נדרים: מהרשומה; ואם חסר — חיפוש בנדרים לפי ת"ז ושמירה חזרה (כדי שמספר תקין
       // תמיד ישויך, גם אם nedarim_id לא נשמר בעבר).
@@ -318,24 +341,40 @@ async function handle(req: NextRequest) {
         await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
           caller: callerPhone, callId, family_name: familyName, error: 'אין nedarim_id למשפחה (גם לא נמצא לפי ת"ז)',
         })
-        return yemotText([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')], callId)
+        return respond([idMessage(tokenOf(M.not_in_nedarim)), goToFolder('hangup')])
       }
-      let linkOk = false, linkMsg = ''
-      try {
-        const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 20_000 })
-        linkOk = r.ok; linkMsg = r.message
-      } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
-      // נדרים מדווח שהכרטיס כבר משויך למשפחה זו — קורה כשימות שולחת את הבקשה פעמיים
-      // (הראשונה הצליחה). זו בדיוק המטרה, לכן מתייחסים לזה כהצלחה ולא כשגיאה.
-      const alreadyOnFamily = !linkOk && /כבר\s*(מוגדר|מוגד|משוי|משויך)/.test(linkMsg)
-      if (!linkOk && !alreadyOnFamily) {
+      // ניסיון שיוך — עד 2 ניסיונות בתוך אותה בקשה, כדי שהמתקשר יקבל תשובה נכונה בשיחה אחת.
+      // הצלחה = חיבור תקין, או "כבר מוגדר", או אימות ישיר מול נדרים שהכרטיס אכן משויך
+      // (נדרים לעיתים מקשר את הכרטיס אך מחזיר שגיאה/פסק-זמן).
+      const isAlreadyMsg = (m: string) => /כבר\s*(מוגדר|מוגד|משוי|משויך)/.test(m)
+      const cardLinkedInNedarim = async (): Promise<boolean> => {
+        try {
+          const full = await getClientCardFull(creds, nedarimId!)
+          const cards = Array.isArray((full as { Cards?: unknown } | null)?.Cards) ? ((full as { Cards: Record<string, unknown>[] }).Cards) : []
+          const want = cardNumber.replace(/\D/g, '')
+          return cards.some(c => !c.RemovedDate && [c.MagneticCard, c.CardNumber].some(v => String(v ?? '').replace(/\D/g, '') === want))
+        } catch { return false }
+      }
+      let linkOk = false, linkMsg = '', already = false
+      for (let attempt = 0; attempt < 2 && !linkOk && !already; attempt++) {
+        try {
+          const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 12_000 })
+          linkOk = r.ok; linkMsg = r.message
+        } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
+        if (!linkOk) {
+          already = isAlreadyMsg(linkMsg) || (await cardLinkedInNedarim())
+        }
+      }
+      const success = linkOk || already
+      if (!success) {
         console.error(`[yemot-maternity] setMagneticCard failed: ${linkMsg}`)
         await logActivity(admin, 'yemot_error', 'maternity_aid', aidId, {
           caller: callerPhone, callId, family_name: familyName, error: linkMsg, card_number_last4: cardNumber.slice(-4), nedarim_id: nedarimId,
         })
         // שמירת סיבת הכישלון המדויקת מנדרים על התיק — כדי שתהיה גלויה במסך הכרטיס
         await admin.from('maternity_aids').update({ card_load_error: `שיוך כרטיס בטלפון נכשל — תגובת נדרים: ${linkMsg}` }).eq('id', aidId).then(undefined, () => {})
-        return yemotText([idMessage(tokenOf(M.link_fail)), goToFolder('hangup')], callId)
+        // הקראת הסיבה המדויקת מנדרים למתקשר
+        return respond([idMessage(tText(`הפעולה נכשלה הסיבה ${linkMsg || 'שגיאה טכנית'}`)), goToFolder('hangup')])
       }
       // הצלחה (חיבור חדש או כרטיס שכבר משויך למשפחה) — רישום איסוף + מונה ממתינים -1.
       // אידמפוטנטי: אם כבר נרשם איסוף (שיחה/ניסיון כפול) — לא סופרים ולא מעדכנים שוב.
@@ -355,8 +394,8 @@ async function handle(req: NextRequest) {
           nedarim_id: nedarimId, center: centerName,
         })
       }
-      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, firstTime=${firstTime}, already=${alreadyOnFamily}`)
-      return yemotText([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')], callId)
+      console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, firstTime=${firstTime}, already=${already}`)
+      return respond([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')])
     }
 
     // תיקון (2) → מבקשים מספר חדש במשתנה הבא (כדי לא לקרוא מחדש משתנה מלא = לולאה)
