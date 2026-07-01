@@ -183,6 +183,7 @@ export interface CardCenter {
   loaded?: number     // נטענו (נוכו מהמלאי)
   remaining?: number  // נשאר פיזית = stock - loaded
   available?: number  // פנוי לאישור = stock - approved - loaded
+  waiting?: number    // משפחות שממתינות לקבל כרטיס במוקד זה (אין מלאי)
 }
 
 export interface Loan {

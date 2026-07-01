@@ -16,7 +16,7 @@ export default function CardCentersManager() {
   const [err, setErr] = useState('')
   const [modal, setModal] = useState<Draft | null>(null) // null=closed; id present=edit, else add
   const [filter, setFilter] = useState<'' | 'stock' | 'approved' | 'loaded' | 'remaining'>('')
-  const [addStock, setAddStock] = useState<{ id: string; name: string; current: number } | null>(null)
+  const [addStock, setAddStock] = useState<{ id: string; name: string; current: number; waiting: number } | null>(null)
   const [addAmount, setAddAmount] = useState('')
 
   const load = useCallback(async () => {
@@ -143,7 +143,7 @@ export default function CardCentersManager() {
                     <td className={`px-5 py-4 font-bold border-l border-slate-100 ${remaining > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{remaining}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock }) }}
+                        <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock, waiting: c.waiting ?? 0 }) }}
                           title="הוסף מלאי מיידי"
                           className="text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg p-1.5"><Plus size={16} /></button>
                         <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
@@ -223,13 +223,29 @@ export default function CardCentersManager() {
             </div>
             <div className="p-5 flex flex-col gap-4">
               <p className="text-sm text-slate-600">מלאי נוכחי: <strong>{addStock.current}</strong>. כמה כרטיסים להוסיף?</p>
+              {addStock.waiting > 0 && (
+                <div className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-amber-800">
+                  <span>⚠️</span>
+                  <span>שים לב: יש <strong>{addStock.waiting}</strong> {addStock.waiting === 1 ? 'משפחה שממתינה' : 'משפחות שממתינות'} לקבל כרטיס במוקד זה — הן יקבלו כרטיס אוטומטית מהמלאי החדש.</span>
+                </div>
+              )}
               <input type="number" min="1" value={addAmount} autoFocus
                 onChange={e => setAddAmount(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') saveAddStock() }}
                 className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-lg text-center focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="0" />
-              {addAmount && parseInt(addAmount, 10) > 0 && (
-                <p className="text-xs text-slate-500">מלאי חדש יהיה: <strong>{addStock.current + parseInt(addAmount, 10)}</strong>. יישלח שובר אוטומטי לכל יולדת שממתינה למלאי במוקד זה.</p>
-              )}
+              {addAmount && parseInt(addAmount, 10) > 0 && (() => {
+                const add = parseInt(addAmount, 10)
+                const served = Math.min(addStock.waiting, add)
+                const newStock = Math.max(0, addStock.current + add - addStock.waiting)
+                const stillWaiting = Math.max(0, addStock.waiting - (addStock.current + add))
+                return (
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    {addStock.waiting > 0
+                      ? <>שים לב יש <strong>{addStock.waiting}</strong> {addStock.waiting === 1 ? 'משפחה שממתינה' : 'משפחות שממתינות'} לקבל כרטיס במוקד זה — {served} {served === 1 ? 'תקבל' : 'יקבלו'} כרטיס מיד, <strong>המלאי החדש יהיה {newStock}</strong>.{stillWaiting > 0 ? ` (עדיין ימתינו ${stillWaiting}.)` : ''}</>
+                      : <>מלאי חדש יהיה: <strong>{addStock.current + add}</strong>.</>}
+                  </p>
+                )
+              })()}
               {err && <p className="text-sm text-red-600">{err}</p>}
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button onClick={() => setAddStock(null)} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">ביטול</button>

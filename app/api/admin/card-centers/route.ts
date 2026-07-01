@@ -31,10 +31,20 @@ async function listCenters(admin: ReturnType<typeof getAdminClient>) {
     if (a.card_status === 'loaded') loadedBy[a.card_center_id] = (loadedBy[a.card_center_id] ?? 0) + 1
     else approvedBy[a.card_center_id] = (approvedBy[a.card_center_id] ?? 0) + 1
   }
+  // משפחות שממתינות לקבל כרטיס במוקד (בחרו מוקד אך אין מלאי) — לפי סטטוס התיק או סטטוס השובר
+  const { data: waitingAids } = await admin!
+    .from('maternity_aids')
+    .select('card_center_id')
+    .not('card_center_id', 'is', null)
+    .or('card_status.eq.awaiting_stock,card_voucher_status.eq.awaiting_stock')
+  const waitingBy: Record<string, number> = {}
+  for (const a of waitingAids ?? []) {
+    if (a.card_center_id) waitingBy[a.card_center_id] = (waitingBy[a.card_center_id] ?? 0) + 1
+  }
   return (centers ?? []).map(c => {
     const approved = approvedBy[c.id] ?? 0
     const loaded = loadedBy[c.id] ?? 0
-    return { ...c, approved, loaded, remaining: c.stock - loaded, available: c.stock - approved - loaded }
+    return { ...c, approved, loaded, remaining: c.stock - loaded, available: c.stock - approved - loaded, waiting: waitingBy[c.id] ?? 0 }
   })
 }
 
