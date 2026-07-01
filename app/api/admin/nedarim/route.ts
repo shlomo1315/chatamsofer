@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const data = await nedarimCall(action, body.params ?? {})
+    const params = { ...(body.params ?? {}) }
+    // נדרים דורש שפרמטר Remove יישלח תמיד בשיוך כרטיס מגנטי ('0' בהוספה).
+    // נכפה זאת בשרת כדי שלא נהיה תלויים בקוד-לקוח מטמון ישן.
+    if (action === 'SetClientMagneticCard' && (params.Remove === undefined || params.Remove === null || params.Remove === '')) {
+      params.Remove = '0'
+    }
+    const data = await nedarimCall(action, params)
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     return NextResponse.json({ Result: 'Error', Message: e instanceof Error ? e.message : 'שגיאה' }, { status: 502 })
