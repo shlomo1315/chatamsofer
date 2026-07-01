@@ -77,32 +77,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 1. מייל אישור הבקשה (לא חוסם)
-  if (ben.email) {
-    const mail = type === 'loan'
-      ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-      : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial })
-
-    // אישור לידה (רגילה, לא שקטה) → שובר הבראה תמיד; שובר כרטיס רק אם יש מלאי במוקד שנבחר
-    let attachments: MailAttachment[] | undefined
-    if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
-      try {
-        const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
-        const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; spouse_id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
-        // ת"ז היולדת = האשה (spouse), עם נפילה-לאחור לרשומה הראשית
-        const motherId = b.spouse_id_number || b.id_number
-        attachments = await buildMaternityVouchers({
-          motherName, motherId, address: b.address, city: b.city, phone: b.phone,
-          birthDate: birth.birth_date, recoveryHome: birth.recovery_home, serial,
-          centers: center ? [center] : [],
-        }, { includeCard: stockAvailable })
-      } catch (e) { console.error('[request-approved] voucher build failed:', e) }
-    }
-
-    deliverMail(ben.email, mail.subject, mail.html, attachments, mailFor(type === 'loan' ? 'gemach' : 'maternity')).catch(e => console.error('[request-approved] mail failed:', e))
-  }
-
-  // ── עדכון הלידה: מספר סידורי + סטטוס שובר; אם יש מלאי — מונה "ממתינים לאיסוף" +1 ──
+  // ── עדכונים מהירים ב-DB (חובה לפני התגובה — כדי שהמסך יתעדכן מיד) ──
+  // עדכון הלידה: מספר סידורי + סטטוס שובר; אם יש מלאי — מונה "ממתינים לאיסוף" +1
   if (type === 'maternity') {
     await admin.from('maternity_aids').update({
       voucher_serial: serial,
@@ -117,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. הפיכה אוטומטית ל"מאושר" אם טרם אושר — ללא מייל נפרד
+  // הפיכה אוטומטית ל"מאושר" אם טרם אושר — ללא מייל נפרד
   let promoted = false
   if (ben.eligibility_status !== 'approved') {
     const { error: upErr } = await admin
@@ -128,11 +104,42 @@ export async function POST(request: NextRequest) {
     else console.error('[request-approved] promote failed:', upErr.message)
   }
 
-  // 3. אישור לידה → הטענת 600 ₪ אוטומטית בנדרים (איתור/הקמת המשפחה לפי ת.ז). לא חוסם.
-  if (type === 'maternity') {
-    try { await loadMaternityCardOnApproval(admin, id) }
-    catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
-  }
+  // ── תופעות לוואי איטיות ברקע (מייל+שוברים, והטענת נדרים) — לא חוסמות את התגובה.
+  // ב-Railway השרת נשאר חי, כך שהעבודה ברקע מסתיימת גם לאחר שהתגובה נשלחה.
+  void (async () => {
+    // 1. מייל אישור הבקשה (+ שוברים ללידה)
+    if (ben.email) {
+      try {
+        const mail = type === 'loan'
+          ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
+          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial })
+
+        // אישור לידה (רגילה, לא שקטה) → שובר הבראה תמיד; שובר כרטיס רק אם יש מלאי במוקד שנבחר
+        let attachments: MailAttachment[] | undefined
+        if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
+          try {
+            const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
+            const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; spouse_id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
+            // ת"ז היולדת = האשה (spouse), עם נפילה-לאחור לרשומה הראשית
+            const motherId = b.spouse_id_number || b.id_number
+            attachments = await buildMaternityVouchers({
+              motherName, motherId, address: b.address, city: b.city, phone: b.phone,
+              birthDate: birth.birth_date, recoveryHome: birth.recovery_home, serial,
+              centers: center ? [center] : [],
+            }, { includeCard: stockAvailable })
+          } catch (e) { console.error('[request-approved] voucher build failed:', e) }
+        }
+
+        await deliverMail(ben.email, mail.subject, mail.html, attachments, mailFor(type === 'loan' ? 'gemach' : 'maternity'))
+      } catch (e) { console.error('[request-approved] mail failed:', e) }
+    }
+
+    // 2. אישור לידה → הטענת 600 ₪ אוטומטית בנדרים (איתור/הקמת המשפחה לפי ת.ז)
+    if (type === 'maternity') {
+      try { await loadMaternityCardOnApproval(admin, id) }
+      catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
+    }
+  })()
 
   return NextResponse.json({ ok: true, promoted })
 }

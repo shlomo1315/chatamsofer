@@ -82,9 +82,9 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
 
-      // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת
+      // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת — ברקע (לא חוסם את ה-UI)
       // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
-      await syncBabyStatusInFamily(supabase, aid, next)
+      void syncBabyStatusInFamily(supabase, aid, next)
 
       // באישור הלידה — מייל+שוברים והפיכת המשפחה ל"מאושר", וסנכרון נדרים — רצים ברקע
       // (לא חוסמים את ה-UI). השרת משלים אותם גם בלי שנמתין לתשובה.

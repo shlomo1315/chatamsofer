@@ -60,13 +60,14 @@ export async function POST(request: NextRequest) {
   const { error } = await admin.from(table).update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await logActivity(admin, {
+  // תיעוד הפעולה ברקע — לא מעכב את התגובה (כדי שהאישור יגיב מיידית)
+  void logActivity(admin, {
     userId: staff.userId,
     action: `${type}_status_changed`,
     entityType: type === 'loan' ? 'loan' : 'maternity_aid',
     entityId: id,
     details: { from: fromStatus, to: status },
-  })
+  }).catch(() => {})
 
   return NextResponse.json({ ok: true })
 }

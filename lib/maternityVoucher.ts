@@ -82,7 +82,7 @@ type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 // משתמשים ב-LEFT-TO-RIGHT OVERRIDE (U+202D) … POP (U+202C) — כפייה חזקה שמכובדת
 // על ידי יותר צופי PDF מאשר ISOLATE (U+2066), שלא תמיד נתמך.
 function isoNum(s: string): string {
-  return String(s ?? '').replace(/\d+(?:[.,:/\-]\d+)*/g, m => `‭${m}‬`)
+  return String(s ?? '').replace(/\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g, m => `‭${m}‬`)
 }
 // מדידת רוחב כולל בידוד מספרים
 function tw(c: Ctx, text: string, size: number): number {

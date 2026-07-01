@@ -283,6 +283,8 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
   const [tlushExp, setTlushExp] = useState('')
   // magnetic
   const [newCard, setNewCard] = useState('')
+  // תגובת נדרים המלאה לשיוך כרטיס (נשארת על המסך עד לפעולה הבאה)
+  const [cardResult, setCardResult] = useState<{ ok: boolean; message: string } | null>(null)
   // לידות המשפחה — "סיבת הטעינות" (כל טעינה = לידה)
   type Birth = { id: string; birthDate: string | null; babyName: string | null; babyGender: string | null; recoveryHome: string | null; status: string | null }
   const [births, setBirths] = useState<Birth[]>([])
@@ -326,11 +328,12 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
 
   const addMagnetic = async () => {
     if (!newCard.trim()) { flash('יש להזין מספר כרטיס'); return }
-    setBusy('mag')
+    setBusy('mag'); setCardResult(null)
     const d = await api('SetClientMagneticCard', { ClientId: family.ClientId, MagneticCard: newCard.trim() })
     setBusy('')
-    if (String(d.Result).toUpperCase() === 'OK') { setNewCard(''); flash('הכרטיס שויך'); refresh() }
-    else flash(d.Message || 'שגיאה בשיוך כרטיס')
+    const ok = String(d.Result).toUpperCase() === 'OK'
+    setCardResult({ ok, message: String(d.Message ?? '') })
+    if (ok) { setNewCard(''); refresh() }
   }
 
   const removeMagnetic = async (cardId: string, mag: string) => {
@@ -474,6 +477,12 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
                   {busy === 'mag' ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} שייך
                 </button>
               </div>
+              {cardResult && (
+                <div className={`mt-2 rounded-lg border px-3 py-2 text-sm ${cardResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                  <div className="font-semibold">{cardResult.ok ? '✓ נדרים אישר — הכרטיס שויך' : '✗ נדרים החזיר שגיאה'}</div>
+                  {cardResult.message && <div className="mt-0.5 text-xs opacity-90">תגובת נדרים: {cardResult.message}</div>}
+                </div>
+              )}
             </section>
 
             {/* history */}
