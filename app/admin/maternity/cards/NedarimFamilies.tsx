@@ -329,7 +329,7 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
   const addMagnetic = async () => {
     if (!newCard.trim()) { flash('יש להזין מספר כרטיס'); return }
     setBusy('mag'); setCardResult(null)
-    const d = await api('SetClientMagneticCard', { ClientId: family.ClientId, MagneticCard: newCard.trim() })
+    const d = await api('SetClientMagneticCard', { ClientId: family.ClientId, MagneticCard: newCard.trim(), Remove: '0' })
     setBusy('')
     const ok = String(d.Result).toUpperCase() === 'OK'
     setCardResult({ ok, message: String(d.Message ?? '') })

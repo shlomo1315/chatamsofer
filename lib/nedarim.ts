@@ -194,7 +194,8 @@ export async function setMagneticCard(
     ClientId: clientId,
     MagneticCard: magneticCard,
     CardId: opts?.cardId,
-    Remove: opts?.remove ? '1' : undefined,
+    // נדרים דורש שהפרמטר יישלח תמיד — '0' בהוספה, '1' במחיקה (השמטתו מחזירה "פרמטר Remove לא תקין")
+    Remove: opts?.remove ? '1' : '0',
   }, opts?.timeoutMs)
   return { ok: isOk(r), message: String(r.Message ?? ''), data: r }
 }
