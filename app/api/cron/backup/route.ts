@@ -18,6 +18,10 @@ function monthKey(d: Date): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: ISRAEL_TZ, year: 'numeric', month: '2-digit' }).format(d)
   return parts // למשל "2026-06"
 }
+function dayKey(d: Date): string {
+  // YYYY-MM-DD לפי אזור הזמן של ישראל — לזיהוי "כבר גובה היום"
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ISRAEL_TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
 // רק קבצי הגיבוי שלנו (לא נוגעים בקבצים אחרים בתיקייה)
 const isOurBackup = (name: string) => /^backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/.test(name)
 const MIN_KEEP = 7 // רשת ביטחון — תמיד שומרים לפחות 7 האחרונים
@@ -33,12 +37,27 @@ export async function GET(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'no admin client' }, { status: 500 })
 
+  const now = new Date()
+  const today = dayKey(now)
+  const force = request.nextUrl.searchParams.get('force') === '1'
+
+  // אידמפוטנטי: גיבוי אחד ליום בלבד. כך אפשר לקרוא לכתובת בתדירות גבוהה (גם כל שעה)
+  // מכל מתזמן, והיא תגבה רק פעם ביום. ?force=1 עוקף (לבדיקה ידנית).
+  if (!force) {
+    const { data: ran } = await admin.from('app_settings').select('value').eq('key', 'backup_last_run_date').maybeSingle()
+    if (ran?.value === today) {
+      return NextResponse.json({ ok: true, skipped: true, reason: 'כבר בוצע גיבוי היום', date: today })
+    }
+  }
+
   try {
-    const now = new Date()
     const { buffer, manifest } = await generateBackup(admin)
     const filename = backupFilename(now)
     const up = await uploadBackup(filename, buffer)
     if (!up.ok) throw new Error(up.error || 'העלאה ל-Drive נכשלה')
+
+    // סימון שהיום כבר גובה (לאידמפוטנטיות — גיבוי אחד ליום)
+    await admin.from('app_settings').upsert({ key: 'backup_last_run_date', value: today }, { onConflict: 'key' }).then(undefined, () => {})
 
     // ניקוי פעם בחודש: רק כשמתחלף החודש מאז הניקוי האחרון.
     // מוחק את כל הגיבויים מהחודשים הקודמים (משאיר רק את החודש הנוכחי),
