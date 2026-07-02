@@ -332,8 +332,8 @@ function FamilyModal({ family, onClose, onChanged }: { family: Family; onClose: 
     const d = await api('SetClientMagneticCard', { ClientId: family.ClientId, MagneticCard: newCard.trim(), Remove: '0' })
     setBusy('')
     const msg = String(d.Message ?? '')
-    // "כבר מוגדר למשפחה זו" = הכרטיס כבר משויך למשפחה — זו המטרה, אז זו הצלחה
-    const alreadyOnFamily = /כבר\s*(מוגדר|מוגד|משוי|משויך)/.test(msg)
+    // הכרטיס כבר משויך למשפחה זו = המטרה — אז זו הצלחה (זיהוי רחב לניסוחי נדרים)
+    const alreadyOnFamily = /משפחה\s*זו|כבר\s*(מוגדר|מוגד|משוי|משויך)|(מוגדר|משויך|משוי)\S*\s*למשפחה/.test(msg)
     const ok = String(d.Result).toUpperCase() === 'OK' || alreadyOnFamily
     setCardResult({ ok, message: alreadyOnFamily ? 'הכרטיס כבר משויך למשפחה זו' : msg })
     if (ok) { setNewCard(''); refresh() }
