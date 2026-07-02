@@ -8,7 +8,7 @@ const COOKIE_NAME = 'pb_session'
 const MAX_AGE_SECONDS = 60 * 60 * 6 // 6 שעות
 
 function secret(): string {
-  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'change-this-secret-in-production'
+  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 }
 
 function sign(payload: string): string {

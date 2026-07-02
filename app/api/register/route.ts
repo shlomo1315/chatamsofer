@@ -8,7 +8,7 @@ import { validateIsraeliId } from '@/lib/validation'
 
 function verifyNonce(nonce: string, email: string): boolean {
   try {
-    const secret = process.env.OTP_NONCE_SECRET || 'change-this-secret-in-production'
+    const secret = process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     const decoded = Buffer.from(nonce, 'base64url').toString()
     const lastColon = decoded.lastIndexOf(':')
     const payload = decoded.slice(0, lastColon)

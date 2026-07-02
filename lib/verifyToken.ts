@@ -6,7 +6,7 @@ import { normalizePhone } from './phone'
 const TTL_MS = 30 * 60 * 1000
 
 function secret(): string {
-  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'change-this-secret-in-production'
+  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 }
 
 export type VerifyChannel = 'email' | 'phone'

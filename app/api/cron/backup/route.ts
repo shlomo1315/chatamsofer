@@ -1,7 +1,7 @@
 // גיבוי יומי אוטומטי → Google Drive + שמירה (retention) + מייל אישור/התראה.
 // מוגן ב-CRON_SECRET. הרצה: GET עם ?token=<CRON_SECRET> או Authorization: Bearer.
 import { NextResponse, type NextRequest } from 'next/server'
-import { getServiceClient } from '@/lib/apiAuth'
+import { getServiceClient, verifyCronSecret } from '@/lib/apiAuth'
 import { generateBackup, backupFilename } from '@/lib/backup'
 import { uploadBackup, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
@@ -27,10 +27,10 @@ const isOurBackup = (name: string) => /^backup-\d{4}-\d{2}-\d{2}-\d{4}\.zip$/.te
 const MIN_KEEP = 7 // רשת ביטחון — תמיד שומרים לפחות 7 האחרונים
 
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  const auth = request.headers.get('authorization')
-  const token = request.nextUrl.searchParams.get('token') || request.nextUrl.searchParams.get('secret')
-  if (secret && auth !== `Bearer ${secret}` && token !== secret) {
+  // נכשל-סגור: אם CRON_SECRET אינו מוגדר או לא תואם — חסום (verifyCronSecret מקבל
+  // Authorization: Bearer או ?secret=). מונע גיבוי לא-מורשה גם אם המשתנה נשמט.
+  const okToken = verifyCronSecret(request) || request.nextUrl.searchParams.get('token') === process.env.CRON_SECRET
+  if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
   if (!(await driveReady())) return NextResponse.json({ error: 'Google Drive אינו מחובר' }, { status: 503 })

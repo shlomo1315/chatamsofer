@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 import { createHmac } from 'crypto'
 
 function signNonce(email: string): string {
-  const secret = process.env.OTP_NONCE_SECRET || 'change-this-secret-in-production'
+  const secret = process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
   const exp = Date.now() + 15 * 60 * 1000
   const payload = `${email}:${exp}`
   const sig = createHmac('sha256', secret).update(payload).digest('hex')

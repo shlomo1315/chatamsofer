@@ -6,7 +6,9 @@ export const PORTAL_COOKIE = 'loans_portal_token'
 const TOKEN_DAYS_VALID = 14
 
 function secret() {
-  return process.env.LOANS_PORTAL_SECRET ?? 'loans_portal_fallback_secret_CHANGE_ME'
+  // ללא ברירת-מחדל ציבורית: אם LOANS_PORTAL_SECRET לא הוגדר — נופלים למפתח ה-service-role
+  // (שתמיד קיים בשרת), כדי שלא ייחתם לעולם עם קבוע ידוע-פומבית.
+  return process.env.LOANS_PORTAL_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
 }
 
 function adminClient() {

@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createHmac } from 'crypto'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 
 function signNonce(email: string): string {
-  const secret = process.env.OTP_NONCE_SECRET || 'change-this-secret-in-production'
+  const secret = process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
   const exp = Date.now() + 15 * 60 * 1000 // 15 minutes
   const payload = `${email}:${exp}`
   const sig = createHmac('sha256', secret).update(payload).digest('hex')
@@ -13,6 +14,11 @@ function signNonce(email: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  // הגבלת קצב — בולמת ניחוש קוד OTP (לפי IP)
+  if (!rateLimit(`verify-otp:${clientIp(request)}`, 20, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
+  }
+
   let body: unknown
   try {
     body = await request.json()

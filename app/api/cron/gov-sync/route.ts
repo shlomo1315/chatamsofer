@@ -1,16 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getAdminClient, syncCities, syncAllStreets } from '@/lib/govData'
+import { verifyCronSecret } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 // רענון לילי (00:00) של מאגר הערים והרחובות מ-data.gov.il (משרד הפנים).
-// מוגן בטוקן CRON_SECRET. מרענן את כל הערים, ואת הרחובות של ערים שכבר נשאלו.
+// מוגן בטוקן CRON_SECRET (נכשל-סגור). מרענן את כל הערים, ואת הרחובות של ערים שכבר נשאלו.
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  const auth = request.headers.get('authorization')
-  const token = request.nextUrl.searchParams.get('token')
-  if (secret && auth !== `Bearer ${secret}` && token !== secret) {
+  const okToken = verifyCronSecret(request) || request.nextUrl.searchParams.get('token') === process.env.CRON_SECRET
+  if (!process.env.CRON_SECRET || !okToken) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
