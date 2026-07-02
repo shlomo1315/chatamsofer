@@ -22,13 +22,12 @@ function ttsSafe(text: string): string {
   return String(text ?? '').replace(/[.,\-"'&|=]/g, ' ').replace(/[ \t]+/g, ' ').trim()
 }
 
-// משפט ההקראה: הספרות ספרה-ספרה עם פסיק בין ספרה לספרה = השהיה קצרה (הקראה איטית
-// וברורה), ופסיקים כפולים לפני החזרה = השהיה ארוכה יותר. פסיקים יוצרים את ההפסקות
-// (כמו בהקראת מספר הכרטיס בשלוחה); מסירים רק תווים שמפריעים לימות — לא פסיקים.
+// כל ספרה מוקראת כמילה בעברית — כך ההקראה איטית וברורה, ספרה אחרי ספרה.
+// ⚠️ בלי פסיקים/נקודות — בשיחה יוצאת (RunCampaign) הם חותכים את ההודעה.
+const DIGIT_WORDS = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע']
 function spokenCode(code: string): string {
-  const digits = code.replace(/\D/g, '').split('').join(', ')
-  const text = `קוד הכניסה שלך הוא, , ${digits}, , , , שוב, , ${digits}`
-  return text.replace(/[.\-"'&|=]/g, ' ').replace(/ +/g, ' ').trim()
+  const words = code.replace(/\D/g, '').split('').map(d => DIGIT_WORDS[Number(d)] ?? d).join(' ')
+  return ttsSafe(`קוד הכניסה שלך הוא ${words} ואחזור שנית קוד הכניסה שלך הוא ${words}`)
 }
 
 // מבצע שיחה יוצאת יחידה שמקריאה טקסט TTS כלשהו. לעולם לא זורק.
