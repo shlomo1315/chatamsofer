@@ -3,24 +3,25 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Edit, Trash2, Loader2 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 export default function BeneficiaryActions({ id, name }: { id: string; name: string }) {
   const router = useRouter()
-  const supabase = createClient()
   const toast = useToast()
   const { confirm, confirmDialog } = useConfirm()
   const [deleting, setDeleting] = useState(false)
 
   const handleDelete = async () => {
-    if (!(await confirm({ title: 'מחיקת נתמך', message: `למחוק את "${name}" לצמיתות? פעולה זו אינה הפיכה.`, confirmLabel: 'מחיקה', danger: true }))) return
+    if (!(await confirm({ title: 'מחיקת נתמך', message: `למחוק את "${name}" לצמיתות? הפעולה תמחק אותם גם מעץ הדורות (אם אין להם צאצאים בעץ). פעולה זו אינה הפיכה.`, confirmLabel: 'מחיקה', danger: true }))) return
     setDeleting(true)
     try {
-      const { error } = await supabase.from('beneficiaries').delete().eq('id', id)
-      if (error) throw error
-      toast.success(`"${name}" נמחק/ה`)
+      const res = await fetch('/api/admin/beneficiaries/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || 'שגיאה במחיקה')
+      toast.success(`"${name}" נמחק/ה${d.treeRemoved ? ' (כולל מעץ הדורות)' : ''}`)
       router.push('/admin/beneficiaries')
       router.refresh()
     } catch (err: unknown) {

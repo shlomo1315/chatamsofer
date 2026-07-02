@@ -161,6 +161,9 @@ export async function DELETE(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
+  // סנכרון: מחיקת צומת בעץ מוחקת גם את המשפחות (צאצאים) המקושרות אליו
+  await admin.from('beneficiaries').delete().eq('lineage_node_id', id).then(undefined, () => {})
+
   const { error } = await admin.from('lineage_nodes').delete().eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
