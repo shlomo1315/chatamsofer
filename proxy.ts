@@ -21,6 +21,10 @@ export async function proxy(request: NextRequest) {
     return isAdminRoute ? noCache(response) : response
   }
 
+  // מסלולים ציבוריים (פורטל, טופס רישום וכו') אינם דורשים אימות — מדלגים על קריאת
+  // הרשת ל-getUser (חוסך ~0.3-0.5ש' לכל בקשה). האימות נדרש רק ב-/admin וב-/login.
+  if (!isAdminRoute && !isLoginPage) return response
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

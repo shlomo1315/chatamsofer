@@ -10,6 +10,11 @@ const BASE =
 const ERR = '!border-red-400 focus:!ring-red-400'
 const DIS = 'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed'
 
+// מטמון בזיכרון (לכל טעינת דף) — ערים ורחובות שנטענו נשמרים כדי שבחירה חוזרת
+// של עיר תוצג מיד, בלי קריאת רשת נוספת.
+let _citiesCache: string[] | null = null
+const _streetsCache = new Map<string, string[]>()
+
 // Split "רחוב הרצל 12" → { street: "רחוב הרצל", houseNumber: "12" }
 function splitAddr(addr: string): { street: string; houseNumber: string } {
   const m = addr.trim().match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/)
@@ -51,10 +56,10 @@ export default function CityStreetPicker({
   const lbl = labelSize === 'xs' ? 'text-xs font-medium text-slate-600' : 'text-sm font-medium text-slate-700'
 
   useEffect(() => {
-    // _=timestamp — כתובת ייחודית שעוקפת כל מטמון (דפדפן ו-CDN/Cloudflare)
-    fetch(`/api/gov/cities?_=${Date.now()}`, { cache: 'no-store' })
+    if (_citiesCache) { setAllCities(_citiesCache); return } // מטמון — טעינה מיידית
+    fetch(`/api/gov/cities`)
       .then(r => r.json())
-      .then(d => setAllCities(d.cities ?? []))
+      .then(d => { _citiesCache = d.cities ?? []; setAllCities(_citiesCache!) })
       .catch(() => {})
   }, [])
 
@@ -66,13 +71,15 @@ export default function CityStreetPicker({
     setHouseNum(houseNumber)
   }, [address])
 
-  // Fetch streets when city is confirmed
+  // Fetch streets when city is confirmed — עם מטמון (בחירה חוזרת של עיר = מיידי)
   useEffect(() => {
     if (!city) { setStreets([]); return }
+    const cached = _streetsCache.get(city)
+    if (cached) { setStreets(cached); setLoadingStreets(false); return }
     setLoadingStreets(true)
-    fetch(`/api/gov/streets?city=${encodeURIComponent(city)}&_=${Date.now()}`, { cache: 'no-store' })
+    fetch(`/api/gov/streets?city=${encodeURIComponent(city)}`)
       .then(r => r.json())
-      .then(d => setStreets(d.streets ?? []))
+      .then(d => { const s = d.streets ?? []; _streetsCache.set(city, s); setStreets(s) })
       .catch(() => setStreets([]))
       .finally(() => setLoadingStreets(false))
   }, [city])

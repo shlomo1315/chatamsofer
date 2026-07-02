@@ -26,8 +26,12 @@ function ttsSafe(text: string): string {
 // ⚠️ בלי פסיקים/נקודות — בשיחה יוצאת (RunCampaign) הם חותכים את ההודעה.
 const DIGIT_WORDS = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע']
 function spokenCode(code: string): string {
-  const words = code.replace(/\D/g, '').split('').map(d => DIGIT_WORDS[Number(d)] ?? d).join(' ')
-  return ttsSafe(`קוד הכניסה שלך הוא ${words} ואחזור שנית קוד הכניסה שלך הוא ${words}`)
+  // רווחים מרובים בין הספרות = השהיה קלה (הקראה איטית יותר) בלי פסיקים שחותכים.
+  const GAP = '     '
+  const words = code.replace(/\D/g, '').split('').map(d => DIGIT_WORDS[Number(d)] ?? d).join(GAP)
+  const text = `קוד הכניסה שלך הוא${GAP}${words}${GAP}${GAP}ואחזור שנית${GAP}קוד הכניסה שלך הוא${GAP}${words}`
+  // מסירים רק תווים שחותכים/מפריעים בשיחה יוצאת — ושומרים על הרווחים (ההשהיות)
+  return text.replace(/[.,\-"'&|=]/g, ' ').trim()
 }
 
 // מבצע שיחה יוצאת יחידה שמקריאה טקסט TTS כלשהו. לעולם לא זורק.

@@ -189,7 +189,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
       e.preventDefault()
       e.stopPropagation()
       setZoom(prev => {
-        const next = Math.min(2.5, Math.max(0.5, +(prev - e.deltaY * 0.0015).toFixed(3)))
+        const next = Math.min(2.5, Math.max(0.1, +(prev - e.deltaY * 0.0015).toFixed(3)))
         if (next === prev) return prev
         const rect = el.getBoundingClientRect()
         const offX = e.clientX - rect.left
@@ -362,7 +362,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   function fitToScreen() {
     if (!canvasRef.current || !positions.length) return
     const el = canvasRef.current
-    const newZoom = Math.min(1.5, Math.max(0.5, Math.min(el.clientWidth / (w + PAD * 2), el.clientHeight / (h + PAD * 2))))
+    const newZoom = Math.min(1.5, Math.max(0.1, Math.min(el.clientWidth / (w + PAD * 2), el.clientHeight / (h + PAD * 2))))
     setZoom(newZoom)
     didCenter.current = false
   }
@@ -434,7 +434,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
           <button onClick={fitToScreen} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>⊡ התאם</button>
           <button onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>+</button>
           <button onClick={() => { setZoom(1); didCenter.current = false }} style={{ height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 11, cursor: 'pointer', padding: '0 8px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
-          <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
+          <button onClick={() => setZoom(z => Math.max(0.1, z - 0.1))} style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED', fontWeight: 700 }}>−</button>
         </div>
       </div>
 
