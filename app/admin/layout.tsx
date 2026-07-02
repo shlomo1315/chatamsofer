@@ -18,10 +18,7 @@ export default async function DashboardLayout({
   if (isSupabaseConfigured()) {
     try {
       const supabase = await createClient()
-      // ה-proxy (middleware) כבר מאמת את המשתמש מול השרת בכל בקשה (getUser),
-      // לכן כאן קוראים את הסשן מקומית מה-cookie ללא סבב רשת נוסף — חוסך ~0.5ש' לכל ניווט/refresh.
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data } = await supabase
           .from('profiles')
