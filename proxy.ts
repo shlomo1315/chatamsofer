@@ -44,18 +44,7 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // אימות מהיר: getClaims מאמת את ה-JWT מקומית (בלי סבב רשת לשרת האימות) כשמוגדרים
-  // מפתחות חתימה, ולכן מהיר בהרבה מ-getUser על כל בקשה. נפילה-לאחור ל-getUser אם צריך.
-  let user: { id: string } | null = null
-  try {
-    const { data } = await supabase.auth.getClaims()
-    const sub = (data?.claims as { sub?: string } | undefined)?.sub
-    if (sub) user = { id: String(sub) }
-  } catch { /* ניפול ל-getUser */ }
-  if (!user) {
-    const { data } = await supabase.auth.getUser()
-    if (data.user) user = { id: data.user.id }
-  }
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (isAdminRoute && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
