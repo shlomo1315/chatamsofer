@@ -57,6 +57,14 @@ const LINK_DEDUP_MS = 90_000 // חלון קצר — רק כדי לתפוס webho
 function pruneDedup(now: number) {
   for (const [k, v] of _linkDedup) if (now - v.at > LINK_DEDUP_MS) _linkDedup.delete(k)
 }
+
+// דדופ ברמת הבקשה כולה — ימות שולחת לעיתים את אותו webhook פעמיים. מפתח לפי
+// מזהה-שיחה + חתימת הקלט (הספרות/אישור שהוקשו), כך שכל שלב מעובד ומגיב פעם אחת.
+const _reqDedup = new Map<string, { at: number; body: string }>()
+const REQ_DEDUP_MS = 30_000
+function pruneReqDedup(now: number) {
+  for (const [k, v] of _reqDedup) if (now - v.at > REQ_DEDUP_MS) _reqDedup.delete(k)
+}
 async function getCachedMessages(): Promise<MaternityMessages> {
   const now = Date.now()
   if (_msgCache && now - _msgCache.at < MSG_TTL_MS) return _msgCache.data
@@ -229,15 +237,35 @@ async function findActiveAid(callerPhone: string) {
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
-export async function POST(req: NextRequest) { return handle(req) }
-export async function GET(req: NextRequest) { return handle(req) }
+export async function POST(req: NextRequest) { return entry(req) }
+export async function GET(req: NextRequest) { return entry(req) }
 
-async function handle(req: NextRequest) {
+// עוטף את הטיפול בדדופ ברמת הבקשה — מונע עיבוד כפול כשימות שולחת פעמיים.
+async function entry(req: NextRequest): Promise<NextResponse> {
   const params: Record<string, string> =
     req.method === 'GET'
       ? Object.fromEntries(req.nextUrl.searchParams.entries())
       : await req.formData().then((f) => Object.fromEntries(f.entries()) as Record<string, string>).catch(() => ({} as Record<string, string>))
 
+  const callId = String(params['ApiCallId'] ?? '').trim()
+  const sig = callId
+    ? `${callId}|${CARD_VARS.map(v => String(params[v] ?? '')).join(',')}|${CONFIRM_VARS.map(v => String(params[v] ?? '')).join(',')}`
+    : ''
+  if (sig) {
+    const cached = _reqDedup.get(sig)
+    if (cached && Date.now() - cached.at < REQ_DEDUP_MS) {
+      console.log(`[yemot-maternity] request dedup hit (callId=${callId})`)
+      return new NextResponse(cached.body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+    }
+  }
+  const res = await handle(params)
+  if (sig) {
+    try { const body = await res.clone().text(); pruneReqDedup(Date.now()); _reqDedup.set(sig, { at: Date.now(), body }) } catch { /* ignore */ }
+  }
+  return res
+}
+
+async function handle(params: Record<string, string>): Promise<NextResponse> {
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
   // הכרטיס שהוקלד באחרון מבין משתני הניסיון (לתצוגה בלוג בלבד)
