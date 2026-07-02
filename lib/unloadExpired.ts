@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { getNedarimCreds, prikatTlush, setMagneticCard } from '@/lib/nedarim'
+import { getNedarimCreds, prikatTlush, removeMagneticByNumber } from '@/lib/nedarim'
 
 // פריקה אוטומטית של כרטיסים שעברו 6 שבועות מהלידה.
 // משמש גם את נקודת-הקצה /api/nedarim/unload-expired וגם את המתזמן הפנימי (instrumentation).
@@ -36,18 +36,21 @@ export async function runUnloadExpired(): Promise<{ ok: boolean; processed: numb
         let cardRemoveError: string | null = null
         if (nedarimId && cardNumber) {
           try {
-            const rm = await setMagneticCard(creds, String(nedarimId), cardNumber, { remove: true })
+            const rm = await removeMagneticByNumber(creds, String(nedarimId), cardNumber)
             cardRemoved = rm.ok
             if (!rm.ok) cardRemoveError = rm.message
           } catch (e) { cardRemoveError = e instanceof Error ? e.message : String(e) }
+        } else {
+          cardRemoved = true // אין כרטיס לנתק
         }
 
         await admin.from('maternity_aids').update({
           card_load_status: 'unloaded',
           card_unloaded_at: new Date().toISOString(),
           card_balance: 0,
-          // ניקוי מספר הכרטיס בתיק רק אם נמחק בנדרים בהצלחה (אחרת נשמר לניסיון חוזר)
+          // ניקוי הכרטיס והאיסוף בתיק רק אם נותק בנדרים בהצלחה — כדי שבלידה הבאה אפשר יהיה לחבר מחדש
           card_number: cardRemoved ? null : aid.card_number,
+          card_picked_up_at: cardRemoved ? null : undefined,
           card_load_error: cardRemoveError,
         }).eq('id', aid.id)
         await admin.from('activity_log').insert({

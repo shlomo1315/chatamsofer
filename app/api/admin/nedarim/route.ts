@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { nedarimCall } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +41,23 @@ export async function POST(request: NextRequest) {
       params.Remove = '0'
     }
     const data = await nedarimCall(action, params)
+    // ניתוק כרטיס ידני שהצליח → ניקוי מצב הכרטיס בתיק היולדת (לפי nedarim_id),
+    // כדי שהמערכת תדע שאין כרטיס וניתן יהיה לחבר מחדש (גם בטלפון).
+    if (action === 'SetClientMagneticCard' && params.Remove === '1' &&
+        String((data as { Result?: string }).Result ?? '').toUpperCase() === 'OK' && params.ClientId) {
+      try {
+        const admin = getServiceClient()
+        if (admin) {
+          const { data: ben } = await admin.from('beneficiaries').select('id').eq('nedarim_id', String(params.ClientId)).maybeSingle()
+          if (ben?.id) {
+            await admin.from('maternity_aids')
+              .update({ card_number: null, card_picked_up_at: null })
+              .eq('beneficiary_id', ben.id)
+              .not('card_number', 'is', null)
+          }
+        }
+      } catch { /* ניקוי best-effort */ }
+    }
     return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     return NextResponse.json({ Result: 'Error', Message: e instanceof Error ? e.message : 'שגיאה' }, { status: 502 })

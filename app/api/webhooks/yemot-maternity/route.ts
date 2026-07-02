@@ -357,15 +357,14 @@ async function handle(req: NextRequest) {
           return cards.some(c => !c.RemovedDate && [c.MagneticCard, c.CardNumber].some(v => String(v ?? '').replace(/\D/g, '') === want))
         } catch { return false }
       }
+      // ניסיון שיוך יחיד (מהיר) — ואם נכשל, אימות אם הכרטיס בכל זאת משויך (הצלחה).
       let linkOk = false, linkMsg = '', already = false
-      for (let attempt = 0; attempt < 2 && !linkOk && !already; attempt++) {
-        try {
-          const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 12_000 })
-          linkOk = r.ok; linkMsg = r.message
-        } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
-        if (!linkOk) {
-          already = isAlreadyMsg(linkMsg) || (await cardLinkedInNedarim())
-        }
+      try {
+        const r = await setMagneticCard(creds, nedarimId, cardNumber, { timeoutMs: 12_000 })
+        linkOk = r.ok; linkMsg = r.message
+      } catch (e) { linkMsg = e instanceof Error ? e.message : String(e) }
+      if (!linkOk) {
+        already = isAlreadyMsg(linkMsg) || (await cardLinkedInNedarim())
       }
       const success = linkOk || already
       if (!success) {

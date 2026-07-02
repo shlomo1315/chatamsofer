@@ -200,6 +200,24 @@ export async function setMagneticCard(
   return { ok: isOk(r), message: String(r.Message ?? ''), data: r }
 }
 
+// מחיקת כרטיס מגנטי לפי מספר: מאתר קודם את CardId (נדרים דורש CardId למחיקה) ואז מוחק.
+// אם הכרטיס כבר לא משויך — מחזיר הצלחה (notFound).
+export async function removeMagneticByNumber(
+  creds: NedarimCreds, clientId: string, cardNumber: string,
+): Promise<{ ok: boolean; message: string; notFound?: boolean }> {
+  const want = cardNumber.replace(/\D/g, '')
+  let cardId: string | undefined
+  try {
+    const full = await getClientCardFull(creds, clientId)
+    const cards = Array.isArray((full as { Cards?: unknown } | null)?.Cards) ? ((full as { Cards: Record<string, unknown>[] }).Cards) : []
+    const hit = cards.find(c => !c.RemovedDate && [c.MagneticCard, c.CardNumber].some(v => String(v ?? '').replace(/\D/g, '') === want))
+    if (!hit) return { ok: true, message: '', notFound: true }
+    cardId = hit.CardId != null ? String(hit.CardId) : undefined
+  } catch { /* נמשיך בלי CardId */ }
+  const r = await setMagneticCard(creds, clientId, cardNumber, { remove: true, cardId })
+  return { ok: r.ok, message: r.message }
+}
+
 // משיכת נתוני משפחה מלאים (פרטים + יתרה + היסטוריה + טעינות + כרטיסים + סירובים)
 export async function getClientCardFull(creds: NedarimCreds, clientId: string): Promise<NedarimResponse | null> {
   const r = await nedarimRequest(creds, 'GetClientCard', { ClientId: clientId })
