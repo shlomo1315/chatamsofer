@@ -2189,7 +2189,7 @@ export default function PublicPortalPage() {
                         {authIsSetup
                           ? 'כדי להגדיר סיסמה לראשונה, נשלח קוד אימות לכתובת המייל הרשומה שלך.'
                           : 'נשלח קוד אימות לכתובת המייל הרשומה שלך לאיפוס הסיסמה.'}
-                        {authEmailHint && <><br /><span className="font-semibold ltr-num">{authEmailHint}</span></>}
+                        {authEmailHint && <><br /><span dir="ltr" className="inline-block font-semibold">{authEmailHint}</span></>}
                       </p>
                       {error && <ErrorBox message={error} />}
                       <button type="button" onClick={handleSendCode} disabled={loading}
@@ -2205,7 +2205,7 @@ export default function PublicPortalPage() {
                   ) : (
                     <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
                       <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
-                        קוד נשלח אל {authEmailHint || 'המייל שלך'} · תקף ל-10 דקות
+                        קוד נשלח אל <span dir="ltr" className="inline-block">{authEmailHint || 'המייל שלך'}</span> · תקף ל-10 דקות
                       </div>
                       <Field label="קוד אימות" required hint="6 ספרות שהתקבלו במייל">
                         <TextInput value={authCode}

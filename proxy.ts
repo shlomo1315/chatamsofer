@@ -44,9 +44,18 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // אימות מהיר: getClaims מאמת את ה-JWT מקומית (בלי סבב רשת לשרת האימות) כשמוגדרים
+  // מפתחות חתימה, ולכן מהיר בהרבה מ-getUser על כל בקשה. נפילה-לאחור ל-getUser אם צריך.
+  let user: { id: string } | null = null
+  try {
+    const { data } = await supabase.auth.getClaims()
+    const sub = (data?.claims as { sub?: string } | undefined)?.sub
+    if (sub) user = { id: String(sub) }
+  } catch { /* ניפול ל-getUser */ }
+  if (!user) {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) user = { id: data.user.id }
+  }
 
   if (isAdminRoute && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
@@ -64,7 +73,7 @@ export async function proxy(request: NextRequest) {
       // select('*') עמיד גם אם העמודה mail_only טרם נוספה במסד
       const { data: prof } = await supabase
         .from('profiles')
-        .select('*')
+        .select('mail_only, role')
         .eq('id', user.id)
         .maybeSingle()
       if (prof?.mail_only === true && prof.role !== 'admin') {
