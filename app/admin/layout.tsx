@@ -36,7 +36,13 @@ export default async function DashboardLayout({
     <ToastProvider>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <WelcomeModal />
-      <Sidebar isAdmin={profile?.role === 'admin'} permissions={profile?.permissions} />
+      <Sidebar
+        isAdmin={profile?.role === 'admin'}
+        permissions={profile?.permissions}
+        mailOnlyFlag={profile?.mail_only}
+        allowedMailboxes={profile?.allowed_mailboxes}
+        department={profile?.department}
+      />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Header user={profile} />
         <main className="flex-1 overflow-y-auto">

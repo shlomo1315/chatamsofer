@@ -7,7 +7,7 @@ import {
   Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { UserPermissions, SectionKey, Profile } from '@/types'
+import type { UserPermissions, SectionKey } from '@/types'
 import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
@@ -51,20 +51,17 @@ const bottomItems: { href: string; label: string; icon: React.ElementType }[] = 
   { href: '/admin/settings', label: 'הגדרות', icon: Settings },
 ]
 
-export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; permissions?: UserPermissions }) {
+// שדות הפרופיל (mail_only/allowed_mailboxes/department) מגיעים כ-props מה-Layout שכבר טען
+// את הפרופיל המלא — כדי לחסוך fetch('/api/admin/me') + getUser + שאילתת profiles נוספים בכל עמוד.
+export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMailboxes, department }: {
+  isAdmin?: boolean; permissions?: UserPermissions
+  mailOnlyFlag?: boolean; allowedMailboxes?: string[] | null; department?: string | null
+}) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [mailOpen, setMailOpen] = useState(pathname.startsWith('/admin/mail'))
   const [maternityOpen, setMaternityOpen] = useState(pathname.startsWith('/admin/maternity'))
-  const [myProfile, setMyProfile] = useState<Profile | null>(null)
   const [unreadCounts, setUnreadCounts] = useState<{ byDepartment: Record<string, number>; total: number }>({ byDepartment: {}, total: 0 })
-
-  useEffect(() => {
-    fetch('/api/admin/me')
-      .then(r => r.json())
-      .then(d => setMyProfile(d.profile ?? null))
-      .catch(() => {})
-  }, [])
 
   useEffect(() => {
     const fetchCounts = () =>
@@ -86,12 +83,12 @@ export default function Sidebar({ isAdmin, permissions }: { isAdmin?: boolean; p
 
   // מחלקות בתפריט המייל: מנהל רואה הכל; משתמש מוגבל רק את התיבות שהוקצו לו.
   // mailOnly = משתמש "מייל בלבד" — רואה אך ורק את לשונית המייל.
-  const mailOnly = !isAdmin && myProfile?.mail_only === true
+  const mailOnly = !isAdmin && mailOnlyFlag === true
   const allowedKeys: string[] | null = isAdmin
     ? null
-    : (myProfile?.allowed_mailboxes && myProfile.allowed_mailboxes.length > 0
-        ? myProfile.allowed_mailboxes
-        : (myProfile?.department ? [myProfile.department] : (mailOnly ? [] : null)))
+    : (allowedMailboxes && allowedMailboxes.length > 0
+        ? allowedMailboxes
+        : (department ? [department] : (mailOnly ? [] : null)))
   const visibleDepartments = allowedKeys === null
     ? Object.values(DEPARTMENTS)
     : Object.values(DEPARTMENTS).filter(d => allowedKeys.includes(d.key))
