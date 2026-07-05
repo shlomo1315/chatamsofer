@@ -1,10 +1,14 @@
 'use client'
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import CityStreetPicker from '@/components/ui/CityStreetPicker'
-import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
-import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
+
+// רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
+// כדי לא להיכנס לבאנדל הראשוני של הדף הציבורי. HebrewDatePicker טוען את @hebcal/core הכבד.
+const CityStreetPicker = dynamic(() => import('@/components/ui/CityStreetPicker'), { ssr: false })
+const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'), { ssr: false })
+const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
 import { docViewUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
