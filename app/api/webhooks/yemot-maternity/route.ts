@@ -106,6 +106,15 @@ function tText(text: string): string {
   return `t-${tts(text)}`
 }
 
+// token להקראה *איטית* — פסיק אחרי כל מילה יוצר הפסקה קצרה בימות, כך שההודעה
+// נשמעת לאט וברור (במיוחד שם המוקד). אם קיימת הקלטה אנושית — משתמשים בה כמות שהיא.
+function slowTokenOf(m: MaternityMsg | undefined, repl?: Record<string, string>): string {
+  if (m?.audio) return `f-${m.audio}`
+  let t = m?.text ?? ''
+  if (repl) for (const [k, v] of Object.entries(repl)) t = t.replaceAll(`{${k}}`, v)
+  return `t-${tts(t).split(' ').filter(Boolean).join(' , ')}`
+}
+
 const joinTokens = (...tokens: string[]) => tokens.filter(Boolean).join('.')
 const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`
 
@@ -426,7 +435,8 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
         })
       }
       console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, firstTime=${firstTime}, already=${already}`)
-      return respond([idMessage(tokenOf(M.link_success, { center: centerName })), goToFolder('hangup')])
+      // הקראה איטית — הכרטיס הוטען בהצלחה ושם המוקד ייאמרו לאט וברור
+      return respond([idMessage(slowTokenOf(M.link_success, { center: centerName })), goToFolder('hangup')])
     }
 
     // תיקון (2) → מבקשים מספר חדש במשתנה הבא (כדי לא לקרוא מחדש משתנה מלא = לולאה)

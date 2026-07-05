@@ -133,6 +133,8 @@ export interface MaternityAid {
   eligibility_extended_at?: string
   eligibility_extension_reason?: string
   card_number?: string
+  // מוגדר רק כששיוך הכרטיס בנדרים הושלם בפועל (דרך שיחת ימות) — משמש כאינדיקציה "שויך כרטיס"
+  card_picked_up_at?: string
   card_balance: number
   card_loaded_at?: string
   card_expires_at?: string

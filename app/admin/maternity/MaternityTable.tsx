@@ -59,7 +59,6 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
   const supabase = createClient()
   const toast = useToast()
   const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [familyGate, setFamilyGate] = useState(false) // חלונית: יש לאשר תחילה את המשפחה
 
@@ -73,49 +72,53 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
       setFamilyGate(true)
       return
     }
-    setSaving(true)
-    try {
-      // עדכון סטטוס התיק — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
-      const res = await fetch('/api/admin/request-status', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'maternity', id: aid.id, status: next }),
-      })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
+    // ── UI אופטימי: סוגרים מיד ומראים הצלחה, וכל העבודה מול השרת רצה ברקע ──
+    // כך שהמזכיר לא ממתין ולו שנייה — התגובה מיידית.
+    setOpen(false)
 
-      // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת — ברקע (לא חוסם את ה-UI)
-      // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
-      void syncBabyStatusInFamily(supabase, aid, next)
-
-      // באישור הלידה — מייל+שוברים והפיכת המשפחה ל"מאושר", וסנכרון נדרים — רצים ברקע
-      // (לא חוסמים את ה-UI). השרת משלים אותם גם בלי שנמתין לתשובה.
-      if (next === 'active') {
-        void fetch('/api/admin/request-approved', {
+    // כל הקריאות לשרת רצות ברקע (לא חוסמות). כישלון → toast + רענון להצגת המצב האמיתי.
+    const runBackground = async () => {
+      try {
+        // עדכון סטטוס התיק — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
+        const res = await fetch('/api/admin/request-status', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'maternity', id: aid.id }),
-        }).catch(() => {})
-        const mother = aid.beneficiary as MotherRef | undefined
-        if (mother?.id) {
-          void fetch('/api/nedarim/save-client', {
+          body: JSON.stringify({ type: 'maternity', id: aid.id, status: next }),
+        })
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
+
+        // סנכרון סטטוס התינוק בכרטסת המשפחה לפי סטטוס תיק היולדת
+        // active → הלידה מאושרת · pending → חוזר לממתין · cancelled → מוסר מהכרטסת
+        void syncBabyStatusInFamily(supabase, aid, next)
+
+        // באישור הלידה — מייל+שוברים והפיכת המשפחה ל"מאושר", וסנכרון נדרים
+        if (next === 'active') {
+          void fetch('/api/admin/request-approved', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ beneficiaryId: mother.id }),
+            body: JSON.stringify({ type: 'maternity', id: aid.id }),
           }).catch(() => {})
+          const mother = aid.beneficiary as MotherRef | undefined
+          if (mother?.id) {
+            void fetch('/api/nedarim/save-client', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ beneficiaryId: mother.id }),
+            }).catch(() => {})
+          }
         }
+        // רק כשלא מדובר בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
+        if (!(advance && next !== 'pending')) router.refresh()
+      } catch (err: unknown) {
+        toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
+        router.refresh()
       }
-      setOpen(false)
-      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
-      if (advance && next !== 'pending') {
-        setSaving(false)
-        setShowSuccess(true)
-        setTimeout(() => {
-          goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
-        }, 1500)
-        return
-      }
-      router.refresh()
-    } catch (err: unknown) {
-      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setSaving(false)
+    }
+    void runBackground()
+
+    // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
+    if (advance && next !== 'pending') {
+      setShowSuccess(true)
+      setTimeout(() => {
+        goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })
+      }, 1200)
     }
   }
 
@@ -152,10 +155,9 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
       )}
       <button
         onClick={() => setOpen(o => !o)}
-        disabled={saving}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${pill.cls}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
       >
-        {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
+        <Icon size={13} />
         {pill.label}
         <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -392,14 +394,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={9 + (showCard ? 1 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={9 + (showCard ? 2 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -447,6 +449,20 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     {showCard && (
                       <td className="px-4 py-3 align-middle">
                         {(() => { const cs = aid.card_status ?? 'pending'; const m = CARD_STATUS_PILL[cs]; return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${m.cls}`}>{m.label}</span> })()}
+                      </td>
+                    )}
+                    {showCard && (
+                      <td className="px-4 py-3 align-middle">
+                        {/* שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at) */}
+                        {aid.card_picked_up_at ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">
+                            <Check size={12} /> שויך
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
+                            <X size={12} /> לא שויך
+                          </span>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
