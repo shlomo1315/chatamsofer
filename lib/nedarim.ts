@@ -177,6 +177,17 @@ export async function addTlush(
   return { ok, tlushId: ok ? String(r.Message ?? '').trim() : null, message: String(r.Message ?? '') }
 }
 
+// רשימת קבוצות "הגבלת חנויות" (LimitedStores) — כל קבוצה מגבילה באילו חנויות ניתן לממש.
+// מחזיר את המבנה הגולמי כדי שנזהה את שם/מזהה הקבוצה המדויקים כפי שנדרים מחזירה.
+export async function getLimitedStoresList(creds: NedarimCreds): Promise<{ groups: Record<string, unknown>[]; raw: NedarimResponse }> {
+  const r = await nedarimRequest(creds, 'GetLimitedStoresList', {})
+  const groups = Array.isArray(r.data) ? (r.data as Record<string, unknown>[])
+    : Array.isArray((r as { List?: unknown }).List) ? ((r as { List: Record<string, unknown>[] }).List)
+    : Array.isArray((r as { Groups?: unknown }).Groups) ? ((r as { Groups: Record<string, unknown>[] }).Groups)
+    : []
+  return { groups, raw: r }
+}
+
 // פריקת טעינה לפי מזהה הטעינה → { ok, message }
 export async function prikatTlush(creds: NedarimCreds, tlushId: string) {
   const r = await nedarimRequest(creds, 'PrikatTlush', { TlushId: tlushId })
