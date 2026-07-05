@@ -3,7 +3,11 @@ import { Bell, LogOut, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Profile, ROLE_LABELS } from '@/types'
-import HeaderDateTime from './HeaderDateTime'
+import dynamic from 'next/dynamic'
+
+// ווידג'ט התאריך/שעה טוען את @hebcal/core (כבד) — נטען עצלה בצד לקוח בלבד,
+// כדי שלא יוכנס לבאנדל המשותף של כל עמוד אדמין ולא יריץ חישובי זמנים ב-SSR.
+const HeaderDateTime = dynamic(() => import('./HeaderDateTime'), { ssr: false })
 
 interface HeaderProps {
   user?: Profile | null
