@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
-import { nedarimCall } from '@/lib/nedarim'
+import { nedarimCall, getMaternityLimitedId } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
     // נכפה זאת בשרת כדי שלא נהיה תלויים בקוד-לקוח מטמון ישן.
     if (action === 'SetClientMagneticCard' && (params.Remove === undefined || params.Remove === null || params.Remove === '')) {
       params.Remove = '0'
+    }
+    // אכיפת שיוך לקבוצת "הגבלת חנויות" (עזר יולדות אוכל מוכן) על כל טעינה — גם טעינה ידנית
+    // ממסך ניהול הכרטיסים. אם הלקוח לא שלח LimitedId, מזריקים את המזהה המוגדר בשרת (ברירת מחדל 823).
+    // כך אף טעינה לא יכולה לצאת בלי הגבלת החנויות, ללא תלות בנתיב/קוד-הלקוח.
+    if (action === 'AddTlush' && (params.LimitedId === undefined || params.LimitedId === null || params.LimitedId === '')) {
+      params.LimitedId = await getMaternityLimitedId()
     }
     const data = await nedarimCall(action, params)
     // ניתוק כרטיס ידני שהצליח → ניקוי מצב הכרטיס בתיק היולדת (לפי nedarim_id),

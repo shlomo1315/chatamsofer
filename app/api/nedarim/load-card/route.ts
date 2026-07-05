@@ -1,10 +1,10 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
-import { MATERNITY_LOAD_CATEGORY } from '@/lib/maternityCards'
 import { format } from 'date-fns'
 import {
   getNedarimCreds,
+  getMaternityLimitedId,
   findClientByZeout,
   saveClientCard,
   addTlush,
@@ -110,9 +110,10 @@ export async function POST(request: NextRequest) {
 
   const expiration = aid.card_expires_at ? format(new Date(aid.card_expires_at), 'dd/MM/yyyy') : undefined
 
+  const limitedId = await getMaternityLimitedId()
   let result: Awaited<ReturnType<typeof addTlush>>
   try {
-    result = await addTlush(creds, clientId, amount, expiration, 'הטענת כרטיס יולדת ממערכת היכל החתם סופר', MATERNITY_LOAD_CATEGORY)
+    result = await addTlush(creds, clientId, amount, expiration, 'הטענת כרטיס יולדת ממערכת היכל החתם סופר', limitedId)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await admin.from('maternity_aids').update({ card_load_status: 'failed', card_load_error: msg }).eq('id', aid.id)
