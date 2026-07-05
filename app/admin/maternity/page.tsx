@@ -13,10 +13,11 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   const { data, error } = await supabase
     .from('maternity_aids')
     .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
+    // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
+    .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })
   if (error) throw error
-  // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — לא ברשימת היולדות הראשית
-  const aids = ((data ?? []) as MaternityAid[]).filter(a => (a.birth_type ?? 'live') !== 'silent')
+  const aids = (data ?? []) as MaternityAid[]
   // נפילה-לאחור: רשומות שאין בהן birth_certificate_url — שליפת אישור הלידה מטבלת המסמכים
   const missing = aids.filter(a => !a.birth_certificate_url && a.beneficiary_id)
   if (missing.length) {
