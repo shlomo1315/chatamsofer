@@ -295,14 +295,15 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
   // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)
   console.log(`[yemot-maternity] phone=${apiPhone} callId=${callId} card=${enteredCard ? '****' + enteredCard.slice(-4) : ''}`)
 
-  const M = await getCachedMessages()
-
   if (!apiPhone) {
     return yemotText([idMessage(tText('שגיאה במספר המתקשר')), goToFolder('hangup')], callId)
   }
 
   const callerPhone = normalizePhone(apiPhone)
   const admin = adminClient()
+  // מתחילים לטעון את ההודעות מיד — ייצרכו במקביל לשליפת המשפחה/הלידה (חוסך סבב תקשורת אחד,
+  // משמעותי כשזמן התגובה של Supabase גבוה). ההודעות ממילא במטמון אחרי השיחה הראשונה.
+  const msgsPromise = getCachedMessages()
 
   // ── שלב הכרטיס + אישור (משתנה חדש לכל ניסיון — מונע לולאת re-read) ────────
   // מאתרים את ניסיון ההקלדה האחרון (המשתנה האחרון מבין CARD_VARS שיש בו ערך).
@@ -314,7 +315,8 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
     const aCard = String(params[CARD_VARS[attempt]] ?? '').trim()
     const aConfirm = String(params[CONFIRM_VARS[attempt]] ?? '').trim()
 
-    const result = await findActiveAid(callerPhone)
+    // הודעות + שליפת הלידה במקביל
+    const [M, result] = await Promise.all([msgsPromise, findActiveAid(callerPhone)])
     if ('error' in result || 'notFound' in result || 'noBirth' in result || !result.active) {
       console.error('[yemot-maternity] re-lookup failed at card/confirm step', result)
       return yemotText([idMessage(tokenOf(M.system_error)), goToFolder('hangup')], callId)
@@ -448,8 +450,8 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
     return yemotText([idMessage(tText('יותר מדי ניסיונות אנא נסי שוב מאוחר יותר או פני למשרד')), goToFolder('hangup')], callId)
   }
 
-  // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה ──────────────────────────────
-  const result = await findActiveAid(callerPhone)
+  // ── שלב 1: זיהוי המשפחה + חיפוש לידה פעילה (במקביל לטעינת ההודעות) ──────────
+  const [M, result] = await Promise.all([msgsPromise, findActiveAid(callerPhone)])
 
   if ('error' in result) {
     console.error('[yemot-maternity] DB error', result.error)

@@ -12,7 +12,7 @@ import ExtendEligibility from '../ExtendEligibility'
 import { docViewUrl } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
-import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
+import LineageTreeToggle from './LineageTreeToggle'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -59,14 +59,26 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
   return data.filter(d => { if (seen.has(d.doc_type)) return false; seen.add(d.doc_type); return true })
 }
 
-// סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
-async function getLineagePath(nodeId?: string | null): Promise<string[]> {
-  if (!nodeId || !isSupabaseConfigured()) return []
+// מטמון קצר-מועד למפת צמתי השושלת — נמנע מסריקת כל הטבלה בכל טעינת כרטסת.
+// השושלת כמעט ואינה משתנה, ולכן TTL של 5 דקות מזרז מאוד טעינות חוזרות.
+type LineageNodeLite = { id: string; name: string; parent_id: string | null }
+let _lineageCache: { at: number; map: Map<string, LineageNodeLite> } | null = null
+const LINEAGE_TTL_MS = 5 * 60_000
+async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
+  const now = Date.now()
+  if (_lineageCache && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
   const supabase = await createClient()
   const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
   if (error) throw error
-  if (!data) return []
-  const map = new Map(data.map(n => [n.id, n]))
+  const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
+  _lineageCache = { at: now, map }
+  return map
+}
+
+// סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
+async function getLineagePath(nodeId?: string | null): Promise<string[]> {
+  if (!nodeId || !isSupabaseConfigured()) return []
+  const map = await getLineageMap()
   const path: string[] = []
   let cur = map.get(nodeId)
   let guard = 0
@@ -215,7 +227,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   )}
                   {ben.lineage_node_id && (
                     <div className="mt-3">
-                      <LineageBranchView nodeId={ben.lineage_node_id} />
+                      <LineageTreeToggle nodeId={ben.lineage_node_id} />
                     </div>
                   )}
                 </div>
