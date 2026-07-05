@@ -10,20 +10,39 @@ export const NEDARIM_URL =
 
 const NEDARIM_KEY = 'nedarim_card'
 
+// מזהה ברירת המחדל של קבוצת "הגבלת חנויות" — "עזר יולדות אוכל מוכן" בנדרים קארד.
+// כל טעינת יולדת משויכת לקבוצה זו (פרמטר LimitedId ב-AddTlush) כדי להגביל את המימוש לחנויות המורשות.
+export const MATERNITY_LIMITED_ID_DEFAULT = '823'
+
 export type NedarimCreds = { mosadId: string; apiPassword: string }
+
+// הגדרות נדרים הנשמרות תחת מפתח 'nedarim_card' ב-app_settings.
+// הכתיבה ממזגת (patch) כדי לא לדרוס שדות שלא נמסרו — למשל שמירת קוד ה-API לא מוחקת את מזהה קבוצת ההגבלה.
+type NedarimStoredSettings = { mosadId?: string; apiPassword?: string; maternityLimitedId?: string }
+
+async function readNedarimSettings(): Promise<NedarimStoredSettings> {
+  const admin = getServiceClient()
+  if (!admin) return {}
+  const { data } = await admin.from('app_settings').select('value').eq('key', NEDARIM_KEY).maybeSingle()
+  if (data?.value) { try { return JSON.parse(data.value) as NedarimStoredSettings } catch { /* value אינו JSON */ } }
+  return {}
+}
+
+async function writeNedarimSettings(patch: NedarimStoredSettings): Promise<boolean> {
+  const admin = getServiceClient()
+  if (!admin) return false
+  const merged = { ...(await readNedarimSettings()), ...patch }
+  const { error } = await admin.from('app_settings').upsert(
+    { key: NEDARIM_KEY, value: JSON.stringify(merged), updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  )
+  return !error
+}
 
 // קריאת קוד מוסד + סיסמת API — קודם מההגדרות (app_settings), אחרת מ-ENV
 export async function getNedarimCreds(): Promise<NedarimCreds | null> {
-  const admin = getServiceClient()
-  if (admin) {
-    const { data } = await admin.from('app_settings').select('value').eq('key', NEDARIM_KEY).maybeSingle()
-    if (data?.value) {
-      try {
-        const p = JSON.parse(data.value)
-        if (p?.mosadId && p?.apiPassword) return { mosadId: String(p.mosadId), apiPassword: String(p.apiPassword) }
-      } catch { /* value אינו JSON */ }
-    }
-  }
+  const s = await readNedarimSettings()
+  if (s.mosadId && s.apiPassword) return { mosadId: String(s.mosadId), apiPassword: String(s.apiPassword) }
   const mosadId = process.env.NEDARIM_MOSAD_ID
   const apiPassword = process.env.NEDARIM_API_PASSWORD
   if (mosadId && apiPassword) return { mosadId, apiPassword }
@@ -31,14 +50,19 @@ export async function getNedarimCreds(): Promise<NedarimCreds | null> {
 }
 
 export async function saveNedarimCreds(creds: NedarimCreds): Promise<boolean> {
-  const admin = getServiceClient()
-  if (!admin) return false
-  const value = JSON.stringify({ mosadId: creds.mosadId.trim(), apiPassword: creds.apiPassword.trim() })
-  const { error } = await admin.from('app_settings').upsert(
-    { key: NEDARIM_KEY, value, updated_at: new Date().toISOString() },
-    { onConflict: 'key' },
-  )
-  return !error
+  return writeNedarimSettings({ mosadId: creds.mosadId.trim(), apiPassword: creds.apiPassword.trim() })
+}
+
+// מזהה קבוצת "הגבלת חנויות" לטעינות יולדות — מההגדרות, אחרת ENV, אחרת ברירת המחדל (823 — "עזר יולדות אוכל מוכן")
+export async function getMaternityLimitedId(): Promise<string> {
+  const s = await readNedarimSettings()
+  if (s.maternityLimitedId && String(s.maternityLimitedId).trim()) return String(s.maternityLimitedId).trim()
+  const env = process.env.NEDARIM_MATERNITY_LIMITED_ID
+  return (env && env.trim()) || MATERNITY_LIMITED_ID_DEFAULT
+}
+
+export async function saveMaternityLimitedId(limitedId: string): Promise<boolean> {
+  return writeNedarimSettings({ maternityLimitedId: String(limitedId).trim() })
 }
 
 export type NedarimResponse = { Result?: string; Message?: string; [k: string]: unknown }
@@ -157,21 +181,23 @@ export async function deleteClient(creds: NedarimCreds, clientId: string) {
 }
 
 // הוספת טעינה למשפחה → { ok, tlushId, message }
-// groupe = שיוך הטעינה לקבוצה/קטגוריה בנדרים (הגבלת חנויות), למשל "עזר יולדות אוכל מוכן".
+// limitedId = מזהה קבוצת "הגבלת חנויות" בנדרים (פרמטר LimitedId ב-AddTlush), המגביל את מימוש
+// הטעינה לחנויות שבקבוצה. לטעינות יולדות מועבר מזהה הקבוצה "עזר יולדות אוכל מוכן" (getMaternityLimitedId).
+// הערה: אין ל-AddTlush פרמטר "Groupe" מתועד — לכן השיוך חייב להיעשות דרך LimitedId בלבד.
 export async function addTlush(
   creds: NedarimCreds,
   clientId: string,
   amount: number,
   expiration?: string,
   comments?: string,
-  groupe?: string,
+  limitedId?: string,
 ) {
   const r = await nedarimRequest(creds, 'AddTlush', {
     ClientId: clientId,
     Amount: String(amount),
     Expiration: expiration,
     Comments: comments,
-    Groupe: groupe,
+    LimitedId: limitedId,
   })
   const ok = isOk(r)
   return { ok, tlushId: ok ? String(r.Message ?? '').trim() : null, message: String(r.Message ?? '') }
@@ -181,10 +207,20 @@ export async function addTlush(
 // מחזיר את המבנה הגולמי כדי שנזהה את שם/מזהה הקבוצה המדויקים כפי שנדרים מחזירה.
 export async function getLimitedStoresList(creds: NedarimCreds): Promise<{ groups: Record<string, unknown>[]; raw: NedarimResponse }> {
   const r = await nedarimRequest(creds, 'GetLimitedStoresList', {})
-  const groups = Array.isArray(r.data) ? (r.data as Record<string, unknown>[])
+  const known = Array.isArray(r.data) ? (r.data as Record<string, unknown>[])
     : Array.isArray((r as { List?: unknown }).List) ? ((r as { List: Record<string, unknown>[] }).List)
     : Array.isArray((r as { Groups?: unknown }).Groups) ? ((r as { Groups: Record<string, unknown>[] }).Groups)
-    : []
+    : null
+  // נדרים מחזירה את הקבוצות (ID + ListName + Stores) תחת מפתח שאינו תמיד קבוע — אם לא זוהה מפתח
+  // ידוע, סורקים כל מערך עליון ובוחרים את זה שפריטיו נראים כמו קבוצות (בעלי ListName) כדי לזהות את המזהה.
+  const groups = known ?? (() => {
+    for (const v of Object.values(r)) {
+      if (Array.isArray(v) && v.some(x => x && typeof x === 'object' && 'ListName' in (x as object))) {
+        return v as Record<string, unknown>[]
+      }
+    }
+    return []
+  })()
   return { groups, raw: r }
 }
 

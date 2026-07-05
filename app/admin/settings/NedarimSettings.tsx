@@ -13,14 +13,31 @@ export default function NedarimSettings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [limitedId, setLimitedId] = useState('')
+  const [savingLimit, setSavingLimit] = useState(false)
+  const [savedLimit, setSavedLimit] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/nedarim/settings')
       .then(r => r.json())
-      .then(d => { setMosadId(d.mosadId ?? ''); setConfigured(!!d.configured); setHasPw(!!d.hasApiPassword) })
+      .then(d => { setMosadId(d.mosadId ?? ''); setConfigured(!!d.configured); setHasPw(!!d.hasApiPassword); setLimitedId(d.maternityLimitedId ?? '') })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  const saveLimit = async () => {
+    setError(''); setSavedLimit(false); setSavingLimit(true)
+    try {
+      const res = await fetch('/api/admin/nedarim/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maternityLimitedId: limitedId.trim() }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error || 'שגיאה בשמירה'); return }
+      setSavedLimit(true); setTimeout(() => setSavedLimit(false), 2500)
+    } catch { setError('שגיאת רשת') }
+    finally { setSavingLimit(false) }
+  }
 
   const save = async () => {
     setError(''); setSaved(false)
@@ -84,6 +101,24 @@ export default function NedarimSettings() {
           <p className="text-xs text-slate-400 leading-relaxed">
             את קוד ה-API יש לבקש משירות הלקוחות של נדרים פלוס (במייל מורשה במוסד). הקוד נשמר מוצפן בצד שרת ואינו נחשף בדפדפן.
           </p>
+
+          {/* מזהה קבוצת הגבלת חנויות ליולדות — משויך לכל טעינת יולדת (LimitedId) */}
+          <div className="mt-2 pt-4 border-t border-slate-100 flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600">מזהה קבוצת הגבלת חנויות ליולדות (LimitedId)</label>
+            <div className="flex items-end gap-2 flex-wrap">
+              <input value={limitedId} onChange={e => setLimitedId(e.target.value.replace(/\D/g, ''))} dir="ltr" inputMode="numeric"
+                placeholder="823"
+                className="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm text-left tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              <button onClick={saveLimit} disabled={savingLimit}
+                className="inline-flex items-center gap-2 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+                {savingLimit ? <Loader2 size={15} className="animate-spin" /> : savedLimit ? <Check size={15} /> : null}
+                {savedLimit ? 'נשמר' : 'שמירה'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              כל טעינת כרטיס יולדת (אוטומטית וידנית) משויכת לקבוצה זו, כדי שהמימוש יוגבל לחנויות ״עזר יולדות אוכל מוכן״. השתמש בכלי האבחון למטה כדי לאתר את המזהה. ברירת מחדל: 823.
+            </p>
+          </div>
 
           {/* אבחון קבוצת הגבלת חנויות — לחיבור טעינת ה-600 ₪ לקבוצה הנכונה */}
           {configured && <LimitGroupDiag />}
