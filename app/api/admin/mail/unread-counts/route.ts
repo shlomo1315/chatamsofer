@@ -18,31 +18,27 @@ export async function GET() {
 
   const admin = getAdminClient()
 
-  const { data, error } = await admin
-    .from('inbound_emails')
-    .select('to_email')
-    .eq('is_read', false)
-    .eq('is_spam', false)
-
-  if (error) {
-    // אם הטבלה לא קיימת — מחזירים אפסים במקום שגיאה
-    return NextResponse.json({ byDepartment: {}, total: 0, error: error.message })
-  }
-
-  const countByEmail: Record<string, number> = {}
-  for (const row of data ?? []) {
-    countByEmail[row.to_email] = (countByEmail[row.to_email] ?? 0) + 1
-  }
-
   // משתמש מוגבל רואה ספירות רק לתיבות שהוקצו לו
   const allowed = allowedMailboxKeys(staff)
+  const deps = Object.values(DEPARTMENTS).filter(dep => allowed === null || allowed.includes(dep.key))
+
+  // ספירה בצד ה-DB לכל תיבה במקביל (head:true — מחזיר count בלבד, בלי להעביר שורות).
+  // מחליף משיכה של כל השורות הלא-נקראות וספירתן ב-JS — חוסך העברת מאות/אלפי שורות בכל קריאה.
+  const results = await Promise.all(deps.map(async dep => {
+    const { count, error } = await admin
+      .from('inbound_emails')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_read', false)
+      .eq('is_spam', false)
+      .eq('to_email', dep.email)
+    return { key: dep.key, count: error ? 0 : (count ?? 0) }
+  }))
+
   const byDepartment: Record<string, number> = {}
   let total = 0
-  for (const dep of Object.values(DEPARTMENTS)) {
-    if (allowed !== null && !allowed.includes(dep.key)) continue
-    const c = countByEmail[dep.email] ?? 0
-    byDepartment[dep.key] = c
-    total += c
+  for (const r of results) {
+    byDepartment[r.key] = r.count
+    total += r.count
   }
 
   return NextResponse.json({ byDepartment, total })

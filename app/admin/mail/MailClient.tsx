@@ -1156,22 +1156,25 @@ export default function MailClient() {
   }, [searchParams])
 
   // רענון מיידי לכל מייל בנפרד — Supabase Realtime: כל הוספה/שינוי בטבלת המיילים
-  // (נכנס/יוצא) דוחף עדכון מיידי למסך. גיבוי: פולינג שקט כל 10ש' + רענון בחזרה לחלון.
+  // (נכנס/יוצא) דוחף עדכון חי למסך. רענון נוסף בחזרה לחלון. אין פולינג — Realtime מספיק.
   useEffect(() => {
     const refresh = () => load(folder, searchRef.current || undefined, true)
     const supabase = createClient()
+    // Realtime עלול לפרוץ במקבצים (כולל כתיבות של האפליקציה עצמה — סימון נקרא/ספאם/מעקב) —
+    // דוחסים אותם לרענון אחד עם debounce קצר במקום שרשרת רענונים מלאים.
+    let t: ReturnType<typeof setTimeout> | null = null
+    const debouncedRefresh = () => { if (t) clearTimeout(t); t = setTimeout(refresh, 800) }
     const ch = supabase
       .channel('mail-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_emails' }, () => refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sent_emails' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_emails' }, () => debouncedRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sent_emails' }, () => debouncedRefresh())
       .subscribe()
-    const interval = setInterval(refresh, 10_000)
     const onFocus = () => { if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
     return () => {
       supabase.removeChannel(ch)
-      clearInterval(interval)
+      if (t) clearTimeout(t)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
     }
