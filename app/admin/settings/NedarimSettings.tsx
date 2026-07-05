@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { CreditCard, Loader2, Check, Eye, EyeOff } from 'lucide-react'
+import LimitGroupDiag from '@/app/admin/maternity/cards/LimitGroupDiag'
 
 export default function NedarimSettings() {
   const [mosadId, setMosadId] = useState('')
@@ -83,6 +84,9 @@ export default function NedarimSettings() {
           <p className="text-xs text-slate-400 leading-relaxed">
             את קוד ה-API יש לבקש משירות הלקוחות של נדרים פלוס (במייל מורשה במוסד). הקוד נשמר מוצפן בצד שרת ואינו נחשף בדפדפן.
           </p>
+
+          {/* אבחון קבוצת הגבלת חנויות — לחיבור טעינת ה-600 ₪ לקבוצה הנכונה */}
+          {configured && <LimitGroupDiag />}
         </div>
       )}
     </div>

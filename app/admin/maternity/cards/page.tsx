@@ -1,7 +1,6 @@
 import { UtensilsCrossed } from 'lucide-react'
 import CardCentersManager from './CardCentersManager'
 import CardsTabs from './CardsTabs'
-import LimitGroupDiag from './LimitGroupDiag'
 
 export default function FoodCardsPage() {
   return (
@@ -15,8 +14,6 @@ export default function FoodCardsPage() {
       </div>
 
       <CardsTabs internal={<CardCentersManager />} />
-
-      <LimitGroupDiag />
     </div>
   )
 }
