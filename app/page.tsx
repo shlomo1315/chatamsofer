@@ -3135,8 +3135,8 @@ export default function PublicPortalPage() {
               <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
                   <div className="bg-gradient-to-l from-pink-500 to-rose-500 px-6 py-4">
-                    <h2 className="text-white font-bold text-lg">השלמת שם הילד</h2>
-                    <p className="text-pink-100 text-xs mt-0.5">סימנת לידה ללא שם — נא להשלים את שם הילד</p>
+                    <h2 className="text-white font-bold text-lg">השלמת שם הילד — חובה</h2>
+                    <p className="text-pink-100 text-xs mt-0.5">כדי להמשיך ולהגיש בקשה חדשה (לידה, הלוואה, סיוע רפואי ועוד) יש להשלים תחילה את שם הילד</p>
                   </div>
                   <div className="px-6 py-5 flex flex-col gap-4">
                     <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -3150,9 +3150,8 @@ export default function PublicPortalPage() {
                     <div className="flex items-center gap-2">
                       <button onClick={saveBabyName} disabled={savingName || !nameInput.trim()}
                         className="flex-1 flex items-center justify-center gap-2 bg-pink-600 hover:bg-pink-700 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-all duration-150">
-                        {savingName ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} שמור שם
+                        {savingName ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} שמור שם והמשך
                       </button>
-                      <button onClick={() => setPendingNames([])} className="px-4 py-2.5 text-sm text-slate-500 hover:text-slate-700">אשלים מאוחר יותר</button>
                     </div>
                     {pendingNames.length > 1 && <p className="text-[11px] text-slate-400 text-center">נותרו {pendingNames.length} לידות להשלמת שם</p>}
                   </div>
