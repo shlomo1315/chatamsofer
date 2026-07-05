@@ -1,32 +1,36 @@
 import Card from '@/components/ui/Card'
 import PageHeader from '@/components/ui/PageHeader'
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
 import ReportsCharts from './ReportsChartsLazy'
 import ReportBuilder from './ReportBuilder'
 import StaffActivityReport from './StaffActivityReport'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 
-async function getReportData() {
-  if (!isSupabaseConfigured()) {
-    return { beneficiaries: [], loans: [], maternity: [] }
-  }
-  try {
-    const supabase = await createClient()
-    // Only the columns the charts/summaries below actually use
-    const [b, l, m] = await Promise.all([
-      supabase.from('beneficiaries').select('eligibility_status, city'),
-      supabase.from('loans').select('status, amount'),
-      supabase.from('maternity_aids').select('status, card_balance'),
-    ])
-    return {
-      beneficiaries: b.data ?? [],
-      loans: l.data ?? [],
-      maternity: m.data ?? [],
+// נתוני הסיכום (ספירות/סכומים) הם ארגון-רחבים ואינם דורשים דיוק של שנייה — ממטמנים ל-5 דק'
+// כדי לא לסרוק את הטבלאות בכל טעינת עמוד. משתמשים ב-service client (בלי cookies) כדי לאפשר מטמון.
+const getReportData = unstable_cache(
+  async () => {
+    const supabase = getServiceClient()
+    if (!supabase) return { beneficiaries: [], loans: [], maternity: [] }
+    try {
+      // רק העמודות שהגרפים/הסיכומים למטה משתמשים בהן
+      const [b, l, m] = await Promise.all([
+        supabase.from('beneficiaries').select('eligibility_status, city'),
+        supabase.from('loans').select('status, amount'),
+        supabase.from('maternity_aids').select('status, card_balance'),
+      ])
+      return {
+        beneficiaries: b.data ?? [],
+        loans: l.data ?? [],
+        maternity: m.data ?? [],
+      }
+    } catch {
+      return { beneficiaries: [], loans: [], maternity: [] }
     }
-  } catch {
-    return { beneficiaries: [], loans: [], maternity: [] }
-  }
-}
+  },
+  ['reports-summary-data'],
+  { revalidate: 300 },
+)
 
 export default async function ReportsPage() {
   const data = await getReportData()
