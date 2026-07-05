@@ -4,7 +4,9 @@ import {
   ArrowLeft, ArrowUpRight, Download,
 } from 'lucide-react'
 import Link from 'next/link'
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { unstable_cache } from 'next/cache'
+import { getServiceClient } from '@/lib/apiAuth'
+import { isSupabaseConfigured } from '@/lib/supabase/server'
 import PendingTasksPanel from './PendingTasksPanel'
 
 interface DashData {
@@ -38,11 +40,14 @@ const EMPTY: DashData = {
   aidPending: 0, aidAwaiting: 0, aidApproved: 0,
 }
 
-async function getStats(): Promise<DashData> {
-  if (!isSupabaseConfigured()) return EMPTY
-  try {
-    const supabase = await createClient()
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+// ספירות הדשבורד ארגון-רחבות (count/head — ללא העברת שורות) ואינן דורשות דיוק של שנייה.
+// ממטמנים ל-60ש' עם service client כדי לא להריץ 20 שאילתות בכל טעינת/רענון של הדשבורד.
+const getStats = unstable_cache(
+  async (): Promise<DashData> => {
+    const supabase = getServiceClient()
+    if (!supabase) return EMPTY
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
     const headCount = { count: 'exact' as const, head: true }
     const [
       totalBeneficiaries, newBeneficiariesWeek, approved, pending,
@@ -97,10 +102,13 @@ async function getStats(): Promise<DashData> {
       aidAwaiting: aidAwaiting.count ?? 0,
       aidApproved: aidApproved.count ?? 0,
     }
-  } catch {
-    return EMPTY
-  }
-}
+    } catch {
+      return EMPTY
+    }
+  },
+  ['dashboard-stats'],
+  { revalidate: 60 },
+)
 
 const fmtCur = (n: number) => new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 const fmt = (n: number) => n.toLocaleString('he-IL')

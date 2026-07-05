@@ -7,15 +7,21 @@ import PageHeader from '@/components/ui/PageHeader'
 import BeneficiariesTable from './BeneficiariesTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 
+// רק העמודות שטבלת הרשימה מציגה/ממיינת/מחפשת בהן — משמיט שדות כבדים (children JSON,
+// lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים את הנתונים המלאים בנפרד.
+const LIST_COLUMNS =
+  'id, created_at, full_name, family_name, id_number, phone, phone2, email, address, city, ' +
+  'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active'
+
 async function getBeneficiaries(): Promise<Beneficiary[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('beneficiaries')
-    .select('*')
+    .select(LIST_COLUMNS)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data ?? []
+  return (data ?? []) as unknown as Beneficiary[]
 }
 
 export default async function BeneficiariesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
