@@ -71,14 +71,21 @@ export async function POST(request: NextRequest) {
     arr.push(n.id)
     childrenOf.set(n.parent_id, arr)
   }
+  // חישוב דורות בזיכרון, ואז כתיבה מקובצת לפי דור (update ... in) במקום round-trip לכל צומת.
+  const genOf = new Map<number, string[]>()
   const queue: { id: string; gen: number }[] = []
   for (const c of childrenOf.get(keepId) ?? []) queue.push({ id: c, gen: (keep.generation ?? 1) + 1 })
   let g = 0
   while (queue.length && g < 100000) {
     const item = queue.shift()!
-    await admin.from('lineage_nodes').update({ generation: item.gen }).eq('id', item.id)
+    const arr = genOf.get(item.gen) ?? []
+    arr.push(item.id)
+    genOf.set(item.gen, arr)
     for (const c of childrenOf.get(item.id) ?? []) queue.push({ id: c, gen: item.gen + 1 })
     g++
+  }
+  for (const [gen, ids] of genOf) {
+    await admin.from('lineage_nodes').update({ generation: gen }).in('id', ids)
   }
 
   return NextResponse.json({ ok: true, mergedCount: mergeIds.length, reassignedChildren, reassignedBeneficiaries })
