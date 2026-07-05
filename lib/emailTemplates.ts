@@ -1001,6 +1001,21 @@ export function birthApprovedEmail(
 }
 
 // ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
+// בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למייל אישור הכרטיס ולמייל התחדשות המלאי.
+// חובה להפעיל את הכרטיס דרך המוקד הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת.
+const cardActivationNotice = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">📞 הפעלת הכרטיס — חובה לפני השימוש!</p>
+        <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.8;">
+          לאחר קבלת הכרטיס מהמוקד, יש להפעילו בהתקשרות למוקד הטלפוני <strong style="direction:ltr;unicode-bidi:embed;">02-3131325</strong> שלוחה <strong>1</strong>, ולפעול לפי ההנחיות.
+        </p>
+        <p style="margin:8px 0 0;color:#7f1d1d;font-size:13px;line-height:1.8;">
+          <strong>שימו לב:</strong> המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.
+        </p>
+      </td></tr>
+    </table>`
+
 export function maternityCardEmail(
   b: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null },
   opts: { centerName?: string | null } = {},
@@ -1026,6 +1041,7 @@ export function maternityCardEmail(
         </p>
       </td></tr>
     </table>` : ''}
+    ${cardActivationNotice}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
   `
   return {
@@ -1053,6 +1069,7 @@ export function cardStockReplenishedEmail(name: string, centerName?: string | nu
         <p style="margin:6px 0 0;color:#065f46;font-size:14px;line-height:1.7;">הדפיסו את השובר המצורף והביאו אותו למוקד לקבלת הכרטיס.</p>
       </td></tr>
     </table>
+    ${cardActivationNotice}
   `
   return {
     subject: '🍞 המלאי התחדש — שובר כרטיס המזון מצורף — היכל החתם סופר',

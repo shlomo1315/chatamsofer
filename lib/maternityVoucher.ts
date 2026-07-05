@@ -300,6 +300,28 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // מוקדי האיסוף — שם, כתובת, ימים ושעות
   y = centersBox(c, 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
 
+  // ── הפעלת הכרטיס — תיבת הדגשה (חובה לפני השימוש) ──
+  {
+    const innerRight = W - MX - 14
+    const innerW = W - MX * 2 - 28
+    const l1 = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות למוקד הטלפוני 02-3131325 שלוחה 1, ולפעול לפי ההנחיות.'
+    const l2 = 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.'
+    const measure = (s: string) => c.font.widthOfTextAtSize(s, 11)
+    const w1 = wrapText(l1, innerW, measure)
+    const w2 = wrapText(l2, innerW, measure)
+    const titleH = 22
+    const lineH = 15
+    const boxH = titleH + (w1.length + w2.length) * lineH + 12
+    c.page.drawRectangle({ x: MX, y: y - boxH, width: W - MX * 2, height: boxH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1.2 })
+    c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: NAVY })
+    c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: 3, color: GOLD })
+    rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', innerRight, y - titleH + 7, 12, rgb(1, 1, 1))
+    let ay = y - titleH - 13
+    for (const ln of w1) { rightText(c, ln, innerRight, ay, 11, INK); ay -= lineH }
+    for (const ln of w2) { rightText(c, ln, innerRight, ay, 11, RED); ay -= lineH }
+    y = y - boxH - 12
+  }
+
   // הערות בתחתית
   y = paragraph(c,
     'הכרטיס בתוקף לשימוש עד 6 שבועות ממועד הלידה, ורק עבור רכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
