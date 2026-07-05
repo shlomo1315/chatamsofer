@@ -8,14 +8,15 @@ import FamiliesClient from './FamiliesClient'
 async function getFamilies(): Promise<(Family & { member_count: number })[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
+  // ספירת חברי המשפחה מחושבת ב-DB (aggregate) במקום למשוך את כל שורות ה-id ולספור ב-JS.
   const { data, error } = await supabase
     .from('families')
-    .select('*, beneficiaries(id)')
+    .select('*, beneficiaries(count)')
     .order('family_name')
   if (error) throw error
   return (data ?? []).map((f) => ({
     ...f,
-    member_count: (f.beneficiaries as { id: string }[]).length,
+    member_count: (f.beneficiaries as { count: number }[] | null)?.[0]?.count ?? 0,
     beneficiaries: undefined,
   }))
 }

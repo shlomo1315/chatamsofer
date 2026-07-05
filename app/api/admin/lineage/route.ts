@@ -131,12 +131,21 @@ export async function PATCH(request: NextRequest) {
     }
     updates.parent_id = newParent
     updates.generation = baseGen
+    // חישוב הדור החדש לכל צאצא בזיכרון, ואז כתיבה מקובצת לפי דור (update ... in) במקום
+    // round-trip לכל צומת — מוריד מ-O(מספר הצאצאים) ל-O(עומק תת-העץ).
+    const genOf = new Map<number, string[]>()
     const queue: { id: string; gen: number }[] = []
     for (const c of childrenOf.get(id) ?? []) queue.push({ id: c, gen: baseGen + 1 })
     while (queue.length) {
       const item = queue.shift() as { id: string; gen: number }
-      await admin.from('lineage_nodes').update({ generation: item.gen }).eq('id', item.id)
+      const arr = genOf.get(item.gen) ?? []
+      arr.push(item.id)
+      genOf.set(item.gen, arr)
       for (const c of childrenOf.get(item.id) ?? []) queue.push({ id: c, gen: item.gen + 1 })
+    }
+    for (const [gen, ids] of genOf) {
+      const { error: gErr } = await admin.from('lineage_nodes').update({ generation: gen }).in('id', ids)
+      if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 })
     }
   }
 
