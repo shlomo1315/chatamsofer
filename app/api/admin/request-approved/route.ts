@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const benSelect = 'id, full_name, family_name, id_number, spouse_id_number, spouse_name, marital_status, phone, address, city, children_count, email, eligibility_status'
+  const benSelect = 'id, full_name, family_name, id_number, spouse_id_number, spouse_name, marital_status, phone, phone2, spouse_phone, address, city, children_count, email, eligibility_status'
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
     ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
@@ -110,20 +110,22 @@ export async function POST(request: NextRequest) {
     // 1. מייל אישור הבקשה (+ שוברים ללידה)
     if (ben.email) {
       try {
+        // מספרי הטלפון המעודכנים של המשפחה — להפעלת הכרטיס (המערכת מזהה לפי מספרים אלו בלבד)
+        const benPhones = [(ben as { phone?: string | null }).phone, (ben as { spouse_phone?: string | null }).spouse_phone, (ben as { phone2?: string | null }).phone2]
         const mail = type === 'loan'
           ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial })
+          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial, phones: benPhones })
 
         // אישור לידה (רגילה, לא שקטה) → שובר הבראה תמיד; שובר כרטיס רק אם יש מלאי במוקד שנבחר
         let attachments: MailAttachment[] | undefined
         if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
           try {
             const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
-            const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; spouse_id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null }
+            const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; spouse_id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null; spouse_phone?: string | null }
             // ת"ז היולדת = האשה (spouse), עם נפילה-לאחור לרשומה הראשית
             const motherId = b.spouse_id_number || b.id_number
             attachments = await buildMaternityVouchers({
-              motherName, motherId, address: b.address, city: b.city, phone: b.phone,
+              motherName, motherId, address: b.address, city: b.city, phone: b.phone, spousePhone: b.spouse_phone,
               birthDate: birth.birth_date, recoveryHome: birth.recovery_home, serial,
               centers: center ? [center] : [],
             }, { includeCard: stockAvailable })

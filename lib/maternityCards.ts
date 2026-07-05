@@ -77,13 +77,13 @@ export async function sendCardVoucher(admin: SupabaseClient, aidId: string, cent
   try {
     const { data: aid } = await admin
       .from('maternity_aids')
-      .select('beneficiary:beneficiaries(full_name, family_name, spouse_name, email)')
+      .select('beneficiary:beneficiaries(full_name, family_name, spouse_name, email, phone, spouse_phone)')
       .eq('id', aidId)
       .maybeSingle()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ben = (aid as any)?.beneficiary
     if (!ben?.email) return
-    const mail = maternityCardEmail(ben, { centerName })
+    const mail = maternityCardEmail(ben, { centerName, phones: [ben.phone, ben.spouse_phone] })
     await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('maternity'))
   } catch (e) {
     console.error('[maternityCards] voucher mail failed:', e)

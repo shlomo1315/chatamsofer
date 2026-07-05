@@ -304,21 +304,46 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   {
     const innerRight = W - MX - 14
     const innerW = W - MX * 2 - 28
-    const l1 = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות למוקד הטלפוני 02-3131325 שלוחה 1, ולפעול לפי ההנחיות.'
-    const l2 = 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.'
     const measure = (s: string) => c.font.widthOfTextAtSize(s, 11)
-    const w1 = wrapText(l1, innerW, measure)
-    const w2 = wrapText(l2, innerW, measure)
+    // מספרי הטלפון המעודכנים של היולדת/בעלה — רק מהם ניתן להפעיל את הכרטיס
+    const phones = [input.phone, input.spousePhone].map(p => String(p ?? '').trim()).filter(Boolean)
+    const uniqPhones = [...new Set(phones)]
+
+    const lineA = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות למוקד הטלפוני, ולפעול לפי ההנחיות:'
+    const lineB = uniqPhones.length
+      ? 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה מהמספרים הבאים:'
+      : 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים במערכת — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.'
+    const wA = wrapText(lineA, innerW, measure)
+    const wB = wrapText(lineB, innerW, measure)
     const titleH = 22
     const lineH = 15
-    const boxH = titleH + (w1.length + w2.length) * lineH + 12
+    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 14
+
     c.page.drawRectangle({ x: MX, y: y - boxH, width: W - MX * 2, height: boxH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1.2 })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: NAVY })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: 3, color: GOLD })
     rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', innerRight, y - titleH + 7, 12, rgb(1, 1, 1))
+
     let ay = y - titleH - 13
-    for (const ln of w1) { rightText(c, ln, innerRight, ay, 11, INK); ay -= lineH }
-    for (const ln of w2) { rightText(c, ln, innerRight, ay, 11, RED); ay -= lineH }
+    for (const ln of wA) { rightText(c, ln, innerRight, ay, 11, INK); ay -= lineH }
+
+    // שורת המוקד — המספר הרב-ספרתי מצויר כטוקן נפרד כדי שלא יתהפך (מספר משובץ בעברית מוצג הפוך ב-PDF)
+    {
+      let x = innerRight
+      const s1 = 'להפעלה חייגו למוקד: '
+      rightText(c, s1, x, ay, 11, INK); x -= tw(c, s1, 11)
+      rightText(c, '02-3131325', x, ay, 11, NAVY); x -= tw(c, '02-3131325', 11)
+      rightText(c, ' שלוחה 1', x, ay, 11, INK)
+      ay -= lineH
+    }
+
+    for (const ln of wB) { rightText(c, ln, innerRight, ay, 11, RED); ay -= lineH }
+
+    // מספרי הטלפון המעודכנים — מצוירים כמקשה אחת של ספרות (ללא עברית מעורבת) כדי שיוצגו תקין
+    if (uniqPhones.length) {
+      centerText(c, uniqPhones.join('     '), W / 2, ay, 12, NAVY); ay -= lineH
+    }
+
     y = y - boxH - 12
   }
 
