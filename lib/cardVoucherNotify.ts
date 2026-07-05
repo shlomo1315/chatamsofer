@@ -7,7 +7,7 @@ import { buildCardVoucherOnly } from './maternityVoucher'
 
 type Ben = {
   full_name: string | null; family_name: string | null; spouse_name: string | null
-  id_number: string | null; spouse_id_number: string | null; phone: string | null; address: string | null; city: string | null; email: string | null
+  id_number: string | null; spouse_id_number: string | null; phone: string | null; spouse_phone: string | null; address: string | null; city: string | null; email: string | null
 }
 type Aid = {
   id: string; birth_date: string | null; voucher_serial: string | null
@@ -27,7 +27,7 @@ export async function notifyCenterStockReplenished(admin: SupabaseClient, center
 
     const { data: aids } = await admin
       .from('maternity_aids')
-      .select('id, birth_date, voucher_serial, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, phone, address, city, email)')
+      .select('id, birth_date, voucher_serial, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, phone, spouse_phone, address, city, email)')
       .eq('card_center_id', centerId)
       .eq('card_voucher_status', 'awaiting_stock')
       .eq('status', 'active')
@@ -40,10 +40,10 @@ export async function notifyCenterStockReplenished(admin: SupabaseClient, center
       const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
       try {
         const att = await buildCardVoucherOnly({
-          motherName, motherId: ben.spouse_id_number || ben.id_number, address: ben.address, city: ben.city, phone: ben.phone,
+          motherName, motherId: ben.spouse_id_number || ben.id_number, address: ben.address, city: ben.city, phone: ben.phone, spousePhone: ben.spouse_phone,
           birthDate: aid.birth_date, serial: aid.voucher_serial, centers: [center],
         })
-        const mail = cardStockReplenishedEmail(motherName, center.name)
+        const mail = cardStockReplenishedEmail(motherName, center.name, [ben.phone, ben.spouse_phone])
         await deliverMail(ben.email, mail.subject, mail.html, att, mailFor('maternity'))
         await admin.from('maternity_aids').update({ card_voucher_status: 'issued' }).eq('id', aid.id)
         await admin.rpc('bump_center_pending_pickups', { p_center_id: centerId, p_delta: 1 })

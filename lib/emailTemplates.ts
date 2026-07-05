@@ -918,7 +918,7 @@ export type FoodCardCenter = { name: string; city?: string | null; address?: str
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
-  opts: { center?: FoodCardCenter | null; stockAvailable?: boolean; serial?: string | null } = {},
+  opts: { center?: FoodCardCenter | null; stockAvailable?: boolean; serial?: string | null; phones?: (string | null | undefined)[] } = {},
 ): BuiltEmail {
   const center = opts.center ?? null
   const stockAvailable = !!opts.stockAvailable
@@ -955,7 +955,8 @@ export function birthApprovedEmail(
               <td style="padding:10px 16px;color:#b45309;font-size:13px;text-align:left;">${centerPlace || '—'}</td></tr>
         </table>` : ''}
       </td></tr>
-    </table>`
+    </table>
+    ${cardActivationNotice(opts.phones)}`
     : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
@@ -1001,24 +1002,33 @@ export function birthApprovedEmail(
 }
 
 // ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
-// בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למייל אישור הכרטיס ולמייל התחדשות המלאי.
-// חובה להפעיל את הכרטיס דרך המוקד הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת.
-const cardActivationNotice = `
+// בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למיילי הכרטיס. חובה להפעיל את הכרטיס דרך המוקד
+// הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת. אם נמסרו מספרים — הם מוצגים במפורש (בכיוון LTR).
+function cardActivationNotice(phones?: (string | null | undefined)[]): string {
+  const list = [...new Set((phones ?? []).map(p => String(p ?? '').trim()).filter(Boolean))]
+  const numbersLine = list.length
+    ? `<p style="margin:8px 0 0;color:#7f1d1d;font-size:13px;line-height:1.9;">
+          <strong>שימו לב:</strong> המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה מהמספרים הבאים:<br />
+          <span style="display:inline-block;margin-top:4px;font-weight:900;color:#991b1b;">${list.map(p => `<span dir="ltr" style="unicode-bidi:embed;">${p}</span>`).join(' &nbsp;·&nbsp; ')}</span>
+        </p>`
+    : `<p style="margin:8px 0 0;color:#7f1d1d;font-size:13px;line-height:1.8;">
+          <strong>שימו לב:</strong> המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים במערכת — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.
+        </p>`
+  return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">📞 הפעלת הכרטיס — חובה לפני השימוש!</p>
         <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.8;">
           לאחר קבלת הכרטיס מהמוקד, יש להפעילו בהתקשרות למוקד הטלפוני <strong style="direction:ltr;unicode-bidi:embed;">02-3131325</strong> שלוחה <strong>1</strong>, ולפעול לפי ההנחיות.
         </p>
-        <p style="margin:8px 0 0;color:#7f1d1d;font-size:13px;line-height:1.8;">
-          <strong>שימו לב:</strong> המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.
-        </p>
+        ${numbersLine}
       </td></tr>
     </table>`
+}
 
 export function maternityCardEmail(
   b: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null },
-  opts: { centerName?: string | null } = {},
+  opts: { centerName?: string | null; phones?: (string | null | undefined)[] } = {},
 ): BuiltEmail {
   const rows = [
     detailRow('שם המשפחה', [b.family_name, b.full_name].filter(Boolean).join(' ')),
@@ -1041,7 +1051,7 @@ export function maternityCardEmail(
         </p>
       </td></tr>
     </table>` : ''}
-    ${cardActivationNotice}
+    ${cardActivationNotice(opts.phones)}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
   `
   return {
@@ -1051,7 +1061,7 @@ export function maternityCardEmail(
 }
 
 // ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
-export function cardStockReplenishedEmail(name: string, centerName?: string | null): BuiltEmail {
+export function cardStockReplenishedEmail(name: string, centerName?: string | null, phones?: (string | null | undefined)[]): BuiltEmail {
   const greet = greetMrs(null, name)
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
@@ -1069,7 +1079,7 @@ export function cardStockReplenishedEmail(name: string, centerName?: string | nu
         <p style="margin:6px 0 0;color:#065f46;font-size:14px;line-height:1.7;">הדפיסו את השובר המצורף והביאו אותו למוקד לקבלת הכרטיס.</p>
       </td></tr>
     </table>
-    ${cardActivationNotice}
+    ${cardActivationNotice(phones)}
   `
   return {
     subject: '🍞 המלאי התחדש — שובר כרטיס המזון מצורף — היכל החתם סופר',
