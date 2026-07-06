@@ -5,6 +5,7 @@ import {
   Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
 } from 'lucide-react'
 import ExtendEligibility from '../ExtendEligibility'
+import { AdminOnly } from '@/components/StaffPermissions'
 
 type Stats = {
   configured?: boolean
@@ -169,10 +170,12 @@ export default function NedarimFamilies() {
           })}
         </div>
         <div className="flex items-center gap-2 pb-1.5">
-          <button onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg">
-            <Plus size={16} /> משפחה חדשה
-          </button>
+          <AdminOnly>
+            <button onClick={() => setAdding(true)}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg">
+              <Plus size={16} /> משפחה חדשה
+            </button>
+          </AdminOnly>
           <button onClick={() => { load(); loadStats() }} disabled={loading} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg border border-slate-200">
             <RefreshCw size={16} className={loading || statsLoading ? 'animate-spin' : ''} />
           </button>

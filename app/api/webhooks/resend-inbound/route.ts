@@ -190,6 +190,21 @@ async function maybeAutoReplyIgud(
   await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
+// המרת HTML לטקסט תוך שמירת שבירות שורה — נדרש לפרסור בקשות שמגיעות כ-HTML בלבד.
+// (פרסור הבקשה סורק שורה-אחר-שורה; strip נאיבי של תגיות היה מוחק את כל שבירות השורה.)
+function htmlToPlainText(html: string): string {
+  return String(html || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/\s*(p|div|tr|li|h[1-6]|table|ul|ol|blockquote)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+    .split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 // פירוק שדה "שם <כתובת>" לשם וכתובת
 function parseAddress(raw: string): { name: string | null; email: string } {
   const s = String(raw ?? '').trim()
@@ -327,6 +342,16 @@ export async function POST(request: NextRequest) {
   // משייכים ל"משרד ראשי" כדי שלא יישאר יתום מחוץ לכל התיבות.
   const isInboundCopy = (knownDept || orgRecipient) ? false : candidates.some(a => a.endsWith('.chasamsofer.info'))
   const resolvedToEmail = knownDept ?? orgRecipient ?? (isInboundCopy ? 'office@chasamsofer.info' : to.email)
+
+  // ── בידוד ארגוני: קליטה רק של דואר שמופנה לדומיין של חתם סופר ──
+  // אותו webhook נכנס עלול לקבל דואר ממערכות אחרות שמשתמשות באותה תשתית Resend.
+  // דוחים (ACK ללא אחסון) כל מייל שאין לו אף נמען בדומיין chasamsofer.info / chasamsofer.co.il,
+  // כדי שדואר של מערכות אחרות לא ידלוף לתיבות של חתם סופר.
+  const isOrgAddr = (a: string) => /(@|\.)(chasamsofer\.info|chasamsofer\.co\.il)$/i.test(a)
+  if (!candidates.some(isOrgAddr)) {
+    console.warn('[resend-inbound] דחיית מייל זר — אין נמען בדומיין chasamsofer. נמענים:', candidates.join(',') || '(ריק)')
+    return NextResponse.json({ ok: true, ignored: 'foreign-recipient' })
+  }
 
   const admin = getAdminClient()
 
@@ -568,7 +593,9 @@ export async function POST(request: NextRequest) {
     const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
     if (isIgud && isRequestSubject(subject)) {
       try {
-        const bodyText = (plain && plain.trim()) ? plain : String(html ?? '').replace(/<[^>]+>/g, ' ')
+        // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
+        // (קריטי! פרסור הבקשה עובד שורה-אחר-שורה; strip נאיבי של תגיות מוחק את המבנה).
+        const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
         await handleEmailRequest(admin, { fromEmail: from.email, subject, body: bodyText, attachments })
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
