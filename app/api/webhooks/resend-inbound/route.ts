@@ -190,6 +190,30 @@ async function maybeAutoReplyIgud(
   await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
+// פענוח MIME encoded-words בכותרות (Subject וכו') — =?charset?B?base64?= / =?charset?Q?quoted?=.
+// בלי זה נושא בעברית מקודד לא מזוהה כבקשה ("בקשת לידה") והבקשה לא נקלטת.
+function decodeMimeWords(input: string): string {
+  const s = String(input || '')
+  if (!s.includes('=?')) return s
+  // מאחדים encoded-words צמודים (מופרדים ברווח/שורה) לפי תקן RFC 2047
+  return s
+    .replace(/\?=\s+=\?/g, '?==?')
+    .replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_m, _charset: string, enc: string, text: string) => {
+      try {
+        if (enc.toUpperCase() === 'B') return Buffer.from(text, 'base64').toString('utf8')
+        // Q-encoding: _ → רווח, =XX → בייט
+        const cleaned = text.replace(/_/g, ' ')
+        const bytes: number[] = []
+        for (let i = 0; i < cleaned.length; i++) {
+          const c = cleaned[i]
+          if (c === '=' && /^[0-9A-Fa-f]{2}$/.test(cleaned.slice(i + 1, i + 3))) { bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16)); i += 2 }
+          else bytes.push(cleaned.charCodeAt(i) & 0xff)
+        }
+        return Buffer.from(bytes).toString('utf8')
+      } catch { return text }
+    })
+}
+
 // המרת HTML לטקסט תוך שמירת שבירות שורה — נדרש לפרסור בקשות שמגיעות כ-HTML בלבד.
 // (פרסור הבקשה סורק שורה-אחר-שורה; strip נאיבי של תגיות היה מוחק את כל שבירות השורה.)
 function htmlToPlainText(html: string): string {
@@ -314,8 +338,10 @@ export async function POST(request: NextRequest) {
   const toRaw = Array.isArray(data.to) ? data.to[0] : data.to
   const to = parseAddress(toRaw ?? '')
 
-  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרת Subject אם ריק
-  const subject = String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim()
+  // נושא: data.subject הוא המקור הרגיל; נפילה-לאחור לכותרת Subject אם ריק.
+  // פענוח MIME encoded-words (=?UTF-8?B?...?=) — קריטי! נושא בעברית מגיע לעיתים מקודד,
+  // ואז זיהוי הבקשה (detectReqType שמחפש "בקשת לידה") נכשל והבקשה לא נקלטת.
+  const subject = decodeMimeWords(String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim())
 
   // ── זיהוי הנמען המקורי (לתמיכה ב-Dual Delivery מ-Google Workspace) ──
   // כשהדואר מגיע כעותק דרך subdomain של Resend, ה-"to" של ה-envelope הוא כתובת ה-subdomain,
