@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { defaultRecoveryDays } from '@/lib/maternity'
+import { sendRecoveryVoucherUpdate } from '@/lib/sendRecoveryVoucher'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,5 +52,12 @@ export async function POST(request: NextRequest) {
     })
   } catch { /* ignore */ }
 
-  return NextResponse.json({ ok: true, recovery_eligibility_days: days })
+  // עדכון ימי הזכאות → שליחה מחדש של שובר ההבראה המעודכן במייל (רק אם השתנה
+  // ורק ללידה מאושרת). רץ ברקע כדי לא לעכב את התגובה למזכיר.
+  const daysChanged = previous !== days
+  if (daysChanged) {
+    void sendRecoveryVoucherUpdate(admin, aidId).catch(e => console.error('[recovery-days] voucher resend failed:', e))
+  }
+
+  return NextResponse.json({ ok: true, recovery_eligibility_days: days, voucherResent: daysChanged })
 }

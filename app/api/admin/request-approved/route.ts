@@ -6,6 +6,7 @@ import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
 import { buildMaternityVouchers } from '@/lib/maternityVoucher'
+import { recoveryDaysOf } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
     ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
-    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, card_center_id, voucher_serial, beneficiary:beneficiaries(${benSelect})`
+    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, is_twins, recovery_eligibility_days, card_center_id, voucher_serial, beneficiary:beneficiaries(${benSelect})`
 
   const { data: req, error } = await admin.from(table).select(reqSelect).eq('id', id).maybeSingle()
   if (error || !req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
   if (!ben?.id) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
 
   // ── אישור לידה: איתור המוקד שנבחר + בדיקת מלאי + מספר סידורי ──
-  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; card_center_id?: string | null; voucher_serial?: string | null }
+  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; card_center_id?: string | null; voucher_serial?: string | null }
   let center: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null } | null = null
   let stockAvailable = false
   let serial = birth.voucher_serial ?? null
@@ -126,7 +127,9 @@ export async function POST(request: NextRequest) {
             const motherId = b.spouse_id_number || b.id_number
             attachments = await buildMaternityVouchers({
               motherName, motherId, address: b.address, city: b.city, phone: b.phone, spousePhone: b.spouse_phone,
-              birthDate: birth.birth_date, recoveryHome: birth.recovery_home, serial,
+              birthDate: birth.birth_date, recoveryHome: birth.recovery_home,
+              recoveryDays: recoveryDaysOf({ recovery_eligibility_days: birth.recovery_eligibility_days, is_twins: birth.is_twins }),
+              serial,
               centers: center ? [center] : [],
             }, { includeCard: stockAvailable })
           } catch (e) { console.error('[request-approved] voucher build failed:', e) }

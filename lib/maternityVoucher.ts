@@ -217,6 +217,7 @@ type VoucherInput = {
   spousePhone?: string | null
   birthDate?: string | null
   recoveryHome?: string | null
+  recoveryDays?: number | null
   serial?: string | null
   centers?: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
 }
@@ -396,6 +397,7 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
     ['תעודת זהות', input.motherId || '—'],
     ['תאריך הלידה', fmtDate(input.birthDate)],
     ['בית החלמה', input.recoveryHome || 'ייקבע מול המזכירות'],
+    ['ימי זכאות בבית ההחלמה', input.recoveryDays != null ? `${input.recoveryDays} ימים` : '—'],
     ['טלפון', input.phone || '—'],
   ])
 
@@ -433,4 +435,10 @@ export async function buildMaternityVouchers(
 export async function buildCardVoucherOnly(input: VoucherInput): Promise<MailAttachment[]> {
   const card = await renderFoodCard(input)
   return [{ filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card }]
+}
+
+// בונה רק את שובר ההבראה (לשליחה מחדש כשמעדכנים את ימי הזכאות)
+export async function buildRecoveryVoucherOnly(input: VoucherInput): Promise<MailAttachment[]> {
+  const recovery = await renderRecovery(input)
+  return [{ filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recovery }]
 }
