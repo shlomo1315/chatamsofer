@@ -65,7 +65,7 @@ interface FoundBeneficiary {
   marital_status?: string
   children_count?: number
   required_docs?: string
-  children?: Array<{ name?: string; birth_date?: string; gender?: string }>
+  children?: Array<{ name?: string; birth_date?: string; gender?: string; id_number?: string; marital_status?: string }>
   lineage_node_id?: string
   lineage_manual?: string[]
   lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
@@ -1161,6 +1161,8 @@ export default function PublicPortalPage() {
   // עדכון פרטים (משפחה מאושרת)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState({ phone: '', phone2: '', spouse_phone: '', address: '', city: '', email: '', marital_status: '' })
+  const [editChildren, setEditChildren] = useState<ChildEntry[]>([])
+  const [editChildIdErrors, setEditChildIdErrors] = useState<Record<number, string>>({})
   const [editSaving, setEditSaving] = useState(false)
   // האם מספר טלפון כבר מאומת עבור הנרשם (מתוך verified_phones)
   const isVerifiedPhone = (v: string) => {
@@ -1174,6 +1176,11 @@ export default function PublicPortalPage() {
       address: beneficiary.address ?? '',
       city: beneficiary.city ?? '', email: beneficiary.email ?? '', marital_status: beneficiary.marital_status ?? '',
     })
+    setEditChildren((beneficiary.children ?? []).map(c => ({
+      name: c.name ?? '', id_number: c.id_number ?? '', gender: c.gender ?? '',
+      birth_date: c.birth_date ?? '', marital_status: c.marital_status ?? '',
+    })))
+    setEditChildIdErrors({})
     setEditEmailToken(null); setEditPhoneToken(null); setEditSpousePhoneToken(null); setEditPhone2Token(null)
     setError(''); setEditOpen(true)
   }
@@ -1194,6 +1201,17 @@ export default function PublicPortalPage() {
         setError('טלפון נוסף זהה לטלפון האשה — יש להזין מספר אחר'); return
       }
     }
+    // אימות פרטי הילדים — כל ילד שמולא חייב שם + תעודת זהות תקינה
+    for (let i = 0; i < editChildren.length; i++) {
+      const c = editChildren[i]
+      const cid = (c.id_number || '').replace(/\D/g, '')
+      if (!c.name && !cid) continue   // שורה ריקה — תסונן מהמשלוח
+      if (!c.name || !cid) { setError(`יש להשלים שם ותעודת זהות עבור ילד ${i + 1}`); return }
+      if (!validateIsraeliId(cid)) {
+        setEditChildIdErrors(er => ({ ...er, [i]: 'תעודת הזהות שהזנתם אינה תקינה' }))
+        setError(`תעודת הזהות של ילד ${i + 1} אינה תקינה`); return
+      }
+    }
     setEditSaving(true); setError('')
     try {
       // כל טלפון שאומת כעת (זוגות ערך+אסימון) → יתווסף לרשימת המספרים המאומתים
@@ -1202,13 +1220,17 @@ export default function PublicPortalPage() {
         { value: editForm.spouse_phone, token: editSpousePhoneToken },
         { value: editForm.phone2, token: editPhone2Token },
       ].filter(p => p.value && p.value.trim() && p.token)
+      const childrenPayload = editChildren.filter(c => c.name && c.id_number).map(c => ({
+        name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status,
+      }))
       const res = await fetch('/api/portal/update-details', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm, email_verify_token: editEmailToken, phone_verify_token: editPhoneToken, phone_tokens: phoneTokens }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...editForm, email_verify_token: editEmailToken, phone_verify_token: editPhoneToken, phone_tokens: phoneTokens,
+          children: childrenPayload, children_count: childrenPayload.length }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בעדכון'); setEditSaving(false); return }
-      setBeneficiary(b => b ? { ...b, ...editForm } : b)
+      setBeneficiary(b => b ? { ...b, ...editForm, children: childrenPayload, children_count: childrenPayload.length } : b)
       setEditOpen(false)
     } catch { setError('שגיאת רשת') }
     setEditSaving(false)
@@ -4123,6 +4145,122 @@ export default function PublicPortalPage() {
                     {MARITAL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </SelectInput>
                 </Field>
+
+                {/* ─── מספר ילדים / פרטי הילדים ─── */}
+                <div className="border-t border-slate-100 pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users size={16} className="text-indigo-600" />
+                    <h3 className="text-sm font-semibold text-slate-900">מספר ילדים / פרטי הילדים</h3>
+                  </div>
+                  <Field label="מספר ילדים">
+                    <TextInput
+                      type="number" min="0" max="20" inputMode="numeric" placeholder="0" className="w-28"
+                      value={editChildren.length === 0 ? '' : String(editChildren.length)}
+                      onChange={e => {
+                        const n = Math.max(0, Math.min(20, parseInt(e.target.value || '0', 10) || 0))
+                        setEditChildren(cs => n > cs.length
+                          ? [...cs, ...Array.from({ length: n - cs.length }, emptyChild)]
+                          : cs.slice(0, n))
+                      }}
+                    />
+                  </Field>
+
+                  <div className="flex flex-col gap-3 mt-3">
+                    {editChildren.map((child, idx) => (
+                      <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
+                          <button type="button"
+                            onClick={() => {
+                              setEditChildren(cs => cs.filter((_, i) => i !== idx))
+                              setEditChildIdErrors(er => { const n = { ...er }; delete n[idx]; return n })
+                            }}
+                            className="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-50 transition-all duration-150">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="שם הילד/ה" required>
+                              <TextInput value={child.name} placeholder="שם מלא" required
+                                onChange={e => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="תעודת זהות" required>
+                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                                className={editChildIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
+                                onChange={e => { setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value.replace(/\D/g,'') } : c)); setEditChildIdErrors(er => ({ ...er, [idx]: '' })) }}
+                                onBlur={async () => {
+                                  const digits = (child.id_number || '').replace(/\D/g, '')
+                                  if (digits && !validateIsraeliId(digits)) {
+                                    setEditChildIdErrors(er => ({ ...er, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
+                                  }
+                                  setEditChildIdErrors(er => ({ ...er, [idx]: '' }))
+                                  if (digits.length === 9) {
+                                    // בעריכה — ילד שכבר שייך למשפחה זו לא נחשב ככפילות מול עצמו
+                                    const ownIds = (beneficiary?.children ?? []).map(c => (c.id_number ?? '').replace(/\D/g, ''))
+                                    if (ownIds.includes(digits)) return
+                                    try {
+                                      const r = await fetch(`/api/portal/lookup?id=${digits}`)
+                                      const d = await r.json()
+                                      if (d.found || d.foundAsChild) {
+                                        setEditChildIdErrors(er => ({ ...er, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))
+                                      }
+                                    } catch { /* בדיקת שרת תיתפס בעת השליחה */ }
+                                  }
+                                }} />
+                              {editChildIdErrors[idx] && <p className="text-xs text-red-600 mt-1">{editChildIdErrors[idx]}</p>}
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="תאריך לידה" required>
+                              <HebrewDatePicker value={child.birth_date}
+                                onChange={iso => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: iso } : c))} maxToday yearFirst />
+                            </Field>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <Field label="מין" required>
+                              <div className="flex gap-2">
+                                {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
+                                  <button key={v} type="button"
+                                    onClick={() => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, gender: v, marital_status: '' } : c))}
+                                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
+                                      child.gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
+                                    }`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                            </Field>
+                          </div>
+                          {child.gender && (
+                          <div className="col-span-2">
+                            <Field label="מצב משפחתי">
+                              <div className="flex gap-2 flex-wrap">
+                                {maritalFor(child.gender).map(({ v, l }) => (
+                                  <button key={v} type="button"
+                                    onClick={() => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
+                                      child.marital_status === v
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                                    }`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                            </Field>
+                          </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setEditChildren(cs => [...cs, emptyChild()])}
+                      className="flex items-center justify-center gap-2 border-2 border-dashed border-indigo-200 text-indigo-600 hover:border-indigo-400 hover:bg-indigo-50 font-medium py-2.5 rounded-xl text-sm transition-all duration-150">
+                      <Plus size={16} /> הוסף ילד/ה
+                    </button>
+                  </div>
+                </div>
+
                 {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
                 <button onClick={handleUpdateDetails} disabled={editSaving}
                   className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-xl">

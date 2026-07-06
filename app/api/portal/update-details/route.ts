@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
 import { normalizePhone } from '@/lib/phone'
+import { validateIsraeliId } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const { beneficiary_id, phone, phone2, spouse_phone, address, city, email, marital_status,
-    email_verify_token, phone_verify_token, phone_tokens } = body
+    email_verify_token, phone_verify_token, phone_tokens, children, children_count } = body
   if (!beneficiary_id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   // אימות סשן הפורטל — מותר לעדכן רק את הרשומה של המוטב שאותר בסשן הנוכחי
@@ -81,6 +82,39 @@ export async function POST(request: NextRequest) {
   }
   if (verifiedSet.size !== existingVerified.length || existingVerified.some(p => !verifiedSet.has(normalizePhone(p)))) {
     update.verified_phones = [...verifiedSet]
+  }
+
+  // עדכון רשימת הילדים — כולל אימות ת"ז ובדיקת כפילות מול המערכת (למעט המשפחה הנוכחית)
+  if (children !== undefined) {
+    if (!Array.isArray(children)) {
+      return NextResponse.json({ error: 'רשימת הילדים אינה תקינה' }, { status: 400 })
+    }
+    const seen = new Set<string>()
+    for (const c of children as { name?: string; id_number?: string }[]) {
+      const name = (c?.name ?? '').trim()
+      const cid = (c?.id_number ?? '').replace(/\D/g, '')
+      const childLabel = name || 'הילד/ה'
+      if (!name || !cid) {
+        return NextResponse.json({ error: `יש להזין שם ותעודת זהות עבור ${childLabel}` }, { status: 400 })
+      }
+      if (!validateIsraeliId(cid)) {
+        return NextResponse.json({ error: `תעודת הזהות של ${childLabel} אינה תקינה` }, { status: 400 })
+      }
+      if (seen.has(cid)) {
+        return NextResponse.json({ error: `תעודת הזהות של ${childLabel} מופיעה פעמיים ברשימת הילדים.` }, { status: 400 })
+      }
+      seen.add(cid)
+      // כבר קיים במערכת על רשומה אחרת (כמוטב, כבן/בת זוג, או כילד) — לא כולל המשפחה הנוכחית
+      const { data: asBen } = await admin.from('beneficiaries').select('id')
+        .or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).neq('id', String(beneficiary_id)).limit(1)
+      const { data: asChild } = await admin.from('beneficiaries').select('id')
+        .contains('children', [{ id_number: cid }]).neq('id', String(beneficiary_id)).limit(1)
+      if (asBen?.length || asChild?.length) {
+        return NextResponse.json({ error: `תעודת הזהות של ${childLabel} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 400 })
+      }
+    }
+    update.children = children.length > 0 ? children : null
+    update.children_count = typeof children_count === 'number' ? children_count : children.length
   }
 
   const { error } = await admin.from('beneficiaries').update(update).eq('id', String(beneficiary_id))
