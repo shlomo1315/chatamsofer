@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
         let parentId: string = sel.id
         let gen: number = sel.generation as number
         let lastId: string = sel.id
+        const newPendingNames: string[] = []
         for (const n of lineage_new_nodes as { name?: string; relation?: string }[]) {
           const nm = (n?.name ?? '').toString().trim().replace(/\s+/g, ' ')
           if (!nm) continue
@@ -200,10 +201,23 @@ export async function POST(request: NextRequest) {
           const { data: node } = await admin.from('lineage_nodes')
             .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })
             .select('id').single()
-          if (node?.id) { parentId = node.id; lastId = node.id }
+          if (node?.id) { parentId = node.id; lastId = node.id; newPendingNames.push(nm) }
         }
         if (lastId !== sel.id) {
           await admin.from('beneficiaries').update({ lineage_node_id: lastId }).eq('id_number', cleanId)
+        }
+        // אישור אוטומטי — שם שנעשה בו שימוש ע"י 10 נרשמים או יותר (מופיע ב-lineage_chain
+        // של 10 משפחות) מאושר אוטומטית ומופיע לכולם ברשימת הבחירה.
+        const AUTO_VERIFY_THRESHOLD = 10
+        for (const nm of [...new Set(newPendingNames)]) {
+          try {
+            const { count } = await admin.from('beneficiaries')
+              .select('id', { count: 'exact', head: true })
+              .contains('lineage_chain', [{ name: nm }])
+            if ((count ?? 0) >= AUTO_VERIFY_THRESHOLD) {
+              await admin.from('lineage_nodes').update({ status: 'verified' }).eq('name', nm).eq('status', 'pending')
+            }
+          } catch { /* ספירה/אישור לא חוסמים את הרישום */ }
         }
       }
     }

@@ -24,10 +24,12 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
+  // yearFirst — פתיחה ישר לרשימת השנים (מתאים לתאריך לידה של מבוגר). ברירת מחדל: תצוגת ימים.
+  yearFirst?: boolean
 }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const selected = value ? new Date(value) : null
@@ -35,7 +37,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true }: {
 
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<'hebrew' | 'gregorian'>('hebrew')
-  const [view, setView] = useState<'days' | 'months' | 'years'>('days')
+  const [view, setView] = useState<'days' | 'months' | 'years'>(yearFirst ? 'years' : 'days')
   const [g, setG] = useState<Date>(selected ?? today)               // חודש לועזי מוצג
   const [hc, setHc] = useState(() => { const h = new HDate(selected ?? today); return { hy: h.getFullYear(), hm: h.getMonth() } })
   const ref = useRef<HTMLDivElement>(null)
@@ -116,7 +118,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true }: {
           <p className="text-xs text-slate-400 mb-1.5 text-center">נא לבחור סוג לוח</p>
           <div className="grid grid-cols-2 gap-1 bg-slate-100 rounded-xl p-1 mb-3">
             {([['hebrew', 'לוח עברי'], ['gregorian', 'לוח לועזי']] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => { setMode(k); setView('days') }}
+              <button key={k} type="button" onClick={() => { setMode(k); setView(yearFirst ? 'years' : 'days') }}
                 className={`py-1.5 rounded-lg text-sm font-medium transition-colors ${mode === k ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                 {l}
               </button>
