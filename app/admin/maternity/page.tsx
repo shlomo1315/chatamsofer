@@ -1,8 +1,6 @@
-import Link from 'next/link'
-import { Plus, Baby } from 'lucide-react'
+import { Baby } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
-import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import MaternityTable from './MaternityTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
@@ -43,12 +41,6 @@ export default async function MaternityPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="יולדות" subtitle={`כל הלידות · ${aids.length}`}>
         <ExportExcelButton type="maternity" />
-        <Link href="/admin/maternity/new">
-          <Button>
-            <Plus size={16} />
-            לידה חדשה
-          </Button>
-        </Link>
       </PageHeader>
 
       {aids.length === 0 ? (

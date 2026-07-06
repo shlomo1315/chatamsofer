@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, CreditCard, ExternalLink } from 'lucide-react'
+import { CreditCard, ExternalLink } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import Button from '@/components/ui/Button'
@@ -33,12 +33,6 @@ export default async function LoansPage() {
           </Button>
         </Link>
         <LoansPortalEmailButton />
-        <Link href="/admin/loans/new">
-          <Button>
-            <Plus size={16} />
-            הלוואה חדשה
-          </Button>
-        </Link>
       </PageHeader>
 
       {loans.length === 0 ? (

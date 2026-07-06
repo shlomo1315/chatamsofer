@@ -27,7 +27,6 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
-  const canAdd = useCan('financial_aid', 'add')
   const canEdit = useCan('financial_aid', 'edit')
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
@@ -152,12 +151,6 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-2">
           {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} בדוק תשובות
         </button>
-        {canAdd && (
-          <button onClick={() => { resetNew(); setNewOpen(true) }}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">
-            <Plus size={14} /> בקשה חדשה
-          </button>
-        )}
       </div>
 
       {/* קוביות סינון */}
