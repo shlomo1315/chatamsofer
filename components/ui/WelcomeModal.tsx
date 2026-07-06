@@ -96,7 +96,7 @@ export default function WelcomeModal() {
         {/* Purple header */}
         <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-6 pt-8 pb-10 text-center text-white">
           {/* Logo */}
-          <div className="w-20 h-20 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden p-1.5">
+          <div className="w-20 h-20 rounded-xl flex items-center justify-center mx-auto mb-4 overflow-hidden">
             {logoError ? (
               <Building2 size={36} className="text-indigo-600" />
             ) : (

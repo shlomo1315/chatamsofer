@@ -13,7 +13,7 @@ import { DEPARTMENTS } from '@/lib/departments'
 function LogoBadge() {
   const [error, setError] = useState(false)
   return (
-    <div className="flex-shrink-0 w-10 h-10 bg-white rounded-xl flex items-center justify-center overflow-hidden p-1 shadow-sm">
+    <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden">
       {error ? (
         <Building2 size={18} className="text-indigo-600" />
       ) : (
@@ -264,8 +264,8 @@ export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMai
           <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-widest text-slate-500">מערכת</p>
         </div>
 
-        {/* Bottom items (הגדרות) */}
-        {bottomItems.map(({ href, label, icon: Icon }) => {
+        {/* Bottom items (הגדרות) — מנהל ראשי בלבד */}
+        {isAdmin && bottomItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href)
           return (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}

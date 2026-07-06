@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
@@ -51,7 +52,18 @@ async function getRecoveryHomes(): Promise<{ name: string; availability: string 
   return [...map.entries()].map(([name, availability]) => ({ name, availability }))
 }
 
+// דף ההגדרות מיועד למנהל הראשי בלבד — מזכירות אינה רשאית לגשת (גם לא ב-URL ישיר).
+async function assertAdmin() {
+  if (!isSupabaseConfigured()) return
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (profile?.role !== 'admin') redirect('/admin')
+}
+
 export default async function SettingsPage() {
+  await assertAdmin()
   const [profiles, recoveryHomes] = await Promise.all([getProfiles(), getRecoveryHomes()])
 
   return (

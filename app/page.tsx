@@ -2181,7 +2181,7 @@ export default function PublicPortalPage() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-white border border-slate-200">
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
             <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1">
@@ -2201,8 +2201,8 @@ export default function PublicPortalPage() {
         {step === 'id-lookup' && (
           <div className="flex flex-col gap-6">
             <div className="text-center">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4 shadow-lg bg-white border border-slate-200">
-                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain p-1" />
+              <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4">
+                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
               </div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
             </div>
@@ -2268,8 +2268,8 @@ export default function PublicPortalPage() {
         {step === 'portal-auth' && pendingAuth && (
           <div className="flex flex-col gap-6">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-3 shadow-lg bg-white border border-slate-200">
-                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain p-1" />
+              <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-3">
+                <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
               </div>
               <h2 className="text-xl font-bold text-slate-900 mb-1">
                 {authMode === 'login' ? 'כניסה לאזור האישי' : authIsSetup ? 'הגדרת סיסמה' : 'איפוס סיסמה'}
