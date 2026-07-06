@@ -5,6 +5,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { FinancialAidRequest, Beneficiary } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import DocThumb from '@/components/ui/DocThumb'
+import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import FinancialAidDetail from './FinancialAidDetail'
 
@@ -67,6 +68,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           <div className="mt-3 flex flex-col gap-1 w-28">
             <DocThumb href={docViewUrl(req.document_url)} rawUrl={req.document_url} name={req.document_name || 'מסמך מצורף'} size={112} />
             <span className="text-[11px] text-slate-600 truncate" title={req.document_name || ''}>{req.document_name || 'מסמך מצורף'}</span>
+            <DownloadDocButton url={req.document_url} name={req.document_name || 'מסמך מצורף'} variant="icon" className="self-start" />
           </div>
         )}
       </Card>

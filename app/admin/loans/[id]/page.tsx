@@ -5,6 +5,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import DocThumb from '@/components/ui/DocThumb'
+import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
@@ -120,6 +121,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               <div key={i} className="flex flex-col gap-1 w-24">
                 <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
                 <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
+                <DownloadDocButton url={d.url} name={d.name || `מסמך ${i + 1}`} variant="icon" className="self-start" />
               </div>
             ))}
           </div>
@@ -178,6 +180,7 @@ function LoanDocCard({ label, url }: { label: string; url?: string }) {
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
   const isPdf = /\.pdf(\?|$)/i.test(url)
   return (
+    <div className="flex flex-col gap-1.5">
     <a href={href} target="_blank" rel="noopener noreferrer"
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
@@ -195,5 +198,7 @@ function LoanDocCard({ label, url }: { label: string; url?: string }) {
         {label} <ExternalLink size={11} />
       </span>
     </a>
+      <DownloadDocButton url={url} name={label} variant="button" className="justify-center" />
+    </div>
   )
 }

@@ -25,6 +25,14 @@ export function docViewUrl(urlOrPath: string | null | undefined): string {
   return `/api/files?p=${encodeURIComponent(urlOrPath)}`
 }
 
+// כתובת הורדה ישירה למחשב — מוסיפה dl=1 (Content-Disposition: attachment).
+// name (לא חובה) קובע את שם הקובץ שיישמר.
+export function docDownloadUrl(urlOrPath: string | null | undefined, name?: string | null): string {
+  if (!urlOrPath) return ''
+  const q = `p=${encodeURIComponent(urlOrPath)}&dl=1${name ? `&name=${encodeURIComponent(name)}` : ''}`
+  return `/api/files?${q}`
+}
+
 // קישור חתום קצר-מועד לשימוש במיילים (ברירת מחדל 7 ימים) — נדרש כשהדלי פרטי.
 // admin הוא לקוח service-role. בכישלון מוחזר ה-URL המקורי כדי לא לשבור את המייל.
 export async function signedDocUrl(

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -11,8 +11,9 @@ import MaternityActions from './MaternityActions'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
-import { docViewUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
+import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageTreeToggle from './LineageTreeToggle'
 import CollapsibleMailThread from './CollapsibleMailThread'
@@ -296,9 +297,12 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               </Card>
               {aid.birth_certificate_url && (
                 <Card>
-                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
-                    <FileText size={16} />
-                    <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 text-indigo-600">
+                      <FileText size={16} />
+                      <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
+                    </div>
+                    <DownloadDocButton url={aid.birth_certificate_url} name="אישור-לידה" variant="button" />
                   </div>
                   <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} />
                 </Card>
@@ -461,22 +465,28 @@ function DocCard({ label, url }: { label: string; url?: string }) {
   const isPdf = /\.pdf(\?|$)/i.test(url)
   const href = docViewUrl(url)
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer"
-       className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
-      {isImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
-      ) : isPdf ? (
-        <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
-          className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
-      ) : (
-        <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-          <FileText size={24} className="text-slate-400" />
-        </div>
-      )}
-      <span className="text-[11px] font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
-        {label} <ExternalLink size={10} />
-      </span>
-    </a>
+    <div className="flex flex-col gap-1.5">
+      <a href={href} target="_blank" rel="noopener noreferrer"
+         className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
+        {isImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+        ) : isPdf ? (
+          <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
+            className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
+        ) : (
+          <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+            <FileText size={24} className="text-slate-400" />
+          </div>
+        )}
+        <span className="text-[11px] font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
+          {label} <ExternalLink size={10} />
+        </span>
+      </a>
+      <a href={docDownloadUrl(url, label)} download={label}
+         className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-white hover:bg-emerald-600 px-2 py-1 rounded-lg border border-emerald-200 hover:border-emerald-600 transition-colors">
+        <Download size={11} /> הורדה
+      </a>
+    </div>
   )
 }

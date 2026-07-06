@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
+import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import type { MaternityAid } from '@/types'
@@ -228,11 +229,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     )}
                     <td className="px-4 py-3 align-middle">
                       {aid.birth_certificate_url ? (
-                        <a href={docViewUrl(aid.birth_certificate_url)} target="_blank" rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
-                          <FileText size={14} /> צפייה
-                        </a>
+                        <span className="inline-flex items-center gap-1.5">
+                          <a href={docViewUrl(aid.birth_certificate_url)} target="_blank" rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
+                            <FileText size={14} /> צפייה
+                          </a>
+                          <DownloadDocButton url={aid.birth_certificate_url} name={`אישור-לידה-${aid.baby_name ?? ''}`} variant="icon" />
+                        </span>
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
