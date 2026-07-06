@@ -1446,6 +1446,16 @@ export default function PublicPortalPage() {
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
+    // כתובת מלאה חובה — עיר, רחוב ומספר בית (הכתובת נשמרת כמחרוזת "רחוב מספר")
+    if (!regForm.city.trim()) { setError('אנא בחר עיר מגורים'); return }
+    {
+      const addr = (regForm.address || '').trim()
+      const m = addr.match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/) // רחוב + מספר בית בסוף
+      const streetPart = (m ? m[1] : addr).trim()
+      const housePart = (m ? m[2] : '').trim()
+      if (!streetPart) { setError('אנא הזן שם רחוב'); return }
+      if (!housePart) { setError('אנא הזן מספר בית'); return }
+    }
     // ברישום כילד רשום — השיוך אוטומטי מההורה. אחרת — דרך בורר הדורות.
     if (!childParentLineage) {
       if (!lineageDeclared) {
@@ -2759,6 +2769,7 @@ export default function PublicPortalPage() {
                   onAddressChange={v => setRegForm(f => ({ ...f, address: v }))}
                   cityRequired
                   addressRequired
+                  houseRequired
                 />
               </Card>
             )}
