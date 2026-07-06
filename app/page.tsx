@@ -9,7 +9,7 @@ import VerifyControl from '@/components/VerifyControl'
 const CityStreetPicker = dynamic(() => import('@/components/ui/CityStreetPicker'), { ssr: false })
 const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'), { ssr: false })
 const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
-import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import {
@@ -464,7 +464,7 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
       {/* search + zoom */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 240 }}>
-          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 חיפוש שם בשושלת..."
+          <input type="text" value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש שם בשושלת..."
             style={{ width: '100%', height: 30, borderRadius: 8, border: '1px solid #E2E8F0', padding: '0 10px', fontSize: 12, color: '#334155', outline: 'none', direction: 'rtl', fontFamily: 'inherit', background: '#fff', boxSizing: 'border-box' }} />
           {results.length > 0 && (
             <div style={{ position: 'absolute', top: 34, right: 0, left: 0, background: '#fff', border: '1px solid #E2E8F0', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 50, overflow: 'hidden', maxHeight: 240, overflowY: 'auto' }}>
@@ -521,7 +521,7 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
           })}
         </div>
       </div>
-      {selected && <p className="text-xs text-indigo-600 font-medium mt-2">✓ נבחר: {allNodes.find(n => n.id === selected)?.name}</p>}
+      {selected && <p className="text-xs text-indigo-600 font-medium mt-2">נבחר: {allNodes.find(n => n.id === selected)?.name}</p>}
     </div>
   )
 }
@@ -726,9 +726,9 @@ function validateEmail(e: string): boolean {
 // ─── Widow Portal Component ───
 
 const WIDOW_REQUEST_TYPES = [
-  { value: 'financial', label: 'קרן סיוע כספי', icon: '💰', desc: 'מענק או הלוואה לסיוע כלכלי' },
-  { value: 'food',      label: 'סיוע במזון / שוברים', icon: '🛒', desc: 'חבילות מזון ושוברי קנייה' },
-  { value: 'general',   label: 'בקשת עזרה כללית', icon: '🤝', desc: 'פנייה חופשית לצוות' },
+  { value: 'financial', label: 'קרן סיוע כספי', icon: '', desc: 'מענק או הלוואה לסיוע כלכלי' },
+  { value: 'food',      label: 'סיוע במזון / שוברים', icon: '', desc: 'חבילות מזון ושוברי קנייה' },
+  { value: 'general',   label: 'בקשת עזרה כללית', icon: '', desc: 'פנייה חופשית לצוות' },
 ] as const
 
 function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; onBack: () => void }) {
@@ -824,7 +824,6 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <span className="text-xl">{t.icon}</span>
                     <div>
                       <p className="text-sm font-medium text-slate-800">{t.label}</p>
                       <p className="text-xs text-slate-500">{t.desc}</p>
@@ -1694,6 +1693,12 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    // תאריך הלידה עד חודשיים אחורה בלבד (שוברי ההבראה תקפים ל-6 שבועות)
+    {
+      const twoMonthsAgo = new Date(); twoMonthsAgo.setHours(0, 0, 0, 0); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2)
+      const bd = new Date(birthForm.birth_date); bd.setHours(0, 0, 0, 0)
+      if (bd < twoMonthsAgo) { setError('ניתן להגיש בקשת לידה עד חודשיים אחורה בלבד'); return }
+    }
     if (!birthForm.baby_gender) { setError(isTwins ? 'אנא בחר בן או בת עבור התינוק הראשון' : 'אנא בחר בן או בת'); return }
     // שם הנולד/ת אינו חובה — ניתן להשלים בכניסה הבאה
     if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
@@ -1994,7 +1999,7 @@ export default function PublicPortalPage() {
     return (
       <div className="border border-slate-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
-        <p className="text-xs font-bold text-red-600 mb-3">⚠️ חובה לצרף גם את הספח (הדף הנלווה לתעודת הזהות)</p>
+        <p className="text-xs font-bold text-red-600 mb-3">חובה לצרף גם את הספח (הדף הנלווה לתעודת הזהות)</p>
         {file ? (
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
             <span className="text-sm text-green-700 flex items-center gap-2">
@@ -2012,12 +2017,12 @@ export default function PublicPortalPage() {
             </span>
             <div className="flex items-center gap-3 flex-shrink-0">
               {existing.url && (
-                <a href={docViewUrl(existing.url)} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-indigo-600 hover:text-indigo-800 underline">צפייה</a>
+                <ViewDocButton url={existing.url} name={existing.name}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 underline">צפייה</ViewDocButton>
               )}
               {existing.url && (
-                <a href={docDownloadUrl(existing.url, existing.name)} download={existing.name || true}
-                  className="text-xs text-emerald-600 hover:text-emerald-800 underline">הורדה</a>
+                <button type="button" onClick={() => { downloadDocDirect(existing.url!, existing.name).catch(() => {}) }}
+                  className="text-xs text-emerald-600 hover:text-emerald-800 underline">הורדה</button>
               )}
               <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: true }))}
                 className="text-xs text-slate-500 hover:text-slate-700 underline">החלף קובץ</button>
@@ -2332,7 +2337,7 @@ export default function PublicPortalPage() {
                         או קבלו כעת קישור ישירות למייל שלכם:
                       </p>
                       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2 leading-relaxed">
-                        ⚠️ בשליחת מייל לאיגוד — <span className="font-semibold">חובה לכתוב בשורת הנושא את מספר תעודת הזהות במלואו (כולל ספרת ביקורת)</span> כדי שנוכל לשלוח אליכם את הפרטים. (בלחיצה על הקישור למעלה הנושא ימולא אוטומטית.)
+                        בשליחת מייל לאיגוד — <span className="font-semibold">חובה לכתוב בשורת הנושא את מספר תעודת הזהות במלואו (כולל ספרת ביקורת)</span> כדי שנוכל לשלוח אליכם את הפרטים. (בלחיצה על הקישור למעלה הנושא ימולא אוטומטית.)
                       </p>
                       {authEmailHint && (
                         <p className="text-xs text-slate-500 mt-2">
@@ -2580,7 +2585,7 @@ export default function PublicPortalPage() {
 
             {/* הבהרה — רישום פעם אחת בלבד */}
             <div className="bg-red-50 border-2 border-red-200 rounded-2xl px-4 py-3.5 text-sm text-red-800 leading-relaxed">
-              <p className="font-bold mb-1">⚠️ יש להירשם פעם אחת בלבד</p>
+              <p className="font-bold mb-1">יש להירשם פעם אחת בלבד</p>
               <p>מי שברשותו גם תעודת זהות וגם דרכון — יירשם עם <strong>אמצעי זיהוי אחד בלבד</strong>, והוא ישמש אותו לאורך כל התהליך. <strong>הירשמות פעם שנייה תגרום לחסימת החשבון לצמיתות.</strong></p>
             </div>
 
@@ -2856,7 +2861,7 @@ export default function PublicPortalPage() {
                 {childParentLineage && childParentLineage.lineage_chain ? (
                   /* שיוך אוטומטי — הנרשם הוא ילד רשום, הייחוס נגזר מההורה */
                   <div className="rounded-2xl border-2 border-green-200 bg-green-50/60 p-4">
-                    <p className="text-sm font-bold text-green-800 mb-1">✓ השיוך שלך נקבע אוטומטית</p>
+                    <p className="text-sm font-bold text-green-800 mb-1">השיוך שלך נקבע אוטומטית</p>
                     <p className="text-xs text-green-700 mb-4 leading-relaxed">
                       אתה רשום במערכת כבן של <strong>{childParentLineage.parentName}</strong>. סדר הייחוס שלך נגזר אוטומטית — אין צורך למלא ידנית.
                     </p>
@@ -3225,7 +3230,7 @@ export default function PublicPortalPage() {
 
               {/* תזכורת ספאם — לוודא שההודעות מהמערכת מתקבלות */}
               <div className="text-right bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-                <p className="text-sm font-bold text-amber-800 mb-1">📧 חשוב — בדקו את תיבת המייל</p>
+                <p className="text-sm font-bold text-amber-800 mb-1">חשוב — בדקו את תיבת המייל</p>
                 <p className="text-xs text-amber-700 leading-relaxed">
                   כל העדכונים והבקשות נשלחים למייל הרשום. אנא בדקו את תיבת הדואר בהקדם, וגם את תיבת ה<strong>ספאם</strong> — ואם מצאתם שם הודעה מאיתנו, סמנו אותה כ״לא ספאם״ (Not spam). כך תקבלו את כל ההודעות, ותעזרו גם לנרשמים הבאים לקבל אותן ישירות לתיבת הדואר.
                 </p>
@@ -3446,7 +3451,7 @@ export default function PublicPortalPage() {
                 {/* תזכורת השלמת מסמכים — למי שעדיין לא אושר */}
                 {!isApproved && (
                   <>
-                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">⚠️ עליך עדיין להשלים את המסמכים הנדרשים:</p>
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">עליך עדיין להשלים את המסמכים הנדרשים:</p>
                     <button
                       onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
                       className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-all duration-150 text-right shadow-sm group"
@@ -3593,6 +3598,7 @@ export default function PublicPortalPage() {
                       value={birthForm.birth_date}
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
+                      minMonthsBack={2}
                     />
                   </Field>
                 </div>
@@ -3746,6 +3752,7 @@ export default function PublicPortalPage() {
                       value={silentForm.birth_date}
                       onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
+                      minMonthsBack={2}
                     />
                   </Field>
                 </div>

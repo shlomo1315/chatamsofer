@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
@@ -181,7 +182,7 @@ function LoanDocCard({ label, url }: { label: string; url?: string }) {
   const isPdf = /\.pdf(\?|$)/i.test(url)
   return (
     <div className="flex flex-col gap-1.5">
-    <a href={href} target="_blank" rel="noopener noreferrer"
+    <ViewDocButton url={url}
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -197,7 +198,7 @@ function LoanDocCard({ label, url }: { label: string; url?: string }) {
       <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
         {label} <ExternalLink size={11} />
       </span>
-    </a>
+    </ViewDocButton>
       <DownloadDocButton url={url} name={label} variant="button" className="justify-center" />
     </div>
   )

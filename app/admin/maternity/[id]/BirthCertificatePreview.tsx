@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
@@ -76,16 +77,16 @@ export default function BirthCertificatePreview({
       ) : isPdf(url) ? (
         <iframe src={`${view}#toolbar=0&navpanes=0`} title="אישור לידה" className="w-full h-80 bg-white" />
       ) : (
-        <a href={view} target="_blank" rel="noopener noreferrer" className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
+        <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>
-        </a>
+        </ViewDocButton>
       )}
 
       {/* פעולות בריחוף */}
       <div className="absolute inset-x-0 top-0 flex items-center justify-end gap-1.5 p-2 bg-gradient-to-b from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-        <a href={view} target="_blank" rel="noopener noreferrer" className={`${btn} text-indigo-700`}>
+        <ViewDocButton url={url} className={`${btn} text-indigo-700`}>
           <ExternalLink size={13} /> פתח
-        </a>
+        </ViewDocButton>
         <DownloadDocButton url={url} name="אישור-לידה" variant="button" className="bg-white/95 shadow-sm" />
         <button onClick={() => fileRef.current?.click()} disabled={busy} title={UPLOAD_HINT} className={`${btn} text-slate-700`}>
           <Upload size={13} /> החלף
