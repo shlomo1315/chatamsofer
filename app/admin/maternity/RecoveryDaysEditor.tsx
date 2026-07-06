@@ -16,12 +16,13 @@ export default function RecoveryDaysEditor({ aid }: { aid: AidLike }) {
   const [days, setDays] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
   const [savedAt, setSavedAt] = useState(initial)
 
   const dirty = days !== savedAt
 
   const save = async () => {
-    setErr(''); setSaving(true)
+    setErr(''); setNote(''); setSaving(true)
     try {
       const res = await fetch('/api/admin/maternity/recovery-days', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -30,6 +31,8 @@ export default function RecoveryDaysEditor({ aid }: { aid: AidLike }) {
       const data = await res.json()
       if (!res.ok || data.ok === false) { setErr(data.error || 'הפעולה נכשלה'); setSaving(false); return }
       setSavedAt(days)
+      // אם הלידה מאושרת — שובר הבראה מעודכן נשלח מחדש למייל היולדת
+      if (data.voucherResent) setNote('נשמר · שובר הבראה מעודכן נשלח למייל היולדת')
       router.refresh()
     } catch {
       setErr('שגיאת רשת — נסה שוב')
@@ -77,6 +80,7 @@ export default function RecoveryDaysEditor({ aid }: { aid: AidLike }) {
       <p className="text-xs text-slate-400">
         ברירת המחדל: לידה רגילה 2 ימים · לידת תאומים 4 ימים. ניתן לעדכן ידנית — הערך יוצג לבית ההחלמה.
       </p>
+      {note && <p className="flex items-center gap-1 text-xs text-emerald-600"><Check size={12} /> {note}</p>}
       {err && <p className="text-xs text-red-600">{err}</p>}
     </div>
   )
