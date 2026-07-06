@@ -619,6 +619,23 @@ export async function POST(request: NextRequest) {
     // חשוב: משלוח כפול של Google עלול לגרום לבקשה לאיגוד להיפתר לתיבת "משרד ראשי"
     // (עותק subdomain), ואז הגייטינג לפי isIgud החמיץ את הקליטה לחלוטין. לכן מזהים לפי הנושא.
     const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
+    // אבחון קליטה — שומר את הנושא הגולמי/מפוענח והחלטת הניתוב, כדי לאבחן כשל זיהוי בקשה.
+    try {
+      await admin.from('app_settings').upsert({
+        key: 'mail_intake_debug',
+        value: JSON.stringify({
+          at: new Date().toISOString(),
+          from: from.email,
+          resolvedToEmail, isIgud,
+          rawSubject: String(data.subject ?? data.Subject ?? ''),
+          headerSubject: getHeader(data.headers, 'subject'),
+          decodedSubject: subject,
+          isRequestSubject: isRequestSubject(subject),
+          plainLen: (plain ?? '').length, htmlLen: (html ?? '').length,
+        }),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* אבחון בלבד */ }
     if (isRequestSubject(subject)) {
       try {
         // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה

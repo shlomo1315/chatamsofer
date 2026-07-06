@@ -14,13 +14,18 @@ export const SUBJECT_PREFIX: Record<ReqType, string> = {
   widow: 'בקשת סיוע אלמנה',
 }
 
-// זיהוי סוג הבקשה מתוך שורת הנושא (לידה שקטה לפני לידה — כי "לידה" מוכל ב"לידה שקטה")
+// זיהוי סוג הבקשה מתוך שורת הנושא (לידה שקטה לפני לידה — כי "לידה" מוכל ב"לידה שקטה").
+// עמיד: מסיר סימוני כיווניות (RTL/LTR marks) ורווחים כפולים, ותופס וריאציות ניסוח נפוצות.
 export function detectReqType(subject: string): ReqType | null {
   const s = String(subject ?? '')
-  if (s.includes('לידה שקטה')) return 'silent_birth'
-  if (s.includes('בקשת לידה')) return 'birth'
-  if (s.includes('הלוואה')) return 'loan'
-  if (s.includes('סיוע רפואי')) return 'financial_aid'
+    .replace(/[‎‏‪-‮⁦-⁩ ]/g, ' ') // סימוני כיווניות + NBSP → רווח
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (/ליד[הת]\s*שקט/.test(s)) return 'silent_birth'
+  // "בקשת לידה" / "בקשה ללידה" / "בקשה ליולדת" ווריאציות
+  if (/בקש.{0,6}ליד/.test(s) || /בקש.{0,6}יולד/.test(s) || s.includes('בקשת לידה') || s.includes('בקשה ליולדת')) return 'birth'
+  if (s.includes('הלוואה') || s.includes('גמ"ח') || s.includes('גמח')) return 'loan'
+  if (s.includes('סיוע רפואי') || (s.includes('סיוע') && s.includes('רפוא'))) return 'financial_aid'
   if (s.includes('אלמנה') || s.includes('אלמן')) return 'widow'
   return null
 }
