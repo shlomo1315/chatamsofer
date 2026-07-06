@@ -188,10 +188,15 @@ export async function POST(request: NextRequest) {
         let gen: number = sel.generation as number
         let lastId: string = sel.id
         for (const n of lineage_new_nodes as { name?: string; relation?: string }[]) {
-          const nm = (n?.name ?? '').toString().trim()
+          const nm = (n?.name ?? '').toString().trim().replace(/\s+/g, ' ')
           if (!nm) continue
           gen += 1
           const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null
+          // שם שכבר אושר (מאומת) תחת אותו אב — שימוש חוזר בצומת הקיים, בלי ליצור כפילות
+          // "ממתין לאישור" שתדרוש אישור חוזר. זה מונע את הבאג של אישור חוזר לשם מאושר.
+          const { data: existing } = await admin.from('lineage_nodes')
+            .select('id, generation').eq('parent_id', parentId).eq('status', 'verified').ilike('name', nm).limit(1).maybeSingle()
+          if (existing?.id) { parentId = existing.id; lastId = existing.id; gen = (existing.generation as number) ?? gen; continue }
           const { data: node } = await admin.from('lineage_nodes')
             .insert({ name: nm, parent_id: parentId, generation: gen, relation: rel, status: 'pending' })
             .select('id').single()

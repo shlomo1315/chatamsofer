@@ -74,8 +74,11 @@ export async function POST(request: NextRequest) {
   if (upErr) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   if (channel === 'email') {
-    deliverMail(raw, 'קוד אימות כתובת מייל — היכל החתם סופר', codeEmailHtml(code), undefined, { ...mailFor('igud'), skipLog: true })
-      .catch((e) => console.error('[verify/send] email failed:', e))
+    const res = await deliverMail(raw, 'קוד אימות כתובת מייל — היכל החתם סופר', codeEmailHtml(code), undefined, { ...mailFor('igud'), skipLog: true })
+    if (!res || !res.ok) {
+      console.error('[verify/send] email failed:', res?.error)
+      return NextResponse.json({ error: 'שליחת המייל נכשלה. נסו שוב או פנו למזכירות.' }, { status: 502 })
+    }
   } else {
     const r = await placeCodeCall(raw, code)
     if (!r.ok && !r.notConfigured) console.error('[verify/send] call failed:', r.error)

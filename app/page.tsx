@@ -576,10 +576,13 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
     setChain(c => [...c, { id: null, name: nm, relation: newRel, isNew: true }])
     setOptions([]); setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('')
   }
-  const removeLast = async () => {
-    const prev = chain[chain.length - 2]
-    setChain(c => c.slice(0, -1))
+  // מחיקת שם מהשרשרת לפי מיקומו — מסירה אותו ואת כל מה שאחריו (הדורות תלויים זה בזה),
+  // ומחזירה את רשימת הבחירה לדור שנותר האחרון.
+  const removeAt = async (chainIndex: number) => {
+    const next = chain.slice(0, chainIndex)
+    setChain(next)
     setSelfAdded(false); setAddOpen(false)
+    const prev = next[next.length - 1]
     if (prev && !prev.isNew && prev.id) setOptions(await fetchChildren(prev.id))
     else if (!prev && root) setOptions(await fetchChildren(root.id))
     else setOptions([])
@@ -611,8 +614,8 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               {row.fixed && <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>}
               {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
               {relBadge(row.relation)}
-              {!row.fixed && i === arr.length - 1 && !selfAdded && (
-                <button type="button" onClick={removeLast} className="text-slate-300 hover:text-red-500 flex-shrink-0" title="הסר"><X size={15} /></button>
+              {!row.fixed && !selfAdded && (
+                <button type="button" onClick={() => removeAt(i - 1)} className="text-slate-400 hover:text-white hover:bg-red-500 rounded-full p-0.5 flex-shrink-0 transition-colors" title="מחיקת שם זה (וכל מה שאחריו)"><X size={14} /></button>
               )}
             </div>
           </div>
@@ -626,10 +629,10 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
           <div className="flex-1 mb-2 rounded-xl border-2 border-green-300 bg-green-600 px-3 py-2 flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-green-100 flex-shrink-0">דור {chain.length + 2}</span>
             <span className="text-sm font-semibold text-white flex-1 truncate">{selfName || '(שמך)'} (אתה)</span>
-            <span className="text-[10px] text-green-100">בן/חתן:</span>
+            <span className="text-xs font-bold text-white">בן/חתן:</span>
             {(['son', 'son_in_law'] as const).map(r => (
               <button key={r} type="button" onClick={() => setSelfRel(r)}
-                className={`text-xs font-semibold rounded-full px-2.5 py-0.5 border transition-all duration-150 ${selfRel === r ? 'bg-white text-green-700 border-white' : 'bg-green-500/40 text-white border-green-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                className={`text-sm font-bold rounded-lg px-4 py-1.5 border-2 transition-all duration-150 ${selfRel === r ? 'bg-white text-green-800 border-white shadow-md ring-2 ring-white/60' : 'bg-green-800/60 text-white border-white/80 hover:bg-green-800'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
             ))}
             <button type="button" onClick={() => { setSelfAdded(false); setSelfRel(null) }} className="text-green-100 hover:text-white flex-shrink-0" title="בטל"><X size={15} /></button>
           </div>
@@ -674,10 +677,10 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               <p className="text-xs font-semibold text-amber-800">הוספת דור {chain.length + 2} (ייכנס לאישור הצוות)</p>
               <TextInput value={newName} onChange={e => { setNewName(e.target.value); setNewErr('') }} placeholder="שם פרטי מלא ושם משפחה מלא" />
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500">בן/חתן של הדור הקודם:</span>
+                <span className="text-xs font-semibold text-slate-700">בן/חתן של הדור הקודם:</span>
                 {(['son', 'son_in_law'] as const).map(r => (
                   <button key={r} type="button" onClick={() => setNewRel(r)}
-                    className={`text-xs font-semibold rounded-full px-3 py-1 border transition-all duration-150 ${newRel === r ? (r === 'son' ? 'bg-blue-100 text-blue-800 border-blue-400' : 'bg-amber-100 text-amber-800 border-amber-400') : 'bg-white text-slate-500 border-slate-300'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                    className={`text-sm font-bold rounded-lg px-4 py-1.5 border-2 transition-all duration-150 ${newRel === r ? (r === 'son' ? 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-200' : 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-200') : 'bg-white text-slate-700 border-slate-400 hover:border-slate-500 hover:bg-slate-50'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
                 ))}
               </div>
               {newErr && <p className="text-xs text-red-600">{newErr}</p>}
@@ -1385,7 +1388,13 @@ export default function PublicPortalPage() {
 
   // ── סדר הדורות המלא: דור 1 (החתם סופר, נעול) → נתיב מהעץ → דורות ידניים → הנרשם עצמו ──
   // לכל דור אחרי הראשון יש סימון בן/חתן (relKey). השם של הנרשם נכנס אוטומטית כדור האחרון.
-  const selfDisplayName = [regForm.family_name, regForm.full_name].filter(Boolean).join(' ')
+  // שם הנרשם לעץ הדורות — שם פרטי תחילה, ובזוג נשוי כולל את שם האשה: "שלמה ושרה ניימאן"
+  const selfDisplayName = (() => {
+    const given = (showSpouseFields && regForm.spouse_name)
+      ? `${regForm.full_name} ו${regForm.spouse_name}`.trim()
+      : (regForm.full_name || '')
+    return [given, regForm.family_name].filter(Boolean).join(' ').trim()
+  })()
   const buildLineageChain = () => {
     const chain: { generation: number; name: string; relKey: string | null; relation: 'son' | 'son_in_law' | null }[] = []
     lineagePath.forEach((name, i) => {
@@ -1489,10 +1498,8 @@ export default function PublicPortalPage() {
         }
       } catch { /* network error — continue */ }
     }
-    if (showSpouseFields) {
-      if (!regForm.spouse_phone || !regForm.spouse_phone.trim()) {
-        setSpousePhoneError('אנא הזן מספר טלפון של האשה'); setError('אנא תקן את שגיאות הטופס'); return
-      }
+    // טלפון האשה אינו חובה — מאמתים רק אם הוזן (פורמט + מניעת כפילות עם הבעל)
+    if (showSpouseFields && regForm.spouse_phone && regForm.spouse_phone.trim()) {
       if (!validatePhone(regForm.spouse_phone)) {
         setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); setError('אנא תקן את שגיאות הטופס'); return
       }
@@ -2621,55 +2628,7 @@ export default function PublicPortalPage() {
               </Card>
             )}
 
-            {/* Contact */}
-            {regForm.marital_status && (
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <Phone size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
-                  <p className="font-bold">שימו לב — יש לדייק בפרטי הקשר</p>
-                  <p>הקפידו להזין מספר טלפון וכתובת מייל <strong>תקינים</strong>, שכן כל ההודעות והעדכונים יישלחו למספר ולכתובת שתמלאו כאן.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 sm:col-span-1">
-                    <Field label="טלפון ראשי" required hint="מספר נייד ישראלי המתחיל ב-05">
-                      <TextInput type="tel" value={regForm.phone}
-                        onChange={e => { setReg('phone')(e); setPhoneError('') }}
-                        onBlur={() => {
-                          if (regForm.phone && !validatePhone(regForm.phone)) { setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); return }
-                          setPhoneError('')
-                          // התרעה מיידית על טלפון זהה בין הבעל לאשה
-                          if (regForm.phone && regForm.spouse_phone && regForm.phone.replace(/\D/g, '') === regForm.spouse_phone.replace(/\D/g, '')) {
-                            setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
-                          } else if (spousePhoneError === 'מספר הטלפון של האישה זהה למספר הטלפון של הבעל') {
-                            setSpousePhoneError('')
-                          }
-                        }}
-                        placeholder="0500000000" dir="ltr" maxLength={11} required
-                        className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
-                      />
-                      {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
-                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
-                    </Field>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <Field label="טלפון נוסף">
-                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
-                    </Field>
-                  </div>
-                  <div className="col-span-2">
-                    <Field label="דואר אלקטרוני" required>
-                      <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
-                      <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken} />
-                    </Field>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {/* Spouse — own card, after contact details, only if married */}
+            {/* Spouse (wife) — own card, right after husband, only if married */}
             {regForm.marital_status && showSpouseFields && (
               <Card>
                 <div className="flex items-center gap-2 mb-4">
@@ -2729,30 +2688,75 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="טלפון האשה" required hint="מספר נייד ישראלי המתחיל ב-05">
-                      <TextInput type="tel"
-                        value={regForm.spouse_phone}
-                        onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
+                    <Field label="תאריך לידה של האשה" required>
+                      <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
+                    </Field>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Contact — email + all phone numbers (husband required, wife/extra optional) */}
+            {regForm.marital_status && (
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  <Phone size={18} className="text-indigo-600" />
+                  <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
+                  <p className="font-bold">שימו לב — יש לדייק בפרטי הקשר</p>
+                  <p>הקפידו להזין מספר טלפון וכתובת מייל <strong>תקינים</strong>, שכן כל ההודעות והעדכונים יישלחו למספר ולכתובת שתמלאו כאן.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Field label={showSpouseFields ? 'טלפון בעל' : 'טלפון ראשי'} required hint="מספר נייד ישראלי המתחיל ב-05">
+                      <TextInput type="tel" value={regForm.phone}
+                        onChange={e => { setReg('phone')(e); setPhoneError('') }}
                         onBlur={() => {
-                          const sp = regForm.spouse_phone.trim()
-                          if (!sp) { setSpousePhoneError('אנא הזן מספר טלפון של האשה'); return }
-                          if (!validatePhone(sp)) {
-                            setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05')
-                          } else if (regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) {
+                          if (regForm.phone && !validatePhone(regForm.phone)) { setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); return }
+                          setPhoneError('')
+                          // התרעה מיידית על טלפון זהה בין הבעל לאשה
+                          if (regForm.phone && regForm.spouse_phone && regForm.phone.replace(/\D/g, '') === regForm.spouse_phone.replace(/\D/g, '')) {
                             setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
-                          } else {
+                          } else if (spousePhoneError === 'מספר הטלפון של האישה זהה למספר הטלפון של הבעל') {
                             setSpousePhoneError('')
                           }
                         }}
                         placeholder="0500000000" dir="ltr" maxLength={11} required
-                        className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
+                        className={phoneError ? 'border-red-400 focus:ring-red-400' : ''}
                       />
-                      {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
+                      {phoneError && <p className="text-xs text-red-600 mt-1">{phoneError}</p>}
+                      <VerifyControl channel="phone" value={regForm.phone} valid={validatePhone(regForm.phone)} onToken={setRegPhoneToken} />
                     </Field>
                   </div>
+                  {showSpouseFields && (
+                    <div className="col-span-2 sm:col-span-1">
+                      <Field label="טלפון אשה" hint="לא חובה">
+                        <TextInput type="tel"
+                          value={regForm.spouse_phone}
+                          onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
+                          onBlur={() => {
+                            const sp = regForm.spouse_phone.trim()
+                            if (sp && !validatePhone(sp)) { setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05') }
+                            else if (sp && regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) { setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל') }
+                            else { setSpousePhoneError('') }
+                          }}
+                          placeholder="0500000000" dir="ltr" maxLength={11}
+                          className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
+                        />
+                        {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
+                      </Field>
+                    </div>
+                  )}
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="תאריך לידה של האשה" required>
-                      <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
+                    <Field label="טלפון נוסף" hint="לא חובה">
+                      <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
+                    </Field>
+                  </div>
+                  <div className="col-span-2">
+                    <Field label="דואר אלקטרוני" required>
+                      <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
+                      <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken} />
                     </Field>
                   </div>
                 </div>
@@ -3030,7 +3034,11 @@ export default function PublicPortalPage() {
                     </label>
                     {pastBenefits.loan && (
                       <div className="px-3 pb-2.5">
-                        <TextInput value={pastBenefits.loan_amount} onChange={e => setPastBenefits(p => ({ ...p, loan_amount: e.target.value }))} placeholder="בסכום (₪)..." dir="ltr" inputMode="numeric" />
+                        {/* ההלוואות במטבע דולר — סימן $ קבוע לצד הסכום */}
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold pointer-events-none">$</span>
+                          <TextInput value={pastBenefits.loan_amount} onChange={e => setPastBenefits(p => ({ ...p, loan_amount: e.target.value.replace(/[^\d.]/g, '') }))} placeholder="סכום ההלוואה בדולרים" dir="ltr" inputMode="numeric" className="pl-8" />
+                        </div>
                       </div>
                     )}
                   </div>
