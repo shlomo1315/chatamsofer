@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 // שדות המוטב שנשלחים לאזור האישי לאחר אימות (זהה לפלט הכניסה הקודם).
 export const BENEFICIARY_SELECT =
-  'id, full_name, family_name, eligibility_status, is_active, phone, phone2, email, city, address, id_number, id_doc_type, spouse_name, spouse_id_number, marital_status, children_count, required_docs, children, lineage_node_id, lineage_manual, lineage_chain, created_at'
+  'id, full_name, family_name, eligibility_status, is_active, phone, phone2, spouse_phone, verified_phones, email, city, address, id_number, id_doc_type, spouse_name, spouse_id_number, marital_status, children_count, required_docs, children, lineage_node_id, lineage_manual, lineage_chain, created_at'
 
 // מסמכי הזהות שכבר הועלו — להצגה בכניסה חוזרת במקום בקשת העלאה מחדש.
 export async function loadDashboardDocs(

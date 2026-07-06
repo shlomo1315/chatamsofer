@@ -48,6 +48,8 @@ export interface Beneficiary {
   full_name: string
   phone?: string
   phone2?: string
+  // רשימת המספרים שאומתו (יכולים לקבל קוד כניסה בעתיד)
+  verified_phones?: string[]
   email?: string
   address?: string
   city?: string
