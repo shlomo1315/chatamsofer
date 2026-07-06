@@ -3062,7 +3062,8 @@ export default function PublicPortalPage() {
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
 
-                {/* הרשמה לעדכונים שוטפים — רב-בחירה */}
+                {/* הרשמה לעדכונים שוטפים — מוסתר זמנית לבקשת הלקוח (יופעל מחדש בהמשך עם התוכן הסופי) */}
+                {false && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
                   <div className="flex items-center gap-2 mb-1">
                     <Mail size={18} className="text-indigo-600" />
@@ -3083,6 +3084,7 @@ export default function PublicPortalPage() {
                     })}
                   </div>
                 </div>
+                )}
               </Card>
             )}
 
