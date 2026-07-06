@@ -104,7 +104,7 @@ export function attachmentsFor(type: ReqType, ctx: Ctx): AttachmentSpec[] {
 // ── בניית גוף הטיוטה (mailto body) ───────────────────────────────────────────
 export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): string {
   const L: string[] = []
-  L.push('⚠️ שימו לב — מלאו כל פרט בדיוק. אם פרט אחד חסר או אינו תקין, הבקשה לא תיקלט.')
+  L.push('שימו לב — מלאו כל פרט בדיוק. אם פרט אחד חסר או אינו תקין, הבקשה לא תיקלט.')
   L.push('ההגשה המומלצת היא דרך המערכת הדיגיטלית שלנו; אפשרות זו מיועדת לחסומים בלבד.')
   L.push('אנא השאירו את שמות השדות (לפני הנקודתיים) ללא שינוי, ומלאו רק אחרי הנקודתיים.')
   L.push('')
@@ -128,7 +128,7 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   if (atts.length) {
     L.push('')
     L.push('━━━ קבצים לצירוף ━━━')
-    L.push('⚠️ חובה לשנות את שם כל קובץ מצורף בדיוק לשם המבוקש (לפני הצירוף). קובץ ללא השם המדויק לא ייקלט!')
+    L.push('חובה לשנות את שם כל קובץ מצורף בדיוק לשם המבוקש (לפני הצירוף). קובץ ללא השם המדויק לא ייקלט!')
     for (const a of atts) {
       L.push(`• ${a.label} — שנו את שם הקובץ ל: "${a.name}"${a.required ? ' (חובה)' : ' (אם רלוונטי)'}`)
     }

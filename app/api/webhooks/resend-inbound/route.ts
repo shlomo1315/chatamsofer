@@ -75,7 +75,7 @@ async function maybeAutoReplyYerid(msg: { fromEmail: string; fromName: string | 
   const greet = msg.fromName ? ` ${msg.fromName}` : ''
   const body = `
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">פנייתך התקבלה ✅</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">פנייתך התקבלה</h2>
     <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
       שלום${greet},<br/>
       תודה על פנייתך לאגף היריד של <strong>היכל החתם סופר</strong>. הודעתך התקבלה במערכת ותטופל בהקדם על ידי הצוות.
@@ -100,7 +100,7 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
 
   const body = `
     <p style="margin:0 0 8px;color:#0d9488;font-size:13px;font-weight:700;letter-spacing:0.5px;">בעזרת ה'</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">הגרלת כרטיסי טיסה ✈️</h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">הגרלת כרטיסי טיסה</h2>
 
     <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.9;">
       בעזרת ה' בימים הקרובים יתקיימו הגרלות על כרטיסי טיסה<br/>
@@ -114,7 +114,7 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#f0fdfa;border-right:4px solid #14b8a6;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#0f766e;font-size:15px;font-weight:900;">⚠️ שימו לב!</p>
+        <p style="margin:0 0 8px;color:#0f766e;font-size:15px;font-weight:900;">שימו לב!</p>
         <p style="margin:0;color:#115e59;font-size:14px;line-height:1.9;">
           כדי שנוכל לערוך את ההגרלה לכל משתתפי השיעור עליכם לשלוח
           <strong>עד יום רביעי בלילה בשבוע זה פרשת בלק</strong>
