@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { getGmailClient } from '@/lib/gmail'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
 import { financialAidInquiryEmail } from '@/lib/emailTemplates'
@@ -23,7 +23,7 @@ function encodeRaw(to: string, subject: string, html: string, attachments: { fil
 
 // שולח לגורם המאשר מייל מעוצב, ושומר את threadId/messageId לצורך שליפת התשובה.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('financial_aid', 'edit'))) return forbidden()
   const { id } = await request.json()
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 

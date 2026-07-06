@@ -2,6 +2,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import type { SectionKey } from '@/types'
+import { permissionAllows, type PermAction } from '@/lib/permissions'
 
 // תשתית אימות אחידה לכל נתיבי ה-API.
 // ה-middleware (proxy.ts) אינו מכסה את /api — לכן כל נתיב חייב לאמת בעצמו דרך הקובץ הזה.
@@ -91,6 +93,16 @@ export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffCon
 // מאמת שהקורא הוא מנהל (admin) בלבד.
 export async function requireAdmin(): Promise<StaffContext | null> {
   return requireStaff(['admin'])
+}
+
+// מאמת שלקורא יש הרשאה לפעולה מסוימת במסך מסוים (לפי המטריצה ב-lib/permissions).
+// מנהל (admin) עוקף הכל. מחזיר null אם אין הרשאה — נא לענות ב-forbidden().
+export async function requirePermission(section: SectionKey, action: PermAction): Promise<StaffContext | null> {
+  const staff = await requireStaff()
+  if (!staff) return null
+  if (staff.role === 'admin') return staff // מנהל — גישה מלאה
+  if (!permissionAllows(staff.permissions, section, action)) return null
+  return staff
 }
 
 export function forbidden(message = 'אין הרשאה לבצע פעולה זו') {

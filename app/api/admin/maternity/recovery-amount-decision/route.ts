@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +13,7 @@ function getAdminClient() {
 
 // אישור/דחייה של סכום ההחלמה שהוזן ע"י בית ההחלמה. action: approve | reject | reset
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('maternity', 'edit'))) return forbidden()
   const { aidId, action } = await request.json()
   if (!aidId || !['approve', 'reject', 'reset'].includes(action)) {
     return NextResponse.json({ error: 'פרמטרים חסרים' }, { status: 400 })

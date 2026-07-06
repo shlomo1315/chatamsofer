@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -13,8 +13,8 @@ function getAdmin() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return unauthorized()
+  const staff = await requirePermission('widows', 'edit')
+  if (!staff) return forbidden()
 
   let body: Record<string, unknown>
   try { body = await request.json() }

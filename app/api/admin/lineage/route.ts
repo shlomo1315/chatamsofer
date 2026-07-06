@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -30,8 +30,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requirePermission('lineage', 'add')
+  if (!staff) return forbidden()
 
   const body = await request.json()
   const { name, parent_id, notes, relation } = body
@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requirePermission('lineage', 'edit')
+  if (!staff) return forbidden()
 
   const body = await request.json()
   const { id, name, notes, parent_id, relation } = body
@@ -180,8 +180,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requirePermission('lineage', 'delete')
+  if (!staff) return forbidden()
 
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר ID' }, { status: 400 })

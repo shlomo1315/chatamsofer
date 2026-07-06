@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { sendCardVoucher } from '@/lib/maternityCards'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +15,7 @@ function getAdminClient() {
 // עדכון מסלול כרטיס המזון של יולדת. action: approve|reject|pending|load
 // approve: דורש centerId עם מקום פנוי (stock > approved+loaded). load: מנכה בפועל מהמלאי.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('maternity', 'edit'))) return forbidden()
   const { aidId, action, centerId } = await request.json()
   if (!aidId || !['approve', 'reject', 'pending', 'load'].includes(action)) {
     return NextResponse.json({ error: 'פרמטרים חסרים' }, { status: 400 })

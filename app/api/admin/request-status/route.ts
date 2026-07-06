@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +35,8 @@ export async function POST(request: NextRequest) {
   const id = String(body.id ?? '')
   const status = String(body.status ?? '')
   if (!VALID[type]) return NextResponse.json({ error: 'סוג בקשה לא תקין' }, { status: 400 })
+  const section = type === 'loan' ? 'loans' : 'maternity'
+  if (!(await requirePermission(section, 'edit'))) return forbidden()
   if (!id || !VALID[type].includes(status)) return NextResponse.json({ error: 'פרמטרים חסרים או לא תקינים' }, { status: 400 })
 
   const admin = getAdmin()

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import bcrypt from 'bcryptjs'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { portalCredentialsEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -11,7 +11,7 @@ const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 // שליחת פרטי הכניסה לפורטל בית ההחלמה במייל — קובע/מעדכן את הסיסמה ושולח מייל מעוצב.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  if (!(await requirePermission('maternity', 'edit'))) return forbidden()
 
   let body: { home?: string; email?: string; password?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

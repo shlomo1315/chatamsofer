@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { notifyCenterStockReplenished } from '@/lib/cardVoucherNotify'
 
@@ -60,7 +60,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('maternity_cards', 'add'))) return forbidden()
   const { name, stock, notes, city, address, pickup_days, pickup_hours } = await request.json()
   if (!name?.trim()) return NextResponse.json({ error: 'שם המוקד חובה' }, { status: 400 })
   const admin = getAdminClient()
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('maternity_cards', 'edit'))) return forbidden()
   const { id, name, stock, notes, is_active, city, address, pickup_days, pickup_hours } = await request.json()
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   const admin = getAdminClient()
@@ -104,7 +104,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('maternity_cards', 'delete'))) return forbidden()
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
   const admin = getAdminClient()
