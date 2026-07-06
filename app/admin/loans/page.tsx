@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CreditCard, ExternalLink } from 'lucide-react'
+import { Plus, CreditCard, ExternalLink } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import Button from '@/components/ui/Button'
@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import LoansTable from './LoansTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import LoansPortalEmailButton from './LoansPortalEmailButton'
+import { AdminOnly } from '@/components/StaffPermissions'
 
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
@@ -33,6 +34,14 @@ export default async function LoansPage() {
           </Button>
         </Link>
         <LoansPortalEmailButton />
+        <AdminOnly>
+          <Link href="/admin/loans/new">
+            <Button>
+              <Plus size={16} />
+              הלוואה חדשה
+            </Button>
+          </Link>
+        </AdminOnly>
       </PageHeader>
 
       {loans.length === 0 ? (

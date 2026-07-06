@@ -8,7 +8,7 @@ import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/type
 import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { useCan } from '@/components/StaffPermissions'
+import { useCan, AdminOnly } from '@/components/StaffPermissions'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
@@ -151,6 +151,12 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-2">
           {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} בדוק תשובות
         </button>
+        <AdminOnly>
+          <button onClick={() => { resetNew(); setNewOpen(true) }}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">
+            <Plus size={14} /> בקשה חדשה
+          </button>
+        </AdminOnly>
       </div>
 
       {/* קוביות סינון */}

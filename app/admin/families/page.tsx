@@ -4,6 +4,7 @@ import { Family } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import FamiliesClient from './FamiliesClient'
+import { AdminOnly } from '@/components/StaffPermissions'
 
 async function getFamilies(): Promise<(Family & { member_count: number })[]> {
   if (!isSupabaseConfigured()) return []
@@ -27,10 +28,12 @@ export default async function FamiliesPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="משפחות" subtitle={`${families.length} משפחות רשומות`}>
-        <Button>
-          <Plus size={16} />
-          משפחה חדשה
-        </Button>
+        <AdminOnly>
+          <Button>
+            <Plus size={16} />
+            משפחה חדשה
+          </Button>
+        </AdminOnly>
       </PageHeader>
 
       <FamiliesClient families={families} />

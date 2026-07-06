@@ -40,3 +40,10 @@ export function useCan(section: SectionKey, action: PermAction): boolean {
 export function useStaffPermissions(): StaffPerms {
   return useContext(StaffPermissionsContext)
 }
+
+// עוטף תוכן שיוצג רק למנהל ראשי (admin) — מזכירות לא תראה אותו.
+// כפתורי "הוספה חדשה" (צאצא/לידה/הלוואה/סיוע/משפחה) שמורים למנהל בלבד.
+export function AdminOnly({ children }: { children: React.ReactNode }) {
+  const { isAdmin } = useContext(StaffPermissionsContext)
+  return isAdmin ? <>{children}</> : null
+}
