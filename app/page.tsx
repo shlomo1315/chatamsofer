@@ -951,6 +951,7 @@ export default function PublicPortalPage() {
   const [pastBenefits, setPastBenefits] = useState({
     recovery_home: false, food_card: false, holiday_grant: false, catering: false,
     loan: false, loan_amount: '', other: false, other_details: '', notes: '',
+    update_topics: [] as string[],
   })
   const [regSuccess, setRegSuccess] = useState(false)
 
@@ -2900,6 +2901,28 @@ export default function PublicPortalPage() {
                   <textarea value={pastBenefits.notes} onChange={e => setPastBenefits(p => ({ ...p, notes: e.target.value }))} rows={3}
                     placeholder="כל מידע נוסף שתרצו להוסיף..."
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+
+                {/* הרשמה לעדכונים שוטפים — רב-בחירה */}
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Mail size={18} className="text-indigo-600" />
+                    <h3 className="font-semibold text-slate-900">האם תרצו להירשם לקבל עדכונים שוטפים?</h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">בחרו את הנושאים שתרצו לקבל עליהם עדכונים — ניתן לבחור יותר מאפשרות אחת (לא חובה):</p>
+                  <div className="flex flex-col gap-2">
+                    {['עזר יולדות', 'הלוואות (גמ"ח)', 'סיוע רפואי', 'עזר לחגים', 'אלמנות ויתומים', 'הודעות כלליות'].map(topic => {
+                      const checked = pastBenefits.update_topics.includes(topic)
+                      return (
+                        <label key={topic} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${checked ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                          <input type="checkbox" checked={checked}
+                            onChange={e => setPastBenefits(p => ({ ...p, update_topics: e.target.checked ? [...p.update_topics, topic] : p.update_topics.filter(t => t !== topic) }))}
+                            className="w-4 h-4 accent-indigo-600" />
+                          {topic}
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
               </Card>
             )}
