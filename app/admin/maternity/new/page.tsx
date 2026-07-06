@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Search, Loader2, Check, AlertTriangle, Upload, X, Baby, ExternalLink, GitBranch, ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { validateIsraeliId } from '@/lib/validation'
+import { defaultRecoveryDays } from '@/lib/maternity'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { format, addWeeks } from 'date-fns'
@@ -37,6 +38,13 @@ export default function NewMaternityPage() {
   const [babyIdType, setBabyIdType] = useState<'id' | 'passport'>('id')
   const [babyIdNumber, setBabyIdNumber] = useState('')
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
+  // לידת תאומים — תינוק שני
+  const [isTwins, setIsTwins] = useState(false)
+  const [baby2Name, setBaby2Name] = useState('')
+  const [baby2IdType, setBaby2IdType] = useState<'id' | 'passport'>('id')
+  const [baby2IdNumber, setBaby2IdNumber] = useState('')
+  const [baby2Gender, setBaby2Gender] = useState<'male' | 'female' | ''>('')
+  const [noBaby2Name, setNoBaby2Name] = useState(false)
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
   const [cardCenterId, setCardCenterId] = useState('')
@@ -132,6 +140,18 @@ export default function NewMaternityPage() {
       e.babyIdNumber = 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
     }
     if (!babyGender) e.babyGender = 'יש לבחור מין תינוק'
+    if (isTwins) {
+      if (!noBaby2Name && !baby2Name.trim()) e.baby2Name = 'שם תינוק שני חובה'
+      if (!baby2IdNumber.trim()) {
+        e.baby2IdNumber = baby2IdType === 'id' ? 'מספר תעודת זהות תינוק שני חובה' : 'מספר דרכון חובה'
+      } else if (baby2IdType === 'id' && !validateIsraeliId(baby2IdNumber)) {
+        e.baby2IdNumber = 'תעודת זהות ישראלית לא תקינה (כולל ספרת ביקורת)'
+      }
+      if (!baby2Gender) e.baby2Gender = 'יש לבחור מין תינוק שני'
+      const n1 = babyIdType === 'id' ? babyIdNumber.replace(/\D/g, '') : babyIdNumber.trim()
+      const n2 = baby2IdType === 'id' ? baby2IdNumber.replace(/\D/g, '') : baby2IdNumber.trim()
+      if (n1 && n2 && n1 === n2) e.baby2IdNumber = 'שני התאומים חייבים להיות עם תעודות זהות שונות'
+    }
     if (!babyBirthDate) e.babyBirthDate = 'תאריך לידת תינוק חובה'
     if (!recoveryHome) e.recoveryHome = 'יש לבחור בית החלמה'
     if (cardCenters.length > 0 && !cardCenterId) e.cardCenterId = 'יש לבחור מוקד לקבלת הכרטיס'
@@ -144,16 +164,21 @@ export default function NewMaternityPage() {
     const errs = validate()
 
     // בדיקת כפילות — האם תינוק עם ת.ז. זו כבר קיים ברשימת הילדים של המשפחה
-    if (!errs.babyIdNumber && babyIdNumber.trim()) {
-      const normalizedBabyId = babyIdType === 'id' ? babyIdNumber.replace(/\D/g, '') : babyIdNumber.trim()
-      const existingChildren = Array.isArray((mother as { children?: unknown }).children)
-        ? ((mother as { children: Record<string, unknown>[] }).children)
-        : []
-      const dup = existingChildren.some(c => {
+    const existingChildrenForDup = Array.isArray((mother as { children?: unknown }).children)
+      ? ((mother as { children: Record<string, unknown>[] }).children)
+      : []
+    const isDupInFamily = (idType: 'id' | 'passport', idNumber: string) => {
+      const norm = idType === 'id' ? idNumber.replace(/\D/g, '') : idNumber.trim()
+      return existingChildrenForDup.some(c => {
         const cid = String(c.id_number ?? '').replace(/\D/g, '') || String(c.id_number ?? '')
-        return cid && (cid === normalizedBabyId || c.id_number === babyIdNumber.trim())
+        return cid && (cid === norm || c.id_number === idNumber.trim())
       })
-      if (dup) errs.babyIdNumber = 'ילד עם תעודת זהות זו כבר רשום במשפחה זו — לא ניתן להוסיף שוב'
+    }
+    if (!errs.babyIdNumber && babyIdNumber.trim() && isDupInFamily(babyIdType, babyIdNumber)) {
+      errs.babyIdNumber = 'ילד עם תעודת זהות זו כבר רשום במשפחה זו — לא ניתן להוסיף שוב'
+    }
+    if (isTwins && !errs.baby2IdNumber && baby2IdNumber.trim() && isDupInFamily(baby2IdType, baby2IdNumber)) {
+      errs.baby2IdNumber = 'ילד עם תעודת זהות זו כבר רשום במשפחה זו — לא ניתן להוסיף שוב'
     }
 
     setFieldErrors(errs)
@@ -173,6 +198,12 @@ export default function NewMaternityPage() {
 
       const sixEnd = addWeeks(new Date(babyBirthDate), 6).toISOString().split('T')[0]
 
+      // רשימת התינוקות — תינוק אחד בלידה רגילה, שניים בתאומים
+      const babies = [
+        { name: babyName.trim() || null, gender: babyGender || null, id_type: babyIdType, id_number: babyIdNumber.trim() || null },
+        ...(isTwins ? [{ name: baby2Name.trim() || null, gender: baby2Gender || null, id_type: baby2IdType, id_number: baby2IdNumber.trim() || null }] : []),
+      ]
+
       const { data: inserted, error } = await supabase
         .from('maternity_aids')
         .insert({
@@ -182,6 +213,9 @@ export default function NewMaternityPage() {
           baby_id_type: babyIdType,
           baby_id_number: babyIdNumber || null,
           baby_gender: babyGender || null,
+          is_twins: isTwins,
+          babies,
+          recovery_eligibility_days: defaultRecoveryDays(isTwins),
           birth_certificate_url: certUrl ?? null,
           recovery_home: recoveryHome || null,
           card_center_id: cardCenterId || null,
@@ -202,17 +236,17 @@ export default function NewMaternityPage() {
       const existingChildren = Array.isArray((mother as { children?: Record<string, unknown>[] }).children)
         ? ((mother as { children: Record<string, unknown>[] }).children)
         : []
-      const newChild = {
-        name: babyName.trim(),
-        id_number: babyIdNumber.trim() || null,
-        doc_type: babyIdType,
-        gender: babyGender || null,
+      const newChildren = babies.map(b => ({
+        name: (b.name ?? '') as string,
+        id_number: b.id_number || null,
+        doc_type: b.id_type,
+        gender: b.gender || null,
         birth_date: babyBirthDate || null,
         marital_status: 'single',
         maternity_aid_id: inserted.id,
         birth_status: 'pending' as const,
-      }
-      const updatedChildren = [...existingChildren, newChild]
+      }))
+      const updatedChildren = [...existingChildren, ...newChildren]
       await supabase
         .from('beneficiaries')
         .update({ children: updatedChildren, children_count: updatedChildren.length })
@@ -225,11 +259,12 @@ export default function NewMaternityPage() {
       setSavedInfo({
         name: familyName || 'המשפחה',
         details: [
-          `תינוק/ת: ${babyName.trim()}`,
-          babyGender ? (babyGender === 'male' ? 'בן' : 'בת') : '',
-          babyIdNumber.trim() ? `ת.ז. ${babyIdNumber.trim()}` : '',
+          isTwins ? 'לידת תאומים 👶👶' : '',
+          `תינוק/ת: ${babyName.trim()}${babyGender ? (babyGender === 'male' ? ' · בן' : ' · בת') : ''}`,
+          ...(isTwins ? [`תינוק/ת שני: ${baby2Name.trim()}${baby2Gender ? (baby2Gender === 'male' ? ' · בן' : ' · בת') : ''}`] : []),
           babyBirthDate ? `לידה ${format(new Date(babyBirthDate), 'dd/MM/yyyy', { locale: he })}` : '',
           recoveryHome ? `בית החלמה: ${recoveryHome}` : '',
+          `זכאות בית החלמה: ${defaultRecoveryDays(isTwins)} ימים`,
         ].filter(Boolean),
       })
       setTimeout(() => router.push(`/admin/maternity/${inserted.id}`), 3000)
@@ -371,6 +406,22 @@ export default function NewMaternityPage() {
               פרטי התינוק
             </h2>
 
+            {/* סוג לידה — רגילה / תאומים */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-slate-600">סוג לידה <span className="text-red-500">*</span></label>
+              <div className="flex gap-2">
+                {([[false, 'לידה רגילה'], [true, 'לידת תאומים']] as const).map(([val, label]) => (
+                  <button key={String(val)} type="button" onClick={() => setIsTwins(val)}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${isTwins === val ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {isTwins && <p className="text-xs text-indigo-600">לידת תאומים — יש למלא את פרטי שני התינוקות. זכאות בית ההחלמה: 4 ימים.</p>}
+            </div>
+
+            {isTwins && <div className="text-sm font-semibold text-indigo-700">תינוק ראשון</div>}
+
             {/* Baby name (+ "עדיין אין שם" — כמו בטופס הציבורי) */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-medium text-slate-600">שם התינוק {!noBabyName && <span className="text-red-500">*</span>}</label>
@@ -424,6 +475,59 @@ export default function NewMaternityPage() {
               </div>
               {fieldErrors.babyGender && <p className="text-xs text-red-600">{fieldErrors.babyGender}</p>}
             </div>
+
+            {/* ── תינוק שני — רק בלידת תאומים ─────────────────────────────── */}
+            {isTwins && (
+              <div className="flex flex-col gap-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                <div className="text-sm font-semibold text-indigo-700 flex items-center gap-1.5"><Baby size={15} /> תינוק שני</div>
+                {/* Name */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-slate-600">שם התינוק {!noBaby2Name && <span className="text-red-500">*</span>}</label>
+                  <input type="text" value={baby2Name} disabled={noBaby2Name}
+                    onChange={e => { setBaby2Name(e.target.value); clearErr('baby2Name') }}
+                    placeholder={noBaby2Name ? 'יושלם בהמשך' : 'שם פרטי של התינוק/ת'}
+                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${noBaby2Name ? 'opacity-50 bg-slate-50 cursor-not-allowed ' : ''}${fieldErrors.baby2Name ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+                  <button type="button"
+                    onClick={() => { const next = !noBaby2Name; setNoBaby2Name(next); if (next) { setBaby2Name(''); clearErr('baby2Name') } }}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors w-fit ${noBaby2Name ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50'}`}>
+                    {noBaby2Name ? <Check size={13} /> : <Baby size={13} />}
+                    {noBaby2Name ? 'יושלם בהמשך' : 'עדיין אין שם'}
+                  </button>
+                  {fieldErrors.baby2Name && <p className="text-xs text-red-600">{fieldErrors.baby2Name}</p>}
+                </div>
+                {/* ID type + number */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-slate-600">סוג מסמך תינוק <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    {(['id', 'passport'] as const).map(t => (
+                      <button key={t} onClick={() => { setBaby2IdType(t); clearErr('baby2IdNumber') }}
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${baby2IdType === t ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                        {t === 'id' ? 'תעודת זהות' : 'דרכון'}
+                      </button>
+                    ))}
+                  </div>
+                  <input type="text" value={baby2IdNumber}
+                    onChange={e => { setBaby2IdNumber(e.target.value); clearErr('baby2IdNumber') }}
+                    placeholder={baby2IdType === 'id' ? 'מספר תעודת זהות תינוק' : 'מספר דרכון תינוק'}
+                    className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.baby2IdNumber ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                    dir="ltr" />
+                  {fieldErrors.baby2IdNumber && <p className="text-xs text-red-600">{fieldErrors.baby2IdNumber}</p>}
+                </div>
+                {/* Gender */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-slate-600">מין התינוק <span className="text-red-500">*</span></label>
+                  <div className="flex gap-2">
+                    {([['male', 'בן'], ['female', 'בת']] as const).map(([val, label]) => (
+                      <button key={val} onClick={() => { setBaby2Gender(val); clearErr('baby2Gender') }}
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${baby2Gender === val ? (val === 'male' ? 'bg-blue-600 border-blue-600 text-white' : 'bg-pink-500 border-pink-500 text-white') : `${fieldErrors.baby2Gender ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {fieldErrors.baby2Gender && <p className="text-xs text-red-600">{fieldErrors.baby2Gender}</p>}
+                </div>
+              </div>
+            )}
 
             {/* Birth date + 6 weeks calc */}
             <div className="flex flex-col gap-2">

@@ -149,6 +149,114 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
   )
 }
 
+// שדות תינוק בטופס הלידה (מין · שם אופציונלי · ת.ז/דרכון + אימות וכפילות).
+// משמש גם ללידה רגילה (תינוק אחד) וגם ללידת תאומים (שני מופעים).
+function BabyFields({
+  title, gender, name, idType, idNumber, noName, idError,
+  onChange, setNoName, setIdError,
+}: {
+  title?: string
+  gender: string
+  name: string
+  idType: string
+  idNumber: string
+  noName: boolean
+  idError: string
+  onChange: (field: 'baby_gender' | 'baby_name' | 'baby_id_type' | 'baby_id_number', value: string) => void
+  setNoName: (v: boolean) => void
+  setIdError: (msg: string) => void
+}) {
+  return (
+    <div className="col-span-2 flex flex-col gap-4">
+      {title && (
+        <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5 w-fit">
+          <Baby size={15} /> {title}
+        </div>
+      )}
+      <Field label="מין הנולד/ת" required>
+        <div className="flex gap-2">
+          {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
+            <button key={v} type="button"
+              onClick={() => onChange('baby_gender', v)}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
+                gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
+              }`}
+            >{l}</button>
+          ))}
+        </div>
+      </Field>
+      {/* שם — אופציונלי. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
+      {gender && (
+        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
+          <TextInput value={name}
+            disabled={noName}
+            className={noName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
+            onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
+            placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+          <div className="mt-2">
+            <button type="button"
+              onClick={() => { const next = !noName; setNoName(next); if (next) onChange('baby_name', '') }}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                noName
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                  : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
+              }`}>
+              {noName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+              {noName ? 'יושלם בהמשך' : 'עדיין אין שם'}
+            </button>
+            {noName && (
+              <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
+            )}
+          </div>
+        </Field>
+      )}
+      {gender && (
+        <Field label={gender === 'female' ? 'תעודת זהות של הנולדת' : 'תעודת זהות של הנולד'} required hint="עבור תושב חוץ יש לבחור דרכון">
+          <div className="flex gap-2 mb-2">
+            {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
+              <button key={v} type="button" onClick={() => onChange('baby_id_type', v)}
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-all duration-150 ${idType === v ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <TextInput value={idNumber}
+            className={idError ? 'border-red-400 focus:ring-red-400' : ''}
+            onChange={e => { const v = idType === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; onChange('baby_id_number', v); setIdError('') }}
+            dir="ltr" inputMode={idType === 'id' ? 'numeric' : 'text'}
+            maxLength={idType === 'id' ? 9 : undefined}
+            placeholder={idType === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required
+            onBlur={async () => {
+              const val = idNumber.trim()
+              if (!val) return
+              // ת.ז ישראלית — בדיקת תקינות תחילה
+              if (idType === 'id') {
+                const digits = val.replace(/\D/g, '')
+                if (digits.length < 9) return
+                if (!validateIsraeliId(digits)) { setIdError(''); return }
+              }
+              // בדיקה מיידית — האם כבר רשום במערכת (כצאצא או כילד אצל מישהו)
+              try {
+                const param = idType === 'id' ? `id=${encodeURIComponent(val)}` : `passport=${encodeURIComponent(val)}`
+                const r = await fetch(`/api/portal/lookup?${param}`)
+                const d = await r.json()
+                if (d.found || d.foundAsChild) setIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב')
+                else setIdError('')
+              } catch { /* תיתפס בעת השליחה */ }
+            }} />
+          {idError && <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> {idError}</p>}
+          {!idError && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && !validateIsraeliId(idNumber) && (
+            <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>
+          )}
+          {!idError && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && validateIsraeliId(idNumber) && (
+            <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
+          )}
+        </Field>
+      )}
+    </div>
+  )
+}
+
 function SelectInput({ className = '', children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
@@ -988,6 +1096,11 @@ export default function PublicPortalPage() {
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
   const [babyIdError, setBabyIdError] = useState('')
+  // לידת תאומים — תינוק שני (baby2) + מצבי שגיאה/שם משלו
+  const [isTwins, setIsTwins] = useState(false)
+  const [baby2, setBaby2] = useState({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
+  const [noBaby2Name, setNoBaby2Name] = useState(false)
+  const [baby2IdError, setBaby2IdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
   const [recoveryHomesSilent, setRecoveryHomesSilent] = useState<string[]>([])
   // מוקדי חלוקת הכרטיסים (לבחירה בטופס הלידה)
@@ -1498,11 +1611,21 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
-    if (!birthForm.baby_gender) { setError('אנא בחר בן או בת'); return }
+    if (!birthForm.baby_gender) { setError(isTwins ? 'אנא בחר בן או בת עבור התינוק הראשון' : 'אנא בחר בן או בת'); return }
     // שם הנולד/ת אינו חובה — ניתן להשלים בכניסה הבאה
     if (!birthForm.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של הנולד/ת'); return }
     if (birthForm.baby_id_type === 'id' && !validateIsraeliId(birthForm.baby_id_number)) { setError('תעודת הזהות של הנולד/ת אינה תקינה'); return }
     if (babyIdError) { setError(babyIdError); return }
+    // תאומים — אימות התינוק השני
+    if (isTwins) {
+      if (!baby2.baby_gender) { setError('אנא בחר בן או בת עבור התינוק השני'); return }
+      if (!baby2.baby_id_number.trim()) { setError('אנא הזן תעודת זהות או דרכון של התינוק השני'); return }
+      if (baby2.baby_id_type === 'id' && !validateIsraeliId(baby2.baby_id_number)) { setError('תעודת הזהות של התינוק השני אינה תקינה'); return }
+      if (baby2IdError) { setError(baby2IdError); return }
+      const id1 = birthForm.baby_id_number.replace(/\D/g, '') || birthForm.baby_id_number.trim()
+      const id2 = baby2.baby_id_number.replace(/\D/g, '') || baby2.baby_id_number.trim()
+      if (id1 && id1 === id2) { setError('שני התאומים חייבים להיות עם תעודות זהות שונות'); return }
+    }
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (cardCenters.length > 0 && !birthForm.card_center_id) { setError('אנא בחר מוקד לקבלת הכרטיס'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
@@ -1528,10 +1651,15 @@ export default function PublicPortalPage() {
       const upData = await upRes.json()
       if (upRes.ok) certUrl = upData.url ?? ''
 
+      // רשימת התינוקות — תינוק אחד בלידה רגילה, שניים בתאומים
+      const babies = [
+        { name: birthForm.baby_name, gender: birthForm.baby_gender, id_type: birthForm.baby_id_type, id_number: birthForm.baby_id_number },
+        ...(isTwins ? [{ name: baby2.baby_name, gender: baby2.baby_gender, id_type: baby2.baby_id_type, id_number: baby2.baby_id_number }] : []),
+      ]
       const res = await fetch('/api/portal/birth-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, birth_certificate_url: certUrl }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, is_twins: isTwins, babies, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -1667,6 +1795,7 @@ export default function PublicPortalPage() {
     if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setBabyIdError(''); setNoBabyName(false)
+    setIsTwins(false); setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' }); setNoBaby2Name(false); setBaby2IdError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id', card_center_id: '' })
     setBirthCertFile(null)
     setDocFiles({})
@@ -3373,91 +3502,43 @@ export default function PublicPortalPage() {
                     />
                   </Field>
                 </div>
+                {/* בורר לידת תאומים — לפני פרטי התינוקות */}
                 <div className="col-span-2">
-                  <Field label="מין הנולד/ת" required>
+                  <Field label="סוג לידה" required>
                     <div className="flex gap-2">
-                      {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
-                        <button key={v} type="button"
-                          onClick={() => setBirthForm(f => ({ ...f, baby_gender: v }))}
+                      {[{ v: false, l: 'לידה רגילה' }, { v: true, l: 'לידת תאומים' }].map(({ v, l }) => (
+                        <button key={String(v)} type="button"
+                          onClick={() => setIsTwins(v)}
                           className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
-                            birthForm.baby_gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
+                            isTwins === v ? 'bg-indigo-100 text-indigo-800 border-indigo-400' : GENDER_BTN_UNSEL
                           }`}
                         >{l}</button>
                       ))}
                     </div>
+                    {isTwins && <p className="mt-1.5 text-xs text-indigo-600">בלידת תאומים יש למלא את פרטי שני התינוקות בנפרד. הזכאות בבית ההחלמה תהיה 4 ימים.</p>}
                   </Field>
                 </div>
-                {/* שם — אופציונלי. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
-                {birthForm.baby_gender && (
-                  <div className="col-span-2">
-                    <Field label={birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
-                      <TextInput value={birthForm.baby_name}
-                        disabled={noBabyName}
-                        className={noBabyName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
-                        onChange={e => { setBirthForm(f => ({ ...f, baby_name: e.target.value })); if (noBabyName) setNoBabyName(false) }}
-                        placeholder={noBabyName ? 'יושלם בהמשך' : (birthForm.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
-                      <div className="mt-2">
-                        <button type="button"
-                          onClick={() => { const next = !noBabyName; setNoBabyName(next); if (next) setBirthForm(f => ({ ...f, baby_name: '' })) }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
-                            noBabyName
-                              ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                              : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
-                          }`}>
-                          {noBabyName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-                          {noBabyName ? 'יושלם בהמשך' : 'עדיין אין שם'}
-                        </button>
-                        {noBabyName && (
-                          <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
-                        )}
-                      </div>
-                    </Field>
-                  </div>
-                )}
-                {birthForm.baby_gender && (
-                  <div className="col-span-2">
-                    <Field label={birthForm.baby_gender === 'female' ? 'תעודת זהות של הנולדת' : 'תעודת זהות של הנולד'} required hint="עבור תושב חוץ יש לבחור דרכון">
-                      <div className="flex gap-2 mb-2">
-                        {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
-                          <button key={v} type="button" onClick={() => setBirthForm(f => ({ ...f, baby_id_type: v }))}
-                            className={`px-3 py-1.5 rounded-lg text-sm border transition-all duration-150 ${birthForm.baby_id_type === v ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
-                            {l}
-                          </button>
-                        ))}
-                      </div>
-                      <TextInput value={birthForm.baby_id_number}
-                        className={babyIdError ? 'border-red-400 focus:ring-red-400' : ''}
-                        onChange={e => { const v = birthForm.baby_id_type === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; setBirthForm(f => ({ ...f, baby_id_number: v })); setBabyIdError('') }}
-                        dir="ltr" inputMode={birthForm.baby_id_type === 'id' ? 'numeric' : 'text'}
-                        maxLength={birthForm.baby_id_type === 'id' ? 9 : undefined}
-                        placeholder={birthForm.baby_id_type === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required
-                        onBlur={async () => {
-                          const val = birthForm.baby_id_number.trim()
-                          if (!val) return
-                          // ת.ז ישראלית — בדיקת תקינות תחילה
-                          if (birthForm.baby_id_type === 'id') {
-                            const digits = val.replace(/\D/g, '')
-                            if (digits.length < 9) return
-                            if (!validateIsraeliId(digits)) { setBabyIdError(''); return }
-                          }
-                          // בדיקה מיידית — האם כבר רשום במערכת (כצאצא או כילד אצל מישהו)
-                          try {
-                            const param = birthForm.baby_id_type === 'id' ? `id=${encodeURIComponent(val)}` : `passport=${encodeURIComponent(val)}`
-                            const r = await fetch(`/api/portal/lookup?${param}`)
-                            const d = await r.json()
-                            if (d.found || d.foundAsChild) setBabyIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב')
-                            else setBabyIdError('')
-                          } catch { /* תיתפס בעת השליחה */ }
-                        }} />
-                      {babyIdError && <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> {babyIdError}</p>}
-                      {!babyIdError && birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && !validateIsraeliId(birthForm.baby_id_number) && (
-                        <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>
-                      )}
-                      {!babyIdError && birthForm.baby_id_type === 'id' && birthForm.baby_id_number.replace(/\D/g, '').length >= 9 && validateIsraeliId(birthForm.baby_id_number) && (
-                        <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
-                      )}
-                    </Field>
-                  </div>
+
+                {/* תינוק ראשון (או התינוק הבודד בלידה רגילה) */}
+                <BabyFields
+                  title={isTwins ? 'תינוק ראשון' : undefined}
+                  gender={birthForm.baby_gender} name={birthForm.baby_name}
+                  idType={birthForm.baby_id_type} idNumber={birthForm.baby_id_number}
+                  noName={noBabyName} idError={babyIdError}
+                  onChange={(field, value) => setBirthForm(f => ({ ...f, [field]: value }))}
+                  setNoName={setNoBabyName} setIdError={setBabyIdError}
+                />
+
+                {/* תינוק שני — רק בלידת תאומים */}
+                {isTwins && (
+                  <BabyFields
+                    title="תינוק שני"
+                    gender={baby2.baby_gender} name={baby2.baby_name}
+                    idType={baby2.baby_id_type} idNumber={baby2.baby_id_number}
+                    noName={noBaby2Name} idError={baby2IdError}
+                    onChange={(field, value) => setBaby2(b => ({ ...b, [field]: value }))}
+                    setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
+                  />
                 )}
                 <div className="col-span-2">
                   <Field label="בית החלמה" required>

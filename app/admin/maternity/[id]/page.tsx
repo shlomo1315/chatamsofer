@@ -9,6 +9,8 @@ import { StatusControl } from '../maternityStatus'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
 import ExtendEligibility from '../ExtendEligibility'
+import RecoveryDaysEditor from '../RecoveryDaysEditor'
+import { recoveryDaysOf } from '@/lib/maternity'
 import { docViewUrl } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import BirthCertificatePreview from './BirthCertificatePreview'
@@ -242,21 +244,37 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               <Card className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 text-indigo-600 mb-2">
                   <Baby size={16} />
-                  <span className="text-xs font-semibold text-slate-500 uppercase">פרטי התינוק</span>
-                </div>
-                <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{aid.baby_name ?? '—'}</span></p>
-                {aid.baby_id_number && (
-                  <p className="text-sm"><span className="text-slate-500">{aid.baby_id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{aid.baby_id_number}</span></p>
-                )}
-                {aid.baby_gender && (
-                  <p className="text-sm">
-                    <span className="text-slate-500">מין: </span>
-                    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${aid.baby_gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
-                      {aid.baby_gender === 'male' ? 'בן' : 'בת'}
+                  <span className="text-xs font-semibold text-slate-500 uppercase">{aid.is_twins ? 'פרטי התאומים' : 'פרטי התינוק'}</span>
+                  {aid.is_twins && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                      <Baby size={11} /> לידת תאומים
                     </span>
-                  </p>
-                )}
-                <p className="text-sm"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
+                  )}
+                </div>
+                {(() => {
+                  // רשימת התינוקות — תאומים (babies) או התינוק הבודד (שדות baby_*)
+                  const babies = Array.isArray(aid.babies) && aid.babies.length
+                    ? aid.babies
+                    : [{ name: aid.baby_name, gender: aid.baby_gender, id_type: aid.baby_id_type, id_number: aid.baby_id_number }]
+                  return babies.map((b, i) => (
+                    <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-slate-100' : ''}>
+                      {aid.is_twins && <p className="text-xs font-semibold text-indigo-600 mb-1">תינוק {i + 1}</p>}
+                      <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{b.name ?? '—'}</span></p>
+                      {b.id_number && (
+                        <p className="text-sm"><span className="text-slate-500">{b.id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{b.id_number}</span></p>
+                      )}
+                      {b.gender && (
+                        <p className="text-sm">
+                          <span className="text-slate-500">מין: </span>
+                          <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${b.gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                            {b.gender === 'male' ? 'בן' : 'בת'}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  ))
+                })()}
+                <p className="text-sm mt-3 pt-3 border-t border-slate-100"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
                 {aid.six_weeks_end && (
                   <p className="text-sm">
                     <span className="text-slate-500">{aid.eligibility_extended ? 'סיום זכאות: ' : '6 שבועות לאחר הלידה: '}</span>
@@ -371,6 +389,17 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               </div>
               <div className="text-sm">
                 <span className="text-slate-500">שם: </span>{aid.recovery_home}
+              </div>
+              {/* ימי זכאות בבית ההחלמה — ניתן לעריכה ידנית (ברירת מחדל: רגילה 2 · תאומים 4) */}
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="mb-2 inline-flex items-center gap-2 text-sm">
+                  <span className="text-slate-500">אישור זכאות:</span>
+                  <span className="inline-flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800">
+                    {recoveryDaysOf(aid)} ימים
+                  </span>
+                  {aid.is_twins && <span className="text-xs text-indigo-600">(לידת תאומים)</span>}
+                </div>
+                <RecoveryDaysEditor aid={aid} />
               </div>
               {aid.recovery_arrived != null && (
                 <div className="text-sm mt-2">

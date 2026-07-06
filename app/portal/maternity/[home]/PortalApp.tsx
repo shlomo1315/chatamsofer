@@ -24,6 +24,9 @@ interface Aid {
   birth_date: string
   baby_name?: string
   baby_gender?: 'male' | 'female'
+  is_twins?: boolean
+  babies?: { name?: string | null; gender?: 'male' | 'female' | null; id_type?: 'id' | 'passport'; id_number?: string | null }[]
+  recovery_eligibility_days?: number | null
   six_weeks_end?: string
   recovery_from?: string
   recovery_to?: string
@@ -50,6 +53,10 @@ const endDate = (a: Aid) =>
 const daysLeft = (a: Aid) => differenceInDays(endDate(a), new Date())
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy') : '—'
+
+// ימי הזכאות של היולדת בבית ההחלמה — הערך שאושר, ובהיעדרו ברירת המחדל לפי סוג הלידה
+// (לידה רגילה = 2 · לידת תאומים = 4).
+const recoveryDays = (a: Aid) => a.recovery_eligibility_days ?? (a.is_twins ? 4 : 2)
 
 // ─── Login Form ───────────────────────────────────────────────────────────────
 function LoginForm({ home, onSuccess }: { home: string; onSuccess: () => void }) {
@@ -168,12 +175,30 @@ function DetailModal({ aid, onClose }: { aid: Aid; onClose: () => void }) {
         <div className="p-5 space-y-4">
             {/* Baby info */}
           <div className="bg-indigo-50 rounded-xl p-4 space-y-2">
-            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2">פרטי התינוק</p>
-            <Row icon={<Baby size={14} />} label="שם התינוק" value={aid.baby_name ?? '—'} />
+            <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+              {aid.is_twins ? 'פרטי התאומים' : 'פרטי התינוק'}
+              {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-800"><Baby size={11} /> לידת תאומים</span>}
+            </p>
+            {(() => {
+              const babies = Array.isArray(aid.babies) && aid.babies.length
+                ? aid.babies
+                : [{ name: aid.baby_name, gender: aid.baby_gender }]
+              return babies.map((b, i) => (
+                <div key={i} className={i > 0 ? 'pt-2 border-t border-indigo-100' : ''}>
+                  <Row icon={<Baby size={14} />} label={aid.is_twins ? `תינוק ${i + 1}` : 'שם התינוק'} value={b.name || '—'} />
+                  {b.gender && <Row icon={<User size={14} />} label="מין" value={b.gender === 'male' ? 'זכר' : 'נקבה'} />}
+                </div>
+              ))
+            })()}
             <Row icon={<CalendarDays size={14} />} label="תאריך לידה" value={fmtDate(aid.birth_date)} />
-            {aid.baby_gender && (
-              <Row icon={<User size={14} />} label="מין" value={aid.baby_gender === 'male' ? 'זכר' : 'נקבה'} />
-            )}
+          </div>
+
+          {/* ימי הזכאות שאושרו לבית ההחלמה */}
+          <div className="bg-sky-50 rounded-xl p-4 flex items-center justify-between">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700">
+              <CalendarDays size={15} /> ימי זכאות לבית ההחלמה
+            </span>
+            <span className="inline-block text-base font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800">{recoveryDays(aid)} ימים</span>
           </div>
 
           {/* Mother info */}
@@ -404,7 +429,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
               <table className="w-full text-sm text-center">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'הגעה לבית החלמה', ''].map(h => (
+                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'ימי זכאות', 'הגעה לבית החלמה', ''].map(h => (
                       <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap text-center">{h}</th>
                     ))}
                   </tr>
@@ -424,8 +449,16 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                         onClick={() => setSelected(aid)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center align-middle">{motherName(m)}</td>
                         <td className="px-4 py-3.5 font-mono text-slate-500 text-center align-middle"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">{aid.baby_name ?? '—'}</td>
+                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">
+                          <span className="inline-flex items-center gap-1.5">
+                            {aid.baby_name ?? '—'}
+                            {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"><Baby size={12} /> תאומים</span>}
+                          </span>
+                        </td>
                         <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap text-center align-middle"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
+                        <td className="px-4 py-3.5 text-center align-middle">
+                          <span className="inline-block text-sm font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות שאושרו לבית ההחלמה">{recoveryDays(aid)} ימים</span>
+                        </td>
                         <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                           {status && !editing ? (
                             <div className="flex flex-col items-center gap-1.5">
@@ -466,7 +499,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                       {/* שורת טופס מלאה-רוחב — כך עמודות הנתונים נשארות מיושרות וקצרות */}
                       {showForm && (
                         <tr className="bg-emerald-50/30" onClick={e => e.stopPropagation()}>
-                          <td colSpan={6} className="px-4 pb-5 pt-1">
+                          <td colSpan={7} className="px-4 pb-5 pt-1">
                             <div className="flex flex-col gap-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 w-full max-w-sm mx-auto">
                               <label className="flex flex-col gap-1.5 text-right">
                                 <span className="text-sm font-semibold text-slate-600">סכום שמומש (₪)</span>
