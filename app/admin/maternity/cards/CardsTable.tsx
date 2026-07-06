@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Check, X, CreditCard, Loader2, Search, RotateCcw } from 'lucide-react'
 import type { MaternityAid, CardCenter, CardStatus } from '@/types'
 import ExtendEligibility from '../ExtendEligibility'
+import { useCan } from '@/components/StaffPermissions'
 
 const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
   pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -52,6 +53,7 @@ const FILTERS: { key: CardStatus | 'all'; label: string }[] = [
 
 export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
   const router = useRouter()
+  const canEdit = useCan('maternity_cards', 'edit')
   const [centers, setCenters] = useState<CardCenter[]>([])
   const [filter, setFilter] = useState<CardStatus | 'all'>('pending')
   const [query, setQuery] = useState('')
@@ -175,6 +177,8 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                   <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
+                    ) : !canEdit ? (
+                      <span className="text-slate-300">—</span>
                     ) : approveFor === aid.id ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <select id={`c-${aid.id}`} className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white" defaultValue="">

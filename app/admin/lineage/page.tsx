@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { useCan } from '@/components/StaffPermissions'
 
 // ─── Types ───
 
@@ -147,6 +148,9 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void }) {
   const toast = useToast()
+  const canAdd = useCan('lineage', 'add')
+  const canEdit = useCan('lineage', 'edit')
+  const canDelete = useCan('lineage', 'delete')
   const [selected, setSelected] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   // hover עם השהיה לסגירה — מאפשר להזיז את העכבר אל החלונית בלי שהיא תיעלם
@@ -383,9 +387,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
         <Users size={30} style={{ color: '#7C3AED', opacity: 0.5 }} />
       </div>
       <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#64748B' }}>אין צמתים בעץ עדיין</p>
-      <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#7C3AED,#5B21B6)', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
-        <Plus size={16} /> הוסף שורש ראשון
-      </button>
+      {canAdd && (
+        <button onClick={() => { setFormName(''); setModal({ type: 'add', parentId: null, parentName: '' }) }} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#7C3AED,#5B21B6)', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(124,58,237,0.4)' }}>
+          <Plus size={16} /> הוסף שורש ראשון
+        </button>
+      )}
     </div>
   )
 
@@ -542,7 +548,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
                 {/* status indicator dot */}
                 <div
-                  onClick={e => { e.stopPropagation(); handleToggleStatus(pos.node) }}
+                  onClick={e => { e.stopPropagation(); if (canEdit) handleToggleStatus(pos.node) }}
                   title={nodeStatus === 'verified' ? 'מאומת → לחץ לממתין' : nodeStatus === 'pending' ? 'ממתין → לחץ ללא מאושר' : 'לא מאושר → לחץ לאימות'}
                   style={{
                     position: 'absolute', top: -10 * zoom, left: 6 * zoom,
@@ -550,7 +556,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     background: statusColor(nodeStatus),
                     border: `2px solid #fff`,
                     boxShadow: `0 1px 5px rgba(0,0,0,0.3)`,
-                    cursor: 'pointer',
+                    cursor: canEdit ? 'pointer' : 'default',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     zIndex: 25, fontSize: Math.max(8, 11 * zoom), fontWeight: 900, color: '#fff',
                   }}>
@@ -624,11 +630,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     {/* שורת אייקונים */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[
-                        { icon: <Pencil size={13} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' },
-                        { icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' },
-                        ...(nodeStatus !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
-                        ...(nodeStatus !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
-                        { icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' },
+                        ...(canEdit ? [{ icon: <Pencil size={13} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' }] : []),
+                        ...(canAdd ? [{ icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' }] : []),
+                        ...(canEdit && nodeStatus !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
+                        ...(canEdit && nodeStatus !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
+                        ...(canDelete ? [{ icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' }] : []),
                       ].map((b, i) => (
                         <button key={i} onClick={b.fn} title={b.title} style={{ width: 32, height: 32, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{b.icon}</button>
                       ))}
@@ -670,11 +676,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[
-                { label: 'עריכה', fn: () => { setFormName(selPos.node.name); setFormRelation(selPos.node.relation ?? null); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light },
-                { label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' },
-                ...((selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
-                ...((selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
-                { label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#64748B', bg: '#F1F5F9' },
+                ...(canEdit ? [{ label: 'עריכה', fn: () => { setFormName(selPos.node.name); setFormRelation(selPos.node.relation ?? null); setModal({ type: 'edit', node: selPos.node }) }, color: pal(selPos.node.generation).ring, bg: pal(selPos.node.generation).light }] : []),
+                ...(canAdd ? [{ label: 'הוסף ילד', fn: () => { setFormName(''); setModal({ type: 'add', parentId: selPos.node.id, parentName: selPos.node.name }) }, color: '#059669', bg: '#ECFDF5' }] : []),
+                ...(canEdit && (selPos.node.status ?? 'verified') !== 'verified' ? [{ label: '✓ אמת', fn: () => handleSetStatus(selPos.node, 'verified' as const), color: '#16A34A', bg: '#F0FDF4' }] : []),
+                ...(canEdit && (selPos.node.status ?? 'verified') !== 'rejected' ? [{ label: '✗ דחה', fn: () => handleSetStatus(selPos.node, 'rejected' as const), color: '#DC2626', bg: '#FEF2F2' }] : []),
+                ...(canDelete ? [{ label: 'מחיקה', fn: () => setModal({ type: 'delete', node: selPos.node }), color: '#64748B', bg: '#F1F5F9' }] : []),
               ].map(b => (
                 <button key={b.label} onClick={b.fn} style={{ background: b.bg, color: b.color, border: `1.5px solid ${b.color}22`, borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity .15s' }}>{b.label}</button>
               ))}
@@ -701,7 +707,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
+              {canEdit && <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -714,7 +720,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             {modal.parentId && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
+              {canAdd && <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -731,7 +737,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             )}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
+              {canDelete && <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -758,6 +764,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
   dupFilter: boolean
   onMergeGroup: (id: string) => void
 }) {
+  const canAdd = useCan('lineage', 'add')
+  const canEdit = useCan('lineage', 'edit')
+  const canDelete = useCan('lineage', 'delete')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const roots = useMemo(() => buildTree(nodes), [nodes])
   const childCount = useMemo(() => {
@@ -805,9 +814,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
           </button>
           {/* status dot */}
           <button
-            onClick={() => handleToggleStatus(node)}
+            onClick={() => { if (canEdit) handleToggleStatus(node) }}
             title={nodeStatus === 'verified' ? 'מאומת → ממתין' : nodeStatus === 'pending' ? 'ממתין → לא מאושר' : 'לא מאושר → אמת'}
-            style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: 'pointer', flexShrink: 0,
+            style={{ width: 14, height: 14, borderRadius: '50%', background: statusColor(nodeStatus), border: 'none', cursor: canEdit ? 'pointer' : 'default', flexShrink: 0,
               boxShadow: nodeStatus === 'verified' ? '0 0 0 3px #DCFCE7' : nodeStatus === 'rejected' ? '0 0 0 3px #FEE2E2' : '0 0 0 3px #FEF3C7' }}
           />
           <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
@@ -822,9 +831,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
             {isDup && !mergeMode && (
               <button onClick={() => onMergeGroup(node.id)} title="מזג כפילים (אותו גזע)" style={{ width: 28, height: 28, borderRadius: 7, background: '#F3E8FF', border: '1.5px solid #E9D5FF', color: '#9333EA', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>⚯</button>
             )}
-            <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>
-            <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>
-            <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 28, height: 28, borderRadius: 7, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>
+            {canAdd && <button onClick={() => onAdd(node.id, node.name)} title="הוסף ילד" style={{ width: 28, height: 28, borderRadius: 7, background: '#ECFDF5', border: '1.5px solid #BBF7D0', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={12} /></button>}
+            {canEdit && <button onClick={() => onEdit(node)} title="עריכה" style={{ width: 28, height: 28, borderRadius: 7, background: p.light, border: `1.5px solid ${p.ring}33`, color: p.ring, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={11} /></button>}
+            {canDelete && <button onClick={() => onDelete(node)} title="מחיקה" style={{ width: 28, height: 28, borderRadius: 7, background: '#FEF2F2', border: '1.5px solid #FECACA', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={11} /></button>}
           </div>
         </div>
         {isExpanded && node.children.map(c => renderRows(c, depth + 1))}
@@ -855,6 +864,9 @@ function TableView({ nodes, onRefresh, onAdd, onEdit, onDelete, statusFilter, ge
 type View = 'tree' | 'table'
 
 export default function LineagePage() {
+  const canAdd = useCan('lineage', 'add')
+  const canEdit = useCan('lineage', 'edit')
+  const canDelete = useCan('lineage', 'delete')
   const [nodes, setNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('tree')
@@ -1124,11 +1136,13 @@ export default function LineagePage() {
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
             {mergeMode ? 'סיום מיזוג' : '⚯ מזג כפולים'}
           </button>
-          <button
-            onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
-            className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
-            <Plus size={14} /> הוסף דור חדש
-          </button>
+          {canAdd && (
+            <button
+              onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
+              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm">
+              <Plus size={14} /> הוסף דור חדש
+            </button>
+          )}
         </div>
       </div>
 
@@ -1185,7 +1199,7 @@ export default function LineagePage() {
             {modal.node.parent_id && <RelationPicker value={formRelation} onChange={setFormRelation} />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />
+              {canEdit && <MBtn label="שמור" color="#7C3AED" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -1213,7 +1227,7 @@ export default function LineagePage() {
             {(modal.parentId || formParentId) && <RelationPicker value={formRelation} onChange={setFormRelation} required />}
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />
+              {canAdd && <MBtn label="הוסף" color="#059669" onClick={handleSave} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>
@@ -1225,7 +1239,7 @@ export default function LineagePage() {
             <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.6 }}>האם למחוק את <strong style={{ color: '#0F172A' }}>{modal.node.name}</strong>?</p>
             {saveErr && <span style={{ color: '#DC2626', fontSize: 13 }}>{saveErr}</span>}
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />
+              {canDelete && <MBtn label="מחק" color="#DC2626" onClick={handleDelete} loading={saving} />}
               <MBtn label="ביטול" color="#94A3B8" onClick={close} />
             </div>
           </div>

@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { Mail, Loader2, Check, Eye, EyeOff, Send } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
+import { useCan } from '@/components/StaffPermissions'
 
 // שליחת פרטי הכניסה לפורטל ביצוע ההלוואות במייל — קובע סיסמה ושולח מייל מעוצב.
 export default function LoansPortalEmailButton() {
+  const canEdit = useCan('loans', 'edit')
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,9 +39,11 @@ export default function LoansPortalEmailButton() {
 
   return (
     <>
-      <Button variant="secondary" onClick={() => { setOpen(true); setErr(''); setSent(false) }}>
-        <Mail size={16} /> שליחה למייל
-      </Button>
+      {canEdit && (
+        <Button variant="secondary" onClick={() => { setOpen(true); setErr(''); setSent(false) }}>
+          <Mail size={16} /> שליחה למייל
+        </Button>
+      )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="שליחת פורטל ביצוע ההלוואות במייל" size="md">
         <div className="flex flex-col gap-4">

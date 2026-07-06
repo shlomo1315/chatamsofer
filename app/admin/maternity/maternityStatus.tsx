@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
 import { useToast } from '@/components/ui/Toast'
+import { useCan } from '@/components/StaffPermissions'
 
 export type MotherRef = {
   id: string
@@ -132,6 +133,7 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const canEdit = useCan('maternity', 'edit')
   const [open, setOpen] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [familyGate, setFamilyGate] = useState(false) // חלונית: יש לאשר תחילה את המשפחה
@@ -227,15 +229,22 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
           </div>
         </div>
       )}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
-      >
-        <Icon size={13} />
-        {pill.label}
-        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
+      {canEdit ? (
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
+        >
+          <Icon size={13} />
+          {pill.label}
+          <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      ) : (
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${pill.cls}`}>
+          <Icon size={13} />
+          {pill.label}
+        </span>
+      )}
+      {canEdit && open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           {/* נפתח לצד שמאל של הכפתור כדי לא להיחתך בתחתית הטבלה */}

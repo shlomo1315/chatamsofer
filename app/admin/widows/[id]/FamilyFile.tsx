@@ -6,6 +6,7 @@ import { Wallet, CalendarClock, Plus, Trash2, Check, X, Loader2, Baby, Phone, Ma
 import { createClient } from '@/lib/supabase/client'
 import Card from '@/components/ui/Card'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
+import { useCan } from '@/components/StaffPermissions'
 import {
   Beneficiary, WidowRequest, WidowSupportPayment, WidowSupportType,
   WIDOW_SUPPORT_TYPE_LABELS, WIDOW_REQUEST_TYPE_LABELS, WIDOW_REQUEST_STATUS_LABELS, WIDOW_REQUEST_STATUS_COLORS,
@@ -17,6 +18,7 @@ const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '�
 export default function FamilyFile({ widow, requests, payments }: { widow: Beneficiary; requests: WidowRequest[]; payments: WidowSupportPayment[] }) {
   const router = useRouter()
   const supabase = createClient()
+  const canEdit = useCan('widows', 'edit')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
@@ -190,7 +192,7 @@ export default function FamilyFile({ widow, requests, payments }: { widow: Benef
                   </div>
                   {r.description && <p className="text-sm text-slate-600 mt-1">{r.description}</p>}
                 </div>
-                {r.status === 'pending' && (
+                {canEdit && r.status === 'pending' && (
                   <div className="flex gap-1.5 flex-shrink-0">
                     <button onClick={() => setReqStatus(r.id, 'approved')} disabled={busy === r.id} className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100" title="אשר"><Check size={14} /></button>
                     <button onClick={() => setReqStatus(r.id, 'rejected')} disabled={busy === r.id} className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100" title="דחה"><X size={14} /></button>

@@ -5,6 +5,7 @@ import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
 import { ToastProvider } from '@/components/ui/Toast'
+import { StaffPermissionsProvider } from '@/components/StaffPermissions'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Profile } from '@/types'
 
@@ -47,7 +48,9 @@ export default async function DashboardLayout({
         <Header user={profile} />
         <main className="flex-1 overflow-y-auto">
           <div className="p-5 lg:p-6 pb-16 max-w-screen-2xl mx-auto">
-            {children}
+            <StaffPermissionsProvider isAdmin={profile?.role === 'admin'} permissions={profile?.permissions}>
+              {children}
+            </StaffPermissionsProvider>
           </div>
         </main>
       </div>
