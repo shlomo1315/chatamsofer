@@ -152,10 +152,11 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
 // שדות תינוק בטופס הלידה (מין · שם אופציונלי · ת.ז/דרכון + אימות וכפילות).
 // משמש גם ללידה רגילה (תינוק אחד) וגם ללידת תאומים (שני מופעים).
 function BabyFields({
-  title, gender, name, idType, idNumber, noName, idError,
+  title, accent = 'indigo', gender, name, idType, idNumber, noName, idError,
   onChange, setNoName, setIdError,
 }: {
   title?: string
+  accent?: 'indigo' | 'violet'
   gender: string
   name: string
   idType: string
@@ -166,11 +167,17 @@ function BabyFields({
   setNoName: (v: boolean) => void
   setIdError: (msg: string) => void
 }) {
+  // בתאומים (title קיים) עוטפים כל תינוק במסגרת תוחמת עם כותרת בולטת בצבע משלו,
+  // כדי שיהיה ברור לחלוטין איזה שדה שייך לאיזה ילד.
+  const framed = !!title
+  const theme = accent === 'violet'
+    ? { border: 'border-violet-200', ring: 'bg-violet-50/40', head: 'bg-violet-100 text-violet-800' }
+    : { border: 'border-indigo-200', ring: 'bg-indigo-50/40', head: 'bg-indigo-100 text-indigo-800' }
   return (
-    <div className="col-span-2 flex flex-col gap-4">
+    <div className={`col-span-2 flex flex-col gap-4 ${framed ? `rounded-2xl border-2 ${theme.border} ${theme.ring} p-4` : ''}`}>
       {title && (
-        <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-1.5 w-fit">
-          <Baby size={15} /> {title}
+        <div className={`flex items-center gap-2 text-sm font-bold rounded-lg px-3 py-2 -mx-1 -mt-1 ${theme.head}`}>
+          <Baby size={16} /> {title}
         </div>
       )}
       <Field label="מין הנולד/ת" required>
@@ -3532,7 +3539,7 @@ export default function PublicPortalPage() {
                 {/* תינוק שני — רק בלידת תאומים */}
                 {isTwins && (
                   <BabyFields
-                    title="תינוק שני"
+                    title="תינוק שני" accent="violet"
                     gender={baby2.baby_gender} name={baby2.baby_name}
                     idType={baby2.baby_id_type} idNumber={baby2.baby_id_number}
                     noName={noBaby2Name} idError={baby2IdError}
