@@ -536,6 +536,8 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
       `${base}/?action=birth`, '👶  בקשת לידה', '#fce7f3', '#9d174d',
       `${base}/?action=loan`,  '💳  בקשת הלוואה', '#e0e7ff', '#3730a3',
     )}
+    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
+    ${btn(`${base}/?action=aid`, '🩺  בקשת סיוע רפואי', '#dcfce7', '#166534')}
 
     <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
       להגשת בקשה תתבקש/י להזין את מספר תעודת הזהות לאימות.<br/>
@@ -1094,5 +1096,37 @@ export function cardStockReplenishedEmail(name: string, centerName?: string | nu
   return {
     subject: '🍞 המלאי התחדש — שובר כרטיס המזון מצורף — היכל החתם סופר',
     html: shell({ preheader: 'המלאי במוקד התחדש — שובר כרטיס המזון מצורף לאיסוף.', accent: '#059669', title: 'המלאי התחדש', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
+// ─── פרטי כניסה לפורטל (בית החלמה / ביצוע הלוואות) — מייל מעוצב עם קישור וסיסמה ──
+export function portalCredentialsEmail(opts: {
+  title: string                 // שם הפורטל, למשל "פורטל בתי החלמה" / "פורטל ביצוע הלוואות"
+  intro: string                 // משפט הסבר קצר
+  portalUrl: string
+  password: string
+  username?: string | null      // שם משתמש/מזהה (אופציונלי) — למשל שם בית ההחלמה
+  usernameLabel?: string
+}): BuiltEmail {
+  const { title, intro, portalUrl, password, username, usernameLabel } = opts
+  const rows = [
+    (usernameLabel && username) ? detailRow(usernameLabel, username) : '',
+    detailRow('כתובת הפורטל', portalUrl),
+  ].join('')
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">פרטי כניסה</p>
+    <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${escapeHtml(title)}</h2>
+    <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">${escapeHtml(intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
+    <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:16px;margin:0 0 22px;text-align:center;">
+      <p style="margin:0 0 6px;color:#3730a3;font-size:13px;font-weight:600;">הסיסמה שלכם</p>
+      <p style="margin:0;color:#1e1b4b;font-size:24px;font-weight:900;letter-spacing:3px;font-family:'Courier New',monospace;" dir="ltr">${escapeHtml(password)}</p>
+    </div>
+    ${btn(portalUrl, 'כניסה לפורטל', '#4f46e5')}
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">יש לשמור את פרטי הכניסה במקום בטוח ולא להעבירם לגורם לא מורשה. אם לא ביקשתם גישה זו — ניתן להתעלם מהודעה זו.</p>
+  `
+  return {
+    subject: `פרטי כניסה — ${title} · היכל החתם סופר`,
+    html: shell({ preheader: `פרטי הכניסה ל${title}`, accent: '#4f46e5', title, subtitle: 'היכל החתם סופר', body }),
   }
 }
