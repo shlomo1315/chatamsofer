@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
+import { createRecoveryPortalToken, RECOVERY_PORTAL_MAX_AGE } from '@/lib/recoveryPortalAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,10 +68,11 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set(portalCookieName(home), '1', {
+  response.cookies.set(portalCookieName(home), createRecoveryPortalToken(home), {
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: RECOVERY_PORTAL_MAX_AGE,
     path: '/',
   })
   return response

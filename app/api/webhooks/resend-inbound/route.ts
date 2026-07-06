@@ -280,11 +280,16 @@ export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'bad json' }, { status: 400 }) }
 
-  // אימות סוד אופציונלי דרך כותרת (מוגדר ב-Resend אם תרצה)
+  // אבטחה — נכשל-סגור: חובה RESEND_WEBHOOK_SECRET (כותרת x-webhook-secret או ?secret=).
+  // ללא אימות, תוקף יכול לזייף מייל נכנס ולגרום לדליפת PII של משפחה (מענה אוטומטי לאיגוד).
   const secret = process.env.RESEND_WEBHOOK_SECRET
-  if (secret) {
+  if (!secret) {
+    console.error('[resend-inbound] RESEND_WEBHOOK_SECRET אינו מוגדר — דחיית כל הבקשות (fail-closed)')
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+  {
     const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
-    if (provided !== secret) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (!provided || provided !== secret) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

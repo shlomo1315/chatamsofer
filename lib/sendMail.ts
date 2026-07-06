@@ -143,23 +143,23 @@ export async function urlToAttachment(url: string, filename: string): Promise<Ma
     let buf: Buffer
     let mimeType: string
     const path = storagePath(url)
+    // אבטחה (מניעת SSRF): מצרפים אך ורק קבצים מדלי 'documents' של Supabase.
+    // כתובת חיצונית שרירותית (למשל endpoint פנימי/מטא-דאטה של הענן) נדחית — לא מבצעים
+    // fetch לכתובת שסופקה ע"י המשתמש. מותר: URL של האחסון, או נתיב-אחסון יחסי (לא absolute).
+    const isAbsolute = /^https?:\/\//i.test(url)
+    const isStorageObject = path !== url // נמצא סמן אחסון ('/documents/' וכו')
+    const key = isStorageObject ? path : url
+    if ((isAbsolute && !isStorageObject) || !key || key.includes('..')) return null
     const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (path !== url && supaUrl && supaKey) {
+    if (!supaUrl || !supaKey) return null
+    {
       // קובץ בדלי 'documents' — הורדה דרך service-role (עובד גם כשהדלי פרטי)
       const admin = createClient(supaUrl, supaKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      const { data: blob } = await admin.storage.from('documents').download(path)
+      const { data: blob } = await admin.storage.from('documents').download(key)
       if (!blob) return null
       buf = Buffer.from(await blob.arrayBuffer())
       mimeType = blob.type || 'application/octet-stream'
-    } else {
-      const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), 8000)
-      const res = await fetch(url, { signal: ctrl.signal })
-      clearTimeout(timer)
-      if (!res.ok) return null
-      buf = Buffer.from(await res.arrayBuffer())
-      mimeType = (res.headers.get('content-type') || '').split(';')[0].trim() || 'application/octet-stream'
     }
 
     // ודא סיומת: אם השם כבר מסתיים בסיומת — נשאיר; אחרת נגזור מה-URL או מ-mimeType

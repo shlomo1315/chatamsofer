@@ -44,7 +44,8 @@ function tts(text: string): string {
 
 function yemotText(commands: string[], callId?: string) {
   const body = commands.join('&') + '&'
-  console.log(`[yemot-otp] response${callId ? ` (callId=${callId})` : ''}: ${body}`)
+  // לא מתעדים את גוף התשובה — הוא עלול להכיל את קוד ה-OTP המוקרא (מידע רגיש).
+  console.log(`[yemot-otp] response${callId ? ` (callId=${callId})` : ''} (${commands.length} commands)`)
   return new NextResponse(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 }
 
@@ -63,15 +64,16 @@ async function handle(req: NextRequest) {
   const apiPhone = String(params['ApiPhone'] ?? '').trim()
   const callId = String(params['ApiCallId'] ?? '').trim()
 
-  // ── אבטחה: אם YEMOT_WEBHOOK_SECRET מוגדר — אוכפים ApiToken (constant-time). ──
+  // ── אבטחה: אכיפת ApiToken (constant-time). נכשל-סגור: אם YEMOT_WEBHOOK_SECRET
+  // אינו מוגדר — דוחים כל בקשה (מונע קצירת קוד OTP ע"י תוקף לא-מאומת). ──
   const secret = process.env.YEMOT_WEBHOOK_SECRET
-  if (secret) {
-    if (!safeEqual(params['ApiToken'] ?? '', secret)) {
-      console.warn('[yemot-otp] ApiToken שגוי — דחייה')
-      return hangupMsg('אין הרשאה', callId)
-    }
-  } else {
-    console.error('[yemot-otp] אזהרת אבטחה: YEMOT_WEBHOOK_SECRET אינו מוגדר — ה-webhook פתוח!')
+  if (!secret) {
+    console.error('[yemot-otp] YEMOT_WEBHOOK_SECRET אינו מוגדר — דחיית כל הבקשות (fail-closed)')
+    return hangupMsg('אין הרשאה', callId)
+  }
+  if (!safeEqual(params['ApiToken'] ?? '', secret)) {
+    console.warn('[yemot-otp] ApiToken שגוי — דחייה')
+    return hangupMsg('אין הרשאה', callId)
   }
 
   if (!apiPhone) return hangupMsg('שגיאה במספר המתקשר', callId)

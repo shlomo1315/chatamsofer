@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
+import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { addDays } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   // Verify portal cookie
   const cookieStore = await cookies()
-  const isAuthed = cookieStore.get(portalCookieName(home))?.value === '1'
+  const isAuthed = verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)
   if (!isAuthed) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
   const admin = getAdminClient()
