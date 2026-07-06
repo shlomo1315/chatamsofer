@@ -589,18 +589,23 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
-    // איגוד: אם זו בקשה (נושא "בקשת...") — קליטת הבקשה במייל; אחרת מענה אוטומטי עם הטבות
+    // קליטת בקשות במייל: מזוהה לפי הנושא ("בקשת...") — ולא לפי התיבה שאליה נותב.
+    // חשוב: משלוח כפול של Google עלול לגרום לבקשה לאיגוד להיפתר לתיבת "משרד ראשי"
+    // (עותק subdomain), ואז הגייטינג לפי isIgud החמיץ את הקליטה לחלוטין. לכן מזהים לפי הנושא.
     const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
-    if (isIgud && isRequestSubject(subject)) {
+    if (isRequestSubject(subject)) {
       try {
         // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
         // (קריטי! פרסור הבקשה עובד שורה-אחר-שורה; strip נאיבי של תגיות מוחק את המבנה).
         const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
-        await handleEmailRequest(admin, { fromEmail: from.email, subject, body: bodyText, attachments })
+        const handled = await handleEmailRequest(admin, { fromEmail: from.email, subject, body: bodyText, attachments })
+        if (!handled && isIgud) {
+          await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+        }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
       }
-    } else {
+    } else if (isIgud) {
       try {
         await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
       } catch (e) {
