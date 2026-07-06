@@ -9,6 +9,7 @@ import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate
 import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
+import { normalizePhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,11 +37,17 @@ export async function POST(request: NextRequest) {
     id_number, id_doc_type, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
     spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits,
-    email_verify_token, phone_verify_token,
+    email_verify_token, phone_verify_token, phone_tokens,
   } = body
 
-  if (!id_number || !full_name || !family_name || !phone) {
+  if (!id_number || !full_name || !family_name) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // חייב להיות לפחות מספר טלפון אחד (בעל / אשה / נוסף)
+  const phoneList = [phone, spouse_phone, phone2].map(p => (p ? String(p).trim() : '')).filter(Boolean)
+  if (phoneList.length === 0) {
+    return NextResponse.json({ error: 'יש להזין לפחות מספר טלפון אחד' }, { status: 400 })
   }
 
   // כתובת מלאה חובה — עיר, רחוב ומספר בית (הכתובת מגיעה כמחרוזת "רחוב מספר")
@@ -57,13 +64,28 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // אימות חובה: כתובת המייל והטלפון הראשי (של הבעל) חייבים להיות מאומתים בקוד.
-  // טלפון האשה אינו דורש אימות.
+  // אימות חובה: כתובת המייל חייבת להיות מאומתת בקוד.
   if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {
     return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
   }
-  if (!verifyVerifyToken(phone_verify_token as string | undefined, 'phone', String(phone))) {
-    return NextResponse.json({ error: 'יש לאמת את מספר הטלפון בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
+  // טלפונים — חובה לפחות מספר אחד מאומת. אוספים את כל המספרים המאומתים (verified_phones).
+  const verifiedPhones: string[] = []
+  const rawTokens = Array.isArray(phone_tokens) ? (phone_tokens as { value?: unknown; token?: unknown }[]) : []
+  for (const t of rawTokens) {
+    const val = t?.value ? String(t.value).trim() : ''
+    const tok = t?.token ? String(t.token) : ''
+    if (val && tok && verifyVerifyToken(tok, 'phone', val)) {
+      const norm = normalizePhone(val)
+      if (norm && !verifiedPhones.includes(norm)) verifiedPhones.push(norm)
+    }
+  }
+  // תאימות לאחור — לקוח ישן ששלח phone_verify_token יחיד לטלפון הבעל
+  if (verifiedPhones.length === 0 && phone && verifyVerifyToken(phone_verify_token as string | undefined, 'phone', String(phone))) {
+    const norm = normalizePhone(String(phone))
+    if (norm) verifiedPhones.push(norm)
+  }
+  if (verifiedPhones.length === 0) {
+    return NextResponse.json({ error: 'יש לאמת לפחות מספר טלפון אחד בקוד שיוקרא בשיחה לפני סיום הרישום.' }, { status: 400 })
   }
 
   const isPassport = String(id_doc_type ?? 'id') === 'passport'
@@ -125,8 +147,10 @@ export async function POST(request: NextRequest) {
   const cleanChildCount = Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10))
   const childrenJson = Array.isArray(children) && children.length > 0 ? children : null
   const sharedFields = {
-    phone: String(phone).trim(),
+    // טלפון ראשי — של הבעל אם הוזן, אחרת המספר הראשון שהוזן (בעל אינו חובה יותר)
+    phone: phone ? String(phone).trim() : (phoneList[0] ?? null),
     phone2: phone2 ? String(phone2).trim() : null,
+    verified_phones: verifiedPhones.length ? verifiedPhones : null,
     email: email ? String(email).toLowerCase().trim() : null,
     address: address ? String(address).trim() : null,
     city: city ? String(city).trim() : null,
@@ -164,8 +188,8 @@ export async function POST(request: NextRequest) {
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, verified_phones, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits; void verified_phones
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)

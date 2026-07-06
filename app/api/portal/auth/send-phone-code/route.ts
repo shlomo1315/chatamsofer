@@ -39,15 +39,20 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const data = await resolveBeneficiaryByEnteredId<{ id: string; phone: string | null; phone2: string | null; spouse_phone: string | null }>(
-    admin, idNumber, 'id, phone, phone2, spouse_phone',
+  const data = await resolveBeneficiaryByEnteredId<{ id: string; phone: string | null; phone2: string | null; spouse_phone: string | null; verified_phones: string[] | null }>(
+    admin, idNumber, 'id, phone, phone2, spouse_phone, verified_phones',
   )
 
-  // רשימת המספרים הקיימים (לפי סדר קבוע), עם המספר המנורמל לשימוש פנימי בלבד
+  // רק מספרים שאומתו יכולים לקבל קוד. תאימות לאחור: אם אין רשימת מאומתים (חשבון ותיק) —
+  // מאפשרים את כל המספרים הקיימים כמו קודם, כדי לא לנעל משתמשים שנרשמו לפני השינוי.
+  const verifiedSet = new Set(
+    (data?.verified_phones ?? []).map((p) => normalizePhone(p)).filter((p) => p.length >= 9),
+  )
   const available = data
     ? PHONE_FIELDS
-        .map((f) => normalizePhone((data as Record<string, string | null>)[f]))
+        .map((f) => normalizePhone((data as Record<string, string | null>)[f] as string | null))
         .filter((p) => p.length >= 9)
+        .filter((p) => verifiedSet.size === 0 || verifiedSet.has(p))
     : []
 
   // ── שלב 1: החזרת רשימת מספרים ממוסכים (לא חושפים אם הת"ז קיימת) ──

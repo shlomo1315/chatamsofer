@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
+import { normalizePhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,8 +19,8 @@ export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { beneficiary_id, phone, phone2, address, city, email, marital_status,
-    email_verify_token, phone_verify_token } = body
+  const { beneficiary_id, phone, phone2, spouse_phone, address, city, email, marital_status,
+    email_verify_token, phone_verify_token, phone_tokens } = body
   if (!beneficiary_id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
   // אימות סשן הפורטל — מותר לעדכן רק את הרשומה של המוטב שאותר בסשן הנוכחי
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, phone, email')
+    .select('id, eligibility_status, phone, email, verified_phones')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
@@ -62,9 +63,25 @@ export async function POST(request: NextRequest) {
     update.phone = newPhone || null
   }
   if (phone2 !== undefined) update.phone2 = phone2 ? String(phone2).trim() : null
+  if (spouse_phone !== undefined) update.spouse_phone = spouse_phone ? String(spouse_phone).trim() : null
   if (address !== undefined) update.address = address ? String(address).trim() : null
   if (city !== undefined) update.city = city ? String(city).trim() : null
   if (marital_status !== undefined) update.marital_status = marital_status ? String(marital_status) : null
+
+  // איחוד טלפונים שאומתו כעת אל רשימת המספרים המאומתים (מאפשר קבלת קוד בעתיד)
+  const existingVerified = Array.isArray((ben as { verified_phones?: string[] }).verified_phones)
+    ? ((ben as { verified_phones: string[] }).verified_phones)
+    : []
+  const verifiedSet = new Set(existingVerified.map(p => normalizePhone(p)).filter(Boolean))
+  const rawTokens = Array.isArray(phone_tokens) ? (phone_tokens as { value?: unknown; token?: unknown }[]) : []
+  for (const t of rawTokens) {
+    const val = t?.value ? String(t.value).trim() : ''
+    const tok = t?.token ? String(t.token) : ''
+    if (val && tok && verifyVerifyToken(tok, 'phone', val)) verifiedSet.add(normalizePhone(val))
+  }
+  if (verifiedSet.size !== existingVerified.length || existingVerified.some(p => !verifiedSet.has(normalizePhone(p)))) {
+    update.verified_phones = [...verifiedSet]
+  }
 
   const { error } = await admin.from('beneficiaries').update(update).eq('id', String(beneficiary_id))
   if (error) return NextResponse.json({ error: `שגיאה בעדכון: ${error.message}` }, { status: 500 })
