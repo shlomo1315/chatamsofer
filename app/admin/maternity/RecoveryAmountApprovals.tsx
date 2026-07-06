@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, X, Loader2, HandCoins } from 'lucide-react'
+import { useCan } from '@/components/StaffPermissions'
 
 export type PendingAmount = {
   id: string
@@ -17,6 +18,7 @@ const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString('he-IL') 
 
 export default function RecoveryAmountApprovals({ items }: { items: PendingAmount[] }) {
   const router = useRouter()
+  const canEdit = useCan('maternity', 'edit')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
@@ -63,7 +65,7 @@ export default function RecoveryAmountApprovals({ items }: { items: PendingAmoun
                   <td className="px-4 py-3 font-bold text-emerald-700">{ils(it.recovery_amount)}</td>
                   <td className="px-4 py-3 text-slate-500 ltr-num">{fmt(it.recovery_amount_at)}</td>
                   <td className="px-4 py-3">
-                    {b ? <Loader2 size={15} className="animate-spin text-slate-400" /> : (
+                    {b ? <Loader2 size={15} className="animate-spin text-slate-400" /> : canEdit && (
                       <div className="flex items-center gap-2">
                         <button onClick={() => decide(it.id, 'approve')}
                           className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5"><Check size={14} /> אשר</button>

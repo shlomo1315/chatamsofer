@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { defaultRecoveryDays } from '@/lib/maternity'
 import { sendRecoveryVoucherUpdate } from '@/lib/sendRecoveryVoucher'
 
@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 //   days = מספר הימים החדש (0–60). המזכירות יכולה להוסיף/להפחית ימים מעבר לברירת המחדל
 //   (רגילה=2 · תאומים=4). הערך מוצג בתוכנה (עמודת הלידות) ובפורטל בתי ההחלמה.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff(['admin', 'secretary'])
-  if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  const staff = await requirePermission('maternity', 'edit')
+  if (!staff) return forbidden()
 
   let body: { aidId?: string; days?: number | string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

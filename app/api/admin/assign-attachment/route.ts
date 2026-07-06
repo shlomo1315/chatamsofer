@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { storagePath as extractDocPath } from '@/lib/docUrl'
 
 export const dynamic = 'force-dynamic'
@@ -27,8 +27,8 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return unauthorized()
+  const staff = await requirePermission('beneficiaries', 'edit')
+  if (!staff) return forbidden()
 
   const { messageId, attachmentId, inlineData, sourceUrl, beneficiaryId, docType, filename, mimeType } = await request.json()
 

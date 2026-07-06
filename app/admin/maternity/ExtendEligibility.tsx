@@ -7,6 +7,7 @@ import { he } from 'date-fns/locale'
 import Modal from '@/components/ui/Modal'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { toHebrewDate } from '@/lib/hebrewDate'
+import { useCan } from '@/components/StaffPermissions'
 import type { MaternityAid } from '@/types'
 
 const fmt = (d?: string | null) => (d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—')
@@ -23,6 +24,7 @@ export default function ExtendEligibility({
   variant?: 'button' | 'icon'
   onDone?: () => void
 }) {
+  const canEdit = useCan('maternity', 'edit')
   const defaultEnd = aid.birth_date ? toIso(addWeeks(new Date(aid.birth_date), 6)) : ''
   const currentEnd = aid.six_weeks_end || defaultEnd
   const extended = !!aid.eligibility_extended
@@ -67,7 +69,7 @@ export default function ExtendEligibility({
 
   return (
     <>
-      {variant === 'icon' ? (
+      {canEdit && (variant === 'icon' ? (
         <button
           onClick={openModal}
           title="הארכת זכאות"
@@ -82,7 +84,7 @@ export default function ExtendEligibility({
         >
           <CalendarClock size={14} /> הארכת זכאות
         </button>
-      )}
+      ))}
 
       <Modal open={open} onClose={() => setOpen(false)} title="הארכת זכאות יולדת" size="md">
         <div className="flex flex-col gap-4">

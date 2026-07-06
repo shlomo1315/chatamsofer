@@ -1,12 +1,12 @@
 // סנכרון צבע צומת הדורות עם סטטוס המשפחה: אישור משפחה → הצומת של הנרשם
 // (וכל אבותיו ה"ממתינים" שהוא הוסיף) הופכים ל"מאומת" (ירוק). סטטוס אחר → חזרה ל"ממתין".
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  if (!(await requirePermission('lineage', 'edit'))) return forbidden()
   let body: { beneficiaryId?: string; approved?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const beneficiaryId = String(body.beneficiaryId ?? '')

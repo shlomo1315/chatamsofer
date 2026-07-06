@@ -4,11 +4,15 @@ import { Plus, Pencil, Trash2, Loader2, Warehouse, X, MapPin } from 'lucide-reac
 import type { CardCenter } from '@/types'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
+import { useCan } from '@/components/StaffPermissions'
 
 type Draft = { id?: string; name: string; stock: string; city: string; address: string; pickup_days: string; pickup_hours: string }
 const emptyDraft: Draft = { name: '', stock: '', city: '', address: '', pickup_days: '', pickup_hours: '' }
 
 export default function CardCentersManager() {
+  const canAdd = useCan('maternity_cards', 'add')
+  const canEdit = useCan('maternity_cards', 'edit')
+  const canDelete = useCan('maternity_cards', 'delete')
   const { confirm, confirmDialog } = useConfirm()
   const [centers, setCenters] = useState<CardCenter[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,10 +87,12 @@ export default function CardCentersManager() {
           <Warehouse size={18} className="text-emerald-600" />
           <h2 className="font-semibold text-slate-900">מוקדי כרטיסים ומלאי</h2>
         </div>
-        <button onClick={() => { setErr(''); setModal({ ...emptyDraft }) }}
-          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg px-4 py-2">
-          <Plus size={15} /> הוסף מוקד
-        </button>
+        {canAdd && (
+          <button onClick={() => { setErr(''); setModal({ ...emptyDraft }) }}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg px-4 py-2">
+            <Plus size={15} /> הוסף מוקד
+          </button>
+        )}
       </div>
 
       {/* סיכום מלאי — לחיצה מסננת את הטבלה בלייב (לחיצה נוספת מבטלת) */}
@@ -143,12 +149,18 @@ export default function CardCentersManager() {
                     <td className={`px-5 py-4 font-bold border-l border-slate-100 ${remaining > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{remaining}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-1">
-                        <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock, waiting: c.waiting ?? 0 }) }}
-                          title="הוסף מלאי מיידי"
-                          className="text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg p-1.5"><Plus size={16} /></button>
-                        <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
-                          className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
-                        <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>
+                        {canEdit && (
+                          <button onClick={() => { setErr(''); setAddAmount(''); setAddStock({ id: c.id, name: c.name, current: c.stock, waiting: c.waiting ?? 0 }) }}
+                            title="הוסף מלאי מיידי"
+                            className="text-emerald-600 hover:text-white hover:bg-emerald-600 border border-emerald-200 rounded-lg p-1.5"><Plus size={16} /></button>
+                        )}
+                        {canEdit && (
+                          <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, stock: String(c.stock), city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}
+                            className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg p-1.5"><Pencil size={16} /></button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => remove(c)} className="text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-1.5"><Trash2 size={16} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>

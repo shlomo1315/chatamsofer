@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 const KEY = 'financial_aid_decision_email'
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('financial_aid', 'edit'))) return forbidden()
   const { email } = await request.json()
   const clean = (email ?? '').trim()
   if (clean && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {

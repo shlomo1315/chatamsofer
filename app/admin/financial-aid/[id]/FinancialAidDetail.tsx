@@ -8,6 +8,7 @@ import type { FinancialAidRequest } from '@/types'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import Card from '@/components/ui/Card'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useCan } from '@/components/StaffPermissions'
 
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleString('he-IL') : '—'
 const fmtDateTime = (d?: string) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
@@ -20,6 +21,7 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
+  const canEdit = useCan('financial_aid', 'edit')
   const [busy, setBusy] = useState<string | null>(null)
   const [err, setErr] = useState('')
   const [amountInput, setAmountInput] = useState('')
@@ -163,18 +165,20 @@ export default function FinancialAidDetail({ req }: { req: FinancialAidRequest }
       {err && <p className="text-sm text-red-600">{err}</p>}
 
       {/* עדכון ידני */}
-      <div className="mt-2 pt-3 border-t border-slate-100">
-        <p className="text-xs text-slate-400 mb-2">עדכון ידני (במידת הצורך):</p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input type="number" min="0" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="סכום" className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
-          <button onClick={() => setStatus('approved', parseInt(amountInput, 10) || 0)} disabled={!amountInput || busy === 'approved' || !eligible}
-            className="inline-flex items-center gap-1 text-xs font-medium text-green-700 border border-green-200 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-2.5 py-1.5"><Check size={13} /> אשר בסכום</button>
-          <button onClick={() => setStatus('rejected')} disabled={busy === 'rejected'}
-            className="inline-flex items-center gap-1 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5"><X size={13} /> דחה</button>
-          <button onClick={() => setStatus('pending')} disabled={busy === 'pending'}
-            className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-50 rounded-lg px-2.5 py-1.5"><Clock size={13} /> החזר לממתין</button>
+      {canEdit && (
+        <div className="mt-2 pt-3 border-t border-slate-100">
+          <p className="text-xs text-slate-400 mb-2">עדכון ידני (במידת הצורך):</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="number" min="0" value={amountInput} onChange={e => setAmountInput(e.target.value)} placeholder="סכום" className="w-28 rounded-lg border border-slate-300 px-3 py-1.5 text-sm" />
+            <button onClick={() => setStatus('approved', parseInt(amountInput, 10) || 0)} disabled={!amountInput || busy === 'approved' || !eligible}
+              className="inline-flex items-center gap-1 text-xs font-medium text-green-700 border border-green-200 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-2.5 py-1.5"><Check size={13} /> אשר בסכום</button>
+            <button onClick={() => setStatus('rejected')} disabled={busy === 'rejected'}
+              className="inline-flex items-center gap-1 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-lg px-2.5 py-1.5"><X size={13} /> דחה</button>
+            <button onClick={() => setStatus('pending')} disabled={busy === 'pending'}
+              className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-50 rounded-lg px-2.5 py-1.5"><Clock size={13} /> החזר לממתין</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* מחיקת הבקשה */}
       <div className="mt-1 pt-3 border-t border-slate-100">

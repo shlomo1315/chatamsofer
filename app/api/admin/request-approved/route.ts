@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
   if (!id || (type !== 'loan' && type !== 'maternity')) {
     return NextResponse.json({ error: 'פרמטרים חסרים' }, { status: 400 })
   }
+
+  const section = type === 'loan' ? 'loans' : 'maternity'
+  if (!(await requirePermission(section, 'edit'))) return forbidden()
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

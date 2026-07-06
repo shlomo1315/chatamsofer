@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,8 +14,8 @@ function getAdminClient() {
 // מיזוג צמתים כפולים: כל ה-mergeIds מתמזגים אל keepId.
 // ילדיהם והנרשמים המשויכים אליהם עוברים ל-keepId, והכפילים נמחקים.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requirePermission('lineage', 'edit')
+  if (!staff) return forbidden()
 
   let body: { keepId?: string; mergeIds?: string[] }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
@@ -17,8 +17,8 @@ function getAdminClient() {
 
 // עדכון ידני של החלטה (אישור עם סכום / דחייה / החזרה לממתין) + הודעה למבקש.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requirePermission('financial_aid', 'edit')
+  if (!staff) return forbidden()
   const { id, status, amount } = await request.json()
   if (!id || !['approved', 'rejected', 'pending'].includes(status)) return NextResponse.json({ error: 'נתונים חסרים' }, { status: 400 })
 

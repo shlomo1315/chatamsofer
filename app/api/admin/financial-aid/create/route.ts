@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 const BUCKET = 'documents'
@@ -15,7 +15,7 @@ function getAdminClient() {
 
 // יצירת בקשת סיוע רפואי מתוך ממשק הניהול (המזכירות מזינה עבור נתמך קיים).
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requirePermission('financial_aid', 'add'))) return forbidden()
 
   let formData: FormData
   try { formData = await request.formData() }

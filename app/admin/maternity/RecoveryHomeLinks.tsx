@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X, LogIn, Mail, Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useCan } from '@/components/StaffPermissions'
 import Modal from '@/components/ui/Modal'
 
 interface Portal { home_name: string; updated_at: string }
@@ -20,6 +21,7 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
+  const canEdit = useCan('maternity', 'edit')
   const [portals, setPortals] = useState<Portal[]>([])
 
   // כתובת מייל לכל בית החלמה — לשליחת דיווחים / סיכום חודשי
@@ -324,11 +326,13 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                 className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
                 {emailSaving === home ? <Loader2 size={13} className="animate-spin" /> : emailSaved === home ? <><Check size={13} className="text-green-600" /> נשמר!</> : <><Check size={13} /> שמור מייל</>}
               </button>
-              <button onClick={() => openSend(home)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-                title="שליחת קישור וסיסמה לפורטל במייל">
-                <Send size={13} /> שלח פורטל למייל
-              </button>
+              {canEdit && (
+                <button onClick={() => openSend(home)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                  title="שליחת קישור וסיסמה לפורטל במייל">
+                  <Send size={13} /> שלח פורטל למייל
+                </button>
+              )}
               {emailErr === home && <span className="text-xs text-red-600">כתובת מייל לא תקינה</span>}
             </div>
           </div>

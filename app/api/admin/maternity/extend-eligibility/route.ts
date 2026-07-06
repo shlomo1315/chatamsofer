@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { addWeeks } from 'date-fns'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,8 +16,8 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 //   action = 'reset'  → חוזר לברירת המחדל (לידה + 6 שבועות) ומבטל את ההארכה הידנית.
 // six_weeks_end הוא תאריך הסיום האפקטיבי שכל הלוגיקה (פריקה אוטומטית, פורטל, ימות) נשענת עליו.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  const staff = await requirePermission('maternity', 'edit')
+  if (!staff) return forbidden()
 
   let body: { aidId?: string; action?: 'extend' | 'reset'; endDate?: string; reason?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

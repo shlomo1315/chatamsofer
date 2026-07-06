@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { nedarimCall, getMaternityLimitedId } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
@@ -18,9 +18,7 @@ const ALLOWED = new Set([
 ])
 
 // proxy צד-שרת: מזריק קוד מוסד + סיסמת API ומעביר את הקריאה לנדרים קארד.
-// פעולות עריכה (כתיבה) מוגבלות למנהל/גבייה.
-const WRITE = new Set(['SaveClientCard', 'SetClientMagneticCard', 'AddTlush', 'PrikatTlush', 'SaveLimitedStores'])
-
+// כל הפעולות דורשות הרשאת עריכה בתיקי יולדות.
 export async function POST(request: NextRequest) {
   let body: { action?: string; params?: Record<string, string> }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
@@ -28,10 +26,7 @@ export async function POST(request: NextRequest) {
   const action = body.action ?? ''
   if (!ALLOWED.has(action)) return NextResponse.json({ error: 'פעולה לא מורשית' }, { status: 400 })
 
-  const roles = WRITE.has(action) ? (['admin', 'collections'] as const) : undefined
-  if (!(await requireStaff(roles ? [...roles] : undefined))) {
-    return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
-  }
+  if (!(await requirePermission('maternity_cards', 'edit'))) return forbidden()
 
   try {
     const params = { ...(body.params ?? {}) }

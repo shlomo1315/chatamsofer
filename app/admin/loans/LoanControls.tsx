@@ -7,6 +7,7 @@ import { goToNextPending } from '@/lib/nextPending'
 import type { Loan, LoanStatus } from '@/types'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useCan } from '@/components/StaffPermissions'
 
 // סטטוס זכאות להלוואה: ממתין / זכאי (מאושר) / לא זכאי (לא מאושר)
 const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
@@ -22,6 +23,7 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
+  const canEdit = useCan('loans', 'edit')
   const btnRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
@@ -169,13 +171,21 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
           </div>
         </div>
       )}
-      <button ref={btnRef} onClick={toggle} disabled={saving}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${pill.cls}`}>
-        {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
-        {pill.label}
-        <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && coords && (
+      {canEdit ? (
+        <button ref={btnRef} onClick={toggle} disabled={saving}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${pill.cls}`}>
+          {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
+          {pill.label}
+          <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      ) : (
+        <span
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${pill.cls}`}>
+          <Icon size={13} />
+          {pill.label}
+        </span>
+      )}
+      {canEdit && open && coords && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="fixed z-50 w-44 bg-white rounded-xl border border-slate-200 shadow-xl py-1"

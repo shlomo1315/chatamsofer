@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { setPortalPassword } from '@/lib/loansPortalAuth'
 import { portalCredentialsEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
@@ -11,7 +11,7 @@ const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 // שליחת פרטי הכניסה לפורטל ביצוע ההלוואות במייל — קובע/מעדכן את הסיסמה ושולח מייל מעוצב.
 export async function POST(request: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: 'נדרשות הרשאות מנהל' }, { status: 403 })
+  if (!(await requirePermission('loans', 'edit'))) return forbidden()
 
   let body: { email?: string; password?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

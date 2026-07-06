@@ -8,6 +8,7 @@ import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/type
 import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useCan } from '@/components/StaffPermissions'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
@@ -26,6 +27,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
+  const canEdit = useCan('financial_aid', 'edit')
   const [filter, setFilter] = useState<FinancialAidStatus | 'all'>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
@@ -149,10 +151,6 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
           className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-50 rounded-lg px-3 py-2">
           {checking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} בדוק תשובות
         </button>
-        <button onClick={() => { resetNew(); setNewOpen(true) }}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2">
-          <Plus size={14} /> בקשה חדשה
-        </button>
       </div>
 
       {/* קוביות סינון */}
@@ -212,7 +210,9 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span>
-                        <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
+                        {canEdit && (
+                          <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
