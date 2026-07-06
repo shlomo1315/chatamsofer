@@ -103,7 +103,7 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   }
 
   const options: { value: EligibilityStatus; label: string; cls: string; icon: typeof Check }[] = [
-    { value: 'approved',     label: 'אשר זכאות',       cls: 'text-green-700 hover:bg-green-50',  icon: Check    },
+    { value: 'approved',     label: 'אישור יחוס',       cls: 'text-green-700 hover:bg-green-50',  icon: Check    },
     { value: 'rejected',     label: 'דחה',              cls: 'text-red-600 hover:bg-red-50',      icon: X        },
     { value: 'docs_pending', label: 'השלמת מסמכים',    cls: 'text-blue-600 hover:bg-blue-50',    icon: FileText },
     { value: 'pending',      label: 'החזר לממתין',      cls: 'text-amber-700 hover:bg-amber-50',  icon: Clock    },

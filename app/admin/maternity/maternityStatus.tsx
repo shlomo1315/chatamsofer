@@ -129,25 +129,20 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
 type MotherRefLite = { id: string }
 
 // ── Clickable status control ────────────────────────────────────────────────────
-export function StatusControl({ aid, advance, familyApproved }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
+export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
   const canEdit = useCan('maternity', 'edit')
   const [open, setOpen] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [familyGate, setFamilyGate] = useState(false) // חלונית: יש לאשר תחילה את המשפחה
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
   const setStatus = async (next: MaternityStatus) => {
-    // חסימה: לא ניתן לאשר לידה לפני שהמשפחה מאושרת — חלונית מפורשת
-    if (next === 'active' && familyApproved === false) {
-      setOpen(false)
-      setFamilyGate(true)
-      return
-    }
+    // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר לידה גם אם היחוס
+    // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד בכפתור "אישור יחוס".
     // ── UI אופטימי: סוגרים מיד ומראים הצלחה, וכל העבודה מול השרת רצה ברקע ──
     // כך שהמזכיר לא ממתין ולו שנייה — התגובה מיידית.
     setOpen(false)
@@ -198,6 +193,26 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
     }
   }
 
+  // אישור יחוס (משפחה) — נפרד מאישור הבקשה. מסמן את המשפחה כמאושרת לכל נושא מעתה,
+  // ומאמת את צומת היחוס בעץ הדורות. אישור הבקשה עצמו ("אשר לידה") אינו מאשר יחוס.
+  const familyApprove = async () => {
+    const mother = aid.beneficiary as MotherRefLite | undefined
+    if (!mother?.id) { toast.error('לא נמצאה משפחה לאישור'); return }
+    setOpen(false)
+    try {
+      const { error } = await supabase.from('beneficiaries')
+        .update({ eligibility_status: 'approved', updated_at: new Date().toISOString() }).eq('id', mother.id)
+      if (error) throw error
+      void fetch('/api/admin/approve-lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beneficiaryId: mother.id, approved: true }) }).catch(() => {})
+      void fetch('/api/admin/send-status-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: mother.id, status: 'approved' }) }).catch(() => {})
+      void fetch('/api/nedarim/save-client', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beneficiaryId: mother.id }) }).catch(() => {})
+      toast.success('אישור יחוס — המשפחה סומנה כמאושרת')
+      router.refresh()
+    } catch (err: unknown) {
+      toast.error(`שגיאה באישור יחוס: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   const options: { value: MaternityStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'active',    label: 'אשר לידה',     cls: 'text-green-700 hover:bg-green-50', icon: Check },
     { value: 'cancelled', label: 'דחה',          cls: 'text-red-600 hover:bg-red-50', icon: X },
@@ -206,18 +221,6 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
 
   return (
     <div className="relative inline-block">
-      {familyGate && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl" onClick={() => setFamilyGate(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-7 py-6 flex flex-col items-center gap-3 max-w-sm text-center" onClick={e => e.stopPropagation()}>
-            <div className="w-14 h-14 bg-amber-100 rounded-full flex items-center justify-center">
-              <Clock size={28} className="text-amber-600" />
-            </div>
-            <p className="font-bold text-slate-900 text-lg">עליך לאשר תחילה את המשפחה</p>
-            <p className="text-sm text-slate-500 leading-relaxed">לא ניתן לאשר את הלידה כל עוד המשפחה אינה מאושרת. אשרו תחילה את המשפחה (הפאנל הצהוב ״המשפחה טרם אושרה״), ולאחר מכן ניתן לאשר את הלידה.</p>
-            <button onClick={() => setFamilyGate(false)} className="mt-1 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl px-6 py-2.5">הבנתי</button>
-          </div>
-        </div>
-      )}
       {showSuccess && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
@@ -258,6 +261,11 @@ export function StatusControl({ aid, advance, familyApproved }: { aid: Maternity
                 </button>
               )
             })}
+            {/* אישור יחוס — פעולה נפרדת מאישור הבקשה */}
+            <button onClick={familyApprove}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-right text-emerald-700 hover:bg-emerald-50 border-t border-slate-100">
+              <Check size={15} /> אישור יחוס (משפחה)
+            </button>
           </div>
         </>
       )}

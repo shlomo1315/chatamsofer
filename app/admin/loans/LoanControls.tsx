@@ -19,7 +19,7 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
   defaulted: { label: 'לא מאושר',     cls: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200', icon: X },
 }
 
-export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loan; advance?: boolean; familyApproved?: boolean }) {
+export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boolean; familyApproved?: boolean }) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -80,12 +80,8 @@ export function LoanStatusControl({ loan, advance, familyApproved }: { loan: Loa
   }
 
   const setStatus = async (next: LoanStatus) => {
-    // חסימה: לא ניתן לאשר בקשה לפני שהמשפחה מאושרת
-    if (next === 'approved' && familyApproved === false) {
-      setOpen(false)
-      toast.error('לא ניתן לאשר את הבקשה — יש לאשר תחילה את המשפחה (ראה/י את הפאנל הצהוב "המשפחה טרם אושרה").')
-      return
-    }
+    // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר הלוואה גם אם היחוס
+    // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד ("אישור יחוס" בכרטסת).
     // אישור — קודם מבקשים את הסכום שאושר בפועל
     if (next === 'approved') {
       setOpen(false)
