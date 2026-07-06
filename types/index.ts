@@ -68,6 +68,7 @@ export interface Beneficiary {
   past_benefits?: {
     recovery_home?: boolean; food_card?: boolean; holiday_grant?: boolean; catering?: boolean
     loan?: boolean; loan_amount?: string; other?: boolean; other_details?: string; notes?: string
+    update_topics?: string[]  // נושאים שהמבקש ביקש לקבל עליהם עדכונים שוטפים
   }
   children?: {
     name: string

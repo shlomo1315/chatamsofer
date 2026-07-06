@@ -344,6 +344,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
               <p className="text-sm text-slate-700 whitespace-pre-wrap">{pb.notes}</p>
             </div>
           )}
+          {pb.update_topics && pb.update_topics.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 mb-2">רשום/ה לקבלת עדכונים שוטפים בנושאים</h3>
+              <ul className="flex flex-wrap gap-1.5">
+                {pb.update_topics.map((t, i) => <li key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1">{t}</li>)}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </Card>
