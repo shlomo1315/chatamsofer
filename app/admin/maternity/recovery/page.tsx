@@ -7,8 +7,10 @@ import RecoveryBillingSummary from '../RecoveryBillingSummary'
 
 const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
-async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeObjs: { name: string; availability: string }[] }> {
-  const defaultObjs = DEFAULT_HOMES.map(name => ({ name, availability: 'regular' }))
+type HomeObj = { name: string; availability: string; report_email: string | null }
+
+async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeObjs: HomeObj[] }> {
+  const defaultObjs: HomeObj[] = DEFAULT_HOMES.map(name => ({ name, availability: 'regular', report_email: null }))
   if (!isSupabaseConfigured()) return { aids: [], homes: DEFAULT_HOMES, homeObjs: defaultObjs }
   const supabase = await createClient()
   const [aidsRes, homesRes] = await Promise.all([
@@ -22,12 +24,12 @@ async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeO
   if (aidsRes.error) throw aidsRes.error
   // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
   if (homesRes.error && homesRes.error.code !== '42P01') throw homesRes.error
-  const map = new Map<string, string>()
-  for (const n of DEFAULT_HOMES) map.set(n, 'regular')
-  for (const r of (homesRes.data ?? []) as { name?: string; availability?: string }[]) {
-    if (r.name) map.set(r.name, r.availability ?? 'regular')
+  const map = new Map<string, { availability: string; report_email: string | null }>()
+  for (const n of DEFAULT_HOMES) map.set(n, { availability: 'regular', report_email: null })
+  for (const r of (homesRes.data ?? []) as { name?: string; availability?: string; report_email?: string | null }[]) {
+    if (r.name) map.set(r.name, { availability: r.availability ?? 'regular', report_email: r.report_email ?? null })
   }
-  const homeObjs = [...map.entries()].map(([name, availability]) => ({ name, availability }))
+  const homeObjs: HomeObj[] = [...map.entries()].map(([name, v]) => ({ name, availability: v.availability, report_email: v.report_email }))
   return { aids: aidsRes.data ?? [], homes: homeObjs.map(h => h.name), homeObjs }
 }
 
