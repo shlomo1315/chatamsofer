@@ -280,16 +280,16 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
   // הכרטיס שהוקלד באחרון מבין משתני הניסיון (לתצוגה בלוג בלבד)
   const enteredCard = CARD_VARS.map((v) => String(params[v] ?? '').trim()).filter(Boolean).pop() ?? ''
 
-  // ── אבטחה: אם YEMOT_WEBHOOK_SECRET מוגדר — אוכפים ApiToken (constant-time). ──
-  // אם אינו מוגדר — ממשיכים כדי לא לשבור את השירות, עם אזהרה חזקה (יש להגדירו בהקדם).
+  // ── אבטחה: אכיפת ApiToken (constant-time). נכשל-סגור: אם YEMOT_WEBHOOK_SECRET
+  // אינו מוגדר — דוחים כל בקשה (ה-webhook מפעיל שיוך/טעינת כרטיס = כסף). ──
   const secret = process.env.YEMOT_WEBHOOK_SECRET
-  if (secret) {
-    if (!safeEqual(params['ApiToken'] ?? '', secret)) {
-      console.warn('[yemot-maternity] ApiToken שגוי — דחייה')
-      return yemotText([idMessage(tText('אין הרשאה')), goToFolder('hangup')], callId)
-    }
-  } else {
-    console.error('[yemot-maternity] אזהרת אבטחה: YEMOT_WEBHOOK_SECRET אינו מוגדר — ה-webhook פתוח! יש להגדירו ב-Railway בהקדם.')
+  if (!secret) {
+    console.error('[yemot-maternity] YEMOT_WEBHOOK_SECRET אינו מוגדר — דחיית כל הבקשות (fail-closed)')
+    return yemotText([idMessage(tText('אין הרשאה')), goToFolder('hangup')], callId)
+  }
+  if (!safeEqual(params['ApiToken'] ?? '', secret)) {
+    console.warn('[yemot-maternity] ApiToken שגוי — דחייה')
+    return yemotText([idMessage(tText('אין הרשאה')), goToFolder('hangup')], callId)
   }
 
   // לוג ללא חשיפת מספר הכרטיס המלא (4 ספרות אחרונות בלבד)

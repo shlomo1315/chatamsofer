@@ -12,10 +12,15 @@ const PORTAL_BASE_DEFAULT =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
 const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
 
+// מנטרל תווי HTML בערכים מבוססי-משתמש לפני שילובם ב-HTML של המייל (מניעת הזרקת HTML)
+function escapeHtml(s: unknown): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 // פתיח מכובד אחיד לכל המיילים: "שלום וברכה, הרב <שם> הי״ו,"
 export function greetHe(name?: string | null): string {
   const n = (name ?? '').trim()
-  return n ? `שלום וברכה, הרב ${n} הי״ו,` : 'שלום וברכה,'
+  return n ? `שלום וברכה, הרב ${escapeHtml(n)} הי״ו,` : 'שלום וברכה,'
 }
 
 // פתיח לפי מצב משפחתי: ברירת מחדל "הרב <משפחה> <שם הבעל> הי״ו".
@@ -28,13 +33,14 @@ export function greetByStatus(
   const nm = [familyName, fullName].filter(Boolean).join(' ').trim()
   if (!nm) return 'שלום וברכה,'
   const female = maritalStatus === 'אלמנה' || maritalStatus === 'גרושה'
-  return female ? `שלום וברכה, הרבנית ${nm} תחי׳,` : `שלום וברכה, הרב ${nm} הי״ו,`
+  const safe = escapeHtml(nm)
+  return female ? `שלום וברכה, הרבנית ${safe} תחי׳,` : `שלום וברכה, הרב ${safe} הי״ו,`
 }
 
 // פתיח למיילי יולדות — הפנייה ליולדת (האשה): "שלום וברכה, מרת <משפחה> <שם האשה> תחי׳,"
 export function greetMrs(familyName?: string | null, motherName?: string | null): string {
   const nm = [familyName, motherName].filter(Boolean).join(' ').trim()
-  return nm ? `שלום וברכה, מרת ${nm} תחי׳,` : 'שלום וברכה,'
+  return nm ? `שלום וברכה, מרת ${escapeHtml(nm)} תחי׳,` : 'שלום וברכה,'
 }
 
 // ─── הערת מענה אוטומטי (בראש המייל) ─────────────────────────────────────────
@@ -99,7 +105,7 @@ function detailRow(label: string, value?: string | null): string {
   if (!value) return ''
   return `<tr>
     <td style="padding:10px 16px;color:#64748b;font-size:13px;width:38%;border-bottom:1px solid #f1f5f9;font-weight:500;">${label}</td>
-    <td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;border-bottom:1px solid #f1f5f9;">${value}</td>
+    <td style="padding:10px 16px;color:#0f172a;font-size:14px;font-weight:700;border-bottom:1px solid #f1f5f9;">${escapeHtml(value)}</td>
   </tr>`
 }
 
@@ -112,18 +118,22 @@ export function shell(opts: {
   body: string
 }): string {
   const { preheader = '', accent, title, subtitle, body } = opts
+  // ערכי טקסט מבוססי-משתמש מנוטרלים; body הוא HTML בנוי מראש ולכן אינו מנוטרל
+  const safeTitle = escapeHtml(title)
+  const safeSubtitle = escapeHtml(subtitle)
+  const safePreheader = escapeHtml(preheader)
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>${title}</title>
+  <title>${safeTitle}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet"/>
   <style>* { font-family: 'Heebo', Arial, sans-serif !important; }</style>
 </head>
 <body style="margin:0;padding:0;background:#eef2f7;font-family:'Heebo',Arial,sans-serif;direction:rtl;">
-  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${preheader}</span>
+  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${safePreheader}</span>
 
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
     <tr><td align="center">
@@ -139,8 +149,8 @@ export function shell(opts: {
           <td style="padding:40px 40px 32px;text-align:center;background:#ffffff;">
             <img src="${LOGO_URL}" alt="היכל החתם סופר" width="80" height="80"
                  style="border-radius:16px;display:inline-block;margin-bottom:20px;border:3px solid ${accent}22;box-shadow:0 2px 12px rgba(0,0,0,0.10);"/>
-            <h1 style="margin:0 0 8px;color:#0f172a;font-size:26px;font-weight:900;letter-spacing:-0.5px;">${title}</h1>
-            <p style="margin:0;color:#64748b;font-size:15px;">${subtitle}</p>
+            <h1 style="margin:0 0 8px;color:#0f172a;font-size:26px;font-weight:900;letter-spacing:-0.5px;">${safeTitle}</h1>
+            <p style="margin:0;color:#64748b;font-size:15px;">${safeSubtitle}</p>
           </td>
         </tr>
 

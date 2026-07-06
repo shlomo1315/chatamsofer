@@ -12,6 +12,12 @@ export const dynamic = 'force-dynamic'
 const BUCKET = 'documents'
 const MAX_SIZE = 10 * 1024 * 1024
 
+// סוגי קבצים מותרים בלבד — מסמכים ותמונות. ה-Content-Type נקבע בשרת לפי הסיומת.
+const ALLOWED_TYPES: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
+  heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
+}
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -56,8 +62,13 @@ export async function POST(request: NextRequest) {
   if (file && typeof file !== 'string') {
     if (file.size > MAX_SIZE) return NextResponse.json({ error: 'הקובץ גדול מ-10MB' }, { status: 400 })
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'pdf'
+    // אימות סוג הקובץ בשרת לפי הסיומת — דחיית סוגים לא נתמכים (כגון svg/html)
+    const contentType = ALLOWED_TYPES[ext]
+    if (!contentType) {
+      return NextResponse.json({ error: 'סוג הקובץ אינו נתמך. ניתן להעלות תמונות או PDF בלבד.' }, { status: 400 })
+    }
     const path = `${beneficiaryId}/financial-aid/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error: upErr } = await admin.storage.from(BUCKET).upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false })
+    const { error: upErr } = await admin.storage.from(BUCKET).upload(path, await file.arrayBuffer(), { contentType, upsert: false })
     if (upErr) return NextResponse.json({ error: 'שגיאה בהעלאת המסמך' }, { status: 500 })
     documentUrl = admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
     documentName = file.name

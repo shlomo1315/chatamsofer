@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 // מחיקת נתמך (משפחה) + סנכרון עם עץ הדורות: מוחק גם את צומת העץ המקושר,
 // אך רק אם הוא "עלה" (אין לו צאצאים בעץ) — כדי לא ליתם ענפים שלמים.
 export async function POST(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const { id } = await request.json().catch(() => ({}))
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 

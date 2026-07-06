@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { portalCookieName } from '@/app/api/portal/login/route'
+import { createRecoveryPortalToken, RECOVERY_PORTAL_MAX_AGE } from '@/lib/recoveryPortalAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,10 +31,11 @@ export async function GET(request: NextRequest) {
   }
 
   const res = NextResponse.redirect(new URL(`/portal/maternity/${encodeURIComponent(home)}`, origin))
-  res.cookies.set(portalCookieName(home), '1', {
+  res.cookies.set(portalCookieName(home), createRecoveryPortalToken(home), {
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: RECOVERY_PORTAL_MAX_AGE,
     path: '/',
   })
   return res

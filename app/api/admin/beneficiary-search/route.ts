@@ -26,15 +26,17 @@ export async function GET(request: NextRequest) {
   if (emails) {
     const list = emails.split(',').map(e => e.trim()).filter(Boolean)
     query = admin.from('beneficiaries').select('id,full_name,family_name,email,phone,city,eligibility_status,children_count').in('email', list).limit(list.length + 10)
-  } else if (idNumber) {
+  } else if (idNumber && idNumber.replace(/\D/g, '')) {
+    // ניטרול לספרות בלבד לפני בניית מסנן .or() (מניעת filter injection)
+    const cleanId = idNumber.replace(/\D/g, '')
     // Try exact match first; also match id numbers stored with leading zero vs without
-    const padded = idNumber.padStart(9, '0')
-    const unpadded = idNumber.replace(/^0+/, '') || idNumber
+    const padded = cleanId.padStart(9, '0')
+    const unpadded = cleanId.replace(/^0+/, '') || cleanId
     const idFilter = [
-      `id_number.eq.${idNumber}`,
+      `id_number.eq.${cleanId}`,
       `id_number.eq.${padded}`,
       `id_number.eq.${unpadded}`,
-      `spouse_id_number.eq.${idNumber}`,
+      `spouse_id_number.eq.${cleanId}`,
       `spouse_id_number.eq.${padded}`,
       `spouse_id_number.eq.${unpadded}`,
     ].join(',')

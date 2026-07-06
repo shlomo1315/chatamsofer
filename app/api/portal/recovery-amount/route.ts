@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
+import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
   if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
 
   const cookieStore = await cookies()
-  if (cookieStore.get(portalCookieName(home))?.value !== '1') {
+  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
     return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   }
 

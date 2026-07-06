@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 //   days = מספר הימים החדש (0–60). המזכירות יכולה להוסיף/להפחית ימים מעבר לברירת המחדל
 //   (רגילה=2 · תאומים=4). הערך מוצג בתוכנה (עמודת הלידות) ובפורטל בתי ההחלמה.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireStaff(['admin', 'secretary'])
   if (!staff) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
   let body: { aidId?: string; days?: number | string }
