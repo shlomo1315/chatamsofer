@@ -615,7 +615,9 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
               {relBadge(row.relation)}
               {!row.fixed && !selfAdded && (
-                <button type="button" onClick={() => removeAt(i - 1)} className="text-slate-400 hover:text-white hover:bg-red-500 rounded-full p-0.5 flex-shrink-0 transition-colors" title="מחיקת שם זה (וכל מה שאחריו)"><X size={14} /></button>
+                <button type="button" onClick={() => removeAt(i - 1)}
+                  className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg bg-red-100 text-red-600 border border-red-300 hover:bg-red-600 hover:text-white hover:border-red-600 shadow-sm transition-colors"
+                  title="מחיקת שם זה (וכל מה שאחריו)"><X size={17} strokeWidth={2.5} /></button>
               )}
             </div>
           </div>
