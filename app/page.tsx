@@ -2857,7 +2857,7 @@ export default function PublicPortalPage() {
                   <Gift size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900">האם בעבר קיבלתם הטבות כלשהן מ&quot;איגוד הצאצאים&quot;?</h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-3">סמנו את כל ההטבות שקיבלתם (לא חובה):</p>
+                <p className="text-xs text-slate-500 mb-3">סמנו את כל ההטבות שקיבלתם — ניתן לבחור יותר מאפשרות אחת (לא חובה):</p>
                 <div className="flex flex-col gap-2">
                   {([
                     ['recovery_home', 'בית החלמה ליולדות'],
@@ -2974,6 +2974,14 @@ export default function PublicPortalPage() {
                 <p className="text-slate-600 mb-5 leading-relaxed">
                   מעכשיו ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.<br />
                   בהגשה הראשונה יתבקשו ממך גם צילומי תעודת זהות.
+                </p>
+              </div>
+
+              {/* תזכורת ספאם — לוודא שההודעות מהמערכת מתקבלות */}
+              <div className="text-right bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                <p className="text-sm font-bold text-amber-800 mb-1">📧 חשוב — בדקו את תיבת המייל</p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  כל העדכונים והבקשות נשלחים למייל הרשום. אנא בדקו את תיבת הדואר בהקדם, וגם את תיבת ה<strong>ספאם</strong> — ואם מצאתם שם הודעה מאיתנו, סמנו אותה כ״לא ספאם״ (Not spam). כך תקבלו את כל ההודעות, ותעזרו גם לנרשמים הבאים לקבל אותן ישירות לתיבת הדואר.
                 </p>
               </div>
 

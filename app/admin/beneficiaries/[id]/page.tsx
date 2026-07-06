@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail } from 'lucide-react'
+import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
@@ -166,29 +166,6 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{beneficiary.notes}</p>
         </Card>
       )}
-      {beneficiary.past_benefits && (() => {
-        const pb = beneficiary.past_benefits
-        const items = [
-          pb.recovery_home && 'בית החלמה ליולדות',
-          pb.food_card && 'כרטיס מזון ליולדות',
-          pb.holiday_grant && 'מענק לקראת החגים',
-          pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
-          pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
-          pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
-        ].filter(Boolean) as string[]
-        if (!items.length && !pb.notes) return null
-        return (
-          <Card>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הטבות שהתקבלו בעבר מאיגוד הצאצאים</h2>
-            {items.length > 0 ? (
-              <ul className="flex flex-wrap gap-1.5">
-                {items.map((it, i) => <li key={i} className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2.5 py-1">{it}</li>)}
-              </ul>
-            ) : <p className="text-sm text-slate-400">לא דווח על הטבות</p>}
-            {pb.notes && <p className="text-sm text-slate-700 whitespace-pre-wrap mt-2 pt-2 border-t border-slate-100"><span className="text-slate-500 text-xs">הערות: </span>{pb.notes}</p>}
-          </Card>
-        )
-      })()}
       <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-400">
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />
@@ -330,6 +307,48 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     </Card>
   )
 
+  // ── Tab: הטבות בעבר (מה שסומן בעת ההרשמה) ──
+  const pb = beneficiary.past_benefits
+  const pastBenefitItems = pb ? ([
+    pb.recovery_home && 'בית החלמה ליולדות',
+    pb.food_card && 'כרטיס מזון ליולדות',
+    pb.holiday_grant && 'מענק לקראת החגים',
+    pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
+    pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
+    pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
+  ].filter(Boolean) as string[]) : []
+  const pastBenefitsTab = (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <Gift size={16} className="text-rose-500" />
+        <h2 className="text-xs font-semibold text-slate-500 uppercase">הטבות שהתקבלו בעבר מאיגוד הצאצאים</h2>
+      </div>
+      {!pb ? (
+        <p className="text-center text-slate-400 text-sm py-6">לא מולא מידע על הטבות בעבר בעת ההרשמה</p>
+      ) : (
+        <>
+          {pastBenefitItems.length > 0 ? (
+            <ul className="flex flex-col gap-2">
+              {pastBenefitItems.map((it, i) => (
+                <li key={i} className="flex items-center gap-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" /> {it}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-400 py-2">המבקש סימן שלא קיבל הטבות בעבר מאיגוד הצאצאים.</p>
+          )}
+          {pb.notes && (
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <h3 className="text-xs font-semibold text-slate-500 mb-1">הערות המבקש</h3>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{pb.notes}</p>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  )
+
   return (
     <div className="flex flex-col gap-5 max-w-5xl">
       <div className="flex items-center justify-between">
@@ -349,6 +368,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       <Tabs tabs={[
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },
         { key: 'children', label: `ילדים (${kids.length})`, accent: 'emerald', icon: <Users size={15} />, content: childrenTab },
+        { key: 'past_benefits', label: 'הטבות בעבר', accent: 'rose', icon: <Gift size={15} />, content: pastBenefitsTab },
         { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },

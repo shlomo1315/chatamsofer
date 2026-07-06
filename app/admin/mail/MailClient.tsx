@@ -1091,7 +1091,9 @@ export default function MailClient() {
       setLoadError(null)
       setSelected(null)
     }
-    const dept = myProfileRef.current?.role === 'admin' ? activeDepartmentRef.current : (myProfileRef.current?.department ?? null)
+    // התיבה שנבחרה (מהתפריט/URL) גוברת תמיד — כדי שלא נהיה תלויים בטעינת הפרופיל.
+    // אם לא נבחרה תיבה — נופלים לתיבת המשתמש. השרת ממילא אוכף אילו תיבות מותרות למשתמש.
+    const dept = activeDepartmentRef.current ?? (myProfileRef.current?.department ?? null)
     const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
     const data = await res.json()
     if (data.error && !data.messages) {
