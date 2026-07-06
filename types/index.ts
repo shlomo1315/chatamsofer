@@ -87,6 +87,7 @@ export interface Beneficiary {
   eligibility_status: EligibilityStatus
   is_active: boolean
   notes?: string
+  signature?: string | null
   rejection_reason?: string
   docs_notes?: string
   required_docs?: string

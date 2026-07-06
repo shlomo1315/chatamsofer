@@ -166,6 +166,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{beneficiary.notes}</p>
         </Card>
       )}
+      {beneficiary.signature && (
+        <Card>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">חתימת ההצהרה</h2>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={beneficiary.signature} alt="חתימה" className="max-h-32 bg-white border border-slate-200 rounded-lg" />
+        </Card>
+      )}
       <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-400">
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />
