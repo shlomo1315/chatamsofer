@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
@@ -156,7 +157,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {docs.map((doc) => (
             <div key={doc.id} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <a href={doc.file_url ? docViewUrl(doc.file_url) : '#'} target="_blank" rel="noopener noreferrer" className="block">
+              <ViewDocButton url={doc.file_url} className="block">
                 {doc.file_url && isImage(doc.file_name) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={docViewUrl(doc.file_url)} alt={doc.file_name ?? ''} className="w-full h-28 object-cover" />
@@ -169,7 +170,7 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                     {isImage(doc.file_name) ? <ImageIcon size={28} /> : <FileText size={28} />}
                   </div>
                 )}
-              </a>
+              </ViewDocButton>
               <div className="p-2">
                 <p className="text-[11px] font-medium text-indigo-700 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
                   {typeLabel(doc.doc_type)}
@@ -180,15 +181,12 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                 )}
               </div>
               <div className="absolute top-1.5 left-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <a
-                  href={doc.file_url ? docViewUrl(doc.file_url) : '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <ViewDocButton
+                  url={doc.file_url}
                   className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-indigo-600 shadow-sm"
-                  title="פתח"
                 >
                   <ExternalLink size={13} />
-                </a>
+                </ViewDocButton>
                 {doc.file_url && (
                   <a
                     href={docDownloadUrl(doc.file_url, doc.file_name)}

@@ -14,6 +14,7 @@ import { recoveryDaysOf } from '@/lib/maternity'
 import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import LineageTreeToggle from './LineageTreeToggle'
 import CollapsibleMailThread from './CollapsibleMailThread'
@@ -466,7 +467,7 @@ function DocCard({ label, url }: { label: string; url?: string }) {
   const href = docViewUrl(url)
   return (
     <div className="flex flex-col gap-1.5">
-      <a href={href} target="_blank" rel="noopener noreferrer"
+      <ViewDocButton url={url}
          className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
         {isImage ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -482,7 +483,7 @@ function DocCard({ label, url }: { label: string; url?: string }) {
         <span className="text-[11px] font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
           {label} <ExternalLink size={10} />
         </span>
-      </a>
+      </ViewDocButton>
       <a href={docDownloadUrl(url, label)} download={label}
          className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-white hover:bg-emerald-600 px-2 py-1 rounded-lg border border-emerald-200 hover:border-emerald-600 transition-colors">
         <Download size={11} /> הורדה

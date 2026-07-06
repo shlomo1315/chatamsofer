@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Paperclip, Plus, Trash2, Loader2, FileText, Upload } from 'lucide-react'
-import { docViewUrl } from '@/lib/docUrl'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Tpl { id: string; name: string; file_url: string; file_name: string; mime_type: string }
@@ -53,11 +53,11 @@ export default function EmailTemplatesManager() {
         {list.length === 0 && <p className="text-xs text-slate-400 text-center py-3">טרם הועלו טמפלטים</p>}
         {list.map(t => (
           <div key={t.id} className="flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 bg-slate-50/60">
-            <a href={docViewUrl(t.file_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 text-sm text-slate-700 hover:text-indigo-600">
+            <ViewDocButton url={t.file_url} className="flex items-center gap-2 min-w-0 text-sm text-slate-700 hover:text-indigo-600">
               <FileText size={15} className="flex-shrink-0 text-slate-400" />
               <span className="font-medium truncate">{t.name}</span>
               <span className="text-xs text-slate-400 truncate">({t.file_name})</span>
-            </a>
+            </ViewDocButton>
             <button onClick={() => remove(t.id)} disabled={busy} className="text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50" title="מחק">
               <Trash2 size={15} />
             </button>

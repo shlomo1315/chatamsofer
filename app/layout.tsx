@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Heebo } from 'next/font/google'
 import './globals.css'
+import { DocViewerProvider } from '@/components/ui/DocViewer'
 
 const heebo = Heebo({
   variable: '--font-heebo',
@@ -21,7 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} h-full`}>
-      <body className="min-h-full bg-slate-50">{children}</body>
+      <body className="min-h-full bg-slate-50">
+        <DocViewerProvider>{children}</DocViewerProvider>
+      </body>
     </html>
   )
 }

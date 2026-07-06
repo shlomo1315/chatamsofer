@@ -24,7 +24,7 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
@@ -33,8 +33,14 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   // birthYearRange — רשימת השנים תתחיל בגיל minAge (למשל 18), כך שטווח הגילאים הרלוונטי
   // מוצג בראש בלי צורך לגלול. אינו חוסם — ניתן לגלול לשנים מבוגרות יותר.
   birthYearRange?: { minAge: number; maxAge: number }
+  // minMonthsBack — חוסם בחירת תאריך מוקדם מ-N חודשים אחורה מהיום (למשל לידה עד חודשיים אחורה).
+  minMonthsBack?: number
 }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
+  // התאריך המוקדם ביותר שניתן לבחור (אם הוגדר minMonthsBack)
+  const minDate = minMonthsBack != null
+    ? (() => { const d = new Date(today); d.setMonth(d.getMonth() - minMonthsBack); return d })()
+    : null
   const selected = value ? new Date(value) : null
   if (selected) selected.setHours(0, 0, 0, 0)
 
@@ -60,6 +66,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   const pick = (d: Date) => {
     const dd = new Date(d); dd.setHours(0, 0, 0, 0)
     if (maxToday && dd > today) return
+    if (minDate && dd < minDate) return
     onChange(isoOf(dd))
     setOpen(false)
   }
@@ -101,6 +108,18 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
     return nextFirst > today
   })()
 
+  // האם החודש הקודם מוקדם כולו מ-minDate (לחסימת ניווט אחורה מעבר לתקרה)
+  const prevDisabled = (() => {
+    if (!minDate) return false
+    if (mode === 'gregorian') {
+      const prevLast = new Date(g.getFullYear(), g.getMonth(), 0); prevLast.setHours(0, 0, 0, 0)
+      return prevLast < minDate
+    }
+    const a = new HDate(1, hc.hm, hc.hy).abs()
+    const prevLast = new HDate(a - 1).greg(); prevLast.setHours(0, 0, 0, 0)
+    return prevLast < minDate
+  })()
+
   const cells = mode === 'hebrew' ? hebCells() : gregCells()
 
   const triggerLabel = selected
@@ -130,7 +149,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
 
           {/* כותרת ניווט — קליק על החודש/שנה פותח רשימת בחירה */}
           <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={mode === 'hebrew' ? hPrev : gPrev} className={`p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 ${view !== 'days' ? 'invisible' : ''}`} title="חודש קודם"><ChevronRight size={18} /></button>
+            <button type="button" disabled={prevDisabled} onClick={mode === 'hebrew' ? hPrev : gPrev} className={`p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed ${view !== 'days' ? 'invisible' : ''}`} title="חודש קודם"><ChevronRight size={18} /></button>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setView(v => v === 'months' ? 'days' : 'months')}
                 className={`text-sm font-bold rounded-lg px-2.5 py-1 transition-colors ${view === 'months' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-800 hover:bg-slate-100'}`}>
@@ -155,7 +174,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
               <div className="grid grid-cols-7 gap-0.5">
                 {cells.map((c, i) => {
                   if (!c) return <div key={i} />
-                  const disabled = maxToday && c.date > today
+                  const disabled = (maxToday && c.date > today) || (!!minDate && c.date < minDate)
                   const isSel = selected && sameYMD(c.date, selected)
                   const isToday = sameYMD(c.date, today)
                   return (
