@@ -157,6 +157,25 @@ export async function PATCH(request: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // אישור ידני של שם → מאמתים גם את כל שרשרת האבות ה"ממתינים" מעליו.
+  // בלי זה, שם מאושר שאב שלו עדיין "ממתין" אינו נגיש בבורר סדר הדורות (הבורר
+  // מנווט רק דרך צמתים מאומתים), ולכן לא יופיע לנרשמים הבאים.
+  if (updates.status === 'verified') {
+    let cur: string | null = (data?.parent_id as string | null) ?? null
+    const guard = new Set<string>([id])
+    while (cur && !guard.has(cur)) {
+      guard.add(cur)
+      const { data: anc } = await admin.from('lineage_nodes').select('id, parent_id, status').eq('id', cur).maybeSingle() as {
+        data: { id: string; parent_id: string | null; status: string } | null
+      }
+      if (!anc) break
+      if (anc.status === 'verified') break
+      await admin.from('lineage_nodes').update({ status: 'verified' }).eq('id', cur).then(undefined, () => {})
+      cur = (anc.parent_id as string | null) ?? null
+    }
+  }
+
   return NextResponse.json({ node: data })
 }
 
