@@ -43,6 +43,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
+  // כתובת מלאה חובה — עיר, רחוב ומספר בית (הכתובת מגיעה כמחרוזת "רחוב מספר")
+  if (!city || !String(city).trim()) {
+    return NextResponse.json({ error: 'יש להזין עיר מגורים' }, { status: 400 })
+  }
+  {
+    const addr = String(address ?? '').trim()
+    const m = addr.match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/)
+    const streetPart = (m ? m[1] : addr).trim()
+    const housePart = (m ? m[2] : '').trim()
+    if (!streetPart || !housePart) {
+      return NextResponse.json({ error: 'יש להזין כתובת מלאה — רחוב ומספר בית' }, { status: 400 })
+    }
+  }
+
   // אימות חובה: כתובת המייל והטלפון הראשי (של הבעל) חייבים להיות מאומתים בקוד.
   // טלפון האשה אינו דורש אימות.
   if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {

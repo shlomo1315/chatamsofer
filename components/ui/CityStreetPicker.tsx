@@ -28,16 +28,18 @@ interface Props {
   onAddressChange: (address: string) => void
   cityError?: string
   addressError?: string
+  houseError?: string
   cityRequired?: boolean
   addressRequired?: boolean
+  houseRequired?: boolean
   labelSize?: 'xs' | 'sm'
 }
 
 export default function CityStreetPicker({
   city, address,
   onCityChange, onAddressChange,
-  cityError, addressError,
-  cityRequired, addressRequired,
+  cityError, addressError, houseError,
+  cityRequired, addressRequired, houseRequired,
   labelSize = 'sm',
 }: Props) {
   const [allCities, setAllCities] = useState<string[]>([])
@@ -209,7 +211,7 @@ export default function CityStreetPicker({
 
       {/* ── House Number ── */}
       <div className="flex flex-col gap-1 sm:col-span-1">
-        <label className={lbl}>מספר בית</label>
+        <label className={lbl}>מספר בית{houseRequired && <span className="text-red-500 mr-1">*</span>}</label>
         <input
           type="text"
           value={houseNum}
@@ -220,8 +222,10 @@ export default function CityStreetPicker({
           }}
           placeholder="12"
           disabled={!city}
-          className={`${BASE} ${DIS}`}
+          required={houseRequired}
+          className={`${BASE} ${DIS} ${houseError ? ERR : ''}`}
         />
+        {houseError && <p className="text-xs text-red-500">{houseError}</p>}
       </div>
 
     </div>
