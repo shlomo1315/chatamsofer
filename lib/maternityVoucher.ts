@@ -193,11 +193,14 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
       // שורה 1: נקודת זהב + שם המוקד
       c.page.drawSvgPath('M 0 -2.2 L 2.2 0 L 0 2.2 L -2.2 0 Z', { x: x + w - 9, y: ry + 4, color: GOLD, borderWidth: 0 })
       rightText(c, cn.name, x + w - 18, ry, 11.5, NAVY)
-      // שורה 2: כתובת · ימים שעות
+      // שורה 2: כתובת · ימים · שעות. את השעות (טווח רב-ספרתי) מציירים כטוקן נפרד כדי שלא
+      // יתהפכו — טווח שעות המשובץ בתוך טקסט עברי מוצג הפוך במנוע ה-PDF (כמו מספר טלפון).
       const addr = [cn.address, cn.city].filter(Boolean).join(', ')
-      const sched = [cn.pickup_days, cn.pickup_hours].filter(Boolean).join(' ')
-      const detail = [addr, sched].filter(Boolean).join('  ·  ')
-      rightText(c, detail, x + w - 18, ry - 12.5, 9, SUB)
+      const hours = (cn.pickup_hours || '').trim()
+      const hebPart = [addr, cn.pickup_days].filter(Boolean).join('  ·  ')
+      let dx = x + w - 18
+      if (hebPart) { rightText(c, hebPart, dx, ry - 12.5, 9, SUB); dx -= tw(c, hebPart, 9) }
+      if (hours) rightText(c, (hebPart ? '  ·  ' : '') + hours, dx, ry - 12.5, 9, SUB)
       ry -= perH
     }
   }
