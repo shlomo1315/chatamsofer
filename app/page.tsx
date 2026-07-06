@@ -1181,6 +1181,16 @@ export default function PublicPortalPage() {
     const phoneChanged = (editForm.phone ?? '').replace(/\D/g, '') !== (beneficiary.phone ?? '').replace(/\D/g, '')
     if (emailChanged && editForm.email && !editEmailToken) { setError('יש לאמת את כתובת המייל החדשה בקוד שנשלח אליה.'); return }
     if (phoneChanged && editForm.phone && !editPhoneToken) { setError('יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.'); return }
+    // טלפון נוסף לא יכול להיות זהה לטלפון הבעל או האשה
+    if (editForm.phone2 && editForm.phone2.trim()) {
+      const ep2 = editForm.phone2.replace(/\D/g, '')
+      if (editForm.phone && ep2 === editForm.phone.replace(/\D/g, '')) {
+        setError('טלפון נוסף זהה לטלפון הבעל — יש להזין מספר אחר'); return
+      }
+      if (editForm.spouse_phone && ep2 === editForm.spouse_phone.replace(/\D/g, '')) {
+        setError('טלפון נוסף זהה לטלפון האשה — יש להזין מספר אחר'); return
+      }
+    }
     setEditSaving(true); setError('')
     try {
       // כל טלפון שאומת כעת (זוגות ערך+אסימון) → יתווסף לרשימת המספרים המאומתים
@@ -1533,6 +1543,16 @@ export default function PublicPortalPage() {
     }
     if (regForm.phone2 && regForm.phone2.trim() && !validatePhone(regForm.phone2)) {
       setError('טלפון נוסף אינו תקין — יש להזין מספר נייד ישראלי המתחיל ב-05'); return
+    }
+    // טלפון נוסף לא יכול להיות זהה לטלפון הבעל או האשה
+    if (regForm.phone2 && regForm.phone2.trim()) {
+      const p2 = regForm.phone2.replace(/\D/g, '')
+      if (regForm.phone && p2 === regForm.phone.replace(/\D/g, '')) {
+        setError('טלפון נוסף זהה לטלפון הבעל — יש להזין מספר אחר'); return
+      }
+      if (regForm.spouse_phone && p2 === regForm.spouse_phone.replace(/\D/g, '')) {
+        setError('טלפון נוסף זהה לטלפון האשה — יש להזין מספר אחר'); return
+      }
     }
     if (regForm.email && !validateEmail(regForm.email)) {
       setEmailError('אנא הזן כתובת מייל תקינה'); setError('אנא תקן את שגיאות הטופס'); return
