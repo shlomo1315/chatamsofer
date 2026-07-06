@@ -97,16 +97,10 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // הפיכה אוטומטית ל"מאושר" אם טרם אושר — ללא מייל נפרד
-  let promoted = false
-  if (ben.eligibility_status !== 'approved') {
-    const { error: upErr } = await admin
-      .from('beneficiaries')
-      .update({ eligibility_status: 'approved', updated_at: new Date().toISOString() })
-      .eq('id', ben.id)
-    if (!upErr) promoted = true
-    else console.error('[request-approved] promote failed:', upErr.message)
-  }
+  // אישור בקשה בלבד — אינו מאשר יחוס. אישור המשפחה ("אישור יחוס") נעשה בנפרד
+  // בכפתור ייעודי (בכרטסת או במסך הבקשה), כי לעיתים מאשרים בקשה גם כשהיחוס טרם ודאי.
+  // (בעבר אישור בקשה הפך את המשפחה ל"מאושר" אוטומטית — הופרד לבקשת הלקוח.)
+  const promoted = false
 
   // ── תופעות לוואי איטיות ברקע (מייל+שוברים, והטענת נדרים) — לא חוסמות את התגובה.
   // ב-Railway השרת נשאר חי, כך שהעבודה ברקע מסתיימת גם לאחר שהתגובה נשלחה.
