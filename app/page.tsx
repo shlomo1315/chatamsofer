@@ -10,6 +10,7 @@ const CityStreetPicker = dynamic(() => import('@/components/ui/CityStreetPicker'
 const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'), { ssr: false })
 const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
 import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
+import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import {
@@ -1073,6 +1074,9 @@ export default function PublicPortalPage() {
   const [editSpousePhoneToken, setEditSpousePhoneToken] = useState<string | null>(null)
   const [editPhone2Token, setEditPhone2Token] = useState<string | null>(null)
   const [declaredReg, setDeclaredReg] = useState(false)
+  // חתימה דיגיטלית — נלכדת בחלונית כשמסמנים את ההצהרה, ונשמרת בכרטסת הצאצא
+  const [regSignature, setRegSignature] = useState<string>('')
+  const [sigModalOpen, setSigModalOpen] = useState(false)
   // הטבות שהתקבלו בעבר מאיגוד הצאצאים
   const [pastBenefits, setPastBenefits] = useState({
     recovery_home: false, food_card: false, holiday_grant: false, catering: false,
@@ -1624,6 +1628,7 @@ export default function PublicPortalPage() {
           spouse_id_doc_type: showSpouseFields ? spouseDocType : null,
           spouse_phone: showSpouseFields ? regForm.spouse_phone : null,
           spouse_birth_date: showSpouseFields ? (regForm.spouse_birth_date || null) : null,
+          signature: regSignature || null,
         }),
       })
       const data = await res.json()
@@ -3155,21 +3160,43 @@ export default function PublicPortalPage() {
               </Card>
             )}
 
-            {/* Declaration */}
+            {/* Declaration + digital signature */}
             {regForm.marital_status && (
               <Card>
                 <div className="flex items-start gap-3">
                   <input
                     type="checkbox" id="decl" checked={declaredReg}
-                    onChange={e => setDeclaredReg(e.target.checked)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        // סימון ההצהרה פותח חלונית חתימה; ההצהרה תאושר רק לאחר חתימה
+                        if (regSignature) setDeclaredReg(true)
+                        else setSigModalOpen(true)
+                      } else {
+                        setDeclaredReg(false); setRegSignature('')
+                      }
+                    }}
                     className="mt-0.5 w-4 h-4 accent-indigo-600"
                   />
                   <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
                     הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול המערכת.
                   </label>
                 </div>
+                {regSignature && (
+                  <div className="mt-3 flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <span className="text-xs font-medium text-slate-500 flex-shrink-0">החתימה שלך:</span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={regSignature} alt="חתימה" className="h-12 bg-white border border-slate-200 rounded-lg" />
+                    <button type="button" onClick={() => setSigModalOpen(true)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 underline flex-shrink-0">חתימה מחדש</button>
+                  </div>
+                )}
               </Card>
             )}
+            <SignaturePad
+              open={sigModalOpen}
+              onConfirm={dataUrl => { setRegSignature(dataUrl); setDeclaredReg(true); setSigModalOpen(false) }}
+              onCancel={() => { setSigModalOpen(false); if (!regSignature) setDeclaredReg(false) }}
+            />
 
             {error && <ErrorBox message={error} />}
 
