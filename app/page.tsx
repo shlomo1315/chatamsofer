@@ -2659,7 +2659,7 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="תאריך לידה" required>
-                      <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday yearFirst />
+                      <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 50 }} />
                     </Field>
                   </div>
                 </div>
@@ -2728,7 +2728,7 @@ export default function PublicPortalPage() {
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="תאריך לידה של האשה" required>
-                      <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday yearFirst />
+                      <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 50 }} />
                     </Field>
                   </div>
                 </div>

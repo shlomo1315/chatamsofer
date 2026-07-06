@@ -24,12 +24,15 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
   // yearFirst — פתיחה ישר לרשימת השנים (מתאים לתאריך לידה של מבוגר). ברירת מחדל: תצוגת ימים.
   yearFirst?: boolean
+  // birthYearRange — רשימת השנים תתחיל בגיל minAge (למשל 18), כך שטווח הגילאים הרלוונטי
+  // מוצג בראש בלי צורך לגלול. אינו חוסם — ניתן לגלול לשנים מבוגרות יותר.
+  birthYearRange?: { minAge: number; maxAge: number }
 }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const selected = value ? new Date(value) : null
@@ -191,9 +194,12 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
             const todayGy = today.getFullYear()
             const topH = maxToday ? todayHy : todayHy + 5
             const topG = maxToday ? todayGy : todayGy + 5
+            // ברירת מחדל לגיל: אם birthYearRange מוגדר — מתחילים בגיל minAge (השנים
+            // הרלוונטיות לזוג נשוי מוצגות בראש), מבלי לחסום שנים מבוגרות יותר.
+            const startAge = birthYearRange ? birthYearRange.minAge : 0
             const years = mode === 'hebrew'
-              ? Array.from({ length: 136 }, (_, i) => topH - i)
-              : Array.from({ length: 136 }, (_, i) => topG - i)
+              ? Array.from({ length: 136 }, (_, i) => (topH - startAge) - i)
+              : Array.from({ length: 136 }, (_, i) => (topG - startAge) - i)
             const curY = mode === 'hebrew' ? hc.hy : g.getFullYear()
             return (
               <div className="grid grid-cols-4 gap-1.5 max-h-[200px] overflow-y-auto">
