@@ -100,7 +100,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true }: {
 
   const triggerLabel = selected
     ? (() => { const h = new HDate(selected); return `${gematriya(h.getDate())} ${monthName(h.getMonth(), h.getFullYear())} ${gematriya(h.getFullYear() % 1000)}  ·  ${selected.toLocaleDateString('he-IL')}` })()
-    : 'בחר סוג לוח…'
+    : 'לחצו לבחירת תאריך'
 
   return (
     <div className="relative" ref={ref} dir="rtl">
