@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
     // לא שולחים מייל על כל גיבוי יומי מוצלח (מיותר). שולחים מייל רק כשמתבצע
     // הניקוי החודשי (פעם בחודש) — כסיכום קצר, וכן במקרה כשל (ב-catch).
     if (purged) {
-      deliverMail(REPORT_TO, `🗂️ ניקוי גיבויים חודשי בוצע — נשמר החודש האחרון`,
+      deliverMail(REPORT_TO, `ניקוי גיבויים חודשי בוצע — נשמר החודש האחרון`,
         `<div dir="rtl" style="font-family:Arial">הגיבוי הלילי ממשיך לרוץ כרגיל.<br/>בוצע ניקוי חודשי: נמחקו ${deleted} גיבויים מחודשים קודמים (נשמר רק החודש האחרון).<br/>גיבוי אחרון: ${filename} (${sizeMB}MB).</div>`,
         undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
     }
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, filename, sizeMB, deleted, purged, manifest })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    deliverMail(REPORT_TO, '⚠️ כשל בגיבוי היומי',
+    deliverMail(REPORT_TO, 'כשל בגיבוי היומי',
       `<div dir="rtl" style="font-family:Arial">הגיבוי היומי נכשל: ${msg}</div>`,
       undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })

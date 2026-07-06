@@ -44,7 +44,7 @@ export async function sendRecoveryVoucherUpdate(
       ימי הזכאות שלכם בבית ההחלמה עודכנו. מצורף שובר הבראה <strong>מעודכן</strong>.
     </p>
     <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 16px;margin:0 0 16px;">
-      <p style="margin:0;color:#3730a3;font-size:15px;font-weight:700;">🏥 ימי זכאות בבית ההחלמה: ${days} ימים</p>
+      <p style="margin:0;color:#3730a3;font-size:15px;font-weight:700;">ימי זכאות בבית ההחלמה: ${days} ימים</p>
       ${aid.recovery_home ? `<p style="margin:6px 0 0;color:#4338ca;font-size:13px;">בית החלמה: ${aid.recovery_home}</p>` : ''}
     </div>
     <p style="margin:0;color:#64748b;font-size:13px;">נא להציג את השובר המעודכן בעת ההגעה לבית ההחלמה. לבירורים ניתן לפנות למזכירות היכל החתם סופר.</p>

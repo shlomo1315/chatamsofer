@@ -687,11 +687,10 @@ export function requestReceivedEmail(opts: {
 
   const firstTimeNote = firstTime ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
-      <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0 0 6px;color:#92400e;font-size:14px;font-weight:800;">⏳ שים/י לב — טרם אושרת סופית</p>
-        <p style="margin:0;color:#92400e;font-size:13px;line-height:1.7;">
-          הבקשה שלך וצילומי תעודת הזהות שצירפת התקבלו והועברו לבדיקת המזכירות.
-          לאחר אישור ראשוני של המשפחה תטופל גם הבקשה עצמה. נעדכן אותך בהמשך.
+      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#15803d;font-size:14px;font-weight:800;">בקשתך התקבלה בהצלחה</p>
+        <p style="margin:0;color:#15803d;font-size:13px;line-height:1.7;">
+          בקשתך וצילומי תעודת הזהות שצירפת נקלטו בהצלחה במערכת. נעדכן אותך בהמשך.
         </p>
       </td></tr>
     </table>` : `
@@ -762,7 +761,7 @@ export function registrationReceivedEmail(
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
     <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(d.family_name, d.full_name, d.marital_status)}</h2>
     <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
-      תודה על פנייתך! בקשתך להירשם ל<strong>איגוד הצאצאים</strong> של היכל החתם סופר התקבלה.
+      תודה על פנייתך! פרטיך נקלטו בהצלחה במערכת <strong>איגוד הצאצאים</strong> של היכל החתם סופר.
     </p>
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הרישום שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
@@ -774,8 +773,8 @@ export function registrationReceivedEmail(
     ${btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534')}
   `
   return {
-    subject: 'קיבלנו את בקשתך — היכל החתם סופר',
-    html: shell({ preheader: 'בקשת ההרשמה שלך התקבלה. ניתן כבר להיכנס ולהגיש בקשות.', accent: '#4f46e5', title: 'בקשתך התקבלה', subtitle: 'היכל החתם סופר', body }),
+    subject: 'פרטיך נקלטו בהצלחה — היכל החתם סופר',
+    html: shell({ preheader: 'פרטיך נקלטו בהצלחה במערכת. ניתן כבר להיכנס ולהגיש בקשות.', accent: '#4f46e5', title: 'הפרטים נקלטו במערכת', subtitle: 'היכל החתם סופר', body }),
   }
 }
 
