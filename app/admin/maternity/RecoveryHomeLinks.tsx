@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X, LogIn, Mail } from 'lucide-react'
+import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X, LogIn, Mail, Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import Modal from '@/components/ui/Modal'
 
 interface Portal { home_name: string; updated_at: string }
 
@@ -27,6 +28,42 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
   const [emailSaved, setEmailSaved] = useState<string | null>(null)
   const [emailErr, setEmailErr] = useState<string | null>(null)
   const [emailSaving, setEmailSaving] = useState<string | null>(null)
+
+  // שליחת פרטי הכניסה לפורטל בית ההחלמה במייל
+  const [sendHome, setSendHome] = useState<string | null>(null)
+  const [sendEmail, setSendEmail] = useState('')
+  const [sendPw, setSendPw] = useState('')
+  const [sendShowPw, setSendShowPw] = useState(false)
+  const [sendSaving, setSendSaving] = useState(false)
+  const [sendErr, setSendErr] = useState('')
+  const [sendDone, setSendDone] = useState(false)
+  const openSend = (home: string) => {
+    setSendHome(home); setSendEmail(emailMap[home] ?? ''); setSendPw(''); setSendErr(''); setSendDone(false)
+  }
+  const submitSend = async () => {
+    if (!sendHome) return
+    setSendErr('')
+    if (!isValidEmail(sendEmail)) { setSendErr('כתובת מייל לא תקינה'); return }
+    if (sendPw.length < 10) { setSendErr('הסיסמה חייבת להכיל לפחות 10 תווים'); return }
+    setSendSaving(true)
+    try {
+      const res = await fetch('/api/admin/maternity/send-portal-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home: sendHome, email: sendEmail.trim(), password: sendPw }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.ok === false) { setSendErr(data.error || 'השליחה נכשלה'); setSendSaving(false); return }
+      // עדכון מקומי — הסיסמה הוגדרה והמייל נשמר
+      setPortals(prev => prev.find(p => p.home_name === sendHome) ? prev : [...prev, { home_name: sendHome, updated_at: new Date().toISOString() }])
+      setEmailMap(m => ({ ...m, [sendHome]: sendEmail.trim() }))
+      setSendDone(true)
+      setTimeout(() => { setSendHome(null); setSendDone(false) }, 1600)
+    } catch {
+      setSendErr('שגיאת רשת — נסו שוב')
+    } finally {
+      setSendSaving(false)
+    }
+  }
   const saveEmail = async (name: string) => {
     const email = (emailMap[name] ?? '').trim()
     if (email && !isValidEmail(email)) { setEmailErr(name); return }
@@ -287,6 +324,11 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                 className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
                 {emailSaving === home ? <Loader2 size={13} className="animate-spin" /> : emailSaved === home ? <><Check size={13} className="text-green-600" /> נשמר!</> : <><Check size={13} /> שמור מייל</>}
               </button>
+              <button onClick={() => openSend(home)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                title="שליחת קישור וסיסמה לפורטל במייל">
+                <Send size={13} /> שלח פורטל למייל
+              </button>
               {emailErr === home && <span className="text-xs text-red-600">כתובת מייל לא תקינה</span>}
             </div>
           </div>
@@ -302,6 +344,42 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
         </p>
       </div>
       {confirmDialog}
+
+      {/* שליחת פרטי כניסה לפורטל בית ההחלמה במייל */}
+      <Modal open={!!sendHome} onClose={() => setSendHome(null)} title={`שליחת פורטל למייל — ${sendHome ?? ''}`} size="md">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-500">
+            הזינו את כתובת המייל של בית ההחלמה ואת הסיסמה שתוגדר לפורטל. יישלח מייל מעוצב עם קישור, סיסמה והסבר כניסה.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-600">כתובת מייל לשליחה</label>
+            <input type="email" value={sendEmail} onChange={e => { setSendEmail(e.target.value); setSendErr('') }}
+              placeholder="name@example.com" dir="ltr"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-slate-600">סיסמה לפורטל (לפחות 10 תווים)</label>
+            <div className="relative">
+              <input type={sendShowPw ? 'text' : 'password'} value={sendPw} onChange={e => { setSendPw(e.target.value); setSendErr('') }}
+                placeholder="הסיסמה שתוגדר" dir="ltr" autoComplete="new-password" data-1p-ignore data-lpignore="true"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 pl-9 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <button type="button" onClick={() => setSendShowPw(v => !v)}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {sendShowPw ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+          {sendErr && <p className="text-sm text-red-600">{sendErr}</p>}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button onClick={() => setSendHome(null)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-600 hover:bg-slate-50">ביטול</button>
+            <button onClick={submitSend} disabled={sendSaving || sendDone}
+              className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg px-5 py-2 transition-colors">
+              {sendSaving ? <Loader2 size={15} className="animate-spin" /> : sendDone ? <Check size={15} /> : <Send size={15} />}
+              {sendDone ? 'נשלח!' : 'שלח את הפורטל'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

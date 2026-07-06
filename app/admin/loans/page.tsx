@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
 import LoansTable from './LoansTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
+import LoansPortalEmailButton from './LoansPortalEmailButton'
 
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
@@ -31,6 +32,7 @@ export default async function LoansPage() {
             פורטל ביצוע
           </Button>
         </Link>
+        <LoansPortalEmailButton />
         <Link href="/admin/loans/new">
           <Button>
             <Plus size={16} />
