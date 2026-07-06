@@ -212,7 +212,7 @@ export function benefitsLinkEmail(
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;">להגשה גם דרך האימייל:</p>
         <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;">רק באם אינכם מצליחים להיכנס למערכת הדיגיטלית שלנו, פיתחנו עבורכם אפשרות לשליחת טפסים גם דרך האימייל. עם זאת שימו לב! היות וגם הקליטה דרך המייל הינה במערכת אוטומטית — ייתכנו בה שיבושים, וככל שמתאפשר לכם מומלץ מאוד להגיש ישירות דרך המערכת הממוחשבת שלנו בהקשה על הלחצנים לעיל.</p>
-        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${l.label} »</a><br/>`).join('')}
+        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${l.label}</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')

@@ -89,7 +89,7 @@ function LoginForm({ home, onSuccess }: { home: string; onSuccess: () => void })
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50 flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8 gap-3 text-center">
-          <div className="w-20 h-20 bg-white rounded-2xl shadow-lg border border-sky-100 flex items-center justify-center overflow-hidden p-2">
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden">
             {logoErr
               ? <Building2 size={36} className="text-indigo-400" />
               : <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}
@@ -348,7 +348,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       {/* Top bar */}
       <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl border border-slate-100 shadow-sm overflow-hidden flex-shrink-0 bg-white flex items-center justify-center p-1">
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
             {logoErr
               ? <Building2 size={22} className="text-indigo-400" />
               : <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" onError={() => setLogoErr(true)} />}

@@ -83,7 +83,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo + org name above card */}
         <div className="flex flex-col items-center gap-4 mb-8">
-          <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg border border-indigo-100 overflow-hidden p-2">
+          <div className="w-24 h-24 rounded-2xl flex items-center justify-center overflow-hidden">
             {logoError ? (
               <Building2 size={36} className="text-indigo-500" />
             ) : (
