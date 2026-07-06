@@ -85,6 +85,11 @@ export default function VerifyControl({
           <p className="text-xs text-slate-600">
             {channel === 'email' ? 'נשלח קוד בן 6 ספרות לכתובת המייל.' : 'מתקשרים אליך כעת ומקריאים קוד בן 6 ספרות.'} הזינו אותו כאן:
           </p>
+          {channel === 'email' && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+              📩 לא קיבלתם את המייל? בדקו בתיבת ה<strong>ספאם</strong> וסמנו את ההודעה כ״לא ספאם״.
+            </p>
+          )}
           <div className="flex items-stretch gap-2">
             <input value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
               placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
