@@ -19,6 +19,8 @@ export default function Header({ user, title }: HeaderProps) {
   const supabase = createClient()
 
   const handleSignOut = async () => {
+    // ניתוק גם מסשני פורטל בתי ההחלמה שנפתחו בכניסה מהירה (עוגיות ph_)
+    await fetch('/api/admin/portal-logout-all', { method: 'POST' }).catch(() => {})
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()

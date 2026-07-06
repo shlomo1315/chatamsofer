@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X } from 'lucide-react'
+import { Link2, Check, Building2, Lock, Eye, EyeOff, Loader2, Trash2, Plus, X, LogIn, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Portal { home_name: string; updated_at: string }
+
+const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 const AVAIL_OPTIONS = [
   { value: 'regular', label: 'לכלל היולדות' },
@@ -13,11 +15,27 @@ const AVAIL_OPTIONS = [
   { value: 'both', label: 'גם וגם' },
 ] as const
 
-export default function RecoveryHomeLinks({ homes }: { homes: { name: string; availability: string }[] }) {
+export default function RecoveryHomeLinks({ homes }: { homes: { name: string; availability: string; report_email?: string | null }[] }) {
   const router = useRouter()
   const supabase = createClient()
   const { confirm, confirmDialog } = useConfirm()
   const [portals, setPortals] = useState<Portal[]>([])
+
+  // כתובת מייל לכל בית החלמה — לשליחת דיווחים / סיכום חודשי
+  const [emailMap, setEmailMap] = useState<Record<string, string>>(() =>
+    Object.fromEntries(homes.map(h => [h.name, h.report_email ?? ''])))
+  const [emailSaved, setEmailSaved] = useState<string | null>(null)
+  const [emailErr, setEmailErr] = useState<string | null>(null)
+  const [emailSaving, setEmailSaving] = useState<string | null>(null)
+  const saveEmail = async (name: string) => {
+    const email = (emailMap[name] ?? '').trim()
+    if (email && !isValidEmail(email)) { setEmailErr(name); return }
+    setEmailErr(null); setEmailSaving(name)
+    try {
+      await supabase.from('recovery_homes').upsert({ name, report_email: email || null }, { onConflict: 'name' })
+      setEmailSaved(name); setTimeout(() => setEmailSaved(null), 2000)
+    } catch { /* silent */ } finally { setEmailSaving(null) }
+  }
   const [adding, setAdding] = useState(false)
   const [newHome, setNewHome] = useState('')
   const [newAvail, setNewAvail] = useState('regular')
@@ -182,6 +200,13 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
+                {/* כניסה מהירה לפורטל — לצוות המחובר, ללא סיסמה (מתנתק עם התנתקות מהמערכת) */}
+                <a href={`/api/admin/maternity/portal-login?home=${encodeURIComponent(home)}`} target="_blank" rel="noopener noreferrer"
+                  title="כניסה מהירה לפורטל בית ההחלמה (ללא סיסמה)"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors">
+                  <LogIn size={13} /> כניסה מהירה
+                </a>
+
                 {/* Copy link — only if password set */}
                 {hasPassword(home) && (
                   <button onClick={() => copyLink(home)}
@@ -243,6 +268,27 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
                 {error && <span className="text-xs text-red-600">{error}</span>}
               </div>
             )}
+
+            {/* כתובת מייל לבית ההחלמה — לשליחת דיווחים / סיכום חודשי */}
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <Mail size={14} className="text-slate-400 flex-shrink-0" />
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <input
+                  type="email"
+                  value={emailMap[home] ?? ''}
+                  onChange={e => { setEmailMap(m => ({ ...m, [home]: e.target.value })); if (emailErr === home) setEmailErr(null) }}
+                  onKeyDown={e => e.key === 'Enter' && saveEmail(home)}
+                  placeholder="כתובת מייל לדיווחים (לא חובה)"
+                  dir="ltr"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 ${emailErr === home ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
+                />
+              </div>
+              <button onClick={() => saveEmail(home)} disabled={emailSaving === home}
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                {emailSaving === home ? <Loader2 size={13} className="animate-spin" /> : emailSaved === home ? <><Check size={13} className="text-green-600" /> נשמר!</> : <><Check size={13} /> שמור מייל</>}
+              </button>
+              {emailErr === home && <span className="text-xs text-red-600">כתובת מייל לא תקינה</span>}
+            </div>
           </div>
         ) })}
       </div>
@@ -250,6 +296,9 @@ export default function RecoveryHomeLinks({ homes }: { homes: { name: string; av
       <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-100">
         <p className="text-xs text-slate-400">
           הגדר סיסמה לכל בית החלמה — לאחר מכן העתק את הקישור ושלח להם. הם יצטרכו להזין סיסמה לפני הצפייה ברשימה.
+          <br />
+          <strong className="text-emerald-600">כניסה מהירה</strong> — כניסה ישירה לפורטל ללא סיסמה (לצוות המחובר בלבד); הגישה מתנתקת אוטומטית עם היציאה מהמערכת.
+          ניתן גם להזין <strong>כתובת מייל</strong> לכל בית החלמה למשלוח דיווחים וסיכומים.
         </p>
       </div>
       {confirmDialog}
