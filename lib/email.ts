@@ -65,7 +65,7 @@ export function templateStatusApproved(name: string): EmailPayload {
         שמחים לבשר לך כי בקשתך <strong>אושרה</strong> במערכת היכל החתם סופר.
       </p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">✅ הסטטוס שלך: מאושר</p>
+        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">הסטטוס שלך: מאושר</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
@@ -98,7 +98,7 @@ export function templateDocsPending(name: string): EmailPayload {
         קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
       </p>
       <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p>
+        <p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
@@ -114,7 +114,7 @@ export function templateLoanApproved(name: string, amount: number): EmailPayload
         שמחים לבשר לך כי בקשת ההלוואה שלך על סך <strong>₪${amount.toLocaleString('he-IL')}</strong> אושרה.
       </p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">✅ הלוואה מאושרת — סכום: ₪${amount.toLocaleString('he-IL')}</p>
+        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">הלוואה מאושרת — סכום: ₪${amount.toLocaleString('he-IL')}</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">נציג יצור איתך קשר בהקדם לתיאום פרטי התשלום.</p>
     `),
@@ -130,7 +130,7 @@ export function templateWidowRequestApproved(name: string): EmailPayload {
         שמחים לבשר לך כי בקשתך באגף אלמנות ויתומים <strong>אושרה</strong>.
       </p>
       <div style="background:#fdf4ff;border:1px solid #d8b4fe;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#6b21a8;font-size:14px;font-weight:600;">✅ הבקשה אושרה — נציג יצור איתך קשר בהקדם.</p>
+        <p style="margin:0;color:#6b21a8;font-size:14px;font-weight:600;">הבקשה אושרה — נציג יצור איתך קשר בהקדם.</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
@@ -146,7 +146,7 @@ export function templateRegistrationConfirmed(name: string): EmailPayload {
         תודה על פנייתך! בקשתך להירשם במערכת היכל החתם סופר <strong>התקבלה בהצלחה</strong> ותועברה לטיפול המשרד.
       </p>
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#1e40af;font-size:14px;font-weight:600;">📋 הבקשה בטיפול — נעדכן אותך בהקדם על המשך התהליך.</p>
+        <p style="margin:0;color:#1e40af;font-size:14px;font-weight:600;">הבקשה בטיפול — נעדכן אותך בהקדם על המשך התהליך.</p>
       </div>
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו בכתובת <a href="mailto:office@chasamsofer.info" style="color:#6366f1;">office@chasamsofer.info</a></p>
     `),
@@ -161,7 +161,7 @@ export function templateDocsPendingWithNotes(name: string, notes?: string): Emai
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
         קיבלנו את פנייתך ואנו בוחנים אותה. על מנת להמשיך בתהליך, נדרשים מסמכים נוספים.
       </p>
-      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">📄 אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p></div>'}
+      ${notes ? `<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:700;">מסמכים / פרטים נדרשים:</p><p style="margin:0;color:#92400e;font-size:14px;line-height:1.6;white-space:pre-wrap;">${notes}</p></div>` : '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:16px;margin:20px 0;"><p style="margin:0;color:#92400e;font-size:14px;font-weight:600;">אנא השלם את המסמכים הנדרשים דרך המערכת הדיגיטלית שלנו.</p></div>'}
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }
