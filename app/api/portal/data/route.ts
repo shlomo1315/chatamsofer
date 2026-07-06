@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
     .from('maternity_aids')
     .select(`
       id, birth_date, baby_name, baby_gender, six_weeks_end,
+      is_twins, babies, recovery_eligibility_days,
       recovery_from, recovery_to, card_number, notes, recovery_arrived,
       recovery_amount, recovery_amount_status, recovery_nights, recovery_receipt_number,
       beneficiary:beneficiaries(

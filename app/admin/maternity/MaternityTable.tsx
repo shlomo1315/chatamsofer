@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
+import { recoveryDaysOf } from '@/lib/maternity'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -176,14 +177,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={9 + (showCard ? 2 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={10 + (showCard ? 2 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -192,10 +193,18 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
                     <td className="px-4 py-3 align-middle font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                    <td className="px-4 py-3 align-middle text-slate-700">{aid.baby_name ?? <span className="text-slate-300">—</span>}</td>
+                    <td className="px-4 py-3 align-middle text-slate-700">
+                      <span className="inline-flex items-center gap-1.5">
+                        {aid.baby_name ?? <span className="text-slate-300">—</span>}
+                        {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
+                    <td className="px-4 py-3 align-middle">
+                      <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
+                    </td>
                     {showArrived && (
                       <td className="px-4 py-3 align-middle">
                         {aid.recovery_arrived === true

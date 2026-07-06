@@ -7,6 +7,7 @@ import { signedDocUrl } from '@/lib/docUrl'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
+import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 })
   }
 
-  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_type, card_center_id } = body
+  const { beneficiary_id, birth_date, baby_name, baby_gender, recovery_home, notes, baby_id_number, baby_id_type, birth_certificate_url, birth_type, card_center_id, is_twins, babies } = body
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -39,15 +40,39 @@ export async function POST(request: NextRequest) {
 
   // לידה שקטה: ללא פרטי ילד (שם/ת.ז/מין) — רק מסמך אישור
   const isSilent = birth_type === 'silent'
-  const babyId = baby_id_number ? String(baby_id_number).trim() : ''
-  const isPassport = baby_id_type === 'passport'
+  const twins = !isSilent && is_twins === true
+
+  // בונים את רשימת התינוקות — בלידת תאומים מגיע מערך babies (שני תינוקות),
+  // אחרת נופלים לשדות התינוק הבודד (תאימות לאחור עם לקוחות ישנים).
+  type RawBaby = { name?: unknown; gender?: unknown; id_type?: unknown; id_number?: unknown }
+  const rawBabies: RawBaby[] = Array.isArray(babies) && babies.length
+    ? (babies as RawBaby[])
+    : [{ name: baby_name, gender: baby_gender, id_type: baby_id_type, id_number: baby_id_number }]
+
+  // נרמול + אימות כל תינוק (מדולג כליל בלידה שקטה)
+  const normBabies: BabyEntry[] = []
   if (!isSilent) {
-    if (!babyId) return NextResponse.json({ error: 'יש להזין תעודת זהות או דרכון של הנולד/ת' }, { status: 400 })
-    if (!isPassport && !validateIsraeliId(babyId)) {
-      return NextResponse.json({ error: 'תעודת הזהות של הנולד/ת אינה תקינה' }, { status: 400 })
+    const active = rawBabies.slice(0, twins ? 2 : 1)
+    if (twins && active.length < 2) {
+      return NextResponse.json({ error: 'בלידת תאומים יש להזין את פרטי שני התינוקות' }, { status: 400 })
+    }
+    for (const b of active) {
+      const idRaw = b.id_number ? String(b.id_number).trim() : ''
+      const isPass = b.id_type === 'passport'
+      const gender = b.gender === 'male' || b.gender === 'female' ? b.gender : null
+      if (!idRaw) return NextResponse.json({ error: 'יש להזין תעודת זהות או דרכון של הנולד/ת' }, { status: 400 })
+      if (!isPass && !validateIsraeliId(idRaw)) {
+        return NextResponse.json({ error: 'תעודת הזהות של הנולד/ת אינה תקינה' }, { status: 400 })
+      }
+      const idNorm = isPass ? idRaw : idRaw.replace(/\D/g, '').padStart(9, '0')
+      normBabies.push({ name: b.name ? String(b.name).trim() : null, gender, id_type: isPass ? 'passport' : 'id', id_number: idNorm })
+    }
+    // תאומים — חובה שתי תעודות זהות שונות
+    if (twins && normBabies[0].id_number === normBabies[1].id_number) {
+      return NextResponse.json({ error: 'שני התאומים חייבים להיות עם תעודות זהות שונות' }, { status: 400 })
     }
   }
-  const babyIdNorm = babyId ? (isPassport ? babyId : babyId.replace(/\D/g, '').padStart(9, '0')) : null
+  const primary = normBabies[0]
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -64,26 +89,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
 
-  // מניעת כפילויות — רק כשיש ת.ז של נולד (לא בלידה שקטה)
-  if (babyIdNorm) {
+  // מניעת כפילויות — בודקים כל אחת מתעודות הזהות של הנולדים (בלידה שקטה אין ת.ז)
+  for (const b of normBabies) {
+    const idNorm = b.id_number as string
     const [byBen, bySpouse, byChild, byMaternity] = await Promise.all([
-      admin.from('beneficiaries').select('id').eq('id_number', babyIdNorm).limit(1),
-      admin.from('beneficiaries').select('id').eq('spouse_id_number', babyIdNorm).limit(1),
-      admin.from('beneficiaries').select('id').contains('children', [{ id_number: babyIdNorm }]).limit(1),
-      admin.from('maternity_aids').select('id').eq('baby_id_number', babyIdNorm).limit(1),
+      admin.from('beneficiaries').select('id').eq('id_number', idNorm).limit(1),
+      admin.from('beneficiaries').select('id').eq('spouse_id_number', idNorm).limit(1),
+      admin.from('beneficiaries').select('id').contains('children', [{ id_number: idNorm }]).limit(1),
+      admin.from('maternity_aids').select('id').eq('baby_id_number', idNorm).limit(1),
     ])
     if ((byBen.data?.length || bySpouse.data?.length || byChild.data?.length || byMaternity.data?.length)) {
-      return NextResponse.json({ error: 'הילד/ה כבר רשום/ה במערכת — תעודת זהות זו כבר קיימת. לא ניתן להגיש בקשה כפולה.' }, { status: 409 })
+      return NextResponse.json({ error: `הילד/ה כבר רשום/ה במערכת — תעודת זהות ${idNorm} כבר קיימת. לא ניתן להגיש בקשה כפולה.` }, { status: 409 })
     }
   }
 
   const { error } = await admin.from('maternity_aids').insert({
     beneficiary_id: String(beneficiary_id),
     birth_date: String(birth_date),
-    baby_name: (!isSilent && baby_name) ? String(baby_name).trim() : null,
-    baby_gender: (!isSilent && baby_gender) ? baby_gender : null,
-    baby_id_number: babyIdNorm,
-    baby_id_type: babyIdNorm ? (isPassport ? 'passport' : 'id') : null,
+    baby_name: (!isSilent && primary?.name) ? primary.name : null,
+    baby_gender: (!isSilent && primary?.gender) ? primary.gender : null,
+    baby_id_number: primary?.id_number ?? null,
+    baby_id_type: primary ? primary.id_type : null,
+    is_twins: twins,
+    babies: (!isSilent && normBabies.length) ? normBabies : null,
+    recovery_eligibility_days: defaultRecoveryDays(twins),
     birth_certificate_url: birth_certificate_url ? String(birth_certificate_url) : null,
     recovery_home: recovery_home ? String(recovery_home).trim() : null,
     card_center_id: (!isSilent && card_center_id) ? String(card_center_id) : null,
@@ -99,8 +128,20 @@ export async function POST(request: NextRequest) {
   // אישור קבלה לצאצא (לא חוסם את הבקשה אם המייל נכשל) — כולל פרטי המבקש, פרטי הלידה והמסמך
   if (ben.email) {
     const benEmail = ben.email
-    const genderLabel = baby_gender === 'male' ? 'בן' : baby_gender === 'female' ? 'בת' : ''
+    const genderLbl = (g?: string | null) => g === 'male' ? 'בן' : g === 'female' ? 'בת' : ''
     const certUrl = birth_certificate_url ? String(birth_certificate_url) : ''
+    // שורות פרטי התינוקות למייל — בתאומים מפורטות לכל תינוק בנפרד
+    const babyRows: [string, string][] = twins
+      ? normBabies.flatMap((b, i): [string, string][] => [
+          [`תינוק ${i + 1} — שם`, b.name || '(יושלם בהמשך)'],
+          [`תינוק ${i + 1} — מין`, genderLbl(b.gender)],
+          [`תינוק ${i + 1} — ${b.id_type === 'passport' ? 'דרכון' : 'ת.ז'}`, b.id_number ?? ''],
+        ])
+      : [
+          [primary?.gender === 'female' ? 'שם הנולדת' : 'שם הנולד', primary?.name || ''],
+          ['מין', genderLbl(primary?.gender)],
+          [primary?.id_type === 'passport' ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', primary?.id_number ?? ''],
+        ]
     void (async () => {
       const mail = requestReceivedEmail({
         type: 'birth', firstTime: ben.eligibility_status !== 'approved', beneficiary: ben,
@@ -111,10 +152,9 @@ export async function POST(request: NextRequest) {
               ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
             ]
           : [
-              [baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד', baby_name ? String(baby_name).trim() : ''],
-              ['מין', genderLabel],
+              ...(twins ? [['סוג לידה', 'תאומים'] as [string, string]] : []),
+              ...babyRows,
               ['תאריך לידה', String(birth_date)],
-              [isPassport ? 'דרכון הנולד/ת' : 'ת.ז הנולד/ת', babyIdNorm ?? ''],
               ['בית החלמה', recovery_home ? String(recovery_home).trim() : ''],
             ],
         documents: [{ name: 'אישור לידה', url: certUrl ? await signedDocUrl(admin, certUrl) : undefined }],

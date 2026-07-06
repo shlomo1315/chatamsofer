@@ -40,36 +40,51 @@ async function syncBabyStatusInFamily(
   next: MaternityStatus,
 ) {
   const mother = aid.beneficiary as MotherRef | undefined
-  if (!mother?.id || !aid.baby_name) return
+  if (!mother?.id) return
 
   const existing = Array.isArray(mother.children) ? (mother.children as Record<string, unknown>[]) : []
-  const idx = existing.findIndex(c => isSameBaby(c, aid))
 
-  let updatedChildren: Record<string, unknown>[]
+  // רשימת התינוקות של התיק — בלידת תאומים יש שניים (babies), אחרת התינוק הבודד.
+  const twinBabies = Array.isArray(aid.babies) && aid.babies.length
+    ? aid.babies
+    : [{ name: aid.baby_name, gender: aid.baby_gender, id_type: aid.baby_id_type, id_number: aid.baby_id_number }]
+
+  // לידה שקטה (ללא פרטי תינוק) — אין ילד להוסיף לכרטסת
+  if (twinBabies.every(b => !b.name && !b.id_number)) return
+
+  // התאמת ילד קיים בכרטסת לתינוק מסוים של התיק (לפי ת.ז / שיוך התיק / שם+תאריך)
+  const matchBaby = (c: Record<string, unknown>, b: { name?: string | null; id_number?: string | null }) =>
+    (c.maternity_aid_id === aid.id && b.id_number != null && c.id_number === b.id_number) ||
+    (b.id_number != null && c.id_number === b.id_number) ||
+    (c.maternity_aid_id === aid.id && c.name === (b.name ?? null) && c.birth_date === aid.birth_date)
+
+  let updatedChildren: Record<string, unknown>[] = existing
 
   if (next === 'cancelled') {
-    // דחיית הלידה — נסיר מהכרטסת רק אם הילד נכנס דרך תיק היולדת (יש לו birth_status)
-    if (idx === -1) return
-    const child = existing[idx]
-    if (!child.birth_status && !child.maternity_aid_id) return
-    updatedChildren = existing.filter((_, i) => i !== idx)
+    // דחיית הלידה — נסיר מהכרטסת רק ילדים שנכנסו דרך תיק היולדת (יש להם birth_status/שיוך)
+    updatedChildren = existing.filter(c => {
+      const belongsToAid = c.maternity_aid_id === aid.id || twinBabies.some(b => matchBaby(c, b))
+      if (!belongsToAid) return true
+      return !(c.birth_status || c.maternity_aid_id) // משאירים אם לא נכנס דרך התיק
+    })
   } else {
     // active → מאושר · pending → ממתין לאישור לידה
     const birth_status = next === 'active' ? 'approved' : 'pending'
-    const babyData = {
-      name: aid.baby_name,
-      id_number: aid.baby_id_number ?? null,
-      doc_type: aid.baby_id_type ?? 'id',
-      gender: aid.baby_gender ?? null,
-      birth_date: aid.birth_date ?? null,
-      marital_status: 'single', // תינוק שזה עתה נולד — לא נשוי
-      maternity_aid_id: aid.id,
-      birth_status,
-    }
-    if (idx === -1) {
-      updatedChildren = [...existing, babyData]
-    } else {
-      updatedChildren = existing.map((c, i) => i === idx ? { ...c, ...babyData } : c)
+    for (const b of twinBabies) {
+      const babyData = {
+        name: b.name ?? null,
+        id_number: b.id_number ?? null,
+        doc_type: b.id_type ?? 'id',
+        gender: b.gender ?? null,
+        birth_date: aid.birth_date ?? null,
+        marital_status: 'single', // תינוק שזה עתה נולד — לא נשוי
+        maternity_aid_id: aid.id,
+        birth_status,
+      }
+      const idx = updatedChildren.findIndex(c => matchBaby(c, b))
+      updatedChildren = idx === -1
+        ? [...updatedChildren, babyData]
+        : updatedChildren.map((c, i) => i === idx ? { ...c, ...babyData } : c)
     }
   }
 
@@ -84,10 +99,22 @@ export async function deleteMaternityAid(supabase: ReturnType<typeof createClien
   const mother = aid.beneficiary as MotherRef | undefined
   if (mother?.id) {
     const existing = Array.isArray(mother.children) ? (mother.children as Record<string, unknown>[]) : []
-    const idx = existing.findIndex(c => isSameBaby(c, aid))
-    // נסיר רק ילד שנכנס דרך תיק היולדת (יש לו maternity_aid_id / birth_status)
-    if (idx !== -1 && (existing[idx].maternity_aid_id || existing[idx].birth_status)) {
-      const updatedChildren = existing.filter((_, i) => i !== idx)
+    // תעודות הזהות של כל תינוקות התיק (כולל תאומים) — להסרה מהכרטסת
+    const aidBabyIds = new Set(
+      (Array.isArray(aid.babies) && aid.babies.length
+        ? aid.babies.map(b => b.id_number)
+        : [aid.baby_id_number]
+      ).filter(Boolean) as string[],
+    )
+    // נסיר כל ילד שנכנס דרך תיק היולדת (שיוך התיק / ת.ז / שם+תאריך), אך רק אם נכנס דרך התיק
+    const updatedChildren = existing.filter(c => {
+      const belongsToAid = c.maternity_aid_id === aid.id
+        || (c.id_number != null && aidBabyIds.has(String(c.id_number)))
+        || isSameBaby(c, aid)
+      if (!belongsToAid) return true
+      return !(c.maternity_aid_id || c.birth_status) // שומרים אם לא נכנס דרך התיק
+    })
+    if (updatedChildren.length !== existing.length) {
       await supabase
         .from('beneficiaries')
         .update({ children: updatedChildren, children_count: updatedChildren.length })

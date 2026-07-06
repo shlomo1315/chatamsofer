@@ -126,6 +126,10 @@ export interface MaternityAid {
   baby_id_type?: 'id' | 'passport'
   baby_id_number?: string
   baby_gender?: 'male' | 'female'
+  // לידת תאומים — שני תינוקות בלידה אחת. babies מחזיק את כל התינוקות
+  // (תינוק אחד בלידה רגילה, שניים בתאומים). baby_* = התינוק הראשון (תאימות לאחור).
+  is_twins?: boolean
+  babies?: { name?: string | null; gender?: 'male' | 'female' | null; id_type?: 'id' | 'passport'; id_number?: string | null }[]
   birth_certificate_url?: string
   // תאריך סיום הזכאות האפקטיבי (ברירת מחדל: לידה + 6 שבועות; ניתן להארכה ידנית)
   six_weeks_end?: string
@@ -157,6 +161,8 @@ export interface MaternityAid {
   recovery_amount_at?: string
   recovery_nights?: number
   recovery_receipt_number?: string
+  // ימי הזכאות של היולדת בבית ההחלמה שאושרו (ברירת מחדל: רגילה=2 · תאומים=4; ניתן לעריכה ידנית)
+  recovery_eligibility_days?: number
   status: MaternityStatus
   // 'live' = לידה רגילה (ברירת מחדל) · 'silent' = לידה שקטה
   birth_type?: 'live' | 'silent'
