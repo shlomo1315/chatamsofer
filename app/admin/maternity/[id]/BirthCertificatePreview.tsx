@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl } from '@/lib/docUrl'
+import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -85,6 +86,7 @@ export default function BirthCertificatePreview({
         <a href={view} target="_blank" rel="noopener noreferrer" className={`${btn} text-indigo-700`}>
           <ExternalLink size={13} /> פתח
         </a>
+        <DownloadDocButton url={url} name="אישור-לידה" variant="button" className="bg-white/95 shadow-sm" />
         <button onClick={() => fileRef.current?.click()} disabled={busy} title={UPLOAD_HINT} className={`${btn} text-slate-700`}>
           <Upload size={13} /> החלף
         </button>

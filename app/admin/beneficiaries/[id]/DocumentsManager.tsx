@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { docViewUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useToast } from '@/components/ui/Toast'
@@ -189,6 +189,16 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                 >
                   <ExternalLink size={13} />
                 </a>
+                {doc.file_url && (
+                  <a
+                    href={docDownloadUrl(doc.file_url, doc.file_name)}
+                    download={doc.file_name || true}
+                    className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-emerald-600 shadow-sm"
+                    title="הורדה למחשב"
+                  >
+                    <Download size={13} />
+                  </a>
+                )}
                 <button
                   onClick={() => handleDelete(doc)}
                   className="p-1.5 rounded-lg bg-white/90 text-red-500 hover:bg-red-50 shadow-sm"

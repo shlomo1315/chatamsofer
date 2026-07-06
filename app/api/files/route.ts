@@ -28,7 +28,14 @@ export async function GET(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data, error } = await admin.storage.from('documents').createSignedUrl(path, 300)
+  // הורדה ישירה למחשב — dl=1 מוסיף Content-Disposition: attachment דרך אפשרות ה-download
+  // של Supabase. name (לא חובה) קובע את שם הקובץ שיישמר.
+  const wantsDownload = request.nextUrl.searchParams.get('dl') === '1'
+  const rawName = request.nextUrl.searchParams.get('name') ?? ''
+  const safeName = rawName.replace(/[\r\n"]/g, '').trim()
+  const options = wantsDownload ? { download: safeName || true } : undefined
+
+  const { data, error } = await admin.storage.from('documents').createSignedUrl(path, 300, options)
   if (error || !data?.signedUrl) return NextResponse.json({ error: 'הקובץ לא נמצא' }, { status: 404 })
 
   const res = NextResponse.redirect(data.signedUrl)

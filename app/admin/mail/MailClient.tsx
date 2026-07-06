@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import { createClient } from '@/lib/supabase/client'
-import { docViewUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import DocThumb from '@/components/ui/DocThumb'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
@@ -711,6 +711,10 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
             : att.inlineData
               ? `/api/admin/gmail/attachment?messageId=${messageId}&inlineData=${encodeURIComponent(att.inlineData)}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
               : `/api/admin/gmail/attachment?messageId=${messageId}&attachmentId=${att.attachmentId}&filename=${encodeURIComponent(att.filename)}&mimeType=${encodeURIComponent(att.mimeType)}`
+          // הורדה ישירה למחשב: מסמכים בדלי 'documents' עוברים דרך docDownloadUrl (dl=1 → Content-Disposition
+          // attachment), כי תכונת ה-download לבדה מתעלמת ב-redirect ל-signed URL חוצה-מקור. צרופות Gmail
+          // מוגשות ממילא עם Content-Disposition: attachment דרך אותו endpoint.
+          const downloadHref = att.url ? docDownloadUrl(att.url, att.filename) : href
           return (
             <div key={att.attachmentId || att.url || `${att.filename}-${i}`}
               className="flex flex-col gap-1.5 bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-700">
@@ -724,8 +728,8 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
                   className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
                   <ExternalLink size={13} />
                 </a>
-                <a href={href} download={att.filename}
-                  className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="הורד">
+                <a href={downloadHref} download={att.filename}
+                  className="p-0.5 text-slate-400 hover:text-emerald-600 transition-colors" title="הורדה למחשב">
                   <Download size={13} />
                 </a>
                 <button onClick={() => setAssigning(att)}

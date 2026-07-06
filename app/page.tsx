@@ -9,7 +9,7 @@ import VerifyControl from '@/components/VerifyControl'
 const CityStreetPicker = dynamic(() => import('@/components/ui/CityStreetPicker'), { ssr: false })
 const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'), { ssr: false })
 const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
-import { docViewUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import {
@@ -1948,6 +1948,10 @@ export default function PublicPortalPage() {
               {existing.url && (
                 <a href={docViewUrl(existing.url)} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-indigo-600 hover:text-indigo-800 underline">צפייה</a>
+              )}
+              {existing.url && (
+                <a href={docDownloadUrl(existing.url, existing.name)} download={existing.name || true}
+                  className="text-xs text-emerald-600 hover:text-emerald-800 underline">הורדה</a>
               )}
               <button type="button" onClick={() => setReplaceDoc(p => ({ ...p, [docType]: true }))}
                 className="text-xs text-slate-500 hover:text-slate-700 underline">החלף קובץ</button>
