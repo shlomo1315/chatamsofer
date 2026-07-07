@@ -1,26 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
-import { portalCookieName } from '../login/route'
+import { portalCookieName, verifyPortalToken } from '@/lib/portal-auth'
+import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
 import { addDays, isAfter } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 export async function GET(request: NextRequest) {
   const home = request.nextUrl.searchParams.get('home')
   if (!home) return NextResponse.json({ error: 'חסר שם בית החלמה' }, { status: 400 })
 
-  // Verify portal cookie
+  // Verify portal cookie — HMAC-signed token bound to this home, not a static '1'
   const cookieStore = await cookies()
-  const isAuthed = cookieStore.get(portalCookieName(home))?.value === '1'
-  if (!isAuthed) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const token = cookieStore.get(portalCookieName(home))?.value
+  if (!verifyPortalToken(token, home)) {
+    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  }
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

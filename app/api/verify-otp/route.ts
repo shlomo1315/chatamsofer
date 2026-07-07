@@ -2,15 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
-import { createHmac } from 'crypto'
-
-function signNonce(email: string): string {
-  const secret = process.env.OTP_NONCE_SECRET || 'change-this-secret-in-production'
-  const exp = Date.now() + 15 * 60 * 1000 // 15 minutes
-  const payload = `${email}:${exp}`
-  const sig = createHmac('sha256', secret).update(payload).digest('hex')
-  return Buffer.from(`${payload}:${sig}`).toString('base64url')
-}
+import { signNonce } from '@/lib/otp-nonce'
 
 export async function POST(request: NextRequest) {
   let body: unknown

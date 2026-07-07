@@ -50,10 +50,19 @@ export default function RecoveryHomeLinks({ homes }: { homes: string[] }) {
 
   const copyLink = (home: string) => {
     const url = `${window.location.origin}/portal/maternity/${encodeURIComponent(home)}`
-    navigator.clipboard.writeText(url).then(() => {
+    const markCopied = () => {
       setCopied(home)
       setTimeout(() => setCopied(null), 2000)
-    })
+    }
+    // navigator.clipboard לא קיים בהקשר לא-מאובטח (HTTP), ו-writeText עלול להידחות
+    // כשההרשאה נדחית. במקרה כזה נציג את הקישור להעתקה ידנית במקום כשל שקט.
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(url).then(markCopied).catch(() => {
+        window.prompt('העתק את הקישור ידנית:', url)
+      })
+    } else {
+      window.prompt('העתק את הקישור ידנית:', url)
+    }
   }
 
   const openEdit = (home: string) => {

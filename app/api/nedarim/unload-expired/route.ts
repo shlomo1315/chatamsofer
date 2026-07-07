@@ -1,15 +1,8 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getNedarimCreds, prikatTlush } from '@/lib/nedarim'
+import { createServiceOrAnonClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 // אימות הקריאה מול CRON_SECRET — דרך Authorization: Bearer <secret> או ?secret=<secret>
 function authorized(request: NextRequest): boolean {

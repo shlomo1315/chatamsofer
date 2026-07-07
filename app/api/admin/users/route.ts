@@ -1,18 +1,11 @@
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
 const VALID_ROLES = ['admin', 'secretary', 'reviewer', 'collections']
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 // מאמת שמי שמבצע את הפעולה מחובר ומשמש כמנהל (admin)
 async function verifyAdmin() {

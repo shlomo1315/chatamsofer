@@ -1,14 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>

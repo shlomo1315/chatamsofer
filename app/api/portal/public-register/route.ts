@@ -1,14 +1,7 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 export async function POST(request: NextRequest) {
   let body: Record<string, unknown>
@@ -60,7 +53,7 @@ export async function POST(request: NextRequest) {
     marital_status: marital_status ? String(marital_status) : null,
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
-    children_count: typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10),
+    children_count: (() => { const n = typeof children_count === 'number' ? children_count : parseInt(String(children_count ?? '0'), 10); return Number.isFinite(n) ? n : 0 })(),
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     eligibility_status: 'pending',

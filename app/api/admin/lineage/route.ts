@@ -1,22 +1,18 @@
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createServiceOrAnonClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0' }
 
-// Prefer the service-role key (full access for writes); fall back to the public
-// anon key so reads still work even if the service key isn't configured on the host.
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !key) return null
-  return createClient(url, key)
-}
+const VALID_STAFF_ROLES = ['admin', 'secretary', 'reviewer', 'collections']
 
+// מאמת שמי שמבצע את הפעולה מחובר, פעיל, ובעל תפקיד צוות תקין —
+// לא רק "מחובר לאיזשהו חשבון auth". ללא בדיקה זו, כל session תקין
+// (שניתן ליצור ישירות מול Supabase עם ה-anon key) יכול לשנות את עץ הדורות.
 async function verifyStaff() {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -26,13 +22,22 @@ async function verifyStaff() {
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          } catch { /* server component */ }
         },
       },
     }
   )
   const { data: { user } } = await supabase.auth.getUser()
-  return user
+  if (!user) return false
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, is_active')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (!profile || profile.is_active === false) return false
+  return VALID_STAFF_ROLES.includes(profile.role)
 }
 
 export async function GET() {
@@ -50,8 +55,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const isStaff = await verifyStaff()
+  if (!isStaff) return NextResponse.json({ error: 'לא מורשה' }, { status: 403 })
 
   const body = await request.json()
   const { name, parent_id, notes } = body
@@ -85,8 +90,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const isStaff = await verifyStaff()
+  if (!isStaff) return NextResponse.json({ error: 'לא מורשה' }, { status: 403 })
 
   const body = await request.json()
   const { id, name, notes, parent_id } = body
@@ -142,13 +147,23 @@ export async function PATCH(request: NextRequest) {
     }
     updates.parent_id = newParent
     updates.generation = baseGen
+    // אוספים את כל הצאצאים לפי הדור החדש שלהם, ואז מבצעים UPDATE אחד לכל דור
+    // (מספר בודד של שאילתות) במקום UPDATE נפרד לכל צומת בלולאה סדרתית.
+    const byGeneration = new Map<number, string[]>()
     const queue: { id: string; gen: number }[] = []
     for (const c of childrenOf.get(id) ?? []) queue.push({ id: c, gen: baseGen + 1 })
     while (queue.length) {
       const item = queue.shift() as { id: string; gen: number }
-      await admin.from('lineage_nodes').update({ generation: item.gen }).eq('id', item.id)
+      const arr = byGeneration.get(item.gen) ?? []
+      arr.push(item.id)
+      byGeneration.set(item.gen, arr)
       for (const c of childrenOf.get(item.id) ?? []) queue.push({ id: c, gen: item.gen + 1 })
     }
+    await Promise.all(
+      [...byGeneration.entries()].map(([gen, ids]) =>
+        admin.from('lineage_nodes').update({ generation: gen }).in('id', ids)
+      )
+    )
   }
 
   const { data, error } = await admin
@@ -163,8 +178,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await verifyStaff()
-  if (!user) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const isStaff = await verifyStaff()
+  if (!isStaff) return NextResponse.json({ error: 'לא מורשה' }, { status: 403 })
 
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר ID' }, { status: 400 })

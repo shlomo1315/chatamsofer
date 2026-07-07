@@ -1,16 +1,9 @@
-import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createAdminClient as getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
-
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
 
 async function verifyAdmin() {
   const cookieStore = await cookies()
@@ -44,9 +37,16 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // מגבבים את הסיסמה בצד ה-DB עם bcrypt (pgcrypto) ושומרים ב-password_hash.
+  // עמודת password ה-plaintext נשמרת ריקה — שלב 4 ב-migration ימחק אותה בהמשך.
+  const { data: hashed, error: hashErr } = await admin.rpc('hash_portal_password', { p_password: password })
+  if (hashErr || !hashed) {
+    return NextResponse.json({ error: 'שגיאה בהצפנת הסיסמה' }, { status: 500 })
+  }
+
   const { error } = await admin.from('recovery_portals').upsert({
     home_name,
-    password,
+    password_hash: hashed,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'home_name' })
 

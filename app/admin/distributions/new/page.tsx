@@ -87,7 +87,10 @@ export default function NewDistributionPage() {
               type="number"
               min="0"
               placeholder="0"
-              {...register('total_budget', { valueAsNumber: true })}
+              error={errors.total_budget?.message}
+              {...register('total_budget', {
+                setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+              })}
             />
           </div>
         </Card>

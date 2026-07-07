@@ -1,7 +1,10 @@
 'use client'
+import { useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#3b82f6', '#a855f7', '#ef4444', '#14b8a6']
+
+interface ConfettiPiece { left: number; delay: number; duration: number; size: number; color: string; rounded: boolean }
 
 // חלונית הצלחה עם קונפיטי — נסגרת מעצמה ע"י ההורה (setTimeout)
 export default function ConfettiSuccess({
@@ -13,33 +16,35 @@ export default function ConfettiSuccess({
   subtitle?: string
   details?: string[]
 }) {
-  const pieces = Array.from({ length: 70 })
+  // מחושב פעם אחת ולא בכל render — Math.random לא נקרא בזמן render.
+  const [pieces] = useState<ConfettiPiece[]>(() =>
+    Array.from({ length: 70 }, (_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 0.8,
+      duration: 2.2 + Math.random() * 1.8,
+      size: 6 + Math.random() * 8,
+      color: COLORS[i % COLORS.length],
+      rounded: Math.random() > 0.5,
+    }))
+  )
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
       {/* Confetti layer */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {pieces.map((_, i) => {
-          const left = Math.random() * 100
-          const delay = Math.random() * 0.8
-          const duration = 2.2 + Math.random() * 1.8
-          const size = 6 + Math.random() * 8
-          const color = COLORS[i % COLORS.length]
-          const rounded = Math.random() > 0.5
-          return (
-            <span key={i}
-              style={{
-                position: 'absolute',
-                left: `${left}%`,
-                top: '-5%',
-                width: size,
-                height: size * (rounded ? 1 : 1.6),
-                background: color,
-                borderRadius: rounded ? '9999px' : '2px',
-                animation: `confetti-fall ${duration}s linear ${delay}s forwards`,
-              }}
-            />
-          )
-        })}
+        {pieces.map((p, i) => (
+          <span key={i}
+            style={{
+              position: 'absolute',
+              left: `${p.left}%`,
+              top: '-5%',
+              width: p.size,
+              height: p.size * (p.rounded ? 1 : 1.6),
+              background: p.color,
+              borderRadius: p.rounded ? '9999px' : '2px',
+              animation: `confetti-fall ${p.duration}s linear ${p.delay}s forwards`,
+            }}
+          />
+        ))}
       </div>
 
       <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 p-7 w-full max-w-sm mx-4 text-center"

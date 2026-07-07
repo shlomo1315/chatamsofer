@@ -22,6 +22,10 @@ export default function NewMaternityPage() {
   const router = useRouter()
   const supabase = createClient()
   const fileRef = useRef<HTMLInputElement>(null)
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // מנקה את טיימר ההפניה אם המשתמש עוזב את הדף בתוך חלון 3 השניות
+  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current) }, [])
 
   // Step 1 — mother lookup
   const [idInput, setIdInput] = useState('')
@@ -51,16 +55,24 @@ export default function NewMaternityPage() {
     })
   }, [supabase])
 
-  // שליפת שרשרת הדורות (עץ הדורות) של המשפחה שנמצאה
+  // שליפת שרשרת הדורות (עץ הדורות) של המשפחה שנמצאה.
+  // ה-endpoint ‎/api/lineage תומך רק ב-?all=1 (מחזיר את כל הצמתים), ואין לו
+  // branch שמחזיר path. לכן שולפים את כל הצמתים ומטפסים במעלה parent_id עד
+  // השורש בצד הלקוח — בדיוק כמו buildNodePath ב-BeneficiaryForm.
   const loadLineage = async (lineageNodeId?: string, manual?: unknown) => {
     const names: string[] = []
     if (lineageNodeId) {
       try {
-        const res = await fetch(`/api/lineage?node_id=${lineageNodeId}`)
+        const res = await fetch('/api/lineage?all=1')
         const j = await res.json()
-        for (const lvl of (j.path ?? [])) {
-          const sel = (lvl.nodes ?? []).find((n: { id: string }) => n.id === lvl.selectedId)
-          if (sel) names.push(sel.name)
+        const nodes: { id: string; name: string; parent_id: string | null }[] = j.nodes ?? []
+        const map = new Map(nodes.map(n => [n.id, n]))
+        let curr = map.get(lineageNodeId)
+        let guard = 0
+        while (curr && guard < 60) {
+          names.unshift(curr.name)
+          curr = curr.parent_id ? map.get(curr.parent_id) : undefined
+          guard++
         }
       } catch { /* ignore */ }
     }
@@ -215,7 +227,7 @@ export default function NewMaternityPage() {
           recoveryHome ? `בית החלמה: ${recoveryHome}` : '',
         ].filter(Boolean),
       })
-      setTimeout(() => router.push(`/admin/maternity/${inserted.id}`), 3000)
+      redirectTimer.current = setTimeout(() => router.push(`/admin/maternity/${inserted.id}`), 3000)
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'שגיאה בשמירה — נסה שוב')
       console.error(e)

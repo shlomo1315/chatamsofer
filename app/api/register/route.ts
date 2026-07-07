@@ -1,26 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { createHmac, timingSafeEqual } from 'crypto'
-
-function verifyNonce(nonce: string, email: string): boolean {
-  try {
-    const secret = process.env.OTP_NONCE_SECRET || 'change-this-secret-in-production'
-    const decoded = Buffer.from(nonce, 'base64url').toString()
-    const lastColon = decoded.lastIndexOf(':')
-    const payload = decoded.slice(0, lastColon)
-    const sig = decoded.slice(lastColon + 1)
-    const [storedEmail, expStr] = payload.split(':')
-    const exp = parseInt(expStr, 10)
-
-    if (storedEmail !== email) return false
-    if (isNaN(exp) || exp < Date.now()) return false
-
-    const expectedSig = createHmac('sha256', secret).update(payload).digest('hex')
-    return timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))
-  } catch {
-    return false
-  }
-}
+import { verifyNonce } from '@/lib/otp-nonce'
 
 export async function POST(request: NextRequest) {
   let body: unknown
@@ -103,7 +83,7 @@ export async function POST(request: NextRequest) {
     birth_date: birth_date || null,
     gender: gender || null,
     marital_status: marital_status ? String(marital_status) : null,
-    children_count: typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10),
+    children_count: (() => { const n = typeof children_count === 'number' ? children_count : parseInt(String(children_count ?? '0'), 10); return Number.isFinite(n) ? n : 0 })(),
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
