@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, ChevronDown, Loader2, Trash2, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -33,7 +33,11 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
   const [approveOpen, setApproveOpen] = useState(false)
   const [approvedAmount, setApprovedAmount] = useState(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
 
-  const pill = PILL[loan.status] ?? PILL.pending
+  // סטטוס אופטימי מקומי — מתעדכן מיד בלחיצה, בלי להמתין ל-router.refresh().
+  const [localStatus, setLocalStatus] = useState<LoanStatus>(loan.status)
+  useEffect(() => { setLocalStatus(loan.status) }, [loan.status])
+
+  const pill = PILL[localStatus] ?? PILL.pending
   const Icon = pill.icon
 
   const toggle = () => {
@@ -53,6 +57,13 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
         body: JSON.stringify({ type: 'loan', id: loan.id, status: next, extra }),
       })
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
+
+      // עדכון אופטימי מיידי — הכפתור משתקף כבר עכשיו.
+      setLocalStatus(next)
+      setOpen(false)
+      setApproveOpen(false)
+      setSaving(false)
+
       // באישור הבקשה — מייל "בקשתך אושרה" + הפיכת המשפחה ל"מאושר" — רץ ברקע (לא חוסם UI)
       if (next === 'approved') {
         void fetch('/api/admin/request-approved', {
@@ -60,21 +71,18 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
           body: JSON.stringify({ type: 'loan', id: loan.id }),
         }).catch(() => {})
       }
-      setOpen(false)
-      setApproveOpen(false)
       // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
       if (advance && next !== 'pending') {
-        setSaving(false)
         setShowSuccess(true)
         setTimeout(() => {
           goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
         }, 1500)
         return
       }
-      router.refresh()
+      router.refresh() // רענון שאר הדף ברקע — לא חוסם את המשוב הויזואלי
     } catch (err: unknown) {
+      setLocalStatus(loan.status) // גלגול אחורה במקרה כשל
       toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
       setSaving(false)
     }
   }
@@ -109,8 +117,8 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
     { value: 'rejected',  label: 'דחה (לא זכאי)',   cls: 'text-red-600 hover:bg-red-50', icon: X },
     { value: 'pending',   label: 'החזר לממתין',     cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
-  const isApprovedLike = loan.status === 'approved' || loan.status === 'active' || loan.status === 'completed'
-  const isRejectedLike = loan.status === 'rejected' || loan.status === 'defaulted'
+  const isApprovedLike = localStatus === 'approved' || localStatus === 'active' || localStatus === 'completed'
+  const isRejectedLike = localStatus === 'rejected' || localStatus === 'defaulted'
 
   return (
     <div className="inline-block">
@@ -187,7 +195,7 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
           <div className="fixed z-50 w-44 bg-white rounded-xl border border-slate-200 shadow-xl py-1"
             style={{ top: coords.top, right: coords.right }}>
             {options
-              .filter(o => !(o.value === loan.status || (o.value === 'approved' && isApprovedLike) || (o.value === 'rejected' && isRejectedLike)))
+              .filter(o => !(o.value === localStatus || (o.value === 'approved' && isApprovedLike) || (o.value === 'rejected' && isRejectedLike)))
               .map(o => {
                 const OIcon = o.icon
                 return (
