@@ -7,7 +7,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import BeneficiariesTable from './BeneficiariesTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import { AdminOnly } from '@/components/StaffPermissions'
-import { readListParams } from '@/lib/useListParams'
+import { readListParams } from '@/lib/listParams'
 
 // רק העמודות שטבלת הרשימה מציגה/ממיינת/מחפשת בהן — משמיט שדות כבדים (children JSON,
 // lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים את הנתונים המלאים בנפרד.

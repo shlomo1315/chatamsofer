@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { readListParams, type ListParams, DEFAULT_PAGE_SIZE } from './listParams'
 
 // Hook לניהול מצב רשימה דרך ה-URL (page/size/q/status/sort), כדי ש:
 //  • החיפוש/סינון/עמוד ירוצו בצד ה-DB (ה-server component קורא את ה-params),
@@ -8,34 +9,10 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 //  • realtime/refresh לא יאבדו את העמוד והפילטרים.
 //
 // החיפוש עובר עם debounce כדי לא לנווט על כל הקשה. שאר השינויים מיידיים.
+// הפונקציות הטהורות (readListParams/PAGE_SIZES) יושבות ב-listParams.ts כדי
+// שגם ה-server component יוכל לייבא אותן (קובץ זה הוא 'use client').
 
-export const PAGE_SIZES = [20, 50, 100, 200] as const
-export const DEFAULT_PAGE_SIZE = 50
-
-export interface ListParams {
-  page: number
-  size: number
-  q: string
-  status: string
-  sort: string
-}
-
-export function readListParams(
-  sp: URLSearchParams | { get(k: string): string | null },
-  opts?: { defaultStatus?: string; defaultSort?: string },
-): ListParams {
-  const rawSize = parseInt(sp.get('size') ?? '', 10)
-  const size = (PAGE_SIZES as readonly number[]).includes(rawSize) ? rawSize : DEFAULT_PAGE_SIZE
-  const rawPage = parseInt(sp.get('page') ?? '', 10)
-  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1
-  return {
-    page,
-    size,
-    q: (sp.get('q') ?? '').trim(),
-    status: sp.get('status') ?? opts?.defaultStatus ?? 'all',
-    sort: sp.get('sort') ?? opts?.defaultSort ?? 'newest',
-  }
-}
+export { PAGE_SIZES, DEFAULT_PAGE_SIZE, readListParams, type ListParams } from './listParams'
 
 export function useListParams(opts?: { defaultStatus?: string; defaultSort?: string }) {
   const router = useRouter()

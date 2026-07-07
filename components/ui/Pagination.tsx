@@ -1,6 +1,6 @@
 'use client'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
-import { PAGE_SIZES } from '@/lib/useListParams'
+import { PAGE_SIZES } from '@/lib/listParams'
 
 // פייג'ר + בורר גודל עמוד (20/50/100/200). RTL: "הקודם" מימין, "הבא" משמאל.
 export default function Pagination({
