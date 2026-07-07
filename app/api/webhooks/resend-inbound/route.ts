@@ -636,12 +636,32 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       }, { onConflict: 'key' })
     } catch { /* אבחון בלבד */ }
-    if (isRequestSubject(subject)) {
+    // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
+    const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+
+    // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
+    // (מגן על המקרה שבו הנושא הגיע פגום/מקודד/שונה, אך הגוף הוא טופס בקשה תקין
+    //  עם שורת "(מזהה: XXXXXXXXX)" ומרקרים של השדות.)
+    let effectiveSubject = subject
+    if (!isRequestSubject(subject)) {
+      const idInBody = (bodyText.match(/מזה[הא][:\s]*?(\d{9})/) || bodyText.match(/ת\.?\s*ז[:\s.]*?(\d{9})/))?.[1] ?? null
+      let bodyType: string | null = null
+      if (/בית\s*החלמה/.test(bodyText) && /תאריך\s*לידה/.test(bodyText)) {
+        bodyType = /לידה\s*שקטה/.test(bodyText) ? 'בקשת לידה שקטה' : 'בקשת לידה'
+      } else if (/מטרת\s*ההלוואה|מספר\s*תשלומים|סכום\s*ההלוואה/.test(bodyText)) {
+        bodyType = 'בקשת הלוואה'
+      } else if (/סיבת\s*הבקשה/.test(bodyText)) {
+        bodyType = 'בקשת סיוע רפואי'
+      }
+      if (bodyType && idInBody) {
+        effectiveSubject = `${bodyType} · ת.ז ${idInBody}`
+        console.warn('[resend-inbound] נושא לא זוהה — נפילה-לאחור לזיהוי לפי הגוף:', effectiveSubject)
+      }
+    }
+
+    if (isRequestSubject(effectiveSubject)) {
       try {
-        // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
-        // (קריטי! פרסור הבקשה עובד שורה-אחר-שורה; strip נאיבי של תגיות מוחק את המבנה).
-        const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
-        const handled = await handleEmailRequest(admin, { fromEmail: from.email, subject, body: bodyText, attachments })
+        const handled = await handleEmailRequest(admin, { fromEmail: from.email, subject: effectiveSubject, body: bodyText, attachments })
         if (!handled && isIgud) {
           await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
         }
