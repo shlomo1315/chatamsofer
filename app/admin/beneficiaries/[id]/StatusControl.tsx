@@ -28,6 +28,11 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   const [open, setOpen]       = useState(false)
   const [saving, setSaving]   = useState(false)
 
+  // סטטוס אופטימי מקומי — מתעדכן מיד בלחיצה כדי שהכפתור יגיב מיידית, בלי להמתין
+  // ל-router.refresh() שטוען מחדש את כל הכרטיס מה-DB. מסונכרן חזרה כשה-prop משתנה.
+  const [localStatus, setLocalStatus] = useState<EligibilityStatus>(status)
+  useEffect(() => { setLocalStatus(status) }, [status])
+
   // Rejection modal
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -49,10 +54,10 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const isPending = PENDING_SET.includes(status)
-  const styleKey  = isPending ? 'pending' : (STYLES[status] ? status : 'pending')
-  const label     = ELIGIBILITY_LABELS[status] || status
-  const Icon      = isPending ? Clock : status === 'approved' ? Check : status === 'rejected' ? X : FileText
+  const isPending = PENDING_SET.includes(localStatus)
+  const styleKey  = isPending ? 'pending' : (STYLES[localStatus] ? localStatus : 'pending')
+  const label     = ELIGIBILITY_LABELS[localStatus] || localStatus
+  const Icon      = isPending ? Clock : localStatus === 'approved' ? Check : localStatus === 'rejected' ? X : FileText
 
   const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string }) => {
     setSaving(true)
@@ -67,8 +72,12 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
       const { error } = await supabase.from('beneficiaries').update(update).eq('id', id)
       if (error) throw error
 
-      // פעולות הלוואי (מייל, סנכרון נדרים, צביעת עץ הדורות) רצות ברקע ולא חוסמות את ה-UI —
-      // כך שינוי הסטטוס מגיב מיידית. כולן best-effort.
+      // עדכון אופטימי מיידי — הכפתור משתקף כבר עכשיו, בלי להמתין ל-refresh.
+      setLocalStatus(next)
+      setOpen(false)
+      setSaving(false)
+
+      // פעולות הלוואי (מייל, סנכרון נדרים, צביעת עץ הדורות) רצות ברקע ולא חוסמות את ה-UI.
       void fetch('/api/admin/send-status-email', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
@@ -81,16 +90,16 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         body: JSON.stringify({ beneficiaryId: id, approved: next === 'approved' }),
       }).catch(() => {})
 
-      setOpen(false)
-      // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא
+      // טיפול בצאצא ממתין מתוך הכרטסת → קפיצה לצאצא הממתין הבא.
+      // אחרת מרעננים את שאר הכרטיס ברקע (הבאנר, נתונים נגזרים) — לא חוסם את המשוב.
       if (advance && next !== 'pending') {
         await goToNextPending(supabase, router, { table: 'beneficiaries', statusColumn: 'eligibility_status', pendingValues: ['pending'], currentId: id, detailBase: '/admin/beneficiaries', listPath: '/admin/beneficiaries' })
       } else {
         router.refresh()
       }
     } catch (err: unknown) {
+      setLocalStatus(status) // גלגול אחורה במקרה כשל
       toast.error(`שגיאה בעדכון הסטטוס: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
       setSaving(false)
     }
   }
