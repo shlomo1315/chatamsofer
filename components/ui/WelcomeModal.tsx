@@ -4,12 +4,25 @@ import { X, Building2 } from 'lucide-react'
 
 const CONFETTI_COLORS = ['#6366f1', '#a855f7', '#ec4899', '#f59e0b', '#22c55e', '#3b82f6', '#ef4444', '#14b8a6']
 
+interface ConfettiPiece { left: number; delay: number; duration: number; size: number; color: string; rounded: boolean }
+
 export default function WelcomeModal() {
   const [name, setName] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
   const [closing, setClosing] = useState(false)
   const [logoError, setLogoError] = useState(false)
-  const pieces = Array.from({ length: 60 })
+  // מחושב פעם אחת (ב-initializer של useState) ולא בכל render — Math.random אינו
+  // נקרא בזמן render, והקונפטי יציב ולא "מתרנדם" בכל רינדור.
+  const [pieces] = useState<ConfettiPiece[]>(() =>
+    Array.from({ length: 60 }, (_, i) => ({
+      left: 20 + Math.random() * 60,
+      delay: Math.random() * 1.0,
+      duration: 2.0 + Math.random() * 1.5,
+      size: 6 + Math.random() * 8,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      rounded: Math.random() > 0.4,
+    }))
+  )
 
   useEffect(() => {
     const stored = sessionStorage.getItem('welcomeUser')
@@ -56,24 +69,18 @@ export default function WelcomeModal() {
     >
       {/* Confetti — scoped inside modal area */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {pieces.map((_, i) => {
-          const left = 20 + Math.random() * 60
-          const delay = Math.random() * 1.0
-          const duration = 2.0 + Math.random() * 1.5
-          const size = 6 + Math.random() * 8
-          const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length]
-          const rounded = Math.random() > 0.4
+        {pieces.map((p, i) => {
           return (
             <span key={i} style={{
               position: 'absolute',
-              left: `${left}%`,
+              left: `${p.left}%`,
               top: '-4%',
-              width: size,
-              height: size * (rounded ? 1 : 1.7),
-              background: color,
-              borderRadius: rounded ? '9999px' : '2px',
+              width: p.size,
+              height: p.size * (p.rounded ? 1 : 1.7),
+              background: p.color,
+              borderRadius: p.rounded ? '9999px' : '2px',
               opacity: 0.9,
-              animation: `confetti-fall ${duration}s linear ${delay}s forwards`,
+              animation: `confetti-fall ${p.duration}s linear ${p.delay}s forwards`,
             }} />
           )
         })}
