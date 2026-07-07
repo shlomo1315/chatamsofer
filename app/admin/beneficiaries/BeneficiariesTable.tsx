@@ -1,10 +1,12 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
+import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
-import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
+import SortButtons, { SortMode } from '@/components/ui/SortButtons'
+import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
+import { useListParams } from '@/lib/useListParams'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 
 // תווית סטטוס מלאה לטבלה
@@ -219,51 +221,45 @@ const CARD_DEFS: CardDef[] = [
   { key: 'rejected', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
 
-export default function BeneficiariesTable({ data, initialFilter = 'all' }: { data: Beneficiary[], initialFilter?: Filter }) {
-  const [filter, setFilter] = useState<Filter>(initialFilter)
+interface Props {
+  data: Beneficiary[]
+  counts: Record<string, number>
+  total: number
+  page: number
+  size: number
+  status: string
+  sort: string
+}
+
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
-  const [sort, setSort] = useState<SortMode>('newest')
+  const { qInput, setSearch, setStatus, setSort, setSize, setPage } = useListParams()
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
     []
   )
 
-  const counts = useMemo(() => ({
-    all: data.length,
-    pending: data.filter((r) => matchesFilter(r, 'pending')).length,
-    review: data.filter((r) => matchesFilter(r, 'review')).length,
-    docs_pending: data.filter((r) => matchesFilter(r, 'docs_pending')).length,
-    approved: data.filter((r) => matchesFilter(r, 'approved')).length,
-    rejected: data.filter((r) => matchesFilter(r, 'rejected')).length,
-  }), [data])
-
-  const filtered = useMemo(() => data.filter((r) => matchesFilter(r, filter)), [data, filter])
-
-  const sorted = useMemo(() =>
-    applySortMode(filtered, sort,
-      r => [r.family_name, r.full_name].filter(Boolean).join(' '),
-      r => r.created_at,
-    ), [filtered, sort])
+  const activeFilter = (status || 'all') as Filter
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Status filter cards */}
+      {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
-          const isActive = filter === c.key
+          const isActive = activeFilter === c.key
           return (
             <button
               key={c.key}
-              onClick={() => setFilter(isActive && c.key !== 'all' ? 'all' : c.key)}
+              onClick={() => setStatus(isActive && c.key !== 'all' ? 'all' : c.key)}
               className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}
             >
               <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
                 <Icon size={18} />
               </span>
               <span className="flex flex-col min-w-0">
-                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key]}</span>
+                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
                 <span className="text-xs text-slate-500 mt-1 truncate">{c.label}</span>
               </span>
             </button>
@@ -271,19 +267,30 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
         })}
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500">מיון:</span>
-        <SortButtons value={sort} onChange={setSort} />
+      {/* חיפוש (רץ על כל הרשומות ב-DB) + מיון */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={qInput}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="חיפוש חופשי בכל הרשומות..."
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">מיון:</span>
+          <SortButtons value={sort as SortMode} onChange={(m) => setSort(m)} />
+        </div>
       </div>
 
       <DataTable
-        data={sorted}
+        data={data}
         columns={columns}
         rowHref={(row) => `/admin/beneficiaries/${row.id}`}
-        searchable
-        searchPlaceholder="חיפוש חופשי בכל השדות..."
-        searchKeys={['full_name', 'family_name', 'id_number', 'phone', 'phone2', 'email', 'address', 'city', 'marital_status', 'spouse_name', 'spouse_id_number', 'nedarim_id', 'notes']}
-        emptyMessage="לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."
+        serverMode
+        emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
           <Link href={`/admin/beneficiaries/${row.id}`}>
             <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">
@@ -293,6 +300,8 @@ export default function BeneficiariesTable({ data, initialFilter = 'all' }: { da
           </Link>
         )}
       />
+
+      <Pagination page={page} size={size} total={total} onPage={setPage} onSize={setSize} />
 
       {emailTarget && (
         <QuickEmailModal

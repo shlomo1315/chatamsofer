@@ -21,6 +21,9 @@ interface DataTableProps<T> {
   loading?: boolean
   actions?: (row: T) => ReactNode
   rowHref?: (row: T) => string
+  // serverMode: הנתונים כבר מסוננים/ממוינים/מפויינים בצד השרת. DataTable רק מרנדר
+  // אותם כמו שהם — בלי חיפוש/מיון/pagination פנימיים (אלה מנוהלים ע"י ההורה דרך ה-URL).
+  serverMode?: boolean
 }
 
 export default function DataTable<T extends { id: string }>({
@@ -33,6 +36,7 @@ export default function DataTable<T extends { id: string }>({
   loading,
   actions,
   rowHref,
+  serverMode,
 }: DataTableProps<T>) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -42,8 +46,9 @@ export default function DataTable<T extends { id: string }>({
   const pageSize = 20
 
   const q = search.trim().toLowerCase()
-  const filtered = q.length >= 2
-    ? data.filter((row) => {
+  const filtered = serverMode || q.length < 2
+    ? data
+    : data.filter((row) => {
         const keys = searchKeys.length ? searchKeys : (Object.keys(row) as (keyof T)[])
         return keys.some((k) => {
           const val = (row as Record<string, unknown>)[k as string]
@@ -51,9 +56,8 @@ export default function DataTable<T extends { id: string }>({
           return String(val).toLowerCase().includes(q)
         })
       })
-    : data
 
-  const sorted = sortKey
+  const sorted = (!serverMode && sortKey)
     ? [...filtered].sort((a, b) => {
         const av = (a as Record<string, unknown>)[sortKey]
         const bv = (b as Record<string, unknown>)[sortKey]
@@ -69,10 +73,12 @@ export default function DataTable<T extends { id: string }>({
       })
     : filtered
 
-  const totalPages = Math.ceil(sorted.length / pageSize)
-  const paged = sorted.slice((page - 1) * pageSize, page * pageSize)
+  // ב-serverMode אין pagination פנימי — מציגים את כל מה שהתקבל (עמוד אחד מהשרת).
+  const totalPages = serverMode ? 1 : Math.ceil(sorted.length / pageSize)
+  const paged = serverMode ? sorted : sorted.slice((page - 1) * pageSize, page * pageSize)
 
   const toggleSort = (key: string) => {
+    if (serverMode) return // המיון מנוהל בשרת
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -104,12 +110,12 @@ export default function DataTable<T extends { id: string }>({
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
-                  className={`bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${col.sortable ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
+                  className={`bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
                   onClick={() => col.sortable && toggleSort(String(col.key))}
                 >
                   <div className="flex items-center gap-1">
                     <span>{col.header}</span>
-                    {col.sortable && sortKey === String(col.key) && (
+                    {!serverMode && col.sortable && sortKey === String(col.key) && (
                       sortDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
                     )}
                   </div>
