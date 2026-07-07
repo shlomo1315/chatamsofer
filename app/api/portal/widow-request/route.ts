@@ -5,8 +5,11 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
+import { rateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
+
+const MAX_WIDOW_AMOUNT = 100000 // תקרה שפויה לבקשת סיוע — בולמת ערכים אבסורדיים
 
 function getAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -32,9 +35,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
   }
 
+  // הגבלת קצב per-מוטב — בולמת הצפה של בקשות (spam / double-submit)
+  if (!rateLimit(`widow-request:${sessionId}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'הגשת יותר מדי בקשות. נסה שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   const validTypes = ['financial', 'food', 'general']
   if (!validTypes.includes(String(request_type))) {
     return NextResponse.json({ error: 'סוג בקשה לא תקין' }, { status: 400 })
+  }
+
+  // ולידציית סכום — דוחה NaN/שלילי/אבסורדי (עקבי עם loan-request)
+  let amountValue: number | null = null
+  if (amount != null && amount !== '') {
+    const n = Number(amount)
+    if (!Number.isFinite(n) || n < 0 || n > MAX_WIDOW_AMOUNT) {
+      return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
+    }
+    amountValue = n
   }
 
   const admin = getAdmin()
@@ -63,7 +81,7 @@ export async function POST(request: NextRequest) {
     beneficiary_id: String(beneficiary_id),
     request_type: String(request_type),
     description: description ? String(description).trim() : null,
-    amount: amount ? Number(amount) : null,
+    amount: amountValue,
     status: 'pending',
   })
 

@@ -6,6 +6,7 @@ import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
+import { rateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +45,11 @@ export async function POST(request: NextRequest) {
   const sessionId = getPortalBeneficiaryId(request)
   if (!sessionId || sessionId !== beneficiaryId) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
+
+  // הגבלת קצב per-מוטב — בולמת הצפת בקשות (spam / double-submit)
+  if (!rateLimit(`financial-aid-request:${sessionId}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'הגשת יותר מדי בקשות. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 
   const { data: ben } = await admin
