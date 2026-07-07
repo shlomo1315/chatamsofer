@@ -44,30 +44,40 @@ async function getBeneficiaries(p: ReturnType<typeof readListParams>): Promise<L
 
   const ascending = p.sort === 'oldest' || p.sort === 'alpha'
   const orderCol = p.sort === 'alpha' ? 'family_name' : 'created_at'
-  const from = (p.page - 1) * p.size
+  const from = Math.max(0, (p.page - 1) * p.size)
   const to = from + p.size - 1
 
-  // ── שאילתת הנתונים (עמוד אחד) + total התואם לפילטר ──
-  let dataQ = supabase
-    .from('beneficiaries')
-    .select(LIST_COLUMNS, { count: 'exact' })
+  // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
+  let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
-  const { data, error, count } = await dataQ.order(orderCol, { ascending }).range(from, to)
-  if (error) throw error
+  const { data, error } = await dataQ
+    .order(orderCol, { ascending, nullsFirst: false })
+    .range(from, to)
+  if (error) {
+    console.error('[beneficiaries] data query failed:', JSON.stringify(error), 'params:', JSON.stringify(p))
+    throw new Error(`שאילתת נתמכים נכשלה: ${error.message}`)
+  }
 
-  // ── ספירות לכרטיסים — count לכל סטטוס (מכבד חיפוש פעיל), במקביל ──
+  // ── ספירות לכרטיסים (וגם total) — count:'exact',head:true לכל סטטוס, במקביל. ──
+  // כשל בספירה אינו מפיל את הדף — נופל ל-0 (הרשימה עצמה חשובה יותר).
   const countFor = async (status: string): Promise<[string, number]> => {
-    let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
-    if (status !== 'all') q = q.eq('eligibility_status', status)
-    if (p.q) q = q.or(searchOr(p.q))
-    const { count: c } = await q
-    return [status, c ?? 0]
+    try {
+      let q = supabase.from('beneficiaries').select('*', { count: 'exact', head: true })
+      if (status !== 'all') q = q.eq('eligibility_status', status)
+      if (p.q) q = q.or(searchOr(p.q))
+      const { count: c, error: cErr } = await q
+      if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }
+      return [status, c ?? 0]
+    } catch { return [status, 0] }
   }
   const countPairs = await Promise.all(['all', ...STATUS_KEYS].map(countFor))
   const counts = Object.fromEntries(countPairs) as Record<string, number>
 
-  return { rows: (data ?? []) as unknown as Beneficiary[], total: count ?? 0, counts }
+  // total = ספירת הפילטר הפעיל (all אם אין סטטוס נבחר)
+  const total = p.status !== 'all' ? (counts[p.status] ?? 0) : (counts.all ?? 0)
+
+  return { rows: (data ?? []) as unknown as Beneficiary[], total, counts }
 }
 
 export default async function BeneficiariesPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
