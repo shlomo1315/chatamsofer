@@ -8,6 +8,7 @@ import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
+import { rateLimit } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,11 @@ export async function POST(request: NextRequest) {
   const sessionId = getPortalBeneficiaryId(request)
   if (!sessionId || sessionId !== String(beneficiary_id)) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
+  }
+
+  // הגבלת קצב per-מוטב — בולמת הצפת בקשות (spam / double-submit)
+  if (!rateLimit(`birth-request:${sessionId}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: 'הגשת יותר מדי בקשות. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 
   // לידה שקטה: ללא פרטי ילד (שם/ת.ז/מין) — רק מסמך אישור

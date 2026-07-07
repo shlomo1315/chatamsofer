@@ -57,6 +57,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' }, { status: 429 })
   }
 
+  // תקרה גלובלית מוחלטת על סך השליחות היוצאות בערוץ — בולמת call/email-bombing
+  // כשתוקף מסובב מספרים/כתובות ו-IP-ים (כל אחד bucket נפרד). כל שיחת ימות עולה כסף.
+  const globalCap = channel === 'phone' ? 60 : 200
+  if (!rateLimit(`verify-send-global:${channel}`, globalCap, 15 * 60 * 1000)) {
+    console.error(`[verify/send] global ${channel} cap hit — possible flooding attack`)
+    return NextResponse.json({ error: 'השירות עמוס כעת. אנא נסו שוב מאוחר יותר.' }, { status: 429 })
+  }
+
   if (channel === 'phone' && !yemotCallConfigured()) {
     return NextResponse.json({ error: 'אימות טלפוני אינו זמין כעת. אנא נסו שוב מאוחר יותר.' }, { status: 503 })
   }
