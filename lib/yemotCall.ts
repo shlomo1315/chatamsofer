@@ -25,7 +25,7 @@ function ttsSafe(text: string): string {
 // כל ספרה מוקראת כמילה בעברית — כך ההקראה איטית וברורה, ספרה אחרי ספרה.
 // ⚠️ בימות, פסיק ',' = הפסקה/רווח בהקראה. רצף פסיקים = הפסקה ארוכה יותר.
 const DIGIT_WORDS = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע']
-function spokenCode(code: string): string {
+export function spokenCode(code: string): string {
   const digits = code.replace(/\D/g, '').split('').map(d => DIGIT_WORDS[Number(d)] ?? d)
   // בימות פסיק = הפסקה. פעמיים ',,' בין ספרה לספרה ≈ שנייה שלמה.
   const DIGIT_GAP = ' ,, '
