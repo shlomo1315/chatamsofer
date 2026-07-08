@@ -37,13 +37,13 @@ function adminClient(): SupabaseClient | null {
   return _admin
 }
 
-// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ פסיק חותך את ההודעה (הספרות לא
-// מוקראות) — תמיד מוסר. נקודה = הפסקה מובנית: מוסרת בהודעות רגילות, אך *נשמרת*
-// בהקראת הקוד (keepDots) כדי להאט אותה ולהפריד ספרה-ספרה.
-const TTS_INVALID = /[.,\-"'&|=]/g
-const TTS_INVALID_KEEP_DOTS = /[,\-"'&|=]/g
-function tts(text: string, keepDots = false): string {
-  return String(text ?? '').replace(keepDots ? TTS_INVALID_KEEP_DOTS : TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
+// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ מנגנוני ההפסקה ב-id_list_message:
+//   • נקודה '.' — מפרידה בין הודעות נפרדות → השהיה ארוכה. תמיד מוסרת.
+//   • פסיק ',' בודד — הפסקה קצרה בתוך הודעה = הקראה איטית וברורה. *נשמר*.
+// (שונה מהמסלול היוצא RunCampaign, שם פסיק חותך — כאן, ב-webhook, פסיק תקין.)
+const TTS_INVALID = /[.\-"'&|=]/g
+function tts(text: string): string {
+  return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 }
 
 function yemotText(commands: string[], callId?: string) {
@@ -53,8 +53,8 @@ function yemotText(commands: string[], callId?: string) {
   return new NextResponse(body, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 }
 
-const hangupMsg = (text: string, callId?: string, keepDots = false) =>
-  yemotText([`id_list_message=t-${tts(text, keepDots)}`, 'go_to_folder=hangup'], callId)
+const hangupMsg = (text: string, callId?: string) =>
+  yemotText([`id_list_message=t-${tts(text)}`, 'go_to_folder=hangup'], callId)
 
 export async function POST(req: NextRequest) { return handle(req) }
 export async function GET(req: NextRequest) { return handle(req) }
@@ -132,10 +132,10 @@ async function handle(req: NextRequest) {
   // ניקוי הטקסט הגלוי מיד אחרי שליפתו — הקראה חד-פעמית (ה-hash נשאר לאימות)
   await admin.from('beneficiaries').update({ portal_phone_code_plain: null }).eq('id', row.id)
 
-  // הקראה זהה למסלול השיחה היוצאת — כל ספרה כמילה עברית מלאה (אפס, אחת, שתיים…)
-  // עם נקודה בין ספרה לספרה כהפסקה, כדי שההקראה תהיה איטית וברורה ולא תרוץ מהר.
-  // keepDots=true — שומר את הנקודות (מנגנון ההשהיה) מפני סינון ה-tts.
+  // כל ספרה כמילה עברית מלאה (אפס, אחת, שתיים…) עם פסיק בודד בין המילים —
+  // הפסקה קצרה בימות שהופכת את ההקראה לאיטית וברורה, בהודעה אחת רציפה (בלי
+  // נקודות שמפרידות הודעות וגורמות להשהיה ארוכה לפני/בין ההקראות).
   const message = spokenCode(code)
   console.log(`[yemot-otp] reading code to caller (****${code.slice(-2)}) callId=${callId}`)
-  return hangupMsg(message, callId, true)
+  return hangupMsg(message, callId)
 }
