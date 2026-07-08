@@ -2325,8 +2325,16 @@ export default function PublicPortalPage() {
                   </div>
                 ) : phoneStep === 'code' ? (
                   <form onSubmit={handleVerifyPhoneCode} className="flex flex-col gap-4">
-                    <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
-                      מתקשרים אליך כעת אל <span className="font-semibold ltr-num">{authPhoneHint || 'הטלפון שלך'}</span> · הקוד תקף ל-5 דקות
+                    <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-center text-sm text-green-700 leading-relaxed">
+                      <p className="font-semibold mb-1">בקרוב תתקבל אצלך שיחה מהמערכת שלנו</p>
+                      <p>
+                        המספר המתקשר: <span className="font-semibold ltr-num" dir="ltr">02-3131325</span>
+                        {authPhoneHint && <> · אל <span className="font-semibold ltr-num">{authPhoneHint}</span></>}
+                      </p>
+                      <p className="mt-1 text-green-600">
+                        לאחר המענה יש להמתין מספר שניות עד שהמערכת תקריא את הקוד, ואז להזין אותו בשדה שלמטה.
+                      </p>
+                      <p className="mt-1 text-xs text-green-600">הקוד תקף ל-5 דקות</p>
                     </div>
                     <Field label="קוד מהשיחה" required hint="6 ספרות שהוקראו בשיחה">
                       <TextInput value={authCode}
