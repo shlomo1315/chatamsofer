@@ -128,9 +128,11 @@ async function handle(req: NextRequest) {
   // ניקוי הטקסט הגלוי מיד אחרי שליפתו — הקראה חד-פעמית (ה-hash נשאר לאימות)
   await admin.from('beneficiaries').update({ portal_phone_code_plain: null }).eq('id', row.id)
 
-  // הקראה ספרה-ספרה (פסיקים = הפסקות), פעמיים לבהירות
-  const spaced = code.split('').join(', ')
-  const message = `קוד הכניסה שלך הוא ${spaced} , שוב, ${spaced}`
+  // הקראה ספרה-ספרה עם הפסקה של כ-שנייה בין הספרות. בימות פסיק = הפסקה קצרה,
+  // ולכן רצף פסיקים מאריך את ההשהיה. GAP של מספר פסיקים ≈ שנייה בין ספרה לספרה.
+  const GAP = ' , , , , ' // ~1 שנייה בין ספרות
+  const spaced = code.split('').join(GAP)
+  const message = `קוד הכניסה שלך הוא ${GAP}${spaced} ${GAP} שוב ${GAP} ${spaced}`
   console.log(`[yemot-otp] reading code to caller (****${code.slice(-2)}) callId=${callId}`)
   return hangupMsg(message, callId)
 }
