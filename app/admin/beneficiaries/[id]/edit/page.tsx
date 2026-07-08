@@ -39,6 +39,7 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
         notes: b.notes ?? '',
         lineage_node_id: b.lineage_node_id ?? '',
         lineage_manual: Array.isArray(b.lineage_manual) ? (b.lineage_manual as string[]) : [],
+        verified_phones: Array.isArray(b.verified_phones) ? (b.verified_phones as string[]) : [],
         eligibility_status: b.eligibility_status ?? 'pending',
         children: Array.isArray(b.children)
           ? (b.children as { name?: string; id_number?: string; doc_type?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[]).map(
