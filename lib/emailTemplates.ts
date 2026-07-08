@@ -203,10 +203,21 @@ export function benefitsLinkEmail(
   portalBase: string = PORTAL_BASE_DEFAULT,
   details?: [string, string | number | null | undefined][],
   draftLinks?: { label: string; href: string }[],
+  maritalStatus?: string | null,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
   const greet = greetHe(name)
+  // התאמת הכפתורים לפי סטטוס: לידה — רק נשואים; אלמנות — רק אלמן/אלמנה; הלוואה+סיוע — לכולם.
+  const married = maritalStatus === 'נשואים'
+  const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
+  const gap = '<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>'
+  const buttons = [
+    married ? btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d') : '',
+    btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985'),
+    btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534'),
+    widower ? btn(`${base}/?action=aid`, 'להגשת בקשה לאלמנות ויתומים — לחצו כאן', '#ede9fe', '#5b21b6') : '',
+  ].filter(Boolean).join(gap)
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
@@ -227,11 +238,7 @@ export function benefitsLinkEmail(
       אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
       לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
     </p>
-    ${btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d')}
-    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985')}
-    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534')}
+    ${buttons}
     ${draftBlock}
     ${noReplyBox()}`
   return {
@@ -750,6 +757,7 @@ export function registrationReceivedEmail(
   const base = portalBase.replace(/\/$/, '')
   const fullName = [d.family_name, d.full_name].filter(Boolean).join(' ') || (d.full_name ?? '')
   const married = (d.marital_status ?? '').startsWith('נשו')
+  const widowerBen = d.marital_status === 'אלמן' || d.marital_status === 'אלמנה'
   const rows = [
     detailRow('שם מלא', fullName),
     detailRow('תעודת זהות', d.id_number),
@@ -770,11 +778,12 @@ export function registrationReceivedEmail(
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הרישום שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;font-weight:700;text-align:center;">להגשת בקשה לאחת מההטבות, לחצו על הכפתור המתאים:</p>
-    ${btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d')}
-    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985')}
-    <div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>
-    ${btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534')}
+    ${[
+      married ? btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d') : '',
+      btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985'),
+      btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534'),
+      widowerBen ? btn(`${base}/?action=aid`, 'להגשת בקשה לאלמנות ויתומים — לחצו כאן', '#ede9fe', '#5b21b6') : '',
+    ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')}
   `
   return {
     subject: 'פרטיך נקלטו בהצלחה — היכל החתם סופר',

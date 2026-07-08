@@ -235,13 +235,20 @@ export async function buildDraftLinks(
   maritalStatus?: string | null,
 ): Promise<{ label: string; href: string }[]> {
   const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
+  const married = maritalStatus === 'נשואים'
   const LABELS: Partial<Record<ReqType, string>> = {
     birth: 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה',
     silent_birth: 'להגשת בקשה להחלמה ומזון לאחר לידה שקטה',
     loan: 'להגשת בקשת הלוואה (גמ״ח)',
     financial_aid: 'להגשת בקשת סיוע רפואי',
   }
-  const types: ReqType[] = ['birth', 'silent_birth', 'loan', 'financial_aid']
+  // התאמת האפשרויות לפי הסטטוס המשפחתי:
+  //  • לידה + לידה שקטה — רק נשואים.
+  //  • הלוואה + סיוע רפואי — לכולם.
+  //  • אלמנות ויתומים — רק אלמן/אלמנה.
+  const types: ReqType[] = married
+    ? ['birth', 'silent_birth', 'loan', 'financial_aid']
+    : ['loan', 'financial_aid']
   const links: { label: string; href: string }[] = []
   for (const t of types) {
     const ctx = await loadCtx(admin, t, pending)
