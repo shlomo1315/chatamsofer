@@ -37,11 +37,10 @@ function adminClient(): SupabaseClient | null {
   return _admin
 }
 
-// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ מנגנוני ההפסקה ב-id_list_message:
-//   • נקודה '.' — מפרידה בין הודעות נפרדות → השהיה ארוכה. תמיד מוסרת.
-//   • פסיק ',' בודד — הפסקה קצרה בתוך הודעה = הקראה איטית וברורה. *נשמר*.
-// (שונה מהמסלול היוצא RunCampaign, שם פסיק חותך — כאן, ב-webhook, פסיק תקין.)
-const TTS_INVALID = /[.\-"'&|=]/g
+// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ פסיק ',' ונקודה '.' חותכים/מפצלים את
+// ההודעה ב-id_list_message (גורמים לניתוק או השהיה) — שניהם מוסרים תמיד. ההפרדה
+// בהקראה נעשית ברווחים בלבד, וכל ספרה כמילה עברית מלאה.
+const TTS_INVALID = /[.,\-"'&|=]/g
 function tts(text: string): string {
   return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 }
