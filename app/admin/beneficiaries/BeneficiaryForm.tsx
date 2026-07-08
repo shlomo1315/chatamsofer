@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button'
 import EmailInput from '@/components/ui/EmailInput'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
+import { normalizePhone } from '@/lib/phone'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { useToast } from '@/components/ui/Toast'
@@ -466,20 +467,32 @@ function Section({ title, icon: Icon, children }: {
   )
 }
 
-function Field({ label, required, error, children }: {
+function Field({ label, required, error, children, suffix }: {
   label: string
   required?: boolean
   error?: string
   children: React.ReactNode
+  suffix?: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-slate-600">
-        {label}{required && <span className="text-red-500 mr-1">*</span>}
+      <label className="text-xs font-medium text-slate-600 flex items-center gap-1.5">
+        <span>{label}{required && <span className="text-red-500 mr-1">*</span>}</span>
+        {suffix}
       </label>
       {children}
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
+  )
+}
+
+// תג "מאומת" — V ירוק ליד טלפון שעבר אימות בהרשמה/עדכון פרטים
+function VerifiedBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5" title="מספר זה עבר אימות">
+      <Check size={11} strokeWidth={3} className="text-green-600" />
+      מאומת
+    </span>
   )
 }
 
@@ -584,7 +597,7 @@ interface FormState {
 }
 
 interface Props {
-  defaultValues?: Partial<FormState & { lineage_node_id: string; children: ChildEntry[]; lineage_manual: string[] }>
+  defaultValues?: Partial<FormState & { lineage_node_id: string; children: ChildEntry[]; lineage_manual: string[]; verified_phones: string[] }>
   beneficiaryId?: string
 }
 
@@ -636,6 +649,52 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
   const [checkingId, setCheckingId] = useState(false)
   // חלונית הצלחה לאחר שמירה (נסגרת אוטומטית אחרי 3 שניות)
   const [savedInfo, setSavedInfo] = useState<{ name: string; details: string[] } | null>(null)
+
+  // ── מספרי טלפון מאומתים (לסימון "מאומת" ליד השדות) ──
+  const verifiedSet = useMemo(() => {
+    const arr = Array.isArray(defaultValues?.verified_phones) ? defaultValues!.verified_phones : []
+    return new Set(arr.map((p) => normalizePhone(String(p))).filter(Boolean))
+  }, [defaultValues?.verified_phones])
+  const isPhoneVerified = (value: string) => {
+    const n = normalizePhone(String(value ?? ''))
+    return !!n && verifiedSet.has(n)
+  }
+
+  // ── מעקב שינויים לא-שמורים (dirty) — לכפתור הצף ולאזהרת יציאה ──
+  // snapshot ראשוני של מצב הטופס; משווים אליו כדי לדעת אם היו שינויים. ה-snapshot
+  // נלכד אחרי השהיה זעירה כדי לתת לטעינות אסינכרוניות (lineage) להתייצב ולא לסמן
+  // "שינוי" בטעות. עד שהוא נלכד — dirty נשאר false.
+  const initialSnapshot = useRef<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const savedRef = useRef(false) // אחרי שמירה מוצלחת — מבטל את האזהרה
+  const snapshot = () => JSON.stringify({ form, manualLineage, children })
+  const snapshotRef = useRef(snapshot)
+  snapshotRef.current = snapshot
+  useEffect(() => {
+    const t = setTimeout(() => { initialSnapshot.current = snapshotRef.current() }, 600)
+    return () => clearTimeout(t)
+  }, [])
+  useEffect(() => {
+    if (initialSnapshot.current !== null) setDirty(snapshot() !== initialSnapshot.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, manualLineage, children])
+
+  // אזהרת דפדפן (סגירת טאב / רענון) כשיש שינויים לא-שמורים
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirty && !savedRef.current) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [dirty])
+
+  // ניווט מוגן (ביטול / חזרה) — מבקש אישור אם יש שינויים לא-שמורים
+  const guardedNavigate = (go: () => void) => {
+    if (dirty && !savedRef.current) {
+      if (!window.confirm('יש שינויים שלא נשמרו. לצאת בלי לשמור?')) return
+    }
+    go()
+  }
 
   // בדיקת כפילות תעודת זהות בזמן אמת (כשעוזבים את השדה)
   const checkDuplicateId = useCallback(async () => {
@@ -865,6 +924,10 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
         targetId = inserted.id
       }
 
+      // נשמר — מבטלים את מעקב השינויים כדי שהניווט המכוון לא יפעיל אזהרה
+      savedRef.current = true
+      setDirty(false)
+
       // חלונית "נשמר בהצלחה" — מציגה את הפרטים ל-3 שניות ואז נסגרת ומנווטת
       setSavedInfo({ name: familyName, details })
       setTimeout(() => {
@@ -880,6 +943,23 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
+
+      {/* ── כפתור "שמור שינויים" צף — מופיע רק כשיש שינוי לא-שמור, צף לאורך הגלילה ── */}
+      {isEdit && dirty && !savedInfo && (
+        <div className="fixed bottom-6 left-6 z-40 flex flex-col items-start gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 disabled:opacity-70 text-white font-semibold px-5 py-3 shadow-lg shadow-amber-500/40 ring-2 ring-amber-300 transition-colors animate-pulse"
+          >
+            {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            {saving ? 'שומר...' : 'שמור שינויים'}
+          </button>
+          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 shadow-sm">
+            יש שינויים שלא נשמרו
+          </span>
+        </div>
+      )}
 
       {/* ── Success modal (auto-closes after 3s) ── */}
       {savedInfo && (
@@ -1033,7 +1113,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
               <Field label="תאריך לידה האישה" required error={errors.spouse_birth_date}>
                 <HebrewDatePicker value={form.spouse_birth_date} onChange={iso => setForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday />
               </Field>
-              <Field label="טלפון האישה" error={errors.spouse_phone}>
+              <Field label="טלפון האישה" error={errors.spouse_phone} suffix={isPhoneVerified(form.spouse_phone) ? <VerifiedBadge /> : undefined}>
                 <FInput type="tel" value={form.spouse_phone}
                   onChange={e => { setForm(f => ({ ...f, spouse_phone: e.target.value })); setErrors(prev => ({ ...prev, spouse_phone: undefined })) }}
                   onBlur={() => {
@@ -1176,10 +1256,10 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       {/* ── Contact ── */}
       <Section title="פרטי קשר" icon={Phone}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="טלפון ראשי" required error={errors.phone}>
+          <Field label="טלפון ראשי" required error={errors.phone} suffix={isPhoneVerified(form.phone) ? <VerifiedBadge /> : undefined}>
             <FInput type="tel" value={form.phone} onChange={set('phone')} placeholder="050-0000000" dir="ltr" required />
           </Field>
-          <Field label="טלפון נוסף">
+          <Field label="טלפון נוסף" suffix={isPhoneVerified(form.phone2) ? <VerifiedBadge /> : undefined}>
             <FInput type="tel" value={form.phone2} onChange={set('phone2')} placeholder="050-0000000" dir="ltr" />
           </Field>
           <Field label="אימייל" required error={errors.email}>
@@ -1372,7 +1452,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
       )}
 
       <div className="flex gap-3 justify-end">
-        <Button type="button" variant="secondary" onClick={() => router.back()}>ביטול</Button>
+        <Button type="button" variant="secondary" onClick={() => guardedNavigate(() => router.back())}>ביטול</Button>
         <Button type="submit" loading={saving}>
           {isEdit ? 'שמור שינויים' : 'רישום צאצא'}
         </Button>
