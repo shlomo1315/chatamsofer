@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient, sendGmailMessage, ensureLabel } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail } from '@/lib/emailTemplates'
+import { isRequestSubject } from '@/lib/emailRequestIntake'
 
 const AUTO_LABEL = 'Auto-Replied'
 const MAX_PER_RUN = 25
@@ -87,15 +88,22 @@ export async function runAutoReply(opts: { dry?: boolean } = {}): Promise<AutoRe
     for (const ref of ids) {
       try {
         const msg = await gmail.users.messages.get({ userId: 'me', id: ref.id!, format: 'metadata',
-          metadataHeaders: ['From', 'List-Id', 'Precedence', 'Auto-Submitted'] })
+          metadataHeaders: ['From', 'Subject', 'List-Id', 'Precedence', 'Auto-Submitted'] })
         const headers = msg.data.payload?.headers ?? []
         const fromEmail = extractEmail(getHeader(headers, 'from'))
+        const subject = getHeader(headers, 'subject')
         const threadId = msg.data.threadId ?? undefined
 
-        // סינונים — מניעת לולאות ומענה לאוטומציות
+        // מייל שהוא בקשה (לידה/הלוואה/סיוע) — מטופל בצינור ה-Resend intake (פרסור +
+        // יצירת בקשה + אישור/דחייה). אסור לענות לו "קיבלנו את פנייתך" הגנרי, שיעקוף
+        // את הקליטה. מתייגים בלי לענות ומדלגים.
+        const isRequest = isRequestSubject(subject)
+
+        // סינונים — מניעת לולאות ומענה לאוטומציות (וגם דילוג על בקשות)
         const skip =
           !fromEmail ||
           fromEmail === officeEmail ||
+          isRequest ||
           isAutomatedSender(fromEmail) ||
           isAutomatedHeaders(headers) ||
           seenSenders.has(fromEmail)
