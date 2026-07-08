@@ -944,6 +944,8 @@ export default function PublicPortalPage() {
   const [phoneStep, setPhoneStep] = useState<'' | 'choose' | 'code'>('')
   const [authPhones, setAuthPhones] = useState<{ index: number; hint: string }[]>([])
   const [authPhoneHint, setAuthPhoneHint] = useState('')
+  // כניסה עם קוד זמני למייל: '' = מסך בחירה (מייל/טלפון); 'code' = הזנת הקוד שנשלח למייל
+  const [emailStep, setEmailStep] = useState<'' | 'code'>('')
 
   // סטטוס הבקשות נשלח למייל הרשום (במקום הצגתן בפורטל — שמירה על פרטיות)
   const [statusSending, setStatusSending] = useState(false)
@@ -1287,14 +1289,12 @@ export default function PublicPortalPage() {
         const data = await res.json()
         if (!res.ok) { setError(data.error || 'שגיאת שרת'); return }
         if (data.found) {
-          // נדרשת סיסמה לפני חשיפת פרטי המוטב
+          // נדרש קוד זמני (מייל/טלפון) לפני חשיפת פרטי המוטב — אין יותר סיסמה קבועה
           setPendingAuth({ idType: 'id', id: digits })
           setAuthEmailHint(data.emailHint || '')
-          setAuthIsSetup(!!data.needsSetup)
-          setAuthMode(data.needsSetup ? 'reset' : 'login')
-          setAuthCodeSent(false)
-          setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
-          setAuthView(data.needsSetup || intendedAction.current ? 'login' : 'intro')
+          setAuthMode('login')
+          setPhoneStep(''); setEmailStep(''); setAuthCode('')
+          setAuthView(intendedAction.current ? 'login' : 'intro')
           setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
@@ -1316,11 +1316,9 @@ export default function PublicPortalPage() {
         if (data.found) {
           setPendingAuth({ idType: 'passport', id: raw })
           setAuthEmailHint(data.emailHint || '')
-          setAuthIsSetup(!!data.needsSetup)
-          setAuthMode(data.needsSetup ? 'reset' : 'login')
-          setAuthCodeSent(false)
-          setAuthPassword(''); setAuthPassword2(''); setAuthCode('')
-          setAuthView(data.needsSetup || intendedAction.current ? 'login' : 'intro')
+          setAuthMode('login')
+          setPhoneStep(''); setEmailStep(''); setAuthCode('')
+          setAuthView(intendedAction.current ? 'login' : 'intro')
           setBenefitsSentTo(null); setBenefitsErr(''); setStatusSentTo(null); setStatusErr('')
           setStep('portal-auth')
         }
@@ -1340,23 +1338,7 @@ export default function PublicPortalPage() {
     setStep('dashboard')
   }
 
-  const handlePortalLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!pendingAuth) return
-    if (!authPassword) { setError('אנא הזן סיסמה'); return }
-    setError(''); setLoading(true)
-    try {
-      const res = await fetch('/api/portal/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id, password: authPassword }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
-      enterDashboard(data.beneficiary, data.documents)
-    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
-    setLoading(false)
-  }
-
+  // שליחת קוד זמני למייל → מסך הזנת קוד → כניסה (ללא סיסמה קבועה)
   const handleSendCode = async () => {
     if (!pendingAuth) return
     setError(''); setLoading(true)
@@ -1367,9 +1349,26 @@ export default function PublicPortalPage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
-      setAuthMode('reset')
-      setAuthCodeSent(true)
       if (data.emailHint) setAuthEmailHint(data.emailHint)
+      setAuthCode(''); setEmailStep('code')
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setLoading(false)
+  }
+
+  // אימות קוד המייל הזמני → כניסה (סשן), ללא סיסמה קבועה
+  const handleVerifyEmailCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!pendingAuth) return
+    if (!authCode) { setError('אנא הזן את הקוד שנשלח למייל'); return }
+    setError(''); setLoading(true)
+    try {
+      const res = await fetch('/api/portal/auth/verify-email-code', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id, code: authCode }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
+      enterDashboard(data.beneficiary, data.documents)
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
   }
@@ -2345,7 +2344,7 @@ export default function PublicPortalPage() {
                       <button type="button" onClick={() => { setError(''); setPhoneStep('choose') }} disabled={loading}
                         className="text-sm text-slate-500 hover:text-slate-700 underline">התקשרו אליי שוב</button>
                       <button type="button" onClick={() => { setError(''); setPhoneStep('') }}
-                        className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה לסיסמה</button>
+                        className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה</button>
                     </div>
                   </form>
                 ) : authMode === 'login' ? (
@@ -2407,15 +2406,16 @@ export default function PublicPortalPage() {
                   )}
 
                 </div>
-                ) : (
-                <form onSubmit={handlePortalLogin} className="flex flex-col gap-4">
-                  <Field label="סיסמה" required>
-                    <TextInput
-                      type="password" value={authPassword}
-                      onChange={e => setAuthPassword(e.target.value)}
-                      placeholder="הסיסמה שלך" dir="ltr" autoComplete="current-password"
-                      className="text-center text-lg"
-                    />
+                ) : emailStep === 'code' ? (
+                <form onSubmit={handleVerifyEmailCode} className="flex flex-col gap-4">
+                  <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
+                    שלחנו קוד זמני למייל שלך{authEmailHint ? <> <span className="font-semibold ltr-num" dir="ltr">{authEmailHint}</span></> : ''} · הקוד תקף ל-10 דקות בלבד
+                  </div>
+                  <Field label="קוד מהמייל" required hint="6 ספרות שנשלחו למייל">
+                    <TextInput value={authCode}
+                      onChange={e => setAuthCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
+                      className="text-center text-lg font-semibold tracking-widest" />
                   </Field>
                   {error && <ErrorBox message={error} />}
                   <button type="submit" disabled={loading}
@@ -2423,16 +2423,32 @@ export default function PublicPortalPage() {
                     {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                     {loading ? 'מאמת...' : 'כניסה'}
                   </button>
-                  <button type="button" onClick={handleListPhones} disabled={loading}
-                    className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-2.5 px-4 rounded-xl transition-all duration-150 text-sm">
-                    <Phone size={16} /> כניסה באמצעות שיחה לטלפון
-                  </button>
-                  <button type="button"
-                    onClick={() => { setError(''); setAuthMode('reset'); setAuthIsSetup(false); setAuthCodeSent(false); setAuthPassword('') }}
-                    className="text-sm text-indigo-600 hover:text-indigo-800 underline mx-auto">
-                    שכחתי סיסמה
-                  </button>
+                  <div className="flex items-center justify-center gap-4">
+                    <button type="button" onClick={handleSendCode} disabled={loading}
+                      className="text-sm text-slate-500 hover:text-slate-700 underline">שלחו לי קוד חדש</button>
+                    <button type="button" onClick={() => { setError(''); setEmailStep('') }}
+                      className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה</button>
+                  </div>
                 </form>
+                ) : (
+                <div className="flex flex-col gap-4">
+                  <p className="text-sm text-slate-600 leading-relaxed text-center">
+                    לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני</span>. בחר/י כיצד לקבל אותו:
+                  </p>
+                  {error && <ErrorBox message={error} />}
+                  <button type="button" onClick={handleSendCode} disabled={loading}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
+                    {loading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
+                    קבלת קוד זמני למייל
+                  </button>
+                  <button type="button" onClick={handleListPhones} disabled={loading}
+                    className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
+                    <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
+                  </button>
+                  <p className="text-xs text-slate-400 text-center leading-relaxed">
+                    הקוד תקף ל-10 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.
+                  </p>
+                </div>
                 )
               ) : (
                 <div className="flex flex-col gap-4">
