@@ -286,14 +286,18 @@ export function requestBlockedRejectedEmail(opts: {
 
 // ─── הגשת בקשה במייל: דחייה + טמפלט למילוי מחדש ─────────────────────────────
 export function emailIntakeRejectedEmail(opts: {
-  name: string; typeLabel: string; errors: string[]; draftText?: string | null; portalUrl?: string
+  name: string; typeLabel: string; errors: string[]; draftHref?: string | null; action?: string; portalUrl?: string
 }): BuiltEmail {
-  const { name, typeLabel, errors, draftText, portalUrl = PORTAL_BASE_DEFAULT } = opts
+  const { name, typeLabel, errors, draftHref, action, portalUrl = PORTAL_BASE_DEFAULT } = opts
   const greet = greetHe(name)
   const errorList = errors.map(e => `<li style="margin:0 0 4px;">${e}</li>`).join('')
-  const draftBlock = draftText ? `
-    <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">להגשה חוזרת — העתיקו את הטופס הבא למייל חדש, מלאו ושלחו (אותו נושא):</p>
-    <pre style="white-space:pre-wrap;font-family:Arial,sans-serif;font-size:12px;color:#0f172a;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;direction:rtl;">${draftText.replace(/</g, '&lt;')}</pre>` : ''
+  // הכפתור מפנה ישירות לטופס ההגשה המתאים (?action=birth|loan|aid) ולא לדף הכללי.
+  const base = portalUrl.replace(/\/$/, '')
+  const digitalUrl = action ? `${base}/?action=${action}` : `${base}/`
+  // "הגשה חוזרת" — קישור לטיוטה מוכנה (mailto) במקום הדבקת כל הטקסט.
+  const draftBlock = draftHref ? `
+    <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">להגשה חוזרת במייל — לחצו לפתיחת טיוטה מוכנה, מלאו וצרפו את הקובץ הנדרש:</p>
+    <p style="margin:0;"><a href="${draftHref}" style="display:inline-block;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">פתיחת טיוטת ${typeLabel} מוכנה במייל</a></p>` : ''
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
@@ -307,7 +311,7 @@ export function emailIntakeRejectedEmail(opts: {
     <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">
       <strong>מומלץ להגיש דרך המערכת הדיגיטלית שלנו</strong> (אם אינכם חסומים) — פשוט ומהיר:
     </p>
-    ${btn(`${portalUrl.replace(/\/$/, '')}/`, 'הגשת בקשה במערכת הדיגיטלית', '#4f46e5')}
+    ${btn(digitalUrl, 'הגשת בקשה במערכת הדיגיטלית', '#4f46e5')}
     ${draftBlock}
     ${noReplyBox()}`
   return {

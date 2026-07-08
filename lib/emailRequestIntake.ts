@@ -3,10 +3,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
-import { emailIntakeConfirmedEmail, emailIntakeRejectedEmail, requestBlockedRejectedEmail } from './emailTemplates'
+import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail } from './emailTemplates'
 import {
   detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
-  buildDraftBody, draftMailto, type ReqType,
+  draftMailto, type ReqType,
 } from './emailRequestForms'
 
 type InAttachment = { filename: string; url?: string; mimeType?: string }
@@ -34,8 +34,16 @@ async function loadCtx(admin: SupabaseClient, type: ReqType, pending: boolean) {
   return { recoveryHomes: [...recovery], centers, pending }
 }
 
-function reject(to: string, name: string, type: ReqType, errors: string[], draftText: string) {
-  const mail = emailIntakeRejectedEmail({ name, typeLabel: SUBJECT_PREFIX[type], errors, draftText })
+// ממפה סוג בקשה לפרמטר ה-deep-link בדף הבית (?action=), כדי שהכפתור יפתח ישירות
+// את טופס ההגשה המתאים ולא את הדף הכללי.
+const ACTION_PARAM: Record<ReqType, string> = {
+  birth: 'birth', silent_birth: 'birth', loan: 'loan', financial_aid: 'aid', widow: 'aid',
+}
+
+// להגשה חוזרת מצרפים *קישור* לטיוטה מוכנה (mailto) במקום להדביק את כל הטקסט.
+function reject(to: string, name: string, type: ReqType, errors: string[], idNumber: string, ctx: Awaited<ReturnType<typeof loadCtx>>) {
+  const draftHref = draftMailto(type, idNumber, ctx)
+  const mail = emailIntakeRejectedEmail({ name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type] })
   return deliverMail(to, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
@@ -51,7 +59,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   const idM = String(msg.subject).match(/\d{9}/)
   const generic = await loadCtx(admin, type, true)
   if (!idM) {
-    await reject(from, '', type, ['לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא'], buildDraftBody(type, '<ת.ז>', generic))
+    await reject(from, '', type, ['לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא'], '<ת.ז>', generic)
     return true
   }
   const idNumber = idM[0]
@@ -63,7 +71,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     .maybeSingle()
   const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : ''
   if (!ben) {
-    await reject(from, '', type, [`לא נמצאה רשומה לתעודת זהות ${idNumber}. ודאו שנרשמתם, או הירשמו במערכת הדיגיטלית שלנו`], buildDraftBody(type, idNumber, generic))
+    await reject(from, '', type, [`לא נמצאה רשומה לתעודת זהות ${idNumber}. ודאו שנרשמתם, או הירשמו במערכת הדיגיטלית שלנו`], idNumber, generic)
     return true
   }
   if (ben.eligibility_status === 'rejected') {
@@ -94,7 +102,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   }
 
   if (errors.length || !valid.ok) {
-    await reject(from, name, type, errors, buildDraftBody(type, idNumber, ctx))
+    await reject(from, name, type, errors, idNumber, ctx)
     return true
   }
 
@@ -159,11 +167,55 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   if (insErr) {
     console.error('[emailRequestIntake] insert failed:', insErr)
-    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו דרך המערכת הדיגיטלית שלנו'], buildDraftBody(type, idNumber, ctx))
+    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו דרך המערכת הדיגיטלית שלנו'], idNumber, ctx)
     return true
   }
 
-  const ok = emailIntakeConfirmedEmail(name, SUBJECT_PREFIX[type])
+  // מייל אישור עם כל הפרטים שהוגשו — כמו בהגשה דרך האתר (requestReceivedEmail).
+  const s = (v: unknown) => (v == null || v === '') ? '' : String(v)
+  const genderLbl = (g: unknown) => g === 'male' ? 'זכר' : g === 'female' ? 'נקבה' : ''
+  const centerName = (data.card_center_id as string)
+    ? (ctx.centers.find(c => c.id === data.card_center_id)?.name ?? '')
+    : ''
+  let rows: [string, string][] = []
+  let mailType: 'birth' | 'loan' | 'financial_aid' | 'widow' = 'birth'
+  if (type === 'birth' || type === 'silent_birth') {
+    mailType = 'birth'
+    rows = [
+      ...(type === 'silent_birth' ? [['סוג בקשה', 'לאחר לידה שקטה'] as [string, string]] : []),
+      ['שם הנולד/ת', s(data.baby_name)],
+      ['מין', genderLbl(data.baby_gender)],
+      ['ת.ז הנולד/ת', s(data.baby_id_number)],
+      ['תאריך לידה', s(data.birth_date)],
+      ['בית החלמה', s(data.recovery_home)],
+      ['מוקד לקבלת הכרטיס', centerName],
+      ['הערות', s(data.notes)],
+    ].filter(([, v]) => v !== '') as [string, string][]
+  } else if (type === 'loan') {
+    mailType = 'loan'
+    rows = [
+      ['סכום מבוקש', s(data.amount)],
+      ['מספר תשלומים', s(data.installments)],
+      ['מטרת ההלוואה', s(data.purpose)],
+      ['הערות', s(data.notes)],
+    ].filter(([, v]) => v !== '') as [string, string][]
+  } else if (type === 'financial_aid') {
+    mailType = 'financial_aid'
+    rows = [['סיבת הבקשה', s(data.reason)]].filter(([, v]) => v !== '') as [string, string][]
+  } else if (type === 'widow') {
+    mailType = 'widow'
+    rows = [
+      ['סוג הבקשה', s(data.request_type)],
+      ['פירוט', s(data.description)],
+      ['סכום מבוקש', s(data.amount)],
+    ].filter(([, v]) => v !== '') as [string, string][]
+  }
+  const ok = requestReceivedEmail({
+    type: mailType,
+    firstTime: ben.eligibility_status !== 'approved',
+    beneficiary: ben,
+    requestRows: rows,
+  })
   await deliverMail(from, ok.subject, ok.html, undefined, { ...mailFor('igud'), skipLog: true })
   console.log(`[emailRequestIntake] ${type} accepted for ben ${ben.id}`)
   return true
