@@ -37,8 +37,9 @@ function adminClient(): SupabaseClient | null {
   return _admin
 }
 
-// טקסט TTS — הסרת תווים שאסורים בימות (. - " ' & |). פסיקים נשמרים (הפסקות).
-const TTS_INVALID = /[.\-"'&|=]/g
+// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ פסיקים כלולים: בימות פסיק חותך את
+// ההודעה (הספרות לא מוקראות). ההשהיה בהקראה נוצרת ממילים ורווחים בלבד.
+const TTS_INVALID = /[.,\-"'&|=]/g
 function tts(text: string): string {
   return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 }
