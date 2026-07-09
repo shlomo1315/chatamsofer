@@ -45,7 +45,7 @@ export default function LegacyMailSettings() {
         <div className="rounded-xl p-4 text-sm bg-amber-50 text-amber-800 border border-amber-200">
           <p className="font-semibold mb-2">התיבה הישנה אינה מחוברת</p>
           <p className="mb-3 text-xs leading-relaxed">חבר את תיבת ה-Gmail הישנה (קריאה בלבד) כדי למשוך ממנה מיילים היסטוריים ומיילים חדשים שמצטברים בתקופת המעבר.</p>
-          <a href="/api/auth/gmail-legacy"><Button variant="primary"><Link2 size={16} /> חיבור תיבת Gmail ישנה</Button></a>
+          <Button variant="primary" onClick={() => { window.location.href = '/api/auth/gmail-legacy' }}><Link2 size={16} /> חיבור תיבת Gmail ישנה</Button>
         </div>
       ) : (
         <>
