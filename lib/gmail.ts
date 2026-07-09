@@ -228,15 +228,20 @@ export function parseMessage(msg: any): ParsedMessage {
 
 const LEGACY_TOKEN_KEY = 'gmail_legacy_refresh_token'
 
-// URL הרשאה לתיבה הישנה — קריאה בלבד (לא שולחים ממנה). redirect ייעודי כדי
-// להבחין מחיבור ה-office הראשי.
-export function getLegacyAuthUrl(): string {
+// OAuth2 client לתיבה הישנה — עם ה-redirect הייעודי שלה (לא של office).
+function getLegacyOAuthClient() {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
-  const oauth = new google.auth.OAuth2(
+  return new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
     process.env.GMAIL_CLIENT_SECRET,
     `${base}/api/auth/gmail-legacy/callback`,
   )
+}
+
+// URL הרשאה לתיבה הישנה — קריאה בלבד (לא שולחים ממנה). redirect ייעודי כדי
+// להבחין מחיבור ה-office הראשי.
+export function getLegacyAuthUrl(): string {
+  const oauth = getLegacyOAuthClient()
   return oauth.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -258,7 +263,7 @@ export async function getLegacyRefreshToken(): Promise<string | null> {
 export async function getLegacyGmailClient() {
   const token = await getLegacyRefreshToken()
   if (!token) throw new Error('Legacy Gmail not connected')
-  const oauth = getOAuthClient()
+  const oauth = getLegacyOAuthClient()
   oauth.setCredentials({ refresh_token: token })
   return google.gmail({ version: 'v1', auth: oauth })
 }
