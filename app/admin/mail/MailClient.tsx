@@ -11,7 +11,7 @@ import {
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Trash2, BarChart2,
   Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
-  Clock, Tag, Ban, Flag, Plus, ShieldCheck,
+  Clock, Tag, Ban, Flag, Plus, ShieldCheck, Archive, UserPlus,
 } from 'lucide-react'
 
 const EMOJIS = ['😊','🙏','👍','🙌','❤️','✨','🎉','✅','📌','📞','📧','📅','⏰','💡','🔔','⚠️','😇','🤝','💪','🌟','📝','📎','🏠','👶','💳','🕯️','✡️','🍀','😀','🙂','👏','🎊']
@@ -29,6 +29,8 @@ import { useDocTypes } from '@/lib/useDocTypes'
 import { Beneficiary, ELIGIBILITY_LABELS, type Profile } from '@/types'
 import { DEPARTMENTS, departmentByEmail, type DepartmentKey } from '@/lib/departments'
 import NewMailToast, { type MailToast, playMailSound } from '@/components/ui/NewMailToast'
+import Modal from '@/components/ui/Modal'
+import { useToast } from '@/components/ui/Toast'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,7 @@ const FOLDER_ITEMS = [
   { key: 'SENT',  label: 'דואר יוצא', icon: Send },
   { key: 'SCHEDULED', label: 'מתוזמנים', icon: Clock },
   { key: 'SPAM',  label: 'ספאם', icon: Ban },
+  { key: 'LEGACY', label: 'ארכיון מייל קודם', icon: Archive },
 ]
 
 const STATUS_COLORS: Record<string, string> = {
@@ -746,6 +749,109 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
   )
 }
 
+// ─── Legacy archive: manual beneficiary assignment modal ──────────────────────
+
+interface BeneficiarySearchResult { id: string; full_name: string; family_name?: string; email?: string; phone?: string; city?: string }
+
+function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
+  messageId: string; onClose: () => void; onAssigned: () => void
+}) {
+  const toast = useToast()
+  const [query, setQuery]     = useState('')
+  const [results, setResults] = useState<BeneficiarySearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const doSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(q)}&limit=8`)
+      const data = await res.json()
+      setResults(data.results ?? [])
+    } catch {
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }, [])
+
+  const handleQueryChange = (v: string) => {
+    setQuery(v)
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    searchTimer.current = setTimeout(() => doSearch(v), 250)
+  }
+
+  const assign = async (beneficiaryId: string) => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/admin/mail/assign-beneficiary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, beneficiaryId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) {
+        toast.error(data.error || 'שגיאה בשיוך המייל')
+        return
+      }
+      toast.success('שויך בהצלחה')
+      onAssigned()
+      onClose()
+    } catch {
+      toast.error('שגיאת רשת. נסה שוב.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="שייך מייל ללקוח" size="md">
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:border-indigo-400">
+            {searching
+              ? <Loader2 size={14} className="animate-spin text-slate-400 flex-shrink-0" />
+              : <Search size={14} className="text-slate-400 flex-shrink-0" />}
+            <input
+              className="flex-1 text-sm outline-none"
+              value={query}
+              onChange={e => handleQueryChange(e.target.value)}
+              placeholder="שם, ת.ז. או טלפון..."
+              autoFocus
+              autoComplete="off"
+            />
+            {query && <button onClick={() => { setQuery(''); setResults([]) }} className="text-slate-300 hover:text-slate-600"><X size={13} /></button>}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+          {results.length === 0 && query.trim().length >= 2 && !searching && (
+            <p className="text-xs text-slate-400 text-center py-3">לא נמצאו תוצאות</p>
+          )}
+          {results.map(r => (
+            <button key={r.id} type="button" disabled={saving}
+              onClick={() => assign(r.id)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-right rounded-lg border border-slate-100 hover:bg-indigo-50 hover:border-indigo-200 disabled:opacity-50">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700 flex-shrink-0">
+                {(r.family_name || r.full_name || '?').charAt(0)}
+              </div>
+              <div className="min-w-0 text-right flex-1">
+                <p className="text-sm font-medium text-slate-800 truncate">{[r.family_name, r.full_name].filter(Boolean).join(' ')}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {[r.phone, r.city].filter(Boolean).join(' · ') || r.email || ''}
+                </p>
+              </div>
+              {saving && <Loader2 size={14} className="animate-spin text-indigo-500 flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function BeneficiaryCard({ email }: { email: string }) {
   const [ben, setBen] = useState<Beneficiary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -994,6 +1100,10 @@ function MailExtraActions({ msg, folder, labelDefs, onToggleLabel, onCreateLabel
 
 export default function MailClient() {
   const [folder, setFolder] = useState('INBOX')
+  const [legacySub, setLegacySub] = useState<'unassigned' | 'assigned'>('unassigned')
+  const legacySubRef = useRef(legacySub)
+  useEffect(() => { legacySubRef.current = legacySub }, [legacySub])
+  const [assigningMsgId, setAssigningMsgId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [selected, setSelected] = useState<ParsedMessage | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1098,7 +1208,8 @@ export default function MailClient() {
     // התיבה שנבחרה (מהתפריט/URL) גוברת תמיד — כדי שלא נהיה תלויים בטעינת הפרופיל.
     // אם לא נבחרה תיבה — נופלים לתיבת המשתמש. השרת ממילא אוכף אילו תיבות מותרות למשתמש.
     const dept = activeDepartmentRef.current ?? (myProfileRef.current?.department ?? null)
-    const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}`)
+    const sub = f === 'LEGACY' ? `&sub=${legacySubRef.current}` : ''
+    const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}${sub}`)
     const data = await res.json()
     if (data.error && !data.messages) {
       setLoadError(data.error)
@@ -1148,6 +1259,12 @@ export default function MailClient() {
   }, [loadUnreadCounts])
 
   useEffect(() => { load(folder) }, [folder, load])
+
+  // רענון כשמחליפים בין משויכים/לא-משויכים בתוך ארכיון המייל הקודם
+  useEffect(() => {
+    if (folder === 'LEGACY') load(folder)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legacySub])
 
   // Reload when activeDepartment changes
   useEffect(() => {
@@ -1383,6 +1500,15 @@ export default function MailClient() {
           </button>
         </div>
 
+        {folder === 'LEGACY' && (
+          <div className="flex gap-3 px-4 py-2 border-b border-slate-100 text-sm">
+            <button type="button" onClick={() => setLegacySub('unassigned')}
+              className={legacySub === 'unassigned' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>לא משויכים</button>
+            <button type="button" onClick={() => setLegacySub('assigned')}
+              className={legacySub === 'assigned' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>משויכים</button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 gap-2 text-slate-400 text-sm">
@@ -1469,6 +1595,14 @@ export default function MailClient() {
                     </button>
                     {/* עמודת פעולות נפרדת — אינה חופפת את התוכן */}
                     <div className="flex flex-col items-center justify-center gap-1 w-9 flex-shrink-0 border-r border-slate-100 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+                      {folder === 'LEGACY' && !msg.beneficiaryId && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setAssigningMsgId(msg.id) }}
+                          className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors"
+                          title="שייך ללקוח">
+                          <UserPlus size={14} />
+                        </button>
+                      )}
                       <button
                         onClick={e => { e.stopPropagation(); trashMessage(msg.id) }}
                         className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
@@ -1540,6 +1674,12 @@ export default function MailClient() {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
                 <Forward size={14} /> העבר
               </button>
+              {folder === 'LEGACY' && !selected.beneficiaryId && (
+                <button onClick={() => setAssigningMsgId(selected.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
+                  <UserPlus size={14} /> שייך ללקוח
+                </button>
+              )}
               <MailExtraActions msg={selected} folder={folder} labelDefs={labelDefs}
                 onToggleLabel={toggleLabel} onCreateLabel={createLabel} onSetSpam={setSpam} onSetFollowUp={setFollowUp} />
               <button onClick={() => trashMessage(selected.id)}
@@ -1585,6 +1725,13 @@ export default function MailClient() {
         }
       />}
       {forwardMsg && <ForwardModal msg={forwardMsg} onClose={() => setForwardMsg(null)} />}
+      {assigningMsgId && (
+        <AssignBeneficiaryModal
+          messageId={assigningMsgId}
+          onClose={() => setAssigningMsgId(null)}
+          onAssigned={() => load(folder, search)}
+        />
+      )}
 
       {/* New mail toast notifications — bottom-left */}
       <div className="fixed bottom-4 left-4 z-50 flex flex-col gap-2">

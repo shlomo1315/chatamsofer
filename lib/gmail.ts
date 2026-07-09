@@ -108,6 +108,7 @@ export interface ParsedMessage {
   isSpam?: boolean
   followUpAt?: string | null
   scheduledAt?: string | null
+  beneficiaryId?: string | null
 }
 
 function decodeBase64(data: string) {
