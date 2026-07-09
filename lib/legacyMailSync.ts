@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getLegacyGmailClient, getBody } from './gmail'
+import { getLegacyGmailClient, getBody, getGmailClient, ensureLabel } from './gmail'
 
 // זיהוי לקוח למייל היסטורי — אותו דפוס כמו resend-inbound (maybeAutoReplyIgud):
 // ת"ז 9 ספרות בנושא (רשום או בן/בת זוג) → נפילה לכתובת השולח.
@@ -42,6 +42,12 @@ const LAST_SYNC_KEY = 'legacy_mail_last_sync'
 // שומר ל-inbound_emails עם source='legacy', משייך beneficiary, מעדכן חותמת.
 export async function syncLegacyMail(admin: SupabaseClient) {
   const gmail = await getLegacyGmailClient()
+
+  let officeGmail: any = null, archiveLabelId: string | null = null
+  try {
+    officeGmail = await getGmailClient()
+    archiveLabelId = await ensureLabel(officeGmail, 'ארכיון מייל קודם')
+  } catch (e) { console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', e) }
 
   const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
   const lastEpoch = cur?.value ? Number(cur.value) : 0
@@ -96,6 +102,18 @@ export async function syncLegacyMail(admin: SupabaseClient) {
 
         const imported = (inserted?.length ?? 0) > 0
         results.push({ imported, matched: !!beneficiaryId })
+
+        if (imported && officeGmail && archiveLabelId) {
+          try {
+            const rawFull = await gmail.users.messages.get({ userId: 'me', id, format: 'raw' })
+            if (rawFull.data.raw) {
+              await officeGmail.users.messages.insert({
+                userId: 'me',
+                requestBody: { raw: rawFull.data.raw, labelIds: [archiveLabelId] },
+              })
+            }
+          } catch (e) { console.error(`[legacy-sync] Gmail insert failed for ${id}:`, e) }
+        }
       } catch (err) {
         console.error(`[legacy-sync] failed message ${id}:`, err)
         results.push({ imported: false, matched: false })
