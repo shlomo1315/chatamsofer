@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getLegacyGmailClient } from './gmail'
+import { getLegacyGmailClient, getBody } from './gmail'
 
 // זיהוי לקוח למייל היסטורי — אותו דפוס כמו resend-inbound (maybeAutoReplyIgud):
 // ת"ז 9 ספרות בנושא (רשום או בן/בת זוג) → נפילה לכתובת השולח.
@@ -55,38 +55,52 @@ export async function syncLegacyMail(admin: SupabaseClient) {
     const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken })
     const ids = (list.data.messages ?? []).map(m => m.id!).filter(Boolean)
     for (const id of ids) {
-      const full = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
-      const headers = full.data.payload?.headers ?? []
-      const h = (n: string) => headers.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? ''
-      const gmailMessageId = h('message-id') || id
-      const subject = h('subject')
-      const fromRaw = h('from')
-      const fromEmail = (fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw).toLowerCase().trim()
-      const fromName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || null
-      const toEmail = (h('to').match(/<([^>]+)>/)?.[1] ?? h('to')).toLowerCase().trim()
-      const dateMs = Number(full.data.internalDate ?? 0)
-      const emailDate = dateMs ? new Date(dateMs).toISOString() : null
-      const epochSec = dateMs ? Math.floor(dateMs / 1000) : 0
-      if (epochSec > maxEpoch) maxEpoch = epochSec
+      try {
+        const full = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
+        const headers = full.data.payload?.headers ?? []
+        const h = (n: string) => headers.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? ''
+        const gmailMessageId = h('message-id') || id
+        const subject = h('subject')
+        const fromRaw = h('from')
+        const fromEmail = (fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw).toLowerCase().trim()
+        const fromName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || null
+        const toEmail = (h('to').match(/<([^>]+)>/)?.[1] ?? h('to')).toLowerCase().trim()
+        const dateMs = Number(full.data.internalDate ?? 0)
+        const emailDate = dateMs ? new Date(dateMs).toISOString() : null
+        const epochSec = dateMs ? Math.floor(dateMs / 1000) : 0
 
-      const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
+        const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
 
-      const { data: inserted } = await admin.from('inbound_emails').upsert({
-        gmail_message_id: gmailMessageId,
-        message_id: gmailMessageId,
-        source: 'legacy',
-        from_email: fromEmail,
-        from_name: fromName,
-        to_email: toEmail,
-        subject,
-        plain_text: full.data.snippet ?? null,
-        beneficiary_id: beneficiaryId,
-        email_date: emailDate,
-        is_read: true,
-      }, { onConflict: 'gmail_message_id', ignoreDuplicates: true }).select('id')
+        const { data: inserted, error } = await admin.from('inbound_emails').upsert({
+          gmail_message_id: gmailMessageId,
+          source: 'legacy',
+          from_email: fromEmail,
+          from_name: fromName,
+          to_email: toEmail,
+          subject,
+          html: getBody(full.data.payload) || null,
+          plain_text: full.data.snippet ?? null,
+          beneficiary_id: beneficiaryId,
+          email_date: emailDate,
+          received_at: emailDate ?? null,
+          is_read: true,
+        }, { onConflict: 'gmail_message_id', ignoreDuplicates: true }).select('id')
 
-      const imported = (inserted?.length ?? 0) > 0
-      results.push({ imported, matched: !!beneficiaryId })
+        if (error) {
+          console.error(`[legacy-sync] upsert failed for ${gmailMessageId}:`, error.message)
+          results.push({ imported: false, matched: false })
+          continue
+        }
+
+        if (epochSec > maxEpoch) maxEpoch = epochSec
+
+        const imported = (inserted?.length ?? 0) > 0
+        results.push({ imported, matched: !!beneficiaryId })
+      } catch (err) {
+        console.error(`[legacy-sync] failed message ${id}:`, err)
+        results.push({ imported: false, matched: false })
+        continue
+      }
     }
     pageToken = list.data.nextPageToken ?? undefined
   } while (pageToken)

@@ -114,7 +114,7 @@ function decodeBase64(data: string) {
   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
 }
 
-function getBody(payload: any): string {
+export function getBody(payload: any): string {
   if (!payload) return ''
   if (payload.mimeType === 'text/html' && payload.body?.data) return decodeBase64(payload.body.data)
   if (payload.mimeType === 'text/plain' && payload.body?.data) {
