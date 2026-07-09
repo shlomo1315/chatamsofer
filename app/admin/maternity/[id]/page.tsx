@@ -16,6 +16,7 @@ import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import BirthCertificatePreview from './BirthCertificatePreview'
+import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
@@ -431,6 +432,19 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 <div className="text-sm mt-2">
                   <span className="text-slate-500">מספר קבלה (בית ההחלמה): </span>
                   <span className="font-bold text-slate-800 ltr-num">{aid.recovery_receipt_number}</span>
+                </div>
+              )}
+              {aid.recovery_receipt_url && (
+                <div className="mt-2">
+                  <DownloadDocButton url={aid.recovery_receipt_url} name="קבלה" label="קובץ קבלה" variant="button" />
+                </div>
+              )}
+              {aid.recovery_locked && (
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  {aid.recovery_edit_requested_at && (
+                    <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">בית ההחלמה ביקש תיקון</span>
+                  )}
+                  <RecoveryUnlockButton aidId={aid.id} />
                 </div>
               )}
             </Card>

@@ -4,6 +4,7 @@ import { MaternityAid } from '@/types'
 import RecoveryHomesView from './RecoveryHomesView'
 import RecoveryHomeLinks from '../RecoveryHomeLinks'
 import RecoveryBillingSummary from '../RecoveryBillingSummary'
+import RecoveryAlerts, { type RecoveryEvent } from './RecoveryAlerts'
 
 const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
@@ -36,8 +37,19 @@ async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeO
 export default async function RecoveryPage() {
   const { aids, homes, homeObjs } = await getData()
 
+  // אירועים לחלונית ההתראה: מימוש זכאות / בקשת תיקון
+  const events: RecoveryEvent[] = aids.flatMap((a) => {
+    const b = (a as { beneficiary?: { family_name?: string; full_name?: string; spouse_name?: string } }).beneficiary
+    const name = b ? [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || '—' : '—'
+    const out: RecoveryEvent[] = []
+    if (a.recovery_amount_at) out.push({ id: a.id, name, kind: 'realized', at: a.recovery_amount_at })
+    if (a.recovery_edit_requested_at) out.push({ id: a.id, name, kind: 'edit', at: a.recovery_edit_requested_at })
+    return out
+  })
+
   return (
     <div className="flex flex-col gap-5">
+      <RecoveryAlerts events={events} />
       <div className="flex items-center gap-2">
         <Baby size={20} className="text-pink-500" />
         <div>

@@ -1142,3 +1142,42 @@ export function portalCredentialsEmail(opts: {
     html: shell({ preheader: `פרטי הכניסה ל${title}`, accent: '#4f46e5', title, subtitle: 'היכל החתם סופר', body }),
   }
 }
+
+// ─── התראה: יולדת מימשה זכאות החלמה (נשלח לכתובת פניות היולדות של בית ההחלמה) ──
+export function recoveryRealizedEmail(opts: {
+  home: string
+  motherName: string
+  amount: number
+  nights: number | null
+  receipt: string
+}): { subject: string; html: string } {
+  const rows =
+    detailRow('בית החלמה', opts.home) +
+    detailRow('יולדת', opts.motherName) +
+    detailRow('סכום שמומש', '₪' + opts.amount.toLocaleString('he-IL')) +
+    detailRow('מספר לילות', opts.nights != null ? String(opts.nights) : '—') +
+    detailRow('מספר קבלה', opts.receipt)
+  const body = `
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">יולדת סימנה מימוש זכאות החלמה בפורטל בית ההחלמה.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
+  `
+  return {
+    subject: `מימוש זכאות החלמה · ${opts.motherName} · ${opts.home}`,
+    html: shell({ preheader: `${opts.motherName} מימשה זכאות החלמה`, accent: '#059669', title: 'מימוש זכאות החלמה', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
+// ─── התראה: בית החלמה ביקש לתקן רשומה נעולה ─────────────────────────────────
+export function recoveryEditRequestEmail(opts: {
+  home: string
+  motherName: string
+}): { subject: string; html: string } {
+  const body = `
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">בית החלמה <b>${escapeHtml(opts.home)}</b> ביקש לתקן את הרשומה של היולדת <b>${escapeHtml(opts.motherName)}</b>.</p>
+    <p style="margin:0;color:#475569;font-size:15px;line-height:1.8;">הרשומה נעולה. ניתן לפתוח אותה לעריכה ממסך ההחלמה או מכרטסת הלידה.</p>
+  `
+  return {
+    subject: `בקשת תיקון · ${opts.motherName} · ${opts.home}`,
+    html: shell({ preheader: `בקשת תיקון מ${opts.home}`, accent: '#d97706', title: 'בקשת תיקון רשומה', subtitle: 'היכל החתם סופר', body }),
+  }
+}

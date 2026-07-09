@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
+import { deliverMail } from '@/lib/sendMail'
+import { recoveryRealizedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +21,9 @@ export async function POST(request: NextRequest) {
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   const amt = Number(amount)
   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
-  const nightsNum = nights === '' || nights == null ? null : Number(nights)
-  if (nightsNum != null && (!Number.isInteger(nightsNum) || nightsNum < 0)) {
-    return NextResponse.json({ error: 'מספר לילות לא תקין' }, { status: 400 })
+  const nightsNum = Number(nights)
+  if (!Number.isInteger(nightsNum) || nightsNum < 0) {
+    return NextResponse.json({ error: 'יש להזין מספר לילות' }, { status: 400 })
   }
   const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
   if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
@@ -35,12 +37,20 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   // אבטחה: הרשומה שייכת לבית ההחלמה הזה, וסומן שהיולדת הגיעה
-  const { data: aid } = await admin.from('maternity_aids').select('id, recovery_home, recovery_arrived').eq('id', aidId).maybeSingle()
+  const { data: aid } = await admin.from('maternity_aids')
+    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, beneficiaries(family_name, full_name, spouse_name)')
+    .eq('id', aidId).maybeSingle()
   if (!aid || aid.recovery_home !== home) {
     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
   }
+  if (aid.recovery_locked) {
+    return NextResponse.json({ error: 'הרשומה נעולה — פנה למשרד' }, { status: 403 })
+  }
   if (aid.recovery_arrived !== true) {
     return NextResponse.json({ error: 'יש לסמן "הגיעה" לפני הזנת הסכום' }, { status: 400 })
+  }
+  if (!aid.recovery_receipt_url) {
+    return NextResponse.json({ error: 'יש להעלות קובץ קבלה' }, { status: 400 })
   }
 
   const { error } = await admin.from('maternity_aids').update({
@@ -49,9 +59,24 @@ export async function POST(request: NextRequest) {
     recovery_receipt_number: receipt,
     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
     recovery_amount_at: new Date().toISOString(),
+    recovery_locked: true, // נעילה מיידית — עריכה חוזרת רק לאחר פתיחת המשרד
     updated_at: new Date().toISOString(),
   }).eq('id', aidId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // מייל התראה על מימוש זכאות — לכתובת פניות היולדות של בית החלמה
+  try {
+    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
+    if (rh?.report_email) {
+      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
+      const motherName = ben
+        ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || '—'
+        : '—'
+      const mail = recoveryRealizedEmail({ home, motherName, amount: amt, nights: nightsNum, receipt })
+      await deliverMail(rh.report_email, mail.subject, mail.html)
+    }
+  } catch { /* כשל מייל לא חוסם */ }
+
   return NextResponse.json({ ok: true })
 }

@@ -179,7 +179,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
-                  <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap align-middle">{h}</th>
+                  <th key={h} className="px-4 py-3.5 text-xs font-semibold text-slate-500 align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -192,7 +192,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   <tr key={aid.id}
                     onClick={() => router.push(`/admin/maternity/${aid.id}`)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 align-middle font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
+                    <td className="px-4 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
                     <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                     <td className="px-4 py-3 align-middle text-slate-700">
                       <span className="inline-flex items-center gap-1.5">

@@ -164,6 +164,9 @@ export interface MaternityAid {
   recovery_amount_at?: string
   recovery_nights?: number
   recovery_receipt_number?: string
+  recovery_receipt_url?: string
+  recovery_locked?: boolean
+  recovery_edit_requested_at?: string
   // ימי הזכאות של היולדת בבית ההחלמה שאושרו (ברירת מחדל: רגילה=2 · תאומים=4; ניתן לעריכה ידנית)
   recovery_eligibility_days?: number
   status: MaternityStatus

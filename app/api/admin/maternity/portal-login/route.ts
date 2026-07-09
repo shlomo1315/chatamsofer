@@ -21,12 +21,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/maternity/recovery', origin))
   }
 
-  // אימות ששם בית ההחלמה קיים במערכת (מונע הזרקת שם שרירותי)
+  // בתי החלמה מברירת-מחדל מוזרקים לתצוגה גם בלי שורה ב-DB. אם חסרה שורה —
+  // צור אותה כדי שהכניסה המהירה תעבוד, במקום להפנות חזרה בשקט.
+  const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
   const admin = getServiceClient()
   if (admin) {
     const { data } = await admin.from('recovery_homes').select('name').eq('name', home).maybeSingle()
     if (!data) {
-      return NextResponse.redirect(new URL('/admin/maternity/recovery', origin))
+      if (DEFAULT_HOMES.includes(home)) {
+        await admin.from('recovery_homes').upsert({ name: home }, { onConflict: 'name' })
+      } else {
+        return NextResponse.redirect(
+          new URL('/admin/maternity/recovery?portalError=' + encodeURIComponent('בית החלמה לא נמצא במערכת'), origin),
+        )
+      }
     }
   }
 

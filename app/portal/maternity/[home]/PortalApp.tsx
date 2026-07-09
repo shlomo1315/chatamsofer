@@ -37,6 +37,9 @@ interface Aid {
   recovery_amount_status?: string | null
   recovery_nights?: number | null
   recovery_receipt_number?: string | null
+  recovery_receipt_url?: string | null
+  recovery_locked?: boolean | null
+  recovery_edit_requested_at?: string | null
   beneficiary?: Mother
 }
 
@@ -272,20 +275,78 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
-  const sendAmount = async (aidId: string) => {
+  // קובץ הקבלה + מצב נעילה של הרשומה
+  const [receiptFile, setReceiptFile] = useState<Record<string, File | null>>({})
+  const [receiptUrl, setReceiptUrl] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_url ?? null])),
+  )
+  const [locked, setLocked] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(aids.map(a => [a.id, !!a.recovery_locked])),
+  )
+  const [editRequested, setEditRequested] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(aids.map(a => [a.id, !!a.recovery_edit_requested_at])),
+  )
+  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
+  const [confirmAid, setConfirmAid] = useState<string | null>(null)
+  const [requesting, setRequesting] = useState<string | null>(null)
+
+  const uploadReceipt = async (aidId: string, file: File) => {
+    setUploadingReceipt(aidId)
+    try {
+      const fd = new FormData()
+      fd.append('home', home); fd.append('aidId', aidId); fd.append('file', file)
+      const r = await fetch('/api/portal/recovery-receipt', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.url) {
+        setReceiptUrl(m => ({ ...m, [aidId]: d.url }))
+        setReceiptFile(m => ({ ...m, [aidId]: file }))
+      }
+    } catch { /* התעלם */ }
+    setUploadingReceipt(null)
+  }
+
+  // כל השדות חובה: סכום חיובי, לילות, מספר קבלה, וקובץ קבלה שהועלה
+  const canSubmit = (aidId: string) => {
     const amt = Number(amountInput[aidId])
-    if (!Number.isFinite(amt) || amt <= 0) return
-    const receipt = (receiptInput[aidId] ?? '').trim()
-    if (!receipt) return
+    return Number.isFinite(amt) && amt > 0 &&
+      (nightsInput[aidId] ?? '').trim() !== '' &&
+      (receiptInput[aidId] ?? '').trim() !== '' &&
+      !!receiptUrl[aidId]
+  }
+
+  const sendAmount = async (aidId: string) => {
+    if (!canSubmit(aidId)) return
     setSavingAmt(aidId)
     try {
       const r = await fetch('/api/portal/recovery-amount', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ home, aidId, amount: amt, nights: nightsInput[aidId] || null, receiptNumber: receipt }),
+        body: JSON.stringify({
+          home, aidId,
+          amount: Number(amountInput[aidId]),
+          nights: nightsInput[aidId],
+          receiptNumber: (receiptInput[aidId] ?? '').trim(),
+        }),
       })
-      if (r.ok) { setAmountStatus(m => ({ ...m, [aidId]: 'pending' })); setEditingAmt(m => ({ ...m, [aidId]: false })) }
+      if (r.ok) {
+        setAmountStatus(m => ({ ...m, [aidId]: 'executed' }))
+        setLocked(m => ({ ...m, [aidId]: true }))
+        setEditingAmt(m => ({ ...m, [aidId]: false }))
+        setConfirmAid(null)
+      }
     } catch { /* נסיון חוזר אפשרי */ }
     setSavingAmt(null)
+  }
+
+  const requestEdit = async (aidId: string) => {
+    setRequesting(aidId)
+    try {
+      const r = await fetch('/api/portal/recovery-request-edit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ home, aidId }),
+      })
+      if (r.ok) setEditRequested(m => ({ ...m, [aidId]: true }))
+    } catch { /* התעלם */ }
+    setRequesting(null)
   }
   const markArrived = async (aidId: string, value: boolean | null) => {
     const prev = arrived[aidId] ?? null
@@ -337,17 +398,53 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
 
   return (
     <div className="portal16 min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
-      {/* גופן אחיד 16px בכל הפורטל (האייקונים נשלטים ע"י width/height ולכן לא מושפעים) */}
+      {/* טיפוגרפיה נעימה וריווח נדיב — בלי font-size גלובלי שמנפח את הטבלה וגורם לגלישה */}
       <style>{`
-        .portal16, .portal16 * { font-size: 16px !important; line-height: 1.5 !important; }
-        .portal16 svg { font-size: 0 !important; }
-        .portal16 input, .portal16 textarea, .portal16 select, .portal16 button { font-size: 16px !important; }
+        .portal16 { font-size: 15px; line-height: 1.6; }
+        .portal16 table { font-size: 14px; }
+        .portal16 thead th { padding-top: 14px; padding-bottom: 14px; letter-spacing: .01em; }
+        .portal16 tbody td { padding-top: 16px; padding-bottom: 16px; }
+        .portal16 input, .portal16 textarea, .portal16 select { font-size: 16px; }
       `}</style>
       {selected && <DetailModal aid={selected} onClose={() => setSelected(null)} />}
 
+      {/* חלונית אימות סופי — "בדוק פעמיים לפני שליחה". לאחר אישור הרשומה ננעלת. */}
+      {confirmAid && (() => {
+        const a = filtered.find(x => x.id === confirmAid); if (!a) return null
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setConfirmAid(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden"
+              style={{ animation: 'pop-in 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
+              <div className="bg-amber-500 px-5 py-4 text-white flex items-start gap-3">
+                <AlertCircle size={22} className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-base">אישור סופי — נא לוודא את נכונות הפרטים</p>
+                  <p className="text-amber-50 text-xs mt-1 leading-relaxed">נא לעבור בעיון על כל הפרטים ולוודא את נכונותם. לאחר האישור לא ניתן יהיה לערוך את הנתונים.</p>
+                </div>
+              </div>
+              <div className="p-5 space-y-2.5 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500">יולדת</span><span className="font-semibold text-slate-800">{motherName(a.beneficiary)}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">סכום שמומש</span><span className="font-semibold text-slate-800">₪{Number(amountInput[a.id]).toLocaleString('he-IL')}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">מספר לילות</span><span className="font-semibold text-slate-800">{nightsInput[a.id]}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">מספר קבלה</span><span className="font-semibold text-slate-800">{receiptInput[a.id]}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">קובץ קבלה</span><span className="font-semibold text-emerald-600">{receiptUrl[a.id] ? 'צורף ✓' : '—'}</span></div>
+              </div>
+              <div className="flex gap-2 p-4 border-t border-slate-100">
+                <button onClick={() => setConfirmAid(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">חזור לתיקון</button>
+                <button onClick={() => sendAmount(a.id)} disabled={savingAmt === a.id}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-40">
+                  {savingAmt === a.id ? '...' : 'אני מאשר/ת ושולח/ת'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Top bar */}
       <div className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
             {logoErr
               ? <Building2 size={22} className="text-indigo-400" />
@@ -373,7 +470,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-5 space-y-4">
+      <div className="max-w-6xl mx-auto px-4 py-5 space-y-4">
         {/* Search */}
         <div className="relative">
           <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3.5 text-slate-400 pointer-events-none" />
@@ -462,9 +559,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                         <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
                           {status && !editing ? (
                             <div className="flex flex-col items-center gap-1.5">
-                              <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2">
-                                <Check size={15} className="text-emerald-600" />
-                                <span className="text-sm font-semibold text-emerald-800">
+                              <div className="inline-flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2 max-w-xs mx-auto">
+                                <Check size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                                <span className="text-sm font-semibold text-emerald-800 text-right leading-relaxed">
                                   היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}{receiptInput[aid.id] ? ` · קבלה ${receiptInput[aid.id]}` : ''}
                                 </span>
                               </div>
@@ -472,8 +569,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 {status === 'rejected'
                                   ? <span className="text-xs font-medium text-red-600">נדחה</span>
                                   : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
-                                <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
-                                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>
+                                {locked[aid.id]
+                                  ? (editRequested[aid.id] || requesting === aid.id
+                                      ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><Lock size={12} /> בקשת תיקון נשלחה</span>
+                                      : <button type="button" onClick={() => requestEdit(aid.id)}
+                                          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">בקש תיקון</button>)
+                                  : <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
+                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>}
                               </div>
                             </div>
                           ) : (
@@ -531,11 +633,22 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                 />
                               </label>
-                              <button type="button" onClick={() => sendAmount(aid.id)}
-                                disabled={savingAmt === aid.id || !amountInput[aid.id] || !(receiptInput[aid.id] ?? '').trim()}
-                                title={!(receiptInput[aid.id] ?? '').trim() ? 'יש להזין מספר קבלה' : undefined}
+                              <label className="flex flex-col gap-1.5 text-right">
+                                <span className="text-sm font-semibold text-slate-600">קובץ קבלה (תמונה/PDF)</span>
+                                <input
+                                  type="file" accept="image/*,application/pdf"
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(aid.id, f) }}
+                                  className="w-full text-sm file:ml-3 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-4 file:py-2 file:text-emerald-700 file:font-semibold file:cursor-pointer"
+                                />
+                                {uploadingReceipt === aid.id
+                                  ? <span className="text-xs text-slate-400">מעלה…</span>
+                                  : receiptUrl[aid.id] && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> קובץ הועלה</span>}
+                              </label>
+                              <button type="button" onClick={() => setConfirmAid(aid.id)}
+                                disabled={!canSubmit(aid.id) || savingAmt === aid.id}
+                                title={!canSubmit(aid.id) ? 'יש למלא סכום, מספר לילות, מספר קבלה ולהעלות קובץ קבלה' : undefined}
                                 className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
-                                {savingAmt === aid.id ? '...' : 'סמן כבוצע'}
+                                אישור ושליחה
                               </button>
                             </div>
                           </td>
