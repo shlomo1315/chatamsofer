@@ -229,7 +229,7 @@ export function parseMessage(msg: any): ParsedMessage {
 const LEGACY_TOKEN_KEY = 'gmail_legacy_refresh_token'
 
 // OAuth2 client לתיבה הישנה — עם ה-redirect הייעודי שלה (לא של office).
-function getLegacyOAuthClient() {
+export function getLegacyOAuthClient() {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
   return new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
