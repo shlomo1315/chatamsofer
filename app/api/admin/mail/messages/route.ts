@@ -93,13 +93,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ messages })
   }
 
-  // ── דואר נכנס / ספאם ──
+  // ── דואר נכנס / ספאם / ארכיון (LEGACY) ──
   const assignments = await labelsFor()
+  const isLegacy = folder === 'LEGACY'
   let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).limit(50)
-  query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
-  query = query.eq('source', 'resend')
-  if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
-  else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
+  if (isLegacy) {
+    query = query.eq('source', 'legacy')
+    const sub = request.nextUrl.searchParams.get('sub')
+    if (sub === 'assigned') query = query.not('beneficiary_id', 'is', null)
+    else if (sub === 'unassigned') query = query.is('beneficiary_id', null)
+  } else {
+    query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
+    query = query.eq('source', 'resend')
+  }
+  if (!isLegacy) {
+    if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
+    else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
+  }
   if (q) query = query.or(`subject.ilike.%${q}%,from_email.ilike.%${q}%,from_name.ilike.%${q}%`)
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -121,6 +131,7 @@ export async function GET(request: NextRequest) {
     labelIds: assignments[m.id] ?? [],
     isSpam: !!m.is_spam,
     followUpAt: m.follow_up_at ?? null,
+    beneficiaryId: m.beneficiary_id ?? null,
   }))
 
   // מיילים שסומנו לטיפול וזמנם הגיע — קופצים לראש הרשימה (העדכני-ביותר-לטיפול ראשון)
