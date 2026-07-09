@@ -18,6 +18,7 @@ import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
+import LegacyMailSettings from './LegacyMailSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -143,6 +144,11 @@ export default async function SettingsPage() {
         {/* Email templates */}
         <Collapsible title="תבניות מייל" icon={<Mail size={16} className="text-indigo-500" />}>
           <EmailTemplatesManager />
+        </Collapsible>
+
+        {/* Legacy Gmail sync */}
+        <Collapsible title="סנכרון מייל קודם" icon={<Mail size={16} className="text-orange-500" />}>
+          <LegacyMailSettings />
         </Collapsible>
 
         {/* Nedarim Card connection */}
