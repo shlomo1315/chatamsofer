@@ -290,6 +290,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   )
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
   const [confirmAid, setConfirmAid] = useState<string | null>(null)
+  const [missingModal, setMissingModal] = useState<{ id: string; fields: string[] } | null>(null)
   const [requesting, setRequesting] = useState<string | null>(null)
 
   const uploadReceipt = async (aidId: string, file: File) => {
@@ -307,14 +308,18 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     setUploadingReceipt(null)
   }
 
-  // כל השדות חובה: סכום חיובי, לילות, מספר קבלה, וקובץ קבלה שהועלה
-  const canSubmit = (aidId: string) => {
+  // רשימת השדות החסרים — להצגה בחלונית התראה כשלוחצים "אישור ושליחה" והטופס לא מלא
+  const missingFields = (aidId: string) => {
+    const missing: string[] = []
     const amt = Number(amountInput[aidId])
-    return Number.isFinite(amt) && amt > 0 &&
-      (nightsInput[aidId] ?? '').trim() !== '' &&
-      (receiptInput[aidId] ?? '').trim() !== '' &&
-      !!receiptUrl[aidId]
+    if (!(Number.isFinite(amt) && amt > 0)) missing.push('סכום שמומש')
+    if ((nightsInput[aidId] ?? '').trim() === '') missing.push('מספר לילות')
+    if ((receiptInput[aidId] ?? '').trim() === '') missing.push('מספר קבלה')
+    if (!receiptUrl[aidId]) missing.push('קובץ קבלה')
+    return missing
   }
+  // כל השדות חובה: סכום חיובי, לילות, מספר קבלה, וקובץ קבלה שהועלה
+  const canSubmit = (aidId: string) => missingFields(aidId).length === 0
 
   const sendAmount = async (aidId: string) => {
     if (!canSubmit(aidId)) return
@@ -409,6 +414,34 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         .portal16 input, .portal16 textarea, .portal16 select { font-size: 16px; }
       `}</style>
       {selected && <DetailModal aid={selected} onClose={() => setSelected(null)} />}
+
+      {/* חלונית התראה — מה חסר להשלמה לפני שליחה */}
+      {missingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={() => setMissingModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden"
+            style={{ animation: 'pop-in 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
+            <div className="bg-rose-500 px-5 py-4 text-white flex items-start gap-3">
+              <AlertCircle size={22} className="flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-base">חסרים פרטים להשלמה</p>
+                <p className="text-rose-50 text-xs mt-1">יש למלא את כל השדות הבאים לפני השליחה:</p>
+              </div>
+            </div>
+            <ul className="p-5 space-y-2">
+              {missingModal.fields.map(f => (
+                <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
+                  <X size={15} className="text-rose-500 flex-shrink-0" /> {f}
+                </li>
+              ))}
+            </ul>
+            <div className="p-4 border-t border-slate-100">
+              <button onClick={() => setMissingModal(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-sm">הבנתי, אשלים</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* חלונית אימות סופי — "בדוק פעמיים לפני שליחה". לאחר אישור הרשומה ננעלת. */}
       {confirmAid && (() => {
@@ -652,9 +685,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   ? <span className="text-xs text-slate-400">מעלה…</span>
                                   : receiptUrl[aid.id] && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> קובץ הועלה</span>}
                               </label>
-                              <button type="button" onClick={() => setConfirmAid(aid.id)}
-                                disabled={!canSubmit(aid.id) || savingAmt === aid.id}
-                                title={!canSubmit(aid.id) ? 'יש למלא סכום, מספר לילות, מספר קבלה ולהעלות קובץ קבלה' : undefined}
+                              <button type="button"
+                                onClick={() => {
+                                  const missing = missingFields(aid.id)
+                                  if (missing.length) setMissingModal({ id: aid.id, fields: missing })
+                                  else setConfirmAid(aid.id)
+                                }}
+                                disabled={savingAmt === aid.id}
                                 className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
                                 אישור ושליחה
                               </button>
