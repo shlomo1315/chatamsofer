@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   const { error } = await admin().from('inbound_emails')
     .update({ beneficiary_id: body.beneficiaryId ?? null })
     .eq('id', body.messageId)
+    .eq('source', 'legacy')
   if (error) return NextResponse.json({ error: 'שגיאה בשיוך' }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
