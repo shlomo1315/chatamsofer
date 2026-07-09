@@ -783,6 +783,10 @@ function AssignBeneficiaryModal({ messageId, onClose, onAssigned }: {
     searchTimer.current = setTimeout(() => doSearch(v), 250)
   }
 
+  useEffect(() => {
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current) }
+  }, [])
+
   const assign = async (beneficiaryId: string) => {
     setSaving(true)
     try {
@@ -1262,7 +1266,7 @@ export default function MailClient() {
 
   // רענון כשמחליפים בין משויכים/לא-משויכים בתוך ארכיון המייל הקודם
   useEffect(() => {
-    if (folder === 'LEGACY') load(folder)
+    if (folder === 'LEGACY') load(folder, searchRef.current || undefined)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [legacySub])
 

@@ -14,10 +14,12 @@ export async function POST(req: NextRequest) {
   let body: { messageId?: string; beneficiaryId?: string | null }
   try { body = await req.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
-  const { error } = await admin().from('inbound_emails')
+  const { data, error } = await admin().from('inbound_emails')
     .update({ beneficiary_id: body.beneficiaryId ?? null })
     .eq('id', body.messageId)
     .eq('source', 'legacy')
+    .select('id')
   if (error) return NextResponse.json({ error: 'שגיאה בשיוך' }, { status: 500 })
+  if (!data || data.length === 0) return NextResponse.json({ error: 'המייל לא נמצא או אינו מייל ארכיון' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
