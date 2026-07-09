@@ -114,7 +114,7 @@ function decodeBase64(data: string) {
   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
 }
 
-function getBody(payload: any): string {
+export function getBody(payload: any): string {
   if (!payload) return ''
   if (payload.mimeType === 'text/html' && payload.body?.data) return decodeBase64(payload.body.data)
   if (payload.mimeType === 'text/plain' && payload.body?.data) {
@@ -224,4 +224,46 @@ export function parseMessage(msg: any): ParsedMessage {
     labelIds: msg.labelIds ?? [],
     attachments: getAttachments(msg.payload),
   }
+}
+
+const LEGACY_TOKEN_KEY = 'gmail_legacy_refresh_token'
+
+// OAuth2 client לתיבה הישנה — עם ה-redirect הייעודי שלה (לא של office).
+export function getLegacyOAuthClient() {
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+  return new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    `${base}/api/auth/gmail-legacy/callback`,
+  )
+}
+
+// URL הרשאה לתיבה הישנה — קריאה בלבד (לא שולחים ממנה). redirect ייעודי כדי
+// להבחין מחיבור ה-office הראשי.
+export function getLegacyAuthUrl(): string {
+  const oauth = getLegacyOAuthClient()
+  return oauth.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/gmail.readonly'],
+  })
+}
+
+export async function saveLegacyRefreshToken(token: string) {
+  const db = getAdminDb()
+  await db.from('app_settings').upsert({ key: LEGACY_TOKEN_KEY, value: token, updated_at: new Date().toISOString() })
+}
+
+export async function getLegacyRefreshToken(): Promise<string | null> {
+  const db = getAdminDb()
+  const { data } = await db.from('app_settings').select('value').eq('key', LEGACY_TOKEN_KEY).maybeSingle()
+  return data?.value ?? null
+}
+
+export async function getLegacyGmailClient() {
+  const token = await getLegacyRefreshToken()
+  if (!token) throw new Error('Legacy Gmail not connected')
+  const oauth = getLegacyOAuthClient()
+  oauth.setCredentials({ refresh_token: token })
+  return google.gmail({ version: 'v1', auth: oauth })
 }
