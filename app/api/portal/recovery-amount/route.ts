@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   const amt = Number(amount)
   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   const nightsNum = Number(nights)
-  if (!Number.isInteger(nightsNum) || nightsNum < 0) {
+  if (!Number.isInteger(nightsNum) || nightsNum < 1) {
     return NextResponse.json({ error: 'יש להזין מספר לילות' }, { status: 400 })
   }
   const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
@@ -38,10 +38,15 @@ export async function POST(request: NextRequest) {
 
   // אבטחה: הרשומה שייכת לבית ההחלמה הזה, וסומן שהיולדת הגיעה
   const { data: aid } = await admin.from('maternity_aids')
-    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, beneficiaries(family_name, full_name, spouse_name)')
+    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, is_twins, recovery_eligibility_days, beneficiaries(family_name, full_name, spouse_name)')
     .eq('id', aidId).maybeSingle()
   if (!aid || aid.recovery_home !== home) {
     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
+  }
+  // מספר הלילות לא יעלה על ימי הזכאות (רגילה=2 · תאומים=4; או ערך שנקבע ידנית)
+  const maxNights = aid.recovery_eligibility_days ?? (aid.is_twins ? 4 : 2)
+  if (nightsNum > maxNights) {
+    return NextResponse.json({ error: `מספר הלילות המרבי הוא ${maxNights}` }, { status: 400 })
   }
   if (aid.recovery_locked) {
     return NextResponse.json({ error: 'הרשומה נעולה — פנה למשרד' }, { status: 403 })

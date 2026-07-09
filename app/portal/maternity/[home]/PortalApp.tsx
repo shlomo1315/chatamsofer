@@ -267,8 +267,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [amountStatus, setAmountStatus] = useState<Record<string, string | null>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_amount_status ?? null])),
   )
+  // ברירת מחדל למספר הלילות = ימי הזכאות של היולדת (רגילה=2 · תאומים=4).
+  // ניתן לסמן פחות, אך לא יותר מהמקסימום.
   const [nightsInput, setNightsInput] = useState<Record<string, string>>(
-    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : ''])),
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : String(recoveryDays(a))])),
   )
   const [receiptInput, setReceiptInput] = useState<Record<string, string>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_number ?? ''])),
@@ -616,11 +618,17 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 </div>
                               </label>
                               <label className="flex flex-col gap-1.5 text-right">
-                                <span className="text-sm font-semibold text-slate-600">מספר לילות</span>
+                                <span className="text-sm font-semibold text-slate-600">מספר לילות <span className="font-normal text-slate-400">(עד {recoveryDays(aid)})</span></span>
                                 <input
                                   value={nightsInput[aid.id] ?? ''}
-                                  onChange={e => setNightsInput(mm => ({ ...mm, [aid.id]: e.target.value.replace(/\D/g, '') }))}
-                                  inputMode="numeric" placeholder="0"
+                                  onChange={e => {
+                                    // חסימת קלט מעל מספר ימי הזכאות — אפשר פחות, לא יותר
+                                    const digits = e.target.value.replace(/\D/g, '')
+                                    const max = recoveryDays(aid)
+                                    const clamped = digits === '' ? '' : String(Math.min(Number(digits), max))
+                                    setNightsInput(mm => ({ ...mm, [aid.id]: clamped }))
+                                  }}
+                                  inputMode="numeric" placeholder={String(recoveryDays(aid))}
                                   className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                 />
                               </label>
