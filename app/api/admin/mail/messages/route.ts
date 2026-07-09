@@ -97,6 +97,7 @@ export async function GET(request: NextRequest) {
   const assignments = await labelsFor()
   let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).limit(50)
   query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
+  query = query.eq('source', 'resend')
   if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
   else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
   if (q) query = query.or(`subject.ilike.%${q}%,from_email.ilike.%${q}%,from_name.ilike.%${q}%`)
