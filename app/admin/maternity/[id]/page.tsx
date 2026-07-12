@@ -11,7 +11,7 @@ import MaternityActions from './MaternityActions'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
-import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
@@ -197,13 +197,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {idDocs.find(d => d.doc_type === 'id_husband') && (
-                      <DocCard label="ת.ז. הבעל" url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+                      <DocCard label="ת.ז. הבעל" person={motherName} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
                     )}
                     {idDocs.find(d => d.doc_type === 'id_wife') && (
-                      <DocCard label="ת.ז. האישה" url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+                      <DocCard label="ת.ז. האישה" person={motherName} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
                     )}
                     {aid.birth_certificate_url && (
-                      <DocCard label="אישור לידה" url={aid.birth_certificate_url} />
+                      <DocCard label="אישור לידה" person={motherName} url={aid.birth_certificate_url} />
                     )}
                   </div>
                 </div>
@@ -304,9 +304,9 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                       <FileText size={16} />
                       <span className="text-xs font-semibold text-slate-500 uppercase">אישור לידה</span>
                     </div>
-                    <DownloadDocButton url={aid.birth_certificate_url} name="אישור-לידה" variant="button" />
+                    <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName} name={aid.birth_certificate_url} variant="button" />
                   </div>
-                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} />
+                  <BirthCertificatePreview aidId={aid.id} beneficiaryId={aid.beneficiary_id} url={aid.birth_certificate_url} person={motherName} />
                 </Card>
               )}
               {aid.notes && (
@@ -436,7 +436,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               )}
               {aid.recovery_receipt_url && (
                 <div className="mt-2">
-                  <DownloadDocButton url={aid.recovery_receipt_url} name="קבלה" label="קובץ קבלה" variant="button" />
+                  <DownloadDocButton url={aid.recovery_receipt_url} docType="קבלה" person={motherName} name={aid.recovery_receipt_url} label="קובץ קבלה" variant="button" />
                 </div>
               )}
               {aid.recovery_locked && (
@@ -468,7 +468,7 @@ function DetailRow({ label, value, ltr, icon }: { label: string; value: string; 
   )
 }
 
-function DocCard({ label, url }: { label: string; url?: string }) {
+function DocCard({ label, url, person }: { label: string; url?: string; person?: string }) {
   if (!url) return (
     <div className="flex flex-col items-center gap-1.5 p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50 text-center">
       <FileText size={18} className="text-slate-300" />
@@ -498,7 +498,7 @@ function DocCard({ label, url }: { label: string; url?: string }) {
           {label} <ExternalLink size={10} />
         </span>
       </ViewDocButton>
-      <a href={docDownloadUrl(url, label)} download={label}
+      <a href={docDownloadUrl(url, docDownloadName(label, person, url))} download={docDownloadName(label, person, url)}
          className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-white hover:bg-emerald-600 px-2 py-1 rounded-lg border border-emerald-200 hover:border-emerald-600 transition-colors">
         <Download size={11} /> הורדה
       </a>

@@ -79,7 +79,7 @@ export default async function EditBeneficiaryPage({ params }: { params: Promise<
       </div>
       <BeneficiaryForm beneficiaryId={id} defaultValues={defaultValues} />
       <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <DocumentsManager beneficiaryId={id} />
+        <DocumentsManager beneficiaryId={id} beneficiaryName={[b.family_name, b.full_name].filter(Boolean).join(' ')} />
       </div>
     </div>
   )

@@ -68,7 +68,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           <div className="mt-3 flex flex-col gap-1 w-28">
             <DocThumb href={docViewUrl(req.document_url)} rawUrl={req.document_url} name={req.document_name || 'מסמך מצורף'} size={112} />
             <span className="text-[11px] text-slate-600 truncate" title={req.document_name || ''}>{req.document_name || 'מסמך מצורף'}</span>
-            <DownloadDocButton url={req.document_url} name={req.document_name || 'מסמך מצורף'} variant="icon" className="self-start" />
+            <DownloadDocButton url={req.document_url} docType="מסמך בקשת סיוע" person={name} name={req.document_name || req.document_url} variant="icon" className="self-start" />
           </div>
         )}
       </Card>

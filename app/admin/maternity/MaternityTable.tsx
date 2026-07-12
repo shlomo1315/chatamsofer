@@ -234,7 +234,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                             className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
                             <FileText size={14} /> צפייה
                           </ViewDocButton>
-                          <DownloadDocButton url={aid.birth_certificate_url} name={`אישור-לידה-${aid.baby_name ?? ''}`} variant="icon" />
+                          <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName(m)} name={aid.birth_certificate_url} variant="icon" />
                         </span>
                       ) : (
                         <span className="text-slate-300">—</span>

@@ -122,7 +122,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               <div key={i} className="flex flex-col gap-1 w-24">
                 <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
                 <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
-                <DownloadDocButton url={d.url} name={d.name || `מסמך ${i + 1}`} variant="icon" className="self-start" />
+                <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
               </div>
             ))}
           </div>
@@ -137,10 +137,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
           <div className="grid grid-cols-2 gap-3">
             {idDocs.find(d => d.doc_type === 'id_husband') && (
-              <LoanDocCard label="ת.ז. הבעל" url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+              <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
             )}
             {idDocs.find(d => d.doc_type === 'id_wife') && (
-              <LoanDocCard label="ת.ז. האישה" url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+              <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
             )}
           </div>
         </Card>
@@ -175,7 +175,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   )
 }
 
-function LoanDocCard({ label, url }: { label: string; url?: string }) {
+function LoanDocCard({ label, url, person }: { label: string; url?: string; person?: string }) {
   if (!url) return null
   const href = docViewUrl(url)
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
@@ -199,7 +199,7 @@ function LoanDocCard({ label, url }: { label: string; url?: string }) {
         {label} <ExternalLink size={11} />
       </span>
     </ViewDocButton>
-      <DownloadDocButton url={url} name={label} variant="button" className="justify-center" />
+      <DownloadDocButton url={url} docType={label} person={person} variant="button" className="justify-center" />
     </div>
   )
 }

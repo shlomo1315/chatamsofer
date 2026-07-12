@@ -8,19 +8,20 @@ import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import { wrapText } from './rtlText'
 import type { MailAttachment } from './sendMail'
 
-const W = 595.28
-const H = 841.89
-const MX = 42
+// מיוצאים לשימוש חוזר בשוברים נוספים (lib/gratitudeVoucher.ts) — אותו עיצוב בדיוק.
+export const W = 595.28
+export const H = 841.89
+export const MX = 42
 
 // ערכת צבעים — כחול כהה + זהב (חגיגי ומכובד)
-const NAVY = rgb(0.106, 0.196, 0.337)
+export const NAVY = rgb(0.106, 0.196, 0.337)
 const NAVY_SOFT = rgb(0.929, 0.945, 0.972)
-const GOLD = rgb(0.776, 0.616, 0.176)
-const GOLD_SOFT = rgb(0.984, 0.957, 0.882)
-const INK = rgb(0.094, 0.129, 0.196)
-const SUB = rgb(0.353, 0.4, 0.467)
+export const GOLD = rgb(0.776, 0.616, 0.176)
+export const GOLD_SOFT = rgb(0.984, 0.957, 0.882)
+export const INK = rgb(0.094, 0.129, 0.196)
+export const SUB = rgb(0.353, 0.4, 0.467)
 const RED = rgb(0.7, 0.106, 0.106)
-const CREAM = rgb(0.996, 0.992, 0.973)
+export const CREAM = rgb(0.996, 0.992, 0.973)
 
 // תאריך לועזי בפורמט DD/MM/YYYY (בנייה ידנית — toLocaleDateString גרם להיפוך/בלבול).
 function fmtDate(d?: string | null): string {
@@ -51,7 +52,7 @@ function withPunct(s: string): string {
   return s.slice(0, -1) + '״' + s.slice(-1)
 }
 // תאריך עברי מלא (גימטריה) — ז׳ תמוז תשפ״ו
-function hebrewDate(d: Date): string {
+export function hebrewDate(d: Date): string {
   try {
     const day = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { day: 'numeric' }).format(d), 10)
     const year = parseInt(new Intl.DateTimeFormat('en-u-ca-hebrew', { year: 'numeric' }).format(d), 10)
@@ -71,59 +72,59 @@ function issueDateParts(): { prefix: string; greg: string } {
 }
 
 // לוגו (best-effort — אם לא נמצא, מדלגים)
-function loadLogo(): Buffer | null {
+export function loadLogo(): Buffer | null {
   try { return readFileSync(join(process.cwd(), 'public', 'logo.png')) } catch { return null }
 }
 
-type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
+export type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 
 // כפיית כיוון שמאל-לימין על מספרים המשובצים בטקסט עברי (כתובות, שעות, תאריכים),
 // כדי שלא יוצגו הפוכים (למשל "יחזקאל 44"→"44 יחזקאל", "21:00"→"00:12").
 // משתמשים ב-LEFT-TO-RIGHT OVERRIDE (U+202D) … POP (U+202C) — כפייה חזקה שמכובדת
 // על ידי יותר צופי PDF מאשר ISOLATE (U+2066), שלא תמיד נתמך.
-function isoNum(s: string): string {
+export function isoNum(s: string): string {
   // עוטפים כל מספר/טווח ב-LRO…POP; בטווח שעות ("19:00 - 21:00") מסירים את הרווחים
   // הפנימיים כדי שכל הטווח יהיה טוקן LTR צמוד אחד — כך הוא מוצג תקין בכל צופה PDF
   // (בדיוק כמו מספר השובר "01072026.2911" שמוצג נכון).
   return String(s ?? '').replace(/\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g, m => `‭${m.replace(/\s*([-–])\s*/g, ' $1 ').replace(/\s+/g, ' ')}‬`)
 }
 // מדידת רוחב כולל בידוד מספרים
-function tw(c: Ctx, text: string, size: number): number {
+export function tw(c: Ctx, text: string, size: number): number {
   return c.font.widthOfTextAtSize(isoNum(text), size)
 }
 
 // ── עוזרי ציור (טקסט לוגי, יישור לימין) ─────────────────────────────────────────
-function rightText(c: Ctx, text: string, xRight: number, y: number, size: number, color: RGB) {
+export function rightText(c: Ctx, text: string, xRight: number, y: number, size: number, color: RGB) {
   const t = isoNum(text)
   const w = c.font.widthOfTextAtSize(t, size)
   c.page.drawText(t, { x: xRight - w, y, size, font: c.font, color })
 }
-function centerText(c: Ctx, text: string, cx: number, y: number, size: number, color: RGB) {
+export function centerText(c: Ctx, text: string, cx: number, y: number, size: number, color: RGB) {
   const t = isoNum(text)
   const w = c.font.widthOfTextAtSize(t, size)
   c.page.drawText(t, { x: cx - w / 2, y, size, font: c.font, color })
 }
 // פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה
-function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
+export function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
   const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(s, size))
   for (const ln of lines) { rightText(c, ln, xRight, y, size, color); y -= size + lineGap }
   return y
 }
 // תיבת מסגרת מעוגלת (קו זהב)
-function roundedBox(c: Ctx, x: number, y: number, w: number, h: number, border: RGB, fill?: RGB) {
+export function roundedBox(c: Ctx, x: number, y: number, w: number, h: number, border: RGB, fill?: RGB) {
   const r = 10
   c.page.drawRectangle({ x, y, width: w, height: h, color: fill ?? rgb(1, 1, 1), borderColor: border, borderWidth: 1.2 })
   // עיגול פינות מדומה — ריבועים לבנים קטנים בפינות (אפקט עדין); מדלגים לפשטות
   void r
 }
 // פס דקורטיבי זהב עם מעוין
-function goldDivider(c: Ctx, cx: number, y: number, half = 70) {
+export function goldDivider(c: Ctx, cx: number, y: number, half = 70) {
   c.page.drawLine({ start: { x: cx - half, y }, end: { x: cx + half, y }, thickness: 1, color: GOLD })
   c.page.drawSvgPath('M 0 -3 L 3 0 L 0 3 L -3 0 Z', { x: cx, y, color: GOLD, borderWidth: 0 })
 }
 
 // כותרת עליונה משותפת (לוגו + שם הארגון על רקע כחול)
-function drawHeader(c: Ctx, subtitle: string): number {
+export function drawHeader(c: Ctx, subtitle: string): number {
   c.page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: CREAM })
   // מסגרת חיצונית כפולה (זהב + כחול)
   c.page.drawRectangle({ x: 18, y: 18, width: W - 36, height: H - 36, borderColor: GOLD, borderWidth: 2.5, color: CREAM })
@@ -148,7 +149,7 @@ function drawHeader(c: Ctx, subtitle: string): number {
 }
 
 // תיבת פרטים עם כותרת מודגשת ושורות label/value
-function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][]): number {
+export function detailsBox(c: Ctx, title: string, y: number, rows: [string, string][]): number {
   const rowH = 20
   const titleH = 26
   const boxH = titleH + rows.length * rowH + 14
@@ -234,7 +235,7 @@ function serialLine(c: Ctx, serial: string | null | undefined, y: number) {
 }
 
 // שורת "הונפק בתאריך": חלק עברי מימין + תאריך לועזי כמספר עצמאי משמאלו (מוצג תקין).
-function drawIssueDate(c: Ctx, y: number) {
+export function drawIssueDate(c: Ctx, y: number) {
   const { prefix, greg } = issueDateParts()
   rightText(c, prefix, W - MX, y, 10, SUB)
   const pW = tw(c, prefix, 10)

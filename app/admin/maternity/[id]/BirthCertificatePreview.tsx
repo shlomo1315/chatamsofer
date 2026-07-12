@@ -18,10 +18,12 @@ export default function BirthCertificatePreview({
   aidId,
   beneficiaryId,
   url: initialUrl,
+  person,
 }: {
   aidId: string
   beneficiaryId: string
   url: string
+  person?: string
 }) {
   const router = useRouter()
   const supabase = createClient()
@@ -87,7 +89,7 @@ export default function BirthCertificatePreview({
         <ViewDocButton url={url} className={`${btn} text-indigo-700`}>
           <ExternalLink size={13} /> פתח
         </ViewDocButton>
-        <DownloadDocButton url={url} name="אישור-לידה" variant="button" className="bg-white/95 shadow-sm" />
+        <DownloadDocButton url={url} docType="אישור לידה" person={person} name={url} variant="button" className="bg-white/95 shadow-sm" />
         <button onClick={() => fileRef.current?.click()} disabled={busy} title={UPLOAD_HINT} className={`${btn} text-slate-700`}>
           <Upload size={13} /> החלף
         </button>

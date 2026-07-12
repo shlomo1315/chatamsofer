@@ -1,0 +1,246 @@
+fd9cdf9 feat: משיכה אינקרמנטלית ושמירת מיילים היסטוריים
+3715654 תכנון: שדרוג פורטל בתי החלמה — חלונית אימות, נעילה, קובץ קבלה, מיילים, עיצוב
+=== STAT ===
+ .../2026-07-09-recovery-portal-overhaul-design.md  | 132 +++++++++++++++++++++
+ lib/legacyMailSync.ts                              |  74 ++++++++++++
+ 2 files changed, 206 insertions(+)
+=== DIFF ===
+diff --git a/docs/superpowers/specs/2026-07-09-recovery-portal-overhaul-design.md b/docs/superpowers/specs/2026-07-09-recovery-portal-overhaul-design.md
+new file mode 100644
+index 0000000..f4b3775
+--- /dev/null
++++ b/docs/superpowers/specs/2026-07-09-recovery-portal-overhaul-design.md
+@@ -0,0 +1,132 @@
++# עיצוב: שדרוג פורטל בתי החלמה
++
++תאריך: 2026-07-09
++מצב: מאושר, מוכן ליישום
++
++## רקע
++
++פורטל בתי החלמה (`/admin/maternity/recovery` בצד המשרד, `/portal/maternity/[home]` בצד בית ההחלמה) מנהל מימוש זכאות החלמה של יולדות. המזכירות של בית ההחלמה מזינה סכום שמומש, מספר לילות ומספר קבלה. המסמך מגדיר חבילת שינויים: תיקון באג "כניסה מהירה", שדות חובה + העלאת קובץ קבלה, חלונית אימות לפני שליחה, נעילה + בקשת תיקון, מיילים והתראות, ועיצוב מחדש.
++
++**עיקרון מנחה: פרודקשן חי.** רק רשומות חדשות מהיום עוברות את הזרימה החדשה. רשומות קיימות לא נוגעים בהן. אין migration שמשנה נתונים קיימים. migrations סכמתיים ירוצו ידנית על ידי המשתמש.
++
++## הגדרות מונחים
++
++- **executed** — הערך של `recovery_amount_status` היום כשבית החלמה מזין סכום. פירושו "בוצע, אין צורך באישור נוסף". נשאר כך — **אין** שלב אישור אנושי מצד המשרד.
++- **נעילה** — לאחר שבית החלמה מאשר בחלונית, הרשומה נעולה לעריכה בצד בית החלמה עד שהמשרד פותח אותה מחדש.
++- **y-email** — כתובת המייל שמשמשת את כלל פניות היולדות (`report_email` המוגדר לבית החלמה, ה-y…@gmail.com בצילום). נעשה בו שימוש כיעד למיילי התראה.
++
++## רכיבי השינוי
++
++### א. תיקון "כניסה מהירה"
++
++**בעיה:** `app/api/admin/maternity/portal-login/route.ts:26-31` בודק `.eq('name', home)` מול טבלת `recovery_homes`. בתי החלמה מברירת-מחדל (`DEFAULT_HOMES` ב-`page.tsx:8`) מוזרקים לתצוגה גם בלי שורה בטבלה, ולכן הבדיקה נכשלת וה-route מפנה חזרה בשקט — נראה כאילו הכפתור לא עובד.
++
++**פתרון:**
++1. ב-route: אם בית החלמה קיים ב-`DEFAULT_HOMES` אך אין לו שורה — ליצור שורה (upsert) על-the-fly, או לדלג על בדיקת הקיום עבור שמות מברירת-מחדל. עדיף upsert כדי שהכל יישאר עקבי.
++2. במקרה כשל אמיתי (שם לא מוכר) — להפנות עם פרמטר שגיאה שיוצג כ-toast במסך, במקום redirect שקט.
++
++### ב. שדות חובה + העלאת קובץ קבלה
++
++**שדות חובה בפורטל** (`app/portal/maternity/[home]/PortalApp.tsx`):
++- סכום שמומש (כבר חובה)
++- מספר לילות (**חדש — היום לא חובה**)
++- מספר קבלה (כבר חובה)
++- **קובץ קבלה — חדש, חובה**
++
++**קובץ קבלה:**
++- שדה העלאה (תמונה/PDF) בטופס הפורטל.
++- נשמר ב-Supabase Storage (אותו דפוס כמו `birth_certificate_url` / מסמכים קיימים).
++- URL נשמר בשדה DB חדש `recovery_receipt_url` בטבלת `maternity_aids`.
++- ולידציה בצד לקוח (הכפתור disabled בלי קובץ) ובצד שרת (`/api/portal/recovery-amount/route.ts` דוחה בלי URL קבלה).
++- מוצג בכרטסת הלידה (`app/admin/maternity/[id]/page.tsx`) ליד מספר הקבלה, כמו `DocCard`/`DownloadDocButton` הקיימים.
++
++### ג. חלונית אימות לפני שליחה ("בדוק פעמיים")
++
++**אין** אישור אנושי מצד המשרד. החלונית היא מנגנון מניעת-טעויות בלבד.
++
++- כפתור "סמן כבוצע" → **"אישור ושליחה"**.
++- בלחיצה: ולידציה שכל השדות מלאים, ואז נפתחת חלונית סיכום (Modal קיים, `components/ui/Modal.tsx`).
++- החלונית מציגה את **כל** הפרטים שהוזנו: סכום, לילות, מספר קבלה, שם הקובץ שהועלה.
++- כותרת: *"נא לעבור בעיון על כל הפרטים ולוודא את נכונותם. לאחר האישור לא ניתן יהיה לערוך את הנתונים."*
++- כפתורים: "חזור לתיקון" / "אני מאשר/ת ושולח/ת".
++- באישור → POST ל-`/api/portal/recovery-amount` → הרשומה נכנסת מיידית כ-`executed` **ונעולה**.
++
++### ד. נעילה + בקשת תיקון
++
++**שדה DB חדש:** `recovery_locked` (boolean, default false) בטבלת `maternity_aids`. (migration ידני.)
++
++**נעילה:**
++- באישור החלונית (סעיף ג') — `recovery_locked = true`.
++- בצד בית החלמה: רשומה נעולה מציגה את הנתונים עם תווית "ננעל" ו**אין** כפתור עריכה — במקומו כפתור **"בקש תיקון"**.
++
++**בקשת תיקון:**
++- כפתור "בקש תיקון" בפורטל → POST `/api/portal/recovery-request-edit` (route חדש).
++- מפעיל: (1) מייל ל-y-email, (2) רישום שהרשומה ממתינה לפתיחה (שדה/דגל שהחלונית אצל המשרד קוראת).
++- אינו משנה את הנעילה — רק מודיע.
++
++**פתיחה מחדש (צד משרד):**
++- כפתור **"פתח לעריכה"** ליד הרשומה במסך הראשי ובכרטסת הלידה → POST route שמאפס `recovery_locked = false`.
++- אחרי פתיחה, בית החלמה יכול לערוך שוב; עריכה מחודשת + אישור בחלונית → נועל שוב.
++
++### ה. מיילים והתראות
++
++**מיילים** (דרך `lib/sendMail.ts` → `deliverMail()`, Resend קיים):
++1. בית החלמה שולח נתונים (מימוש זכאות, סעיף ג' באישור) → מייל ל-y-email.
++2. בקשת תיקון (סעיף ד') → מייל ל-y-email.
++
++תבנית מייל חדשה ב-`lib/emailTemplates.ts` בסגנון `shell()` הקיים.
++
++**חלונית התראה בכניסה למערכת** (צד משרד):
++- מנגנון: בכניסה ל-`/admin/maternity/recovery`, טעינת כל האירועים (שליחת נתונים + בקשות תיקון) שקרו מאז הכניסה האחרונה של המשתמש.
++- "כניסה אחרונה" נשמרת per-user (localStorage בצד לקוח מספיק כפתרון ראשוני; אם נדרש cross-device — שדה DB. ברירת מחדל: localStorage).
++- מוצג כ-toast/חלונית תחתונה (מנגנון `Toast`/`NewMailToast` קיים) עם רשימת היולדות שאושרו/שביקשו תיקון.
++
++### ו. אישור והצגה בכרטסת הלידה
++
++`app/admin/maternity/[id]/page.tsx`:
++- מספר קבלה — כבר מוצג (`page.tsx:430`). לוודא הצגה תקינה.
++- קובץ קבלה (`recovery_receipt_url`) — הצגה חדשה כ-DocCard להורדה/תצוגה מקדימה.
++- כפתור "פתח לעריכה" (סעיף ד') — נגיש גם מכאן.
++
++### ז. עיצוב מחדש בינוני
++
++**היקף:** פורטל בית החלמה (`PortalApp.tsx` + סגנונות) ומסך "עזר יולדות" הפנימי (`RecoveryHomesView.tsx` / `MaternityTable.tsx`).
++
++**בעיה מרכזית:** גלישת עמודות מחוץ למסך — צריך לגלול צידה כדי לראות. חייב "להיפרס מיד".
++
++**פתרונות:**
++- תיקון ה-layout כך שכל העמודות נכנסות ברוחב המסך בלי גלילה אופקית (בדיקת `min-width`/`white-space`/`table-layout`, וידוא שהכרטיסים הפנימיים לא מרחיבים את הטבלה).
++- ריווח נדיב: padding שורות/תאים, גובה שורה, מרווח בין בלוקים.
++- טיפוגרפיה: גדלים היררכיים ברורים, משקלים.
++- עיצוב מחדש של הבאדג'ים/הכרטיסים הצבעוניים (הבועות הירוקות "היולדת מימשה…", באדג' "תאומים", "ימים") — קונסיסטנטיים ונקיים.
++- עקביות בין שני הפורטלים.
++
++**ללא שינוי מבני עמוק** — נשאר על מבנה הטבלה/נתונים הקיים, משתמשים ב-frontend-design skill לכיוון אסתטי.
++
++## סכמת DB (migrations ידניים)
++
++טבלת `maternity_aids` — שני שדות חדשים:
++```sql
++ALTER TABLE maternity_aids ADD COLUMN IF NOT EXISTS recovery_receipt_url text;
++ALTER TABLE maternity_aids ADD COLUMN IF NOT EXISTS recovery_locked boolean NOT NULL DEFAULT false;
++```
++(דגל בקשת-תיקון: אפשר שדה `recovery_edit_requested_at timestamptz` או להסתמך על אירוע/מייל בלבד — יוכרע בתכנון היישום.)
++
++טבלת `recovery_homes` — לוודא ש-`DEFAULT_HOMES` קיימים (upsert בזמן ריצה, לא migration של נתונים).
++
++## מה מחוץ לתחום (YAGNI)
++
++- אין שלב אישור אנושי מצד המשרד על הנתונים (נכנס מיידית כ-executed).
++- אין migration שמשנה רשומות קיימות.
++- אין שינוי מבני עמוק של ה-layout (לא כרטיסים-במקום-טבלה).
++- הרכיב המנותק `RecoveryAmountApprovals.tsx` — לא בשימוש בזרימה זו (אין אישור אנושי). יוסר או יושאר כפי שהוא, לא חלק מהעבודה.
++
++## אימות
++
++- כניסה מהירה: לחיצה פותחת את פורטל בית ההחלמה בהצלחה לכל בית החלמה, כולל ברירות-מחדל.
++- שדות חובה: לא ניתן לשלוח בלי סכום/לילות/קבלה/קובץ.
++- חלונית: מציגה את כל הנתונים, אישור נועל, "חזור לתיקון" סוגר.
++- נעילה: אחרי אישור אין עריכה; "בקש תיקון" שולח מייל + התראה; "פתח לעריכה" משחרר.
++- מיילים: מגיעים ל-y-email בשני הטריגרים.
++- התראה: בכניסה מציגה את מי שאושר/ביקש תיקון מאז הכניסה הקודמת.
++- עיצוב: אין גלילה אופקית באף פורטל; ריווח נעים; טקסט קריא.
+diff --git a/lib/legacyMailSync.ts b/lib/legacyMailSync.ts
+index 02a77cf..3566124 100644
+--- a/lib/legacyMailSync.ts
++++ b/lib/legacyMailSync.ts
+@@ -1,11 +1,12 @@
+ import type { SupabaseClient } from '@supabase/supabase-js'
++import { getLegacyGmailClient } from './gmail'
+ 
+ // זיהוי לקוח למייל היסטורי — אותו דפוס כמו resend-inbound (maybeAutoReplyIgud):
+ // ת"ז 9 ספרות בנושא (רשום או בן/בת זוג) → נפילה לכתובת השולח.
+ export async function resolveBeneficiaryId(
+   admin: SupabaseClient,
+   opts: { subject: string; fromEmail: string },
+ ): Promise<string | null> {
+   const idMatch = String(opts.subject ?? '').match(/\d{9}/)
+   if (idMatch) {
+     const id = idMatch[0]
+@@ -16,10 +17,83 @@ export async function resolveBeneficiaryId(
+       .maybeSingle()
+     if (data?.id) return data.id
+   }
+   const from = (opts.fromEmail || '').toLowerCase().trim()
+   if (from && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) {
+     const { data } = await admin.from('beneficiaries').select('id').ilike('email', from).maybeSingle()
+     if (data?.id) return data.id
+   }
+   return null
+ }
++
++type ItemResult = { imported: boolean; matched: boolean }
++
++export function summarizeSync(items: ItemResult[]) {
++  return {
++    imported: items.filter(i => i.imported).length,
++    skipped: items.filter(i => !i.imported).length,
++    matched: items.filter(i => i.imported && i.matched).length,
++    unmatched: items.filter(i => i.imported && !i.matched).length,
++  }
++}
++
++const LAST_SYNC_KEY = 'legacy_mail_last_sync'
++
++// משיכה אינקרמנטלית: מושך הודעות אחרי החותמת האחרונה (Gmail query after:),
++// שומר ל-inbound_emails עם source='legacy', משייך beneficiary, מעדכן חותמת.
++export async function syncLegacyMail(admin: SupabaseClient) {
++  const gmail = await getLegacyGmailClient()
++
++  const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
++  const lastEpoch = cur?.value ? Number(cur.value) : 0
++  const q = lastEpoch ? `after:${lastEpoch}` : ''
++
++  const results: ItemResult[] = []
++  let pageToken: string | undefined
++  let maxEpoch = lastEpoch
++
++  do {
++    const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken })
++    const ids = (list.data.messages ?? []).map(m => m.id!).filter(Boolean)
++    for (const id of ids) {
++      const full = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
++      const headers = full.data.payload?.headers ?? []
++      const h = (n: string) => headers.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? ''
++      const gmailMessageId = h('message-id') || id
++      const subject = h('subject')
++      const fromRaw = h('from')
++      const fromEmail = (fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw).toLowerCase().trim()
++      const fromName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || null
++      const toEmail = (h('to').match(/<([^>]+)>/)?.[1] ?? h('to')).toLowerCase().trim()
++      const dateMs = Number(full.data.internalDate ?? 0)
++      const emailDate = dateMs ? new Date(dateMs).toISOString() : null
++      const epochSec = dateMs ? Math.floor(dateMs / 1000) : 0
++      if (epochSec > maxEpoch) maxEpoch = epochSec
++
++      const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
++
++      const { data: inserted } = await admin.from('inbound_emails').upsert({
++        gmail_message_id: gmailMessageId,
++        message_id: gmailMessageId,
++        source: 'legacy',
++        from_email: fromEmail,
++        from_name: fromName,
++        to_email: toEmail,
++        subject,
++        plain_text: full.data.snippet ?? null,
++        beneficiary_id: beneficiaryId,
++        email_date: emailDate,
++        is_read: true,
++      }, { onConflict: 'gmail_message_id', ignoreDuplicates: true }).select('id')
++
++      const imported = (inserted?.length ?? 0) > 0
++      results.push({ imported, matched: !!beneficiaryId })
++    }
++    pageToken = list.data.nextPageToken ?? undefined
++  } while (pageToken)
++
++  if (maxEpoch > lastEpoch) {
++    await admin.from('app_settings').upsert({ key: LAST_SYNC_KEY, value: String(maxEpoch + 1), updated_at: new Date().toISOString() })
++  }
++
++  return { fetched: results.length, ...summarizeSync(results) }
++}

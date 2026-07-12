@@ -1,0 +1,1070 @@
+f3cdd7d fix: תיקוני סקירה במשיכת מייל היסטורי (message_id, received_at, error handling, גוף מלא)
+8c94bf6 תכנון: תוכנית יישום מפורטת לשדרוג פורטל בתי החלמה
+=== DIFF (fix commit) ===
+diff --git a/docs/superpowers/plans/2026-07-09-recovery-portal-overhaul.md b/docs/superpowers/plans/2026-07-09-recovery-portal-overhaul.md
+new file mode 100644
+index 0000000..6bdb990
+--- /dev/null
++++ b/docs/superpowers/plans/2026-07-09-recovery-portal-overhaul.md
+@@ -0,0 +1,912 @@
++# שדרוג פורטל בתי החלמה — תוכנית יישום
++
++> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
++
++**Goal:** תיקון "כניסה מהירה", הוספת שדות חובה + קובץ קבלה, חלונית אימות לפני שליחה, נעילה + בקשת תיקון, מיילים והתראות, ועיצוב מחדש של הפורטלים.
++
++**Architecture:** Next.js App Router + Supabase (service-role בצד שרת) + Resend למיילים. הפורטל של בית החלמה מאומת דרך cookie חתום (`verifyRecoveryPortalToken`), לא staff-auth. אין שלב אישור אנושי מצד המשרד — נתונים נכנסים מיידית כ-`executed`; החלונית היא מנגנון "בדוק פעמיים". נעילה מונעת עריכה עד שהמשרד פותח מחדש.
++
++**Tech Stack:** TypeScript, React 18, Next.js App Router, Tailwind, Supabase JS, Resend, lucide-react, date-fns.
++
++## Global Constraints
++
++- **פרודקשן חי.** רק רשומות חדשות מהיום עוברות את הזרימה החדשה. אין migration שמשנה נתונים קיימים.
++- **migrations סכמתיים ירוצו ידנית ע"י המשתמש.** כל task שמוסיף עמודה כותב קובץ migration ומסמן שהמשתמש יריץ. אין להריץ SQL אוטומטית.
++- **אין תשתית בדיקות** (`package.json` ללא `test`; אין vitest/jest). אימות = `npm run build` + `npm run lint` + בדיקה ידנית של הזרימה. אין להוסיף תשתית בדיקות.
++- **אבטחת route של פורטל:** כל route תחת `/api/portal/*` חייב (1) `verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)`, (2) אימות בעלות `aid.recovery_home === home` לפני עדכון.
++- **Storage:** bucket `documents` (פרטי). העלאה דרך service-role, `getPublicUrl`, גישה בפועל דרך `/api/files`. `MAX_SIZE=10MB`, whitelist סיומות: jpg/jpeg/png/webp/heic/gif/pdf.
++- **מייל היעד להתראות** = `report_email` של בית החלמה מטבלת `recovery_homes` (ה-y…@gmail.com).
++- **קומיטים:** קומיט אחרי כל task, בעברית, עם `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
++
++---
++
++## מבנה קבצים
++
++**Migrations (חדשים):**
++- `supabase/migrations/20260709_recovery_receipt_url.sql` — עמודת `recovery_receipt_url`
++- `supabase/migrations/20260709_recovery_locked.sql` — עמודות `recovery_locked`, `recovery_edit_requested_at`
++
++**API routes:**
++- Modify: `app/api/admin/maternity/portal-login/route.ts` — תיקון כניסה מהירה (upsert + שגיאה גלויה)
++- Create: `app/api/portal/recovery-receipt/route.ts` — העלאת קובץ קבלה (פורטל)
++- Modify: `app/api/portal/recovery-amount/route.ts` — לילות+קובץ חובה, נעילה, מייל התראה
++- Create: `app/api/portal/recovery-request-edit/route.ts` — בקשת תיקון (פורטל) + מייל
++- Create: `app/api/admin/maternity/recovery-unlock/route.ts` — פתיחה מחדש (משרד)
++
++**תבניות/עזרי מייל:**
++- Modify: `lib/emailTemplates.ts` — תבניות `recoveryRealizedEmail`, `recoveryEditRequestEmail`
++
++**Client / UI:**
++- Modify: `app/portal/maternity/[home]/PortalApp.tsx` — קובץ קבלה, חלונית אימות, נעילה, "בקש תיקון", עיצוב
++- Modify: `app/admin/maternity/recovery/page.tsx` — טעינת אירועים אחרונים + אזור התראות
++- Create: `app/admin/maternity/recovery/RecoveryAlerts.tsx` — חלונית התראה תחתונה
++- Modify: `app/admin/maternity/[id]/page.tsx` — הצגת קובץ קבלה + כפתור "פתח לעריכה"
++- Create: `app/admin/maternity/[id]/RecoveryUnlockButton.tsx` — כפתור פתיחה מחדש
++
++**Types:**
++- Modify: `app/portal/maternity/[home]/PortalApp.tsx` (interface Aid) + `types/index.ts` (MaternityAid)
++
++---
++
++## Task 1: Migrations — עמודות חדשות ב-maternity_aids
++
++**Files:**
++- Create: `supabase/migrations/20260709_recovery_receipt_url.sql`
++- Create: `supabase/migrations/20260709_recovery_locked.sql`
++
++**Interfaces:**
++- Produces: עמודות `recovery_receipt_url text`, `recovery_locked boolean default false`, `recovery_edit_requested_at timestamptz` בטבלת `maternity_aids`.
++
++- [ ] **Step 1: כתוב migration לקובץ קבלה**
++
++`supabase/migrations/20260709_recovery_receipt_url.sql`:
++```sql
++-- קובץ הקבלה שהעלה בית ההחלמה (סריקה/צילום/PDF). נשמר בדלי documents.
++alter table public.maternity_aids
++  add column if not exists recovery_receipt_url text;
++```
++
++- [ ] **Step 2: כתוב migration לנעילה ובקשת תיקון**
++
++`supabase/migrations/20260709_recovery_locked.sql`:
++```sql
++-- נעילת רשומת ההחלמה לאחר שבית ההחלמה אישר בחלונית. עריכה חוזרת חסומה עד
++-- שהמשרד פותח מחדש. recovery_edit_requested_at מתעדכן כשבית ההחלמה מבקש תיקון.
++alter table public.maternity_aids
++  add column if not exists recovery_locked boolean not null default false;
++alter table public.maternity_aids
++  add column if not exists recovery_edit_requested_at timestamptz;
++```
++
++- [ ] **Step 3: הודע למשתמש שיריץ ידנית**
++
++אל תריץ. ציין בפירוש: "יש להריץ את שני קבצי ה-migration הללו ב-Supabase לפני שהקוד התלוי בהם יעבוד."
++
++- [ ] **Step 4: Commit**
++
++```bash
++git add supabase/migrations/20260709_recovery_receipt_url.sql supabase/migrations/20260709_recovery_locked.sql
++git commit -m "DB: עמודות recovery_receipt_url, recovery_locked, recovery_edit_requested_at"
++```
++
++---
++
++## Task 2: תיקון "כניסה מהירה"
++
++**Files:**
++- Modify: `app/api/admin/maternity/portal-login/route.ts:24-31`
++- Modify: `app/admin/maternity/recovery/page.tsx` (הצגת שגיאה מפרמטר query — אם קיים RecoveryHomeLinks client, שם ה-toast)
++
++**בעיה:** ל-`DEFAULT_HOMES` אין בהכרח שורה ב-`recovery_homes`, ואז `.eq('name', home).maybeSingle()` מחזיר null וה-route מפנה חזרה בשקט.
++
++**Interfaces:**
++- Consumes: `getServiceClient()` מ-`@/lib/apiAuth`, `DEFAULT_HOMES` (יש להוסיף export ב-page.tsx או להגדיר מקומית).
++
++- [ ] **Step 1: שנה את בדיקת הקיום ל-upsert עבור ברירות מחדל**
++
++ב-`app/api/admin/maternity/portal-login/route.ts`, החלף את הבלוק `if (admin) {...}` (שורות 26-31) ב:
++```ts
++  // בתי החלמה מברירת-מחדל מוזרקים לתצוגה גם בלי שורה ב-DB. אם חסרה שורה —
++  // צור אותה כדי שהכניסה המהירה תעבוד, במקום להפנות חזרה בשקט.
++  const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
++  const admin = getServiceClient()
++  if (admin) {
++    const { data } = await admin.from('recovery_homes').select('name').eq('name', home).maybeSingle()
++    if (!data) {
++      if (DEFAULT_HOMES.includes(home)) {
++        await admin.from('recovery_homes').upsert({ name: home }, { onConflict: 'name' })
++      } else {
++        return NextResponse.redirect(new URL('/admin/maternity/recovery?portalError=' + encodeURIComponent('בית החלמה לא נמצא במערכת'), origin))
++      }
++    }
++  }
++```
++
++- [ ] **Step 2: ודא build**
++
++Run: `npm run build`
++Expected: build עובר ללא שגיאות TypeScript.
++
++- [ ] **Step 3: בדיקה ידנית**
++
++היכנס למסך `/admin/maternity/recovery`, לחץ "כניסה מהירה" על `ביכורים`. ציפייה: נפתח `/portal/maternity/ביכורים` בטאב חדש עם רשימת היולדות (לא חזרה למסך הראשי).
++
++- [ ] **Step 4: Commit**
++
++```bash
++git add app/api/admin/maternity/portal-login/route.ts
++git commit -m "תיקון: כניסה מהירה יוצרת שורת בית החלמה חסרה במקום להפנות בשקט"
++```
++
++---
++
++## Task 3: תבניות מייל להתראות
++
++**Files:**
++- Modify: `lib/emailTemplates.ts` (הוסף בסוף, לפני סגירת הקובץ)
++
++**Interfaces:**
++- Consumes: `shell({ preheader, accent, title, subtitle, body })`, `escapeHtml`, `detailRow(label,value)` — כולם קיימים בקובץ.
++- Produces:
++  - `recoveryRealizedEmail(opts: { home: string; motherName: string; amount: number; nights: number | null; receipt: string }): { subject: string; html: string }`
++  - `recoveryEditRequestEmail(opts: { home: string; motherName: string }): { subject: string; html: string }`
++
++- [ ] **Step 1: הוסף את שתי התבניות**
++
++בסוף `lib/emailTemplates.ts` (השתמש ב-`shell`, `escapeHtml`, `detailRow` הקיימים — בדוק את שמותיהם המדויקים בקובץ לפני כתיבה; אם `detailRow` פרטי לפונקציה אחרת, בנה שורות ידנית עם escapeHtml):
++```ts
++// התראה: יולדת מימשה זכאות החלמה (נשלח למייל בית ההחלמה / כלל הפניות)
++export function recoveryRealizedEmail(opts: {
++  home: string; motherName: string; amount: number; nights: number | null; receipt: string
++}): { subject: string; html: string } {
++  const rows = [
++    ['בית החלמה', opts.home],
++    ['יולדת', opts.motherName],
++    ['סכום שמומש', '₪' + opts.amount.toLocaleString('he-IL')],
++    ['מספר לילות', opts.nights != null ? String(opts.nights) : '—'],
++    ['מספר קבלה', opts.receipt],
++  ].map(([l, v]) => `<tr><td style="padding:6px 12px;color:#64748b">${escapeHtml(l)}</td><td style="padding:6px 12px;font-weight:600">${escapeHtml(v)}</td></tr>`).join('')
++  const body = `<p>יולדת סימנה מימוש זכאות החלמה בפורטל בית ההחלמה.</p>
++    <table style="border-collapse:collapse;margin-top:12px">${rows}</table>`
++  return {
++    subject: `מימוש זכאות החלמה · ${opts.motherName} · ${opts.home}`,
++    html: shell({ accent: '#059669', title: 'מימוש זכאות החלמה', subtitle: 'היכל החתם סופר', body }),
++  }
++}
++
++// התראה: בית החלמה ביקש לתקן רשומה נעולה
++export function recoveryEditRequestEmail(opts: {
++  home: string; motherName: string
++}): { subject: string; html: string } {
++  const body = `<p>בית החלמה <b>${escapeHtml(opts.home)}</b> ביקש לתקן את הרשומה של היולדת <b>${escapeHtml(opts.motherName)}</b>.</p>
++    <p>הרשומה נעולה. ניתן לפתוח אותה לעריכה ממסך ההחלמה או מכרטסת הלידה.</p>`
++  return {
++    subject: `בקשת תיקון · ${opts.motherName} · ${opts.home}`,
++    html: shell({ accent: '#d97706', title: 'בקשת תיקון רשומה', subtitle: 'היכל החתם סופר', body }),
++  }
++}
++```
++
++- [ ] **Step 2: ודא build**
++
++Run: `npm run build`
++Expected: עובר. אם `shell`/`escapeHtml` לא מיוצאים/נגישים — התאם import/scope.
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add lib/emailTemplates.ts
++git commit -m "מייל: תבניות התראה למימוש זכאות ולבקשת תיקון"
++```
++
++---
++
++## Task 4: route העלאת קובץ קבלה (פורטל)
++
++**Files:**
++- Create: `app/api/portal/recovery-receipt/route.ts`
++
++**Interfaces:**
++- Consumes: `verifyRecoveryPortalToken`, `portalCookieName`, service-role client (דפוס מ-`upload-docs/route.ts`).
++- Produces: `POST` שמקבל FormData `{ home, aidId, file }`, מעלה לדלי `documents`, שומר `recovery_receipt_url` על ה-aid, ומחזיר `{ ok: true, url }`.
++
++- [ ] **Step 1: כתוב את ה-route**
++
++`app/api/portal/recovery-receipt/route.ts`:
++```ts
++import { createClient } from '@supabase/supabase-js'
++import { NextResponse, type NextRequest } from 'next/server'
++import { cookies } from 'next/headers'
++import { portalCookieName } from '../login/route'
++import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
++
++export const dynamic = 'force-dynamic'
++
++const BUCKET = 'documents'
++const MAX_SIZE = 10 * 1024 * 1024
++const ALLOWED: Record<string, string> = {
++  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
++  webp: 'image/webp', heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
++}
++
++function getAdminClient() {
++  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
++  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
++  if (!url || !key) return null
++  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++export async function POST(request: NextRequest) {
++  const form = await request.formData()
++  const home = String(form.get('home') ?? '')
++  const aidId = String(form.get('aidId') ?? '')
++  const file = form.get('file')
++  if (!home || !aidId || !(file instanceof File)) {
++    return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
++  }
++  const cookieStore = await cookies()
++  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
++    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++  }
++  if (file.size > MAX_SIZE) return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 })
++  const ext = (file.name.split('.').pop() ?? '').toLowerCase()
++  const contentType = ALLOWED[ext]
++  if (!contentType) return NextResponse.json({ error: 'סוג קובץ לא נתמך' }, { status: 400 })
++
++  const admin = getAdminClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++
++  // אימות בעלות: הרשומה שייכת לבית החלמה זה
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, beneficiary_id, recovery_locked').eq('id', aidId).maybeSingle()
++  if (!aid || aid.recovery_home !== home) {
++    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
++  }
++  if (aid.recovery_locked) return NextResponse.json({ error: 'הרשומה נעולה' }, { status: 403 })
++
++  const path = `${aid.beneficiary_id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
++  const buf = await file.arrayBuffer()
++  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, { contentType, upsert: false })
++  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
++  const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path)
++  const url = urlData.publicUrl
++
++  const { error } = await admin.from('maternity_aids')
++    .update({ recovery_receipt_url: url, updated_at: new Date().toISOString() }).eq('id', aidId)
++  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++
++  return NextResponse.json({ ok: true, url })
++}
++```
++
++- [ ] **Step 2: ודא build**
++
++Run: `npm run build`
++Expected: עובר. אם `beneficiary_id` אינו שם העמודה — בדוק ב-schema.sql והתאם.
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add app/api/portal/recovery-receipt/route.ts
++git commit -m "פורטל: route להעלאת קובץ קבלה עם אימות טוקן ובעלות"
++```
++
++---
++
++## Task 5: עדכון recovery-amount — לילות+קובץ חובה, נעילה, מייל
++
++**Files:**
++- Modify: `app/api/portal/recovery-amount/route.ts`
++
++**Interfaces:**
++- Consumes: `recoveryRealizedEmail` (Task 3), `deliverMail` מ-`@/lib/sendMail`.
++- Produces: POST שמחייב `nights` (שלם ≥0) ו-`recovery_receipt_url` קיים, מסמן `recovery_locked=true`, ושולח מייל ל-`report_email`.
++
++- [ ] **Step 1: הפוך לילות לחובה בשרת**
++
++ב-`route.ts`, החלף שורות 22-25 (הבלוק שמאפשר `nights=null`):
++```ts
++  const nightsNum = Number(nights)
++  if (!Number.isInteger(nightsNum) || nightsNum < 0) {
++    return NextResponse.json({ error: 'יש להזין מספר לילות' }, { status: 400 })
++  }
++```
++
++- [ ] **Step 2: אמת קיום קובץ קבלה + שלוף report_email**
++
++החלף את שליפת ה-aid (שורה 38) כך שתכלול את השדות הדרושים:
++```ts
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, beneficiary_id, beneficiaries(family_name, full_name, spouse_name)')
++    .eq('id', aidId).maybeSingle()
++  if (!aid || aid.recovery_home !== home) {
++    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
++  }
++  if (aid.recovery_locked) return NextResponse.json({ error: 'הרשומה נעולה — פנה למשרד' }, { status: 403 })
++  if (aid.recovery_arrived !== true) {
++    return NextResponse.json({ error: 'יש לסמן "הגיעה" לפני הזנת הסכום' }, { status: 400 })
++  }
++  if (!aid.recovery_receipt_url) {
++    return NextResponse.json({ error: 'יש להעלות קובץ קבלה' }, { status: 400 })
++  }
++```
++
++- [ ] **Step 3: סמן נעילה בעדכון**
++
++בבלוק ה-`update` (שורות 46-53) הוסף `recovery_locked: true`:
++```ts
++  const { error } = await admin.from('maternity_aids').update({
++    recovery_amount: amt,
++    recovery_nights: nightsNum,
++    recovery_receipt_number: receipt,
++    recovery_amount_status: 'executed',
++    recovery_amount_at: new Date().toISOString(),
++    recovery_locked: true,
++    updated_at: new Date().toISOString(),
++  }).eq('id', aidId)
++  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++```
++
++- [ ] **Step 4: שלח מייל התראה ל-report_email**
++
++אחרי ה-update המוצלח, לפני `return`:
++```ts
++  // מייל התראה על מימוש זכאות — לכתובת פניות היולדות של בית החלמה
++  try {
++    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
++    const to = rh?.report_email
++    if (to) {
++      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
++      const motherName = ben ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') : '—'
++      const mail = recoveryRealizedEmail({ home, motherName, amount: amt, nights: nightsNum, receipt })
++      await deliverMail(to, mail.subject, mail.html)
++    }
++  } catch { /* כשל מייל לא חוסם */ }
++```
++והוסף imports בראש הקובץ:
++```ts
++import { deliverMail } from '@/lib/sendMail'
++import { recoveryRealizedEmail } from '@/lib/emailTemplates'
++```
++
++- [ ] **Step 5: ודא build**
++
++Run: `npm run build`
++Expected: עובר. אם ה-join `beneficiaries(...)` אינו שם ה-FK — בדוק כיצד נעשה join ב-`recovery/page.tsx:getData` והתאם.
++
++- [ ] **Step 6: Commit**
++
++```bash
++git add app/api/portal/recovery-amount/route.ts
++git commit -m "פורטל: לילות+קובץ קבלה חובה, נעילת רשומה, ומייל התראה על מימוש"
++```
++
++---
++
++## Task 6: route בקשת תיקון (פורטל)
++
++**Files:**
++- Create: `app/api/portal/recovery-request-edit/route.ts`
++
++**Interfaces:**
++- Consumes: `verifyRecoveryPortalToken`, `deliverMail`, `recoveryEditRequestEmail` (Task 3).
++- Produces: POST `{ home, aidId }` → מעדכן `recovery_edit_requested_at`, שולח מייל ל-`report_email`, מחזיר `{ ok: true }`.
++
++- [ ] **Step 1: כתוב את ה-route**
++
++`app/api/portal/recovery-request-edit/route.ts`:
++```ts
++import { createClient } from '@supabase/supabase-js'
++import { NextResponse, type NextRequest } from 'next/server'
++import { cookies } from 'next/headers'
++import { portalCookieName } from '../login/route'
++import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
++import { deliverMail } from '@/lib/sendMail'
++import { recoveryEditRequestEmail } from '@/lib/emailTemplates'
++
++export const dynamic = 'force-dynamic'
++
++function getAdminClient() {
++  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
++  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
++  if (!url || !key) return null
++  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++export async function POST(request: NextRequest) {
++  const { home, aidId } = await request.json()
++  if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
++  const cookieStore = await cookies()
++  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
++    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++  }
++  const admin = getAdminClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, beneficiaries(family_name, full_name, spouse_name)')
++    .eq('id', aidId).maybeSingle()
++  if (!aid || aid.recovery_home !== home) {
++    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
++  }
++
++  await admin.from('maternity_aids')
++    .update({ recovery_edit_requested_at: new Date().toISOString() }).eq('id', aidId)
++
++  try {
++    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
++    if (rh?.report_email) {
++      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
++      const motherName = ben ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') : '—'
++      const mail = recoveryEditRequestEmail({ home, motherName })
++      await deliverMail(rh.report_email, mail.subject, mail.html)
++    }
++  } catch { /* כשל מייל לא חוסם */ }
++
++  return NextResponse.json({ ok: true })
++}
++```
++
++- [ ] **Step 2: ודא build**
++
++Run: `npm run build`
++Expected: עובר.
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add app/api/portal/recovery-request-edit/route.ts
++git commit -m "פורטל: route לבקשת תיקון רשומה נעולה + מייל התראה"
++```
++
++---
++
++## Task 7: route פתיחה מחדש (משרד)
++
++**Files:**
++- Create: `app/api/admin/maternity/recovery-unlock/route.ts`
++
++**Interfaces:**
++- Consumes: `requireStaff`, `getServiceClient` מ-`@/lib/apiAuth` (דפוס מ-`portal-login/route.ts`).
++- Produces: POST `{ aidId }` → `recovery_locked=false`, `recovery_edit_requested_at=null`. staff-auth בלבד.
++
++- [ ] **Step 1: כתוב את ה-route**
++
++`app/api/admin/maternity/recovery-unlock/route.ts`:
++```ts
++import { NextResponse, type NextRequest } from 'next/server'
++import { requireStaff, getServiceClient } from '@/lib/apiAuth'
++
++export const dynamic = 'force-dynamic'
++
++export async function POST(request: NextRequest) {
++  const staff = await requireStaff()
++  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++  const { aidId } = await request.json()
++  if (!aidId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
++  const admin = getServiceClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++  const { error } = await admin.from('maternity_aids')
++    .update({ recovery_locked: false, recovery_edit_requested_at: null }).eq('id', aidId)
++  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++  return NextResponse.json({ ok: true })
++}
++```
++
++- [ ] **Step 2: ודא build**
++
++Run: `npm run build`
++Expected: עובר. אם `requireStaff`/`getServiceClient` אינם החתימות — בדוק ב-`lib/apiAuth.ts`.
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add app/api/admin/maternity/recovery-unlock/route.ts
++git commit -m "משרד: route לפתיחת רשומת החלמה נעולה לעריכה מחדש"
++```
++
++---
++
++## Task 8: פורטל — קובץ קבלה + חלונית אימות + נעילה + עיצוב
++
++**Files:**
++- Modify: `app/portal/maternity/[home]/PortalApp.tsx`
++
++**Interfaces:**
++- Consumes: routes מ-Task 4/5/6. שדות `recovery_receipt_url`, `recovery_locked`, `recovery_edit_requested_at` על `Aid`.
++
++- [ ] **Step 1: הרחב את interface Aid**
++
++הוסף לשדות ה-`Aid` (שורות 22-41):
++```ts
++  recovery_receipt_url?: string | null
++  recovery_locked?: boolean | null
++  recovery_edit_requested_at?: string | null
++```
++
++- [ ] **Step 2: הוסף state לקובץ ולנעילה**
++
++ב-`DataView`, ליד שאר ה-state (סביב שורה 273), הוסף:
++```ts
++  const [receiptFile, setReceiptFile] = useState<Record<string, File | null>>({})
++  const [receiptUrl, setReceiptUrl] = useState<Record<string, string | null>>(
++    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_url ?? null])),
++  )
++  const [locked, setLocked] = useState<Record<string, boolean>>(
++    () => Object.fromEntries(aids.map(a => [a.id, !!a.recovery_locked])),
++  )
++  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
++  const [confirmAid, setConfirmAid] = useState<string | null>(null)
++  const [requesting, setRequesting] = useState<string | null>(null)
++```
++
++- [ ] **Step 3: פונקציית העלאת קובץ**
++
++הוסף ליד `sendAmount` (סביב שורה 289):
++```ts
++  const uploadReceipt = async (aidId: string, file: File) => {
++    setUploadingReceipt(aidId)
++    try {
++      const fd = new FormData()
++      fd.append('home', home); fd.append('aidId', aidId); fd.append('file', file)
++      const r = await fetch('/api/portal/recovery-receipt', { method: 'POST', body: fd })
++      const d = await r.json()
++      if (r.ok && d.url) { setReceiptUrl(m => ({ ...m, [aidId]: d.url })); setReceiptFile(m => ({ ...m, [aidId]: file })) }
++    } catch { /* התעלם */ }
++    setUploadingReceipt(null)
++  }
++```
++
++- [ ] **Step 4: עדכן sendAmount — דורש לילות+קובץ, פותח חלונית, ואז נועל**
++
++החלף את `sendAmount` (שורות 275-289):
++```ts
++  const canSubmit = (aidId: string) => {
++    const amt = Number(amountInput[aidId])
++    return Number.isFinite(amt) && amt > 0 &&
++      (nightsInput[aidId] ?? '').trim() !== '' &&
++      (receiptInput[aidId] ?? '').trim() !== '' &&
++      !!receiptUrl[aidId]
++  }
++  const sendAmount = async (aidId: string) => {
++    if (!canSubmit(aidId)) return
++    setSavingAmt(aidId)
++    try {
++      const r = await fetch('/api/portal/recovery-amount', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ home, aidId, amount: Number(amountInput[aidId]), nights: nightsInput[aidId], receiptNumber: (receiptInput[aidId] ?? '').trim() }),
++      })
++      if (r.ok) {
++        setAmountStatus(m => ({ ...m, [aidId]: 'executed' }))
++        setLocked(m => ({ ...m, [aidId]: true }))
++        setEditingAmt(m => ({ ...m, [aidId]: false }))
++        setConfirmAid(null)
++      }
++    } catch { /* נסיון חוזר */ }
++    setSavingAmt(null)
++  }
++  const requestEdit = async (aidId: string) => {
++    setRequesting(aidId)
++    try {
++      await fetch('/api/portal/recovery-request-edit', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ home, aidId }),
++      })
++    } catch { /* התעלם */ }
++    setRequesting(null)
++  }
++```
++
++- [ ] **Step 5: הוסף שדה העלאת קובץ בטופס**
++
++בטופס (אחרי בלוק "מספר קבלה", לפני כפתור השליחה, סביב שורה 533), הוסף:
++```tsx
++                              <label className="flex flex-col gap-1.5 text-right">
++                                <span className="text-sm font-semibold text-slate-600">קובץ קבלה (תמונה/PDF)</span>
++                                <input
++                                  type="file" accept="image/*,application/pdf"
++                                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(aid.id, f) }}
++                                  className="w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-4 file:py-2 file:text-emerald-700 file:font-semibold"
++                                />
++                                {uploadingReceipt === aid.id && <span className="text-xs text-slate-400">מעלה…</span>}
++                                {receiptUrl[aid.id] && <span className="text-xs text-emerald-600 flex items-center gap-1"><Check size={13} /> קובץ הועלה</span>}
++                              </label>
++```
++
++- [ ] **Step 6: שנה את כפתור השליחה לפתיחת חלונית האימות**
++
++החלף את כפתור "סמן כבוצע" (שורות 534-539):
++```tsx
++                              <button type="button" onClick={() => setConfirmAid(aid.id)}
++                                disabled={!canSubmit(aid.id)}
++                                title={!canSubmit(aid.id) ? 'יש למלא סכום, לילות, מספר קבלה ולהעלות קובץ' : undefined}
++                                className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
++                                אישור ושליחה
++                              </button>
++```
++
++- [ ] **Step 7: החלף את בלוק "בוצע ✓ / ערוך" בנעילה + "בקש תיקון"**
++
++בבלוק `status && !editing` (שורות 463-478), החלף את החלק של הכפתורים (`<div className="flex items-center gap-2">...ערוך</div>`) ב:
++```tsx
++                              <div className="flex items-center gap-2">
++                                <span className="text-xs font-medium text-green-600">בוצע ✓</span>
++                                {locked[aid.id]
++                                  ? (aid.recovery_edit_requested_at || requesting === aid.id
++                                      ? <span className="text-xs font-medium text-amber-600">בקשת תיקון נשלחה</span>
++                                      : <button type="button" onClick={() => requestEdit(aid.id)}
++                                          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">בקש תיקון</button>)
++                                  : <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
++                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>}
++                              </div>
++```
++(כאשר `locked` true והמשרד עדיין לא פתח — אין "ערוך", יש "בקש תיקון"; אחרי בקשה — הודעה. כשהמשרד פותח, `locked` יתאפס בטעינה מחדש והכפתור "ערוך" יחזור.)
++
++- [ ] **Step 8: הוסף חלונית אימות (DetailModal-style)**
++
++לפני ה-`return` של `DataView`, מצא את ה-aid הנבחר וצייר Modal. הוסף בתוך ה-JSX (ליד `{selected && <DetailModal .../>}`, שורה 346):
++```tsx
++      {confirmAid && (() => {
++        const a = filtered.find(x => x.id === confirmAid); if (!a) return null
++        return (
++          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm" onClick={() => setConfirmAid(null)}>
++            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
++              <div className="bg-amber-500 px-5 py-4 text-white">
++                <p className="font-bold text-base">אישור סופי — נא לוודא את נכונות הפרטים</p>
++                <p className="text-amber-100 text-xs mt-1">נא לעבור בעיון על כל הפרטים ולוודא את נכונותם. לאחר האישור לא ניתן יהיה לערוך את הנתונים.</p>
++              </div>
++              <div className="p-5 space-y-2 text-sm">
++                <div className="flex justify-between"><span className="text-slate-500">יולדת</span><span className="font-semibold">{motherName(a.beneficiary)}</span></div>
++                <div className="flex justify-between"><span className="text-slate-500">סכום שמומש</span><span className="font-semibold">₪{Number(amountInput[a.id]).toLocaleString('he-IL')}</span></div>
++                <div className="flex justify-between"><span className="text-slate-500">מספר לילות</span><span className="font-semibold">{nightsInput[a.id]}</span></div>
++                <div className="flex justify-between"><span className="text-slate-500">מספר קבלה</span><span className="font-semibold">{receiptInput[a.id]}</span></div>
++                <div className="flex justify-between"><span className="text-slate-500">קובץ קבלה</span><span className="font-semibold text-emerald-600">{receiptUrl[a.id] ? 'צורף ✓' : '—'}</span></div>
++              </div>
++              <div className="flex gap-2 p-4 border-t border-slate-100">
++                <button onClick={() => setConfirmAid(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">חזור לתיקון</button>
++                <button onClick={() => sendAmount(a.id)} disabled={savingAmt === a.id}
++                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-40">
++                  {savingAmt === a.id ? '...' : 'אני מאשר/ת ושולח/ת'}</button>
++              </div>
++            </div>
++          </div>
++        )
++      })()}
++```
++
++- [ ] **Step 9: תיקון עיצוב — הסר font-size גלובלי, תקן גלישה**
++
++החלף את בלוק ה-`<style>` (שורות 341-345) בגרסה מרוככת שלא מנפחת את הטבלה:
++```tsx
++      <style>{`
++        .portal16 { font-size: 15px; line-height: 1.6; }
++        .portal16 table { font-size: 14px; }
++        .portal16 th, .portal16 td { padding-top: 14px; padding-bottom: 14px; }
++      `}</style>
++```
++והסר את `whitespace-nowrap` מהתאים הרחבים אם עדיין יש גלישה אופקית (בדוק במסך צר). ה-`overflow-x-auto` (שורה 428) יישאר כרשת ביטחון אך ברוחב רגיל הטבלה צריכה להיכנס.
++
++- [ ] **Step 10: ודא build + בדיקה ידנית**
++
++Run: `npm run build`
++Expected: עובר. ואז בדיקה ידנית בפורטל: הגעה→טופס→העלאת קובץ→אישור ושליחה→חלונית→אישור→"בוצע ✓" נעול→"בקש תיקון".
++
++- [ ] **Step 11: Commit**
++
++```bash
++git add app/portal/maternity/[home]/PortalApp.tsx
++git commit -m "פורטל: קובץ קבלה, חלונית אימות, נעילה, בקשת תיקון, ותיקון עיצוב וגלישה"
++```
++
++---
++
++## Task 9: כרטסת הלידה — קובץ קבלה + כפתור פתיחה מחדש
++
++**Files:**
++- Modify: `app/admin/maternity/[id]/page.tsx` (סביב 420-433)
++- Create: `app/admin/maternity/[id]/RecoveryUnlockButton.tsx`
++
++**Interfaces:**
++- Consumes: `DownloadDocButton`, `recovery-unlock` route (Task 7). שדות `recovery_receipt_url`, `recovery_locked` על ה-aid.
++
++- [ ] **Step 1: הוסף הצגת קובץ קבלה בכרטסת**
++
++ב-`[id]/page.tsx`, אחרי בלוק `recovery_receipt_number` (שורה 430-433), הוסף:
++```tsx
++        {aid.recovery_receipt_url && (
++          <div className="mt-2">
++            <DownloadDocButton url={aid.recovery_receipt_url} name="קבלה" label="קובץ קבלה" variant="button" />
++          </div>
++        )}
++```
++(ודא ש-`DownloadDocButton` מיובא בקובץ; אם לא — הוסף `import DownloadDocButton from '@/components/ui/DownloadDocButton'`.)
++
++- [ ] **Step 2: כתוב את כפתור הפתיחה מחדש**
++
++`app/admin/maternity/[id]/RecoveryUnlockButton.tsx`:
++```tsx
++'use client'
++import { useState } from 'react'
++import { Unlock } from 'lucide-react'
++
++export default function RecoveryUnlockButton({ aidId }: { aidId: string }) {
++  const [busy, setBusy] = useState(false)
++  const [done, setDone] = useState(false)
++  const unlock = async () => {
++    setBusy(true)
++    try {
++      const r = await fetch('/api/admin/maternity/recovery-unlock', {
++        method: 'POST', headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ aidId }),
++      })
++      if (r.ok) { setDone(true); location.reload() }
++    } catch { /* התעלם */ }
++    setBusy(false)
++  }
++  if (done) return <span className="text-xs text-emerald-600">נפתח לעריכה ✓</span>
++  return (
++    <button onClick={unlock} disabled={busy}
++      className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40">
++      <Unlock size={13} /> {busy ? 'פותח…' : 'פתח לעריכה'}
++    </button>
++  )
++}
++```
++
++- [ ] **Step 3: שבץ את הכפתור כשהרשומה נעולה**
++
++ב-`[id]/page.tsx`, בבלוק הסכום (סביב 420-433), הוסף כשהרשומה נעולה:
++```tsx
++        {aid.recovery_locked && (
++          <div className="mt-2 flex items-center gap-2">
++            {aid.recovery_edit_requested_at && <span className="text-xs font-medium text-amber-600">בית ההחלמה ביקש תיקון</span>}
++            <RecoveryUnlockButton aidId={aid.id} />
++          </div>
++        )}
++```
++והוסף `import RecoveryUnlockButton from './RecoveryUnlockButton'` בראש הקובץ.
++
++- [ ] **Step 4: ודא build**
++
++Run: `npm run build`
++Expected: עובר.
++
++- [ ] **Step 5: Commit**
++
++```bash
++git add "app/admin/maternity/[id]/page.tsx" "app/admin/maternity/[id]/RecoveryUnlockButton.tsx"
++git commit -m "כרטסת: הצגת קובץ קבלה וכפתור פתיחה מחדש לרשומה נעולה"
++```
++
++---
++
++## Task 10: חלונית התראה במסך הראשי
++
++**Files:**
++- Modify: `app/admin/maternity/recovery/page.tsx`
++- Create: `app/admin/maternity/recovery/RecoveryAlerts.tsx`
++
++**Interfaces:**
++- Consumes: `aids` (כולל `recovery_amount_at`, `recovery_edit_requested_at`, `recovery_amount_status`, שם היולדת).
++- Produces: חלונית תחתונה שמציגה מי מימש/ביקש תיקון מאז הכניסה האחרונה (localStorage `recovery_last_seen`).
++
++- [ ] **Step 1: ודא ש-page.tsx מעביר את השדות הדרושים**
++
++ב-`recovery/page.tsx:getData`, ודא שה-`select` של `maternity_aids` כולל `recovery_amount_at, recovery_edit_requested_at, recovery_amount_status` (הוסף אם חסר). מבנה היולדת לשם התצוגה כבר קיים דרך ה-join.
++
++- [ ] **Step 2: כתוב את RecoveryAlerts**
++
++`app/admin/maternity/recovery/RecoveryAlerts.tsx`:
++```tsx
++'use client'
++import { useEffect, useState } from 'react'
++import { Bell, X } from 'lucide-react'
++
++type Ev = { id: string; name: string; kind: 'realized' | 'edit'; at: string }
++
++export default function RecoveryAlerts({ events }: { events: Ev[] }) {
++  const [show, setShow] = useState<Ev[]>([])
++  useEffect(() => {
++    const last = Number(localStorage.getItem('recovery_last_seen') || 0)
++    const fresh = events.filter(e => new Date(e.at).getTime() > last)
++    if (fresh.length) setShow(fresh)
++    localStorage.setItem('recovery_last_seen', String(Date.now()))
++  }, [events])
++  if (!show.length) return null
++  return (
++    <div className="fixed bottom-4 left-4 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden" dir="rtl">
++      <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between">
++        <span className="font-bold text-sm flex items-center gap-2"><Bell size={16} /> עדכונים חדשים ({show.length})</span>
++        <button onClick={() => setShow([])} className="text-white/70 hover:text-white"><X size={16} /></button>
++      </div>
++      <ul className="max-h-64 overflow-y-auto divide-y divide-slate-100">
++        {show.map((e, i) => (
++          <li key={i} className="px-4 py-2.5 text-sm">
++            <span className="font-semibold text-slate-800">{e.name}</span>{' '}
++            <span className={e.kind === 'edit' ? 'text-amber-600' : 'text-emerald-600'}>
++              {e.kind === 'edit' ? 'ביקש/ה תיקון' : 'מימשה זכאות'}
++            </span>
++          </li>
++        ))}
++      </ul>
++    </div>
++  )
++}
++```
++
++- [ ] **Step 3: בנה את מערך האירועים ורנדר במסך**
++
++ב-`recovery/page.tsx`, אחרי `getData`, בנה `events` מ-`aids` ורנדר `<RecoveryAlerts events={events} />` (למשל אחרי `RecoveryBillingSummary`):
++```tsx
++  const events = aids.flatMap((a: any) => {
++    const name = a.beneficiaries ? [a.beneficiaries.family_name, a.beneficiaries.spouse_name || a.beneficiaries.full_name].filter(Boolean).join(' ') : '—'
++    const out: { id: string; name: string; kind: 'realized' | 'edit'; at: string }[] = []
++    if (a.recovery_amount_at) out.push({ id: a.id, name, kind: 'realized', at: a.recovery_amount_at })
++    if (a.recovery_edit_requested_at) out.push({ id: a.id, name, kind: 'edit', at: a.recovery_edit_requested_at })
++    return out
++  })
++```
++(התאם את שם השדה של היולדת ל-join הקיים ב-`getData`.) והוסף `import RecoveryAlerts from './RecoveryAlerts'`.
++
++- [ ] **Step 4: ודא build + בדיקה ידנית**
++
++Run: `npm run build`
++Expected: עובר. בדיקה: מחק `recovery_last_seen` מ-localStorage, רענן — החלונית מופיעה עם האירועים.
++
++- [ ] **Step 5: Commit**
++
++```bash
++git add app/admin/maternity/recovery/page.tsx app/admin/maternity/recovery/RecoveryAlerts.tsx
++git commit -m "משרד: חלונית התראה למימוש זכאות ובקשות תיקון מאז הכניסה האחרונה"
++```
++
++---
++
++## Task 11: עיצוב מחדש — טבלת עזר יולדות (המשרד)
++
++**Files:**
++- Modify: `app/admin/maternity/MaternityTable.tsx`
++- Modify: `app/admin/maternity/recovery/RecoveryHomesView.tsx` (אם נדרש ריווח)
++
++**Interfaces:** עיצוב בלבד — אין שינוי נתונים/לוגיקה.
++
++- [ ] **Step 1: הרחב ריווח ותקן גלישה**
++
++ב-`MaternityTable.tsx`: הגדל padding של תאים (`px-4 py-3` → `px-5 py-4`), הגדל מרווח שורות, ודא שהטבלה נכנסת ברוחב המסך (בדוק `overflow-x-auto` והסר `whitespace-nowrap` מעמודות טקסט ארוכות אם גורם לגלישה). שמור עקביות ויזואלית עם הפורטל.
++
++- [ ] **Step 2: ודא build + בדיקה ויזואלית**
++
++Run: `npm run build`
++Expected: עובר. בדיקה: המסך `/admin/maternity/recovery` — טבלה מרווחת, בלי גלילה אופקית ברוחב רגיל.
++
++- [ ] **Step 3: Commit**
++
++```bash
++git add app/admin/maternity/MaternityTable.tsx app/admin/maternity/recovery/RecoveryHomesView.tsx
++git commit -m "עיצוב: ריווח ותיקון גלישה בטבלת עזר יולדות"
++```
++
++---
++
++## Task 12: אימות סופי end-to-end
++
++- [ ] **Step 1: build + lint מלא**
++
++Run: `npm run build && npm run lint`
++Expected: שניהם עוברים.
++
++- [ ] **Step 2: מעבר ידני על כל הזרימה**
++
++ודא (עם ה-migrations שהורצו):
++1. כניסה מהירה פותחת פורטל לכל בית החלמה.
++2. בפורטל: הגעה → טופס → סכום+לילות+קבלה+קובץ (הכל חובה, הכפתור disabled בלי אחד מהם).
++3. "אישור ושליחה" → חלונית עם כל הפרטים → "אני מאשר/ת" → "בוצע ✓" נעול.
++4. "בקש תיקון" → מייל ל-report_email + התראה במשרד.
++5. במשרד: כרטסת מציגה קובץ קבלה + "פתח לעריכה" → הפורטל שוב פתוח לעריכה.
++6. חלונית התראה במסך הראשי מציגה מימושים/בקשות.
++7. מייל מגיע ל-report_email במימוש.
++8. אין גלילה אופקית בשום פורטל; ריווח נעים.
++
++- [ ] **Step 3: קומיט סיכום אם נדרש**
++
++אם נותרו שינויים לא-מקומטים, קומט אותם עם הודעה מסכמת.
+diff --git a/lib/gmail.ts b/lib/gmail.ts
+index 5c1ac4a..ead8f4e 100644
+--- a/lib/gmail.ts
++++ b/lib/gmail.ts
+@@ -105,25 +105,25 @@ export interface ParsedMessage {
+   isRead: boolean
+   labelIds: string[]
+   attachments: Attachment[]
+   isSpam?: boolean
+   followUpAt?: string | null
+   scheduledAt?: string | null
+ }
+ 
+ function decodeBase64(data: string) {
+   return Buffer.from(data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8')
+ }
+ 
+-function getBody(payload: any): string {
++export function getBody(payload: any): string {
+   if (!payload) return ''
+   if (payload.mimeType === 'text/html' && payload.body?.data) return decodeBase64(payload.body.data)
+   if (payload.mimeType === 'text/plain' && payload.body?.data) {
+     const text = decodeBase64(payload.body.data)
+     return `<pre style="white-space:pre-wrap;font-family:inherit">${text}</pre>`
+   }
+   if (payload.parts) {
+     const html = payload.parts.find((p: any) => p.mimeType === 'text/html')
+     if (html?.body?.data) return decodeBase64(html.body.data)
+     const plain = payload.parts.find((p: any) => p.mimeType === 'text/plain')
+     if (plain?.body?.data) {
+       const text = decodeBase64(plain.body.data)
+diff --git a/lib/legacyMailSync.ts b/lib/legacyMailSync.ts
+index 3566124..a717fb1 100644
+--- a/lib/legacyMailSync.ts
++++ b/lib/legacyMailSync.ts
+@@ -1,14 +1,14 @@
+ import type { SupabaseClient } from '@supabase/supabase-js'
+-import { getLegacyGmailClient } from './gmail'
++import { getLegacyGmailClient, getBody } from './gmail'
+ 
+ // זיהוי לקוח למייל היסטורי — אותו דפוס כמו resend-inbound (maybeAutoReplyIgud):
+ // ת"ז 9 ספרות בנושא (רשום או בן/בת זוג) → נפילה לכתובת השולח.
+ export async function resolveBeneficiaryId(
+   admin: SupabaseClient,
+   opts: { subject: string; fromEmail: string },
+ ): Promise<string | null> {
+   const idMatch = String(opts.subject ?? '').match(/\d{9}/)
+   if (idMatch) {
+     const id = idMatch[0]
+     const { data } = await admin
+       .from('beneficiaries')
+@@ -46,54 +46,68 @@ export async function syncLegacyMail(admin: SupabaseClient) {
+   const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
+   const lastEpoch = cur?.value ? Number(cur.value) : 0
+   const q = lastEpoch ? `after:${lastEpoch}` : ''
+ 
+   const results: ItemResult[] = []
+   let pageToken: string | undefined
+   let maxEpoch = lastEpoch
+ 
+   do {
+     const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 100, pageToken })
+     const ids = (list.data.messages ?? []).map(m => m.id!).filter(Boolean)
+     for (const id of ids) {
+-      const full = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
+-      const headers = full.data.payload?.headers ?? []
+-      const h = (n: string) => headers.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? ''
+-      const gmailMessageId = h('message-id') || id
+-      const subject = h('subject')
+-      const fromRaw = h('from')
+-      const fromEmail = (fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw).toLowerCase().trim()
+-      const fromName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || null
+-      const toEmail = (h('to').match(/<([^>]+)>/)?.[1] ?? h('to')).toLowerCase().trim()
+-      const dateMs = Number(full.data.internalDate ?? 0)
+-      const emailDate = dateMs ? new Date(dateMs).toISOString() : null
+-      const epochSec = dateMs ? Math.floor(dateMs / 1000) : 0
+-      if (epochSec > maxEpoch) maxEpoch = epochSec
++      try {
++        const full = await gmail.users.messages.get({ userId: 'me', id, format: 'full' })
++        const headers = full.data.payload?.headers ?? []
++        const h = (n: string) => headers.find((x: any) => x.name?.toLowerCase() === n.toLowerCase())?.value ?? ''
++        const gmailMessageId = h('message-id') || id
++        const subject = h('subject')
++        const fromRaw = h('from')
++        const fromEmail = (fromRaw.match(/<([^>]+)>/)?.[1] ?? fromRaw).toLowerCase().trim()
++        const fromName = fromRaw.replace(/<[^>]+>/, '').replace(/"/g, '').trim() || null
++        const toEmail = (h('to').match(/<([^>]+)>/)?.[1] ?? h('to')).toLowerCase().trim()
++        const dateMs = Number(full.data.internalDate ?? 0)
++        const emailDate = dateMs ? new Date(dateMs).toISOString() : null
++        const epochSec = dateMs ? Math.floor(dateMs / 1000) : 0
+ 
+-      const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
++        const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
+ 
+-      const { data: inserted } = await admin.from('inbound_emails').upsert({
+-        gmail_message_id: gmailMessageId,
+-        message_id: gmailMessageId,
+-        source: 'legacy',
+-        from_email: fromEmail,
+-        from_name: fromName,
+-        to_email: toEmail,
+-        subject,
+-        plain_text: full.data.snippet ?? null,
+-        beneficiary_id: beneficiaryId,
+-        email_date: emailDate,
+-        is_read: true,
+-      }, { onConflict: 'gmail_message_id', ignoreDuplicates: true }).select('id')
++        const { data: inserted, error } = await admin.from('inbound_emails').upsert({
++          gmail_message_id: gmailMessageId,
++          source: 'legacy',
++          from_email: fromEmail,
++          from_name: fromName,
++          to_email: toEmail,
++          subject,
++          html: getBody(full.data.payload) || null,
++          plain_text: full.data.snippet ?? null,
++          beneficiary_id: beneficiaryId,
++          email_date: emailDate,
++          received_at: emailDate ?? null,
++          is_read: true,
++        }, { onConflict: 'gmail_message_id', ignoreDuplicates: true }).select('id')
+ 
+-      const imported = (inserted?.length ?? 0) > 0
+-      results.push({ imported, matched: !!beneficiaryId })
++        if (error) {
++          console.error(`[legacy-sync] upsert failed for ${gmailMessageId}:`, error.message)
++          results.push({ imported: false, matched: false })
++          continue
++        }
++
++        if (epochSec > maxEpoch) maxEpoch = epochSec
++
++        const imported = (inserted?.length ?? 0) > 0
++        results.push({ imported, matched: !!beneficiaryId })
++      } catch (err) {
++        console.error(`[legacy-sync] failed message ${id}:`, err)
++        results.push({ imported: false, matched: false })
++        continue
++      }
+     }
+     pageToken = list.data.nextPageToken ?? undefined
+   } while (pageToken)
+ 
+   if (maxEpoch > lastEpoch) {
+     await admin.from('app_settings').upsert({ key: LAST_SYNC_KEY, value: String(maxEpoch + 1), updated_at: new Date().toISOString() })
+   }
+ 
+   return { fetched: results.length, ...summarizeSync(results) }
+ }

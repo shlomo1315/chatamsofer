@@ -1,0 +1,440 @@
+24043a0 feat: routes רענון וסטטוס לסנכרון מייל קודם
+e0ba108 פורטל בתי החלמה: migrations, כניסה מהירה, מיילים, ו-routes נעילה/קבלה/תיקון
+=== STAT ===
+ app/api/admin/legacy-mail/status/route.ts          | 20 +++++++
+ app/api/admin/legacy-mail/sync/route.ts            | 25 ++++++++
+ app/api/admin/maternity/portal-login/route.ts      | 12 +++-
+ app/api/admin/maternity/recovery-unlock/route.ts   | 22 ++++++++
+ app/api/portal/recovery-amount/route.ts            | 33 +++++++++--
+ app/api/portal/recovery-receipt/route.ts           | 66 ++++++++++++++++++++++
+ app/api/portal/recovery-request-edit/route.ts      | 55 ++++++++++++++++++
+ lib/emailTemplates.ts                              | 39 +++++++++++++
+ supabase/migrations/20260709_recovery_locked.sql   |  6 ++
+ .../migrations/20260709_recovery_receipt_url.sql   |  3 +
+ 10 files changed, 275 insertions(+), 6 deletions(-)
+=== DIFF ===
+diff --git a/app/api/admin/legacy-mail/status/route.ts b/app/api/admin/legacy-mail/status/route.ts
+new file mode 100644
+index 0000000..fe97937
+--- /dev/null
++++ b/app/api/admin/legacy-mail/status/route.ts
+@@ -0,0 +1,20 @@
++import { NextResponse } from 'next/server'
++import { createClient } from '@supabase/supabase-js'
++import { requireStaff, unauthorized } from '@/lib/apiAuth'
++import { getLegacyRefreshToken } from '@/lib/gmail'
++
++export const dynamic = 'force-dynamic'
++
++function admin() {
++  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++export async function GET() {
++  const staff = await requireStaff()
++  if (!staff) return unauthorized()
++  const db = admin()
++  const token = await getLegacyRefreshToken()
++  const { data: sync } = await db.from('app_settings').select('value, updated_at').eq('key', 'legacy_mail_last_sync').maybeSingle()
++  const { count } = await db.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('source', 'legacy').is('beneficiary_id', null)
++  return NextResponse.json({ connected: !!token, lastSync: sync?.updated_at ?? null, unmatched: count ?? 0 })
++}
+diff --git a/app/api/admin/legacy-mail/sync/route.ts b/app/api/admin/legacy-mail/sync/route.ts
+new file mode 100644
+index 0000000..cb8de8f
+--- /dev/null
++++ b/app/api/admin/legacy-mail/sync/route.ts
+@@ -0,0 +1,25 @@
++import { NextResponse } from 'next/server'
++import { createClient } from '@supabase/supabase-js'
++import { requireStaff, unauthorized } from '@/lib/apiAuth'
++import { syncLegacyMail } from '@/lib/legacyMailSync'
++
++export const dynamic = 'force-dynamic'
++export const maxDuration = 300 // משיכה ראשונה עלולה להיות ארוכה
++
++function admin() {
++  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++export async function POST() {
++  const staff = await requireStaff()
++  if (!staff) return unauthorized()
++  try {
++    const result = await syncLegacyMail(admin())
++    return NextResponse.json({ ok: true, ...result })
++  } catch (e) {
++    const msg = e instanceof Error ? e.message : String(e)
++    if (msg.includes('not connected')) return NextResponse.json({ error: 'התיבה הישנה אינה מחוברת. חבר אותה תחילה.' }, { status: 400 })
++    console.error('[legacy-mail/sync]', msg)
++    return NextResponse.json({ error: 'שגיאה במשיכת המיילים. נסה שוב.' }, { status: 500 })
++  }
++}
+diff --git a/app/api/admin/maternity/portal-login/route.ts b/app/api/admin/maternity/portal-login/route.ts
+index 9097663..d0c339f 100644
+--- a/app/api/admin/maternity/portal-login/route.ts
++++ b/app/api/admin/maternity/portal-login/route.ts
+@@ -14,26 +14,34 @@ export async function GET(request: NextRequest) {
+ 
+   const staff = await requireStaff()
+   if (!staff) {
+     // לא מחובר כצוות — להפניה לכניסת הניהול
+     return NextResponse.redirect(new URL('/login', origin))
+   }
+   if (!home) {
+     return NextResponse.redirect(new URL('/admin/maternity/recovery', origin))
+   }
+ 
+-  // אימות ששם בית ההחלמה קיים במערכת (מונע הזרקת שם שרירותי)
++  // בתי החלמה מברירת-מחדל מוזרקים לתצוגה גם בלי שורה ב-DB. אם חסרה שורה —
++  // צור אותה כדי שהכניסה המהירה תעבוד, במקום להפנות חזרה בשקט.
++  const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
+   const admin = getServiceClient()
+   if (admin) {
+     const { data } = await admin.from('recovery_homes').select('name').eq('name', home).maybeSingle()
+     if (!data) {
+-      return NextResponse.redirect(new URL('/admin/maternity/recovery', origin))
++      if (DEFAULT_HOMES.includes(home)) {
++        await admin.from('recovery_homes').upsert({ name: home }, { onConflict: 'name' })
++      } else {
++        return NextResponse.redirect(
++          new URL('/admin/maternity/recovery?portalError=' + encodeURIComponent('בית החלמה לא נמצא במערכת'), origin),
++        )
++      }
+     }
+   }
+ 
+   const res = NextResponse.redirect(new URL(`/portal/maternity/${encodeURIComponent(home)}`, origin))
+   res.cookies.set(portalCookieName(home), createRecoveryPortalToken(home), {
+     httpOnly: true,
+     sameSite: 'lax',
+     secure: process.env.NODE_ENV === 'production',
+     maxAge: RECOVERY_PORTAL_MAX_AGE,
+     path: '/',
+diff --git a/app/api/admin/maternity/recovery-unlock/route.ts b/app/api/admin/maternity/recovery-unlock/route.ts
+new file mode 100644
+index 0000000..9be1996
+--- /dev/null
++++ b/app/api/admin/maternity/recovery-unlock/route.ts
+@@ -0,0 +1,22 @@
++import { NextResponse, type NextRequest } from 'next/server'
++import { requireStaff, getServiceClient } from '@/lib/apiAuth'
++
++export const dynamic = 'force-dynamic'
++
++// המשרד פותח רשומת החלמה נעולה לעריכה מחדש בצד בית ההחלמה.
++export async function POST(request: NextRequest) {
++  const staff = await requireStaff()
++  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++
++  const { aidId } = await request.json()
++  if (!aidId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
++
++  const admin = getServiceClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++
++  const { error } = await admin.from('maternity_aids')
++    .update({ recovery_locked: false, recovery_edit_requested_at: null }).eq('id', aidId)
++  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++
++  return NextResponse.json({ ok: true })
++}
+diff --git a/app/api/portal/recovery-amount/route.ts b/app/api/portal/recovery-amount/route.ts
+index f50cced..037d4ab 100644
+--- a/app/api/portal/recovery-amount/route.ts
++++ b/app/api/portal/recovery-amount/route.ts
+@@ -1,57 +1,82 @@
+ import { createClient } from '@supabase/supabase-js'
+ import { NextResponse, type NextRequest } from 'next/server'
+ import { cookies } from 'next/headers'
+ import { portalCookieName } from '../login/route'
+ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
++import { deliverMail } from '@/lib/sendMail'
++import { recoveryRealizedEmail } from '@/lib/emailTemplates'
+ 
+ export const dynamic = 'force-dynamic'
+ 
+ function getAdminClient() {
+   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+   if (!url || !key) return null
+   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+ }
+ 
+ // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
+ export async function POST(request: NextRequest) {
+   const { home, aidId, amount, nights, receiptNumber } = await request.json()
+   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
+   const amt = Number(amount)
+   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
+-  const nightsNum = nights === '' || nights == null ? null : Number(nights)
+-  if (nightsNum != null && (!Number.isInteger(nightsNum) || nightsNum < 0)) {
+-    return NextResponse.json({ error: 'מספר לילות לא תקין' }, { status: 400 })
++  const nightsNum = Number(nights)
++  if (!Number.isInteger(nightsNum) || nightsNum < 0) {
++    return NextResponse.json({ error: 'יש להזין מספר לילות' }, { status: 400 })
+   }
+   const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
+   if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
+ 
+   const cookieStore = await cookies()
+   if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
+     return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+   }
+ 
+   const admin = getAdminClient()
+   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+ 
+   // אבטחה: הרשומה שייכת לבית ההחלמה הזה, וסומן שהיולדת הגיעה
+-  const { data: aid } = await admin.from('maternity_aids').select('id, recovery_home, recovery_arrived').eq('id', aidId).maybeSingle()
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, recovery_arrived, recovery_receipt_url, recovery_locked, beneficiaries(family_name, full_name, spouse_name)')
++    .eq('id', aidId).maybeSingle()
+   if (!aid || aid.recovery_home !== home) {
+     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
+   }
++  if (aid.recovery_locked) {
++    return NextResponse.json({ error: 'הרשומה נעולה — פנה למשרד' }, { status: 403 })
++  }
+   if (aid.recovery_arrived !== true) {
+     return NextResponse.json({ error: 'יש לסמן "הגיעה" לפני הזנת הסכום' }, { status: 400 })
+   }
++  if (!aid.recovery_receipt_url) {
++    return NextResponse.json({ error: 'יש להעלות קובץ קבלה' }, { status: 400 })
++  }
+ 
+   const { error } = await admin.from('maternity_aids').update({
+     recovery_amount: amt,
+     recovery_nights: nightsNum,
+     recovery_receipt_number: receipt,
+     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
+     recovery_amount_at: new Date().toISOString(),
++    recovery_locked: true, // נעילה מיידית — עריכה חוזרת רק לאחר פתיחת המשרד
+     updated_at: new Date().toISOString(),
+   }).eq('id', aidId)
+ 
+   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++
++  // מייל התראה על מימוש זכאות — לכתובת פניות היולדות של בית החלמה
++  try {
++    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
++    if (rh?.report_email) {
++      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
++      const motherName = ben
++        ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || '—'
++        : '—'
++      const mail = recoveryRealizedEmail({ home, motherName, amount: amt, nights: nightsNum, receipt })
++      await deliverMail(rh.report_email, mail.subject, mail.html)
++    }
++  } catch { /* כשל מייל לא חוסם */ }
++
+   return NextResponse.json({ ok: true })
+ }
+diff --git a/app/api/portal/recovery-receipt/route.ts b/app/api/portal/recovery-receipt/route.ts
+new file mode 100644
+index 0000000..1a17e29
+--- /dev/null
++++ b/app/api/portal/recovery-receipt/route.ts
+@@ -0,0 +1,66 @@
++import { createClient } from '@supabase/supabase-js'
++import { NextResponse, type NextRequest } from 'next/server'
++import { cookies } from 'next/headers'
++import { portalCookieName } from '../login/route'
++import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
++
++export const dynamic = 'force-dynamic'
++
++const BUCKET = 'documents'
++const MAX_SIZE = 10 * 1024 * 1024
++const ALLOWED: Record<string, string> = {
++  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
++  webp: 'image/webp', heic: 'image/heic', gif: 'image/gif', pdf: 'application/pdf',
++}
++
++function getAdminClient() {
++  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
++  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
++  if (!url || !key) return null
++  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++// העלאת קובץ הקבלה של בית ההחלמה. מאומת דרך עוגיית הפורטל + בעלות על הרשומה.
++export async function POST(request: NextRequest) {
++  const form = await request.formData()
++  const home = String(form.get('home') ?? '')
++  const aidId = String(form.get('aidId') ?? '')
++  const file = form.get('file')
++  if (!home || !aidId || !(file instanceof File)) {
++    return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
++  }
++
++  const cookieStore = await cookies()
++  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
++    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++  }
++
++  if (file.size > MAX_SIZE) return NextResponse.json({ error: 'הקובץ גדול מדי (מקסימום 10MB)' }, { status: 400 })
++  const ext = (file.name.split('.').pop() ?? '').toLowerCase()
++  const contentType = ALLOWED[ext]
++  if (!contentType) return NextResponse.json({ error: 'סוג קובץ לא נתמך' }, { status: 400 })
++
++  const admin = getAdminClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++
++  // אימות בעלות: הרשומה שייכת לבית החלמה זה ואינה נעולה
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, beneficiary_id, recovery_locked').eq('id', aidId).maybeSingle()
++  if (!aid || aid.recovery_home !== home) {
++    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
++  }
++  if (aid.recovery_locked) return NextResponse.json({ error: 'הרשומה נעולה' }, { status: 403 })
++
++  const path = `${aid.beneficiary_id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
++  const buf = await file.arrayBuffer()
++  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buf, { contentType, upsert: false })
++  if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
++  const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path)
++  const url = urlData.publicUrl
++
++  const { error } = await admin.from('maternity_aids')
++    .update({ recovery_receipt_url: url, updated_at: new Date().toISOString() }).eq('id', aidId)
++  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
++
++  return NextResponse.json({ ok: true, url })
++}
+diff --git a/app/api/portal/recovery-request-edit/route.ts b/app/api/portal/recovery-request-edit/route.ts
+new file mode 100644
+index 0000000..876a0bf
+--- /dev/null
++++ b/app/api/portal/recovery-request-edit/route.ts
+@@ -0,0 +1,55 @@
++import { createClient } from '@supabase/supabase-js'
++import { NextResponse, type NextRequest } from 'next/server'
++import { cookies } from 'next/headers'
++import { portalCookieName } from '../login/route'
++import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
++import { deliverMail } from '@/lib/sendMail'
++import { recoveryEditRequestEmail } from '@/lib/emailTemplates'
++
++export const dynamic = 'force-dynamic'
++
++function getAdminClient() {
++  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
++  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
++  if (!url || !key) return null
++  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
++}
++
++type Ben = { family_name?: string | null; full_name?: string | null; spouse_name?: string | null }
++const motherName = (b?: Ben | null) =>
++  b ? [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || '—' : '—'
++
++// בית ההחלמה מבקש לפתוח רשומה נעולה לתיקון. מסמן זמן בקשה ושולח מייל התראה.
++export async function POST(request: NextRequest) {
++  const { home, aidId } = await request.json()
++  if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
++
++  const cookieStore = await cookies()
++  if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
++    return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
++  }
++
++  const admin = getAdminClient()
++  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
++
++  const { data: aid } = await admin.from('maternity_aids')
++    .select('id, recovery_home, beneficiaries(family_name, full_name, spouse_name)')
++    .eq('id', aidId).maybeSingle()
++  if (!aid || aid.recovery_home !== home) {
++    return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
++  }
++
++  await admin.from('maternity_aids')
++    .update({ recovery_edit_requested_at: new Date().toISOString() }).eq('id', aidId)
++
++  try {
++    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
++    if (rh?.report_email) {
++      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
++      const mail = recoveryEditRequestEmail({ home, motherName: motherName(ben) })
++      await deliverMail(rh.report_email, mail.subject, mail.html)
++    }
++  } catch { /* כשל מייל לא חוסם */ }
++
++  return NextResponse.json({ ok: true })
++}
+diff --git a/lib/emailTemplates.ts b/lib/emailTemplates.ts
+index db3f61f..5335046 100644
+--- a/lib/emailTemplates.ts
++++ b/lib/emailTemplates.ts
+@@ -1135,10 +1135,49 @@ export function portalCredentialsEmail(opts: {
+       <p style="margin:0;color:#1e1b4b;font-size:24px;font-weight:900;letter-spacing:3px;font-family:'Courier New',monospace;" dir="ltr">${escapeHtml(password)}</p>
+     </div>
+     ${btn(portalUrl, 'כניסה לפורטל', '#4f46e5')}
+     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">יש לשמור את פרטי הכניסה במקום בטוח ולא להעבירם לגורם לא מורשה. אם לא ביקשתם גישה זו — ניתן להתעלם מהודעה זו.</p>
+   `
+   return {
+     subject: `פרטי כניסה — ${title} · היכל החתם סופר`,
+     html: shell({ preheader: `פרטי הכניסה ל${title}`, accent: '#4f46e5', title, subtitle: 'היכל החתם סופר', body }),
+   }
+ }
++
++// ─── התראה: יולדת מימשה זכאות החלמה (נשלח לכתובת פניות היולדות של בית ההחלמה) ──
++export function recoveryRealizedEmail(opts: {
++  home: string
++  motherName: string
++  amount: number
++  nights: number | null
++  receipt: string
++}): { subject: string; html: string } {
++  const rows =
++    detailRow('בית החלמה', opts.home) +
++    detailRow('יולדת', opts.motherName) +
++    detailRow('סכום שמומש', '₪' + opts.amount.toLocaleString('he-IL')) +
++    detailRow('מספר לילות', opts.nights != null ? String(opts.nights) : '—') +
++    detailRow('מספר קבלה', opts.receipt)
++  const body = `
++    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">יולדת סימנה מימוש זכאות החלמה בפורטל בית ההחלמה.</p>
++    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
++  `
++  return {
++    subject: `מימוש זכאות החלמה · ${opts.motherName} · ${opts.home}`,
++    html: shell({ preheader: `${opts.motherName} מימשה זכאות החלמה`, accent: '#059669', title: 'מימוש זכאות החלמה', subtitle: 'היכל החתם סופר', body }),
++  }
++}
++
++// ─── התראה: בית החלמה ביקש לתקן רשומה נעולה ─────────────────────────────────
++export function recoveryEditRequestEmail(opts: {
++  home: string
++  motherName: string
++}): { subject: string; html: string } {
++  const body = `
++    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">בית החלמה <b>${escapeHtml(opts.home)}</b> ביקש לתקן את הרשומה של היולדת <b>${escapeHtml(opts.motherName)}</b>.</p>
++    <p style="margin:0;color:#475569;font-size:15px;line-height:1.8;">הרשומה נעולה. ניתן לפתוח אותה לעריכה ממסך ההחלמה או מכרטסת הלידה.</p>
++  `
++  return {
++    subject: `בקשת תיקון · ${opts.motherName} · ${opts.home}`,
++    html: shell({ preheader: `בקשת תיקון מ${opts.home}`, accent: '#d97706', title: 'בקשת תיקון רשומה', subtitle: 'היכל החתם סופר', body }),
++  }
++}
+diff --git a/supabase/migrations/20260709_recovery_locked.sql b/supabase/migrations/20260709_recovery_locked.sql
+new file mode 100644
+index 0000000..a27dfa8
+--- /dev/null
++++ b/supabase/migrations/20260709_recovery_locked.sql
+@@ -0,0 +1,6 @@
++-- נעילת רשומת ההחלמה לאחר שבית ההחלמה אישר בחלונית. עריכה חוזרת חסומה עד
++-- שהמשרד פותח מחדש. recovery_edit_requested_at מתעדכן כשבית ההחלמה מבקש תיקון.
++alter table public.maternity_aids
++  add column if not exists recovery_locked boolean not null default false;
++alter table public.maternity_aids
++  add column if not exists recovery_edit_requested_at timestamptz;
+diff --git a/supabase/migrations/20260709_recovery_receipt_url.sql b/supabase/migrations/20260709_recovery_receipt_url.sql
+new file mode 100644
+index 0000000..b1ed5dc
+--- /dev/null
++++ b/supabase/migrations/20260709_recovery_receipt_url.sql
+@@ -0,0 +1,3 @@
++-- קובץ הקבלה שהעלה בית ההחלמה (סריקה/צילום/PDF). נשמר בדלי documents.
++alter table public.maternity_aids
++  add column if not exists recovery_receipt_url text;

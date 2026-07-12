@@ -212,7 +212,7 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
           <div key={`d${i}`} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
             <FileText size={14} className="text-indigo-500 flex-shrink-0" />
             <ViewDocButton url={d.url} className="truncate flex-1 hover:underline">{d.name || `מסמך ${i + 1}`}</ViewDocButton>
-            <DownloadDocButton url={d.url} name={d.name || `מסמך ${i + 1}`} variant="icon" />
+            <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower?.name} name={d.name || d.url} variant="icon" />
             <button type="button" onClick={() => setDocs(prev => prev.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500"><X size={14} /></button>
           </div>
         ))}

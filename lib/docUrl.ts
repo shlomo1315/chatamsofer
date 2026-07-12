@@ -25,6 +25,22 @@ export function docViewUrl(urlOrPath: string | null | undefined): string {
   return `/api/files?p=${encodeURIComponent(urlOrPath)}`
 }
 
+// בניית שם הורדה משמעותי למסמך מוטב: "סוג המסמך + שם ומשפחת המוטב" עם הסיומת
+// המקורית של הקובץ. למשל: docType="תעודת זהות", person="משה כהן", original="scan123.pdf"
+//   → "תעודת זהות משה כהן.pdf".
+// אם אין שם מוטב — נופלים לסוג בלבד; אם אין גם סוג — לשם הקובץ המקורי.
+// הסיומת נגזרת מהשם המקורי; אם השם המקורי חסר סיומת, /api/files ישלים אותה מנתיב האחסון.
+export function docDownloadName(
+  docType?: string | null,
+  person?: string | null,
+  original?: string | null,
+): string {
+  const ext = (original ?? '').match(/\.[^.\s]+$/)?.[0] ?? ''
+  const base = [docType?.trim(), person?.trim()].filter(Boolean).join(' ').trim()
+  const clean = (base || original || 'מסמך').replace(/[\\/:*?"<>|]+/g, '').trim()
+  return /\.[^.\s]+$/.test(clean) ? clean : `${clean}${ext}`
+}
+
 // כתובת הורדה ישירה למחשב — מוסיפה dl=1 (Content-Disposition: attachment).
 // name (לא חובה) קובע את שם הקובץ שיישמר.
 export function docDownloadUrl(urlOrPath: string | null | undefined, name?: string | null): string {

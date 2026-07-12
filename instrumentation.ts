@@ -86,4 +86,20 @@ export async function register() {
     setTimeout(() => { void checkLoansReport(); setInterval(() => { void checkLoansReport() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[loans-report] weekly (Sun 08:00 Israel) scheduler started')
   }
+
+  // ── תור מיילים מתוזמנים (מכתבי ברכה, משוב בית החלמה) — בדיקה שעתית ──
+  // ה-worker עצמו לא שולח בשבת/חג, ולוקח advisory lock כדי שלא ירוץ פעמיים.
+  if (process.env.SCHEDULED_MAIL_DISABLED !== '1') {
+    const tickScheduled = async () => {
+      try {
+        const { runScheduledMail } = await import('@/lib/scheduledMail')
+        const res = await runScheduledMail()
+        if (res.sent || res.failed || res.skipped) {
+          console.log(`[scheduled-mail] sent=${res.sent} failed=${res.failed} skipped=${res.skipped}`)
+        }
+      } catch (err) { console.error('[scheduled-mail] tick failed', err) }
+    }
+    setTimeout(() => { void tickScheduled(); setInterval(() => { void tickScheduled() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[scheduled-mail] hourly scheduler started')
+  }
 }

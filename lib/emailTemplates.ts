@@ -924,7 +924,7 @@ export function loanApprovedEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#3730a3;font-size:14px;font-weight:700;line-height:1.7;">
-          בקשתכם הועברה לטיפול במזכירות של הרב אברהם סלונים שליט"א, ויצרו עמכם קשר בימים הקרובים.
+          בקשתכם הועברה לטיפול במזכירות גמ"ח חסדי אבות, ויצרו עמכם קשר בימים הקרובים.
         </p>
       </td></tr>
     </table>
@@ -1179,5 +1179,153 @@ export function recoveryEditRequestEmail(opts: {
   return {
     subject: `בקשת תיקון · ${opts.motherName} · ${opts.home}`,
     html: shell({ preheader: `בקשת תיקון מ${opts.home}`, accent: '#d97706', title: 'בקשת תיקון רשומה', subtitle: 'היכל החתם סופר', body }),
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מכתבי ברכה לנדיב + משוב על בית ההחלמה
+//
+// ⚠️ חשוב: מול היולדת אין להשתמש במילה "סקר". הניסוח המאושר הוא
+// "לצורך ייעול ושיפור השירות, נשמח לשמוע ממך על טיב השירות שקיבלת".
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── בקשת דברי ברכה לנדיב (10 ימים אחרי אישור הלידה) ────────────────────────
+export function gratitudeRequestEmail(opts: {
+  familyName?: string | null
+  motherName?: string | null
+  formUrl: string
+}): BuiltEmail {
+  const body = `
+    <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
+
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      מזל טוב חוזר לרגל השמחה!
+    </p>
+
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך ביולדות הקהילה — בעילום שם, בלי לבקש דבר בתמורה.
+      נשמח מאוד אם תרצו לכתוב לו כמה מילות ברכה והכרת הטוב. מכתב קצר שיחמם את ליבו,
+      ויראה לו שהתמיכה שלו הגיעה למקום הנכון.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fefce8;border-right:4px solid #C69D2D;border-radius:8px;padding:12px 16px;">
+        <p style="margin:0;color:#713f12;font-size:14px;line-height:1.7;">
+          <strong>אין בכך שום חובה</strong> — רק מי שרוצה ומרגישה בכך.
+        </p>
+      </td></tr>
+    </table>
+
+    ${btn(opts.formUrl, 'לכתיבת דברי ברכה', '#C69D2D')}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+      <tr><td style="background:#f8fafc;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#1B3256;font-size:14px;font-weight:700;">אפשר גם בדרכים אחרות:</p>
+        <p style="margin:0 0 6px;color:#475569;font-size:13.5px;line-height:1.8;">
+          ✉️ <strong>להשיב ישירות למייל הזה</strong> — פשוט לכתוב את הברכה בגוף ההודעה, ואנחנו נדאג לשאר.
+        </p>
+        <p style="margin:0;color:#475569;font-size:13.5px;line-height:1.8;">
+          ✍️ <strong>לכתוב בכתב יד</strong> — מצורף כאן דף מעוצב להדפסה. אפשר לצלם אותו ולשלוח לנו במייל חוזר.
+        </p>
+      </td></tr>
+    </table>`
+  return {
+    subject: 'דברי ברכה לנדיב · היכל החתם סופר',
+    html: shell({
+      preheader: 'נשמח לכמה מילות ברכה לנדיב שסייע לכם',
+      accent: '#C69D2D',
+      title: 'דברי ברכה',
+      subtitle: 'הכרת הטוב לנדיב',
+      body,
+    }),
+  }
+}
+
+// ─── בקשת משוב על בית ההחלמה (5 ימים אחרי סימון ההגעה) ──────────────────────
+// ⚠️ בלי המילה "סקר".
+export function recoveryFeedbackEmail(opts: {
+  familyName?: string | null
+  motherName?: string | null
+  recoveryHome?: string | null
+  formUrl: string
+  questions: { position: number; text: string; type: string }[]
+}): BuiltEmail {
+  const scaleQs = opts.questions.filter(q => q.type === 'scale')
+  const list = scaleQs.map(q => `
+    <tr><td style="padding:5px 0;color:#334155;font-size:14px;line-height:1.6;">
+      <strong style="color:#1B3256;">${q.position}.</strong> ${escapeHtml(q.text)}
+    </td></tr>`).join('')
+  const example = scaleQs.map(q => `${q.position}-8`).join(' ')
+
+  const homeName = opts.recoveryHome ? escapeHtml(opts.recoveryHome) : 'בית ההחלמה'
+
+  const body = `
+    <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
+
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      אנו מקווים שהשהות ב<strong>${homeName}</strong> הייתה נעימה ומרגיעה.
+    </p>
+
+    <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.9;">
+      לצורך ייעול ושיפור השירות, נשמח לשמוע ממך על טיב השירות שקיבלת בבית ההחלמה.
+      זה ייקח פחות מדקה, ויעזור לנו לדאוג טוב יותר ליולדות הבאות.
+    </p>
+
+    ${btn(opts.formUrl, 'לשיתוף החוויה שלך', '#1B3256')}
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+      <tr><td style="background:#f8fafc;border-radius:10px;padding:18px 20px;">
+        <p style="margin:0 0 12px;color:#1B3256;font-size:14px;font-weight:700;">
+          או פשוט השיבי למייל הזה
+        </p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${list}</table>
+        <p style="margin:14px 0 0;color:#64748b;font-size:13px;line-height:1.8;">
+          כתבי בשורה אחת את הציונים מ־1 עד 10, למשל:
+        </p>
+        <p style="margin:6px 0 0;color:#1B3256;font-size:16px;font-weight:700;letter-spacing:1px;direction:ltr;text-align:right;">
+          ${example}
+        </p>
+      </td></tr>
+    </table>`
+  return {
+    subject: 'נשמח לשמוע ממך · היכל החתם סופר',
+    html: shell({
+      preheader: 'לצורך ייעול ושיפור השירות',
+      accent: '#1B3256',
+      title: 'איך היה בבית ההחלמה?',
+      subtitle: 'לצורך ייעול ושיפור השירות',
+      body,
+    }),
+  }
+}
+
+// ─── אישור קבלת דברי הברכה ──────────────────────────────────────────────────
+export function gratitudeReceivedEmail(opts: {
+  familyName?: string | null
+  motherName?: string | null
+}): BuiltEmail {
+  const body = `
+    <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
+
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      דברי הברכה שלכם התקבלו אצלנו, ואנו נדאג להעבירם לנדיב.
+    </p>
+
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      תודה רבה מקרב לב — זה בדיוק מה שנותן כוח להמשיך ולסייע.
+    </p>
+
+    <p style="margin:0;color:#64748b;font-size:14px;line-height:1.8;">
+      מצורף עותק מעוצב של המכתב.
+    </p>`
+  return {
+    subject: 'קיבלנו את דברי הברכה — תודה רבה',
+    html: shell({
+      preheader: 'דברי הברכה שלכם התקבלו',
+      accent: '#C69D2D',
+      title: 'תודה רבה!',
+      subtitle: 'דברי הברכה התקבלו',
+      body,
+    }),
   }
 }

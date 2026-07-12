@@ -633,11 +633,11 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
           <div className="flex flex-col items-center w-5 flex-shrink-0"><span className="w-3 h-3 rounded-full mt-2.5 bg-green-600 ring-2 ring-green-200" /></div>
           <div className="flex-1 mb-2 rounded-xl border-2 border-green-300 bg-green-600 px-3 py-2 flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-green-100 flex-shrink-0">דור {chain.length + 2}</span>
-            <span className="text-sm font-semibold text-white flex-1 truncate">{selfName || '(שמך)'} (אתה)</span>
-            <span className="text-xs font-bold text-white">בן/חתן:</span>
+            <span className="text-sm font-semibold text-white flex-1 truncate">{selfName || '(שמך)'}</span>
+            <span className={`text-xs font-bold text-white ${selfRel === null ? 'animate-pulse' : ''}`}>{selfRel === null ? '← בחר/י בן/חתן (חובה):' : 'בן/חתן:'}</span>
             {(['son', 'son_in_law'] as const).map(r => (
               <button key={r} type="button" onClick={() => setSelfRel(r)}
-                className={`text-sm font-bold rounded-lg px-4 py-1.5 border-2 transition-all duration-150 ${selfRel === r ? 'bg-white text-green-800 border-white shadow-md ring-2 ring-white/60' : 'bg-green-800/60 text-white border-white/80 hover:bg-green-800'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                className={`text-sm font-bold rounded-lg px-4 py-1.5 border-2 transition-all duration-150 ${selfRel === r ? 'bg-white text-green-800 border-white shadow-md ring-2 ring-white/60' : selfRel === null ? 'bg-white/90 text-green-800 border-white animate-pulse ring-2 ring-yellow-300 shadow-lg' : 'bg-green-800/60 text-white border-white/80 hover:bg-green-800'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
             ))}
             <button type="button" onClick={() => { setSelfAdded(false); setSelfRel(null) }} className="text-green-100 hover:text-white flex-shrink-0" title="בטל"><X size={15} /></button>
           </div>
@@ -1024,6 +1024,7 @@ export default function PublicPortalPage() {
     id_number: '', full_name: '', family_name: '', phone: '', phone2: '',
     email: '', address: '', city: '', birth_date: '', gender: '',
     marital_status: '', spouse_name: '', spouse_id_number: '', spouse_phone: '', spouse_birth_date: '',
+    community_affiliation: '',
     children_count: '0', notes: '',
   })
   // רישום מהיר של ילד — מילוי הפרטים לבעל/אשה לפי המין, אחרי בחירת מצב משפחתי
@@ -1082,6 +1083,7 @@ export default function PublicPortalPage() {
   // הטבות שהתקבלו בעבר מאיגוד הצאצאים
   const [pastBenefits, setPastBenefits] = useState({
     recovery_home: false, food_card: false, holiday_grant: false, catering: false,
+    tishrei_5785: false, pesach_5786: false, shavuot_5786: false,
     loan: false, loan_amount: '', other: false, other_details: '', notes: '',
     update_topics: [] as string[],
   })
@@ -1444,6 +1446,10 @@ export default function PublicPortalPage() {
   // ── סדר הדורות המלא: דור 1 (החתם סופר, נעול) → נתיב מהעץ → דורות ידניים → הנרשם עצמו ──
   // לכל דור אחרי הראשון יש סימון בן/חתן (relKey). השם של הנרשם נכנס אוטומטית כדור האחרון.
   // שם הנרשם לעץ הדורות — שם פרטי תחילה, ובזוג נשוי כולל את שם האשה: "שלמה ושרה ניימאן"
+  // האם כבר אומת לפחות טלפון אחד — קובע אם להציג הבהרה שאימות שאר הטלפונים אינו חובה
+  const anyPhoneVerified = Boolean(regPhoneToken || regSpousePhoneToken || regPhone2Token)
+  const phoneOptionalHint = 'אימות מספר זה אינו חובה — אימתם כבר מספר טלפון אחד, ודי בכך להשלמת הרישום. אמתו מספר זה רק אם תרצו שגם באמצעותו ניתן יהיה לקבל בעתיד קוד כניסה למערכת.'
+
   const selfDisplayName = (() => {
     const given = (showSpouseFields && regForm.spouse_name)
       ? `${regForm.full_name} ו${regForm.spouse_name}`.trim()
@@ -1670,8 +1676,9 @@ export default function PublicPortalPage() {
       }, 5000)
     } catch {
       setError('שגיאת רשת. אנא נסה שוב.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // ── Suggest lineage node ──
@@ -2738,6 +2745,11 @@ export default function PublicPortalPage() {
                       <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 50 }} />
                     </Field>
                   </div>
+                  <div className="col-span-2">
+                    <Field label="השתייכות קהילתית" hint="לא חובה">
+                      <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" />
+                    </Field>
+                  </div>
                 </div>
 
               </Card>
@@ -2861,14 +2873,14 @@ export default function PublicPortalPage() {
                           className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
                         />
                         {spousePhoneError && <p className="text-xs text-red-600 mt-1">{spousePhoneError}</p>}
-                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} />
+                        <VerifyControl channel="phone" value={regForm.spouse_phone} valid={validatePhone(regForm.spouse_phone)} onToken={setRegSpousePhoneToken} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
                       </Field>
                     </div>
                   )}
                   <div className="col-span-2 sm:col-span-1">
                     <Field label="טלפון נוסף" hint="לא חובה">
                       <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
-                      <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhone(regForm.phone2)} onToken={setRegPhone2Token} />
+                      <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhone(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
                     </Field>
                   </div>
                   <div className="col-span-2">
@@ -2937,7 +2949,7 @@ export default function PublicPortalPage() {
                                 {/* כרטיס הדור */}
                                 <div className={`flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2 ${row.isSelf ? 'bg-green-600 border-green-600' : `${col.bg} ${col.border}`}`}>
                                   <span className={`text-[10px] font-bold flex-shrink-0 ${row.isSelf ? 'text-green-100' : col.text} opacity-70`}>דור {i + 1}</span>
-                                  <span className={`text-sm font-semibold flex-1 truncate ${row.isSelf ? 'text-white' : col.text}`}>{row.name}{row.isSelf ? '  (אתה)' : ''}</span>
+                                  <span className={`text-sm font-semibold flex-1 truncate ${row.isSelf ? 'text-white' : col.text}`}>{row.name}</span>
                                   {(row.relation === 'son' || row.relation === 'son_in_law') && (
                                     <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${row.relation === 'son' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{row.relation === 'son' ? 'בן' : 'חתן'}</span>
                                   )}
@@ -3138,6 +3150,9 @@ export default function PublicPortalPage() {
                     ['food_card', 'כרטיס מזון ליולדות'],
                     ['holiday_grant', 'מענק לקראת החגים'],
                     ['catering', 'קייטרינג מוזל "ויגילו בשמחה"'],
+                    ['tishrei_5785', 'תשרי תשפ"ה'],
+                    ['pesach_5786', 'פסח תשפ"ו'],
+                    ['shavuot_5786', 'שבועות תשפ"ו'],
                   ] as const).map(([k, label]) => (
                     <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                       <input type="checkbox" checked={pastBenefits[k] as boolean} onChange={e => setPastBenefits(p => ({ ...p, [k]: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
@@ -3247,19 +3262,12 @@ export default function PublicPortalPage() {
             {error && <ErrorBox message={error} />}
 
             {regForm.marital_status && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
-                <p className="font-medium mb-1">שים לב</p>
-                <p>הטופס ייבדק על ידי צוות המערכת. תקבל עדכון על סטטוס הבקשה שלך.</p>
-              </div>
-            )}
-
-            {regForm.marital_status && (
               <button
                 type="submit" disabled={loading}
                 className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
               >
                 {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
-                {loading ? 'שולח...' : 'שלח בקשת רישום'}
+                {loading ? 'שולח...' : 'שלח טופס רישום'}
               </button>
             )}
           </form>

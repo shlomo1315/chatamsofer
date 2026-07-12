@@ -269,7 +269,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
                 <a href={certUrl} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-indigo-600 hover:underline">צפייה בקובץ הנוכחי</a>
               )}
-              {certUrl && <DownloadDocButton url={certUrl} name="אישור לידה" variant="button" />}
+              {certUrl && <DownloadDocButton url={certUrl} docType="אישור לידה" name={certUrl} variant="button" />}
               <button onClick={() => fileRef.current?.click()}
                 className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-4 py-2.5 text-sm border-slate-300 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                 <Upload size={16} /> {certUrl ? 'החלפת הקובץ' : 'העלאת קובץ'}

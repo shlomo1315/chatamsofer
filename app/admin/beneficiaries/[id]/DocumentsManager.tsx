@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -31,11 +31,18 @@ const formatUploaded = (raw?: string) => {
 const isImage = (name?: string | null) => !!name && /\.(png|jpe?g|gif|webp|bmp|heic)$/i.test(name)
 const isPdf = (name?: string | null) => !!name && /\.pdf$/i.test(name)
 
-export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: string }) {
+export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { beneficiaryId: string; beneficiaryName?: string }) {
   const supabase = createClient()
   const toast = useToast()
   const { confirm, confirmDialog } = useConfirm()
   const { docTypes: DOC_TYPES, label: typeLabel } = useDocTypes()
+
+  // שם ההורדה: "סוג המסמך + שם ומשפחת המוטב" עם הסיומת המקורית של הקובץ.
+  // למשל: "תעודת זהות משה כהן.pdf". כך הקובץ יורד עם שם משמעותי ובפורמט הנכון.
+  const downloadName = useCallback(
+    (doc: DocRow): string => docDownloadName(typeLabel(doc.doc_type), beneficiaryName, doc.file_name),
+    [typeLabel, beneficiaryName],
+  )
   const fileRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -189,8 +196,8 @@ export default function DocumentsManager({ beneficiaryId }: { beneficiaryId: str
                 </ViewDocButton>
                 {doc.file_url && (
                   <a
-                    href={docDownloadUrl(doc.file_url, doc.file_name)}
-                    download={doc.file_name || true}
+                    href={docDownloadUrl(doc.file_url, downloadName(doc))}
+                    download={downloadName(doc)}
                     className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-emerald-600 shadow-sm"
                     title="הורדה למחשב"
                   >
