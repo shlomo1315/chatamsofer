@@ -12,12 +12,17 @@ export interface MailOptions {
   sentBy?: string      // מי שלח (משתמש מערכת); ריק = מייל אוטומטי
   skipLog?: boolean    // דלג על תיעוד ב-sent_emails (כשהקורא מתעד בעצמו)
   scheduledAt?: string // ISO 8601 — תזמון שליחה דרך Resend (אם מוגדר, המייל יישלח במועד זה)
+  tracking?: boolean   // מעקב פתיחות/קליקים (דיוור בלבד; מיילים תפעוליים ללא מעקב)
+  unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
 }
 
 // תיעוד מייל יוצא ב-Supabase כדי שיופיע בתיבת "דואר יוצא" של המחלקה. לא חוסם.
+// resendId — המזהה שהוחזר מ-Resend. קריטי: ה-webhook של אירועי המסירה
+// (delivered/opened/clicked/bounced) מזהה מיילים אך ורק לפיו.
 async function logSentEmail(
   to: string, subject: string, html: string,
   attachments: MailAttachment[] | undefined, opts: MailOptions | undefined, fromName: string,
+  resendId?: string | null,
 ) {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -38,6 +43,7 @@ async function logSentEmail(
       reply_to: replyTo,
       sent_by: opts?.sentBy ?? null,
       attachments: (attachments ?? []).map(a => ({ filename: a.filename, mimeType: a.mimeType })),
+      ...(resendId ? { resend_id: resendId } : {}),
       ...(opts?.scheduledAt ? { scheduled_at: opts.scheduledAt } : {}),
     })
     if (error) console.error('[mail] sent_emails log error:', error.message)
@@ -54,7 +60,7 @@ export async function deliverMail(
   html: string,
   attachments?: MailAttachment[],
   options?: MailOptions,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; id?: string }> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     console.error('[mail] RESEND_API_KEY חסר — לא נשלח מייל')
@@ -74,9 +80,18 @@ export async function deliverMail(
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim()
 
+  // כותרת הסרה מרשימת תפוצה. לדיוור המוני (ניוזלטר) מעבירים קישור One-Click —
+  // דרישה של Gmail משולחים מסיביים; בלעדיה המיילים מסומנים כספאם.
+  const unsubHeaders: Record<string, string> = options?.unsubscribeUrl
+    ? {
+        'List-Unsubscribe': `<${options.unsubscribeUrl}>, <mailto:office@chasamsofer.info?subject=unsubscribe>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      }
+    : { 'List-Unsubscribe': '<mailto:office@chasamsofer.info?subject=unsubscribe>' }
+
   try {
     const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from,
       to,
       subject,
@@ -84,9 +99,12 @@ export async function deliverMail(
       ...(text ? { text } : {}),
       ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
       ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
+      // מעקב פתיחות/קליקים — מופעל רק כשמבקשים במפורש (דיוור).
+      // מיילים תפעוליים נשארים ללא מעקב, כדי לא להוסיף פיקסל ולעטוף קישורים.
+      ...(options?.tracking ? { tracking: { open: true, click: true } } : {}),
       // כותרות שמשפרות אמון ומסירה (פחות סיכוי לספאם בג'ימייל/אאוטלוק)
       headers: {
-        'List-Unsubscribe': '<mailto:office@chasamsofer.info?subject=unsubscribe>',
+        ...unsubHeaders,
         'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       },
       ...(attachments?.length
@@ -101,11 +119,15 @@ export async function deliverMail(
       console.error('[mail] Resend error:', error)
       return { ok: false, error: String(error.message ?? error) }
     }
+
+    // מזהה ההודעה ב-Resend — בלעדיו אי אפשר לקשר אירועי מסירה/פתיחה/קליק למייל.
+    const resendId = data?.id ?? null
+
     // תיעוד אוטומטי בתיבת "דואר יוצא" — אלא אם הקורא מתעד בעצמו
     if (!options?.skipLog) {
-      await logSentEmail(to, subject, html, attachments, options, fromName)
+      await logSentEmail(to, subject, html, attachments, options, fromName, resendId)
     }
-    return { ok: true }
+    return { ok: true, id: resendId ?? undefined }
   } catch (err) {
     console.error('[mail] Resend threw:', err)
     return { ok: false, error: String(err) }

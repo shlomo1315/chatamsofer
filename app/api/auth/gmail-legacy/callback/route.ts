@@ -30,13 +30,17 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  // המחלקה שנבחרה לפני ההפניה ל-Google (נישאת ב-state)
+  // המחלקה שנבחרה לפני ההפניה ל-Google (נישאת ב-state, מקודדת base64url)
   let department: string | null = null
   let label = ''
   try {
-    const state = JSON.parse(request.nextUrl.searchParams.get('state') ?? '{}')
-    if (state.department && state.department in DEPARTMENTS) department = state.department
-    label = String(state.label ?? '').slice(0, 60)
+    const raw = request.nextUrl.searchParams.get('state') ?? ''
+    if (raw) {
+      const decoded = Buffer.from(raw, 'base64url').toString('utf-8')
+      const state = JSON.parse(decoded)
+      if (state.department && state.department in DEPARTMENTS) department = state.department
+      label = String(state.label ?? '').slice(0, 60)
+    }
   } catch { /* state לא תקין — ניפול לתיבה הישנה */ }
 
   // התיבה שחוברה — שולפים את כתובתה בפועל מ-Gmail

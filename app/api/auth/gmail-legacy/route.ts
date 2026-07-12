@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
   }
 
   const url = new URL(getLegacyAuthUrl())
-  url.searchParams.set('state', JSON.stringify({ department, label }))
+  // ה-state חייב להיות מחרוזת בטוחה ל-URL. JSON גולמי (עם { " : ) שובר את
+  // Google ומחזיר 500 — לכן מקודדים ב-base64url.
+  const state = Buffer.from(JSON.stringify({ department, label })).toString('base64url')
+  url.searchParams.set('state', state)
   return NextResponse.redirect(url.toString())
 }

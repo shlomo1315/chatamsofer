@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download, Heart } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -8,6 +8,7 @@ import Tabs, { type TabDef } from '@/components/ui/Tabs'
 import { StatusControl } from '../maternityStatus'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
+import GratitudeTab from './GratitudeTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
@@ -454,6 +455,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           key: 'mail', label: 'מיילים', accent: 'amber' as const, icon: <Mail size={15} />,
           content: <CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />,
         }] : []),
+        {
+          key: 'gratitude', label: 'מכתבי ברכה', accent: 'amber' as const, icon: <Heart size={15} />,
+          content: <GratitudeTab aidId={aid.id} />,
+        },
       ] as TabDef[]} />
     </div>
   )
