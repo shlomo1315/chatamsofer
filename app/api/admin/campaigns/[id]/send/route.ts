@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient } from '@/lib/apiAuth'
 import { resolveSegment, type SegmentDef } from '@/lib/newsletter/segments'
 import { runCampaignSender } from '@/lib/newsletter/sender'
+import { nextAllowedSendTime } from '@/lib/jewishCalendar'
 
 // מימוש הקהל והפעלת השליחה.
 //
@@ -19,6 +20,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  // תזמון למועד עתידי (אופציונלי)
+  let scheduledAt: string | null = null
+  try {
+    const body = await request.json()
+    if (body?.scheduledAt) scheduledAt = String(body.scheduledAt)
+  } catch { /* גוף ריק — שליחה מיידית */ }
 
   const { data: campaign } = await db
     .from('campaigns')
@@ -46,6 +54,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   if (!recipients.length) {
     return NextResponse.json({ error: 'אין נמענים בקהל שנבחר' }, { status: 400 })
+  }
+
+  // ── תזמון למועד עתידי ──
+  // הקהל לא מומש עכשיו — הוא ימומש ברגע השליחה בפועל, כך שהוא ישקף
+  // את מצב המערכת באותו רגע (מוטבים שנוספו/הוסרו בינתיים).
+  if (scheduledAt) {
+    const when = new Date(scheduledAt)
+    if (isNaN(when.getTime())) {
+      return NextResponse.json({ error: 'מועד לא תקין' }, { status: 400 })
+    }
+    if (when.getTime() < Date.now()) {
+      return NextResponse.json({ error: 'המועד שנבחר כבר עבר' }, { status: 400 })
+    }
+
+    // המערכת לעולם לא שולחת בשבת או בחג — המועד נדחה ליום החול הבא, 09:00
+    const allowed = nextAllowedSendTime(when)
+    const moved = allowed.getTime() !== when.getTime()
+
+    const { error } = await db.from('campaigns').update({
+      status: 'scheduled',
+      scheduled_at: allowed.toISOString(),
+      total_count: recipients.length,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({
+      ok: true,
+      scheduled: true,
+      scheduledAt: allowed.toISOString(),
+      moved,   // הלקוח מציג הודעה אם המועד נדחה בגלל שבת/חג
+      total: recipients.length,
+    })
   }
 
   // ניקוי מימוש קודם (אם נשלח בעבר וחזר לטיוטה)

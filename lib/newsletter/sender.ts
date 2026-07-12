@@ -4,6 +4,8 @@ import { mailFor, type DepartmentKey } from '../departments'
 import { applyMerge } from './merge'
 import { buildCampaignHtml, type Block } from './blocks'
 import { unsubscribeUrl } from '../unsubscribe'
+import { isBlockedForMail } from '../jewishCalendar'
+import type { SegmentDef as SegmentDefType } from './segments'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מנוע השליחה.
@@ -21,6 +23,7 @@ const THROTTLE_MS = 1000 / REQUESTS_PER_SEC
 const MAX_ATTEMPTS = 3
 const MAX_BATCHES_PER_TICK = 20 // ~2,000 מיילים בריצה; השאר בטיק הבא
 const LOCK_KEY = 771122334      // advisory lock — מונע ריצה כפולה
+const REPLY_DOMAIN = 'chasamsofer.info'
 
 function adminClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -69,6 +72,21 @@ export async function runCampaignSender(): Promise<{ sent: number; failed: numbe
   let sent = 0, failed = 0
 
   try {
+    // קמפיינים מתוזמנים שהגיע מועדם → מעבירים ל-'sending'.
+    // לא שולחים בשבת/חג — הקמפיין פשוט ימתין לטיק הבא ביום חול.
+    if (!isBlockedForMail(new Date())) {
+      const { data: due } = await db
+        .from('campaigns')
+        .select('id')
+        .eq('status', 'scheduled')
+        .lte('scheduled_at', new Date().toISOString())
+
+      for (const c of due ?? []) {
+        const started = await startScheduledCampaign(db, String(c.id))
+        if (!started) continue
+      }
+    }
+
     const { data: campaigns } = await db
       .from('campaigns')
       .select('*')
@@ -87,6 +105,63 @@ export async function runCampaignSender(): Promise<{ sent: number; failed: numbe
   }
 
   return { sent, failed }
+}
+
+/**
+ * מפעיל קמפיין מתוזמן שהגיע מועדו.
+ * מממש את הקהל (הקפאת הרשימה) ומעביר ל-'sending'.
+ */
+async function startScheduledCampaign(db: SupabaseClient, id: string): Promise<boolean> {
+  try {
+    const { data: campaign } = await db
+      .from('campaigns')
+      .select('id, segment, status')
+      .eq('id', id)
+      .maybeSingle()
+
+    // מירוץ: ייתכן שמכונה אחרת כבר הרימה אותו
+    if (!campaign || campaign.status !== 'scheduled') return false
+
+    const { resolveSegment } = await import('./segments')
+    const { recipients } = await resolveSegment(db, (campaign.segment ?? {}) as SegmentDefType)
+
+    if (!recipients.length) {
+      await db.from('campaigns').update({
+        status: 'failed',
+        updated_at: new Date().toISOString(),
+      }).eq('id', id)
+      console.error(`[newsletter] קמפיין מתוזמן ${id} — אין נמענים`)
+      return false
+    }
+
+    // מימוש הקהל — הרשימה מוקפאת ברגע השליחה
+    await db.from('campaign_recipients').delete().eq('campaign_id', id)
+
+    for (let i = 0; i < recipients.length; i += 500) {
+      const chunk = recipients.slice(i, i + 500).map(r => ({
+        campaign_id: id,
+        beneficiary_id: r.beneficiaryId,
+        email: r.email,
+        merge_data: r.mergeData,
+        status: 'pending',
+      }))
+      await db.from('campaign_recipients')
+        .upsert(chunk, { onConflict: 'campaign_id,email', ignoreDuplicates: true })
+    }
+
+    await db.from('campaigns').update({
+      status: 'sending',
+      started_at: new Date().toISOString(),
+      total_count: recipients.length,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+
+    console.log(`[newsletter] קמפיין מתוזמן ${id} הופעל · ${recipients.length} נמענים`)
+    return true
+  } catch (err) {
+    console.error(`[newsletter] הפעלת קמפיין מתוזמן ${id} נכשלה:`, err)
+    return false
+  }
 }
 
 async function sendCampaignBatches(
@@ -139,7 +214,10 @@ async function sendCampaignBatches(
         // בנושא לא מנטרלים HTML — זה טקסט רגיל
         subject: applyMerge(campaign.subject, data, false),
         html: applyMerge(html, data, true),
-        replyTo: dept.replyTo,
+        // plus-addressing עם 8 התווים הראשונים של מזהה הקמפיין —
+        // כך תגובה חוזרת מזוהה ומקושרת לקמפיין. (כתובת קצרה; מזהה מלא
+        // היה חורג מהאורך ש-Resend מקבל.)
+        replyTo: `office+c${campaign.id.replace(/-/g, '').slice(0, 8)}@${REPLY_DOMAIN}`,
         // מעקב פתיחות וקליקים — בלי זה Resend לא מזריק פיקסל ולא עוטף
         // קישורים, ולכן לא נשלחים אירועי opened/clicked ל-webhook.
         tracking: { open: true, click: true },

@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Users, FileText, Eye, Send, Loader2, Save, Check, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Users, FileText, Eye, Send, Loader2, Save, Check, AlertTriangle, Clock } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import SegmentBuilder from '@/components/newsletter/SegmentBuilder'
 import BlockEditor, { MergeTagPicker, insertAtCursor } from '@/components/newsletter/BlockEditor'
@@ -353,6 +353,8 @@ function SendStep({ campaignId, onSave, onSent }: {
   const [count, setCount] = useState<number | null>(null)
   const [confirmText, setConfirmText] = useState('')
   const [sending, setSending] = useState(false)
+  const [when, setWhen] = useState<'now' | 'later'>('now')
+  const [scheduledAt, setScheduledAt] = useState('')
 
   useEffect(() => {
     fetch(`/api/admin/campaigns/${campaignId}/preview`)
@@ -363,23 +365,46 @@ function SendStep({ campaignId, onSave, onSent }: {
 
   const needsConfirm = (count ?? 0) >= CONFIRM_THRESHOLD
   const canSend = count !== null && count > 0 &&
-    (!needsConfirm || confirmText.trim() === String(count))
+    (!needsConfirm || confirmText.trim() === String(count)) &&
+    (when === 'now' || Boolean(scheduledAt))
 
   async function send() {
     setSending(true)
     try {
       await onSave()
-      const res = await fetch(`/api/admin/campaigns/${campaignId}/send`, { method: 'POST' })
+      const res = await fetch(`/api/admin/campaigns/${campaignId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          when === 'later' ? { scheduledAt: new Date(scheduledAt).toISOString() } : {},
+        ),
+      })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שליחה נכשלה')
 
-      toast.success(`השליחה החלה — ${d.total.toLocaleString('he-IL')} נמענים`)
+      if (d.scheduled) {
+        const at = new Date(d.scheduledAt).toLocaleString('he-IL', {
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+        })
+        // המערכת לעולם לא שולחת בשבת/חג — אם המועד נדחה, מודיעים למה
+        toast.success(d.moved
+          ? `המועד נדחה ל-${at} — לא נשלחים מיילים בשבת ובחג`
+          : `הקמפיין תוזמן ל-${at}`)
+      } else {
+        toast.success(`השליחה החלה — ${d.total.toLocaleString('he-IL')} נמענים`)
+      }
       onSent()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה')
       setSending(false)
     }
   }
+
+  // מינימום: עוד 5 דקות (בפורמט של datetime-local, בשעון מקומי)
+  const minAt = (() => {
+    const d = new Date(Date.now() + 5 * 60_000 - new Date().getTimezoneOffset() * 60_000)
+    return d.toISOString().slice(0, 16)
+  })()
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -403,6 +428,54 @@ function SendStep({ campaignId, onSave, onSent }: {
         </div>
       )}
 
+      {/* מתי לשלוח */}
+      <div className="mb-4">
+        <label className="mb-2 block text-sm font-semibold text-slate-700">מתי לשלוח?</label>
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setWhen('now')}
+            className={`rounded-xl border p-3 text-right transition ${
+              when === 'now'
+                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
+                : 'border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <div className="text-sm font-bold text-slate-800">עכשיו</div>
+            <div className="mt-0.5 text-xs text-slate-500">השליחה מתחילה מיד</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWhen('later')}
+            className={`rounded-xl border p-3 text-right transition ${
+              when === 'later'
+                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
+                : 'border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <div className="text-sm font-bold text-slate-800">במועד מאוחר יותר</div>
+            <div className="mt-0.5 text-xs text-slate-500">בחרו תאריך ושעה</div>
+          </button>
+        </div>
+
+        {when === 'later' && (
+          <>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              min={minAt}
+              onChange={e => setScheduledAt(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
+                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+            <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
+              המערכת <strong>לא שולחת מיילים בשבת ובחג</strong>. אם המועד שתבחרו נופל
+              בשבת או ביום טוב, השליחה תידחה אוטומטית ליום החול הבא בשעה 09:00.
+            </p>
+          </>
+        )}
+      </div>
+
       {needsConfirm && (
         <div className="mb-4">
           <label className="mb-1.5 block text-sm font-semibold text-rose-700">
@@ -425,8 +498,10 @@ function SendStep({ campaignId, onSave, onSent }: {
                    hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {sending
-          ? <><Loader2 size={16} className="ml-2 inline animate-spin" /> מתחיל שליחה…</>
-          : <><Send size={16} className="ml-2 inline" /> שלח עכשיו</>}
+          ? <><Loader2 size={16} className="ml-2 inline animate-spin" /> {when === 'later' ? 'מתזמן…' : 'מתחיל שליחה…'}</>
+          : when === 'later'
+            ? <><Clock size={16} className="ml-2 inline" /> תזמן שליחה</>
+            : <><Send size={16} className="ml-2 inline" /> שלח עכשיו</>}
       </button>
 
       <p className="mt-3 text-center text-xs leading-relaxed text-slate-400">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle, RefreshCw } from 'lucide-react'
+import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle, RefreshCw, MessageSquare } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import type { Campaign } from './CampaignWizard'
 
@@ -19,11 +19,17 @@ interface Recipient {
   bounced: boolean; error: string | null
 }
 
+interface Reply {
+  id: string; from: string; email: string
+  subject: string | null; text: string; at: string
+}
+
 interface Stats {
   campaign: { status: string; name: string }
   metrics: Metrics
   links: { url: string; count: number }[]
   recipients: Recipient[]
+  replies: Reply[]
 }
 
 function pct(n: number, of: number): string {
@@ -36,7 +42,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [tab, setTab] = useState<'recipients' | 'links'>('recipients')
+  const [tab, setTab] = useState<'recipients' | 'links' | 'replies'>('recipients')
 
   const load = useCallback(async () => {
     try {
@@ -155,7 +161,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
 
       {/* טאבים */}
       <div className="mb-3 flex gap-2">
-        {(['recipients', 'links'] as const).map(t => (
+        {(['recipients', 'links', 'replies'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -164,7 +170,9 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
                         : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
-            {t === 'recipients' ? `נמענים (${stats.recipients.length})` : `קישורים (${stats.links.length})`}
+            {t === 'recipients' ? `נמענים (${stats.recipients.length})`
+              : t === 'links' ? `קישורים (${stats.links.length})`
+              : `תגובות (${stats.replies?.length ?? 0})`}
           </button>
         ))}
       </div>
@@ -205,7 +213,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : tab === 'links' ? (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           {!stats.links.length ? (
             <p className="p-10 text-center text-sm text-slate-400">עדיין לא נלחצו קישורים</p>
@@ -226,6 +234,42 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      ) : (
+        /* תגובות — נמענים שהשיבו למייל */
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          {!stats.replies?.length ? (
+            <div className="p-10 text-center">
+              <MessageSquare size={22} className="mx-auto mb-2 text-slate-300" />
+              <p className="text-sm text-slate-400">עדיין לא התקבלו תגובות</p>
+              <p className="mt-1 text-xs text-slate-400">
+                תגובות של נמענים שישיבו למייל יופיעו כאן
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {stats.replies.map(r => (
+                <div key={r.id} className="p-4 transition hover:bg-slate-50">
+                  <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <span className="text-sm font-bold text-slate-800">{r.from}</span>
+                      <span className="mr-2 font-mono text-xs text-slate-400">{r.email}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      {new Date(r.at).toLocaleString('he-IL', {
+                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                  {r.text && (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+                      {r.text}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

@@ -600,6 +600,26 @@ export async function POST(request: NextRequest) {
     }, { onConflict: 'key' })
   } catch { /* אבחון בלבד */ }
 
+  // ── תגובה לניוזלטר? ──
+  // הכתובת office+c<8 תווים>@... נושאת את תחילת מזהה הקמפיין.
+  // מאתרים את הקמפיין ומקשרים אליו את התגובה.
+  let campaignId: string | null = null
+  try {
+    const m = candidates
+      .map(a => String(a).match(/\+c([a-f0-9]{8})@/i))
+      .find(Boolean)
+    if (m) {
+      const prefix = m[1].toLowerCase()
+      const { data: cs } = await admin.from('campaigns').select('id').limit(500)
+      campaignId = (cs ?? [])
+        .map(c => String(c.id))
+        .find(id => id.replace(/-/g, '').slice(0, 8) === prefix) ?? null
+      if (campaignId) console.log(`[resend-inbound] תגובה לקמפיין ${campaignId}`)
+    }
+  } catch (e) {
+    console.error('[resend-inbound] זיהוי קמפיין נכשל:', e)
+  }
+
   const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
@@ -611,6 +631,7 @@ export async function POST(request: NextRequest) {
     headers: data.headers ?? null,
     attachments,
     is_read: false,
+    ...(campaignId ? { campaign_id: campaignId } : {}),
   }, { onConflict: 'message_id', ignoreDuplicates: true }).select('id')
 
   if (error) {

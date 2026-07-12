@@ -59,10 +59,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .sort((a, b) => b.count - a.count)
     .slice(0, 20)
 
+  // תגובות שהתקבלו לקמפיין (נמענים שהשיבו למייל)
+  const { data: replies } = await db
+    .from('inbound_emails')
+    .select('id, from_email, from_name, subject, plain_text, received_at')
+    .eq('campaign_id', id)
+    .order('received_at', { ascending: false })
+    .limit(100)
+
   return NextResponse.json({
     campaign,
     metrics,
     links,
+    replies: (replies ?? []).map(r => ({
+      id: r.id,
+      from: r.from_name || r.from_email,
+      email: r.from_email,
+      subject: r.subject,
+      text: String(r.plain_text ?? '').slice(0, 300),
+      at: r.received_at,
+    })),
     recipients: rows.map(r => ({
       email: r.email,
       name: (r.merge_data as Record<string, string>)?.['שם_מלא'] ?? '',
