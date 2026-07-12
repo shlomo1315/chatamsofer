@@ -5,6 +5,7 @@ import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMai
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
 import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
 import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
+import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
 export const dynamic = 'force-dynamic'
 
@@ -316,20 +317,45 @@ function debugSnapshot(d: any): any {
 // Webhook לקבלת מיילים נכנסים מ-Resend Inbound.
 // Resend עוטף את הנתונים תחת data; תומכים גם במבנה שטוח ליתר ביטחון.
 export async function POST(request: NextRequest) {
-  let body: Record<string, unknown>
-  try { body = await request.json() } catch { return NextResponse.json({ error: 'bad json' }, { status: 400 }) }
+  // חובה לקרוא את הגוף כטקסט גולמי — אימות חתימת Svix מחושב עליו בדיוק
+  // כפי שהתקבל. כל שינוי (אפילו רווח) ישבור את החתימה.
+  const rawBody = await request.text()
 
-  // אבטחה — נכשל-סגור: חובה RESEND_WEBHOOK_SECRET (כותרת x-webhook-secret או ?secret=).
-  // ללא אימות, תוקף יכול לזייף מייל נכנס ולגרום לדליפת PII של משפחה (מענה אוטומטי לאיגוד).
-  const secret = process.env.RESEND_WEBHOOK_SECRET
-  if (!secret) {
-    console.error('[resend-inbound] RESEND_WEBHOOK_SECRET אינו מוגדר — דחיית כל הבקשות (fail-closed)')
+  // ── אבטחה: נכשל-סגור, עם שתי שיטות אימות ──
+  //
+  // 1. חתימת Svix (המומלצת) — תקפה 5 דקות, משתנה בכל בקשה, עמידה ל-replay.
+  // 2. סוד סטטי בכותרת (הישנה) — נשמרת לתאימות לאחור, כדי שהמייל הנכנס
+  //    לא ייפול בין הפריסה לבין עדכון ההגדרה ב-Resend.
+  //
+  // ⚠️ אחרי שמוגדר RESEND_WEBHOOK_SIGNING_SECRET ואומת שהמיילים נכנסים —
+  //    כדאי להסיר את RESEND_WEBHOOK_SECRET ולהישאר עם החתימה בלבד.
+  const signingSecret = process.env.RESEND_WEBHOOK_SIGNING_SECRET
+  const staticSecret = process.env.RESEND_WEBHOOK_SECRET
+
+  if (!signingSecret && !staticSecret) {
+    console.error('[resend-inbound] אין סוד אימות מוגדר — דחיית כל הבקשות (fail-closed)')
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  {
+
+  let authenticated = false
+
+  if (signingSecret && hasSvixHeaders(request)) {
+    authenticated = verifySvixSignature(request, rawBody, signingSecret)
+    if (!authenticated) {
+      console.error('[resend-inbound] חתימת Svix לא תקינה')
+      return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
+    }
+  } else if (staticSecret) {
     const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
-    if (!provided || provided !== secret) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
   }
+
+  if (!authenticated) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  let body: Record<string, unknown>
+  try { body = JSON.parse(rawBody) } catch { return NextResponse.json({ error: 'bad json' }, { status: 400 }) }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = (body.data as Record<string, unknown>) ?? body

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { createHmac, timingSafeEqual } from 'crypto'
 import { addUnsubscribe } from '@/lib/unsubscribe'
+import { verifySvixSignature } from '@/lib/svix'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Webhook לאירועי מסירה של Resend — delivered / opened / clicked / bounced /
@@ -18,37 +18,6 @@ function admin(): SupabaseClient | null {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-}
-
-/**
- * אימות חתימת Svix.
- * הסוד מגיע בפורמט "whsec_<base64>". החתימה מחושבת על
- * "<id>.<timestamp>.<body>" ומוחזרת כ-"v1,<base64>".
- */
-function verifySvix(req: NextRequest, rawBody: string, secret: string): boolean {
-  const id = req.headers.get('svix-id')
-  const ts = req.headers.get('svix-timestamp')
-  const sigHeader = req.headers.get('svix-signature')
-  if (!id || !ts || !sigHeader) return false
-
-  // הגנה מפני replay — חלון של 5 דקות
-  const age = Math.abs(Date.now() / 1000 - Number(ts))
-  if (!Number.isFinite(age) || age > 300) return false
-
-  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64')
-  const expected = createHmac('sha256', key)
-    .update(`${id}.${ts}.${rawBody}`)
-    .digest('base64')
-
-  // הכותרת עשויה להכיל כמה חתימות מופרדות ברווח ("v1,xxx v1,yyy")
-  for (const part of sigHeader.split(' ')) {
-    const sig = part.split(',')[1]
-    if (!sig) continue
-    const a = Buffer.from(sig)
-    const b = Buffer.from(expected)
-    if (a.length === b.length && timingSafeEqual(a, b)) return true
-  }
-  return false
 }
 
 // מיפוי סוג האירוע → העמודה שמתעדכנת אצל הנמען
@@ -69,7 +38,7 @@ export async function POST(request: NextRequest) {
     console.error('[resend-events] RESEND_WEBHOOK_SIGNING_SECRET חסר — דחיית כל הבקשות')
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  if (!verifySvix(request, rawBody, secret)) {
+  if (!verifySvixSignature(request, rawBody, secret)) {
     return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
   }
 
