@@ -173,6 +173,81 @@ export default function BlockEditor({
     setAtMenu(null)
   }
 
+  /**
+   * נקרא אחרי כל הקלדה בשדה. סורק אחורה מהסמן ומחפש '@'.
+   * אם נמצא (בלי רווח בדרך) — פותח את התפריט ומעדכן את הסינון.
+   */
+  function checkAtTrigger(blockId: string, el: HTMLElement) {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0) { closeAtMenu(); return }
+
+    const range = sel.getRangeAt(0)
+    const node = range.startContainer
+    if (node.nodeType !== Node.TEXT_NODE) { closeAtMenu(); return }
+
+    const text = node.textContent ?? ''
+    const caret = range.startOffset
+
+    // סורקים אחורה מהסמן עד '@'. רווח באמצע = לא טריגר.
+    let at = -1
+    for (let i = caret - 1; i >= 0; i--) {
+      const ch = text[i]
+      if (ch === '@') { at = i; break }
+      if (/\s/.test(ch)) break
+    }
+
+    if (at < 0) { closeAtMenu(); return }
+
+    const query = text.slice(at + 1, caret)
+
+    // עוגן: Range שמצביע בדיוק על ה-'@' — משם נמחק בבחירה
+    const anchor = document.createRange()
+    anchor.setStart(node, at)
+    anchor.setEnd(node, at)
+    atAnchor.current = anchor
+
+    // מיקום התפריט — ליד הסמן
+    const rect = range.getBoundingClientRect()
+    setAtMenu(prev => ({
+      blockId,
+      query,
+      top: rect.bottom + 6,
+      left: Math.max(8, rect.left - 240),
+      // שומרים על הבחירה אם רק הסינון השתנה
+      index: prev && prev.blockId === blockId ? 0 : 0,
+    }))
+    void el
+  }
+
+  /** ניווט מקלדת בתפריט. מחזיר true אם האירוע נבלע. */
+  function handleAtKey(e: React.KeyboardEvent): boolean {
+    const menu = atMenuRef.current
+    if (!menu) return false
+
+    const matches = MERGE_TAGS.filter(t => {
+      const q = menu.query.trim()
+      return !q || t.token.includes(q) || t.label.includes(q)
+    })
+    if (!matches.length) return false
+
+    if (e.key === 'Escape') { closeAtMenu(); return true }
+
+    if (e.key === 'ArrowDown') {
+      setAtMenu(m => (m ? { ...m, index: (m.index + 1) % matches.length } : m))
+      return true
+    }
+    if (e.key === 'ArrowUp') {
+      setAtMenu(m => (m ? { ...m, index: (m.index - 1 + matches.length) % matches.length } : m))
+      return true
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      const pick = matches[menu.index] ?? matches[0]
+      if (pick) pickAtTag(pick.token)
+      return true
+    }
+    return false
+  }
+
   // סגירה בלחיצה מחוץ לתפריט
   useEffect(() => {
     if (!atMenu) return
@@ -434,6 +509,8 @@ export default function BlockEditor({
                   onEditableDragEnter={() => setDropTargetId(b.id)}
                   onEditableDragLeave={() => setDropTargetId(prev => (prev === b.id ? null : prev))}
                   onEditableDropDone={() => setDropTargetId(null)}
+                  onAtCheck={checkAtTrigger}
+                  onAtKey={handleAtKey}
                 />
               ))
             )}
@@ -494,6 +571,7 @@ function CanvasBlock({
   dragging, onDragHandleDown, onBlockDragEnd,
   dropIndicator, onBlockDragOver, onBlockDrop,
   dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
+  onAtCheck, onAtKey,
 }: {
   block: Block
   selected: boolean
@@ -515,6 +593,8 @@ function CanvasBlock({
   onEditableDragEnter: () => void
   onEditableDragLeave: () => void
   onEditableDropDone: () => void
+  onAtCheck: (blockId: string, el: HTMLElement) => void
+  onAtKey: (e: React.KeyboardEvent) => boolean
 }) {
   const line = <div className="my-0.5 h-1 rounded-full bg-indigo-500" />
 
@@ -580,6 +660,8 @@ function CanvasBlock({
         )}
 
         <BlockBody
+          onAtCheck={onAtCheck}
+          onAtKey={onAtKey}
           block={b}
           onUpdate={onUpdate}
           editableRef={editableRef}
@@ -597,6 +679,7 @@ function CanvasBlock({
 function BlockBody({
   block: b, onUpdate, editableRef,
   dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
+  onAtCheck, onAtKey,
 }: {
   block: Block
   onUpdate: (p: Partial<Block>) => void
@@ -605,9 +688,11 @@ function BlockBody({
   onEditableDragEnter: () => void
   onEditableDragLeave: () => void
   onEditableDropDone: () => void
+  onAtCheck: (blockId: string, el: HTMLElement) => void
+  onAtKey: (e: React.KeyboardEvent) => boolean
 }) {
   const align = b.align ?? 'right'
-  const dropProps = { dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone }
+  const dropProps = { dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone, onAtCheck, onAtKey }
 
   switch (b.type) {
     case 'heading':
@@ -717,6 +802,7 @@ function BlockBody({
 function Editable({
   id, tag, html, onInput, editableRef, placeholder, style,
   dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
+  onAtCheck, onAtKey,
 }: {
   id: string
   tag: 'h2' | 'div'
@@ -729,6 +815,10 @@ function Editable({
   onEditableDragEnter: () => void
   onEditableDragLeave: () => void
   onEditableDropDone: () => void
+  /** נקרא אחרי כל הקלדה — בודק אם המשתמש כתב @ ומה הוא הקליד אחריו */
+  onAtCheck: (blockId: string, el: HTMLElement) => void
+  /** ניווט בתפריט ה-@ (חיצים/Enter/Escape). מחזיר true אם טיפל באירוע. */
+  onAtKey: (e: React.KeyboardEvent) => boolean
 }) {
   const ref = useRef<HTMLElement | null>(null)
   const [empty, setEmpty] = useState(!html)
@@ -758,6 +848,12 @@ function Editable({
           const el = e.currentTarget
           setEmpty(!el.textContent?.trim())
           onInput(el.innerHTML)
+          // בדיקת @ — פותח/מעדכן/סוגר את תפריט המשתנים
+          onAtCheck(id, el)
+        }}
+        onKeyDown={e => {
+          // תפריט ה-@ פתוח? הוא בולע חיצים/Enter/Escape
+          if (onAtKey(e)) e.preventDefault()
         }}
         onPaste={e => {
           // הדבקה כטקסט נקי — HTML מ-Word/אתרים שובר את המייל
