@@ -5,6 +5,7 @@ import {
   Heading, Type, Image as ImageIcon, MousePointerClick, Minus, MoveVertical,
   Trash2, ChevronUp, ChevronDown, Braces, Upload, Loader2, Copy,
   AlignRight, AlignCenter, AlignLeft, Link2, Plus, Settings2, GripVertical,
+  Pencil, Eye,
 } from 'lucide-react'
 import type { Block, BlockType } from '@/lib/newsletter/blocks'
 import { MERGE_TAGS } from '@/lib/newsletter/merge'
@@ -39,6 +40,23 @@ function newBlock(type: BlockType): Block {
     case 'spacer':  return { id, type, height: 20 }
     default:        return { id, type }
   }
+}
+
+// ── תצוגה מקדימה: ערכי דוגמה לכל משתנה מיזוג ──
+const DEMO: Record<string, string> = Object.fromEntries(MERGE_TAGS.map(t => [t.token, t.example]))
+
+/** מחליף כל {{משתנה}} בערך הדוגמה שלו. משתנה לא מוכר נשאר כפי שהוא. */
+function renderDemo(html: string): string {
+  return String(html ?? '').replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, k: string) => DEMO[k.trim()] ?? `{{${k}}}`)
+}
+
+/** מצב תפריט ה-@ הצף — נשלט מהקומפוננטה הראשית כדי שיוכל להיות fixed מעל הכל. */
+type AtMenu = {
+  blockId: string
+  query: string
+  top: number
+  left: number
+  index: number
 }
 
 /** הזרקת טקסט לשדה שהיה בפוקוס — עוקף את השליטה של React על הערך. */
@@ -130,6 +148,85 @@ export default function BlockEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // ה-contentEditable האחרון שהיה בפוקוס — יעד הזרקת משתני המיזוג
   const lastEditable = useRef<HTMLElement | null>(null)
+
+  // ── מצב תצוגה מקדימה ──
+  const [previewMode, setPreviewMode] = useState(false)
+
+  // ── תפריט @ ──
+  // atMenu — המצב הצף. atAnchor — ה-Range המקורי (collapsed) שבו נכתב ה-@ עצמו.
+  // שומרים אותו ב-ref (ולא ב-state) כי הוא אובייקט DOM חי שאין טעם לרנדר עליו.
+  const [atMenu, setAtMenu] = useState<AtMenu | null>(null)
+  const atAnchor = useRef<Range | null>(null)
+  const atMenuRef = useRef<AtMenu | null>(null)
+  atMenuRef.current = atMenu
+
+  const atMatches = atMenu
+    ? MERGE_TAGS.filter(t => {
+        const q = atMenu.query.trim()
+        if (!q) return true
+        return t.token.includes(q) || t.label.includes(q)
+      })
+    : []
+
+  function closeAtMenu() {
+    atAnchor.current = null
+    setAtMenu(null)
+  }
+
+  // סגירה בלחיצה מחוץ לתפריט
+  useEffect(() => {
+    if (!atMenu) return
+    function onDown(e: MouseEvent) {
+      const t = e.target as HTMLElement | null
+      if (t?.closest('[data-at-menu]')) return
+      closeAtMenu()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [atMenu])
+
+  /**
+   * בחירת תג מתוך תפריט ה-@.
+   * מוחקים את הרצף "@..." שהמשתמש הקליד ומכניסים {{token}} במקומו:
+   * בונים Range מנקודת ה-@ (atAnchor, שנשמר ברגע ההקלדה) ועד לסמן הנוכחי,
+   * מוחקים אותו, ומזריקים צומת טקסט חדש. atAnchor הוא Range חי — הדפדפן
+   * מעדכן את ה-offset שלו תוך כדי הקלדה, ולכן הוא עדיין מצביע על ה-@.
+   */
+  function pickAtTag(token: string) {
+    const menu = atMenuRef.current
+    const anchor = atAnchor.current
+    const el = lastEditable.current
+    if (!menu || !anchor || !el) return closeAtMenu()
+
+    const sel = window.getSelection()
+    const caret = sel && sel.rangeCount ? sel.getRangeAt(0) : null
+
+    const range = document.createRange()
+    range.setStart(anchor.startContainer, anchor.startOffset)
+    if (caret && el.contains(caret.endContainer)) {
+      range.setEnd(caret.endContainer, caret.endOffset)
+    } else {
+      // נפילה: מוחקים רק את ה-@ ואת אורך השאילתה מאותו צומת
+      range.setEnd(anchor.startContainer, anchor.startOffset)
+    }
+
+    range.deleteContents()
+    const node = document.createTextNode(`{{${token}}}`)
+    range.insertNode(node)
+
+    // הסמן אחרי התג שהוזרק
+    if (sel) {
+      const after = document.createRange()
+      after.setStartAfter(node)
+      after.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(after)
+    }
+
+    el.focus()
+    update(menu.blockId, { content: el.innerHTML })
+    closeAtMenu()
+  }
 
   // ── מצב גרירה ──
   // draggingId — הבלוק שנגרר כעת. משמש גם כדי להפעיל draggable על ה-wrapper
@@ -438,6 +535,14 @@ function CanvasBlock({
           <IconBtn onClick={onDuplicate} title="שכפול"><Copy size={13} /></IconBtn>
           <IconBtn onClick={onRemove} title="מחיקה" danger><Trash2 size={13} /></IconBtn>
         </div>
+
+        {/* רמז — מוצג רק על בלוק טקסט שנבחר */}
+        {selected && (b.type === 'heading' || b.type === 'text') && (
+          <p className="mb-1 text-[11px] text-slate-400">
+            💡 להוספת שדה מותאם — הקישו <kbd className="rounded bg-slate-100 px-1 font-mono font-bold text-slate-600">@</kbd>
+            {'  ·  '}או גררו משתנה מהפאנל
+          </p>
+        )}
 
         <BlockBody
           block={b}
