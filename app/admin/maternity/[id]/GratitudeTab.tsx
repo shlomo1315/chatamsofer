@@ -93,7 +93,8 @@ export default function GratitudeTab({ aidId }: { aidId: string }) {
   const SourceIcon = letter ? SOURCE_ICON[letter.source] : Heart
 
   return (
-    <div className="flex flex-col gap-4">
+    // פריסה רחבה — המכתב והשליחה הידנית זה לצד זה במסכים רחבים
+    <div className="grid gap-4 lg:grid-cols-2 items-start">
       {/* המכתב שהתקבל */}
       {letter ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5">

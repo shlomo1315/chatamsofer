@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download, Heart } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download, Heart, Star } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -9,6 +9,7 @@ import { StatusControl } from '../maternityStatus'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import MaternityActions from './MaternityActions'
 import GratitudeTab from './GratitudeTab'
+import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
@@ -137,7 +138,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const motherId = beneficiary?.spouse_id_number ?? beneficiary?.id_number
 
   return (
-    <div className="flex flex-col gap-5 max-w-2xl">
+    <div className="flex flex-col gap-5 max-w-4xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/maternity" />
@@ -458,6 +459,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
         {
           key: 'gratitude', label: 'מכתבי ברכה', accent: 'amber' as const, icon: <Heart size={15} />,
           content: <GratitudeTab aidId={aid.id} />,
+        },
+        {
+          key: 'feedback', label: 'משוב', accent: 'sky' as const, icon: <Star size={15} />,
+          content: <FeedbackTab aidId={aid.id} />,
         },
       ] as TabDef[]} />
     </div>

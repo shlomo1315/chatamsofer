@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey } from '@/types'
@@ -38,7 +38,16 @@ const maternityChildren: { href: string; label: string; section: SectionKey }[] 
   { href: '/admin/maternity/silent',    label: 'לידה שקטה',         section: 'maternity' },
   { href: '/admin/maternity/cards',     label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
   { href: '/admin/maternity/gratitude', label: 'מכתבי ברכה',        section: 'maternity' },
+  { href: '/admin/maternity/feedback',  label: 'משוב בתי החלמה',    section: 'maternity' },
 ]
+
+const MATERNITY_CHILD_ICONS: Record<string, React.ElementType> = {
+  '/admin/maternity/recovery':  Baby,
+  '/admin/maternity/silent':    Heart,
+  '/admin/maternity/cards':     UtensilsCrossed,
+  '/admin/maternity/gratitude': Gift,
+  '/admin/maternity/feedback':  Star,
+}
 
 const navBottom: NavItem[] = [
   { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
@@ -108,10 +117,11 @@ export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMai
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 
   const mailActive = pathname.startsWith('/admin/mail')
-  const cardsActive = pathname.startsWith('/admin/maternity/cards')
-  const recoveryActive = pathname.startsWith('/admin/maternity/recovery')
-  const silentActive = pathname.startsWith('/admin/maternity/silent')
-  const maternityRootActive = pathname === '/admin/maternity' || /^\/admin\/maternity\/[^/]+$/.test(pathname) && !cardsActive && !recoveryActive && !silentActive
+  // תת-עמוד יולדות פעיל — לפי הקידומת של הקישור עצמו
+  const childActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  const anyChildActive = maternityChildren.some(c => childActive(c.href))
+  const maternityRootActive = pathname === '/admin/maternity'
+    || (/^\/admin\/maternity\/[^/]+$/.test(pathname) && !anyChildActive)
 
   const renderLink = ({ href, label, icon: Icon }: NavItem) => {
     const active = href === '/admin/dashboard' ? pathname === href : pathname.startsWith(href)
@@ -174,12 +184,8 @@ export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMai
             {maternityOpen && (
               <div className="mt-1 mr-4 border-r border-slate-700/60 pr-2 flex flex-col gap-0.5">
                 {maternityVisible.map(child => {
-                  const active = child.href === '/admin/maternity/cards' ? cardsActive
-                    : child.href === '/admin/maternity/silent' ? silentActive
-                    : recoveryActive
-                  const Icon = child.href === '/admin/maternity/cards' ? UtensilsCrossed
-                    : child.href === '/admin/maternity/silent' ? Heart
-                    : Baby
+                  const active = childActive(child.href)
+                  const Icon = MATERNITY_CHILD_ICONS[child.href] ?? Baby
                   return (
                     <Link key={child.href} href={child.href} onClick={() => setMobileOpen(false)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
