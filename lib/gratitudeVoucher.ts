@@ -24,8 +24,8 @@ export interface GratitudeVoucherInput {
 }
 
 /**
- * בונה את שורת החתימה מפרטי המשפחה, עם תארים מכובדים:
- * "משפחת כהן — הרב משה ומרת שרה, בני ברק"
+ * בונה את שורת החתימה מפרטי המשפחה:
+ * "משפחת הרב שלמה ומרת גיטי ויסברג - עמנואל"
  */
 function buildSignature(i: GratitudeVoucherInput): string {
   const family = (i.familyName ?? '').trim()
@@ -37,12 +37,15 @@ function buildSignature(i: GratitudeVoucherInput): string {
   if (husband) names.push(`הרב ${husband}`)
   if (wife) names.push(`מרת ${wife}`)
 
-  const parts: string[] = []
-  if (family) parts.push(`משפחת ${family}`)
+  // "משפחת <השמות> <שם המשפחה>"
+  const parts = ['משפחת']
   if (names.length) parts.push(names.join(' ו'))
+  if (family) parts.push(family)
 
-  const line = parts.join(' — ')
-  return city ? (line ? `${line}, ${city}` : city) : line
+  const line = parts.length > 1 ? parts.join(' ') : ''
+  if (!line) return city
+
+  return city ? `${line} - ${city}` : line
 }
 
 const MIN_LINES = 8       // מספר השורות הריקות בשובר להדפסה
