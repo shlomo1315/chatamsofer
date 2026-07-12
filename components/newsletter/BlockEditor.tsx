@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   Heading, Type, Image as ImageIcon, MousePointerClick, Minus, MoveVertical,
   Trash2, ChevronUp, ChevronDown, Braces, Upload, Loader2, Copy,
-  AlignRight, AlignCenter, AlignLeft, Link2, Plus, Settings2,
+  AlignRight, AlignCenter, AlignLeft, Link2, Plus, Settings2, GripVertical,
 } from 'lucide-react'
 import type { Block, BlockType } from '@/lib/newsletter/blocks'
 import { MERGE_TAGS } from '@/lib/newsletter/merge'
@@ -131,6 +131,15 @@ export default function BlockEditor({
   // ה-contentEditable האחרון שהיה בפוקוס — יעד הזרקת משתני המיזוג
   const lastEditable = useRef<HTMLElement | null>(null)
 
+  // ── מצב גרירה ──
+  // draggingId — הבלוק שנגרר כעת. משמש גם כדי להפעיל draggable על ה-wrapper
+  // רק בזמן גרירה מהידית, כדי לא לשבור סימון טקסט ב-contentEditable.
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  // היכן ינחת הבלוק הנגרר — קו כחול מעל/מתחת לבלוק שמתחת לעכבר
+  const [dropIndicator, setDropIndicator] = useState<{ id: string; position: 'before' | 'after' } | null>(null)
+  // ה-contentEditable שמעליו נגרר כרגע משתנה מיזוג (הדגשה ויזואלית)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+
   const selected = blocks.find(b => b.id === selectedId) ?? null
 
   function update(id: string, patch: Partial<Block>) {
@@ -176,6 +185,25 @@ export default function BlockEditor({
     document.execCommand('insertText', false, `{{${token}}}`)
     const id = el.dataset.blockId
     if (id) update(id, { content: el.innerHTML })
+  }
+
+  /** סידור מחדש: מזיז את הבלוק הנגרר לפני/אחרי בלוק היעד */
+  function reorder(dragId: string, targetId: string, position: 'before' | 'after') {
+    if (dragId === targetId) return
+    const from = blocks.findIndex(b => b.id === dragId)
+    if (from < 0) return
+    const next = [...blocks]
+    const [moved] = next.splice(from, 1)
+    // חישוב היעד אחרי ההסרה — האינדקס של targetId עשוי לזוז אחורה
+    const targetIdx = next.findIndex(b => b.id === targetId)
+    if (targetIdx < 0) return
+    next.splice(position === 'before' ? targetIdx : targetIdx + 1, 0, moved)
+    onChange(next)
+  }
+
+  function clearDrag() {
+    setDraggingId(null)
+    setDropIndicator(null)
   }
 
   return (
@@ -230,18 +258,26 @@ export default function BlockEditor({
             <Braces size={13} /> משתני מיזוג
           </h3>
           <p className="mb-2 text-[11px] leading-relaxed text-slate-400">
-            לחצו בתוך טקסט בקנבס, ואז על משתנה — הוא יתווסף במקום הסמן.
+            לחצו או גררו לתוך הטקסט — המשתנה יתווסף במקום הסמן / במקום השחרור.
           </p>
           <div className="flex flex-col gap-1 overflow-hidden rounded-lg border border-slate-200">
             {MERGE_TAGS.map(t => (
               <button
                 key={t.token}
                 type="button"
-                // onMouseDown — מונע איבוד הפוקוס מה-contentEditable לפני ההזרקה
+                draggable
+                onDragStart={e => {
+                  e.dataTransfer.setData('text/plain', `{{${t.token}}}`)
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
+                onDragEnd={() => setDropTargetId(null)}
+                // onMouseDown — מונע איבוד הפוקוס מה-contentEditable לפני ההזרקה.
+                // preventDefault כאן לא מבטל גרירה (HTML5 DnD מתחיל גם בלי ברירת המחדל של mousedown).
                 onMouseDown={e => { e.preventDefault(); insertTag(t.token) }}
-                className="flex items-center gap-2 border-b border-slate-50 px-2.5 py-1.5 text-right
-                           transition last:border-0 hover:bg-indigo-50"
+                className="flex cursor-grab items-center gap-2 border-b border-slate-50 px-2.5 py-1.5
+                           text-right transition last:border-0 hover:bg-indigo-50 active:cursor-grabbing"
               >
+                <GripVertical size={12} className="flex-shrink-0 text-slate-300" />
                 <code className="flex-shrink-0 rounded bg-indigo-100 px-1 py-0.5 text-[10px] font-bold text-indigo-700">
                   {`{{${t.token}}}`}
                 </code>
@@ -262,7 +298,13 @@ export default function BlockEditor({
             <img src="/logo.png" alt="היכל החתם סופר" width={72} height={72} className="inline-block" />
           </div>
 
-          <div className="px-10 pb-8 pt-5">
+          <div
+            className="px-10 pb-8 pt-5"
+            // יציאה מהקנבס כולו — מנקה את קו ההנחיה
+            onDragLeave={e => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropIndicator(null)
+            }}
+          >
             {!blocks.length ? (
               <p className="py-20 text-center text-sm text-slate-400">
                 המייל ריק — הוסיפו בלוק מהפאנל
@@ -281,6 +323,20 @@ export default function BlockEditor({
                   onDuplicate={() => duplicate(b.id)}
                   onMove={d => move(b.id, d)}
                   editableRef={lastEditable}
+                  dragging={draggingId === b.id}
+                  onDragHandleDown={() => setDraggingId(b.id)}
+                  onBlockDragEnd={clearDrag}
+                  dropIndicator={dropIndicator?.id === b.id ? dropIndicator.position : null}
+                  onBlockDragOver={pos => {
+                    // מעדכנים רק כשהמצב באמת השתנה — מונע re-render בכל pixel
+                    setDropIndicator(prev =>
+                      prev?.id === b.id && prev.position === pos ? prev : { id: b.id, position: pos })
+                  }}
+                  onBlockDrop={dragId => reorder(dragId, b.id, dropIndicator?.position ?? 'before')}
+                  dropTarget={dropTargetId === b.id}
+                  onEditableDragEnter={() => setDropTargetId(b.id)}
+                  onEditableDragLeave={() => setDropTargetId(prev => (prev === b.id ? null : prev))}
+                  onEditableDropDone={() => setDropTargetId(null)}
                 />
               ))
             )}
@@ -303,6 +359,9 @@ export default function BlockEditor({
 function CanvasBlock({
   block: b, selected, first, last,
   onSelect, onUpdate, onRemove, onDuplicate, onMove, editableRef,
+  dragging, onDragHandleDown, onBlockDragEnd,
+  dropIndicator, onBlockDragOver, onBlockDrop,
+  dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
 }: {
   block: Block
   selected: boolean
@@ -314,34 +373,101 @@ function CanvasBlock({
   onDuplicate: () => void
   onMove: (d: -1 | 1) => void
   editableRef: React.MutableRefObject<HTMLElement | null>
+  dragging: boolean
+  onDragHandleDown: () => void
+  onBlockDragEnd: () => void
+  dropIndicator: 'before' | 'after' | null
+  onBlockDragOver: (pos: 'before' | 'after') => void
+  onBlockDrop: (dragId: string) => void
+  dropTarget: boolean
+  onEditableDragEnter: () => void
+  onEditableDragLeave: () => void
+  onEditableDropDone: () => void
 }) {
-  return (
-    <div
-      onClick={onSelect}
-      className={`group relative mb-1 cursor-pointer rounded-lg transition ${
-        selected ? 'ring-2 ring-indigo-400' : 'hover:ring-1 hover:ring-slate-300'
-      }`}
-    >
-      {/* כפתורים צפים בהובר */}
-      <div className="absolute -top-3 left-2 z-10 hidden items-center gap-0.5 rounded-lg border
-                      border-slate-200 bg-white px-1 py-0.5 shadow-md group-hover:flex">
-        <IconBtn onClick={() => onMove(-1)} disabled={first} title="למעלה"><ChevronUp size={14} /></IconBtn>
-        <IconBtn onClick={() => onMove(1)} disabled={last} title="למטה"><ChevronDown size={14} /></IconBtn>
-        <IconBtn onClick={onDuplicate} title="שכפול"><Copy size={13} /></IconBtn>
-        <IconBtn onClick={onRemove} title="מחיקה" danger><Trash2 size={13} /></IconBtn>
-      </div>
+  const line = <div className="my-0.5 h-1 rounded-full bg-indigo-500" />
 
-      <BlockBody block={b} onUpdate={onUpdate} editableRef={editableRef} />
-    </div>
+  return (
+    <>
+      {dropIndicator === 'before' && line}
+      <div
+        onClick={onSelect}
+        // draggable מופעל רק אחרי לחיצה על הידית — אחרת contentEditable
+        // לא מאפשר לסמן טקסט עם העכבר.
+        draggable={dragging}
+        onDragStart={e => {
+          e.dataTransfer.setData('application/x-block', b.id)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragEnd={onBlockDragEnd}
+        onDragOver={e => {
+          // רלוונטי רק לגרירת בלוקים — גרירת משתנה מיזוג מטופלת ב-Editable
+          if (!e.dataTransfer.types.includes('application/x-block')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          const rect = e.currentTarget.getBoundingClientRect()
+          onBlockDragOver(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after')
+        }}
+        onDrop={e => {
+          const dragId = e.dataTransfer.getData('application/x-block')
+          if (!dragId) return
+          e.preventDefault()
+          e.stopPropagation()
+          onBlockDrop(dragId)
+          onBlockDragEnd()
+        }}
+        className={`group relative mb-1 cursor-pointer rounded-lg transition ${
+          selected ? 'ring-2 ring-indigo-400' : 'hover:ring-1 hover:ring-slate-300'
+        } ${dragging ? 'opacity-40' : ''}`}
+      >
+        {/* כפתורים צפים בהובר */}
+        <div className="absolute -top-3 left-2 z-10 hidden items-center gap-0.5 rounded-lg border
+                        border-slate-200 bg-white px-1 py-0.5 shadow-md group-hover:flex">
+          <span
+            title="גררו לסידור מחדש"
+            // mouseDown מפעיל את draggable על ה-wrapper רגע לפני שהדפדפן מתחיל את הגרירה
+            onMouseDown={onDragHandleDown}
+            onMouseUp={onBlockDragEnd}
+            onClick={e => e.stopPropagation()}
+            className="cursor-grab rounded p-1 text-slate-400 transition hover:bg-slate-100
+                       hover:text-slate-700 active:cursor-grabbing"
+          >
+            <GripVertical size={14} />
+          </span>
+          <IconBtn onClick={() => onMove(-1)} disabled={first} title="למעלה"><ChevronUp size={14} /></IconBtn>
+          <IconBtn onClick={() => onMove(1)} disabled={last} title="למטה"><ChevronDown size={14} /></IconBtn>
+          <IconBtn onClick={onDuplicate} title="שכפול"><Copy size={13} /></IconBtn>
+          <IconBtn onClick={onRemove} title="מחיקה" danger><Trash2 size={13} /></IconBtn>
+        </div>
+
+        <BlockBody
+          block={b}
+          onUpdate={onUpdate}
+          editableRef={editableRef}
+          dropTarget={dropTarget}
+          onEditableDragEnter={onEditableDragEnter}
+          onEditableDragLeave={onEditableDragLeave}
+          onEditableDropDone={onEditableDropDone}
+        />
+      </div>
+      {dropIndicator === 'after' && line}
+    </>
   )
 }
 
-function BlockBody({ block: b, onUpdate, editableRef }: {
+function BlockBody({
+  block: b, onUpdate, editableRef,
+  dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
+}: {
   block: Block
   onUpdate: (p: Partial<Block>) => void
   editableRef: React.MutableRefObject<HTMLElement | null>
+  dropTarget: boolean
+  onEditableDragEnter: () => void
+  onEditableDragLeave: () => void
+  onEditableDropDone: () => void
 }) {
   const align = b.align ?? 'right'
+  const dropProps = { dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone }
 
   switch (b.type) {
     case 'heading':
@@ -353,6 +479,7 @@ function BlockBody({ block: b, onUpdate, editableRef }: {
           onInput={html => onUpdate({ content: html })}
           editableRef={editableRef}
           placeholder="כותרת…"
+          {...dropProps}
           style={{
             margin: '0 0 16px',
             color: NAVY,
@@ -373,6 +500,7 @@ function BlockBody({ block: b, onUpdate, editableRef }: {
           onInput={html => onUpdate({ content: html })}
           editableRef={editableRef}
           placeholder="כתבו כאן…"
+          {...dropProps}
           style={{
             margin: '0 0 16px',
             color: '#334155',
@@ -446,7 +574,10 @@ function BlockBody({ block: b, onUpdate, editableRef }: {
  * ה-innerHTML נקבע פעם אחת ב-mount בלבד — כתיבה חוזרת בכל render מאפסת את
  * מיקום הסמן. מכאן והלאה ה-DOM הוא מקור האמת לתוכן, ו-onInput רק מסנכרן ל-state.
  */
-function Editable({ id, tag, html, onInput, editableRef, placeholder, style }: {
+function Editable({
+  id, tag, html, onInput, editableRef, placeholder, style,
+  dropTarget, onEditableDragEnter, onEditableDragLeave, onEditableDropDone,
+}: {
   id: string
   tag: 'h2' | 'div'
   html: string
@@ -454,6 +585,10 @@ function Editable({ id, tag, html, onInput, editableRef, placeholder, style }: {
   editableRef: React.MutableRefObject<HTMLElement | null>
   placeholder: string
   style: React.CSSProperties
+  dropTarget: boolean
+  onEditableDragEnter: () => void
+  onEditableDragLeave: () => void
+  onEditableDropDone: () => void
 }) {
   const ref = useRef<HTMLElement | null>(null)
   const [empty, setEmpty] = useState(!html)
@@ -464,6 +599,11 @@ function Editable({ id, tag, html, onInput, editableRef, placeholder, style }: {
   }, [])
 
   const Tag = tag as 'div'
+
+  /** האם הגרירה הנוכחית היא של משתנה מיזוג (טקסט) ולא של בלוק */
+  function isTagDrag(dt: DataTransfer) {
+    return !dt.types.includes('application/x-block')
+  }
 
   return (
     <div className="relative">
@@ -485,8 +625,67 @@ function Editable({ id, tag, html, onInput, editableRef, placeholder, style }: {
           const text = e.clipboardData.getData('text/plain')
           document.execCommand('insertText', false, text)
         }}
+        onDragEnter={e => { if (isTagDrag(e.dataTransfer)) onEditableDragEnter() }}
+        onDragOver={e => {
+          if (!isTagDrag(e.dataTransfer)) return
+          // בלי preventDefault הדפדפן לא יאפשר drop כלל
+          e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={e => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onEditableDragLeave()
+        }}
+        onDrop={e => {
+          if (!isTagDrag(e.dataTransfer)) return
+          e.preventDefault()
+          e.stopPropagation()
+          const text = e.dataTransfer.getData('text/plain')
+          onEditableDropDone()
+          if (!text) return
+
+          const el = e.currentTarget
+          // הכנסה בדיוק במקום שבו שוחרר העכבר — caretRangeFromPoint (WebKit/Blink)
+          // או caretPositionFromPoint (Firefox); אם אין תמיכה — נופלים לסוף התוכן.
+          const doc = document as Document & {
+            caretRangeFromPoint?: (x: number, y: number) => Range | null
+            caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+          }
+          let range: Range | null = doc.caretRangeFromPoint?.(e.clientX, e.clientY) ?? null
+          if (!range) {
+            const pos = doc.caretPositionFromPoint?.(e.clientX, e.clientY)
+            if (pos) {
+              range = document.createRange()
+              range.setStart(pos.offsetNode, pos.offset)
+              range.collapse(true)
+            }
+          }
+          if (!range || !el.contains(range.startContainer)) {
+            range = document.createRange()
+            range.selectNodeContents(el)
+            range.collapse(false)
+          }
+
+          const node = document.createTextNode(text)
+          range.deleteContents()
+          range.insertNode(node)
+
+          // מיקום הסמן אחרי הטקסט שהוזרק
+          const sel = window.getSelection()
+          if (sel) {
+            const after = document.createRange()
+            after.setStartAfter(node)
+            after.collapse(true)
+            sel.removeAllRanges()
+            sel.addRange(after)
+          }
+
+          // ה-DOM הוא מקור האמת — מסנכרנים חזרה ל-state
+          setEmpty(!el.textContent?.trim())
+          onInput(el.innerHTML)
+        }}
         style={{ ...style, outline: 'none', minHeight: '1.2em' }}
-        className="rounded px-1 focus:bg-indigo-50/40"
+        className={`rounded px-1 focus:bg-indigo-50/40 ${dropTarget ? 'ring-2 ring-indigo-300' : ''}`}
       />
       {empty && (
         <span
