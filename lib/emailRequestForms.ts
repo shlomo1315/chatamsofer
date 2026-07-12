@@ -42,7 +42,10 @@ export const SUBJECT_PREFIX: Record<ReqType, string> = {
 // עמיד: מסיר סימוני כיווניות (RTL/LTR marks) ורווחים כפולים, ותופס וריאציות ניסוח נפוצות.
 export function detectReqType(subject: string): ReqType | null {
   const s = String(subject ?? '')
-    .replace(/[‎‏‪-‮⁦-⁩ ]/g, ' ') // סימוני כיווניות + NBSP → רווח
+    // סימוני כיווניות ורווחים מיוחדים -> רווח.
+    // escapes מפורשים ולא תווים מילוליים: תו בלתי-נראה בקוד המקור עלול
+    // להישבר בנרמול קובץ, ואז הניקוי מפסיק לעבוד בשקט.
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0\u2007\u202F\uFEFF]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (/ליד[הת]\s*שקט/.test(s)) return 'silent_birth'
@@ -182,19 +185,69 @@ export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPr
 }
 
 // ── פרסור גוף המייל שהתקבל ────────────────────────────────────────────────────
-// לכל שדה: מאתרים שורה שמתחילה בתווית, ולוקחים את הטקסט אחרי הנקודתיים הראשונות.
+//
+// עמידות היא קריטית: המשתמש עורך את הטיוטה ידנית, ולקוחות מייל שונים
+// מוסיפים תווים בלתי-נראים, מפצלים שורות, ומשנים רווחים.
+//
+// לכן:
+//  • הנקודתיים אינן קריטיות — מקבלים גם "-", "=", או רווח בלבד
+//  • מנקים תווי כיווניות RTL ורווחים מיוחדים שהלקוח מזריק
+//  • חותכים אחרי התווית עצמה, לא ב"נקודתיים הראשונות" (שעלולות
+//    להיות בתוך ה-hint שבסוגריים)
+//  • בהתאמת תווית מעדיפים את הארוכה ביותר, כדי ש"בית החלמה" לא
+//    יתפוס שדה שהתווית שלו מתחילה באותן מילים
+
+/** מנקה תווים בלתי-נראים שלקוחות מייל מזריקים (RTL marks, NBSP, ZWSP). */
+function cleanLine(s: string): string {
+  return String(s ?? '')
+    // סימוני כיווניות ורווחים מיוחדים -> רווח.
+    // escapes מפורשים ולא תווים מילוליים: תו בלתי-נראה בקוד המקור עלול
+    // להישבר בנרמול קובץ, ואז הניקוי מפסיק לעבוד בשקט.
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0\u2007\u202F\uFEFF]/g, ' ')
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0\u2007\u202F\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** מסיר את ה-hint שבסוגריים מתוך התווית, לצורך התאמה. */
+function labelCore(label: string): string {
+  return cleanLine(label).replace(/\s*\([^)]*\)\s*$/, '').trim()
+}
+
 export function parseDraft(type: ReqType, body: string, ctx: Ctx): Record<string, string> {
-  const lines = String(body ?? '').split(/\r?\n/)
+  const lines = String(body ?? '').split(/\r?\n/).map(cleanLine).filter(Boolean)
   const out: Record<string, string> = {}
-  for (const f of fieldsFor(type, ctx)) {
-    for (const ln of lines) {
-      // מתעלמים מ-hint בסוגריים: מתאימים לפי תחילת התווית
-      if (ln.trimStart().startsWith(f.label)) {
-        const idx = ln.indexOf(':')
-        if (idx >= 0) { out[f.key] = ln.slice(idx + 1).trim(); break }
-      }
+
+  // התוויות הארוכות קודם — מונע התאמה שגויה לשדה שהוא תחילית של אחר
+  const fields = [...fieldsFor(type, ctx)]
+    .sort((a, b) => labelCore(b.label).length - labelCore(a.label).length)
+
+  const used = new Set<number>()
+
+  for (const f of fields) {
+    const core = labelCore(f.label)
+    if (!core) continue
+
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue
+      const ln = lines[i]
+      if (!ln.startsWith(core)) continue
+
+      // הכל אחרי התווית — כולל ה-hint בסוגריים והמפריד
+      let rest = ln.slice(core.length)
+
+      // הסרת ה-hint בסוגריים, אם נשאר
+      rest = rest.replace(/^\s*\([^)]*\)/, '')
+
+      // המפריד — נקודתיים, מקף, שווה, או סתם רווח. אף אחד אינו חובה.
+      rest = rest.replace(/^\s*[:：\-–=]\s*/, '').trim()
+
+      out[f.key] = rest
+      used.add(i)
+      break
     }
   }
+
   return out
 }
 
