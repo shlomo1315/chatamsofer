@@ -92,26 +92,89 @@ async function unsubscribe(token: string): Promise<boolean> {
   return true
 }
 
+/** הרשמה חוזרת — מסירים את הכתובת מרשימת ההסרות. */
+async function resubscribe(token: string): Promise<boolean> {
+  const parsed = verifyUnsubscribeToken(token)
+  if (!parsed) return false
+
+  const db = admin()
+  if (!db) return false
+
+  const { error } = await db.from('unsubscribes').delete().eq('email', parsed.email)
+  if (error) { console.error('[unsubscribe] הרשמה חוזרת נכשלה:', error.message); return false }
+
+  console.log(`[unsubscribe] ${parsed.email} נרשם/ה בחזרה לרשימת התפוצה`)
+  return true
+}
+
+// מסך תוצאה אחרי הסרה — עם אפשרות לחזור בגלל טעות
+function removedPage(token: string): NextResponse {
+  return new NextResponse(
+    `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>הוסרתם מרשימת התפוצה</title>
+</head>
+<body style="margin:0;font-family:Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:36px;max-width:440px;text-align:center;">
+    <div style="font-size:36px;margin-bottom:14px;">✓</div>
+    <h1 style="margin:0 0 10px;color:#059669;font-size:20px;">הוסרתם מרשימת התפוצה</h1>
+    <p style="margin:0 0 6px;color:#64748b;font-size:14px;line-height:1.7;">
+      לא תקבלו מאיתנו עוד מיילים פרסומיים.
+    </p>
+    <p style="margin:0 0 26px;color:#94a3b8;font-size:13px;line-height:1.7;">
+      מיילים הקשורים לבקשות שהגשתם (אישורים, שוברים) ימשיכו להישלח כרגיל.
+    </p>
+
+    <div style="border-top:1px solid #f1f5f9;padding-top:22px;">
+      <p style="margin:0 0 12px;color:#64748b;font-size:13px;">
+        הסרתם בטעות, או שתרצו לחזור?
+      </p>
+      <form method="POST" action="/api/unsubscribe/${token}?resubscribe=1" style="margin:0;">
+        <button type="submit"
+          style="width:100%;background:#fff;color:#4f46e5;border:1.5px solid #c7d2fe;border-radius:12px;
+                 padding:13px;font-size:14px;font-weight:bold;cursor:pointer;font-family:inherit;">
+          הצטרפות חוזרת לרשימת התפוצה
+        </button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  )
+}
+
 // One-Click — Gmail/Apple שולחים POST אוטומטית ומצפים ל-200.
 // כאן אין אישור אינטראקטיבי: הלחיצה על "בטל מנוי" בממשק של Gmail
 // היא עצמה ההסכמה, וזה מה שהתקן דורש.
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-
-  // אישור מדף האינטרנט (טופס) — לעומת One-Click של Gmail
   const url = new URL(request.url)
-  const confirmed = url.searchParams.get('confirm') === '1'
 
+  // ── הצטרפות חוזרת לרשימת התפוצה ──
+  if (url.searchParams.get('resubscribe') === '1') {
+    const ok = await resubscribe(token)
+    return ok
+      ? page(
+          'חזרתם לרשימת התפוצה',
+          'תמשיכו לקבל מאיתנו עדכונים.<br/>אפשר להסיר את עצמכם בכל עת, מהקישור שבתחתית כל מייל.',
+          true,
+        )
+      : page('אירעה שגיאה', 'לא הצלחנו לרשום אתכם בחזרה. אפשר לפנות אלינו ישירות.', false)
+  }
+
+  // ── הסרה ──
+  // confirm=1 = אישור מדף האינטרנט (טופס). ללא זה = One-Click של Gmail.
+  const confirmed = url.searchParams.get('confirm') === '1'
   const ok = await unsubscribe(token)
 
   if (confirmed) {
+    // מסך התוצאה כולל אפשרות לחזור — למי שהסיר בטעות
     return ok
-      ? page(
-          'הוסרתם מרשימת התפוצה',
-          'לא תקבלו מאיתנו עוד מיילים פרסומיים.<br/>מיילים הקשורים לבקשות שהגשתם ימשיכו להישלח כרגיל.<br/><br/>' +
-          'טעות? אפשר לפנות אלינו ונחזיר אתכם לרשימה.',
-          true,
-        )
+      ? removedPage(token)
       : page('אירעה שגיאה', 'לא הצלחנו לבצע את ההסרה. אפשר לפנות אלינו ישירות.', false)
   }
 
@@ -124,6 +187,17 @@ export async function GET(_r: NextRequest, { params }: { params: Promise<{ token
   const parsed = verifyUnsubscribeToken(token)
 
   if (parsed) {
+    // כבר מוסר? מציגים את מסך ההצטרפות החוזרת במקום לשאול שוב על הסרה.
+    const db = admin()
+    if (db) {
+      const { data: existing } = await db
+        .from('unsubscribes')
+        .select('email')
+        .eq('email', parsed.email)
+        .maybeSingle()
+      if (existing) return removedPage(token)
+    }
+
     // מסך אישור — ההסרה מתבצעת רק בלחיצה על הכפתור
     return confirmPage(token, parsed.email)
   }
