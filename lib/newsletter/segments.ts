@@ -30,6 +30,12 @@ export interface SegmentDef {
   hadMaternity?: boolean
   // רשימה חיצונית
   contactListId?: string
+
+  // ── עריכה ידנית של הרשימה שהתקבלה מהמסננים ──
+  // excluded: כתובות שהוסרו ידנית (סימון ומחיקה מהרשימה)
+  // manual:   כתובות שנוספו ידנית, גם אם אינן עונות על המסננים
+  excluded?: string[]
+  manual?: { email: string; name?: string }[]
 }
 
 export interface Recipient {
@@ -62,10 +68,17 @@ function ageOf(birthDate?: string | null): number | null {
  * מממש סגמנט לרשימת נמענים.
  * מסנן אוטומטית: כתובות חסרות/לא תקינות, כפילויות, ומי שהוסר מרשימת התפוצה.
  */
+export interface SegmentStats {
+  total: number
+  noEmail: number
+  suppressed: number
+  excluded: number
+}
+
 export async function resolveSegment(
   db: SupabaseClient,
   def: SegmentDef,
-): Promise<{ recipients: Recipient[]; stats: { total: number; noEmail: number; suppressed: number } }> {
+): Promise<{ recipients: Recipient[]; stats: SegmentStats }> {
   const suppressed = await suppressionSet(db)
 
   let rows: { email: string; beneficiaryId: string | null; src: MergeSource }[] = []
@@ -149,10 +162,26 @@ export async function resolveSegment(
       .map(b => ({ email: String(b.email).trim(), beneficiaryId: b.id, src: b }))
   }
 
+  // ── תוספות ידניות — נכנסות גם אם אינן עונות על המסננים ──
+  for (const m of def.manual ?? []) {
+    const email = String(m.email ?? '').toLowerCase().trim()
+    if (email.includes('@')) {
+      rows.push({
+        email,
+        beneficiaryId: null,
+        src: { family_name: m.name ?? '', full_name: '' },
+      })
+    }
+  }
+
+  // כתובות שהוסרו ידנית מהרשימה
+  const excluded = new Set((def.excluded ?? []).map(e => e.toLowerCase().trim()))
+
   // דה-דופליקציה + סינון suppression + ולידציית כתובת
   const seen = new Set<string>()
   const recipients: Recipient[] = []
   let suppressedCount = 0
+  let excludedCount = 0
 
   for (const r of rows) {
     const email = r.email.toLowerCase().trim()
@@ -160,7 +189,11 @@ export async function resolveSegment(
     if (seen.has(email)) continue
     seen.add(email)
 
+    // הסרה מרשימת תפוצה — לא ניתן לעקוף, גם לא בתוספת ידנית
     if (suppressed.has(email)) { suppressedCount++; continue }
+
+    // הוסר ידנית ע"י המשתמש
+    if (excluded.has(email)) { excludedCount++; continue }
 
     recipients.push({
       email,
@@ -172,6 +205,11 @@ export async function resolveSegment(
 
   return {
     recipients,
-    stats: { total: recipients.length, noEmail, suppressed: suppressedCount },
+    stats: {
+      total: recipients.length,
+      noEmail,
+      suppressed: suppressedCount,
+      excluded: excludedCount,
+    },
   }
 }

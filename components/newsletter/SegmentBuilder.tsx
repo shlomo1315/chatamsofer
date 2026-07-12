@@ -1,14 +1,37 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Users, Loader2, MailX, Ban, Filter } from 'lucide-react'
+import { Users, Loader2, MailX, Ban, Filter, Trash2, Plus, UserMinus, RotateCcw } from 'lucide-react'
 import type { SegmentDef, SegmentSource } from '@/lib/newsletter/segments'
 
-interface PreviewStats {
+// ─────────────────────────────────────────────────────────────────────────────
+// בונה הקהל.
+//
+// הסדר: קודם בוחרים מקור ומסננים, ורק אז מופיעה הרשימה המלאה —
+// שאותה אפשר לערוך: להסיר נמענים שלא רוצים, ולהוסיף כתובות ידנית.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RecipientRow {
+  email: string
+  name: string
+  city: string
+  isManual: boolean
+}
+
+interface PreviewResult {
   total: number
   noEmail: number
   suppressed: number
-  sample: { email: string; name: string; city: string }[]
+  excluded: number
+  truncated: boolean
+  recipients: RecipientRow[]
+}
+
+interface FilterOptions {
+  cities: string[]
+  communities: string[]
+  maritalStatuses: string[]
+  eligibilityStatuses: string[]
 }
 
 const SOURCES: { value: SegmentSource; label: string }[] = [
@@ -17,105 +40,16 @@ const SOURCES: { value: SegmentSource; label: string }[] = [
   { value: 'recovery_homes', label: 'בתי החלמה' },
 ]
 
-const ELIGIBILITY: { value: string; label: string }[] = [
-  { value: 'pending', label: 'ממתין' },
-  { value: 'approved', label: 'מאושר' },
-  { value: 'rejected', label: 'נדחה' },
-  { value: 'review', label: 'בבדיקה' },
-  { value: 'docs_pending', label: 'ממתין למסמכים' },
-]
-
-const MARITAL: string[] = ['נשוי/אה', 'אלמן/ה', 'גרוש/ה', 'רווק/ה']
+// תוויות לסטטוסי הזכאות — רק אלה שקיימים בפועל ב-DB יוצגו
+const ELIGIBILITY_LABELS: Record<string, string> = {
+  pending: 'ממתין',
+  approved: 'מאושר',
+  rejected: 'נדחה',
+  review: 'בבדיקה',
+  docs_pending: 'ממתין למסמכים',
+}
 
 const CARD = 'rounded-2xl border border-slate-200 bg-white'
-
-/** toggle תלת-מצבי: לא מוגדר / כן / לא */
-function Toggle({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: boolean | undefined
-  onChange: (v: boolean | undefined) => void
-}) {
-  const on = value === true
-  return (
-    <div className="flex items-center justify-between gap-3 py-1">
-      <span className="text-sm text-slate-700">{label}</span>
-      <div className="flex items-center gap-2">
-        {value !== undefined && (
-          <button
-            type="button"
-            onClick={() => onChange(undefined)}
-            className="text-[11px] text-slate-400 hover:text-slate-600"
-          >
-            נקה
-          </button>
-        )}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label={label}
-          onClick={() => onChange(on ? false : true)}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-            on ? 'bg-indigo-600' : value === false ? 'bg-rose-400' : 'bg-slate-200'
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-              on ? 'right-0.5' : 'right-[22px]'
-            }`}
-          />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function CheckPills({
-  options,
-  selected,
-  onToggle,
-}: {
-  options: { value: string; label: string }[]
-  selected: string[]
-  onToggle: (v: string) => void
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map(o => {
-        const active = selected.includes(o.value)
-        return (
-          <label
-            key={o.value}
-            className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
-              active
-                ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={active}
-              onChange={() => onToggle(o.value)}
-            />
-            {o.label}
-          </label>
-        )
-      })}
-    </div>
-  )
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mb-1.5 text-xs font-bold text-slate-500">{children}</div>
-}
-
-const numInput =
-  'w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100'
 
 export default function SegmentBuilder({
   value,
@@ -124,308 +58,459 @@ export default function SegmentBuilder({
   value: SegmentDef
   onChange: (v: SegmentDef) => void
 }) {
-  const [cities, setCities] = useState<string[]>([])
-  const [communities, setCommunities] = useState<string[]>([])
-  const [stats, setStats] = useState<PreviewStats | null>(null)
+  const def = value ?? { source: 'beneficiaries' as SegmentSource }
+
+  const [options, setOptions] = useState<FilterOptions>({
+    cities: [], communities: [], maritalStatuses: [], eligibilityStatuses: [],
+  })
+  const [result, setResult] = useState<PreviewResult | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [manualEmail, setManualEmail] = useState('')
+  const [manualName, setManualName] = useState('')
+  const reqId = useRef(0)
 
-  const set = useCallback(
-    <K extends keyof SegmentDef>(key: K, v: SegmentDef[K]) => {
-      const next = { ...value, [key]: v }
-      if (v === undefined || (Array.isArray(v) && v.length === 0)) delete next[key]
-      onChange(next)
-    },
-    [value, onChange],
-  )
+  const patch = useCallback((p: Partial<SegmentDef>) => {
+    onChange({ ...def, ...p })
+  }, [def, onChange])
 
-  const toggleIn = useCallback(
-    (key: 'eligibilityStatus' | 'city' | 'maritalStatus', v: string) => {
-      const cur = value[key] ?? []
-      const next = cur.includes(v) ? cur.filter(x => x !== v) : [...cur, v]
-      set(key, next.length ? next : undefined)
-    },
-    [value, set],
-  )
-
-  // ── ערכי המסננים הקיימים בפועל ──
+  // ערכי המסננים — נגזרים מהנתונים האמיתיים, לא מרשימה קבועה בקוד
   useEffect(() => {
-    let alive = true
     fetch('/api/admin/segments/preview')
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
-      .then((d: { cities?: string[]; communities?: string[] }) => {
-        if (!alive) return
-        setCities(d.cities ?? [])
-        setCommunities(d.communities ?? [])
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
+      .then(r => r.json())
+      .then(d => setOptions({
+        cities: d.cities ?? [],
+        communities: d.communities ?? [],
+        maritalStatuses: d.maritalStatuses ?? [],
+        eligibilityStatuses: d.eligibilityStatuses ?? [],
+      }))
+      .catch(() => { /* ignore */ })
   }, [])
 
-  // ── מונה חי (debounce 400ms) ──
-  const reqId = useRef(0)
+  // טעינת הרשימה — עם debounce, ותשובות ישנות נזרקות
   useEffect(() => {
     const id = ++reqId.current
     setLoading(true)
-    const t = setTimeout(() => {
-      fetch('/api/admin/segments/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(value),
-      })
-        .then(r => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
-        .then((d: PreviewStats) => {
-          if (id !== reqId.current) return
-          setStats(d)
-          setError(null)
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/admin/segments/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(def),
         })
-        .catch(() => {
-          if (id !== reqId.current) return
-          setError('שגיאה בחישוב הקהל')
-        })
-        .finally(() => {
-          if (id === reqId.current) setLoading(false)
-        })
+        const d = await res.json()
+        if (id === reqId.current) setResult(d)
+      } catch { /* ignore */ }
+      finally { if (id === reqId.current) setLoading(false) }
     }, 400)
     return () => clearTimeout(t)
-  }, [value])
+  }, [JSON.stringify(def)]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isBen = value.source === 'beneficiaries'
+  const isBen = def.source === 'beneficiaries'
+  const recipients = result?.recipients ?? []
+
+  // ── פעולות על הרשימה ──
+  function toggleCheck(email: string) {
+    setChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(email)) next.delete(email)
+      else next.add(email)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setChecked(prev =>
+      prev.size === recipients.length ? new Set() : new Set(recipients.map(r => r.email)),
+    )
+  }
+
+  function removeChecked() {
+    if (!checked.size) return
+    const excluded = new Set(def.excluded ?? [])
+    const manual = (def.manual ?? []).filter(m => !checked.has(m.email.toLowerCase()))
+    for (const email of checked) excluded.add(email)
+    patch({ excluded: [...excluded], manual })
+    setChecked(new Set())
+  }
+
+  function removeOne(email: string) {
+    const excluded = new Set(def.excluded ?? [])
+    excluded.add(email)
+    patch({
+      excluded: [...excluded],
+      manual: (def.manual ?? []).filter(m => m.email.toLowerCase() !== email),
+    })
+  }
+
+  function restoreExcluded() {
+    patch({ excluded: [] })
+  }
+
+  function addManual() {
+    const email = manualEmail.trim().toLowerCase()
+    if (!email.includes('@')) return
+    const manual = [...(def.manual ?? [])]
+    if (!manual.some(m => m.email.toLowerCase() === email)) {
+      manual.push({ email, name: manualName.trim() || undefined })
+    }
+    // אם הכתובת הוסרה קודם — מחזירים אותה
+    patch({
+      manual,
+      excluded: (def.excluded ?? []).filter(e => e !== email),
+    })
+    setManualEmail('')
+    setManualName('')
+  }
 
   return (
-    <div dir="rtl" className="space-y-4">
-      {/* ── מונה הקהל ── */}
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-l from-white to-indigo-50/60 p-5">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#1B3256] text-white">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />}
-          </span>
-          <div>
-            <div className="text-2xl font-black text-[#1B3256]">
-              {error ? '—' : `${(stats?.total ?? 0).toLocaleString('he-IL')} נמענים`}
+    <div className="flex flex-col gap-4">
+      {/* ── 1. מקור הקהל ── */}
+      <div className={`${CARD} p-5`}>
+        <label className="mb-2.5 block text-sm font-semibold text-slate-700">מקור הקהל</label>
+        <div className="flex gap-2">
+          {SOURCES.map(s => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => onChange({ source: s.value })}
+              className={`rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
+                def.source === s.value
+                  ? 'border-slate-800 bg-slate-800 text-white'
+                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── 2. מסננים ── */}
+      {isBen && (
+        <div className={`${CARD} p-5`}>
+          <div className="mb-4 flex items-center gap-1.5">
+            <Filter size={15} className="text-slate-400" />
+            <h3 className="text-sm font-semibold text-slate-700">מסננים</h3>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
+            {/* סטטוס זכאות */}
+            {options.eligibilityStatuses.length > 0 && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-500">סטטוס זכאות</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {options.eligibilityStatuses.map(s => (
+                    <Pill
+                      key={s}
+                      label={ELIGIBILITY_LABELS[s] ?? s}
+                      active={(def.eligibilityStatus ?? []).includes(s)}
+                      onClick={() => {
+                        const cur = def.eligibilityStatus ?? []
+                        patch({
+                          eligibilityStatus: cur.includes(s)
+                            ? cur.filter(x => x !== s)
+                            : [...cur, s],
+                        })
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* מצב משפחתי — רק הערכים שקיימים בפועל */}
+            {options.maritalStatuses.length > 0 && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-500">מצב משפחתי</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {options.maritalStatuses.map(s => (
+                    <Pill
+                      key={s}
+                      label={s}
+                      active={(def.maritalStatus ?? []).includes(s)}
+                      onClick={() => {
+                        const cur = def.maritalStatus ?? []
+                        patch({
+                          maritalStatus: cur.includes(s)
+                            ? cur.filter(x => x !== s)
+                            : [...cur, s],
+                        })
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* עיר */}
+            {options.cities.length > 0 && (
+              <div>
+                <label className="mb-2 block text-xs font-semibold text-slate-500">
+                  עיר {(def.city?.length ?? 0) > 0 && (
+                    <span className="text-indigo-600">({def.city!.length} נבחרו)</span>
+                  )}
+                </label>
+                <div className="max-h-36 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                  {options.cities.map(city => (
+                    <label key={city} className="flex cursor-pointer items-center gap-2 px-1.5 py-1 hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        checked={(def.city ?? []).includes(city)}
+                        onChange={() => {
+                          const cur = def.city ?? []
+                          patch({ city: cur.includes(city) ? cur.filter(c => c !== city) : [...cur, city] })
+                        }}
+                        className="h-3.5 w-3.5 accent-indigo-600"
+                      />
+                      <span className="text-sm text-slate-700">{city}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* שיוך קהילתי */}
+            <div>
+              <label className="mb-2 block text-xs font-semibold text-slate-500">שיוך קהילתי</label>
+              <input
+                list="communities"
+                value={def.communityAffiliation ?? ''}
+                onChange={e => patch({ communityAffiliation: e.target.value || undefined })}
+                placeholder="חיפוש חופשי…"
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
+                           focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+              <datalist id="communities">
+                {options.communities.map(c => <option key={c} value={c} />)}
+              </datalist>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <NumInput label="מינימום ילדים" value={def.minChildren}
+                          onChange={v => patch({ minChildren: v })} />
+                <NumInput label="מקסימום ילדים" value={def.maxChildren}
+                          onChange={v => patch({ maxChildren: v })} />
+                <NumInput label="יש ילד מגיל" value={def.childAgeFrom}
+                          onChange={v => patch({ childAgeFrom: v })} />
+                <NumInput label="עד גיל" value={def.childAgeTo}
+                          onChange={v => patch({ childAgeTo: v })} />
+              </div>
             </div>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-              {error ? (
-                <span className="text-rose-600">{error}</span>
-              ) : (
-                <>
-                  <span className="inline-flex items-center gap-1">
-                    <MailX className="h-3 w-3" />
-                    {(stats?.noEmail ?? 0).toLocaleString('he-IL')} ללא כתובת מייל
-                  </span>
-                  <span className="text-slate-300">·</span>
-                  <span className="inline-flex items-center gap-1">
-                    <Ban className="h-3 w-3" />
-                    {(stats?.suppressed ?? 0).toLocaleString('he-IL')} הוסרו מרשימת התפוצה
-                  </span>
-                </>
-              )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4">
+            <Check label="פעיל בלבד" value={def.isActive}
+                   onChange={v => patch({ isActive: v })} />
+            <Check label="יש הלוואה פעילה" value={def.hasLoan}
+                   onChange={v => patch({ hasLoan: v })} />
+            <Check label="קיבל עזר יולדות" value={def.hadMaternity}
+                   onChange={v => patch({ hadMaternity: v })} />
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. הרשימה — אחרי המסננים ── */}
+      <div className={CARD}>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 text-white">
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <Users size={18} />}
             </div>
+            <div>
+              <div className="text-2xl font-black text-slate-800">
+                {(result?.total ?? 0).toLocaleString('he-IL')} נמענים
+              </div>
+              <div className="flex flex-wrap gap-x-3 text-xs text-slate-400">
+                {(result?.noEmail ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <MailX size={11} /> {result!.noEmail} ללא מייל
+                  </span>
+                )}
+                {(result?.suppressed ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Ban size={11} /> {result!.suppressed} הוסרו מרשימת התפוצה
+                  </span>
+                )}
+                {(result?.excluded ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-1 text-amber-600">
+                    <UserMinus size={11} /> {result!.excluded} הסרת ידנית
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            {(result?.excluded ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={restoreExcluded}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2
+                           text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                <RotateCcw size={13} /> החזר את שהוסרו
+              </button>
+            )}
+            {checked.size > 0 && (
+              <button
+                type="button"
+                onClick={removeChecked}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2
+                           text-xs font-bold text-white transition hover:bg-rose-700"
+              >
+                <Trash2 size={13} /> הסרת {checked.size} מסומנים
+              </button>
+            )}
           </div>
         </div>
 
-        {!!stats?.sample?.length && (
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="px-3 py-1.5 font-bold">שם</th>
-                  <th className="px-3 py-1.5 font-bold">מייל</th>
+        {/* הוספה ידנית */}
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50 p-3">
+          <input
+            value={manualEmail}
+            onChange={e => setManualEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addManual()}
+            placeholder="הוספת כתובת ידנית…"
+            className="min-w-48 flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm
+                       focus:border-indigo-400 focus:outline-none"
+          />
+          <input
+            value={manualName}
+            onChange={e => setManualName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addManual()}
+            placeholder="שם (אופציונלי)"
+            className="w-40 rounded-lg border border-slate-300 px-3 py-1.5 text-sm
+                       focus:border-indigo-400 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={addManual}
+            disabled={!manualEmail.includes('@')}
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3.5 py-1.5
+                       text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-40"
+          >
+            <Plus size={14} /> הוספה
+          </button>
+        </div>
+
+        {/* הטבלה */}
+        {!recipients.length ? (
+          <p className="p-10 text-center text-sm text-slate-400">
+            {loading ? 'טוען…' : 'אין נמענים — שנה את המסננים או הוסף כתובת ידנית'}
+          </p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-slate-50">
+                <tr className="text-right text-xs text-slate-500">
+                  <th className="w-10 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={checked.size > 0 && checked.size === recipients.length}
+                      onChange={toggleAll}
+                      className="h-3.5 w-3.5 accent-indigo-600"
+                    />
+                  </th>
+                  <th className="px-3 py-2.5 font-semibold">שם</th>
+                  <th className="px-3 py-2.5 font-semibold">מייל</th>
+                  <th className="px-3 py-2.5 font-semibold">עיר</th>
+                  <th className="w-10" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {stats.sample.map(s => (
-                  <tr key={s.email}>
-                    <td className="px-3 py-1.5 text-slate-700">{s.name}</td>
-                    <td className="px-3 py-1.5 font-mono text-[11px] text-slate-500" dir="ltr">
-                      {s.email}
+                {recipients.map(r => (
+                  <tr key={r.email} className={checked.has(r.email) ? 'bg-rose-50' : 'hover:bg-slate-50'}>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={checked.has(r.email)}
+                        onChange={() => toggleCheck(r.email)}
+                        className="h-3.5 w-3.5 accent-indigo-600"
+                      />
+                    </td>
+                    <td className="px-3 py-2 font-medium text-slate-800">
+                      {r.name || '—'}
+                      {r.isManual && (
+                        <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                          ידני
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-500">{r.email}</td>
+                    <td className="px-3 py-2 text-slate-500">{r.city || '—'}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => removeOne(r.email)}
+                        title="הסרה מהרשימה"
+                        className="text-slate-300 transition hover:text-rose-600"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-1.5 text-[11px] text-slate-400">
-              10 הנמענים הראשונים
-            </div>
           </div>
         )}
+
+        {result?.truncated && (
+          <p className="border-t border-slate-100 bg-amber-50 px-4 py-2 text-xs text-amber-700">
+            מוצגים 5,000 הנמענים הראשונים. השליחה תכלול את כולם.
+          </p>
+        )}
       </div>
-
-      {/* ── מקור ── */}
-      <div className={`${CARD} p-4`}>
-        <FieldLabel>מקור הקהל</FieldLabel>
-        <div className="flex flex-wrap gap-2">
-          {SOURCES.map(s => {
-            const active = value.source === s.value
-            return (
-              <label
-                key={s.value}
-                className={`cursor-pointer rounded-xl border px-3.5 py-2 text-sm font-semibold transition-colors ${
-                  active
-                    ? 'border-[#1B3256] bg-[#1B3256] text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="segment-source"
-                  className="sr-only"
-                  checked={active}
-                  onChange={() => onChange({ source: s.value })}
-                />
-                {s.label}
-              </label>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── מסננים (מוטבים בלבד) ── */}
-      {isBen && (
-        <div className={`${CARD} p-4`}>
-          <div className="mb-3 flex items-center gap-1.5 text-sm font-bold text-[#1B3256]">
-            <Filter className="h-4 w-4 text-[#C69D2D]" />
-            מסננים
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <FieldLabel>סטטוס זכאות</FieldLabel>
-              <CheckPills
-                options={ELIGIBILITY}
-                selected={value.eligibilityStatus ?? []}
-                onToggle={v => toggleIn('eligibilityStatus', v)}
-              />
-            </div>
-
-            <div>
-              <FieldLabel>מצב משפחתי</FieldLabel>
-              <CheckPills
-                options={MARITAL.map(m => ({ value: m, label: m }))}
-                selected={value.maritalStatus ?? []}
-                onToggle={v => toggleIn('maritalStatus', v)}
-              />
-            </div>
-
-            <div>
-              <FieldLabel>עיר</FieldLabel>
-              <select
-                multiple
-                size={5}
-                value={value.city ?? []}
-                onChange={e =>
-                  set(
-                    'city',
-                    Array.from(e.target.selectedOptions, o => o.value).length
-                      ? Array.from(e.target.selectedOptions, o => o.value)
-                      : undefined,
-                  )
-                }
-                className="w-full rounded-lg border border-slate-200 p-1.5 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-              >
-                {cities.map(c => (
-                  <option key={c} value={c} className="rounded px-1 py-0.5">
-                    {c}
-                  </option>
-                ))}
-              </select>
-              {!!value.city?.length && (
-                <button
-                  type="button"
-                  onClick={() => set('city', undefined)}
-                  className="mt-1 text-[11px] text-slate-400 hover:text-slate-600"
-                >
-                  נקה בחירה ({value.city.length})
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <FieldLabel>שיוך קהילתי</FieldLabel>
-                <input
-                  type="text"
-                  list="segment-communities"
-                  value={value.communityAffiliation ?? ''}
-                  onChange={e => set('communityAffiliation', e.target.value || undefined)}
-                  placeholder="חיפוש חופשי…"
-                  className={numInput}
-                />
-                <datalist id="segment-communities">
-                  {communities.map(c => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <FieldLabel>מינימום ילדים</FieldLabel>
-                  <input
-                    type="number"
-                    min={0}
-                    value={value.minChildren ?? ''}
-                    onChange={e =>
-                      set('minChildren', e.target.value === '' ? undefined : Number(e.target.value))
-                    }
-                    className={numInput}
-                  />
-                </div>
-                <div>
-                  <FieldLabel>מקסימום ילדים</FieldLabel>
-                  <input
-                    type="number"
-                    min={0}
-                    value={value.maxChildren ?? ''}
-                    onChange={e =>
-                      set('maxChildren', e.target.value === '' ? undefined : Number(e.target.value))
-                    }
-                    className={numInput}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel>יש ילד בגיל</FieldLabel>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="מגיל"
-                    value={value.childAgeFrom ?? ''}
-                    onChange={e =>
-                      set('childAgeFrom', e.target.value === '' ? undefined : Number(e.target.value))
-                    }
-                    className={numInput}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    placeholder="עד גיל"
-                    value={value.childAgeTo ?? ''}
-                    onChange={e =>
-                      set('childAgeTo', e.target.value === '' ? undefined : Number(e.target.value))
-                    }
-                    className={numInput}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-x-6 border-t border-slate-100 pt-3 md:grid-cols-2">
-            <Toggle label="פעיל" value={value.isActive} onChange={v => set('isActive', v)} />
-            <Toggle label="יש הלוואה פעילה" value={value.hasLoan} onChange={v => set('hasLoan', v)} />
-            <Toggle
-              label="קיבל עזר יולדות"
-              value={value.hadMaternity}
-              onChange={v => set('hadMaternity', v)}
-            />
-          </div>
-        </div>
-      )}
     </div>
+  )
+}
+
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+        active
+          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+function NumInput({ label, value, onChange }: {
+  label: string; value?: number; onChange: (v: number | undefined) => void
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] text-slate-400">{label}</label>
+      <input
+        type="number"
+        min={0}
+        value={value ?? ''}
+        onChange={e => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+        className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm
+                   focus:border-indigo-400 focus:outline-none"
+      />
+    </div>
+  )
+}
+
+function Check({ label, value, onChange }: {
+  label: string; value?: boolean; onChange: (v: boolean | undefined) => void
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2">
+      <input
+        type="checkbox"
+        checked={value === true}
+        onChange={e => onChange(e.target.checked ? true : undefined)}
+        className="h-4 w-4 accent-indigo-600"
+      />
+      <span className="text-sm text-slate-700">{label}</span>
+    </label>
   )
 }

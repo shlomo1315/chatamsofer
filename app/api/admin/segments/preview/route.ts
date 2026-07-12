@@ -18,20 +18,29 @@ export async function POST(request: NextRequest) {
 
   const { recipients, stats } = await resolveSegment(db, def)
 
+  // הרשימה המלאה — המשתמש רואה בדיוק למי הוא שולח, ויכול להסיר מי שלא רוצה.
+  // תקרה של 5,000 כדי שהדפדפן לא ייחנק; מעבר לזה הרשימה גדולה מדי לעריכה ידנית.
+  const MAX_LIST = 5000
+  const manualEmails = new Set((def.manual ?? []).map(m => m.email.toLowerCase().trim()))
+
   return NextResponse.json({
     total: stats.total,
     noEmail: stats.noEmail,
     suppressed: stats.suppressed,
-    // 10 הראשונים — כדי שהמשתמש יראה למי בדיוק הוא שולח
-    sample: recipients.slice(0, 10).map(r => ({
+    excluded: stats.excluded,
+    truncated: recipients.length > MAX_LIST,
+    recipients: recipients.slice(0, MAX_LIST).map(r => ({
       email: r.email,
-      name: r.mergeData['שם_מלא'] || r.email,
+      name: r.mergeData['שם_מלא'] || '',
       city: r.mergeData['עיר'] ?? '',
+      isManual: manualEmails.has(r.email),
     })),
   })
 }
 
-// GET — ערכי המסננים הקיימים בפועל (ערים, שיוכים קהילתיים)
+// GET — ערכי המסננים הקיימים בפועל.
+// כל הערכים נגזרים מהנתונים האמיתיים ב-DB (select distinct), ולא מרשימה
+// מקודדת בקוד — כדי שלא יוצגו אפשרויות שאין להן אף רשומה.
 export async function GET() {
   const ctx = await requirePermission('newsletter', 'view')
   if (ctx instanceof NextResponse) return ctx
@@ -41,18 +50,29 @@ export async function GET() {
 
   const { data } = await db
     .from('beneficiaries')
-    .select('city, community_affiliation')
+    .select('city, community_affiliation, marital_status, eligibility_status')
 
   const cities = new Set<string>()
   const communities = new Set<string>()
+  const maritalStatuses = new Set<string>()
+  const eligibilityStatuses = new Set<string>()
 
-  for (const r of (data ?? []) as { city?: string | null; community_affiliation?: string | null }[]) {
+  for (const r of (data ?? []) as {
+    city?: string | null
+    community_affiliation?: string | null
+    marital_status?: string | null
+    eligibility_status?: string | null
+  }[]) {
     if (r.city?.trim()) cities.add(r.city.trim())
     if (r.community_affiliation?.trim()) communities.add(r.community_affiliation.trim())
+    if (r.marital_status?.trim()) maritalStatuses.add(r.marital_status.trim())
+    if (r.eligibility_status?.trim()) eligibilityStatuses.add(r.eligibility_status.trim())
   }
 
   return NextResponse.json({
     cities: [...cities].sort((a, b) => a.localeCompare(b, 'he')),
     communities: [...communities].sort((a, b) => a.localeCompare(b, 'he')),
+    maritalStatuses: [...maritalStatuses].sort((a, b) => a.localeCompare(b, 'he')),
+    eligibilityStatuses: [...eligibilityStatuses],
   })
 }
