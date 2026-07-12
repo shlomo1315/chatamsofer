@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Users, Loader2, MailX, Ban, Filter, Trash2, Plus, UserMinus, RotateCcw, Download, Upload, X } from 'lucide-react'
+import { Users, Loader2, MailX, Ban, Filter, Trash2, Plus, UserMinus, RotateCcw, Download, Upload, X, Save } from 'lucide-react'
 import type { SegmentDef, SegmentSource } from '@/lib/newsletter/segments'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,6 +93,11 @@ export default function SegmentBuilder({
   // ── קבוצות שמורות — כל אחת מוצגת כקובייה משלה בשורת המקורות ──
   const [lists, setLists] = useState<ContactList[]>([])
   const [showNewGroup, setShowNewGroup] = useState(false)
+
+  // שמירת הרשימה הנוכחית (אחרי מסננים ועריכה ידנית) כקבוצה קבועה
+  const [saveGroup, setSaveGroup] = useState(false)
+  const [groupName, setGroupName] = useState('')
+  const [savingGroup, setSavingGroup] = useState(false)
 
   const loadLists = useCallback(() =>
     fetch('/api/admin/newsletter/contacts')
@@ -193,6 +198,37 @@ export default function SegmentBuilder({
 
   function restoreExcluded() {
     patch({ excluded: [] })
+  }
+
+  /**
+   * שומר את הרשימה שמוצגת כרגע כקבוצה קבועה.
+   * הנמענים נשמרים כפי שהם — אחרי המסננים, ההסרות הידניות והתוספות.
+   */
+  async function saveAsGroup() {
+    const name = groupName.trim()
+    if (!name || !recipients.length) return
+
+    setSavingGroup(true)
+    try {
+      const res = await fetch('/api/admin/newsletter/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          recipients: recipients.map(r => ({ email: r.email, name: r.name, city: r.city })),
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'השמירה נכשלה')
+
+      await loadLists()
+      setSaveGroup(false)
+      setGroupName('')
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'שגיאה בשמירת הקבוצה')
+    } finally {
+      setSavingGroup(false)
+    }
   }
 
   function addManual() {
@@ -497,6 +533,17 @@ export default function SegmentBuilder({
           </div>
 
           <div className="flex gap-2">
+            {/* שמירת הרשימה הנוכחית (אחרי המסננים והעריכה) כקבוצה קבועה */}
+            {recipients.length > 0 && def.source !== 'contact_list' && (
+              <button
+                type="button"
+                onClick={() => setSaveGroup(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50
+                           px-3.5 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+              >
+                <Save size={13} /> שמור כקבוצה
+              </button>
+            )}
             {(result?.excluded ?? 0) > 0 && (
               <button
                 type="button"
@@ -519,6 +566,47 @@ export default function SegmentBuilder({
             )}
           </div>
         </div>
+
+        {/* שמירה כקבוצה — שם + אישור */}
+        {saveGroup && (
+          <div className="border-b border-indigo-100 bg-indigo-50/60 p-4">
+            <label className="mb-1.5 block text-xs font-bold text-indigo-800">
+              שמירת {recipients.length.toLocaleString('he-IL')} הנמענים האלה כקבוצה
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <input
+                autoFocus
+                value={groupName}
+                onChange={e => setGroupName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveAsGroup()}
+                placeholder="שם הקבוצה — לדוגמה: ירושלים"
+                className="min-w-48 flex-1 rounded-lg border border-indigo-200 px-3 py-2 text-sm
+                           focus:border-indigo-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={saveAsGroup}
+                disabled={!groupName.trim() || savingGroup}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm
+                           font-bold text-white transition hover:bg-indigo-700 disabled:opacity-40"
+              >
+                {savingGroup ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                שמירה
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSaveGroup(false); setGroupName('') }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm
+                           font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                ביטול
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-indigo-600">
+              הקבוצה תישמר עם הנמענים המדויקים שמוצגים כאן — כולל השינויים שעשיתם.
+            </p>
+          </div>
+        )}
 
         {/* הוספה ידנית */}
         <div className="flex flex-wrap gap-2 border-b border-slate-100 bg-slate-50 p-3">
