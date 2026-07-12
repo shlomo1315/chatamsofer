@@ -38,8 +38,9 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
   return (
     <div className="flex flex-col gap-4">
       {/* שורה אחת תמיד — גלילה אופקית כשצר, בלי לחתוך את הכפתורים.
-          py-1 + -my-1 נותנים מרווח ל-ring/shadow בלי להזיז את הפריסה. */}
-      <div className="-my-1 flex gap-2 overflow-x-auto py-1
+          py-1/-my-1 נותנים מקום ל-ring; ה-spacer בסוף מונע חיתוך של
+          הכפתור האחרון בקצה אזור הגלילה. */}
+      <div className="-mx-1 -my-1 flex gap-2 overflow-x-auto px-1 py-1
                       [-ms-overflow-style:none] [scrollbar-width:none]
                       [&::-webkit-scrollbar]:hidden">
         {tabs.map(t => {
@@ -52,6 +53,8 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
             </button>
           )
         })}
+        {/* מרווח בקצה — בלעדיו הכפתור האחרון נחתך בגבול אזור הגלילה */}
+        <div className="w-1 flex-shrink-0" aria-hidden />
       </div>
       <div>{current?.content}</div>
     </div>
