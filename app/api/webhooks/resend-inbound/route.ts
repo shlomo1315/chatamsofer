@@ -639,6 +639,24 @@ export async function POST(request: NextRequest) {
     // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
     const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
 
+    // ── מענה למכתב ברכה / משוב בית החלמה (plus-addressing: office+g<token> / office+s<token>) ──
+    // נבדק לפני זיהוי הבקשות, כי אלו מסלולים ייעודיים עם טוקן חתום.
+    try {
+      const { isGratitudeOrFeedbackReply } = await import('@/lib/inboundGratitude')
+      if (isGratitudeOrFeedbackReply(candidates)) {
+        const { handleGratitudeReply, handleFeedbackReply } = await import('@/lib/inboundGratitude')
+        const gctx = { recipients: candidates, body: bodyText, attachments }
+        if (await handleGratitudeReply(admin, gctx)) {
+          return NextResponse.json({ ok: true, routed: 'gratitude' })
+        }
+        if (await handleFeedbackReply(admin, gctx)) {
+          return NextResponse.json({ ok: true, routed: 'feedback' })
+        }
+      }
+    } catch (e) {
+      console.error('[resend-inbound] gratitude/feedback routing failed:', e)
+    }
+
     // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
     // (מגן על המקרה שבו הנושא הגיע פגום/מקודד/שונה, אך הגוף הוא טופס בקשה תקין
     //  עם שורת "(מזהה: XXXXXXXXX)" ומרקרים של השדות.)

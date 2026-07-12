@@ -10,17 +10,23 @@ const DEFAULT_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
 type HomeObj = { name: string; availability: string; report_email: string | null }
 
-async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeObjs: HomeObj[] }> {
+// ציון משוב ממוצע לכל בית החלמה (מהמיילים שנשלחו ליולדות אחרי השהות)
+export type HomeRating = { avg: number; count: number }
+
+async function getData(): Promise<{
+  aids: MaternityAid[]; homes: string[]; homeObjs: HomeObj[]; ratings: Record<string, HomeRating>
+}> {
   const defaultObjs: HomeObj[] = DEFAULT_HOMES.map(name => ({ name, availability: 'regular', report_email: null }))
-  if (!isSupabaseConfigured()) return { aids: [], homes: DEFAULT_HOMES, homeObjs: defaultObjs }
+  if (!isSupabaseConfigured()) return { aids: [], homes: DEFAULT_HOMES, homeObjs: defaultObjs, ratings: {} }
   const supabase = await createClient()
-  const [aidsRes, homesRes] = await Promise.all([
+  const [aidsRes, homesRes, ratingsRes] = await Promise.all([
     supabase
       .from('maternity_aids')
       .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count)')
       .eq('status', 'active')
       .order('created_at', { ascending: false }),
     supabase.from('recovery_homes').select('*'),
+    supabase.from('survey_responses').select('recovery_home, answers'),
   ])
   if (aidsRes.error) throw aidsRes.error
   // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
@@ -31,11 +37,32 @@ async function getData(): Promise<{ aids: MaternityAid[]; homes: string[]; homeO
     if (r.name) map.set(r.name, { availability: r.availability ?? 'regular', report_email: r.report_email ?? null })
   }
   const homeObjs: HomeObj[] = [...map.entries()].map(([name, v]) => ({ name, availability: v.availability, report_email: v.report_email }))
-  return { aids: aidsRes.data ?? [], homes: homeObjs.map(h => h.name), homeObjs }
+
+  // חישוב הציון הממוצע — ממוצע כל הציונים בכל התשובות של אותו בית החלמה.
+  // טבלת survey_responses עשויה שלא להתקיים עדיין (מיגרציה שטרם הורצה) — מתעלמים.
+  const ratings: Record<string, HomeRating> = {}
+  if (!ratingsRes.error) {
+    const acc: Record<string, { sum: number; n: number; responses: number }> = {}
+    for (const r of (ratingsRes.data ?? []) as { recovery_home?: string | null; answers?: Record<string, number> | null }[]) {
+      const home = r.recovery_home
+      if (!home) continue
+      const scores = Object.values(r.answers ?? {}).filter(v => typeof v === 'number')
+      if (!scores.length) continue
+      acc[home] ??= { sum: 0, n: 0, responses: 0 }
+      acc[home].sum += scores.reduce((a, b) => a + b, 0)
+      acc[home].n += scores.length
+      acc[home].responses += 1
+    }
+    for (const [home, v] of Object.entries(acc)) {
+      ratings[home] = { avg: Math.round((v.sum / v.n) * 10) / 10, count: v.responses }
+    }
+  }
+
+  return { aids: aidsRes.data ?? [], homes: homeObjs.map(h => h.name), homeObjs, ratings }
 }
 
 export default async function RecoveryPage() {
-  const { aids, homes, homeObjs } = await getData()
+  const { aids, homes, homeObjs, ratings } = await getData()
 
   // אירועים לחלונית ההתראה: מימוש זכאות / בקשת תיקון
   const events: RecoveryEvent[] = aids.flatMap((a) => {
@@ -70,7 +97,7 @@ export default async function RecoveryPage() {
           <p className="text-slate-400 text-sm">לא נמצאו תיקי יולדות</p>
         </div>
       ) : (
-        <RecoveryHomesView aids={aids} homes={homes} />
+        <RecoveryHomesView aids={aids} homes={homes} ratings={ratings} />
       )}
 
       {/* קישור ישיר + סיסמה לכל בית החלמה — מכווץ, בתחתית הדף */}

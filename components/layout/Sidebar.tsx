@@ -34,9 +34,10 @@ const navTop: NavItem[] = [
 
 // "יולדות" — קטגוריית אם מתקפלת עם שני תתי-אגפים
 const maternityChildren: { href: string; label: string; section: SectionKey }[] = [
-  { href: '/admin/maternity/recovery', label: 'עזר יולדות',        section: 'maternity' },
-  { href: '/admin/maternity/silent',   label: 'לידה שקטה',         section: 'maternity' },
-  { href: '/admin/maternity/cards',    label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
+  { href: '/admin/maternity/recovery',  label: 'עזר יולדות',        section: 'maternity' },
+  { href: '/admin/maternity/silent',    label: 'לידה שקטה',         section: 'maternity' },
+  { href: '/admin/maternity/cards',     label: 'כרטיסי מזון יולדות', section: 'maternity_cards' },
+  { href: '/admin/maternity/gratitude', label: 'מכתבי ברכה',        section: 'maternity' },
 ]
 
 const navBottom: NavItem[] = [

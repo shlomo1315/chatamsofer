@@ -141,6 +141,22 @@ export async function POST(request: NextRequest) {
       try { await loadMaternityCardOnApproval(admin, id) }
       catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
     }
+
+    // 3. אישור לידה (רגילה) → תזמון בקשת מכתב ברכה לנדיב, 10 ימים מהיום.
+    // המועד נדחה אוטומטית אם נופל בשבת/חג. לידה שקטה — לא נשלח.
+    if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
+      try {
+        const { scheduleEmail } = await import('@/lib/scheduledMail')
+        const { addDays } = await import('@/lib/jewishCalendar')
+        await scheduleEmail({
+          kind: 'gratitude_letter',
+          entityTable: 'maternity_aids',
+          entityId: id,
+          toEmail: ben.email,
+          sendAfter: addDays(new Date(), 10),
+        })
+      } catch (e) { console.error('[request-approved] gratitude schedule failed:', e) }
+    }
   })()
 
   return NextResponse.json({ ok: true, promoted })

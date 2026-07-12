@@ -43,5 +43,37 @@ export async function POST(request: NextRequest) {
   }).eq('id', aidId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // תזמון בקשת משוב על בית ההחלמה — 5 ימים אחרי סימון ההגעה.
+  // ביטול הסימון מבטל גם את המייל הממתין (אם טרם נשלח).
+  // ברקע — הפורטל של בית ההחלמה חייב להמשיך לעבוד גם אם התזמון נכשל.
+  void (async () => {
+    try {
+      const { scheduleEmail, cancelScheduledEmail } = await import('@/lib/scheduledMail')
+      const key = { kind: 'recovery_survey' as const, entityTable: 'maternity_aids', entityId: aidId }
+
+      if (arrived === true) {
+        const { addDays } = await import('@/lib/jewishCalendar')
+        const { data: full } = await admin
+          .from('maternity_aids')
+          .select('beneficiary:beneficiaries(email)')
+          .eq('id', aidId)
+          .maybeSingle()
+        const ben = (Array.isArray(full?.beneficiary) ? full?.beneficiary[0] : full?.beneficiary) as
+          { email?: string | null } | null
+        await scheduleEmail({
+          ...key,
+          toEmail: ben?.email,
+          sendAfter: addDays(new Date(), 5),
+          payload: { recovery_home: home },
+        })
+      } else {
+        await cancelScheduledEmail(key)
+      }
+    } catch (err) {
+      console.error('[arrived] תזמון משוב נכשל', err)
+    }
+  })()
+
   return NextResponse.json({ ok: true })
 }

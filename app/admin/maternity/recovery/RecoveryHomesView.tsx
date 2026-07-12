@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Home, Clock, CheckCircle2 } from 'lucide-react'
+import { Home, Clock, CheckCircle2, Star } from 'lucide-react'
 import type { MaternityAid } from '@/types'
 import MaternityTable from '../MaternityTable'
 
@@ -14,7 +14,18 @@ function isWithinSixWeeks(aid: MaternityAid): boolean {
   return end >= today
 }
 
-export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[]; homes: string[] }) {
+export type HomeRating = { avg: number; count: number }
+
+// צבע הציון: 8+ מצוין, 6-8 סביר, מתחת ל-6 טעון שיפור
+function ratingColor(avg: number): string {
+  if (avg >= 8) return 'text-emerald-600'
+  if (avg >= 6) return 'text-amber-600'
+  return 'text-rose-600'
+}
+
+export default function RecoveryHomesView({ aids, homes, ratings = {} }: {
+  aids: MaternityAid[]; homes: string[]; ratings?: Record<string, HomeRating>
+}) {
   const [home, setHome] = useState<string>('all')
   const [status, setStatus] = useState<'active' | 'inactive' | 'all'>('active')
   const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('all')
@@ -69,10 +80,21 @@ export default function RecoveryHomesView({ aids, homes }: { aids: MaternityAid[
         </button>
         {allHomes.map(h => {
           const cnt = homeCount(h)
+          const rating = ratings[h]
           return (
             <button key={h} onClick={() => setHome(h)}
               className={`inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-xl border transition-colors ${home === h ? 'bg-pink-100 text-pink-800 border-pink-300' : 'bg-white text-slate-600 border-slate-200 hover:border-pink-200'}`}>
               <Home size={14} /> {h} <span className="opacity-70">{cnt}</span>
+              {rating && (
+                // ציון המשוב מהיולדות ששהו כאן — ממוצע כל הציונים
+                <span
+                  className={`inline-flex items-center gap-0.5 mr-1 pr-2 border-r border-slate-200 font-bold ${ratingColor(rating.avg)}`}
+                  title={`ציון ממוצע מ-${rating.count} תשובות`}
+                >
+                  <Star size={12} className="fill-current" />
+                  {rating.avg}
+                </span>
+              )}
             </button>
           )
         })}
