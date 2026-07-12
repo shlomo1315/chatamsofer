@@ -23,18 +23,25 @@ export interface GratitudeVoucherInput {
   city?: string           // עיר מגורים
 }
 
-/** בונה את שורת החתימה מפרטי המשפחה: "משפחת כהן — משה ושרה, בני ברק" */
+/**
+ * בונה את שורת החתימה מפרטי המשפחה, עם תארים מכובדים:
+ * "משפחת כהן — הרב משה ומרת שרה, בני ברק"
+ */
 function buildSignature(i: GratitudeVoucherInput): string {
   const family = (i.familyName ?? '').trim()
-  const names = [i.husbandName, i.wifeName].map(n => (n ?? '').trim()).filter(Boolean)
+  const husband = (i.husbandName ?? '').trim()
+  const wife = (i.wifeName ?? '').trim()
+  const city = (i.city ?? '').trim()
+
+  const names: string[] = []
+  if (husband) names.push(`הרב ${husband}`)
+  if (wife) names.push(`מרת ${wife}`)
 
   const parts: string[] = []
   if (family) parts.push(`משפחת ${family}`)
   if (names.length) parts.push(names.join(' ו'))
 
   const line = parts.join(' — ')
-  const city = (i.city ?? '').trim()
-
   return city ? (line ? `${line}, ${city}` : city) : line
 }
 
@@ -92,24 +99,25 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
     y -= LINE_GAP
   }
 
-  // ── בכבוד רב + שורת החתימה ──
+  // ── בכבוד רב + החתימה ──
   y -= 6
   rightText(c, 'בכבוד רב,', lineX1 - 4, y, 13, NAVY)
-  y -= 28
+  y -= 22
 
-  const sigLineX0 = lineX1 - 210
-  page.drawLine({
-    start: { x: sigLineX0, y },
-    end: { x: lineX1, y },
-    thickness: 0.6,
-    color: LINE_COLOR,
-    dashArray: [3, 3],
-  })
-
-  // חתימה — נקבעת אוטומטית מפרטי המשפחה, ללא עריכה ע"י היולדת.
-  if (input.mode === 'filled') {
-    const sig = buildSignature(input)
-    if (sig) rightText(c, sig.slice(0, 80), lineX1 - 4, y + 6, BODY_SIZE, INK)
+  // החתימה מודפסת בשני המצבים — גם בשובר הריק להדפסה.
+  // המשפחה לא צריכה לכתוב את שמה ביד; היא כבר רשומה אצלנו.
+  const sig = buildSignature(input)
+  if (sig) {
+    rightText(c, sig.slice(0, 80), lineX1 - 4, y, BODY_SIZE, NAVY)
+  } else {
+    // אין פרטי משפחה (נדיר) — שורה ריקה למילוי ידני
+    page.drawLine({
+      start: { x: lineX1 - 210, y: y - 2 },
+      end: { x: lineX1, y: y - 2 },
+      thickness: 0.6,
+      color: LINE_COLOR,
+      dashArray: [3, 3],
+    })
   }
 
   // קו זהב מסיים בתחתית

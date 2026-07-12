@@ -20,12 +20,18 @@ export interface SendOutcome {
   reason?: string
 }
 
-interface BenRow { family_name?: string | null; spouse_name?: string | null; email?: string | null }
+interface BenRow {
+  family_name?: string | null
+  full_name?: string | null     // שם הבעל
+  spouse_name?: string | null   // שם האשה
+  city?: string | null
+  email?: string | null
+}
 
 export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Promise<SendOutcome> {
   const { data: aid } = await db
     .from('maternity_aids')
-    .select('id, status, birth_type, recovery_home, recovery_arrived, beneficiary:beneficiaries(family_name, spouse_name, email)')
+    .select('id, status, birth_type, recovery_home, recovery_arrived, beneficiary:beneficiaries(family_name, full_name, spouse_name, city, email)')
     .eq('id', job.entity_id)
     .maybeSingle()
 
@@ -51,8 +57,15 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
       motherName,
       formUrl: `${SITE}/gratitude/${token}`,
     })
-    // שובר ריק להדפסה — למי שמעדיפה לכתוב ביד
-    const blankVoucher = await buildGratitudeVoucher({ mode: 'blank' })
+    // שובר להדפסה — שורות ריקות לכתיבה ביד, אבל החתימה כבר מודפסת
+    // (המשפחה לא צריכה לכתוב את שמה — הוא רשום אצלנו)
+    const blankVoucher = await buildGratitudeVoucher({
+      mode: 'blank',
+      familyName: ben?.family_name ?? undefined,
+      husbandName: ben?.full_name ?? undefined,
+      wifeName: ben?.spouse_name ?? undefined,
+      city: ben?.city ?? undefined,
+    })
 
     const res = await deliverMail(job.to_email, mail.subject, mail.html, [blankVoucher], {
       ...mailFor('maternity'),
