@@ -19,6 +19,7 @@ interface PortalLoan {
     full_name?: string
     family_name?: string
     id_number?: string
+    address?: string
     city?: string
     phone?: string
     email?: string
@@ -247,7 +248,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
 
   // ייצוא ההלוואות המסוננות לקובץ אקסל (CSV עם BOM — נפתח ישירות באקסל בעברית)
   const exportExcel = () => {
-    const headers = ['שם משפחה', 'שם פרטי', 'ת.ז.', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'מספר תשלומים', 'סטטוס', 'תאריך ביצוע']
+    const headers = ['שם משפחה', 'שם פרטי', 'ת.ז.', 'רחוב', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'מספר תשלומים', 'סטטוס', 'תאריך ביצוע']
     const rows = visibleLoans.map(l => [
       l.beneficiary?.family_name ?? '',
       l.beneficiary?.full_name ?? '',
@@ -360,20 +361,25 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                     הורד אקסל
                   </button>
                 </div>
+                {/* min-w מבטיח שהעמודות לא יידחסו — במסך צר הטבלה נגללת אופקית */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full table-fixed text-sm text-right border-collapse">
+                  <table className="w-full min-w-[1100px] table-fixed text-sm text-right border-collapse">
                     <colgroup>
-                      <col style={{ width: '22%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '15%' }} />
-                      <col style={{ width: '24%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '13%' }} />
+                      <col style={{ width: '17%' }} />  {/* שם */}
+                      <col style={{ width: '11%' }} />  {/* ת.ז. */}
+                      <col style={{ width: '15%' }} />  {/* רחוב */}
+                      <col style={{ width: '10%' }} />  {/* עיר */}
+                      <col style={{ width: '12%' }} />  {/* טלפון */}
+                      <col style={{ width: '18%' }} />  {/* מייל */}
+                      <col style={{ width: '9%' }} />   {/* סכום */}
+                      <col style={{ width: '8%' }} />   {/* סטטוס */}
                     </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
                         <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">שם</th>
                         <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">ת.ז.</th>
+                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">רחוב</th>
+                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">עיר</th>
                         <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">טלפון</th>
                         <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">מייל</th>
                         <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">סכום מאושר</th>
@@ -387,9 +393,16 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                           <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
                             <td className="px-4 py-3.5 border-l border-slate-100 align-middle">
                               <div className="font-semibold text-slate-900 break-words">{borrowerName(l.beneficiary)}</div>
-                              {l.beneficiary?.city && <div className="text-xs text-slate-400 mt-0.5">{l.beneficiary.city}</div>}
                             </td>
                             <td className="px-4 py-3.5 border-l border-slate-100 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
+
+                            {/* כתובת — רחוב ועיר בעמודות נפרדות. break-words מונע גלישה החוצה. */}
+                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
+                              {l.beneficiary?.address || '—'}
+                            </td>
+                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
+                              {l.beneficiary?.city || '—'}
+                            </td>
                             <td className="px-4 py-3.5 border-l border-slate-100 align-middle whitespace-nowrap">
                               {l.beneficiary?.phone
                                 ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{l.beneficiary.phone}</a>

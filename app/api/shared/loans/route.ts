@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const admin = adminClient()
   const { data, error } = await admin
     .from('loans')
-    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, phone, email)')
+    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email)')
     .in('status', ['approved', 'active'])
     .order('created_at', { ascending: false })
 
