@@ -755,7 +755,7 @@ function NewGroupModal({ onClose, onCreated }: {
         <input
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="לדוגמה: אברכי בני ברק"
+          placeholder="לדוגמה: ירושלים"
           className="mb-5 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm
                      focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
         />
