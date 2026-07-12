@@ -1293,9 +1293,12 @@ export function recoveryFeedbackEmail(opts: {
 
     ${btn(opts.formUrl, 'לשיתוף החוויה שלך', '#1B3256')}
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 12px;">
       <tr><td style="text-align:center;">
-        <p style="margin:0 0 12px;color:#94a3b8;font-size:13px;">— או —</p>
+        <p style="margin:0;color:#64748b;font-size:13.5px;line-height:1.7;">
+          <strong style="color:#334155;">חסום לכם הקישור?</strong><br/>
+          ניתן ללחוץ כאן לשליחת משוב דרך המייל:
+        </p>
       </td></tr>
     </table>
 
