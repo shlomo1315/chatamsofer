@@ -62,7 +62,15 @@ export default function SegmentBuilder({
   // בלי source — עדיין לא נבחרה קבוצה, ולכן לא מציגים רשימה.
   // (חשוב: אין ברירת מחדל, אחרת נטענת רשימה אקראית לפני שהמשתמש בחר.)
   const def = value ?? ({} as SegmentDef)
+
+  // הרשימה נטענת רק אחרי אישור מפורש של המשתמש — לא בכל שינוי מסנן.
+  // כך הוא בוחר קבוצה, מסננים או קובץ, ורק כשהוא מוכן לוחץ "הצג את הרשימה".
+  const [showList, setShowList] = useState(false)
+
   const hasSource = Boolean(def.source)
+  // רשימה מקובץ — חייבים לבחור רשימה ספציפית
+  const needsList = def.source === 'contact_list' && !def.contactListId
+  const canShow = hasSource && !needsList
 
   const [options, setOptions] = useState<FilterOptions>({
     cities: [], communities: [], maritalStatuses: [], eligibilityStatuses: [],
@@ -91,9 +99,10 @@ export default function SegmentBuilder({
       .catch(() => { /* ignore */ })
   }, [])
 
-  // טעינת הרשימה — רק אחרי שנבחרה קבוצה. עם debounce, ותשובות ישנות נזרקות.
+  // טעינת הרשימה — רק אחרי שהמשתמש לחץ "הצג את הרשימה".
+  // מרגע שהוצגה, היא מתעדכנת בכל שינוי מסנן (עם debounce).
   useEffect(() => {
-    if (!hasSource) { setResult(null); setLoading(false); return }
+    if (!showList || !canShow) { setResult(null); setLoading(false); return }
 
     const id = ++reqId.current
     setLoading(true)
@@ -110,7 +119,10 @@ export default function SegmentBuilder({
       finally { if (id === reqId.current) setLoading(false) }
     }, 400)
     return () => clearTimeout(t)
-  }, [JSON.stringify(def), hasSource]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(def), showList, canShow]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // החלפת מקור מאפסת את הרשימה — צריך לאשר מחדש
+  useEffect(() => { setShowList(false) }, [def.source])
 
   const isBen = def.source === 'beneficiaries'
   const recipients = result?.recipients ?? []
@@ -322,22 +334,49 @@ export default function SegmentBuilder({
           <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-4">
             <Check label="פעיל בלבד" value={def.isActive}
                    onChange={v => patch({ isActive: v })} />
-            <Check label="יש הלוואה פעילה" value={def.hasLoan}
-                   onChange={v => patch({ hasLoan: v })} />
             <Check label="קיבל עזר יולדות" value={def.hadMaternity}
                    onChange={v => patch({ hadMaternity: v })} />
           </div>
         </div>
       )}
 
-      {/* ── 3. הרשימה — רק אחרי שנבחרה קבוצה ── */}
-      {!hasSource ? (
+      {/* ── 3. הרשימה — רק אחרי אישור מפורש ── */}
+      {!showList ? (
         <div className={`${CARD} p-10 text-center`}>
           <Users size={26} className="mx-auto mb-3 text-slate-300" />
-          <p className="text-sm font-semibold text-slate-600">עדיין לא בחרתם לאיזו קבוצה לשלוח</p>
-          <p className="mt-1 text-xs text-slate-400">
-            בחרו קבוצה למעלה, ורשימת הנמענים תופיע כאן
-          </p>
+
+          {!hasSource ? (
+            <>
+              <p className="text-sm font-semibold text-slate-600">עדיין לא בחרתם לאיזו קבוצה לשלוח</p>
+              <p className="mt-1 text-xs text-slate-400">בחרו קבוצה למעלה כדי להמשיך</p>
+            </>
+          ) : needsList ? (
+            <>
+              <p className="text-sm font-semibold text-slate-600">עדיין לא נבחרה רשימה</p>
+              <p className="mt-1 text-xs text-slate-400">העלו קובץ או בחרו רשימה קיימת למעלה</p>
+            </>
+          ) : (
+            <>
+              <p className="mb-1 text-sm font-semibold text-slate-600">
+                {def.source === 'beneficiaries'
+                  ? 'סיימתם להגדיר את המסננים?'
+                  : 'מוכנים לראות את הנמענים?'}
+              </p>
+              <p className="mb-5 text-xs text-slate-400">
+                {def.source === 'beneficiaries'
+                  ? 'כשתסיימו לבחור את המסננים, הציגו את הרשימה כדי לראות בדיוק למי נשלח'
+                  : 'הציגו את הרשימה כדי לראות בדיוק למי נשלח'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowList(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5
+                           text-sm font-bold text-white transition hover:bg-indigo-700"
+              >
+                <Users size={15} /> הצג את רשימת הנמענים
+              </button>
+            </>
+          )}
         </div>
       ) : (
       <div className={CARD}>

@@ -69,10 +69,21 @@ export async function GET() {
     if (r.eligibility_status?.trim()) eligibilityStatuses.add(r.eligibility_status.trim())
   }
 
+  // כל האפשרויות שהמערכת תומכת בהן (זהה ל-MARITAL_OPTIONS בטופס המוטב),
+  // מאוחדות עם ערכים שכבר קיימים ב-DB — כך מוצגות כל האפשרויות גם אם
+  // אין עדיין אף רשומה מסוג מסוים.
+  const MARITAL_OPTIONS = ['נשואים', 'גרוש', 'גרושה', 'אלמן', 'אלמנה']
+  for (const m of MARITAL_OPTIONS) maritalStatuses.add(m)
+
+  const ELIGIBILITY_OPTIONS = ['pending', 'approved', 'rejected', 'review', 'docs_pending']
+  for (const e of ELIGIBILITY_OPTIONS) eligibilityStatuses.add(e)
+
   return NextResponse.json({
     cities: [...cities].sort((a, b) => a.localeCompare(b, 'he')),
     communities: [...communities].sort((a, b) => a.localeCompare(b, 'he')),
-    maritalStatuses: [...maritalStatuses].sort((a, b) => a.localeCompare(b, 'he')),
-    eligibilityStatuses: [...eligibilityStatuses],
+    // סדר קבוע ועקבי (לא אלפביתי) — כמו בטופס
+    maritalStatuses: MARITAL_OPTIONS.filter(m => maritalStatuses.has(m))
+      .concat([...maritalStatuses].filter(m => !MARITAL_OPTIONS.includes(m))),
+    eligibilityStatuses: ELIGIBILITY_OPTIONS.filter(e => eligibilityStatuses.has(e)),
   })
 }
