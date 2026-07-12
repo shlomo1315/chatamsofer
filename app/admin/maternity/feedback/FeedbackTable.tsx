@@ -2,7 +2,9 @@
 
 // טבלת המשוב על בתי ההחלמה + כרטיסי סיכום לכל בית החלמה.
 import { useMemo, useState } from 'react'
-import { Star, Globe, Mail, X, Home, MessageSquare } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Star, Globe, Mail, X, Home, MessageSquare, Trash2, Loader2 } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast'
 
 export interface SurveyQuestion {
   id: string
@@ -66,7 +68,30 @@ function fmtDateTime(iso: string): string {
 }
 
 export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]; questions: SurveyQuestion[] }) {
+  const router = useRouter()
+  const toast = useToast()
   const [open, setOpen] = useState<FeedbackRow | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  /** מחיקת משוב. אחרי המחיקה הקישור חוזר להיות פעיל והיולדת תוכל למלא מחדש. */
+  async function remove(id: string, name: string) {
+    if (!confirm(`למחוק את המשוב של ${name}?\nהיולדת תוכל למלא מחדש.`)) return
+
+    setDeleting(id)
+    try {
+      const res = await fetch(`/api/admin/maternity/feedback/${id}`, { method: 'DELETE' })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'המחיקה נכשלה')
+
+      toast.success('המשוב נמחק')
+      setOpen(null)
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const scaleQuestions = useMemo(() => questions.filter(q => q.type === 'scale'), [questions])
 
@@ -156,6 +181,7 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
               <th className="px-4 py-3 font-semibold">ציון ממוצע</th>
               <th className="px-4 py-3 font-semibold">מקור</th>
               <th className="px-4 py-3 font-semibold">הערות</th>
+              <th className="w-12" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -184,6 +210,22 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
                   </td>
                   <td className="px-4 py-3 text-slate-600 max-w-xs">
                     <span className="line-clamp-1">{row.free_text || '—'}</span>
+                  </td>
+
+                  {/* מחיקה — עוצר את ה-propagation כדי שלא ייפתח המודל */}
+                  <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
+                    {deleting === row.id ? (
+                      <Loader2 size={15} className="animate-spin text-slate-400" />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => remove(row.id, motherName(row))}
+                        title="מחיקת המשוב"
+                        className="rounded-lg p-1.5 text-slate-300 transition hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               )
@@ -275,12 +317,28 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
                 </div>
               )}
 
-              {open.maternity_aid_id && (
-                <a href={`/admin/maternity/${open.maternity_aid_id}`}
-                   className="self-start text-xs font-semibold text-indigo-600 hover:underline">
-                  לכרטסת הלידה ←
-                </a>
-              )}
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                {open.maternity_aid_id ? (
+                  <a href={`/admin/maternity/${open.maternity_aid_id}`}
+                     className="text-xs font-semibold text-indigo-600 hover:underline">
+                    לכרטסת הלידה ←
+                  </a>
+                ) : <span />}
+
+                <button
+                  type="button"
+                  onClick={() => remove(open.id, motherName(open))}
+                  disabled={deleting === open.id}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white
+                             px-3.5 py-2 text-xs font-bold text-rose-600 transition
+                             hover:bg-rose-50 disabled:opacity-40"
+                >
+                  {deleting === open.id
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <Trash2 size={14} />}
+                  מחיקת המשוב
+                </button>
+              </div>
             </div>
           </div>
         </div>
