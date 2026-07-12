@@ -742,5 +742,33 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── מענה אוטומטי זמני ("המערכת בפיתוח") ──
+  // נשלח רק אם ההגדרה מופעלת, ורק לשולח שאינו מזוהה כמוטב במערכת.
+  //
+  // ⚠️ לא נשלח על מיילים שהם בקשה (לידה/הלוואה/סיוע) — הם מקבלים מענה
+  // ייעודי (אישור קליטה או פירוט מה חסר), ומענה גנרי היה מסתיר אותו.
+  try {
+    const isRequest = isRequestSubject(subject)
+
+    if (!isRequest) {
+      const { maybeSendMaintenanceReply } = await import('@/lib/maintenanceReply')
+
+      // מזוהה במערכת? (לפי כתובת המייל)
+      const { data: known } = await admin
+        .from('beneficiaries')
+        .select('id')
+        .ilike('email', from.email)
+        .maybeSingle()
+
+      await maybeSendMaintenanceReply(admin, {
+        fromEmail: from.email,
+        beneficiaryId: known?.id ?? null,
+        headers: data.headers,
+      })
+    }
+  } catch (e) {
+    console.error('[resend-inbound] maintenance reply error:', e instanceof Error ? e.message : String(e))
+  }
+
   return NextResponse.json({ ok: true })
 }

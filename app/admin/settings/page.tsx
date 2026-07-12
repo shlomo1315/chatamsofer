@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -19,6 +19,7 @@ import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
+import MaintenanceReplySettings from './MaintenanceReplySettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -147,6 +148,10 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* Legacy Gmail sync */}
+        <Collapsible title="מענה אוטומטי זמני" icon={<MailWarning size={16} className="text-amber-500" />}>
+          <MaintenanceReplySettings />
+        </Collapsible>
+
         <Collapsible title="סנכרון מייל קודם" icon={<Mail size={16} className="text-orange-500" />}>
           <LegacyMailSettings />
         </Collapsible>
