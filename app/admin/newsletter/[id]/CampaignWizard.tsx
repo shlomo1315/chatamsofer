@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Users, FileText, Eye, Send, Loader2, Save, Check, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import SegmentBuilder from '@/components/newsletter/SegmentBuilder'
-import BlockEditor from '@/components/newsletter/BlockEditor'
+import BlockEditor, { MergeTagPicker, insertAtCursor } from '@/components/newsletter/BlockEditor'
 import type { SegmentDef } from '@/lib/newsletter/segments'
 import type { Block } from '@/lib/newsletter/blocks'
 import { DEPARTMENTS } from '@/lib/departments'
@@ -42,6 +42,8 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
   const [c, setC] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
+  // שורת הנושא — כדי שבורר משתני המיזוג יוכל להזריק לתוכה
+  const subjectRef = useRef<HTMLInputElement>(null)
 
   const patch = useCallback(<K extends keyof Campaign>(key: K, val: Campaign[K]) => {
     setC(prev => ({ ...prev, [key]: val }))
@@ -144,10 +146,18 @@ export default function CampaignWizard({ campaign: initial }: { campaign: Campai
       {step === 1 && (
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-              שורת נושא <span className="font-normal text-slate-400">(תומכת במשתני מיזוג)</span>
-            </label>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <label className="text-sm font-semibold text-slate-700">
+                שורת נושא <span className="font-normal text-rose-500">*</span>
+              </label>
+              {/* הזרקת משתנה מיזוג ישירות לשורת הנושא */}
+              <MergeTagPicker
+                hint="המשתנה יתווסף במקום הסמן בשורת הנושא"
+                onPick={t => insertAtCursor(subjectRef.current, `{{${t}}}`)}
+              />
+            </div>
             <input
+              ref={subjectRef}
               value={c.subject}
               onChange={e => patch('subject', e.target.value)}
               placeholder="למשל: {{שם_משפחה}}, עדכון חשוב לקראת החג"

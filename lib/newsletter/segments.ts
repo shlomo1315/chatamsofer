@@ -107,7 +107,7 @@ export async function resolveSegment(
   } else {
     // ── מוטבים — המקור העיקרי ──
     let q = db.from('beneficiaries').select(
-      'id, email, family_name, full_name, spouse_name, marital_status, city, children_count, children, gender, eligibility_status, is_active, community_affiliation, past_benefits',
+      'id, email, family_name, full_name, spouse_name, marital_status, city, address, phone, phone2, id_number, children_count, children, gender, eligibility_status, is_active, community_affiliation, past_benefits',
     )
 
     if (def.isActive !== undefined) q = q.eq('is_active', def.isActive)

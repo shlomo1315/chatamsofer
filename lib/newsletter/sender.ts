@@ -126,7 +126,6 @@ async function sendCampaignBatches(
       const data = { ...r.merge_data, 'קישור_הסרה': unsubUrl }
 
       const html = buildCampaignHtml({
-        title: applyMerge(campaign.name, data, true),
         preheader: applyMerge(campaign.preheader ?? '', data, true),
         blocks: campaign.content,
         rawHtml: campaign.raw_html ?? undefined,
@@ -141,6 +140,9 @@ async function sendCampaignBatches(
         subject: applyMerge(campaign.subject, data, false),
         html: applyMerge(html, data, true),
         replyTo: dept.replyTo,
+        // מעקב פתיחות וקליקים — בלי זה Resend לא מזריק פיקסל ולא עוטף
+        // קישורים, ולכן לא נשלחים אירועי opened/clicked ל-webhook.
+        tracking: { open: true, click: true },
         headers: {
           'List-Unsubscribe': `<${unsubUrl}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

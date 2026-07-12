@@ -1,4 +1,25 @@
-import { shell } from '../emailTemplates'
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
+// הלוגו מוטמע כ-data URI ולא נטען מהרשת.
+//
+// למה: Gmail/Outlook חוסמים תמונות חיצוניות כברירת מחדל — הלוגו לא היה מוצג
+// עד שהנמען לוחץ "הצג תמונות". תמונה מוטמעת מוצגת תמיד.
+// (נטען פעם אחת בעליית השרת ונשמר בזיכרון.)
+let logoDataUri: string | null = null
+
+function getLogoDataUri(): string {
+  if (logoDataUri !== null) return logoDataUri
+  try {
+    const buf = readFileSync(join(process.cwd(), 'public', 'logo.png'))
+    logoDataUri = `data:image/png;base64,${buf.toString('base64')}`
+  } catch {
+    // נפילה-לאחור: כתובת רשת (עלולה להיחסם, אבל עדיף מכלום)
+    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
+    logoDataUri = `${site}/logo.png`
+  }
+  return logoDataUri
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עורך בלוקים — כל בלוק מרונדר לטבלת HTML עם inline styles.
@@ -120,7 +141,8 @@ export function renderBlocks(blocks: Block[]): string {
  * כך הניוזלטר נראה כמו חלק מהמערכת ולא כמו גוף זר.
  */
 export function buildCampaignHtml(opts: {
-  title: string
+  /** @deprecated לא בשימוש — שם הקמפיין הוא פנימי ואינו מוצג לנמען */
+  title?: string
   preheader?: string
   blocks?: Block[]
   rawHtml?: string
@@ -144,11 +166,61 @@ export function buildCampaignHtml(opts: {
       </td></tr>
     </table>`
 
-  return shell({
-    preheader: opts.preheader ?? '',
-    accent: NAVY,
-    title: opts.title,
-    subtitle: '',
-    body: body + footer,
-  })
+  return newsletterShell(opts.preheader ?? '', body + footer)
+}
+
+// מעטפת ייעודית לניוזלטר.
+//
+// למה לא shell() הרגיל: הוא מכריח כותרת גדולה בראש המייל — ובדיוור, הכותרת
+// היא חלק מהתוכן שהמשתמש בונה, לא משהו שנכפה עליו. שם הקמפיין הוא מזהה
+// פנימי לניהול בלבד ואסור שיופיע לנמען.
+function newsletterShell(preheader: string, body: string): string {
+  const safePreheader = String(preheader ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+  <style>* { font-family: 'Heebo', Arial, sans-serif !important; }</style>
+</head>
+<body style="margin:0;padding:0;background:#eef2f7;font-family:'Heebo',Arial,sans-serif;direction:rtl;">
+  <span style="display:none;font-size:1px;color:#eef2f7;max-height:0;overflow:hidden;">${safePreheader}</span>
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:36px 16px;">
+    <tr><td align="center">
+      <table width="620" cellpadding="0" cellspacing="0"
+             style="max-width:620px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;
+                    box-shadow:0 4px 24px rgba(15,23,42,0.10);">
+
+        <tr><td style="background:${NAVY};height:6px;font-size:0;line-height:0;">&nbsp;</td></tr>
+
+        <!-- לוגו בלבד — ללא כותרת כפויה. הכותרת היא חלק מהתוכן. -->
+        <tr>
+          <td style="padding:32px 40px 8px;text-align:center;">
+            <img src="${getLogoDataUri()}" alt="היכל החתם סופר" width="72" height="72"
+                 style="display:inline-block;"/>
+          </td>
+        </tr>
+
+        <tr><td style="padding:20px 40px 32px;">${body}</td></tr>
+
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:2px solid ${NAVY}22;">
+            <p style="margin:0 0 4px;color:#334155;font-size:13px;font-weight:700;">היכל החתם סופר</p>
+            <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.7;">
+              <a href="mailto:office@chasamsofer.info" style="color:${NAVY};text-decoration:none;font-weight:600;">
+                office@chasamsofer.info
+              </a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
 }

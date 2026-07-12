@@ -13,8 +13,12 @@ export interface MergeSource {
   spouse_name?: string | null
   marital_status?: string | null
   city?: string | null
+  address?: string | null
+  phone?: string | null
+  phone2?: string | null
   children_count?: number | null
   email?: string | null
+  id_number?: string | null
   [key: string]: unknown
 }
 
@@ -31,6 +35,10 @@ export const MERGE_TAGS: MergeTag[] = [
   { token: 'שם_מלא',       label: 'שם מלא',             example: 'משה כהן' },
   { token: 'שם_האשה',      label: 'שם האשה',            example: 'שרה' },
   { token: 'עיר',          label: 'עיר',                example: 'בני ברק' },
+  { token: 'כתובת',        label: 'כתובת',              example: 'רחוב הרב קוק 12' },
+  { token: 'טלפון',        label: 'טלפון',              example: '050-1234567' },
+  { token: 'מייל',         label: 'כתובת מייל',         example: 'moshe@example.com' },
+  { token: 'תעודת_זהות',   label: 'תעודת זהות',         example: '123456789' },
   { token: 'מספר_ילדים',   label: 'מספר ילדים',         example: '7' },
   { token: 'קישור_הסרה',   label: 'קישור הסרה מהתפוצה', example: '(נוצר אוטומטית)' },
 ]
@@ -43,6 +51,10 @@ const FALLBACKS: Record<string, string> = {
   'שם_מלא': 'ידידנו היקר',
   'שם_האשה': '',
   'עיר': '',
+  'כתובת': '',
+  'טלפון': '',
+  'מייל': '',
+  'תעודת_זהות': '',
   'מספר_ילדים': '',
   'קישור_הסרה': '',
 }
@@ -70,6 +82,11 @@ export function buildMergeData(src: MergeSource, unsubscribeUrl = ''): Record<st
     'שם_מלא': [family, first].filter(Boolean).join(' '),
     'שם_האשה': wife,
     'עיר': (src.city ?? '').trim(),
+    'כתובת': (src.address ?? '').trim(),
+    // הטלפון הראשי, ובנפילה — הטלפון הנוסף
+    'טלפון': ((src.phone ?? '').trim() || (src.phone2 ?? '').trim()),
+    'מייל': (src.email ?? '').trim(),
+    'תעודת_זהות': (src.id_number ?? '').trim(),
     'מספר_ילדים': src.children_count != null ? String(src.children_count) : '',
     'קישור_הסרה': unsubscribeUrl,
   }

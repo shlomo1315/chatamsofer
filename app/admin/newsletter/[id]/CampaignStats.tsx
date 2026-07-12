@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle } from 'lucide-react'
+import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import type { Campaign } from './CampaignWizard'
 
@@ -35,6 +35,7 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
   const toast = useToast()
   const [stats, setStats] = useState<Stats | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [tab, setTab] = useState<'recipients' | 'links'>('recipients')
 
   const load = useCallback(async () => {
@@ -48,8 +49,11 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
 
   // רענון אוטומטי בזמן שליחה — המספרים זזים
   useEffect(() => {
-    if (stats?.campaign.status !== 'sending') return
-    const t = setInterval(load, 5000)
+    const st = stats?.campaign.status
+    if (st !== 'sending' && st !== 'sent') return
+    // בשליחה — כל 5 שניות. אחרי שנשלח — כל 20 שניות, כי אירועי הפתיחה
+    // והקליק מ-Resend מגיעים בהשהיה של שניות עד דקות.
+    const t = setInterval(load, st === 'sending' ? 5000 : 20000)
     return () => clearInterval(t)
   }, [stats?.campaign.status, load])
 
@@ -92,18 +96,31 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
           <p className="mt-1 text-sm text-slate-500">{campaign.subject}</p>
         </div>
 
-        {(sending || paused) && (
+        <div className="flex gap-2">
+          {/* רענון ידני — אירועי פתיחה/קליק מגיעים מ-Resend בהשהיה קצרה */}
           <button
-            onClick={() => toggle(paused ? 'resume' : 'pause')}
-            disabled={busy}
+            onClick={() => { setRefreshing(true); load().finally(() => setRefreshing(false)) }}
+            disabled={refreshing}
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5
                        text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
           >
-            {busy ? <Loader2 size={15} className="animate-spin" />
-                  : paused ? <Play size={15} /> : <Pause size={15} />}
-            {paused ? 'חידוש שליחה' : 'השהיה'}
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+            רענון נתונים
           </button>
-        )}
+
+          {(sending || paused) && (
+            <button
+              onClick={() => toggle(paused ? 'resume' : 'pause')}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5
+                         text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+            >
+              {busy ? <Loader2 size={15} className="animate-spin" />
+                    : paused ? <Play size={15} /> : <Pause size={15} />}
+              {paused ? 'חידוש שליחה' : 'השהיה'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* התקדמות בזמן שליחה */}

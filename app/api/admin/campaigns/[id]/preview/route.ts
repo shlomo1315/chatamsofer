@@ -45,7 +45,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const merged = { ...data, 'קישור_הסרה': unsubUrl }
 
   const html = buildCampaignHtml({
-    title: applyMerge(campaign.name, merged, true),
     preheader: applyMerge(campaign.preheader ?? '', merged, true),
     blocks: (campaign.content ?? []) as Block[],
     rawHtml: campaign.raw_html ?? undefined,
@@ -96,7 +95,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const merged = { ...data, 'קישור_הסרה': unsubUrl }
 
   const html = buildCampaignHtml({
-    title: applyMerge(campaign.name, merged, true),
     preheader: applyMerge(campaign.preheader ?? '', merged, true),
     blocks: (campaign.content ?? []) as Block[],
     rawHtml: campaign.raw_html ?? undefined,
