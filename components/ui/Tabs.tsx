@@ -37,13 +37,18 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
+      {/* שורה אחת תמיד — גלילה אופקית כשצר, במקום לרדת לשורה שנייה */}
+      <div className="flex gap-2 overflow-x-auto pb-1
+                      [scrollbar-width:thin] [-ms-overflow-style:none]
+                      [&::-webkit-scrollbar]:h-1.5
+                      [&::-webkit-scrollbar-thumb]:rounded-full
+                      [&::-webkit-scrollbar-thumb]:bg-slate-200">
         {tabs.map(t => {
           const a = ACCENTS[t.accent ?? 'indigo']
           const isActive = t.key === active
           return (
             <button key={t.key} onClick={() => select(t.key)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${isActive ? a.active : a.idle}`}>
+              className={`inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${isActive ? a.active : a.idle}`}>
               {t.icon}{t.label}
             </button>
           )
