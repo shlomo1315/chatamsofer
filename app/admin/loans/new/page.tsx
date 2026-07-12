@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, Search, Loader2, Check, AlertTriangle, X, CreditCard, Upload, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Beneficiary } from '@/types'
+import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 
 const MAX_AMOUNT = 30000
 const MAX_INSTALLMENTS = 60
@@ -12,7 +13,7 @@ const MAX_FILES = 5
 const MAX_FILE_MB = 10
 
 // הצהרה — האם פנה בעבר לגמ"ח
-const DECLARATION_OPTIONS = ['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי']
+const DECLARATION_OPTIONS = [...LOAN_DECLARATIONS]
 
 // מטרות ההלוואה — כולל הסבר היכן שנדרש
 const LOAN_PURPOSES: { value: string; desc?: string }[] = [

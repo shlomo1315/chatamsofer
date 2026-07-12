@@ -5,6 +5,30 @@ import { validateIsraeliId } from './validation'
 
 export type ReqType = 'birth' | 'silent_birth' | 'loan' | 'financial_aid' | 'widow'
 
+// ── קבועי הלוואה — מקור אמת יחיד לפורטל, לטופס המייל ולמסכי הניהול ──
+export const LOAN_MAX_AMOUNT = 30_000
+export const LOAN_MAX_INSTALLMENTS = 60
+
+export const LOAN_PURPOSES = [
+  'נישואי הבן/הבת',
+  'שמחה משפחתית',
+  'הוצאה רפואית',
+  'חובות מנישואי הילדים',
+  'רכישת דירה',
+  'אחר',
+] as const
+
+// מטרה שמחייבת צירוף הזמנה לחתונה
+export const WEDDING_PURPOSE = 'נישואי הבן/הבת'
+
+// הצהרה על פנייה קודמת לגמ״ח
+export const LOAN_DECLARATIONS = [
+  'לא הגשתי',
+  'הגשתי וקיבלתי',
+  'הגשתי וסורבתי',
+  'הגשתי, אושרתי ולא מימשתי',
+] as const
+
 // תווית הנושא לכל סוג (זיהוי הסוג לפי תחילת שורת הנושא)
 export const SUBJECT_PREFIX: Record<ReqType, string> = {
   birth: 'בקשת לידה',
@@ -73,9 +97,10 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
       ]
     case 'loan':
       return [
-        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: 'מספר בלבד, ב-₪', required: true },
-        { key: 'installments', label: 'מספר תשלומים', hint: 'מספר בלבד', required: true },
-        { key: 'purpose', label: 'מטרת ההלוואה', required: true },
+        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: `מספר בלבד, ב-₪ · עד ${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ₪`, required: true },
+        { key: 'installments', label: 'מספר תשלומים', hint: `מספר בלבד · עד ${LOAN_MAX_INSTALLMENTS} תשלומים`, required: true },
+        { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_PURPOSES] },
+        { key: 'declaration', label: 'האם פנית בעבר לגמ״ח חתם סופר?', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_DECLARATIONS] },
         { key: 'notes', label: 'הערות', required: false },
       ]
     case 'financial_aid':
@@ -98,7 +123,13 @@ export function attachmentsFor(type: ReqType, ctx: Ctx): AttachmentSpec[] {
     case 'silent_birth':
       return [{ name: 'אישור-לידה', label: 'אישור לידה מבית החולים', required: true }, ...id]
     case 'loan':
-      return [{ name: 'מסמך-תומך', label: 'מסמך תומך (אם נדרש)', required: false }, ...id]
+      // הזמנה לחתונה — חובה כשמטרת ההלוואה היא נישואי הבן/הבת.
+      // בטופס המייל אי אפשר לדעת מראש מה תיבחר, ולכן מוצג כתנאי מפורש.
+      return [
+        { name: 'הזמנה-לחתונה', label: `הזמנה לחתונה — חובה אם מטרת ההלוואה היא "${WEDDING_PURPOSE}"`, required: false },
+        { name: 'מסמך-תומך', label: 'מסמך תומך (אם נדרש)', required: false },
+        ...id,
+      ]
     case 'financial_aid':
       return [{ name: 'מסמך-רפואי', label: 'מסמך רפואי / אסמכתא', required: true }, ...id]
     case 'widow':
@@ -217,11 +248,29 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
   if (type === 'loan') {
     const amount = parseInt((values.amount ?? '').replace(/[^\d]/g, ''), 10)
     if (!amount || amount <= 0) errors.push('סכום ההלוואה חסר או לא תקין')
+    else if (amount > LOAN_MAX_AMOUNT) errors.push(`סכום ההלוואה המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ₪`)
     else data.amount = amount
+
     const inst = parseInt((values.installments ?? '').replace(/[^\d]/g, ''), 10)
     if (!inst || inst <= 0) errors.push('מספר התשלומים חסר או לא תקין')
+    else if (inst > LOAN_MAX_INSTALLMENTS) errors.push(`מספר התשלומים המרבי הוא ${LOAN_MAX_INSTALLMENTS}`)
     else data.installments = inst
-    data.purpose = need('purpose', 'מטרת ההלוואה')
+
+    const purpose = need('purpose', 'מטרת ההלוואה')
+    if (purpose && !LOAN_PURPOSES.includes(purpose as typeof LOAN_PURPOSES[number])) {
+      errors.push(`מטרת ההלוואה "${purpose}" אינה ברשימה — יש להשאיר אחת מהאפשרויות בלבד`)
+    } else {
+      data.purpose = purpose
+    }
+
+    const decl = (values.declaration ?? '').trim()
+    if (!decl) errors.push('חסרה תשובה: האם פנית בעבר לגמ״ח חתם סופר?')
+    else if (!LOAN_DECLARATIONS.includes(decl as typeof LOAN_DECLARATIONS[number])) {
+      errors.push('התשובה על פנייה קודמת לגמ״ח — יש להשאיר אחת מהאפשרויות בלבד')
+    } else {
+      data.declaration = decl
+    }
+
     data.notes = (values.notes ?? '').trim() || null
   }
 

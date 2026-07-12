@@ -13,6 +13,7 @@ import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
+import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -4016,7 +4017,7 @@ export default function PublicPortalPage() {
                   <div className="col-span-2">
                     <Field label='האם פנית בעבר לגמ"ח חתם סופר?' required>
                       <div className="flex flex-col gap-2">
-                        {['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי'].map(opt => (
+                        {LOAN_DECLARATIONS.map(opt => (
                           <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                             <input type="radio" name="declaration" value={opt}
                               checked={loanForm.declaration === opt}

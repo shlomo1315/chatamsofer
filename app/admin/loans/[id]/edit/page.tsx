@@ -6,13 +6,14 @@ import { ArrowRight, Loader2, Check, AlertTriangle, Upload, X, FileText } from '
 import { createClient } from '@/lib/supabase/client'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
+import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 
 const MAX_AMOUNT = 30000
 const MAX_INSTALLMENTS = 60
 const MAX_FILES = 5
 const MAX_FILE_MB = 10
 const LOAN_PURPOSES = ['נישואי הבן/הבת', 'שמחה משפחתית', 'הוצאה רפואית', 'חובות מנישואי הילדים', 'רכישת דירה', 'אחר']
-const DECLARATION_OPTIONS = ['לא הגשתי', 'הגשתי וקיבלתי', 'הגשתי וסורבתי']
+const DECLARATION_OPTIONS = [...LOAN_DECLARATIONS]
 
 type Doc = { url: string; name: string }
 
