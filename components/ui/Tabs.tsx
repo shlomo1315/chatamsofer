@@ -37,12 +37,11 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
 
   return (
     <div className="flex flex-col gap-4">
-      {/* שורה אחת תמיד — גלילה אופקית כשצר, במקום לרדת לשורה שנייה */}
-      <div className="flex gap-2 overflow-x-auto pb-1
-                      [scrollbar-width:thin] [-ms-overflow-style:none]
-                      [&::-webkit-scrollbar]:h-1.5
-                      [&::-webkit-scrollbar-thumb]:rounded-full
-                      [&::-webkit-scrollbar-thumb]:bg-slate-200">
+      {/* שורה אחת תמיד — גלילה אופקית כשצר, בלי לחתוך את הכפתורים.
+          py-1 + -my-1 נותנים מרווח ל-ring/shadow בלי להזיז את הפריסה. */}
+      <div className="-my-1 flex gap-2 overflow-x-auto py-1
+                      [-ms-overflow-style:none] [scrollbar-width:none]
+                      [&::-webkit-scrollbar]:hidden">
         {tabs.map(t => {
           const a = ACCENTS[t.accent ?? 'indigo']
           const isActive = t.key === active

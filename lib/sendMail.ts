@@ -101,7 +101,11 @@ export async function deliverMail(
       ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
       // מעקב פתיחות/קליקים — מופעל רק כשמבקשים במפורש (דיוור).
       // מיילים תפעוליים נשארים ללא מעקב, כדי לא להוסיף פיקסל ולעטוף קישורים.
-      ...(options?.tracking ? { tracking: { open: true, click: true } } : {}),
+      // מעקב פתיחות/קליקים — מופעל כברירת מחדל על כל המיילים, כדי שנדע
+      // אם מייל נפתח בפועל. אפשר לכבות במפורש עם tracking: false.
+      tracking: options?.tracking === false
+        ? { open: false, click: false }
+        : { open: true, click: true },
       // כותרות שמשפרות אמון ומסירה (פחות סיכוי לספאם בג'ימייל/אאוטלוק)
       headers: {
         ...unsubHeaders,

@@ -33,6 +33,17 @@ function fmt(iso: string | null): string {
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('he-IL')
 }
 
+/** תאריך + שעה — לתצוגת מועד השליחה בפועל */
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return '—'
+  return d.toLocaleString('he-IL', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 export default function GratitudeTab({ aidId }: { aidId: string }) {
   const toast = useToast()
   const [letter, setLetter] = useState<Letter | null>(null)
@@ -166,14 +177,23 @@ function JobRow({ title, job, busy, disabled, onSend }: {
   const pending = job?.status === 'pending'
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
+    <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
+      sent ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-200'
+    }`}>
       <div className="min-w-0">
         <div className="text-sm font-semibold text-slate-700">{title}</div>
-        <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1 text-xs">
           {sent ? (
-            <><CheckCircle2 size={12} className="text-emerald-600" /> נשלח ב-{fmt(job!.sent_at)}</>
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-100 px-2 py-0.5
+                             font-semibold text-emerald-700">
+              <CheckCircle2 size={12} />
+              נשלח ב-{fmtDateTime(job!.sent_at)}
+            </span>
           ) : pending ? (
-            <><Clock size={12} className="text-amber-500" /> מתוזמן ל-{fmt(job!.send_after)}</>
+            <span className="inline-flex items-center gap-1 text-amber-600">
+              <Clock size={12} />
+              מתוזמן ל-{fmt(job!.send_after)}
+            </span>
           ) : (
             <span className="text-slate-400">לא מתוזמן</span>
           )}
