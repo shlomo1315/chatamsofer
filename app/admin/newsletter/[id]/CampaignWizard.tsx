@@ -7,6 +7,7 @@ import { ArrowRight, Users, FileText, Eye, Send, Loader2, Save, Check, AlertTria
 import { useToast } from '@/components/ui/Toast'
 import SegmentBuilder from '@/components/newsletter/SegmentBuilder'
 import BlockEditor, { MergeTagPicker, insertAtCursor } from '@/components/newsletter/BlockEditor'
+import DateTimePicker from '@/components/newsletter/DateTimePicker'
 import type { SegmentDef } from '@/lib/newsletter/segments'
 import type { Block } from '@/lib/newsletter/blocks'
 import { DEPARTMENTS } from '@/lib/departments'
@@ -400,11 +401,8 @@ function SendStep({ campaignId, onSave, onSent }: {
     }
   }
 
-  // מינימום: עוד 5 דקות (בפורמט של datetime-local, בשעון מקומי)
-  const minAt = (() => {
-    const d = new Date(Date.now() + 5 * 60_000 - new Date().getTimezoneOffset() * 60_000)
-    return d.toISOString().slice(0, 16)
-  })()
+  // מינימום: עוד 5 דקות מעכשיו
+  const minAt = new Date(Date.now() + 5 * 60_000)
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
@@ -460,14 +458,7 @@ function SendStep({ campaignId, onSave, onSent }: {
 
         {when === 'later' && (
           <>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              min={minAt}
-              onChange={e => setScheduledAt(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm
-                         focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
+            <DateTimePicker value={scheduledAt} onChange={setScheduledAt} min={minAt} />
             <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-500">
               המערכת <strong>לא שולחת מיילים בשבת ובחג</strong>. אם המועד שתבחרו נופל
               בשבת או ביום טוב, השליחה תידחה אוטומטית ליום החול הבא בשעה 09:00.

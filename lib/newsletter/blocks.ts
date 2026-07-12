@@ -1,25 +1,10 @@
-import { readFileSync } from 'fs'
-import { join } from 'path'
-
-// הלוגו מוטמע כ-data URI ולא נטען מהרשת.
+// הלוגו — כתובת רשת, בדיוק כמו בכל תבניות המייל הקיימות (emailTemplates.ts).
 //
-// למה: Gmail/Outlook חוסמים תמונות חיצוניות כברירת מחדל — הלוגו לא היה מוצג
-// עד שהנמען לוחץ "הצג תמונות". תמונה מוטמעת מוצגת תמיד.
-// (נטען פעם אחת בעליית השרת ונשמר בזיכרון.)
-let logoDataUri: string | null = null
-
-function getLogoDataUri(): string {
-  if (logoDataUri !== null) return logoDataUri
-  try {
-    const buf = readFileSync(join(process.cwd(), 'public', 'logo.png'))
-    logoDataUri = `data:image/png;base64,${buf.toString('base64')}`
-  } catch {
-    // נפילה-לאחור: כתובת רשת (עלולה להיחסם, אבל עדיף מכלום)
-    const site = (process.env.NEXT_PUBLIC_SITE_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
-    logoDataUri = `${site}/logo.png`
-  }
-  return logoDataUri
-}
+// ⚠️ אל תחזירו ל-data: URI — Gmail חוסם אותו לחלוטין בתמונות, והלוגו
+// פשוט לא מוצג. URL רגיל עובד (ייתכן שנדרשת לחיצה על "הצג תמונות"
+// בפעם הראשונה, אבל אחרי שהנמען מאשר את השולח הוא מוצג תמיד).
+const SITE = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il').replace(/\/$/, '')
+const LOGO_URL = `${SITE}/logo.png`
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עורך בלוקים — כל בלוק מרונדר לטבלת HTML עם inline styles.
@@ -200,7 +185,7 @@ function newsletterShell(preheader: string, body: string): string {
         <!-- לוגו בלבד — ללא כותרת כפויה. הכותרת היא חלק מהתוכן. -->
         <tr>
           <td style="padding:32px 40px 8px;text-align:center;">
-            <img src="${getLogoDataUri()}" alt="היכל החתם סופר" width="72" height="72"
+            <img src="${LOGO_URL}" alt="היכל החתם סופר" width="72" height="72"
                  style="display:inline-block;"/>
           </td>
         </tr>

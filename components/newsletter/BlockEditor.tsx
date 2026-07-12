@@ -446,6 +446,41 @@ export default function BlockEditor({
           </div>
         </div>
       </div>
+
+      {/* ── תפריט @ — צף ליד הסמן, מציג את כל המשתנים ── */}
+      {atMenu && atMatches.length > 0 && (
+        <div
+          className="fixed z-50 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+          style={{ top: atMenu.top, left: atMenu.left }}
+          onMouseDown={e => e.preventDefault()} // שומר על הפוקוס בשדה
+        >
+          <div className="border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-500">
+            {atMenu.query ? `מסנן: "${atMenu.query}"` : 'בחרו משתנה · חיצים לניווט · Enter לבחירה'}
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {atMatches.map((t, i) => (
+              <button
+                key={t.token}
+                type="button"
+                onClick={() => pickAtTag(t.token)}
+                className={`flex w-full items-start gap-2 border-b border-slate-50 px-3 py-2 text-right
+                            transition last:border-0 ${
+                  i === atMenu.index ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                }`}
+              >
+                <code className="mt-0.5 flex-shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[11px]
+                                 font-bold text-indigo-700">
+                  {`{{${t.token}}}`}
+                </code>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-slate-700">{t.label}</span>
+                  <span className="block truncate text-xs text-slate-400">{t.example}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

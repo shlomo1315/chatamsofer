@@ -74,7 +74,7 @@ function parseCsvLine(line: string): string[] {
   return out
 }
 
-// POST — העלאת רשימת נמענים מקובץ
+// POST — יצירת קבוצה: מקובץ, או מנמענים שנבחרו מקבוצה קיימת
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'edit')
   if (ctx instanceof NextResponse) return ctx
@@ -82,6 +82,44 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  const contentType = request.headers.get('content-type') ?? ''
+
+  // ── מסלול א': יצירת קבוצה מנמענים שנבחרו ידנית (JSON) ──
+  if (contentType.includes('application/json')) {
+    const body = await request.json()
+    const name = String(body?.name ?? '').trim().slice(0, 100)
+    const recipients = Array.isArray(body?.recipients) ? body.recipients : []
+
+    if (!name) return NextResponse.json({ error: 'יש לתת שם לקבוצה' }, { status: 400 })
+    if (!recipients.length) return NextResponse.json({ error: 'לא נבחרו נמענים' }, { status: 400 })
+
+    const { data: list, error: listErr } = await db
+      .from('contact_lists').insert({ name }).select('id').single()
+    if (listErr || !list) return NextResponse.json({ error: 'יצירת הקבוצה נכשלה' }, { status: 500 })
+
+    const seen = new Set<string>()
+    const rows = recipients
+      .map((r: { email?: string; name?: string; city?: string }) => {
+        const email = String(r.email ?? '').toLowerCase().trim()
+        if (!email.includes('@') || seen.has(email)) return null
+        seen.add(email)
+        return {
+          list_id: list.id,
+          email,
+          data: { family_name: r.name ?? '', full_name: '', city: r.city ?? '', email },
+        }
+      })
+      .filter(Boolean) as { list_id: string; email: string; data: Record<string, string> }[]
+
+    for (let i = 0; i < rows.length; i += 500) {
+      await db.from('contacts')
+        .upsert(rows.slice(i, i + 500), { onConflict: 'list_id,email', ignoreDuplicates: true })
+    }
+
+    return NextResponse.json({ ok: true, listId: list.id, imported: rows.length })
+  }
+
+  // ── מסלול ב': העלאת קובץ ──
   const form = await request.formData()
   const file = form.get('file')
   const name = String(form.get('name') ?? '').trim() || 'רשימה שהועלתה'

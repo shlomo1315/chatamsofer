@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { Send } from 'lucide-react'
+import { Send, Ban } from 'lucide-react'
 import NewCampaignButton from './NewCampaignButton'
 import CampaignsTable, { type CampaignRow } from './CampaignsTable'
 
@@ -23,7 +24,16 @@ export default async function NewsletterPage() {
           <h1 className="text-2xl font-bold text-slate-800 mb-1">ניוזלטר</h1>
           <p className="text-sm text-slate-500">דיוור לקהלים נבחרים, עם מעקב פתיחות וקליקים</p>
         </div>
-        <NewCampaignButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/newsletter/unsubscribes"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5
+                       text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <Ban size={16} /> הסרות
+          </Link>
+          <NewCampaignButton />
+        </div>
       </div>
 
       {error && (

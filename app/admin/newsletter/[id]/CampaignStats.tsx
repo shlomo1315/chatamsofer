@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle, RefreshCw, MessageSquare } from 'lucide-react'
+import { ArrowRight, Pause, Play, Loader2, MousePointerClick, Eye, Send, AlertTriangle, RefreshCw, MessageSquare, Check } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import type { Campaign } from './CampaignWizard'
 
@@ -25,7 +25,11 @@ interface Reply {
 }
 
 interface Stats {
-  campaign: { status: string; name: string }
+  campaign: {
+    status: string; name: string
+    started_at: string | null
+    completed_at: string | null
+  }
   metrics: Metrics
   links: { url: string; count: number }[]
   recipients: Recipient[]
@@ -100,6 +104,27 @@ export default function CampaignStats({ campaign }: { campaign: Campaign }) {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">{campaign.name}</h1>
           <p className="mt-1 text-sm text-slate-500">{campaign.subject}</p>
+
+          {/* מועדי השליחה */}
+          {stats.campaign.started_at && (
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1">
+                <Send size={11} />
+                נשלח: {new Date(stats.campaign.started_at).toLocaleString('he-IL', {
+                  day: '2-digit', month: '2-digit', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
+              {stats.campaign.completed_at && (
+                <span className="inline-flex items-center gap-1">
+                  <Check size={11} />
+                  הסתיים: {new Date(stats.campaign.completed_at).toLocaleTimeString('he-IL', {
+                    hour: '2-digit', minute: '2-digit',
+                  })}
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2">
