@@ -13,7 +13,9 @@ export default function GratitudeForm({ token }: { token: string }) {
 
   const [body, setBody] = useState('')
   const [signature, setSignature] = useState('')
-  const [showName, setShowName] = useState(false) // ברירת מחדל: אנונימי
+  // ברירת מחדל: השם מופיע. הסרת הסימון הופכת את המכתב לאנונימי —
+  // גם בתצוגה המקדימה וגם בשליחה.
+  const [showName, setShowName] = useState(true)
 
   const [previewPdf, setPreviewPdf] = useState<string | null>(null)
   const [busy, setBusy] = useState<'preview' | 'send' | null>(null)
@@ -131,7 +133,7 @@ export default function GratitudeForm({ token }: { token: string }) {
             type="text"
             value={signature}
             onChange={e => setSignature(e.target.value.slice(0, 60))}
-            placeholder="למשל: משפחה מודה מבני ברק"
+            placeholder="למשל: משפחת כהן מבני ברק"
             className="w-full rounded-xl border border-slate-300 p-3 text-[15px]
                        focus:outline-none focus:ring-2 focus:border-transparent"
             style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
@@ -147,9 +149,11 @@ export default function GratitudeForm({ token }: { token: string }) {
               style={{ accentColor: NAVY }}
             />
             <span className="text-sm text-slate-600 leading-relaxed">
-              אני מאשרת לציין את שם המשפחה שלי במכתב.
+              אני מאשרת שיופיע שם המשפחה שלי במכתב.
               <span className="block text-xs text-slate-400 mt-0.5">
-                אם לא תסמנו — המכתב יישאר אנונימי לחלוטין.
+                {showName
+                  ? 'להסרת הסימון — המכתב יישלח ללא שם, באופן אנונימי לחלוטין.'
+                  : 'המכתב יישלח ללא שם, באופן אנונימי לחלוטין.'}
               </span>
             </span>
           </label>

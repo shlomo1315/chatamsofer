@@ -89,11 +89,12 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
     dashArray: [3, 3],
   })
 
-  if (input.mode === 'filled') {
-    const anon = input.isAnonymous !== false
+  // חתימה — רק אם המשתמשת אישרה שיופיע שמה.
+  // אנונימי = שורת החתימה נשארת ריקה לגמרי (לא מודפס שום תחליף).
+  if (input.mode === 'filled' && input.isAnonymous === false) {
     const sig = (input.signature ?? '').trim()
-      || (!anon && input.familyName ? `משפחת ${input.familyName}` : 'משפחה מודה')
-    rightText(c, sig.slice(0, 60), lineX1 - 4, y + 6, BODY_SIZE, INK)
+      || (input.familyName ? `משפחת ${input.familyName}` : '')
+    if (sig) rightText(c, sig.slice(0, 60), lineX1 - 4, y + 6, BODY_SIZE, INK)
   }
 
   // קו זהב מסיים בתחתית
