@@ -29,7 +29,13 @@ export interface InboundCtx {
   attachments?: InboundAttachment[]
 }
 
-interface BenRow { family_name?: string | null; spouse_name?: string | null; email?: string | null }
+interface BenRow {
+  family_name?: string | null
+  full_name?: string | null     // שם הבעל
+  spouse_name?: string | null   // שם האשה
+  city?: string | null
+  email?: string | null
+}
 
 /** מחלץ טוקן מכתובת מהצורה office+g<token>@... */
 function extractToken(addresses: string[], kind: PublicTokenKind): string | null {
@@ -59,7 +65,7 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
 
   const { data: aid } = await db
     .from('maternity_aids')
-    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, spouse_name, email)')
+    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, full_name, spouse_name, city, email)')
     .eq('id', aidId)
     .maybeSingle()
   if (!aid) return false
@@ -77,23 +83,30 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
       source: 'scan',
       body: body || null,
       scan_url: image.url,
-      is_anonymous: true,
+      is_anonymous: false,
     }, { onConflict: 'maternity_aid_id' })
     console.log('[gratitude] נקלט שובר סרוק')
     return true
   }
 
-  if (!body) return false
+  if (!body) { console.warn(`[gratitude] גוף ריק אחרי חיתוך ציטוט — לא נקלט`); return false }
 
   // הטקסט שנכתב במייל נשתל בתוך השובר המעוצב
-  const voucher = await buildGratitudeVoucher({ mode: 'filled', body, isAnonymous: true })
+  const voucher = await buildGratitudeVoucher({
+    mode: 'filled',
+    body,
+    familyName: ben?.family_name ?? undefined,
+    husbandName: ben?.full_name ?? undefined,
+    wifeName: ben?.spouse_name ?? undefined,
+    city: ben?.city ?? undefined,
+  })
 
   const { error } = await db.from('gratitude_letters').upsert({
     maternity_aid_id: aidId,
     beneficiary_id: aid.beneficiary_id,
     source: 'email',
     body,
-    is_anonymous: true,
+    is_anonymous: false,
   }, { onConflict: 'maternity_aid_id' })
   if (error) { console.error('[gratitude] שמירה נכשלה:', error.message); return false }
 

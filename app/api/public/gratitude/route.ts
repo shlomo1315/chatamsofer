@@ -29,7 +29,13 @@ function clean(s: unknown, max: number): string {
   return String(s ?? '').replace(/<[^>]*>/g, '').slice(0, max).trim()
 }
 
-interface BenRow { family_name?: string | null; spouse_name?: string | null; email?: string | null }
+interface BenRow {
+  family_name?: string | null
+  full_name?: string | null     // שם הבעל
+  spouse_name?: string | null   // שם האשה
+  city?: string | null
+  email?: string | null
+}
 
 // GET — טעינת מצב הדף (האם כבר נשלח מכתב)
 export async function GET(request: NextRequest) {
@@ -85,23 +91,21 @@ export async function POST(request: NextRequest) {
 
   const { data: aid } = await db
     .from('maternity_aids')
-    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, spouse_name, email)')
+    .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, full_name, spouse_name, city, email)')
     .eq('id', aidId)
     .maybeSingle()
   if (!aid) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
 
   const ben = (Array.isArray(aid.beneficiary) ? aid.beneficiary[0] : aid.beneficiary) as BenRow | null
 
-  // ברירת המחדל: השם מופיע. אנונימי רק אם ביקשו במפורש.
-  const isAnonymous = payload.isAnonymous === true
-  const signature = clean(payload.signature, MAX_SIG)
-
+  // החתימה נקבעת מפרטי המשפחה במערכת — היולדת אינה עורכת אותה, ואין אנונימיות.
   const voucher = await buildGratitudeVoucher({
     mode: 'filled',
     body: text,
-    signature,
     familyName: ben?.family_name ?? undefined,
-    isAnonymous,
+    husbandName: ben?.full_name ?? undefined,
+    wifeName: ben?.spouse_name ?? undefined,
+    city: ben?.city ?? undefined,
   })
 
   // תצוגה מקדימה — לא נשמר דבר
@@ -114,8 +118,9 @@ export async function POST(request: NextRequest) {
     beneficiary_id: aid.beneficiary_id,
     source: 'web',
     body: text,
-    signature: signature || null,
-    is_anonymous: isAnonymous,
+    // החתימה נגזרת מפרטי המשפחה בזמן ההפקה — לא נשמרת ולא נערכת
+    signature: null,
+    is_anonymous: false,
   }, { onConflict: 'maternity_aid_id' })
 
   if (error) {

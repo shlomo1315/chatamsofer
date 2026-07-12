@@ -12,10 +12,6 @@ export default function GratitudeForm({ token }: { token: string }) {
   const [done, setDone] = useState(false)
 
   const [body, setBody] = useState('')
-  const [signature, setSignature] = useState('')
-  // ברירת מחדל: השם מופיע. הסרת הסימון הופכת את המכתב לאנונימי —
-  // גם בתצוגה המקדימה וגם בשליחה.
-  const [showName, setShowName] = useState(true)
 
   const [previewPdf, setPreviewPdf] = useState<string | null>(null)
   const [busy, setBusy] = useState<'preview' | 'send' | null>(null)
@@ -40,8 +36,6 @@ export default function GratitudeForm({ token }: { token: string }) {
         body: JSON.stringify({
           token,
           body: body.trim(),
-          signature: signature.trim(),
-          isAnonymous: !showName,
           preview,
         }),
       })
@@ -129,38 +123,12 @@ export default function GratitudeForm({ token }: { token: string }) {
             </span>
           </div>
 
-          {/* חתימה */}
-          <label className="block text-sm font-semibold text-slate-700 mb-2">
-            חתימה <span className="font-normal text-slate-400">(איך לחתום על המכתב)</span>
-          </label>
-          <input
-            type="text"
-            value={signature}
-            onChange={e => setSignature(e.target.value.slice(0, 60))}
-            placeholder="למשל: משפחת כהן מבני ברק"
-            className="w-full rounded-xl border border-slate-300 p-3 text-[15px]
-                       focus:outline-none focus:ring-2 focus:border-transparent"
-            style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
-          />
-
-          {/* אנונימיות */}
-          <label className="flex items-start gap-3 mt-4 mb-6 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={showName}
-              onChange={e => setShowName(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-slate-300 cursor-pointer"
-              style={{ accentColor: NAVY }}
-            />
-            <span className="text-sm text-slate-600 leading-relaxed">
-              אני מאשרת שיופיע שם המשפחה שלי במכתב.
-              <span className="block text-xs text-slate-400 mt-0.5">
-                {showName
-                  ? 'להסרת הסימון — המכתב יישלח ללא שם, באופן אנונימי לחלוטין.'
-                  : 'המכתב יישלח ללא שם, באופן אנונימי לחלוטין.'}
-              </span>
-            </span>
-          </label>
+          {/* החתימה נקבעת אוטומטית מפרטי המשפחה — אין עריכה ואין אנונימיות */}
+          <div className="mb-6 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+            <p className="text-sm text-slate-600 leading-relaxed">
+              המכתב ייחתם בשם משפחתכם כפי שהוא רשום אצלנו.
+            </p>
+          </div>
 
           {error && (
             <div className="mb-4 rounded-xl bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
@@ -215,7 +183,7 @@ export default function GratitudeForm({ token }: { token: string }) {
         )}
 
         <p className="text-center text-xs text-slate-400 mt-6 leading-relaxed">
-          אין חובה למלא טופס זה — רק מי שרוצה ומרגישה בכך.
+          זו חובה שהיא זכות — להכיר טובה למי שפתח עבורכן את הלב!
         </p>
       </div>
     </main>

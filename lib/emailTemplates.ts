@@ -1211,7 +1211,7 @@ export function gratitudeRequestEmail(opts: {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fefce8;border-right:4px solid #C69D2D;border-radius:8px;padding:12px 16px;">
         <p style="margin:0;color:#713f12;font-size:14px;line-height:1.7;">
-          <strong>אין בכך שום חובה</strong> — רק מי שרוצה ומרגישה בכך.
+          זו <strong>חובה שהיא זכות</strong> — להכיר טובה למי שפתח עבורכן את הלב!
         </p>
       </td></tr>
     </table>
@@ -1220,13 +1220,25 @@ export function gratitudeRequestEmail(opts: {
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr><td style="background:#f8fafc;border-radius:10px;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#1B3256;font-size:14px;font-weight:700;">אפשר גם בדרכים אחרות:</p>
-        <p style="margin:0 0 6px;color:#475569;font-size:13.5px;line-height:1.8;">
+        <p style="margin:0 0 10px;color:#1B3256;font-size:14px;font-weight:700;">אפשר גם בדרכים אחרות:</p>
+
+        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">
           ✉️ <strong>להשיב ישירות למייל הזה</strong> — פשוט לכתוב את הברכה בגוף ההודעה, ואנחנו נדאג לשאר.
         </p>
-        <p style="margin:0;color:#475569;font-size:13.5px;line-height:1.8;">
-          ✍️ <strong>לכתוב בכתב יד</strong> — מצורף כאן דף מעוצב להדפסה. אפשר לצלם אותו ולשלוח לנו במייל חוזר.
+
+        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">
+          ✍️ <strong>לכתוב בכתב יד</strong> — מצורף כאן דף מעוצב להדפסה.
+          אפשר להדפיס אותו, למלא בו את רגשות ליבכן, לסרוק, ולשלוח לנו בחזרה.
         </p>
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 0;">
+          <tr><td style="background:#fef3c7;border-right:3px solid #d97706;border-radius:6px;padding:10px 14px;">
+            <p style="margin:0;color:#78350f;font-size:13px;line-height:1.7;">
+              <strong>חשוב:</strong> כדי שהמערכת תזהה את המכתב שלכן ותשייך אותו אליכן,
+              יש לשלוח אותו <strong>בתשובה למייל הזה</strong> (כפתור "השב") — ולא כמייל חדש.
+            </p>
+          </td></tr>
+        </table>
       </td></tr>
     </table>`
   return {

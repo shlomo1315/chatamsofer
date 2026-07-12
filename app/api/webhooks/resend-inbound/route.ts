@@ -640,6 +640,35 @@ export async function POST(request: NextRequest) {
   }
 
   // העברת עותק ל-Gmail רק עבור מייל חדש (לא בכפילות/ניסיון חוזר של ה-webhook)
+  // ── מענה למכתב ברכה / משוב בית החלמה (plus-addressing) ──
+  //
+  // ⚠️ חייב לרוץ מחוץ ל-if (isNew): Resend שולח את ה-webhook יותר מפעם אחת
+  // (retry על timeout, ו-dual-delivery). בריצה השנייה ה-upsert מדלג בגלל
+  // ignoreDuplicates, isNew הופך ל-false, וכל הבלוק היה מדולג — כולל
+  // ניתוב הברכה. זה גרם למכתבים שנשלחו במייל לא להיקלט.
+  //
+  // בטוח להריץ פעמיים: השמירה היא upsert על maternity_aid_id.
+  {
+    const replyBody = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+    try {
+      const { isGratitudeOrFeedbackReply, handleGratitudeReply, handleFeedbackReply } =
+        await import('@/lib/inboundGratitude')
+
+      if (isGratitudeOrFeedbackReply(candidates)) {
+        const gctx = { recipients: candidates, body: replyBody, attachments }
+        if (await handleGratitudeReply(admin, gctx)) {
+          return NextResponse.json({ ok: true, routed: 'gratitude' })
+        }
+        if (await handleFeedbackReply(admin, gctx)) {
+          return NextResponse.json({ ok: true, routed: 'feedback' })
+        }
+        console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
+      }
+    } catch (e) {
+      console.error('[resend-inbound] gratitude/feedback routing failed:', e)
+    }
+  }
+
   const isNew = (insertedRows?.length ?? 0) > 0
   if (isNew) {
     try {
@@ -685,24 +714,6 @@ export async function POST(request: NextRequest) {
     } catch { /* אבחון בלבד */ }
     // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
     const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
-
-    // ── מענה למכתב ברכה / משוב בית החלמה (plus-addressing: office+g<token> / office+s<token>) ──
-    // נבדק לפני זיהוי הבקשות, כי אלו מסלולים ייעודיים עם טוקן חתום.
-    try {
-      const { isGratitudeOrFeedbackReply } = await import('@/lib/inboundGratitude')
-      if (isGratitudeOrFeedbackReply(candidates)) {
-        const { handleGratitudeReply, handleFeedbackReply } = await import('@/lib/inboundGratitude')
-        const gctx = { recipients: candidates, body: bodyText, attachments }
-        if (await handleGratitudeReply(admin, gctx)) {
-          return NextResponse.json({ ok: true, routed: 'gratitude' })
-        }
-        if (await handleFeedbackReply(admin, gctx)) {
-          return NextResponse.json({ ok: true, routed: 'feedback' })
-        }
-      }
-    } catch (e) {
-      console.error('[resend-inbound] gratitude/feedback routing failed:', e)
-    }
 
     // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
     // (מגן על המקרה שבו הנושא הגיע פגום/מקודד/שונה, אך הגוף הוא טופס בקשה תקין

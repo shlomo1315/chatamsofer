@@ -16,9 +16,26 @@ import type { MailAttachment } from './sendMail'
 export interface GratitudeVoucherInput {
   mode: 'blank' | 'filled'
   body?: string           // הטקסט שהיולדת כתבה (רק ב-filled)
-  signature?: string      // שורת החתימה שבחרה
-  familyName?: string     // מודפס רק אם isAnonymous=false
-  isAnonymous?: boolean   // ברירת מחדל: אנונימי
+  // החתימה נקבעת אוטומטית מפרטי המשפחה — היולדת אינה עורכת אותה.
+  familyName?: string     // שם משפחה
+  husbandName?: string    // שם הבעל
+  wifeName?: string       // שם האשה
+  city?: string           // עיר מגורים
+}
+
+/** בונה את שורת החתימה מפרטי המשפחה: "משפחת כהן — משה ושרה, בני ברק" */
+function buildSignature(i: GratitudeVoucherInput): string {
+  const family = (i.familyName ?? '').trim()
+  const names = [i.husbandName, i.wifeName].map(n => (n ?? '').trim()).filter(Boolean)
+
+  const parts: string[] = []
+  if (family) parts.push(`משפחת ${family}`)
+  if (names.length) parts.push(names.join(' ו'))
+
+  const line = parts.join(' — ')
+  const city = (i.city ?? '').trim()
+
+  return city ? (line ? `${line}, ${city}` : city) : line
 }
 
 const MIN_LINES = 8       // מספר השורות הריקות בשובר להדפסה
@@ -89,12 +106,10 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
     dashArray: [3, 3],
   })
 
-  // חתימה — רק אם המשתמשת אישרה שיופיע שמה.
-  // אנונימי = שורת החתימה נשארת ריקה לגמרי (לא מודפס שום תחליף).
-  if (input.mode === 'filled' && input.isAnonymous === false) {
-    const sig = (input.signature ?? '').trim()
-      || (input.familyName ? `משפחת ${input.familyName}` : '')
-    if (sig) rightText(c, sig.slice(0, 60), lineX1 - 4, y + 6, BODY_SIZE, INK)
+  // חתימה — נקבעת אוטומטית מפרטי המשפחה, ללא עריכה ע"י היולדת.
+  if (input.mode === 'filled') {
+    const sig = buildSignature(input)
+    if (sig) rightText(c, sig.slice(0, 80), lineX1 - 4, y + 6, BODY_SIZE, INK)
   }
 
   // קו זהב מסיים בתחתית
