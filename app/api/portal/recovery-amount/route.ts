@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { recoveryRealizedEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -70,17 +71,16 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // מייל התראה על מימוש זכאות — לכתובת פניות היולדות של בית החלמה
+  // מייל התראה על מימוש זכאות — הודעה תפעולית פנימית.
+  // נשלחת אך ורק לתיבת מחלקת יולדות, ולעולם לא ליולדת עצמה.
   try {
-    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
-    if (rh?.report_email) {
-      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
-      const motherName = ben
-        ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || '—'
-        : '—'
-      const mail = recoveryRealizedEmail({ home, motherName, amount: amt, nights: nightsNum, receipt })
-      await deliverMail(rh.report_email, mail.subject, mail.html)
-    }
+    const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
+    const motherName = ben
+      ? [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || '—'
+      : '—'
+    const mail = recoveryRealizedEmail({ home, motherName, amount: amt, nights: nightsNum, receipt })
+    const dept = mailFor('maternity')
+    await deliverMail(dept.fromEmail, mail.subject, mail.html, undefined, dept)
   } catch { /* כשל מייל לא חוסם */ }
 
   return NextResponse.json({ ok: true })

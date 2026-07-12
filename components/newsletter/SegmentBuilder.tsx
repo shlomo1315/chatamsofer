@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Users, Loader2, MailX, Ban, Filter, Trash2, Plus, UserMinus, RotateCcw } from 'lucide-react'
+import { Users, Loader2, MailX, Ban, Filter, Trash2, Plus, UserMinus, RotateCcw, Download, Upload } from 'lucide-react'
 import type { SegmentDef, SegmentSource } from '@/lib/newsletter/segments'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,10 +34,11 @@ interface FilterOptions {
   eligibilityStatuses: string[]
 }
 
-const SOURCES: { value: SegmentSource; label: string }[] = [
-  { value: 'beneficiaries', label: 'מוטבים' },
-  { value: 'staff', label: 'צוות' },
-  { value: 'recovery_homes', label: 'בתי החלמה' },
+const SOURCES: { value: SegmentSource; label: string; description: string }[] = [
+  { value: 'beneficiaries', label: 'צאצאים', description: 'הצאצאים הרשומים במערכת' },
+  { value: 'staff', label: 'צוות', description: 'אנשי הצוות של הארגון' },
+  { value: 'recovery_homes', label: 'בתי החלמה', description: 'כתובות הדיווח של בתי ההחלמה' },
+  { value: 'contact_list', label: 'רשימה מקובץ', description: 'נמענים שהעליתם מקובץ Excel' },
 ]
 
 // תוויות לסטטוסי הזכאות — רק אלה שקיימים בפועל ב-DB יוצגו
@@ -167,24 +168,39 @@ export default function SegmentBuilder({
     <div className="flex flex-col gap-4">
       {/* ── 1. מקור הקהל ── */}
       <div className={`${CARD} p-5`}>
-        <label className="mb-2.5 block text-sm font-semibold text-slate-700">מקור הקהל</label>
-        <div className="flex gap-2">
+        <h3 className="mb-1 text-base font-bold text-slate-800">לאיזו קבוצה תרצה לשלוח את ההודעה?</h3>
+        <p className="mb-4 text-xs text-slate-500">
+          בחרו את מקור הנמענים. אם הקבוצה שאתם צריכים אינה במערכת — העלו רשימה מקובץ.
+        </p>
+
+        <div className="grid gap-2 sm:grid-cols-2">
           {SOURCES.map(s => (
             <button
               key={s.value}
               type="button"
               onClick={() => onChange({ source: s.value })}
-              className={`rounded-xl border px-5 py-2.5 text-sm font-semibold transition ${
+              className={`rounded-xl border p-3 text-right transition ${
                 def.source === s.value
-                  ? 'border-slate-800 bg-slate-800 text-white'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200'
+                  : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-slate-50'
               }`}
             >
-              {s.label}
+              <div className={`text-sm font-bold ${def.source === s.value ? 'text-indigo-800' : 'text-slate-700'}`}>
+                {s.label}
+              </div>
+              <div className="mt-0.5 text-xs text-slate-500">{s.description}</div>
             </button>
           ))}
         </div>
       </div>
+
+      {/* ── רשימות מקובץ ── */}
+      {def.source === 'contact_list' && (
+        <ContactLists
+          selectedId={def.contactListId}
+          onSelect={id => patch({ contactListId: id })}
+        />
+      )}
 
       {/* ── 2. מסננים ── */}
       {isBen && (
@@ -461,6 +477,135 @@ export default function SegmentBuilder({
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── רשימות נמענים מקובץ ──
+function ContactLists({ selectedId, onSelect }: {
+  selectedId?: string
+  onSelect: (id: string) => void
+}) {
+  const [lists, setLists] = useState<{ id: string; name: string; count: number }[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/newsletter/contacts')
+      const d = await res.json()
+      setLists(d.lists ?? [])
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function upload(file: File) {
+    setUploading(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('name', file.name.replace(/\.[^.]+$/, ''))
+
+      const res = await fetch('/api/admin/newsletter/contacts', { method: 'POST', body: form })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'העלאה נכשלה')
+
+      await load()
+      onSelect(d.listId)
+      setError(d.invalid > 0
+        ? `נקלטו ${d.imported} נמענים. ${d.invalid} שורות דולגו (כתובת לא תקינה).`
+        : '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm('למחוק את הרשימה?')) return
+    await fetch(`/api/admin/newsletter/contacts?id=${id}`, { method: 'DELETE' })
+    load()
+  }
+
+  return (
+    <div className={`${CARD} p-5`}>
+      <h3 className="mb-1 text-sm font-bold text-slate-800">רשימת נמענים מקובץ</h3>
+      <p className="mb-4 text-xs leading-relaxed text-slate-500">
+        הורידו את קובץ הדוגמה, מלאו את הנמענים שלכם, והעלו אותו בחזרה.
+        הקובץ חייב להכיל עמודת <strong>מייל</strong>; שאר העמודות (שם, עיר, טלפון)
+        משמשות למשתני המיזוג ואינן חובה.
+      </p>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        <a
+          href="/api/admin/newsletter/contacts?template=1"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white
+                     px-3.5 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+        >
+          <Download size={15} /> הורדת קובץ דוגמה
+        </a>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2
+                     text-sm font-bold text-white transition hover:bg-indigo-700 disabled:opacity-40"
+        >
+          {uploading ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+          {uploading ? 'מעלה…' : 'העלאת רשימה'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }}
+          className="hidden"
+        />
+      </div>
+
+      {error && (
+        <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{error}</p>
+      )}
+
+      {!lists.length ? (
+        <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400">
+          עדיין לא הועלו רשימות
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {lists.map(l => (
+            <div
+              key={l.id}
+              className={`flex items-center justify-between gap-2 rounded-xl border p-3 transition ${
+                selectedId === l.id
+                  ? 'border-indigo-500 bg-indigo-50'
+                  : 'border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSelect(l.id)}
+                className="min-w-0 flex-1 text-right"
+              >
+                <div className="truncate text-sm font-semibold text-slate-800">{l.name}</div>
+                <div className="text-xs text-slate-400">{l.count.toLocaleString('he-IL')} נמענים</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(l.id)}
+                className="text-slate-300 transition hover:text-rose-600"
+                title="מחיקת הרשימה"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

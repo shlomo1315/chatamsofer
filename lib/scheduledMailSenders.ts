@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { gratitudeRequestEmail, recoveryFeedbackEmail } from './emailTemplates'
-import { signPublicToken } from './publicToken'
+import { signPublicToken, getOrCreateReplyToken } from './publicToken'
 import { buildGratitudeVoucher } from './gratitudeVoucher'
 import type { ScheduledJob } from './scheduledMail'
 
@@ -42,7 +42,10 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
       return { outcome: 'cancelled', reason: 'לידה שקטה' }
     }
 
+    // טוקן ארוך לקישור בדפדפן; מזהה קצר לכתובת המענה (כתובת ארוכה נדחית ע"י Resend)
     const token = signPublicToken('g', String(aid.id))
+    const replyToken = await getOrCreateReplyToken(db, 'g', String(aid.id))
+
     const mail = gratitudeRequestEmail({
       familyName,
       motherName,
@@ -54,7 +57,7 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
     const res = await deliverMail(job.to_email, mail.subject, mail.html, [blankVoucher], {
       ...mailFor('maternity'),
       // plus-addressing — כך המענה החוזר מזוהה אוטומטית ומשויך ללידה
-      replyTo: `office+g${token}@${REPLY_DOMAIN}`,
+      ...(replyToken ? { replyTo: `office+g${replyToken}@${REPLY_DOMAIN}` } : {}),
     })
     return res.ok ? { outcome: 'sent' } : { outcome: 'failed', reason: res.error }
   }
@@ -73,6 +76,8 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
       .order('position')
 
     const token = signPublicToken('s', String(aid.id))
+    const replyToken = await getOrCreateReplyToken(db, 's', String(aid.id))
+
     const mail = recoveryFeedbackEmail({
       familyName,
       motherName,
@@ -83,7 +88,7 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
 
     const res = await deliverMail(job.to_email, mail.subject, mail.html, undefined, {
       ...mailFor('maternity'),
-      replyTo: `office+s${token}@${REPLY_DOMAIN}`,
+      ...(replyToken ? { replyTo: `office+s${replyToken}@${REPLY_DOMAIN}` } : {}),
     })
     return res.ok ? { outcome: 'sent' } : { outcome: 'failed', reason: res.error }
   }

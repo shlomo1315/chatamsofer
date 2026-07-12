@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { verifyPublicToken, type PublicTokenKind } from './publicToken'
+import { verifyReplyToken, type PublicTokenKind } from './publicToken'
 import { parseScores, stripQuotedReply } from './surveyParse'
 import { buildGratitudeVoucher } from './gratitudeVoucher'
 import { deliverMail } from './sendMail'
@@ -33,7 +33,7 @@ interface BenRow { family_name?: string | null; spouse_name?: string | null; ema
 
 /** מחלץ טוקן מכתובת מהצורה office+g<token>@... */
 function extractToken(addresses: string[], kind: PublicTokenKind): string | null {
-  const re = new RegExp(`\\+${kind}([A-Za-z0-9_-]{20,})@`, 'i')
+  const re = new RegExp(`\\+${kind}([A-Za-z0-9_-]{8,})@`, 'i')
   for (const addr of addresses) {
     const m = String(addr ?? '').match(re)
     if (m) return m[1]
@@ -43,7 +43,7 @@ function extractToken(addresses: string[], kind: PublicTokenKind): string | null
 
 /** האם המייל הנכנס מיועד לאחד המסלולים האלה (בדיקה מהירה לפני עיבוד). */
 export function isGratitudeOrFeedbackReply(addresses: string[]): boolean {
-  return addresses.some(a => /\+[gs][A-Za-z0-9_-]{20,}@/i.test(String(a ?? '')))
+  return addresses.some(a => /\+[gs][A-Za-z0-9_-]{8,}@/i.test(String(a ?? '')))
 }
 
 /** קליטת מכתב ברכה שהגיע במייל. מחזיר true אם טופל. */
@@ -51,7 +51,7 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
   const token = extractToken(ctx.recipients, 'g')
   if (!token) return false
 
-  const aidId = verifyPublicToken(token, 'g')
+  const aidId = await verifyReplyToken(db, token, 'g')
   if (!aidId) {
     console.warn('[gratitude] טוקן לא תקין או שפג תוקפו')
     return false
@@ -112,7 +112,7 @@ export async function handleFeedbackReply(db: SupabaseClient, ctx: InboundCtx): 
   const token = extractToken(ctx.recipients, 's')
   if (!token) return false
 
-  const aidId = verifyPublicToken(token, 's')
+  const aidId = await verifyReplyToken(db, token, 's')
   if (!aidId) {
     console.warn('[feedback] טוקן לא תקין או שפג תוקפו')
     return false
