@@ -189,6 +189,14 @@ export default function FeedbackForm({ token }: { token: string }) {
         </p>
       </header>
 
+      {/* הסבר הסולם — פעם אחת בראש, כדי שלא יהיה ספק */}
+      {scaleQuestions.length > 0 && (
+        <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
+          דרגו כל שאלה מ־<strong className="text-rose-500">1</strong> (כלל לא מרוצה)
+          {' '}עד <strong className="text-emerald-600">10</strong> (מרוצה מאוד)
+        </div>
+      )}
+
       <div className="space-y-7 pt-6">
         {scaleQuestions.map(q => (
           <fieldset key={q.id}>
@@ -217,9 +225,10 @@ export default function FeedbackForm({ token }: { token: string }) {
               })}
             </div>
 
-            <div className="mt-1.5 flex justify-between text-[11px] text-slate-400">
-              <span>בכלל לא</span>
-              <span>מצוין</span>
+            {/* סולם ברור — 1 הנמוך ביותר, 10 הגבוה ביותר */}
+            <div className="mt-2 flex items-center justify-between text-[11px]">
+              <span className="font-semibold text-rose-500">1 · כלל לא מרוצה</span>
+              <span className="font-semibold text-emerald-600">10 · מרוצה מאוד</span>
             </div>
           </fieldset>
         ))}

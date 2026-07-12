@@ -1279,8 +1279,17 @@ export function recoveryFeedbackEmail(opts: {
           או פשוט השיבי למייל הזה
         </p>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${list}</table>
-        <p style="margin:14px 0 0;color:#64748b;font-size:13px;line-height:1.8;">
-          כתבי בשורה אחת את הציונים מ־1 עד 10, למשל:
+
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;">
+          <tr><td style="background:#ffffff;border-radius:8px;padding:10px 14px;text-align:center;">
+            <span style="color:#e11d48;font-size:13px;font-weight:700;">1 = כלל לא מרוצה</span>
+            <span style="color:#cbd5e1;font-size:13px;margin:0 8px;">←→</span>
+            <span style="color:#059669;font-size:13px;font-weight:700;">10 = מרוצה מאוד</span>
+          </td></tr>
+        </table>
+
+        <p style="margin:12px 0 0;color:#64748b;font-size:13px;line-height:1.8;">
+          כתבי בשורה אחת את הציונים, למשל:
         </p>
         <p style="margin:6px 0 0;color:#1B3256;font-size:16px;font-weight:700;letter-spacing:1px;direction:ltr;text-align:right;">
           ${example}
