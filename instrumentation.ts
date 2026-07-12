@@ -6,6 +6,7 @@
 const AUTOREPLY_INTERVAL_MS = 15 * 60 * 1000
 const INITIAL_DELAY_MS = 60 * 1000
 const HOURLY_MS = 60 * 60 * 1000
+const MINUTE_MS = 60 * 1000
 
 // התאריך/שעה הנוכחיים לפי שעון ישראל (עמיד לשעון קיץ/חורף)
 function israelParts() {
@@ -101,5 +102,22 @@ export async function register() {
     }
     setTimeout(() => { void tickScheduled(); setInterval(() => { void tickScheduled() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[scheduled-mail] hourly scheduler started')
+  }
+
+  // ── מנוע הדיוור (ניוזלטר) — כל דקה ──
+  // שולח קמפיינים שבסטטוס 'sending' במנות של 100 (Resend Batch API),
+  // עם throttle של 2 בקשות/שנייה. חסין לקריסות: ממשיך מהשורות שנשארו pending.
+  if (process.env.NEWSLETTER_DISABLED !== '1') {
+    const tickNewsletter = async () => {
+      try {
+        const { runCampaignSender } = await import('@/lib/newsletter/sender')
+        const res = await runCampaignSender()
+        if (res.sent || res.failed) {
+          console.log(`[newsletter] sent=${res.sent} failed=${res.failed}`)
+        }
+      } catch (err) { console.error('[newsletter] tick failed', err) }
+    }
+    setTimeout(() => { void tickNewsletter(); setInterval(() => { void tickNewsletter() }, MINUTE_MS) }, INITIAL_DELAY_MS)
+    console.log('[newsletter] sender started (every 1m)')
   }
 }
