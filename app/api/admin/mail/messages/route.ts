@@ -102,11 +102,13 @@ export async function GET(request: NextRequest) {
     const sub = request.nextUrl.searchParams.get('sub')
     if (sub === 'assigned') query = query.not('beneficiary_id', 'is', null)
     else if (sub === 'unassigned') query = query.is('beneficiary_id', null)
+    // ארכיון מסונן לפי המחלקה שאליה שויכה תיבת המקור (עמודת department).
+    // ללא בחירת מחלקה — מוצג הארכיון של כל התיבות.
+    if (department) query = query.eq('department', department)
   } else {
     query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
     query = query.eq('source', 'resend')
-  }
-  if (!isLegacy) {
+    // דואר נכנס רגיל — המחלקה נגזרת מכתובת הנמען
     if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
     else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
   }
