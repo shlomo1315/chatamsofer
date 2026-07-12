@@ -101,11 +101,16 @@ export async function deliverMail(
       ...(options?.scheduledAt ? { scheduledAt: options.scheduledAt } : {}),
       // מעקב פתיחות/קליקים — מופעל רק כשמבקשים במפורש (דיוור).
       // מיילים תפעוליים נשארים ללא מעקב, כדי לא להוסיף פיקסל ולעטוף קישורים.
-      // מעקב פתיחות/קליקים — מופעל כברירת מחדל על כל המיילים, כדי שנדע
-      // אם מייל נפתח בפועל. אפשר לכבות במפורש עם tracking: false.
-      tracking: options?.tracking === false
+      // מעקב פתיחות/קליקים — מופעל כברירת מחדל על כל המיילים.
+      //
+      // ⚠️ ה-SDK של Resend (v6) לא חושף את השדה הזה בטיפוסים, אבל ה-API
+      // מקבל אותו. בלעדיו Resend לא מזריק פיקסל ולא עוטף קישורים, ולכן
+      // לא נשלחים אירועי email.opened / email.clicked ל-webhook.
+      // (זו הייתה הסיבה ל"נפתחו 0".)
+      ...({ tracking: options?.tracking === false
         ? { open: false, click: false }
         : { open: true, click: true },
+      } as Record<string, unknown>),
       // כותרות שמשפרות אמון ומסירה (פחות סיכוי לספאם בג'ימייל/אאוטלוק)
       headers: {
         ...unsubHeaders,

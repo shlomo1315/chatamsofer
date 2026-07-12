@@ -40,24 +40,13 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
 
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
-  drawIssueDate(c, y)
-  y -= 26
-
-  // כותרת ראשית
+  // שובר נקי: רק "דברי ברכה", השורות, ו"בכבוד רב".
+  // (ללא תאריך הנפקה, כותרת משנה, או פסקת הסבר — לבקשת הלקוח.)
+  y -= 20
   centerText(c, 'דברי ברכה', W / 2, y, 24, NAVY)
   y -= 12
   goldDivider(c, W / 2, y)
-  y -= 20
-  centerText(c, 'הכרת הטוב לנדיב שסייע', W / 2, y, 12, SUB)
-  y -= 26
-
-  // פסקת פתיחה קצרה
-  y = paragraph(
-    c,
-    'הסיוע התאפשר בזכות נדיב לב שבחר לתמוך ביולדות הקהילה בעילום שם. כאן ניתן לכתוב לו דברי ברכה והכרת הטוב.',
-    W - MX, y, W - MX * 2, 11, SUB, 4,
-  )
-  y -= 12
+  y -= 34
 
   // ── שורות הכתיבה ──
   const lineX0 = MX + 8
@@ -106,9 +95,6 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
       || (!anon && input.familyName ? `משפחת ${input.familyName}` : 'משפחה מודה')
     rightText(c, sig.slice(0, 60), lineX1 - 4, y + 6, BODY_SIZE, INK)
   }
-
-  // תווית קטנה מתחת לשורת החתימה
-  rightText(c, 'שם / חתימה', lineX1 - 4, y - 12, 8.5, SUB)
 
   // קו זהב מסיים בתחתית
   goldDivider(c, W / 2, 74, 90)
