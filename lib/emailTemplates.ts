@@ -1248,16 +1248,36 @@ export function recoveryFeedbackEmail(opts: {
   motherName?: string | null
   recoveryHome?: string | null
   formUrl: string
+  /** כתובת המענה (plus-addressing) — לבניית טיוטת המייל */
+  replyTo: string
   questions: { position: number; text: string; type: string }[]
 }): BuiltEmail {
   const scaleQs = opts.questions.filter(q => q.type === 'scale')
-  const list = scaleQs.map(q => `
-    <tr><td style="padding:5px 0;color:#334155;font-size:14px;line-height:1.6;">
-      <strong style="color:#1B3256;">${q.position}.</strong> ${escapeHtml(q.text)}
-    </td></tr>`).join('')
-  const example = scaleQs.map(q => `${q.position}-8`).join(' ')
+  const textQs = opts.questions.filter(q => q.type === 'text')
 
   const homeName = opts.recoveryHome ? escapeHtml(opts.recoveryHome) : 'בית ההחלמה'
+
+  // ── טיוטת מייל מוכנה למילוי — אותו דפוס כמו הגשת בקשות במייל ──
+  // הנמענת לוחצת, נפתחת טיוטה עם השאלות, היא ממלאת ציונים ושולחת.
+  const draftLines: string[] = []
+  draftLines.push('דרגי כל שאלה מ-1 (כלל לא מרוצה) עד 10 (מרוצה מאוד).')
+  draftLines.push('כתבי את הציון אחרי הנקודתיים, ושלחי.')
+  draftLines.push('')
+  for (const q of scaleQs) {
+    draftLines.push(`${q.position}. ${q.text}: `)
+  }
+  if (textQs.length) {
+    draftLines.push('')
+    for (const q of textQs) {
+      draftLines.push(`${q.text}: `)
+    }
+  }
+
+  const draftSubject = `משוב · ${opts.recoveryHome ?? 'בית החלמה'}`
+  const draftMailto =
+    `mailto:${opts.replyTo}` +
+    `?subject=${encodeURIComponent(draftSubject)}` +
+    `&body=${encodeURIComponent(draftLines.join('\n'))}`
 
   const body = `
     <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
@@ -1273,29 +1293,17 @@ export function recoveryFeedbackEmail(opts: {
 
     ${btn(opts.formUrl, 'לשיתוף החוויה שלך', '#1B3256')}
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
-      <tr><td style="background:#f8fafc;border-radius:10px;padding:18px 20px;">
-        <p style="margin:0 0 12px;color:#1B3256;font-size:14px;font-weight:700;">
-          או פשוט השיבי למייל הזה
-        </p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${list}</table>
-
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;">
-          <tr><td style="background:#ffffff;border-radius:8px;padding:10px 14px;text-align:center;">
-            <span style="color:#e11d48;font-size:13px;font-weight:700;">1 = כלל לא מרוצה</span>
-            <span style="color:#cbd5e1;font-size:13px;margin:0 8px;">←→</span>
-            <span style="color:#059669;font-size:13px;font-weight:700;">10 = מרוצה מאוד</span>
-          </td></tr>
-        </table>
-
-        <p style="margin:12px 0 0;color:#64748b;font-size:13px;line-height:1.8;">
-          כתבי בשורה אחת את הציונים, למשל:
-        </p>
-        <p style="margin:6px 0 0;color:#1B3256;font-size:16px;font-weight:700;letter-spacing:1px;direction:ltr;text-align:right;">
-          ${example}
-        </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+      <tr><td style="text-align:center;">
+        <p style="margin:0 0 12px;color:#94a3b8;font-size:13px;">— או —</p>
       </td></tr>
-    </table>`
+    </table>
+
+    ${btn(draftMailto, 'מענה מהיר במייל', '#f1f5f9', '#334155')}
+
+    <p style="margin:12px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;text-align:center;">
+      נפתחת טיוטת מייל מוכנה — רק למלא ציון מ־1 עד 10 לכל שאלה, ולשלוח.
+    </p>`
   return {
     subject: 'נשמח לשמוע ממך · היכל החתם סופר',
     html: shell({

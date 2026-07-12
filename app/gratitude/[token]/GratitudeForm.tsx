@@ -46,6 +46,10 @@ export default function GratitudeForm({ token }: { token: string }) {
         }),
       })
       const data = await res.json()
+
+      // כבר התקבל מכתב ללידה הזו (מכל מסלול) — הקישור אינו פעיל עוד
+      if (data.alreadySubmitted) { setSubmitted(true); return }
+
       if (!res.ok) { setError(data.error ?? 'אירעה שגיאה'); return }
 
       if (preview) setPreviewPdf(data.pdf)

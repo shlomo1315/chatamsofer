@@ -78,11 +78,16 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
     const token = signPublicToken('s', String(aid.id))
     const replyToken = await getOrCreateReplyToken(db, 's', String(aid.id))
 
+    const replyAddress = replyToken
+      ? `office+s${replyToken}@${REPLY_DOMAIN}`
+      : `office@${REPLY_DOMAIN}`
+
     const mail = recoveryFeedbackEmail({
       familyName,
       motherName,
       recoveryHome: aid.recovery_home ?? (job.payload?.recovery_home as string | undefined) ?? null,
       formUrl: `${SITE}/feedback/${token}`,
+      replyTo: replyAddress,
       questions: questions ?? [],
     })
 

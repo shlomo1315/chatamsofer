@@ -66,6 +66,23 @@ export async function POST(request: NextRequest) {
   const db = adminClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // חד-פעמיות: אם כבר התקבל מכתב ללידה הזו — מכל מסלול (טופס, מייל,
+  // או שובר סרוק) — הקישור אינו פעיל עוד. (תצוגה מקדימה מותרת תמיד.)
+  if (payload.preview !== true) {
+    const { data: existing } = await db
+      .from('gratitude_letters')
+      .select('id')
+      .eq('maternity_aid_id', aidId)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json(
+        { error: 'כבר התקבל מכתב ברכה עבור לידה זו. תודה רבה!', alreadySubmitted: true },
+        { status: 409 },
+      )
+    }
+  }
+
   const { data: aid } = await db
     .from('maternity_aids')
     .select('id, beneficiary_id, beneficiary:beneficiaries(family_name, spouse_name, email)')
@@ -75,7 +92,8 @@ export async function POST(request: NextRequest) {
 
   const ben = (Array.isArray(aid.beneficiary) ? aid.beneficiary[0] : aid.beneficiary) as BenRow | null
 
-  const isAnonymous = payload.isAnonymous !== false // ברירת מחדל: אנונימי
+  // ברירת המחדל: השם מופיע. אנונימי רק אם ביקשו במפורש.
+  const isAnonymous = payload.isAnonymous === true
   const signature = clean(payload.signature, MAX_SIG)
 
   const voucher = await buildGratitudeVoucher({
