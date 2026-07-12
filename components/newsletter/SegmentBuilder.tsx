@@ -59,7 +59,10 @@ export default function SegmentBuilder({
   value: SegmentDef
   onChange: (v: SegmentDef) => void
 }) {
-  const def = value ?? { source: 'beneficiaries' as SegmentSource }
+  // בלי source — עדיין לא נבחרה קבוצה, ולכן לא מציגים רשימה.
+  // (חשוב: אין ברירת מחדל, אחרת נטענת רשימה אקראית לפני שהמשתמש בחר.)
+  const def = value ?? ({} as SegmentDef)
+  const hasSource = Boolean(def.source)
 
   const [options, setOptions] = useState<FilterOptions>({
     cities: [], communities: [], maritalStatuses: [], eligibilityStatuses: [],
@@ -88,8 +91,10 @@ export default function SegmentBuilder({
       .catch(() => { /* ignore */ })
   }, [])
 
-  // טעינת הרשימה — עם debounce, ותשובות ישנות נזרקות
+  // טעינת הרשימה — רק אחרי שנבחרה קבוצה. עם debounce, ותשובות ישנות נזרקות.
   useEffect(() => {
+    if (!hasSource) { setResult(null); setLoading(false); return }
+
     const id = ++reqId.current
     setLoading(true)
     const t = setTimeout(async () => {
@@ -105,7 +110,7 @@ export default function SegmentBuilder({
       finally { if (id === reqId.current) setLoading(false) }
     }, 400)
     return () => clearTimeout(t)
-  }, [JSON.stringify(def)]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(def), hasSource]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isBen = def.source === 'beneficiaries'
   const recipients = result?.recipients ?? []
@@ -325,7 +330,16 @@ export default function SegmentBuilder({
         </div>
       )}
 
-      {/* ── 3. הרשימה — אחרי המסננים ── */}
+      {/* ── 3. הרשימה — רק אחרי שנבחרה קבוצה ── */}
+      {!hasSource ? (
+        <div className={`${CARD} p-10 text-center`}>
+          <Users size={26} className="mx-auto mb-3 text-slate-300" />
+          <p className="text-sm font-semibold text-slate-600">עדיין לא בחרתם לאיזו קבוצה לשלוח</p>
+          <p className="mt-1 text-xs text-slate-400">
+            בחרו קבוצה למעלה, ורשימת הנמענים תופיע כאן
+          </p>
+        </div>
+      ) : (
       <div className={CARD}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-5">
           <div className="flex items-center gap-3">
@@ -477,6 +491,7 @@ export default function SegmentBuilder({
           </p>
         )}
       </div>
+      )}
     </div>
   )
 }
