@@ -35,7 +35,22 @@ export default function CampaignsTable({ campaigns }: { campaigns: CampaignRow[]
   const router = useRouter()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
-  const [menu, setMenu] = useState<string | null>(null)
+  // התפריט מרונדר fixed מעל הכל — אחרת ה-overflow של הטבלה חותך אותו.
+  // המיקום נגזר ממיקום הכפתור בזמן הלחיצה.
+  const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null)
+
+  function openMenu(e: React.MouseEvent<HTMLButtonElement>, id: string) {
+    if (menu?.id === id) { setMenu(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    const MENU_H = 92
+    // אם אין מקום מתחת — נפתח כלפי מעלה
+    const below = window.innerHeight - r.bottom > MENU_H + 12
+    setMenu({
+      id,
+      top: below ? r.bottom + 4 : r.top - MENU_H - 4,
+      left: r.left,
+    })
+  }
 
   async function duplicate(id: string, name: string) {
     setBusy(id)
@@ -123,56 +138,62 @@ export default function CampaignsTable({ campaigns }: { campaigns: CampaignRow[]
 
                 {/* תפריט פעולות — עוצר את ה-propagation כדי שלא ייפתח הקמפיין */}
                 <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
-                  <div className="relative">
-                    {isBusy ? (
-                      <Loader2 size={16} className="animate-spin text-slate-400" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setMenu(menu === c.id ? null : c.id)}
-                        className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                        title="פעולות"
-                      >
-                        <MoreVertical size={16} />
-                      </button>
-                    )}
-
-                    {menu === c.id && (
-                      <>
-                        <div className="fixed inset-0 z-10" onClick={() => setMenu(null)} />
-                        <div className="absolute left-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-xl
-                                        border border-slate-200 bg-white shadow-lg">
-                          <button
-                            type="button"
-                            onClick={() => duplicate(c.id, c.name)}
-                            className="flex w-full items-center gap-2 px-3 py-2.5 text-right text-sm
-                                       text-slate-700 transition hover:bg-slate-50"
-                          >
-                            <Copy size={14} className="text-slate-400" />
-                            שכפול לשליחה חוזרת
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => remove(c.id, c.name)}
-                            disabled={c.status === 'sending'}
-                            title={c.status === 'sending' ? 'יש לעצור את הקמפיין לפני מחיקה' : undefined}
-                            className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2.5
-                                       text-right text-sm text-rose-600 transition hover:bg-rose-50
-                                       disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Trash2 size={14} />
-                            מחיקה
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  {isBusy ? (
+                    <Loader2 size={16} className="animate-spin text-slate-400" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={e => openMenu(e, c.id)}
+                      className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      title="פעולות"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  )}
                 </td>
               </tr>
             )
           })}
         </tbody>
       </table>
+
+      {/* התפריט מרונדר מחוץ לטבלה (fixed) — כך הוא לא נחתך ע"י ה-overflow */}
+      {menu && (() => {
+        const c = campaigns.find(x => x.id === menu.id)
+        if (!c) return null
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+            <div
+              className="fixed z-50 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+              style={{ top: menu.top, left: menu.left }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => duplicate(c.id, c.name)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-right text-sm
+                           text-slate-700 transition hover:bg-slate-50"
+              >
+                <Copy size={14} className="text-slate-400" />
+                שכפול לשליחה חוזרת
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(c.id, c.name)}
+                disabled={c.status === 'sending'}
+                title={c.status === 'sending' ? 'יש לעצור את הקמפיין לפני מחיקה' : undefined}
+                className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2.5
+                           text-right text-sm text-rose-600 transition hover:bg-rose-50
+                           disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+                מחיקה
+              </button>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
