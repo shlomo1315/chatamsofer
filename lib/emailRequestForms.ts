@@ -9,6 +9,16 @@ export type ReqType = 'birth' | 'silent_birth' | 'loan' | 'financial_aid' | 'wid
 export const LOAN_MAX_AMOUNT = 30_000
 export const LOAN_MAX_INSTALLMENTS = 60
 
+// חלון הזכאות ליולדת: 6 שבועות מהלידה. אותו כלל שהמערכת מיישמת בכל
+// מקום אחר (six_weeks_end, פריקת כרטיסים אוטומטית, סינון בפורטל).
+export const MATERNITY_WINDOW_DAYS = 42
+
+/** תאריך בעברית לתצוגה בהודעות שגיאה: 01/01/2026 */
+function fmtDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
 export const LOAN_PURPOSES = [
   'נישואי הבן/הבת',
   'שמחה משפחתית',
@@ -146,6 +156,20 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   L.push('שימו לב — מלאו כל פרט בדיוק. אם פרט אחד חסר או אינו תקין, הבקשה לא תיקלט.')
   L.push('ההגשה המומלצת היא דרך המערכת הדיגיטלית שלנו; אפשרות זו מיועדת לחסומים בלבד.')
   L.push('אנא השאירו את שמות השדות (לפני הנקודתיים) ללא שינוי, ומלאו רק אחרי הנקודתיים.')
+  // מגבלות שחייבות להופיע לפני המילוי — אחרת המבקש ממלא טופס שנדחה ממילא.
+  if (type === 'birth') {
+    L.push('')
+    L.push('חשוב לדעת לפני המילוי:')
+    // דרכון אינו ניתן לאימות אוטומטי (אין ספרת ביקורת), ובמייל אין בקרה
+    // אנושית. לכן הגשה במייל מוגבלת לת"ז בלבד.
+    L.push('• הגשה במייל אפשרית רק לתינוק שיש לו תעודת זהות ישראלית. אם לתינוק יש דרכון בלבד — יש להגיש דרך המערכת הדיגיטלית.')
+    L.push('• ניתן להגיש עד 6 שבועות מתאריך הלידה. לאחר מכן הבקשה לא תיקלט.')
+  }
+  if (type === 'silent_birth') {
+    L.push('')
+    L.push('חשוב לדעת לפני המילוי:')
+    L.push('• ניתן להגיש עד 6 שבועות מתאריך הלידה. לאחר מכן הבקשה לא תיקלט.')
+  }
   L.push('')
   L.push('━━━ פרטי הבקשה ━━━')
   for (const f of fieldsFor(type, ctx)) {
@@ -275,7 +299,27 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
   if (type === 'birth' || type === 'silent_birth') {
     const bd = parseDateDDMMYYYY(values.birth_date ?? '')
     if (!bd) errors.push('תאריך לידה חסר או לא תקין (פורמט DD/MM/YYYY)')
-    else data.birth_date = bd
+    else {
+      data.birth_date = bd
+      // חלון הזכאות: 6 שבועות (42 יום) מהלידה — אותו כלל שהמערכת מיישמת
+      // בכל מקום אחר (six_weeks_end, פריקת כרטיסים, סינון בפורטל).
+      // בלי הבדיקה כאן, בקשה שהוגשה באיחור נקלטת ומגיעה לאישור לשווא.
+      const birth = new Date(bd)
+      const deadline = new Date(birth.getTime() + MATERNITY_WINDOW_DAYS * 86400000)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (today > deadline) {
+        errors.push(
+          `עברו יותר מ-6 שבועות מתאריך הלידה (${fmtDate(birth)}) — ` +
+          `חלון ההגשה הסתיים ב-${fmtDate(deadline)}, ולכן לא ניתן להגיש את הבקשה. ` +
+          `אם קיימות נסיבות מיוחדות, אנא פנו למשרד.`,
+        )
+      }
+      // לידה עתידית — כמעט תמיד שגיאת הקלדה בשנה
+      if (birth.getTime() > Date.now() + 86400000) {
+        errors.push(`תאריך הלידה (${fmtDate(birth)}) הוא בעתיד — בדקו את התאריך שהוזן`)
+      }
+    }
     const rh = (values.recovery_home ?? '').trim()
     if (!rh) errors.push('חסר בית החלמה')
     else if (!ctx.recoveryHomes.includes(rh)) errors.push(`בית החלמה "${rh}" אינו ברשימה`)
@@ -289,8 +333,15 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
     else data.baby_gender = gender === 'בן' ? 'male' : 'female'
     const bid = (values.baby_id_number ?? '').replace(/\D/g, '')
     if (!bid) errors.push('חסרה תעודת זהות של הנולד/ת')
-    else if (!validateIsraeliId(bid)) errors.push('תעודת הזהות של הנולד/ת אינה תקינה')
-    else data.baby_id_number = bid.padStart(9, '0')
+    else if (bid.length !== 9) errors.push(`תעודת הזהות של הנולד/ת חייבת להיות 9 ספרות (הוזנו ${bid.length})`)
+    // בדיקות שפיות לפני ספרת הביקורת: מספרים כמו 000007070 או 111111111
+    // עוברים את אלגוריתם הביקורת אך אינם ת"ז אמיתית — כמעט תמיד שגיאת
+    // הקלדה. ת"ז ישראלית אמיתית אינה מתחילה ברצף אפסים ארוך.
+    else if (/^0{4}/.test(bid) || /^(\d)\1{8}$/.test(bid)) {
+      errors.push('תעודת הזהות של הנולד/ת אינה תקינה — יש להזין 9 ספרות מתוך תעודת הזהות')
+    }
+    else if (!validateIsraeliId(bid)) errors.push('תעודת הזהות של הנולד/ת אינה תקינה (בדקו את ספרת הביקורת)')
+    else data.baby_id_number = bid
     data.baby_name = (values.baby_name ?? '').trim() || null
     // מוקד לפי מספר מהרשימה
     const num = parseInt((values.card_center ?? '').replace(/\D/g, ''), 10)

@@ -294,9 +294,12 @@ export function requestBlockedRejectedEmail(opts: {
 // ─── הגשת בקשה במייל: דחייה + טמפלט למילוי מחדש ─────────────────────────────
 export function emailIntakeRejectedEmail(opts: {
   name: string; typeLabel: string; errors: string[]; draftHref?: string | null; action?: string; portalUrl?: string
+  // פתיח מוכן שגובר על ברירת המחדל. בבקשות לידה הפנייה היא ליולדת
+  // ("מרת <שם> תחי׳") ולא לבעל — ראה greetMrs.
+  greeting?: string | null
 }): BuiltEmail {
   const { name, typeLabel, errors, draftHref, action, portalUrl = PORTAL_BASE_DEFAULT } = opts
-  const greet = greetHe(name)
+  const greet = opts.greeting?.trim() || greetHe(name)
   const errorList = errors.map(e => `<li style="margin:0 0 4px;">${e}</li>`).join('')
   // הכפתור מפנה ישירות לטופס ההגשה המתאים (?action=birth|loan|aid) ולא לדף הכללי.
   const base = portalUrl.replace(/\/$/, '')

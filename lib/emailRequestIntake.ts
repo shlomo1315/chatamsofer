@@ -3,7 +3,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
-import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail } from './emailTemplates'
+import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
 import {
   detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
   draftMailto, type ReqType,
@@ -41,9 +41,20 @@ const ACTION_PARAM: Record<ReqType, string> = {
 }
 
 // להגשה חוזרת מצרפים *קישור* לטיוטה מוכנה (mailto) במקום להדביק את כל הטקסט.
-function reject(to: string, name: string, type: ReqType, errors: string[], idNumber: string, ctx: Awaited<ReturnType<typeof loadCtx>>) {
+// בבקשות לידה הפנייה היא ליולדת ("מרת <משפחה> <שם האשה> תחי׳") ולא לבעל.
+function reject(
+  to: string, name: string, type: ReqType, errors: string[], idNumber: string,
+  ctx: Awaited<ReturnType<typeof loadCtx>>,
+  ben?: { family_name?: string | null; spouse_name?: string | null } | null,
+) {
   const draftHref = draftMailto(type, idNumber, ctx)
-  const mail = emailIntakeRejectedEmail({ name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type] })
+  const isBirth = type === 'birth' || type === 'silent_birth'
+  const greeting = (isBirth && ben?.spouse_name)
+    ? greetMrs(ben.family_name, ben.spouse_name)
+    : null
+  const mail = emailIntakeRejectedEmail({
+    name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type], greeting,
+  })
   return deliverMail(to, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
@@ -66,7 +77,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, eligibility_status, rejection_reason, marital_status')
+    .select('id, full_name, family_name, spouse_name, eligibility_status, rejection_reason, marital_status')
     .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
     .maybeSingle()
   const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : ''
@@ -102,7 +113,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   }
 
   if (errors.length || !valid.ok) {
-    await reject(from, name, type, errors, idNumber, ctx)
+    await reject(from, name, type, errors, idNumber, ctx, ben)
     return true
   }
 
@@ -167,7 +178,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   if (insErr) {
     console.error('[emailRequestIntake] insert failed:', insErr)
-    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו דרך המערכת הדיגיטלית שלנו'], idNumber, ctx)
+    await reject(from, name, type, ['אירעה שגיאה בקליטת הבקשה. אנא נסו שוב או הגישו דרך המערכת הדיגיטלית שלנו'], idNumber, ctx, ben)
     return true
   }
 
