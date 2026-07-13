@@ -1,14 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserPermissions, SectionKey } from '@/types'
+import { TABLES, tableByName, schemaFor, type TableSpec } from './schema'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// הכלים שהעוזר יכול להפעיל — קריאה בלבד.
+// הכלים של העוזר — קריאה בלבד.
 //
-// ⚠️ עקרון האבטחה: ההרשאות נאכפות *כאן*, בשרת, ולא ע"י המודל. המודל יכול
-// לבקש כל דבר; אם למשתמש אין הרשאה לאותו אגף, הכלי מחזיר שגיאה ולא נתונים.
-// מזכירה של אגף אחד לא תוכל לשאוב מידע מאגף אחר דרך העוזר.
+// במקום כלי לכל שאלה (גישה שתמיד תשאיר פערים), יש כאן שלושה כלים גנריים
+// שעובדים מול *רישום הטבלאות* (schema.ts). התוצאה: כל טבלה שנרשמת שם נגישה
+// לעוזר מיד — כולל מחלקות שיתווספו בעתיד. אין צורך לגעת בקוד הזה.
 //
-// אין כאן שום כלי שכותב, מעדכן או מוחק. הסוכן אינו יכול לשנות דבר.
+// ⚠️ ההרשאות נאכפות כאן, בשרת, ולא ע"י המודל. אין כאן שום כלי שכותב.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ToolCtx {
@@ -17,226 +18,278 @@ export interface ToolCtx {
   isAdmin: boolean
 }
 
-/** האם למשתמש יש גישת צפייה לאגף. */
 function canView(ctx: ToolCtx, section: SectionKey): boolean {
   if (ctx.isAdmin) return true
   const lvl = ctx.perms[section]
   return lvl === 'view' || lvl === 'edit' || lvl === 'add'
 }
 
-function deny(section: string) {
-  return { error: `אין לך הרשאה לצפות בנתוני ${section}. פנה למנהל המערכת.` }
+/** האם המשתמש רשאי לגעת בטבלה. */
+function allowed(ctx: ToolCtx, spec: TableSpec): boolean {
+  if (spec.perm === null) return true          // פתוח לכל הצוות (למשל דואר)
+  return canView(ctx, spec.perm)
 }
 
-// ─── הגדרות הכלים (נשלחות למודל) ────────────────────────────────────────────
+/** תיאור כל הטבלאות שהמשתמש רשאי לראות — נשלח למודל בהנחיה. */
+export function schemaForUser(ctx: ToolCtx): string {
+  return schemaFor(s => canView(ctx, s), ctx.isAdmin)
+}
+
+// ─── הגדרות הכלים ────────────────────────────────────────────────────────────
 
 export const TOOL_DEFS = [
   {
-    name: 'get_dashboard',
-    description: 'סיכום כללי של המערכת: כמה בקשות ממתינות לאישור בכל אגף, כמה נרשמו לאחרונה, כמה תיקים פעילים. השתמש בזה לשאלות כמו "מה המצב?" או "מה ממתין לי?".',
+    name: 'query_data',
+    description:
+      'שולף רשומות מכל טבלה במערכת. זה הכלי הראשי — השתמש בו לכל שאלה על נתונים. ' +
+      'רשימת הטבלאות והעמודות שלהן מופיעה בהנחיה. אפשר לסנן לפי סטטוס, לפי טווח ימים, ' +
+      'ולחפש טקסט חופשי.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        table: { type: 'string', description: 'שם הטבלה, בדיוק כפי שמופיע ברשימה בהנחיה' },
+        search: { type: 'string', description: 'חיפוש טקסט חופשי (שם, נושא, עיר). מחפש מילה-מילה, כך ש"שלמה ויסברג" ימצא גם כששם פרטי ומשפחה בשדות נפרדים.' },
+        status: { type: 'string', description: 'סינון לפי סטטוס, למשל pending' },
+        days: { type: 'number', description: 'רק רשומות מ-N הימים האחרונים. 1 = היום.' },
+        limit: { type: 'number', description: 'כמה להחזיר (ברירת מחדל 25, מקסימום 100)' },
+      },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'count_data',
+    description:
+      'סופר רשומות בטבלה, עם אותם סינונים כמו query_data. השתמש בזה כשמספיק מספר ' +
+      '("כמה נרשמו השבוע?") — זה מהיר בהרבה משליפת הרשומות עצמן. ' +
+      'אפשר גם לקבל פילוח לפי עמודה (group_by), למשל כמה בכל סטטוס או בכל בית החלמה.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        table: { type: 'string', description: 'שם הטבלה' },
+        status: { type: 'string' },
+        days: { type: 'number' },
+        search: { type: 'string' },
+        group_by: { type: 'string', description: 'עמודה לפילוח, למשל status / recovery_home / to_email' },
+      },
+      required: ['table'],
+    },
+  },
+  {
+    name: 'get_overview',
+    description:
+      'תמונת מצב כוללת של כל המערכת בקריאה אחת: כמה ממתין לטיפול בכל אגף, כמה נרשמו ' +
+      'לאחרונה, דואר שלא נקרא. השתמש בזה לשאלות כמו "מה המצב?", "מה ממתין לי?", ' +
+      '"תן לי סיכום". מהיר — עדיף על מספר קריאות ל-count_data.',
     input_schema: { type: 'object' as const, properties: {}, required: [] },
-  },
-  {
-    name: 'get_pending_tasks',
-    description: 'רשימת כל המשימות שממתינות לטיפול: בקשות שלא אושרו, מסמכים חסרים, כרטיסים שממתינים. השתמש בזה לשאלות כמו "מה אני צריך לעשות?" או "מה דחוף?".',
-    input_schema: { type: 'object' as const, properties: {}, required: [] },
-  },
-  {
-    name: 'count_registrations',
-    description: 'כמה משפחות נרשמו בטווח זמן. לשאלות כמו "כמה נרשמו היום/השבוע/החודש?".',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        days: { type: 'number', description: 'כמה ימים אחורה לספור. 1 = היום, 7 = השבוע האחרון, 30 = החודש.' },
-      },
-      required: ['days'],
-    },
-  },
-  {
-    name: 'search_beneficiary',
-    description: 'חיפוש משפחה לפי שם או תעודת זהות. מחזיר את הפרטים והסטטוס.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: { type: 'string', description: 'שם משפחה, שם פרטי, או מספר תעודת זהות' },
-      },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'list_requests',
-    description: 'רשימת בקשות באגף מסוים, עם אפשרות לסנן לפי סטטוס.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        section: {
-          type: 'string',
-          enum: ['maternity', 'loans', 'financial_aid', 'widows'],
-          description: 'האגף: maternity=יולדות, loans=הלוואות, financial_aid=סיוע רפואי, widows=אלמנות',
-        },
-        status: { type: 'string', description: 'סטטוס לסינון, למשל pending (ממתין). השאר ריק לכל הסטטוסים.' },
-        limit: { type: 'number', description: 'כמה תוצאות להחזיר (ברירת מחדל 20)' },
-      },
-      required: ['section'],
-    },
-  },
-  {
-    name: 'get_stats',
-    description: 'סטטיסטיקה מספרית על אגף: כמה בקשות, סכומים כוללים, פילוח לפי סטטוס.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        section: {
-          type: 'string',
-          enum: ['maternity', 'loans', 'financial_aid', 'widows', 'beneficiaries'],
-        },
-        days: { type: 'number', description: 'טווח בימים. השאר ריק לכל הזמנים.' },
-      },
-      required: ['section'],
-    },
   },
 ]
 
 // ─── מימוש ───────────────────────────────────────────────────────────────────
 
-const SECTION_TABLE: Record<string, { table: string; perm: SectionKey; label: string }> = {
-  maternity: { table: 'maternity_aids', perm: 'maternity', label: 'יולדות' },
-  loans: { table: 'loans', perm: 'loans', label: 'הלוואות' },
-  financial_aid: { table: 'financial_aid_requests', perm: 'financial_aid', label: 'סיוע רפואי' },
-  widows: { table: 'widow_requests', perm: 'widows', label: 'אלמנות ויתומים' },
-  beneficiaries: { table: 'beneficiaries', perm: 'beneficiaries', label: 'משפחות' },
+function sinceISO(days?: number): string | null {
+  const d = Number(days)
+  if (!d || d <= 0) return null
+  const t = new Date()
+  t.setHours(0, 0, 0, 0)                       // "היום" = מתחילת היום, לא 24 שעות אחורה
+  t.setDate(t.getDate() - (d - 1))
+  return t.toISOString()
 }
 
-function sinceISO(days?: number): string | null {
-  if (!days || days <= 0) return null
-  return new Date(Date.now() - days * 86400000).toISOString()
+const BEN_JOIN = 'beneficiary:beneficiaries(family_name, full_name, spouse_name, id_number, phone, city)'
+
+/** בונה שאילתה עם כל הסינונים. משותף ל-query ול-count. */
+function buildQuery(
+  db: SupabaseClient,
+  spec: TableSpec,
+  input: Record<string, unknown>,
+  select: string,
+  countOnly = false,
+) {
+  let q = countOnly
+    ? db.from(spec.table).select(select, { count: 'exact', head: true })
+    : db.from(spec.table).select(select)
+
+  if (input.status && spec.statusCol) {
+    q = q.eq(spec.statusCol, String(input.status))
+  }
+
+  const since = sinceISO(Number(input.days))
+  if (since && spec.dateCol) {
+    q = q.gte(spec.dateCol, since)
+  }
+
+  return q
+}
+
+/**
+ * חיפוש טקסט. קריטי: המשתמש כותב "שלמה ויסברג", אבל במסד השם הפרטי ושם
+ * המשפחה בשדות נפרדים — ולכן ILIKE על המחרוזת השלמה לא מתאים לאף שדה.
+ * מחפשים מילה-מילה, ואז מדרגים לפי כמה מילים תאמו.
+ */
+async function searchRows(
+  db: SupabaseClient,
+  spec: TableSpec,
+  term: string,
+  input: Record<string, unknown>,
+  select: string,
+  limit: number,
+): Promise<Record<string, unknown>[]> {
+  const cols = spec.searchCols ?? []
+  if (!cols.length) return []
+
+  // ת"ז / מספר — התאמה מדויקת
+  const digits = term.replace(/\D/g, '')
+  if (digits.length >= 7 && spec.columns.includes('id_number')) {
+    const idFilter = spec.columns.includes('spouse_id_number')
+      ? `id_number.eq.${digits},spouse_id_number.eq.${digits}`
+      : `id_number.eq.${digits}`
+    const { data } = await buildQuery(db, spec, input, select).or(idFilter).limit(limit)
+    if (data?.length) return data as never
+  }
+
+  const words = term.split(/\s+/)
+    .map(w => w.trim())
+    .filter(w => w.length >= 2 && !['הרב', 'רבי', 'מרת', 'של'].includes(w))
+  if (!words.length) return []
+
+  const hits = new Map<string, Record<string, unknown>>()
+  for (const w of words) {
+    const or = cols.map(c => `${c}.ilike.%${w}%`).join(',')
+    const { data } = await buildQuery(db, spec, input, select).or(or).limit(60)
+    for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+      hits.set(String(r.id ?? JSON.stringify(r)), r)
+    }
+  }
+  if (!hits.size) return []
+
+  // דירוג: התאמה ליותר מילים = רלוונטי יותר
+  const scored = [...hits.values()].map(r => {
+    const hay = cols.map(c => String(r[c] ?? '')).join(' ').toLowerCase()
+    return { r, score: words.filter(w => hay.includes(w.toLowerCase())).length }
+  }).sort((a, b) => b.score - a.score)
+
+  const best = scored[0].score
+  return scored.filter(s => s.score === best).slice(0, limit).map(s => s.r)
 }
 
 export async function runTool(ctx: ToolCtx, name: string, input: Record<string, unknown>): Promise<unknown> {
   const { db } = ctx
 
   switch (name) {
-    // ── סיכום כללי ──────────────────────────────────────────────────────────
-    case 'get_dashboard': {
+    // ── שליפת רשומות ────────────────────────────────────────────────────────
+    case 'query_data': {
+      const spec = tableByName(String(input.table ?? ''))
+      if (!spec) {
+        return { error: `הטבלה "${input.table}" אינה קיימת. הטבלאות הזמינות מופיעות בהנחיה.` }
+      }
+      if (!allowed(ctx, spec)) {
+        return { error: `אין לך הרשאה לצפות ב${spec.label}.` }
+      }
+
+      const limit = Math.min(Math.max(Number(input.limit) || 25, 1), 100)
+      const select = spec.joinBeneficiary
+        ? `${spec.columns.join(', ')}, ${BEN_JOIN}`
+        : spec.columns.join(', ')
+
+      const term = String(input.search ?? '').trim()
+      if (term) {
+        const rows = await searchRows(db, spec, term, input, select, limit)
+        if (!rows.length) return { message: `לא נמצאו תוצאות עבור "${term}" ב${spec.label}` }
+        return { טבלה: spec.label, נמצאו: rows.length, רשומות: rows }
+      }
+
+      let q = buildQuery(db, spec, input, select)
+      if (spec.dateCol) q = q.order(spec.dateCol, { ascending: false })
+
+      const { data, error } = await q.limit(limit)
+      if (error) {
+        console.error('[assistant] query_data:', spec.table, error.message)
+        return { error: 'שגיאה בשליפת הנתונים' }
+      }
+      if (!data?.length) return { message: `לא נמצאו רשומות ב${spec.label}` }
+      return { טבלה: spec.label, נמצאו: data.length, רשומות: data }
+    }
+
+    // ── ספירה ופילוח ────────────────────────────────────────────────────────
+    case 'count_data': {
+      const spec = tableByName(String(input.table ?? ''))
+      if (!spec) return { error: `הטבלה "${input.table}" אינה קיימת.` }
+      if (!allowed(ctx, spec)) return { error: `אין לך הרשאה לצפות ב${spec.label}.` }
+
+      const groupBy = String(input.group_by ?? '').trim()
+
+      if (groupBy) {
+        if (!spec.columns.includes(groupBy)) {
+          return { error: `העמודה "${groupBy}" אינה קיימת ב${spec.label}.` }
+        }
+        // שולפים רק את עמודת הפילוח וסופרים בצד שלנו
+        const { data, error } = await buildQuery(db, spec, input, groupBy).limit(2000)
+        if (error) return { error: 'שגיאה בשליפת הנתונים' }
+
+        const counts: Record<string, number> = {}
+        for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+          const k = r[groupBy] == null || r[groupBy] === '' ? '(ריק)' : String(r[groupBy])
+          counts[k] = (counts[k] ?? 0) + 1
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
+        return { טבלה: spec.label, פילוח_לפי: groupBy, סהכ: data?.length ?? 0, תוצאות: Object.fromEntries(sorted) }
+      }
+
+      const { count, error } = await buildQuery(db, spec, input, 'id', true)
+      if (error) return { error: 'שגיאה בספירה' }
+      return { טבלה: spec.label, כמות: count ?? 0 }
+    }
+
+    // ── תמונת מצב כוללת ─────────────────────────────────────────────────────
+    case 'get_overview': {
       const out: Record<string, unknown> = {}
 
-      if (canView(ctx, 'beneficiaries')) {
-        const { count: total } = await db.from('beneficiaries').select('*', { count: 'exact', head: true })
-        const { count: week } = await db.from('beneficiaries')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', sinceISO(7)!)
-        const { count: pending } = await db.from('beneficiaries')
-          .select('*', { count: 'exact', head: true })
-          .eq('eligibility_status', 'pending')
-        out.משפחות = { סהכ: total ?? 0, נרשמו_השבוע: week ?? 0, ממתינות_לאישור: pending ?? 0 }
+      // כל הספירות במקביל — סדרתי היה איטי מאוד
+      const jobs: Promise<void>[] = []
+
+      const bens = tableByName('beneficiaries')!
+      if (allowed(ctx, bens)) {
+        jobs.push((async () => {
+          const [total, week, pending, docs] = await Promise.all([
+            db.from('beneficiaries').select('id', { count: 'exact', head: true }),
+            db.from('beneficiaries').select('id', { count: 'exact', head: true }).gte('created_at', sinceISO(7)!),
+            db.from('beneficiaries').select('id', { count: 'exact', head: true }).eq('eligibility_status', 'pending'),
+            db.from('beneficiaries').select('id', { count: 'exact', head: true }).eq('eligibility_status', 'docs_pending'),
+          ])
+          out['משפחות'] = {
+            סהכ: total.count ?? 0,
+            נרשמו_השבוע: week.count ?? 0,
+            ממתינות_לאישור: pending.count ?? 0,
+            ממתינות_למסמכים: docs.count ?? 0,
+          }
+        })())
       }
 
-      for (const [key, cfg] of Object.entries(SECTION_TABLE)) {
-        if (key === 'beneficiaries' || !canView(ctx, cfg.perm)) continue
-        const { count: pending } = await db.from(cfg.table)
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending')
-        out[cfg.label] = { ממתינות_לאישור: pending ?? 0 }
+      // בקשות ממתינות בכל אגף שיש בו סטטוס
+      for (const spec of TABLES) {
+        if (!spec.statusCol || spec.table === 'beneficiaries' || spec.table === 'campaigns') continue
+        if (!allowed(ctx, spec)) continue
+        jobs.push((async () => {
+          const { count } = await db.from(spec.table)
+            .select('id', { count: 'exact', head: true })
+            .eq(spec.statusCol!, 'pending')
+          if (count) out[spec.label] = { ממתינות_לאישור: count }
+        })())
       }
+
+      // דואר
+      jobs.push((async () => {
+        const [today, unread] = await Promise.all([
+          db.from('inbound_emails').select('id', { count: 'exact', head: true }).gte('created_at', sinceISO(1)!),
+          db.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('is_read', false),
+        ])
+        out['דואר'] = { התקבלו_היום: today.count ?? 0, לא_נקראו: unread.count ?? 0 }
+      })())
+
+      await Promise.all(jobs)
 
       if (!Object.keys(out).length) return { error: 'אין לך הרשאות צפייה לאף אגף.' }
       return out
-    }
-
-    // ── משימות פתוחות ───────────────────────────────────────────────────────
-    case 'get_pending_tasks': {
-      const tasks: { אגף: string; משימה: string; כמות: number }[] = []
-
-      if (canView(ctx, 'beneficiaries')) {
-        const { count: p } = await db.from('beneficiaries')
-          .select('*', { count: 'exact', head: true }).eq('eligibility_status', 'pending')
-        if (p) tasks.push({ אגף: 'איגוד הצאצאים', משימה: 'רישומים ממתינים לאישור', כמות: p })
-
-        const { count: d } = await db.from('beneficiaries')
-          .select('*', { count: 'exact', head: true }).eq('eligibility_status', 'docs_pending')
-        if (d) tasks.push({ אגף: 'איגוד הצאצאים', משימה: 'ממתינים להשלמת מסמכים', כמות: d })
-      }
-
-      for (const [key, cfg] of Object.entries(SECTION_TABLE)) {
-        if (key === 'beneficiaries' || !canView(ctx, cfg.perm)) continue
-        const { count } = await db.from(cfg.table)
-          .select('*', { count: 'exact', head: true }).eq('status', 'pending')
-        if (count) tasks.push({ אגף: cfg.label, משימה: 'בקשות ממתינות לאישור', כמות: count })
-      }
-
-      return tasks.length ? tasks : { message: 'אין כרגע משימות פתוחות.' }
-    }
-
-    // ── ספירת נרשמים ────────────────────────────────────────────────────────
-    case 'count_registrations': {
-      if (!canView(ctx, 'beneficiaries')) return deny('משפחות')
-      const days = Number(input.days) || 1
-      const { count } = await db.from('beneficiaries')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', sinceISO(days)!)
-      return { ימים_אחורה: days, נרשמו: count ?? 0 }
-    }
-
-    // ── חיפוש משפחה ─────────────────────────────────────────────────────────
-    case 'search_beneficiary': {
-      if (!canView(ctx, 'beneficiaries')) return deny('משפחות')
-      const q = String(input.query ?? '').trim()
-      if (!q) return { error: 'לא צוין מה לחפש' }
-
-      const digits = q.replace(/\D/g, '')
-      const filter = digits.length >= 5
-        ? `id_number.eq.${digits},spouse_id_number.eq.${digits}`
-        : `family_name.ilike.%${q}%,full_name.ilike.%${q}%,spouse_name.ilike.%${q}%`
-
-      const { data } = await db.from('beneficiaries')
-        .select('id, family_name, full_name, spouse_name, id_number, phone, city, eligibility_status')
-        .or(filter)
-        .limit(10)
-
-      if (!data?.length) return { message: `לא נמצאה משפחה עבור "${q}"` }
-      return data
-    }
-
-    // ── רשימת בקשות ─────────────────────────────────────────────────────────
-    case 'list_requests': {
-      const cfg = SECTION_TABLE[String(input.section)]
-      if (!cfg) return { error: 'אגף לא מוכר' }
-      if (!canView(ctx, cfg.perm)) return deny(cfg.label)
-
-      let q = db.from(cfg.table)
-        .select('id, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number)')
-        .order('created_at', { ascending: false })
-        .limit(Math.min(Number(input.limit) || 20, 50))
-
-      if (input.status) q = q.eq('status', String(input.status))
-
-      const { data, error } = await q
-      if (error) return { error: 'שגיאה בשליפת הנתונים' }
-      return data?.length ? data : { message: 'לא נמצאו בקשות' }
-    }
-
-    // ── סטטיסטיקה ───────────────────────────────────────────────────────────
-    case 'get_stats': {
-      const cfg = SECTION_TABLE[String(input.section)]
-      if (!cfg) return { error: 'אגף לא מוכר' }
-      if (!canView(ctx, cfg.perm)) return deny(cfg.label)
-
-      const since = sinceISO(Number(input.days))
-      const statuses = ['pending', 'approved', 'rejected', 'active', 'completed']
-      const out: Record<string, number> = {}
-
-      for (const s of statuses) {
-        let q = db.from(cfg.table).select('*', { count: 'exact', head: true }).eq('status', s)
-        if (since) q = q.gte('created_at', since)
-        const { count } = await q
-        if (count) out[s] = count
-      }
-
-      let totalQ = db.from(cfg.table).select('*', { count: 'exact', head: true })
-      if (since) totalQ = totalQ.gte('created_at', since)
-      const { count: total } = await totalQ
-
-      return { אגף: cfg.label, סהכ: total ?? 0, לפי_סטטוס: out }
     }
 
     default:

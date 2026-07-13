@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { BotMessageSquare, Sparkles, X, Send, Loader2, AlertCircle } from 'lucide-react'
+import { BotMessageSquare, Sparkles, X, Send, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עוזר AI — כפתור צף בכל מסכי הניהול.
@@ -32,6 +32,20 @@ export default function AssistantWidget() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [msgs, busy])
+
+  /** מנקה את השיחה ומתחיל מחדש. */
+  const reset = () => {
+    setMsgs([])
+    setInput('')
+    setErr('')
+    inputRef.current?.focus()
+  }
+
+  /** סגירה — מאפסת את השיחה, כך שפתיחה מחדש תמיד מתחילה נקי. */
+  const close = () => {
+    setOpen(false)
+    reset()
+  }
 
   const send = async (text: string) => {
     const q = text.trim()
@@ -111,12 +125,24 @@ export default function AssistantWidget() {
                 <p className="text-indigo-200 text-[11px]">שאל אותי על המערכת</p>
               </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              <X size={17} />
-            </button>
+            <div className="flex items-center gap-0.5">
+              {msgs.length > 0 && (
+                <button
+                  onClick={reset}
+                  title="שיחה חדשה"
+                  className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                >
+                  <RotateCcw size={15} />
+                </button>
+              )}
+              <button
+                onClick={close}
+                title="סגירה"
+                className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X size={17} />
+              </button>
+            </div>
           </div>
 
           {/* השיחה */}
@@ -130,7 +156,7 @@ export default function AssistantWidget() {
                   במה היית רוצה להתמקד כרגע?
                 </div>
 
-                <p className="text-xs text-slate-400 font-semibold mt-2">אפשר להתחיל מכאן:</p>
+                <p className="text-xs text-slate-400 font-semibold mt-2">קיצורים מהירים:</p>
                 {SUGGESTIONS.map(s => (
                   <button
                     key={s}
