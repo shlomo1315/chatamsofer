@@ -24,7 +24,7 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack, minDaysBack }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
@@ -33,14 +33,20 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   // birthYearRange — רשימת השנים תתחיל בגיל minAge (למשל 18), כך שטווח הגילאים הרלוונטי
   // מוצג בראש בלי צורך לגלול. אינו חוסם — ניתן לגלול לשנים מבוגרות יותר.
   birthYearRange?: { minAge: number; maxAge: number }
-  // minMonthsBack — חוסם בחירת תאריך מוקדם מ-N חודשים אחורה מהיום (למשל לידה עד חודשיים אחורה).
+  // minMonthsBack — חוסם בחירת תאריך מוקדם מ-N חודשים אחורה מהיום.
   minMonthsBack?: number
+  // minDaysBack — חוסם בחירת תאריך מוקדם מ-N ימים אחורה. עדיף על minMonthsBack
+  // כשהחוק נמדד בימים: חלון הזכאות ליולדת הוא 42 יום, ו"חודשיים" נותנים ~60 —
+  // כמעט שבועיים וחצי יותר מהמותר. גובר על minMonthsBack אם שניהם הוגדרו.
+  minDaysBack?: number
 }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  // התאריך המוקדם ביותר שניתן לבחור (אם הוגדר minMonthsBack)
-  const minDate = minMonthsBack != null
-    ? (() => { const d = new Date(today); d.setMonth(d.getMonth() - minMonthsBack); return d })()
-    : null
+  // התאריך המוקדם ביותר שניתן לבחור
+  const minDate = minDaysBack != null
+    ? (() => { const d = new Date(today); d.setDate(d.getDate() - minDaysBack); return d })()
+    : minMonthsBack != null
+      ? (() => { const d = new Date(today); d.setMonth(d.getMonth() - minMonthsBack); return d })()
+      : null
   const selected = value ? new Date(value) : null
   if (selected) selected.setHours(0, 0, 0, 0)
 

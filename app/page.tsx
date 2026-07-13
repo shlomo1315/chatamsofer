@@ -13,7 +13,7 @@ import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
-import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
+import { LOAN_DECLARATIONS, MATERNITY_WINDOW_DAYS } from '@/lib/emailRequestForms'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -3676,11 +3676,13 @@ export default function PublicPortalPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
                   <Field label="תאריך הלידה" required>
+                    {/* חלון הזכאות הוא 42 יום. minMonthsBack={2} נתן ~60 יום —
+                        כמעט שבועיים וחצי יותר מהמותר, ובקשות באיחור נקלטו. */}
                     <HebrewDatePicker
                       value={birthForm.birth_date}
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
-                      minMonthsBack={2}
+                      minDaysBack={MATERNITY_WINDOW_DAYS}
                     />
                   </Field>
                 </div>
@@ -3834,7 +3836,7 @@ export default function PublicPortalPage() {
                       value={silentForm.birth_date}
                       onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
-                      minMonthsBack={2}
+                      minDaysBack={MATERNITY_WINDOW_DAYS}
                     />
                   </Field>
                 </div>
