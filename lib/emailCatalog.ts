@@ -149,7 +149,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'digital_note', label: 'המלצה על המערכת הדיגיטלית', default: 'מומלץ להגיש דרך המערכת הדיגיטלית שלנו (אם אינכם חסומים) — פשוט ומהיר:', multiline: true },
       { key: 'digital_button', label: 'טקסט הכפתור', default: 'הגשת בקשה במערכת הדיגיטלית' },
       { key: 'draft_note', label: 'הסבר על הגשה חוזרת במייל', default: 'להגשה חוזרת במייל — לחצו לפתיחת טיוטה מוכנה, מלאו וצרפו את הקובץ הנדרש:', multiline: true },
-      { key: 'draft_button', label: 'טקסט קישור הטיוטה', default: 'פתיחת טיוטת בקשה מוכנה במייל' },
+      { key: 'draft_button', label: 'טקסט קישור הטיוטה', default: 'פתיחת טיוטת {סוג} מוכנה במייל', vars: ['{סוג}'], hint: '{סוג} יוחלף ב"בקשת לידה" / "בקשת הלוואה" וכו׳' },
     ],
   },
 

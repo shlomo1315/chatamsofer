@@ -19,6 +19,16 @@ function israelParts() {
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
+
+  // טקסטי המיילים הערוכים — נטענים למטמון בעליית התהליך, כדי שתבניות המייל
+  // (שהן סינכרוניות) יוכלו לקרוא אותם. גם בפיתוח, כדי שההתנהגות זהה.
+  try {
+    const { loadEmailTexts } = await import('@/lib/emailTextsStore')
+    await loadEmailTexts()
+  } catch (e) {
+    console.error('[instrumentation] טעינת טקסטי המיילים נכשלה:', e)
+  }
+
   if (process.env.NODE_ENV !== 'production') return
 
   // ── מענה אוטומטי לתיבת המשרד (ניתן לכבות עם AUTO_REPLY_DISABLED=1) ──

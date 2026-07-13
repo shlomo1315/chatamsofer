@@ -69,8 +69,9 @@ export default async function SettingsPage() {
   await assertAdmin()
   const [profiles, recoveryHomes] = await Promise.all([getProfiles(), getRecoveryHomes()])
 
+  // max-w-5xl — טאב "הודעות מייל" מציג עריכה ותצוגת מייל זו לצד זו
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6 max-w-5xl">
       <PageHeader title="הגדרות" subtitle="ניהול המערכת והמשתמשים" />
 
       <div className="flex flex-col gap-3">

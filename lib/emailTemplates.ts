@@ -1,6 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // תבניות מייל מעוצבות — inline styles לתאימות מרבית עם תוכנות מייל
+//
+// טקסטים הניתנים לעריכה ממסך ההגדרות ("הודעות מייל") נקראים דרך textFor().
+// הפונקציה סינכרונית (המטמון נטען בעליית השרת ומתרענן בכל שמירה), ולכן
+// התבניות נשארות סינכרוניות ואין צורך לשנות את כל מקומות הקריאה.
 // ─────────────────────────────────────────────────────────────────────────────
+import { textFor } from './emailTextsStore'
 
 export interface BuiltEmail {
   subject: string
@@ -304,29 +309,34 @@ export function emailIntakeRejectedEmail(opts: {
   // הכפתור מפנה ישירות לטופס ההגשה המתאים (?action=birth|loan|aid) ולא לדף הכללי.
   const base = portalUrl.replace(/\/$/, '')
   const digitalUrl = action ? `${base}/?action=${action}` : `${base}/`
+
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל"). textFor מחזיר את
+  // הערך הערוך, ובהיעדרו את ברירת המחדל — שזהה לטקסט שהיה כאן קשיח.
+  // {סוג} מוחלף בסוג הבקשה, כדי שהעריכה לא תאבד את התוכן הדינמי.
+  const T = (k: string) => escapeHtml(textFor('email_intake_rejected', k).replace(/\{סוג\}/g, typeLabel))
+
   // "הגשה חוזרת" — קישור לטיוטה מוכנה (mailto) במקום הדבקת כל הטקסט.
   const draftBlock = draftHref ? `
-    <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">להגשה חוזרת במייל — לחצו לפתיחת טיוטה מוכנה, מלאו וצרפו את הקובץ הנדרש:</p>
-    <p style="margin:0;"><a href="${draftHref}" style="display:inline-block;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">פתיחת טיוטת ${typeLabel} מוכנה במייל</a></p>` : ''
+    <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">${T('draft_note')}</p>
+    <p style="margin:0;"><a href="${draftHref}" style="display:inline-block;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${T('draft_button')}</a></p>` : ''
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">${typeLabel} שלך לא נקלטה</p>
-        <p style="margin:0 0 8px;color:#991b1b;font-size:13px;">הסיבות:</p>
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">${escapeHtml(typeLabel)} שלך לא נקלטה</p>
+        <p style="margin:0 0 8px;color:#991b1b;font-size:13px;">${T('errors_intro')}</p>
         <ul style="margin:0;padding-inline-start:18px;color:#991b1b;font-size:13px;line-height:1.7;">${errorList}</ul>
       </td></tr>
     </table>
-    <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">
-      <strong>מומלץ להגיש דרך המערכת הדיגיטלית שלנו</strong> (אם אינכם חסומים) — פשוט ומהיר:
-    </p>
-    ${btn(digitalUrl, 'הגשת בקשה במערכת הדיגיטלית', '#4f46e5')}
+    <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">${T('digital_note')}</p>
+    ${btn(digitalUrl, textFor('email_intake_rejected', 'digital_button'), '#4f46e5')}
     ${draftBlock}
     ${noReplyBox()}`
+  const title = textFor('email_intake_rejected', 'title')
   return {
     subject: `${typeLabel} לא נקלטה — היכל החתם סופר`,
-    html: shell({ preheader: 'הבקשה לא נקלטה — נא לתקן ולשלוח שוב.', accent: '#dc2626', title: 'הבקשה לא נקלטה', subtitle: 'איגוד הצאצאים', body }),
+    html: shell({ preheader: 'הבקשה לא נקלטה — נא לתקן ולשלוח שוב.', accent: '#dc2626', title, subtitle: 'איגוד הצאצאים', body }),
   }
 }
 

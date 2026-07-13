@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient } from '@/lib/apiAuth'
 import { EMAIL_CATALOG, EMAIL_TEXTS_KEY, type EmailTexts } from '@/lib/emailCatalog'
+import { setEmailTexts, loadEmailTexts } from '@/lib/emailTextsStore'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עריכת הטקסטים של המיילים היוצאים.
@@ -72,6 +73,10 @@ export async function POST(request: NextRequest) {
     console.error('[email-texts] שמירה נכשלה:', error.message)
     return NextResponse.json({ error: 'השמירה נכשלה' }, { status: 500 })
   }
+
+  // רענון מיידי של המטמון — כדי שהמייל הבא שיישלח כבר ישתמש בטקסט החדש,
+  // בלי להמתין לריסטארט.
+  setEmailTexts(texts)
 
   return NextResponse.json({ ok: true, texts })
 }
