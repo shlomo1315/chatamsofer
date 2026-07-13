@@ -13,14 +13,22 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin')
 
-  let body: { channel?: string; value?: string }
+  let body: { channel?: string; value?: string; phone?: string }
   try { body = await request.json() } catch { return jsonCors({ error: 'בקשה לא תקינה' }, { status: 400 }, origin) }
 
-  // בזרימת נדרים מאמתים טלפון בלבד — מתעלמים מכל channel אחר.
-  if (body.channel !== 'phone') {
+  // שני פורמטים נתמכים:
+  //   { phone: "05..." }                    ← הפשוט, מה שנדרים פלוס שולחים
+  //   { channel: "phone", value: "05..." }  ← הפורמט המקורי, לתאימות לאחור
+  // בזרימה זו מאמתים טלפון בלבד (מייל אינו נאמת כאן).
+  const phone = String(body.phone ?? body.value ?? '').trim()
+
+  if (body.channel && body.channel !== 'phone') {
     return jsonCors({ error: 'אימות טלפון בלבד נתמך בטופס זה' }, { status: 400 }, origin)
   }
+  if (!phone) {
+    return jsonCors({ error: 'חסר מספר טלפון' }, { status: 400 }, origin)
+  }
 
-  const result = await sendVerifyCode(request, 'phone', String(body.value ?? ''))
+  const result = await sendVerifyCode(request, 'phone', phone)
   return jsonCors(result.body, { status: result.status }, origin)
 }

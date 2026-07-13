@@ -21,8 +21,15 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  // הגבלת קצב — מניעת רישומי ספאם המוניים
-  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+  // הגבלת קצב — מניעת רישומי ספאם המוניים.
+  //
+  // ⚠️ טופס נדרים פלוס (matara.pro) קורא לכאן דרך nedarim-form/register.
+  // אם הם קוראים משרת-לשרת, *כל* הרישומים מגיעים מאותו IP — ותקרה של 10
+  // בשעה הייתה חוסמת רישומים אמיתיים. לכן להם תקרה גבוהה יותר, ועדיין
+  // מוגבלת (הגנה מפני לולאה או תקלה אצלם).
+  const isNedarim = request.headers.get('origin') === 'https://matara.pro'
+  const limit = isNedarim ? 200 : 10
+  if (!rateLimit(`public-register:${clientIp(request)}`, limit, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 

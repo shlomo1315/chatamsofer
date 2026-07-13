@@ -13,15 +13,17 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin')
 
-  let body: { channel?: string; value?: string; code?: string }
+  let body: { channel?: string; value?: string; phone?: string; code?: string }
   try { body = await request.json() } catch { return jsonCors({ error: 'בקשה לא תקינה' }, { status: 400 }, origin) }
 
-  if (body.channel !== 'phone') {
+  // שני פורמטים נתמכים — ראה verify/send.
+  if (body.channel && body.channel !== 'phone') {
     return jsonCors({ error: 'אימות טלפון בלבד נתמך בטופס זה' }, { status: 400 }, origin)
   }
-  const raw = String(body.value ?? '').trim()
+  const raw = String(body.phone ?? body.value ?? '').trim()
   const code = String(body.code ?? '').replace(/\D/g, '')
-  if (!raw || !code) return jsonCors({ error: 'חסרים פרטים' }, { status: 400 }, origin)
+  if (!raw) return jsonCors({ error: 'חסר מספר טלפון' }, { status: 400 }, origin)
+  if (!code) return jsonCors({ error: 'חסר קוד אימות' }, { status: 400 }, origin)
 
   const result = await confirmVerifyCode(request, 'phone', raw, code)
   return jsonCors(result.body, { status: result.status }, origin)
