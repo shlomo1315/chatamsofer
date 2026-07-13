@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { validateRequest, parseDraft } from './emailRequestForms'
+import { validateRequest, parseDraft, MATERNITY_SUBMIT_DAYS } from './emailRequestForms'
 import { validateIsraeliId } from './validation'
 
 const ctx = {
@@ -35,15 +35,22 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-describe('חלון 6 השבועות', () => {
+describe('חלון ההגשה — 30 יום', () => {
+  // ההגשה נסגרת ב-30 יום, בעוד שכרטיס המזון תקף 42 יום. ההפרש המכוון
+  // מבטיח שתמיד יישאר מרווח בין קליטת הבקשה לבין תום תוקף הכרטיס.
+  it('חלון ההגשה קצר מחלון המימוש', () => {
+    expect(MATERNITY_SUBMIT_DAYS).toBe(30)
+    expect(MATERNITY_SUBMIT_DAYS).toBeLessThan(42)
+  })
+
   it('לידה מלפני 6 חודשים — נדחית, עם התאריכים בהודעה', () => {
     const r = validate(birthBody({ date: '01/01/2026', babyId: '123456782' }))
     expect(r.ok).toBe(false)
     if (!r.ok) {
       const msg = r.errors.join(' ')
-      expect(msg).toContain('6 שבועות')
+      expect(msg).toContain('30 יום')
       expect(msg).toContain('01/01/2026')   // תאריך הלידה
-      expect(msg).toContain('12/02/2026')   // המועד האחרון להגשה (+42 יום)
+      expect(msg).toContain('31/01/2026')   // המועד האחרון להגשה (+30 יום)
     }
   })
 
@@ -53,17 +60,24 @@ describe('חלון 6 השבועות', () => {
     expect(r.ok).toBe(true)
   })
 
-  it('בדיוק ביום ה-42 — עדיין בתוך החלון', () => {
-    // 42 יום לפני 13/07/2026 = 01/06/2026
-    const r = validate(birthBody({ date: '01/06/2026', babyId: '123456782' }))
+  it('בדיוק ביום ה-30 — עדיין בתוך החלון', () => {
+    // 30 יום לפני 13/07/2026 = 13/06/2026
+    const r = validate(birthBody({ date: '13/06/2026', babyId: '123456782' }))
     if (!r.ok) console.error('שגיאות:', r.errors)
     expect(r.ok).toBe(true)
   })
 
-  it('יום 43 — מחוץ לחלון', () => {
-    const r = validate(birthBody({ date: '31/05/2026', babyId: '123456782' }))
+  it('יום 31 — מחוץ לחלון', () => {
+    const r = validate(birthBody({ date: '12/06/2026', babyId: '123456782' }))
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.errors.join(' ')).toContain('6 שבועות')
+    if (!r.ok) expect(r.errors.join(' ')).toContain('30 יום')
+  })
+
+  it('יום 35 — בתוך 6 השבועות אך מחוץ לחלון ההגשה', () => {
+    // המקרה שההפרדה נועדה למנוע: הכרטיס עדיין תקף, אבל מאוחר מדי להגיש.
+    const r = validate(birthBody({ date: '08/06/2026', babyId: '123456782' }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.join(' ')).toContain('30 יום')
   })
 
   it('תאריך לידה עתידי — נדחה (שגיאת הקלדה בשנה)', () => {
@@ -111,7 +125,7 @@ describe('כל השגיאות מוחזרות יחד — לא אחת בכל פע�
     if (!r.ok) {
       const msg = r.errors.join(' | ')
       console.log('\nההודעה שהמשתמש מקבל:\n  ' + r.errors.join('\n  ') + '\n')
-      expect(msg).toContain('6 שבועות')
+      expect(msg).toContain('30 יום')
       expect(msg).toContain('תקינה')
       expect(msg).toContain('בית החלמה')
       expect(r.errors.length).toBeGreaterThanOrEqual(3)

@@ -9,7 +9,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
 import { rateLimit } from '@/lib/rateLimit'
-import { MATERNITY_WINDOW_DAYS } from '@/lib/emailRequestForms'
+import { MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
-  // ── חלון הזכאות: 6 שבועות (42 יום) מהלידה ──
+  // ── חלון ההגשה: 30 יום מהלידה (המימוש הוא 6 שבועות — ראה MATERNITY_SUBMIT_DAYS) ──
   // בורר התאריכים בטופס כבר מגביל, אבל אסור להסתמך על הלקוח: בקשה שנשלחת
   // ישירות ל-API עוקפת אותו לגמרי. זה אותו כלל שנאכף בהגשה במייל.
   const bd = new Date(String(birth_date))
@@ -43,12 +43,12 @@ export async function POST(request: NextRequest) {
   }
   bd.setHours(0, 0, 0, 0)
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const deadline = new Date(bd.getTime() + MATERNITY_WINDOW_DAYS * 86400000)
+  const deadline = new Date(bd.getTime() + MATERNITY_SUBMIT_DAYS * 86400000)
   const fmt = (d: Date) => d.toLocaleDateString('he-IL')
 
   if (today > deadline) {
     return NextResponse.json({
-      error: `עברו יותר מ-6 שבועות מתאריך הלידה (${fmt(bd)}) — חלון ההגשה הסתיים ב-${fmt(deadline)}. אם קיימות נסיבות מיוחדות, אנא פנו למשרד.`,
+      error: `ניתן להגיש בקשה עד 30 יום מתאריך הלידה. תאריך הלידה שצוין הוא ${fmt(bd)}, והמועד האחרון להגשה היה ${fmt(deadline)}. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.`,
     }, { status: 400 })
   }
   if (bd.getTime() > today.getTime()) {

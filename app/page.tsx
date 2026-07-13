@@ -13,7 +13,7 @@ import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
-import { LOAN_DECLARATIONS, MATERNITY_WINDOW_DAYS } from '@/lib/emailRequestForms'
+import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -1727,11 +1727,16 @@ export default function PublicPortalPage() {
   const handleBirthRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
-    // תאריך הלידה עד חודשיים אחורה בלבד (שוברי ההבראה תקפים ל-6 שבועות)
+    // חלון ההגשה: 30 יום מהלידה. (הכרטיס תקף 6 שבועות — ההגשה נסגרת מוקדם
+    // יותר בכוונה, כדי שיישאר מרווח בין האישור לבין תום התוקף.)
     {
-      const twoMonthsAgo = new Date(); twoMonthsAgo.setHours(0, 0, 0, 0); twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2)
       const bd = new Date(birthForm.birth_date); bd.setHours(0, 0, 0, 0)
-      if (bd < twoMonthsAgo) { setError('ניתן להגיש בקשת לידה עד חודשיים אחורה בלבד'); return }
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      const deadline = new Date(bd.getTime() + MATERNITY_SUBMIT_DAYS * 86400000)
+      if (today > deadline) {
+        setError('ניתן להגיש בקשה עד 30 יום מתאריך הלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.')
+        return
+      }
     }
     if (!birthForm.baby_gender) { setError(isTwins ? 'אנא בחר בן או בת עבור התינוק הראשון' : 'אנא בחר בן או בת'); return }
     // שם הנולד/ת אינו חובה — ניתן להשלים בכניסה הבאה
@@ -3676,14 +3681,13 @@ export default function PublicPortalPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
                   <Field label="תאריך הלידה" required>
-                    {/* חלון הזכאות הוא 42 יום. minMonthsBack={2} נתן ~60 יום —
-                        כמעט שבועיים וחצי יותר מהמותר, ובקשות באיחור נקלטו. */}
+                    {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
                     <HebrewDatePicker
                       value={birthForm.birth_date}
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
-                      minDaysBack={MATERNITY_WINDOW_DAYS}
-                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 6 שבועות מתאריך הלידה בלבד. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
+                      minDaysBack={MATERNITY_SUBMIT_DAYS}
+                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 30 יום מתאריך הלידה. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
                     />
                   </Field>
                 </div>
@@ -3837,8 +3841,8 @@ export default function PublicPortalPage() {
                       value={silentForm.birth_date}
                       onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
-                      minDaysBack={MATERNITY_WINDOW_DAYS}
-                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 6 שבועות מתאריך הלידה בלבד. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
+                      minDaysBack={MATERNITY_SUBMIT_DAYS}
+                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 30 יום מתאריך הלידה. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
                     />
                   </Field>
                 </div>
