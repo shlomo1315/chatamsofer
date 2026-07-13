@@ -5,6 +5,7 @@ import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMai
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
 import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
 import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
+import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
 export const dynamic = 'force-dynamic'
@@ -404,36 +405,33 @@ export async function POST(request: NextRequest) {
   const envelopeRecipients = (Array.isArray(data.to) ? data.to : [data.to])
     .map((t: unknown) => parseAddress(String(t ?? '')).email)
     .filter(Boolean)
-  const candidates = [
-    ...envelopeRecipients,
-    ...extractEmails(getHeader(data.headers, 'to')),
-    ...extractEmails(getHeader(data.headers, 'cc')),
-    ...extractEmails(getHeader(data.headers, 'delivered-to')),
+  // ⚠️ הסדר כאן קובע לאיזו תיבה המייל משויך — knownDept לוקח את ההתאמה
+  // הראשונה. מייל שנשלח לתיבה 10 ובו office ב-Cc (או בשרשור תגובות) היה
+  // מגיע ל-office במקום לתיבה 10. לכן: נמענים *ישירים* קודם, ו-Cc אחרון.
+  const directRecipients = [
+    ...extractEmails(getHeader(data.headers, 'delivered-to')),   // הנמען בפועל — הכי אמין
     ...extractEmails(getHeader(data.headers, 'x-original-to')),
     ...extractEmails(getHeader(data.headers, 'x-gm-original-to')),
     ...extractEmails(getHeader(data.headers, 'x-forwarded-to')),
+    ...envelopeRecipients,
+    ...extractEmails(getHeader(data.headers, 'to')),
   ]
+  const ccRecipients = extractEmails(getHeader(data.headers, 'cc'))
+  const candidates = [...directRecipients, ...ccRecipients]
   // עדיפות: (1) תיבה מוכרת במערכת; (2) כל נמען אמיתי בדומיין הארגון (כך שכתובת חדשה
   // שטרם הוגדרה כתיבה עדיין נשמרת תחת הכתובת האמיתית שלה, ולא תחת כתובת ה-copy של ה-subdomain);
   // (3) נפילה-לאחור ל-to של ה-envelope.
-  const knownDept = candidates.find(addr => departmentByEmail(addr))
-  const orgRecipient = candidates.find(addr => addr.endsWith('@chasamsofer.info'))
-  // (4) דואר שהגיע לכתובת ה-copy של ה-subdomain (in.chasamsofer.info) ללא נמען מקורי מזוהה —
-  // משייכים ל"משרד ראשי" כדי שלא יישאר יתום מחוץ לכל התיבות.
-  const isInboundCopy = (knownDept || orgRecipient) ? false : candidates.some(a => a.endsWith('.chasamsofer.info'))
+  // בקשה (לידה/הלוואה/סיוע) — תמיד מנותבת ל-igud, גם כשהגיעה דרך כתובת
+  // ה-copy. בלי זה היא נופלת ל'משרד ראשי' ומייל הדחייה לא נשלח.
+  const isRequestMail = isRequestSubject(subject)
 
-  // (5) ⚠️ בקשה (לידה/הלוואה/סיוע) — תמיד מנותבת ל-igud, גם אם הגיעה
-  // דרך כתובת ה-copy של ה-subdomain. בלי זה היא נופלת ל-'main',
-  // isIgud יוצא false, ומייל הדחייה עם פירוט השגיאות לא נשלח —
-  // המשתמש נשאר בלי מענה ובלי לדעת מה חסר.
-  const isRequestMail = isRequestSubject(
-    decodeMimeWords(String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim()),
-  )
-
-  const resolvedToEmail = knownDept
-    ?? (isRequestMail ? 'igud@chasamsofer.info' : undefined)
-    ?? orgRecipient
-    ?? (isInboundCopy ? 'office@chasamsofer.info' : to.email)
+  // כל כללי הניתוב מרוכזים ב-lib/mailRouting (ונבדקים שם).
+  const resolvedToEmail = resolveMailbox({
+    direct: directRecipients,
+    cc: ccRecipients,
+    isRequest: isRequestMail,
+    envelopeTo: to.email,
+  })
 
   // ── בידוד ארגוני: קליטה רק של דואר שמופנה לדומיין של חתם סופר ──
   // אותו webhook נכנס עלול לקבל דואר ממערכות אחרות שמשתמשות באותה תשתית Resend.
