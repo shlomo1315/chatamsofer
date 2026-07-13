@@ -4344,6 +4344,18 @@ export default function PublicPortalPage() {
           <Mail size={11} />
           מערכת מאובטחת · כל הפרטים מוצפנים
         </p>
+
+        <p className="text-center text-[11px] text-slate-300 mt-3 mb-2">
+          אפיון ופיתוח:{' '}
+          <a
+            href="https://r-lavan.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-slate-400 hover:text-indigo-500 transition-colors"
+          >
+            r-lavan
+          </a>
+        </p>
       </main>
     </div>
   )

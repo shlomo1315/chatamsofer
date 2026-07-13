@@ -7,6 +7,7 @@ import WelcomeModal from '@/components/ui/WelcomeModal'
 import { ToastProvider } from '@/components/ui/Toast'
 import { StaffPermissionsProvider } from '@/components/StaffPermissions'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import AssistantWidget from '@/components/admin/AssistantWidget'
 import { Profile } from '@/types'
 
 export default async function DashboardLayout({
@@ -54,6 +55,8 @@ export default async function DashboardLayout({
           </div>
         </main>
       </div>
+      {/* עוזר AI — צף בכל מסכי הניהול. קריאה בלבד, ומכבד את הרשאות המשתמש. */}
+      <AssistantWidget />
     </div>
     </ToastProvider>
   )
