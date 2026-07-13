@@ -213,42 +213,44 @@ export function benefitsLinkEmail(
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
   const greet = greetHe(name)
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('benefits_link', k)
+  const T = (k: string) => escapeHtml(t(k))
   // התאמת הכפתורים לפי סטטוס: לידה — רק נשואים; אלמנות — רק אלמן/אלמנה; הלוואה+סיוע — לכולם.
   const married = maritalStatus === 'נשואים'
   const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
   const gap = '<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>'
   const buttons = [
-    married ? btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d') : '',
-    btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985'),
-    btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534'),
-    widower ? btn(`${base}/?action=aid`, 'להגשת בקשה לאלמנות ויתומים — לחצו כאן', '#ede9fe', '#5b21b6') : '',
+    married ? btn(`${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
+    btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
+    btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
+    widower ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
   ].filter(Boolean).join(gap)
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;">להגשה גם דרך האימייל:</p>
-        <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;">רק באם אינכם מצליחים להיכנס למערכת הדיגיטלית שלנו, פיתחנו עבורכם אפשרות לשליחת טפסים גם דרך האימייל. עם זאת שימו לב! היות וגם הקליטה דרך המייל הינה במערכת אוטומטית — ייתכנו בה שיבושים, וככל שמתאפשר לכם מומלץ מאוד להגיש ישירות דרך המערכת הממוחשבת שלנו בהקשה על הלחצנים לעיל.</p>
+        <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;">${T('draft_title')}</p>
+        <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;">${T('draft_note')}</p>
         ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${l.label}</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
   const detailsTable = detailsRows ? `
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">הפרטים הרשומים אצלנו:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">${T('details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${detailsRows}</table>` : ''
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
     ${detailsTable}
     <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.8;font-family:Arial,sans-serif;">
-      אתם נמנים עם רשומי <strong>"איגוד הצאצאים"</strong>. כדי להגיש בקשה לאחת מההטבות,
-      לחצו על הכפתור המתאים — תועברו להתחברות מאובטחת ולאחריה ייפתח טופס הבקשה שבחרתם:
+      ${t('intro')}
     </p>
     ${buttons}
     ${draftBlock}
     ${noReplyBox()}`
   return {
-    subject: 'הגשת בקשות והטבות — איגוד הצאצאים',
-    html: shell({ preheader: 'קישורים להגשת בקשות לאיגוד הצאצאים', accent, title: 'איגוד הצאצאים', subtitle: 'הגשת בקשות והטבות', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent, title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -277,22 +279,25 @@ export function requestBlockedRejectedEmail(opts: {
 }): BuiltEmail {
   const greet = greetByStatus(opts.family_name, opts.full_name, opts.marital_status)
   const reason = (opts.reason ?? '').trim()
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('request_blocked_rejected', k)
+  const officeLink = `<a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>`
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">לא ניתן לטפל בבקשתך</p>
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">${escapeHtml(t('box_title'))}</p>
         <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.8;">
-          הבקשה שהגשת התקבלה, אך לא ניתן לטפל בה כיוון שהרישום שלך לאיגוד הצאצאים <strong>לא אושר</strong>${reason ? ` — ${reason}` : ''}.
+          ${t('box_text').replace(/\{סיבה\}/g, reason ? ` — ${escapeHtml(reason)}` : '')}
         </p>
       </td></tr>
     </table>
-    <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">לבירורים ניתן לפנות למשרד: <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a></p>
+    <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">${t('contact_note').replace(/\{מייל\}/g, officeLink)}</p>
     ${noReplyBox()}`
   return {
-    subject: 'בנוגע לבקשתך — היכל החתם סופר',
-    html: shell({ preheader: 'לא ניתן לטפל בבקשה — הרישום לא אושר.', accent: '#dc2626', title: 'בנוגע לבקשתך', subtitle: 'איגוד הצאצאים', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#dc2626', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -354,6 +359,9 @@ export function weeklyLoansReportEmail(
   sinceISO?: string,
 ): BuiltEmail {
   const accent = '#6366f1'
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('weekly_loans_report', k)
+  const T = (k: string) => escapeHtml(t(k))
   const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
   const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
 
@@ -369,19 +377,20 @@ export function weeklyLoansReportEmail(
 
   const newLoans = stats.newLoans ?? []
   const sinceLabel = sinceISO ? fmtDate(sinceISO) : ''
+  const sinceSuffix = sinceLabel ? ` (${sinceLabel})` : ''
 
   // טבלת ההלוואות שאושרו מאז הדוח הקודם
   const newLoansSection = newLoans.length > 0
     ? `
     <h2 style="margin:30px 0 12px;color:#0f172a;font-size:16px;font-weight:800;">
-      הלוואות מאושרות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''} — ${newLoans.length}
+      ${escapeHtml(t('new_loans_title').replace(/\{תאריך\}/g, sinceSuffix).replace(/\{מספר\}/g, String(newLoans.length)))}
     </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       <tr style="background:#f1f5f9;">
-        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">משפחה</td>
-        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">סכום</td>
-        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">סטטוס</td>
-        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">תאריך</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">${T('col_family')}</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">${T('col_amount')}</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">${T('col_status')}</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:700;color:#475569;text-align:right;">${T('col_date')}</td>
       </tr>
       ${newLoans.map((l, i) => `
       <tr style="background:${i % 2 ? '#ffffff' : '#fafbfc'};">
@@ -394,39 +403,39 @@ export function weeklyLoansReportEmail(
     : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr><td style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:18px;text-align:center;">
-        <p style="margin:0;color:#94a3b8;font-size:13px;">אין הלוואות מאושרות מאז הדוח הקודם${sinceLabel ? ` (${sinceLabel})` : ''}</p>
+        <p style="margin:0;color:#94a3b8;font-size:13px;">${escapeHtml(t('empty_note').replace(/\{תאריך\}/g, sinceSuffix))}</p>
       </td></tr>
     </table>`
 
   const body = `
     <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.7;text-align:center;">
-      ריכוז בקשות ההלוואה במערכת.<br/>
-      להלן מצב ההלוואות נכון להיום:
+      ${t('intro')}
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr>
-        ${statBox(stats.awaitingDisbursement, 'מאושרות וממתינות לביצוע', '#6366f1')}
-        ${statBox(stats.pending, 'ממתינות לאישור', '#d97706')}
-        ${statBox(stats.disbursedThisWeek, 'בוצעו השבוע', '#059669')}
+        ${statBox(stats.awaitingDisbursement, T('stat_awaiting'), '#6366f1')}
+        ${statBox(stats.pending, T('stat_pending'), '#d97706')}
+        ${statBox(stats.disbursedThisWeek, T('stat_disbursed'), '#059669')}
       </tr>
     </table>
 
     ${newLoansSection}
 
-    <div style="margin:28px 0 0;">${btn(portalUrl, 'לחץ כאן לכניסה לאישור ההלוואות ', accent)}</div>
+    <div style="margin:28px 0 0;">${btn(portalUrl, t('button'), accent)}</div>
 
     <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">
-      במערכת ניתן לצפות בפרטי כל הלוואה ולסמן את ביצועה.
+      ${T('footnote')}
     </p>`
 
+  const pending = String(stats.pending)
   return {
-    subject: `דוח הלוואות — ${stats.pending} ממתינות לאישור`,
+    subject: t('subject').replace(/\{ממתינות\}/g, pending),
     html: shell({
-      preheader: `${stats.pending} הלוואות ממתינות לאישור`,
+      preheader: t('preheader').replace(/\{ממתינות\}/g, pending),
       accent,
-      title: 'דוח הלוואות',
-      subtitle: 'היכל החתם סופר',
+      title: t('title'),
+      subtitle: t('subtitle'),
       body,
     }),
   }
@@ -633,22 +642,23 @@ export function docsPendingEmail(
   extraNote?: string,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('docs_pending', k)
   const docs = (explicitDocs && explicitDocs.length) ? explicitDocs : requiredDocLabels(maritalStatus)
   const docsList = docs.map(d =>
     `<li style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:700;">${d}</li>`
   ).join('')
 
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">פעולה נדרשת</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(t('kicker'))}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(null, name, maritalStatus)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
-      כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.
-      ניתן להעלות אותם ישירות דרך המערכת הדיגיטלית שלנו — מהמחשב או מהנייד.
+      ${t('intro')}
     </p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:18px 20px;">
-        <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:800;">מסמכים נדרשים:</p>
+        <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:800;">${escapeHtml(t('docs_title'))}</p>
         <ul style="margin:0;padding-right:20px;">${docsList}</ul>
       </td></tr>
     </table>
@@ -656,18 +666,17 @@ export function docsPendingEmail(
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr><td align="center">
-        ${btn(`${base}/?action=docs`, 'להעלאת המסמכים', '#d97706')}
+        ${btn(`${base}/?action=docs`, t('button'), '#d97706')}
       </td></tr>
     </table>
 
     <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      בלחיצה על הכפתור תתבקש/י להזין את מספר תעודת הזהות,<br/>
-      ואז תועבר/י ישירות למסך העלאת המסמכים.
+      ${t('footnote')}
     </p>
   `
   return {
-    subject: 'נדרשת השלמת מסמכים — היכל החתם סופר',
-    html: shell({ preheader: 'נדרשת השלמת מסמכים להמשך הטיפול.', accent: '#d97706', title: 'נדרשת השלמת מסמכים', subtitle: 'עוד צעד אחד להשלמת התהליך', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#d97706', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -708,25 +717,28 @@ export function requestReceivedEmail(opts: {
   const reqLabel = type === 'birth' ? 'בקשת הבראה ליולדת' : type === 'financial_aid' ? 'בקשת סיוע רפואי' : type === 'widow' ? 'בקשת סיוע' : 'בקשת הלוואה'
   const accent   = type === 'birth' ? '#db2777' : type === 'financial_aid' ? '#10b981' : type === 'widow' ? '#7c3aed' : '#4f46e5'
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || (beneficiary.full_name ?? '')
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל"). {סוג} מוחלף בסוג הבקשה.
+  const t = (k: string) => textFor('request_received', k).replace(/\{סוג\}/g, reqLabel)
+  const T = (k: string) => escapeHtml(t(k))
 
   const firstTimeNote = firstTime ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0 0 6px;color:#15803d;font-size:14px;font-weight:800;">בקשתך התקבלה בהצלחה</p>
+        <p style="margin:0 0 6px;color:#15803d;font-size:14px;font-weight:800;">${T('first_time_title')}</p>
         <p style="margin:0;color:#15803d;font-size:13px;line-height:1.7;">
-          בקשתך וצילומי תעודת הזהות שצירפת נקלטו בהצלחה במערכת. נעדכן אותך בהמשך.
+          ${T('first_time_note')}
         </p>
       </td></tr>
     </table>` : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#15803d;font-size:14px;font-weight:700;">הבקשה התקבלה והועברה לטיפול המזכירות.</p>
+        <p style="margin:0;color:#15803d;font-size:14px;font-weight:700;">${T('repeat_note')}</p>
       </td></tr>
     </table>`
 
   const reqRowsHtml = requestRows.map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
   const docsHtml = documents.length ? `
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">מסמכים מצורפים:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('docs_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
       <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 18px;color:#334155;font-size:14px;line-height:2;">
         ${documents.map(d => d.url
@@ -736,24 +748,24 @@ export function requestReceivedEmail(opts: {
     </table>` : ''
 
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${T('kicker')}</p>
     <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${type === 'birth' ? greetMrs(beneficiary.family_name, beneficiary.spouse_name || beneficiary.full_name) : greetByStatus(beneficiary.family_name, beneficiary.full_name, beneficiary.marital_status)}</h2>
     <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">
-      <strong>${reqLabel}</strong> שלך התקבלה במערכת היכל החתם סופר ומועברת לטיפול המזכירות.
+      ${t('intro')}
     </p>
     ${firstTimeNote}
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי המבקש:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('beneficiary_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${beneficiaryDetailRows(beneficiary)}</table>
     ${reqRowsHtml ? `
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הבקשה:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('request_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${reqRowsHtml}</table>` : ''}
     ${docsHtml}
-    <p style="margin:0 0 4px;color:#94a3b8;font-size:13px;line-height:1.7;">תקבל/י עדכון על המשך הטיפול בהמשך.</p>
+    <p style="margin:0 0 4px;color:#94a3b8;font-size:13px;line-height:1.7;">${T('footnote')}</p>
     ${noReplyBox()}
   `
   return {
-    subject: `התקבלה ${reqLabel} — היכל החתם סופר`,
-    html: shell({ preheader: `${reqLabel} התקבלה ומועברת לטיפול.`, accent, title: 'הבקשה התקבלה', subtitle: reqLabel, body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent, title: t('title'), subtitle: reqLabel, body }),
   }
 }
 
@@ -768,6 +780,8 @@ export function registrationReceivedEmail(
   portalBase = PORTAL_BASE_DEFAULT,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('registration_received', k)
   const fullName = [d.family_name, d.full_name].filter(Boolean).join(' ') || (d.full_name ?? '')
   const married = (d.marital_status ?? '').startsWith('נשו')
   const widowerBen = d.marital_status === 'אלמן' || d.marital_status === 'אלמנה'
@@ -783,24 +797,24 @@ export function registrationReceivedEmail(
     detailRow('מספר ילדים', d.children_count != null ? String(d.children_count) : ''),
   ].join('')
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${escapeHtml(t('kicker'))}</p>
     <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(d.family_name, d.full_name, d.marital_status)}</h2>
     <p style="margin:0 0 22px;color:#475569;font-size:15px;line-height:1.8;">
-      תודה על פנייתך! פרטיך נקלטו בהצלחה במערכת <strong>איגוד הצאצאים</strong> של היכל החתם סופר.
+      ${t('intro')}
     </p>
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הרישום שלך:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${escapeHtml(t('details_title'))}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
-    <p style="margin:0 0 16px;color:#334155;font-size:15px;font-weight:700;text-align:center;">להגשת בקשה לאחת מההטבות, לחצו על הכפתור המתאים:</p>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;font-weight:700;text-align:center;">${escapeHtml(t('buttons_title'))}</p>
     ${[
-      married ? btn(`${base}/?action=birth`, 'להגשת בקשה לימי החלמה ומזון מוכן לאחר לידה — לחצו כאן', '#fce7f3', '#9d174d') : '',
-      btn(`${base}/?action=loan`, 'להגשת בקשת הלוואה (גמ״ח) — לחצו כאן', '#e0f2fe', '#075985'),
-      btn(`${base}/?action=aid`, 'להגשת בקשת סיוע רפואי — לחצו כאן', '#dcfce7', '#166534'),
-      widowerBen ? btn(`${base}/?action=aid`, 'להגשת בקשה לאלמנות ויתומים — לחצו כאן', '#ede9fe', '#5b21b6') : '',
+      married ? btn(`${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
+      btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
+      btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
+      widowerBen ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
     ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')}
   `
   return {
-    subject: 'פרטיך נקלטו בהצלחה — היכל החתם סופר',
-    html: shell({ preheader: 'פרטיך נקלטו בהצלחה במערכת. ניתן כבר להיכנס ולהגיש בקשות.', accent: '#4f46e5', title: 'הפרטים נקלטו במערכת', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#4f46e5', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -863,30 +877,33 @@ export function financialAidReceivedEmail(name: string): BuiltEmail {
 
 // ─── סיוע רפואי — הודעת החלטה למבקש (אושר/נדחה) ────────────────────────────────
 export function financialAidDecisionEmail(name: string, approved: boolean, amount?: number | null): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('financial_aid_decision', k)
+  const T = (k: string) => escapeHtml(t(k))
   const body = approved ? `
-    <p style="margin:0 0 8px;color:#059669;font-size:13px;font-weight:700;letter-spacing:0.5px;">בשורה משמחת</p>
+    <p style="margin:0 0 8px;color:#059669;font-size:13px;font-weight:700;letter-spacing:0.5px;">${T('kicker_approved')}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 18px;color:#334155;font-size:15px;line-height:1.8;">
-      שמחים לבשר כי בקשתך לסיוע רפואי <strong>אושרה</strong>.
+      ${t('intro_approved')}
     </p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:18px 22px;text-align:center;">
-        <p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">הסכום שאושר</p>
+        <p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">${T('amount_label')}</p>
         <p style="margin:6px 0 0;color:#047857;font-size:30px;font-weight:900;" dir="ltr">₪${Number(amount ?? 0).toLocaleString('he-IL')}</p>
       </td></tr>
     </table>
-    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">צוות המזכירות יצור עמך קשר להמשך התהליך. בברכה, היכל החתם סופר.</p>
+    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">${T('footer_approved')}</p>
   ` : `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">עדכון בנוגע לבקשתך</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${T('kicker_rejected')}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
     <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.8;">
-      בקשתך לסיוע רפואי נבדקה, ולצערנו לא אושרה בשלב זה.
+      ${t('intro_rejected')}
     </p>
-    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">לפרטים נוספים ניתן לפנות למזכירות. בברכה, היכל החתם סופר.</p>
+    <p style="margin:0;color:#334155;font-size:14px;line-height:1.8;">${T('footer_rejected')}</p>
   `
   return {
-    subject: approved ? 'בקשת הסיוע הרפואי אושרה — היכל החתם סופר' : 'עדכון בנוגע לבקשת הסיוע הרפואי',
-    html: shell({ preheader: approved ? `בקשתך אושרה על סך ₪${Number(amount ?? 0).toLocaleString('he-IL')}` : 'עדכון בנוגע לבקשתך', accent: approved ? '#10b981' : '#64748b', title: approved ? 'הבקשה אושרה' : 'עדכון בקשה', subtitle: 'סיוע רפואי', body }),
+    subject: approved ? t('subject_approved') : t('subject_rejected'),
+    html: shell({ preheader: approved ? `בקשתך אושרה על סך ₪${Number(amount ?? 0).toLocaleString('he-IL')}` : t('preheader_rejected'), accent: approved ? '#10b981' : '#64748b', title: approved ? t('title_approved') : t('title_rejected'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -924,29 +941,32 @@ export function loanApprovedEmail(
     detailRow('תשלום חודשי', fmt(loan.monthly_payment)),
     detailRow('מטרת ההלוואה', loan.purpose),
   ].join('')
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('loan_approved', k)
+  const T = (k: string) => escapeHtml(t(k))
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} בקשת ההלוואה שלך אושרה</h2>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(b.family_name, b.full_name, b.marital_status)} ${T('heading_suffix')}</h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">בקשת ההלוואה שלך טופלה ואושרה.</p>
+        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">${T('approved_note')}</p>
       </td></tr>
     </table>
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי ההלוואה:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('loan_details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${loanRows}</table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#eef2ff;border-right:4px solid #4f46e5;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#3730a3;font-size:14px;font-weight:700;line-height:1.7;">
-          בקשתכם הועברה לטיפול במזכירות גמ"ח חסדי אבות, ויצרו עמכם קשר בימים הקרובים.
+          ${T('next_note')}
         </p>
       </td></tr>
     </table>
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('ben_details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
   `
   return {
-    subject: 'בקשת ההלוואה אושרה — היכל החתם סופר',
-    html: shell({ preheader: 'בקשת ההלוואה שלך אושרה.', accent: '#4f46e5', title: 'בקשת ההלוואה אושרה', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#4f46e5', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -959,6 +979,9 @@ export function birthApprovedEmail(
 ): BuiltEmail {
   const center = opts.center ?? null
   const stockAvailable = !!opts.stockAvailable
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('birth_approved', k)
+  const T = (k: string) => escapeHtml(t(k))
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
   const genderLabel = birth.baby_gender === 'male' ? 'בן' : birth.baby_gender === 'female' ? 'בת' : ''
   const nameLabel = birth.baby_gender === 'female' ? 'שם הנולדת' : 'שם הנולד'
@@ -983,9 +1006,9 @@ export function birthApprovedEmail(
     ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">כרטיס מזון על סך 600 ₪</p>
+        <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">${T('card_title')}</p>
         <p style="margin:0;color:#92400e;font-size:14px;line-height:1.7;">
-          מצורף שובר לאיסוף כרטיס המזון. יש להדפיס את השובר ולהביאו ל<strong>מוקד שבחרתם</strong>:
+          ${t('card_text')}
         </p>
         ${center ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">
           <tr><td style="padding:10px 16px;color:#92400e;font-size:15px;font-weight:800;">${center.name}</td>
@@ -997,44 +1020,43 @@ export function birthApprovedEmail(
     : `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">כרטיס מזון על סך 600 ₪ — ממתין למלאי</p>
+        <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">${T('card_title_no_stock')}</p>
         <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.7;">
-          שימו לב: במוקד שבחרתם${center ? ` (<strong>${center.name}</strong>)` : ''} אין כרגע כרטיסים זמינים.
-          ברגע שהמלאי יתחדש נשלח אליכם עדכון במייל עם שובר הכרטיס לאיסוף. (שובר ההבראה לבית ההחלמה מצורף כבר עכשיו.)
+          ${t('no_stock_note').replace(/\{מוקד\}/g, center ? ` (<strong>${center.name}</strong>)` : '')}
         </p>
       </td></tr>
     </table>`
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
-        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">מצורפים למייל זה שוברים למימוש ההטבה!</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">הדפיסו את השוברים והביאו אותם לבית החלמה ו/או למוקדים לצורך מימוש ההטבה.</p>
+        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${T('vouchers_note')}</p>
       </td></tr>
     </table>
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} בקשת ההבראה ליולדת אושרה </h2>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} ${T('heading_suffix')} </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#fdf2f8;border-right:4px solid #db2777;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">הבקשה שלכם טופלה ואושרה, מזל טוב!</p>
+        <p style="margin:0;color:#be185d;font-size:15px;font-weight:800;">${T('approved_note')}</p>
       </td></tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">להמשך התהליך:</p>
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">${T('next_title')}</p>
         <p style="margin:6px 0 0;color:#1e3a8a;font-size:14px;line-height:1.7;">
-          עליכם לפנות אל בית ההחלמה שנרשמתם${birth.recovery_home ? ` — <strong>${birth.recovery_home}</strong>` : ''} ולהשלים מולם את הרישום ושאר הפרטים.
+          ${t('next_text').replace(/\{בית_החלמה\}/g, birth.recovery_home ? ` — <strong>${birth.recovery_home}</strong>` : '')}
         </p>
       </td></tr>
     </table>
     ${foodCardBlock}
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הלידה:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('birth_details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${birthRows}</table>
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">הפרטים שלך:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${T('ben_details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${benRows}</table>
   `
   return {
-    subject: 'בקשת ההבראה ליולדת אושרה — היכל החתם סופר',
-    html: shell({ preheader: 'בקשת ההבראה ליולדת שלך אושרה.', accent: '#db2777', title: 'הבקשה אושרה', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#db2777', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -1067,24 +1089,27 @@ export function maternityCardEmail(
   b: { full_name?: string | null; family_name?: string | null; spouse_name?: string | null },
   opts: { centerName?: string | null; phones?: (string | null | undefined)[] } = {},
 ): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('maternity_card', k)
+  const T = (k: string) => escapeHtml(t(k))
   const rows = [
     detailRow('שם המשפחה', [b.family_name, b.full_name].filter(Boolean).join(' ')),
     detailRow('מוקד החלוקה', opts.centerName),
   ].join('')
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">בשורה טובה!</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} כרטיס המזון אושר </h2>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetMrs(b.family_name, b.spouse_name || b.full_name)} ${T('heading_suffix')} </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">כרטיס המזון שלך אושר וזמין לאיסוף.</p>
+        <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">${T('intro')}</p>
       </td></tr>
     </table>
     ${opts.centerName ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">להמשך התהליך:</p>
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">${T('next_title')}</p>
         <p style="margin:6px 0 0;color:#1e3a8a;font-size:14px;line-height:1.7;">
-          ניתן לאסוף את כרטיס המזון / השובר במוקד <strong>${opts.centerName}</strong>.
+          ${t('next_text').replace(/\{מוקד\}/g, opts.centerName)}
         </p>
       </td></tr>
     </table>` : ''}
@@ -1092,35 +1117,38 @@ export function maternityCardEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
   `
   return {
-    subject: 'כרטיס המזון אושר — היכל החתם סופר',
-    html: shell({ preheader: 'כרטיס המזון שלך אושר וזמין לאיסוף.', accent: '#059669', title: 'כרטיס המזון אושר', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#059669', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
 // ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
 export function cardStockReplenishedEmail(name: string, centerName?: string | null, phones?: (string | null | undefined)[]): BuiltEmail {
   const greet = greetMrs(null, name)
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('card_stock_replenished', k)
+  const T = (k: string) => escapeHtml(t(k))
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
-        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">מצורף שובר לאיסוף כרטיס המזון!</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">הדפיסו את השובר והביאו אותו למוקד לצורך קבלת הכרטיס.</p>
+        <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('voucher_title')}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${T('voucher_note')}</p>
       </td></tr>
     </table>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greet} המלאי במוקד התחדש </h2>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greet} ${T('heading_suffix')} </h2>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#ecfdf5;border-right:4px solid #059669;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#047857;font-size:15px;font-weight:800;">
-          שימו לב — המלאי במוקד${centerName ? ` <strong>${centerName}</strong>` : ' שבחרתם'} התחדש, וכעת ניתן לאסוף את כרטיס המזון.
+          ${t('intro').replace(/\{מוקד\}/g, centerName ? ` <strong>${centerName}</strong>` : ' שבחרתם')}
         </p>
-        <p style="margin:6px 0 0;color:#065f46;font-size:14px;line-height:1.7;">הדפיסו את השובר המצורף והביאו אותו למוקד לקבלת הכרטיס.</p>
+        <p style="margin:6px 0 0;color:#065f46;font-size:14px;line-height:1.7;">${T('intro_note')}</p>
       </td></tr>
     </table>
     ${cardActivationNotice(phones)}
   `
   return {
-    subject: 'המלאי התחדש — שובר כרטיס המזון מצורף — היכל החתם סופר',
-    html: shell({ preheader: 'המלאי במוקד התחדש — שובר כרטיס המזון מצורף לאיסוף.', accent: '#059669', title: 'המלאי התחדש', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#059669', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -1134,25 +1162,29 @@ export function portalCredentialsEmail(opts: {
   usernameLabel?: string
 }): BuiltEmail {
   const { title, intro, portalUrl, password, username, usernameLabel } = opts
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל"). {פורטל} = שם הפורטל,
+  // שנקבע במקום השליחה (פורטל בתי החלמה / פורטל ביצוע הלוואות) ואינו נערך כאן.
+  const t = (k: string) => textFor('portal_credentials', k).replace(/\{פורטל\}/g, title)
+  const T = (k: string) => escapeHtml(t(k))
   const rows = [
     (usernameLabel && username) ? detailRow(usernameLabel, username) : '',
-    detailRow('כתובת הפורטל', portalUrl),
+    detailRow(t('url_label'), portalUrl),
   ].join('')
   const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">פרטי כניסה</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">${T('kicker')}</p>
     <h2 style="margin:0 0 14px;color:#0f172a;font-size:22px;font-weight:900;">${escapeHtml(title)}</h2>
     <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.8;">${escapeHtml(intro)}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
     <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:16px;margin:0 0 22px;text-align:center;">
-      <p style="margin:0 0 6px;color:#3730a3;font-size:13px;font-weight:600;">הסיסמה שלכם</p>
+      <p style="margin:0 0 6px;color:#3730a3;font-size:13px;font-weight:600;">${T('password_label')}</p>
       <p style="margin:0;color:#1e1b4b;font-size:24px;font-weight:900;letter-spacing:3px;font-family:'Courier New',monospace;" dir="ltr">${escapeHtml(password)}</p>
     </div>
-    ${btn(portalUrl, 'כניסה לפורטל', '#4f46e5')}
-    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">יש לשמור את פרטי הכניסה במקום בטוח ולא להעבירם לגורם לא מורשה. אם לא ביקשתם גישה זו — ניתן להתעלם מהודעה זו.</p>
+    ${btn(portalUrl, t('button'), '#4f46e5')}
+    <p style="margin:22px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;">${T('security_note')}</p>
   `
   return {
-    subject: `פרטי כניסה — ${title} · היכל החתם סופר`,
-    html: shell({ preheader: `פרטי הכניסה ל${title}`, accent: '#4f46e5', title, subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#4f46e5', title, subtitle: t('subtitle'), body }),
   }
 }
 
@@ -1282,13 +1314,15 @@ export function recoveryFeedbackEmail(opts: {
   const scaleQs = opts.questions.filter(q => q.type === 'scale')
   const textQs = opts.questions.filter(q => q.type === 'text')
 
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('recovery_feedback', k)
+  const T = (k: string) => escapeHtml(t(k))
   const homeName = opts.recoveryHome ? escapeHtml(opts.recoveryHome) : 'בית ההחלמה'
 
   // ── טיוטת מייל מוכנה למילוי — אותו דפוס כמו הגשת בקשות במייל ──
   // הנמענת לוחצת, נפתחת טיוטה עם השאלות, היא ממלאת ציונים ושולחת.
   const draftLines: string[] = []
-  draftLines.push('דרגי כל שאלה מ-1 (כלל לא מרוצה) עד 10 (מרוצה מאוד).')
-  draftLines.push('כתבי את הציון אחרי הנקודתיים, ושלחי.')
+  draftLines.push(t('draft_intro'))
   draftLines.push('')
   for (const q of scaleQs) {
     draftLines.push(`${q.position}. ${q.text}: `)
@@ -1310,40 +1344,62 @@ export function recoveryFeedbackEmail(opts: {
     <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
 
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      אנו מקווים שהשהות ב<strong>${homeName}</strong> הייתה נעימה ומרגיעה.
+      ${t('opening').replace(/\{בית_החלמה\}/g, homeName)}
     </p>
 
     <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.9;">
-      לצורך ייעול ושיפור השירות, נשמח לשמוע ממך על טיב השירות שקיבלת בבית ההחלמה.
-      זה ייקח פחות מדקה, ויעזור לנו לדאוג טוב יותר ליולדות הבאות.
+      ${t('intro')}
     </p>
 
-    ${btn(opts.formUrl, 'לשיתוף החוויה שלך', '#1B3256')}
+    ${btn(opts.formUrl, t('button'), '#1B3256')}
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 12px;">
       <tr><td style="text-align:center;">
         <p style="margin:0;color:#64748b;font-size:13.5px;line-height:1.7;">
-          <strong style="color:#334155;">חסום לכם הקישור?</strong><br/>
-          ניתן ללחוץ כאן לשליחת משוב דרך המייל:
+          ${t('fallback_note')}
         </p>
       </td></tr>
     </table>
 
-    ${btn(draftMailto, 'מענה מהיר במייל', '#f1f5f9', '#334155')}
+    ${btn(draftMailto, t('mail_button'), '#f1f5f9', '#334155')}
 
     <p style="margin:12px 0 0;color:#94a3b8;font-size:12px;line-height:1.7;text-align:center;">
-      נפתחת טיוטת מייל מוכנה — רק למלא ציון מ־1 עד 10 לכל שאלה, ולשלוח.
+      ${T('footnote')}
     </p>`
   return {
-    subject: 'נשמח לשמוע ממך · היכל החתם סופר',
+    subject: t('subject'),
     html: shell({
-      preheader: 'לצורך ייעול ושיפור השירות',
+      preheader: t('preheader'),
       accent: '#1B3256',
-      title: 'איך היה בבית ההחלמה?',
-      subtitle: 'לצורך ייעול ושיפור השירות',
+      title: t('title'),
+      subtitle: t('subtitle'),
       body,
     }),
   }
+}
+
+// ─── קוד אימות כתובת מייל ───────────────────────────────────────────────────
+// מייל פשוט ועצמאי (לא דרך shell) — נשלח מ-lib/verifyChannel.ts. הוא יושב כאן
+// כדי שכל תבניות המייל יהיו במקום אחד, ושהטקסטים יהיו ניתנים לעריכה כרגיל.
+export function verifyCodeEmail(code: string): BuiltEmail {
+  const t = (k: string) => textFor('verify_code_email', k)
+  const T = (k: string) => escapeHtml(t(k))
+  const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head>
+  <body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;background:#f1f5f9;padding:24px;">
+    <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+      <div style="background:#4f46e5;color:#fff;padding:20px 24px;font-size:18px;font-weight:700;">${T('header')}</div>
+      <div style="padding:24px;color:#1e293b;font-size:15px;line-height:1.7;">
+        <p style="margin:0 0 12px;">${T('intro')}</p>
+        <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#4f46e5;text-align:center;background:#eef2ff;border-radius:12px;padding:16px 0;margin:8px 0 16px;">${escapeHtml(code)}</div>
+        <p style="margin:0 0 8px;">${t('ttl_note')}</p>
+        <p style="margin:0 0 12px;color:#64748b;font-size:13px;">${T('ignore_note')}</p>
+      </div>
+      <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;">
+        <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">${T('footer')}</p>
+      </div>
+    </div>
+  </body></html>`
+  return { subject: t('subject'), html }
 }
 
 // ─── אישור קבלת דברי הברכה ──────────────────────────────────────────────────
@@ -1351,27 +1407,30 @@ export function gratitudeReceivedEmail(opts: {
   familyName?: string | null
   motherName?: string | null
 }): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('gratitude_received', k)
+  const T = (k: string) => escapeHtml(t(k))
   const body = `
     <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
 
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      דברי הברכה שלכם התקבלו אצלנו, ואנו נדאג להעבירם לנדיב.
+      ${T('intro')}
     </p>
 
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      תודה רבה מקרב לב — זה בדיוק מה שנותן כוח להמשיך ולסייע.
+      ${T('thanks')}
     </p>
 
     <p style="margin:0;color:#64748b;font-size:14px;line-height:1.8;">
-      מצורף עותק מעוצב של המכתב.
+      ${T('attachment_note')}
     </p>`
   return {
-    subject: 'קיבלנו את דברי הברכה — תודה רבה',
+    subject: t('subject'),
     html: shell({
-      preheader: 'דברי הברכה שלכם התקבלו',
+      preheader: t('preheader'),
       accent: '#C69D2D',
-      title: 'תודה רבה!',
-      subtitle: 'דברי הברכה התקבלו',
+      title: t('title'),
+      subtitle: t('subtitle'),
       body,
     }),
   }

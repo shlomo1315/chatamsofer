@@ -10,6 +10,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
 import { createVerifyToken, normalizeVerifyValue, type VerifyChannel } from '@/lib/verifyToken'
+import { verifyCodeEmail } from '@/lib/emailTemplates'
 
 const CODE_TTL_MS = 10 * 60 * 1000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -18,24 +19,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export interface ChannelResult {
   status: number
   body: Record<string, unknown>
-}
-
-function codeEmailHtml(code: string): string {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head>
-  <body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;background:#f1f5f9;padding:24px;">
-    <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
-      <div style="background:#4f46e5;color:#fff;padding:20px 24px;font-size:18px;font-weight:700;">היכל החתם סופר — אימות כתובת מייל</div>
-      <div style="padding:24px;color:#1e293b;font-size:15px;line-height:1.7;">
-        <p style="margin:0 0 12px;">קוד האימות לכתובת המייל שלך:</p>
-        <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#4f46e5;text-align:center;background:#eef2ff;border-radius:12px;padding:16px 0;margin:8px 0 16px;">${code}</div>
-        <p style="margin:0 0 8px;">הקוד תקף ל-<strong>10 דקות</strong>.</p>
-        <p style="margin:0 0 12px;color:#64748b;font-size:13px;">אם לא ביקשת קוד זה, ניתן להתעלם מהודעה זו.</p>
-      </div>
-      <div style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 24px;">
-        <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">מייל זה נשלח ממערכת אוטומטית, אין להשיב למייל זה.</p>
-      </div>
-    </div>
-  </body></html>`
 }
 
 // נרמול הערוץ מקלט גולמי. מחזיר null אם לא תקין.
@@ -93,7 +76,8 @@ export async function sendVerifyCode(
   if (upErr) return { status: 500, body: { error: 'שגיאת שרת' } }
 
   if (channel === 'email') {
-    const res = await deliverMail(raw, 'קוד אימות כתובת מייל — היכל החתם סופר', codeEmailHtml(code), undefined, { ...mailFor('igud'), skipLog: true })
+    const mail = verifyCodeEmail(code)
+    const res = await deliverMail(raw, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
     if (!res || !res.ok) {
       console.error('[verify/send] email failed:', res?.error)
       return { status: 502, body: { error: 'שליחת המייל נכשלה. נסו שוב או פנו למזכירות.' } }
