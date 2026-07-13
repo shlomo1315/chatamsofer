@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { BrainCircuit, X, Send, Loader2, AlertCircle } from 'lucide-react'
+import { BotMessageSquare, Sparkles, X, Send, Loader2, AlertCircle } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עוזר AI — כפתור צף בכל מסכי הניהול.
@@ -83,7 +83,12 @@ export default function AssistantWidget() {
           >
             {/* הילה פועמת — עדינה, לא מסיחה */}
             <span className="absolute inset-0 rounded-2xl bg-indigo-500 opacity-40 animate-ping-slow" />
-            <BrainCircuit size={26} className="relative z-10" strokeWidth={1.75} />
+            <BotMessageSquare size={27} className="relative z-10" strokeWidth={1.9} />
+
+            {/* ניצוץ בפינה — הסימן המוסכם ל-AI. בלעדיו האייקון נקרא כ"צ'אט" סתם. */}
+            <span className="absolute -top-1 -right-1 z-10 w-6 h-6 rounded-full bg-amber-400 text-amber-900 flex items-center justify-center shadow-md ring-2 ring-white">
+              <Sparkles size={13} strokeWidth={2.5} className="fill-current" />
+            </span>
           </button>
         </div>
       )}
@@ -94,12 +99,16 @@ export default function AssistantWidget() {
           {/* כותרת */}
           <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5 text-white">
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <BrainCircuit size={17} strokeWidth={1.75} />
+              <div className="relative w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                <BotMessageSquare size={17} strokeWidth={1.9} />
+                <Sparkles size={9} strokeWidth={2.5} className="absolute -top-0.5 -right-0.5 text-amber-300 fill-current" />
               </div>
               <div>
-                <p className="font-bold text-sm leading-tight">עוזר</p>
-                <p className="text-indigo-200 text-[11px]">העוזר החכם · שאל אותי על המערכת</p>
+                <p className="font-bold text-sm leading-tight flex items-center gap-1.5">
+                  עוזר
+                  <span className="text-[9px] font-bold bg-white/20 rounded px-1.5 py-0.5 tracking-wide">AI</span>
+                </p>
+                <p className="text-indigo-200 text-[11px]">שאל אותי על המערכת</p>
               </div>
             </div>
             <button
