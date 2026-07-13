@@ -779,20 +779,55 @@ export async function POST(request: NextRequest) {
   // ⚠️ חייב לרוץ מחוץ ל-if (isNew): Resend שולח את ה-webhook יותר מפעם אחת
   // (retry על timeout). בריצה השנייה ה-upsert מדלג, isNew הופך false, וכל
   // הבלוק היה מדולג — הבקשה לא נקלטה ומייל הדחייה עם פירוט השגיאות
-  // מעולם לא נשלח. handleEmailRequest מזהה כפילות בעצמו, אז זה בטוח.
+  // מעולם לא נשלח.
+  //
+  // ⚠️ אבל isNew לבדו היה גם ההגנה מפני כפילות: Resend שולח את ה-webhook
+  // יותר מפעם אחת, ובלי חסם כל ניסיון חוזר שלח מייל דחייה נוסף — משתמשים
+  // קיבלו את אותו מייל שוב ושוב על בקשה ישנה. handleEmailRequest אינו מזהה
+  // כפילות בעצמו. לכן נעילה מפורשת לפי message_id: הראשון שתופס אותה מטפל,
+  // וכל ניסיון חוזר נדחה. ה-upsert אטומי, ולכן בטוח גם בריצה מקבילה.
   if (requestSubject && isRequestSubject(requestSubject)) {
-    try {
-      const handled = await handleEmailRequest(admin, {
-        fromEmail: from.email,
-        subject: requestSubject,
-        body: requestBody,
-        attachments,
-      })
-      if (!handled && isIgud) {
-        await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+    // מפתח הנעילה חייב להיות יציב בין ניסיונות. messageId נופל-לאחור לערך
+    // אקראי כשהכותרת חסרה — ואז הנעילה חסרת ערך. לכן במקרה כזה נועלים לפי
+    // תוכן המייל (שולח + נושא), שזהה בכל ניסיון חוזר.
+    const stableId = (data.message_id ?? data.messageId ?? data.id)
+      ? String(messageId)
+      : `${from.email}|${requestSubject}`
+    const lockKey = `req_handled:${stableId}`.slice(0, 200)
+
+    // הנעילה פגה אחרי 10 דקות. ה-retry של Resend קורה תוך שניות, אז החלון
+    // הזה חוסם אותו — אבל משתמש שמתקן את הבקשה ושולח שוב (אותו נושא!) לא
+    // ייחסם. בלי התפוגה, נעילת "שולח+נושא" הייתה חוסמת אותו לנצח.
+    const LOCK_TTL_MS = 10 * 60 * 1000
+    const now = Date.now()
+    const { data: prev } = await admin
+      .from('app_settings').select('value').eq('key', lockKey).maybeSingle()
+
+    const prevAt = prev?.value ? Date.parse(String(prev.value)) : NaN
+    const locked = !isNaN(prevAt) && (now - prevAt) < LOCK_TTL_MS
+
+    if (locked) {
+      console.log('[resend-inbound] המייל כבר טופל — מדלג (מניעת מייל כפול)')
+    } else {
+      await admin.from('app_settings').upsert(
+        { key: lockKey, value: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
+        { onConflict: 'key' },
+      )
+      try {
+        const handled = await handleEmailRequest(admin, {
+          fromEmail: from.email,
+          subject: requestSubject,
+          body: requestBody,
+          attachments,
+        })
+        if (!handled && isIgud) {
+          await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+        }
+      } catch (e) {
+        console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
+        // משחררים את הנעילה כדי שניסיון חוזר של Resend יוכל לטפל בכל זאת
+        await admin.from('app_settings').delete().eq('key', lockKey)
       }
-    } catch (e) {
-      console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
     }
   } else if (isIgud && isNew) {
     // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
