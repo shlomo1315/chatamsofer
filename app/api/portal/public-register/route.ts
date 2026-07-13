@@ -21,15 +21,12 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  // הגבלת קצב — מניעת רישומי ספאם המוניים.
-  //
-  // ⚠️ טופס נדרים פלוס (matara.pro) קורא לכאן דרך nedarim-form/register.
-  // אם הם קוראים משרת-לשרת, *כל* הרישומים מגיעים מאותו IP — ותקרה של 10
-  // בשעה הייתה חוסמת רישומים אמיתיים. לכן להם תקרה גבוהה יותר, ועדיין
-  // מוגבלת (הגנה מפני לולאה או תקלה אצלם).
+  // טופס נדרים פלוס רץ בדפדפן המשתמש מ-matara.pro (ראה lib/cors.ts), ולכן
+  // כל נרשם מגיע מה-IP שלו — אותה תקרה מתאימה לשניהם.
   const isNedarim = request.headers.get('origin') === 'https://matara.pro'
-  const limit = isNedarim ? 200 : 10
-  if (!rateLimit(`public-register:${clientIp(request)}`, limit, 60 * 60 * 1000)) {
+
+  // הגבלת קצב — מניעת רישומי ספאם המוניים
+  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 
@@ -72,8 +69,15 @@ export async function POST(request: NextRequest) {
   }
 
   // אימות חובה: כתובת המייל חייבת להיות מאומתת בקוד.
-  if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {
-    return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
+  //
+  // ⚠️ יוצא מן הכלל — טופס נדרים פלוס מאמת טלפון בלבד (וכך גם ה-endpoints
+  // שנבנו עבורו: nedarim-form/verify תומך ב-'phone' בלבד). בלי הפטור הזה
+  // כל רישום משם היה נכשל ב-400. אימות הטלפון עצמו נאכף בהמשך לכל המסלולים,
+  // כולל נדרים — הוא ההגנה האמיתית.
+  if (!isNedarim) {
+    if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {
+      return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
+    }
   }
   // טלפונים — חובה לפחות מספר אחד מאומת. אוספים את כל המספרים המאומתים (verified_phones).
   const verifiedPhones: string[] = []
@@ -114,10 +118,16 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  // שער ההרשמה — חסום אם ההרשמה סגורה, אלא אם הוצג קוד עוקף תקין (לטסטים)
-  const gate = await getRegistrationGate(admin)
-  if (!registrationAllowed(gate, body.bypass as string | undefined)) {
-    return NextResponse.json({ error: 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.' }, { status: 403 })
+  // שער ההרשמה — חסום אם ההרשמה סגורה, אלא אם הוצג קוד עוקף תקין (לטסטים).
+  //
+  // ⚠️ טופס נדרים פלוס (matara.pro) פטור מהשער: הוא ערוץ רישום נפרד, ופתיחה
+  // או סגירה של הטופס הראשי באתר אינה אמורה להשפיע עליו. בלי הפטור הזה,
+  // סגירת הרישום הייתה משביתה להם את הטופס בלי שאיש ישים לב.
+  if (!isNedarim) {
+    const gate = await getRegistrationGate(admin)
+    if (!registrationAllowed(gate, body.bypass as string | undefined)) {
+      return NextResponse.json({ error: 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.' }, { status: 403 })
+    }
   }
 
   const { data: existing } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
