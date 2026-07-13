@@ -23,17 +23,24 @@ export async function GET() {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  // המייל האחרון שה-webhook ראה — נכתב בכל קליטה, גם כשלא זוהה כבקשה
-  const { data: dbg } = await db
+  const { data: rows } = await db
     .from('app_settings')
-    .select('value, updated_at')
-    .eq('key', 'mail_intake_debug')
-    .maybeSingle()
+    .select('key, value, updated_at')
+    .in('key', ['mail_intake_debug', 'mail_auth_failure'])
 
-  let lastInbound: unknown = null
-  if (dbg?.value) {
-    try { lastInbound = JSON.parse(String(dbg.value)) } catch { lastInbound = String(dbg.value) }
+  const pick = (k: string) => (rows ?? []).find(r => r.key === k)
+  const parse = (v: unknown) => {
+    if (v == null) return null
+    try { return JSON.parse(String(v)) } catch { return String(v) }
   }
+
+  const dbg = pick('mail_intake_debug')
+  const lastInbound = parse(dbg?.value)
+
+  // כשל אימות = הכשל השקט. Resend מקבל 401, מפסיק לנסות, והדואר נעלם
+  // בלי שום סימן. אם השדה הזה עדכני יותר מ-lastInboundAt — זו הבעיה.
+  const authRow = pick('mail_auth_failure')
+  const lastAuthFailure = parse(authRow?.value)
 
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
   const { data: mails, error } = await db
@@ -64,8 +71,12 @@ export async function GET() {
   const { data: cc } = await db.from('card_centers').select('name, city').eq('is_active', true).order('name')
 
   return NextResponse.json({
-    fixVersion: 'route-requests-to-igud@2026-07-13',
+    fixVersion: 'webhook-auth-fallback@2026-07-13',
     now: new Date().toISOString(),
+    // ⚠️ אם lastAuthFailureAt חדש יותר מ-lastInboundAt — ה-webhook נדחה
+    // ו-Resend הפסיק למסור. הסיבה המדויקת ב-lastAuthFailure.reason
+    lastAuthFailureAt: authRow?.updated_at ?? null,
+    lastAuthFailure,
     lastInboundAt: dbg?.updated_at ?? null,
     lastInbound,
     requestsSeen: inbound.filter(m => m.isRequest).length,

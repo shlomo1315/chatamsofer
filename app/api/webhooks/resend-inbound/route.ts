@@ -332,26 +332,54 @@ export async function POST(request: NextRequest) {
   const signingSecret = process.env.RESEND_WEBHOOK_SIGNING_SECRET
   const staticSecret = process.env.RESEND_WEBHOOK_SECRET
 
-  if (!signingSecret && !staticSecret) {
-    console.error('[resend-inbound] אין סוד אימות מוגדר — דחיית כל הבקשות (fail-closed)')
+  // כשל אימות הוא הכשל המסוכן ביותר כאן: Resend מקבל 401, מפסיק לנסות,
+  // והמיילים נעלמים בשקט מוחלט — בלי שום סימן במערכת. לכן כל דחייה
+  // נרשמת ל-app_settings ומוצגת בכלי האבחון, עם הסיבה המדויקת.
+  const denyAuth = async (reason: string) => {
+    console.error('[resend-inbound] דחיית אימות:', reason)
+    try {
+      // לקוח משלו: admin נוצר רק בהמשך, אחרי האימות.
+      const db = getAdminClient()
+      if (!db) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      await db.from('app_settings').upsert({
+        key: 'mail_auth_failure',
+        value: JSON.stringify({
+          at: new Date().toISOString(),
+          reason,
+          hasSigningSecret: Boolean(signingSecret),
+          hasStaticSecret: Boolean(staticSecret),
+          hasSvixHeaders: hasSvixHeaders(request),
+        }),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* אבחון בלבד — לעולם לא מפיל את הבקשה */ }
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  if (!signingSecret && !staticSecret) {
+    return await denyAuth('אין סוד אימות מוגדר כלל (fail-closed)')
   }
 
   let authenticated = false
 
   if (signingSecret && hasSvixHeaders(request)) {
     authenticated = verifySvixSignature(request, rawBody, signingSecret)
-    if (!authenticated) {
-      console.error('[resend-inbound] חתימת Svix לא תקינה')
-      return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
+    // נפילה-לאחור לסוד הסטטי: אם סוד ה-Svix שגוי או שייך ל-webhook אחר,
+    // בלי זה כל הדואר הנכנס מת בשקט עד שמישהו יבחין.
+    if (!authenticated && staticSecret) {
+      const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
+      authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
+      if (authenticated) console.warn('[resend-inbound] חתימת Svix נכשלה — אומת בסוד הסטטי. בדוק את RESEND_WEBHOOK_SIGNING_SECRET.')
     }
+    if (!authenticated) return await denyAuth('חתימת Svix לא תקינה — ככל הנראה RESEND_WEBHOOK_SIGNING_SECRET שגוי')
   } else if (staticSecret) {
     const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
     authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
+    if (!authenticated) return await denyAuth('הסוד הסטטי חסר או שגוי בבקשה')
   }
 
   if (!authenticated) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return await denyAuth('לא הצליח אף מסלול אימות')
   }
 
   let body: Record<string, unknown>
