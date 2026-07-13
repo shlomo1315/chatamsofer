@@ -778,11 +778,23 @@ export function registrationReceivedEmail(
     children_count?: number | null
   },
   portalBase = PORTAL_BASE_DEFAULT,
+  // קישורי טיוטה מוכנה (mailto) — להגשת בקשה ישירות מהמייל, בלי להיכנס לאתר.
+  // חיוני למי שחסום לגלישה. נבנים ע"י buildDraftLinks.
+  draftLinks?: { label: string; href: string }[],
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
   const t = (k: string) => textFor('registration_received', k)
   const fullName = [d.family_name, d.full_name].filter(Boolean).join(' ') || (d.full_name ?? '')
+
+  const draftBlock = (draftLinks && draftLinks.length) ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
+      <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#9a3412;font-size:14px;font-weight:900;">${escapeHtml(t('drafts_title'))}</p>
+        <p style="margin:0 0 12px;color:#9a3412;font-size:13px;line-height:1.7;">${escapeHtml(t('drafts_note'))}</p>
+        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${escapeHtml(l.label)}</a><br/>`).join('')}
+      </td></tr>
+    </table>` : ''
   const married = (d.marital_status ?? '').startsWith('נשו')
   const widowerBen = d.marital_status === 'אלמן' || d.marital_status === 'אלמנה'
   const rows = [
@@ -811,6 +823,7 @@ export function registrationReceivedEmail(
       btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
       widowerBen ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
     ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')}
+    ${draftBlock}
   `
   return {
     subject: t('subject'),

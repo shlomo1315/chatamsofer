@@ -9,6 +9,7 @@ import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate
 import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
+import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { normalizePhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
@@ -271,6 +272,15 @@ export async function POST(request: NextRequest) {
 
   // Send confirmation email (non-blocking) — מעוצב עם כל פרטי הרישום + קישור לפורטל
   if (email) {
+    // קישורי טיוטה מוכנה (mailto) — כדי שנרשם שחסום לגלישה יוכל להגיש בקשה
+    // ישירות מהמייל. כשל בבנייתם לא מפיל את מייל האישור.
+    let drafts: { label: string; href: string }[] | undefined
+    try {
+      drafts = await buildDraftLinks(admin, cleanId, true, marital_status ? String(marital_status) : null)
+    } catch (e) {
+      console.error('[public-register] בניית קישורי הטיוטות נכשלה:', e)
+    }
+
     const reg = registrationReceivedEmail({
       full_name: full_name ? String(full_name) : null,
       family_name: family_name ? String(family_name) : null,
@@ -283,7 +293,7 @@ export async function POST(request: NextRequest) {
       spouse_name: spouse_name ? String(spouse_name) : null,
       spouse_id_number: spouse_id_number ? String(spouse_id_number) : null,
       children_count: cleanChildCount,
-    })
+    }, undefined, drafts)
     deliverMail(String(email), reg.subject, reg.html, undefined, mailFor('igud'))
       .catch(e => console.error('[public-register] confirmation email failed:', e))
   }

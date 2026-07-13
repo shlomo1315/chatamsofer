@@ -87,3 +87,25 @@ describe('רגרסיה: המיילים לא השתנו עם החיבור', () =>
     }
   })
 })
+
+describe('מייל הרישום — קישורי טיוטה להגשה במייל', () => {
+  const d = { full_name: 'שלמה', family_name: 'ויסברג', id_number: '318344884', marital_status: 'נשוי' }
+  const drafts = [
+    { label: 'בקשת לידה', href: 'mailto:igud@x?subject=y' },
+    { label: 'בקשת הלוואה', href: 'mailto:igud@x?subject=z' },
+  ]
+
+  it('הטיוטות מופיעות במייל כשהן מסופקות', () => {
+    const m = current.registrationReceivedEmail(d, undefined, drafts)
+    expect(m.html).toContain('בקשת לידה')
+    expect(m.html).toContain('mailto:igud@x')
+    // הכותרת שמסבירה למי זה מיועד
+    expect(m.html).toContain('חסומים לגלישה')
+  })
+
+  it('בלי טיוטות — המייל תקין ואין בלוק ריק', () => {
+    const m = current.registrationReceivedEmail(d)
+    expect(m.html).not.toContain('חסומים לגלישה')
+    expect(m.html.length).toBeGreaterThan(500)
+  })
+})
