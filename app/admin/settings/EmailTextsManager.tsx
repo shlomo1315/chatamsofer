@@ -119,9 +119,10 @@ export default function EmailTextsManager() {
         העיצוב (לוגו, צבעים, מסגרות) נשאר אחיד ואינו ניתן לעריכה, כדי שטעות לא תוכל לשבור מייל.
       </p>
 
-      {/* קבוצות */}
+      {/* קבוצות — רק מיילים שהתבנית שלהם באמת קוראת את הטקסטים הערוכים.
+          הצגת מייל שאינו wired הייתה מטעה: העריכה לא הייתה משפיעה על כלום. */}
       {GROUP_ORDER.map(group => {
-        const emails = EMAIL_CATALOG.filter(e => e.group === group)
+        const emails = EMAIL_CATALOG.filter(e => e.group === group && e.wired)
         if (!emails.length) return null
 
         return (

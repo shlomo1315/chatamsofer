@@ -57,6 +57,12 @@ export interface EmailSpec {
   /** המחלקה השולחת (DepartmentKey), לתצוגה. */
   department: string
   fields: EditableField[]
+  /**
+   * האם התבנית בקוד באמת קוראת את הטקסטים הערוכים (textFor).
+   * מיילים שאינם wired מוסתרים מהמסך — עריכה שלהם לא הייתה משפיעה על כלום,
+   * וזה מטעה יותר מלא להציג אותם כלל.
+   */
+  wired?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +149,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשבקשה שהוגשה במייל נכשלה בבדיקה (פרט חסר / קובץ חסר / ת"ז שגויה / עברו 30 יום)',
     recipient: 'המגיש',
     department: 'igud',
+    wired: true,
     fields: [
       { key: 'title', label: 'כותרת ראשית', default: 'הבקשה לא נקלטה' },
       { key: 'errors_intro', label: 'כותרת רשימת השגיאות', default: 'הסיבות:' },
@@ -249,13 +256,18 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: '10 ימים לאחר אישור הלידה. תזכורת נשלחת יומיים אחר כך אם לא התקבל מכתב',
     recipient: 'היולדת',
     department: 'maternity',
+    wired: true,
     fields: [
       { key: 'subject', label: 'שורת הנושא', default: 'דברי ברכה לנדיב · היכל החתם סופר' },
       { key: 'subject_reminder', label: 'שורת הנושא — תזכורת', default: 'תזכורת · דברי ברכה לנדיב' },
-      { key: 'title', label: 'כותרת ראשית', default: 'דברי ברכה לנדיב' },
-      { key: 'intro', label: 'פסקת פתיחה', default: 'נשמח אם תכתבי מילות ברכה לנדיב שבחר לתמוך בכם.', multiline: true },
-      { key: 'button', label: 'טקסט הכפתור', default: 'לכתיבת דברי הברכה' },
-      { key: 'print_note', label: 'הסבר על השובר המצורף', default: 'אפשר להדפיס, למלאות את רגשות ליבכן, לסרוק ולשלוח לנו במייל חוזר — יש להשיב דווקא בהשב למייל זה, כדי שהמערכת תזהה את המכתב שלכם.', multiline: true },
+      { key: 'mazal_tov', label: 'שורת פתיחה', default: 'מזל טוב חוזר לרגל השמחה!' },
+      { key: 'reminder_note', label: 'טקסט התזכורת', multiline: true, default: 'לפני מספר ימים שלחנו אליכם בקשה לכתוב דברי ברכה לנדיב. אולי המייל נשכח בין ההודעות? נשמח מאוד לשמוע מכם.' },
+      { key: 'intro', label: 'פסקה ראשית', multiline: true, default: 'הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך בכם — בעילום שם, בלי לבקש דבר בתמורה. נשמח מאוד אם תרצו לכתוב לו כמה מילות ברכה והכרת הטוב. מכתב קצר שיחמם את ליבו, ויראה לו שהתמיכה שלו הגיעה למקום הנכון.' },
+      { key: 'highlight', label: 'המשפט המודגש', default: 'זו חובה שהיא זכות — להכיר טובה למי שפתח עבורכן את הלב!', multiline: true },
+      { key: 'button', label: 'טקסט הכפתור', default: 'לכתיבת דברי ברכה' },
+      { key: 'other_ways_title', label: 'כותרת "דרכים אחרות"', default: 'אפשר גם בדרכים אחרות:' },
+      { key: 'way_reply', label: 'דרך 1 — תשובה במייל', multiline: true, default: 'להשיב ישירות למייל הזה — פשוט לכתוב את הברכה בגוף ההודעה, ואנחנו נדאג לשאר.' },
+      { key: 'way_print', label: 'דרך 2 — הדפסה וסריקה', multiline: true, default: 'לכתוב בכתב יד — מצורף כאן דף מעוצב להדפסה. אפשר להדפיס אותו, למלא בו את רגשות ליבכן, לסרוק, ולשלוח לנו בחזרה.' },
     ],
   },
   {
@@ -314,33 +326,11 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'notice', label: 'הודעת "שימו לב"', multiline: true, default: 'כדי שנוכל לערוך את ההגרלה לכל משתתפי השיעור, עליכם לשלוח את שמות המשתתפים הקבועים בשיעורים לאימייל 8@chasamsofer.info' },
     ],
   },
-  {
-    id: 'existing_contact',
-    group: 'auto_reply',
-    title: 'מענה אוטומטי לצאצא רשום',
-    trigger: 'סריקה אוטומטית של תיבת המשרד כל 15 דקות — לפניות שאינן בקשה',
-    recipient: 'הפונה (רשום במערכת)',
-    department: 'main',
-    fields: [
-      { key: 'subject', label: 'שורת הנושא', default: 'קיבלנו את פנייתך — היכל החתם סופר' },
-      { key: 'title', label: 'כותרת ראשית', default: 'קיבלנו את פנייתך' },
-      { key: 'intro', label: 'פסקת פתיחה', default: 'פנייתך התקבלה. להלן הפרטים הרשומים אצלנו:', multiline: true },
-    ],
-  },
-  {
-    id: 'registration_invite',
-    group: 'auto_reply',
-    title: 'הזמנה להרשמה (פונה שאינו רשום)',
-    trigger: 'אותה סריקה אוטומטית — כשכתובת השולח אינה מוכרת במערכת',
-    recipient: 'הפונה (לא רשום)',
-    department: 'main',
-    fields: [
-      { key: 'subject', label: 'שורת הנושא', default: 'קיבלנו את פנייתך — היכל החתם סופר' },
-      { key: 'title', label: 'כותרת ראשית', default: 'קיבלנו את פנייתך' },
-      { key: 'intro', label: 'פסקת פתיחה', default: 'פנייתך התקבלה. לא נמצאת רשומה במערכת — נשמח אם תשלימו הרשמה.', multiline: true },
-      { key: 'button', label: 'טקסט הכפתור', default: 'להרשמה למערכת' },
-    ],
-  },
+  // existingContactEmail ו-registrationInviteEmail הוסרו מהקטלוג במכוון:
+  // הם שרידי הארכיטקטורה הישנה שסרקה את תיבת Gmail. הדואר הנכנס עובר היום
+  // דרך ה-webhook של Resend, והתפקיד שלהם הוחלף ב-benefits_link (לפונה רשום)
+  // וב-maintenance_reply (ללא מזוהה). הראוט admin/gmail/auto-reply שקורא להם
+  // אינו נקרא מאף מקום בקוד.
 
   // ── מערכת ─────────────────────────────────────────────────────────────────
   {

@@ -1210,50 +1210,37 @@ export function gratitudeRequestEmail(opts: {
   /** תזכורת — נשלחת יומיים אחרי הבקשה, אם עדיין לא התקבל מכתב */
   isReminder?: boolean
 }): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const T = (k: string) => escapeHtml(textFor('gratitude_request', k))
+
   const body = `
     <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
 
     ${opts.isReminder ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
       <tr><td style="background:#eef2ff;border-right:4px solid #6366f1;border-radius:8px;padding:12px 16px;">
-        <p style="margin:0;color:#3730a3;font-size:14px;line-height:1.7;">
-          לפני מספר ימים שלחנו אליכם בקשה לכתוב דברי ברכה לנדיב.
-          <strong>אולי המייל נשכח בין ההודעות?</strong> נשמח מאוד לשמוע מכם.
-        </p>
+        <p style="margin:0;color:#3730a3;font-size:14px;line-height:1.7;">${T('reminder_note')}</p>
       </td></tr>
     </table>` : `
-    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      מזל טוב חוזר לרגל השמחה!
-    </p>`}
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">${T('mazal_tov')}</p>`}
 
-    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך בכם — בעילום שם, בלי לבקש דבר בתמורה.
-      נשמח מאוד אם תרצו לכתוב לו כמה מילות ברכה והכרת הטוב. מכתב קצר שיחמם את ליבו,
-      ויראה לו שהתמיכה שלו הגיעה למקום הנכון.
-    </p>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">${T('intro')}</p>
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fefce8;border-right:4px solid #C69D2D;border-radius:8px;padding:12px 16px;">
-        <p style="margin:0;color:#713f12;font-size:14px;line-height:1.7;">
-          זו <strong>חובה שהיא זכות</strong> — להכיר טובה למי שפתח עבורכן את הלב!
-        </p>
+        <p style="margin:0;color:#713f12;font-size:14px;line-height:1.7;">${T('highlight')}</p>
       </td></tr>
     </table>
 
-    ${btn(opts.formUrl, 'לכתיבת דברי ברכה', '#C69D2D')}
+    ${btn(opts.formUrl, textFor('gratitude_request', 'button'), '#C69D2D')}
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr><td style="background:#f8fafc;border-radius:10px;padding:16px 20px;">
-        <p style="margin:0 0 10px;color:#1B3256;font-size:14px;font-weight:700;">אפשר גם בדרכים אחרות:</p>
+        <p style="margin:0 0 10px;color:#1B3256;font-size:14px;font-weight:700;">${T('other_ways_title')}</p>
 
-        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">
-          ✉️ <strong>להשיב ישירות למייל הזה</strong> — פשוט לכתוב את הברכה בגוף ההודעה, ואנחנו נדאג לשאר.
-        </p>
+        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">✉️ ${T('way_reply')}</p>
 
-        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">
-          ✍️ <strong>לכתוב בכתב יד</strong> — מצורף כאן דף מעוצב להדפסה.
-          אפשר להדפיס אותו, למלא בו את רגשות ליבכן, לסרוק, ולשלוח לנו בחזרה.
-        </p>
+        <p style="margin:0 0 10px;color:#475569;font-size:13.5px;line-height:1.8;">✍️ ${T('way_print')}</p>
 
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 0;">
           <tr><td style="background:#fef3c7;border-right:3px solid #d97706;border-radius:6px;padding:10px 14px;">
@@ -1267,8 +1254,8 @@ export function gratitudeRequestEmail(opts: {
     </table>`
   return {
     subject: opts.isReminder
-      ? 'תזכורת · דברי ברכה לנדיב'
-      : 'דברי ברכה לנדיב · היכל החתם סופר',
+      ? textFor('gratitude_request', 'subject_reminder')
+      : textFor('gratitude_request', 'subject'),
     html: shell({
       preheader: opts.isReminder
         ? 'עדיין נשמח לכמה מילות ברכה לנדיב שסייע לכם'
