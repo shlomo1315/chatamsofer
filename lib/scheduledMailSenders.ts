@@ -42,10 +42,25 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
   const familyName = ben?.family_name ?? null
   const motherName = ben?.spouse_name ?? null
 
-  // ── מכתב ברכה לנדיב ──
-  if (job.kind === 'gratitude_letter') {
+  // ── מכתב ברכה לנדיב (בקשה או תזכורת) ──
+  if (job.kind === 'gratitude_letter' || job.kind === 'gratitude_reminder') {
     if ((aid.birth_type ?? 'live') === 'silent') {
       return { outcome: 'cancelled', reason: 'לידה שקטה' }
+    }
+
+    const isReminder = job.kind === 'gratitude_reminder'
+
+    // ⚠️ הבדיקה הקריטית: אם כבר התקבל מכתב — מכל מסלול (טופס, מייל, סריקה) —
+    // אין לשלוח תזכורת. הבדיקה נעשית כאן, ברגע השליחה, ולא בזמן התזמון —
+    // כי בין התזמון לשליחה היולדת אולי כבר שלחה.
+    const { data: existingLetter } = await db
+      .from('gratitude_letters')
+      .select('id')
+      .eq('maternity_aid_id', aid.id)
+      .maybeSingle()
+
+    if (existingLetter) {
+      return { outcome: 'cancelled', reason: 'המכתב כבר התקבל' }
     }
 
     // טוקן ארוך לקישור בדפדפן; מזהה קצר לכתובת המענה (כתובת ארוכה נדחית ע"י Resend)
@@ -56,6 +71,7 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
       familyName,
       motherName,
       formUrl: `${SITE}/gratitude/${token}`,
+      isReminder,
     })
     // שובר להדפסה — שורות ריקות לכתיבה ביד, אבל החתימה כבר מודפסת
     // (המשפחה לא צריכה לכתוב את שמה — הוא רשום אצלנו)
@@ -72,7 +88,29 @@ export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Prom
       // plus-addressing — כך המענה החוזר מזוהה אוטומטית ומשויך ללידה
       ...(replyToken ? { replyTo: `office+g${replyToken}@${REPLY_DOMAIN}` } : {}),
     })
-    return res.ok ? { outcome: 'sent' } : { outcome: 'failed', reason: res.error }
+
+    if (!res.ok) return { outcome: 'failed', reason: res.error }
+
+    // אחרי הבקשה הראשונה — מתזמנים תזכורת ליומיים.
+    // התזכורת עצמה בודקת שוב אם המכתב הגיע, ומתבטלת אם כן.
+    // (אחרי התזכורת לא שולחים יותר — מספיק פעם אחת.)
+    if (!isReminder) {
+      try {
+        const { scheduleEmail } = await import('./scheduledMail')
+        const { addDays } = await import('./jewishCalendar')
+        await scheduleEmail({
+          kind: 'gratitude_reminder',
+          entityTable: 'maternity_aids',
+          entityId: String(aid.id),
+          toEmail: job.to_email,
+          sendAfter: addDays(new Date(), 2),
+        })
+      } catch (e) {
+        console.error('[gratitude] תזמון התזכורת נכשל:', e)
+      }
+    }
+
+    return { outcome: 'sent' }
   }
 
   // ── משוב על בית ההחלמה ──

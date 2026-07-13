@@ -5,6 +5,7 @@ import { buildGratitudeVoucher } from './gratitudeVoucher'
 import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { gratitudeReceivedEmail } from './emailTemplates'
+import { cancelGratitudeReminder } from './scheduledMail'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // קליטת מענה שהגיע בגוף מייל חוזר — מכתב ברכה או משוב על בית ההחלמה.
@@ -85,6 +86,7 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
       scan_url: image.url,
       is_anonymous: false,
     }, { onConflict: 'maternity_aid_id' })
+    void cancelGratitudeReminder(aidId)
     console.log('[gratitude] נקלט שובר סרוק')
     return true
   }
@@ -116,6 +118,7 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
     void deliverMail(ben.email, mail.subject, mail.html, [voucher], mailFor('maternity'))
   }
 
+  void cancelGratitudeReminder(aidId)
   console.log('[gratitude] נקלט מכתב ברכה מהמייל')
   return true
 }

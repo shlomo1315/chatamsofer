@@ -1194,16 +1194,27 @@ export function gratitudeRequestEmail(opts: {
   familyName?: string | null
   motherName?: string | null
   formUrl: string
+  /** תזכורת — נשלחת יומיים אחרי הבקשה, אם עדיין לא התקבל מכתב */
+  isReminder?: boolean
 }): BuiltEmail {
   const body = `
     <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greetMrs(opts.familyName, opts.motherName)}</p>
 
+    ${opts.isReminder ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #6366f1;border-radius:8px;padding:12px 16px;">
+        <p style="margin:0;color:#3730a3;font-size:14px;line-height:1.7;">
+          לפני מספר ימים שלחנו אליכם בקשה לכתוב דברי ברכה לנדיב.
+          <strong>אולי המייל נשכח בין ההודעות?</strong> נשמח מאוד לשמוע מכם.
+        </p>
+      </td></tr>
+    </table>` : `
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
       מזל טוב חוזר לרגל השמחה!
-    </p>
+    </p>`}
 
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך ביולדות הקהילה — בעילום שם, בלי לבקש דבר בתמורה.
+      הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך בכם — בעילום שם, בלי לבקש דבר בתמורה.
       נשמח מאוד אם תרצו לכתוב לו כמה מילות ברכה והכרת הטוב. מכתב קצר שיחמם את ליבו,
       ויראה לו שהתמיכה שלו הגיעה למקום הנכון.
     </p>
@@ -1242,9 +1253,13 @@ export function gratitudeRequestEmail(opts: {
       </td></tr>
     </table>`
   return {
-    subject: 'דברי ברכה לנדיב · היכל החתם סופר',
+    subject: opts.isReminder
+      ? 'תזכורת · דברי ברכה לנדיב'
+      : 'דברי ברכה לנדיב · היכל החתם סופר',
     html: shell({
-      preheader: 'נשמח לכמה מילות ברכה לנדיב שסייע לכם',
+      preheader: opts.isReminder
+        ? 'עדיין נשמח לכמה מילות ברכה לנדיב שסייע לכם'
+        : 'נשמח לכמה מילות ברכה לנדיב שסייע לכם',
       accent: '#C69D2D',
       title: 'דברי ברכה',
       subtitle: 'הכרת הטוב לנדיב',

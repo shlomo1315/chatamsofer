@@ -6,8 +6,8 @@ import { sendScheduled } from '@/lib/scheduledMailSenders'
 // שימושי כשרוצים לשלוח מיד, או לשלוח שוב למי שלא ענה.
 export const dynamic = 'force-dynamic'
 
-type Kind = 'gratitude_letter' | 'recovery_survey'
-const VALID: Kind[] = ['gratitude_letter', 'recovery_survey']
+type Kind = 'gratitude_letter' | 'gratitude_reminder' | 'recovery_survey'
+const VALID: Kind[] = ['gratitude_letter', 'gratitude_reminder', 'recovery_survey']
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('maternity', 'edit')

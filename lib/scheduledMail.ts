@@ -7,7 +7,10 @@ import { isBlockedForMail, nextAllowedSendTime } from './jewishCalendar'
 // (runScheduledMail, נקרא כל שעה מ-instrumentation.ts) שולח כשמגיע הזמן.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ScheduledKind = 'gratitude_letter' | 'recovery_survey'
+export type ScheduledKind =
+  | 'gratitude_letter'          // בקשת מכתב ברכה — 10 ימים אחרי אישור הלידה
+  | 'gratitude_reminder'        // תזכורת — יומיים אחרי, אם עדיין לא הגיע מכתב
+  | 'recovery_survey'           // בקשת משוב — 5 ימים אחרי סימון ההגעה
 
 export interface EntityKey {
   kind: ScheduledKind
@@ -91,6 +94,21 @@ export async function scheduleEmail(input: ScheduleInput): Promise<void> {
   } catch (err) {
     console.error('[scheduled-mail] scheduleEmail threw:', err)
   }
+}
+
+/**
+ * מבטל את תזכורת מכתב הברכה — נקרא ברגע שהמכתב מתקבל,
+ * מכל מסלול (טופס, מייל, סריקה).
+ *
+ * (התזכורת גם בודקת בעצמה לפני השליחה, אבל ביטול מיידי נקי יותר
+ * ומונע תזכורת שנשלחת בטעות אם הבדיקה נכשלת.)
+ */
+export async function cancelGratitudeReminder(aidId: string): Promise<void> {
+  await cancelScheduledEmail({
+    kind: 'gratitude_reminder',
+    entityTable: 'maternity_aids',
+    entityId: aidId,
+  })
 }
 
 /** מבטל מייל שטרם נשלח. מייל שכבר נשלח — לא מושפע. */

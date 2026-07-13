@@ -100,7 +100,7 @@ export default function GratitudeForm({ token }: { token: string }) {
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
           <p className="text-slate-600 text-sm leading-relaxed mb-6">
-            הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך ביולדות הקהילה — בעילום שם.
+            הסיוע שקיבלתם התאפשר בזכות נדיב לב שבחר לתמוך בכם — בעילום שם.
             כאן אפשר לכתוב לו כמה מילות ברכה והכרת הטוב.
           </p>
 

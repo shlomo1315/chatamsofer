@@ -6,6 +6,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { gratitudeReceivedEmail } from '@/lib/emailTemplates'
+import { cancelGratitudeReminder } from '@/lib/scheduledMail'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // כתיבת דברי ברכה לנדיב — endpoint ציבורי (ללא התחברות).
@@ -127,6 +128,9 @@ export async function POST(request: NextRequest) {
     console.error('[gratitude] שמירה נכשלה:', error.message)
     return NextResponse.json({ error: 'שמירה נכשלה' }, { status: 500 })
   }
+
+  // המכתב התקבל — מבטלים את התזכורת שממתינה
+  void cancelGratitudeReminder(aidId)
 
   // מייל אישור ליולדת עם השובר המעוצב — לא חוסם את התגובה
   void (async () => {
