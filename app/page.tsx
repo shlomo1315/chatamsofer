@@ -3683,6 +3683,7 @@ export default function PublicPortalPage() {
                       onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
                       minDaysBack={MATERNITY_WINDOW_DAYS}
+                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 6 שבועות מתאריך הלידה בלבד. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
                     />
                   </Field>
                 </div>
@@ -3837,6 +3838,7 @@ export default function PublicPortalPage() {
                       onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
                       maxToday
                       minDaysBack={MATERNITY_WINDOW_DAYS}
+                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 6 שבועות מתאריך הלידה בלבד. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
                     />
                   </Field>
                 </div>

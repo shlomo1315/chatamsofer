@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { HDate, gematriya } from '@hebcal/core'
-import { Calendar, ChevronRight, ChevronLeft } from 'lucide-react'
+import { Calendar, ChevronRight, ChevronLeft, AlertCircle } from 'lucide-react'
 
 const HEB_MONTHS: Record<number, string> = {
   1: 'ניסן', 2: 'אייר', 3: 'סיון', 4: 'תמוז', 5: 'אב', 6: 'אלול',
@@ -24,7 +24,7 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack, minDaysBack }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack, minDaysBack, minDateMessage }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
@@ -39,7 +39,11 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   // כשהחוק נמדד בימים: חלון הזכאות ליולדת הוא 42 יום, ו"חודשיים" נותנים ~60 —
   // כמעט שבועיים וחצי יותר מהמותר. גובר על minMonthsBack אם שניהם הוגדרו.
   minDaysBack?: number
+  // ההסבר שמוצג כשנלחץ תאריך מוקדם מדי. בלעדיו הלחיצה פשוט לא עושה כלום,
+  // והמשתמש לא מבין למה. הטקסט נמסר מבחוץ — הרכיב עצמו גנרי.
+  minDateMessage?: string
 }) {
+  const [notice, setNotice] = useState<string | null>(null)
   const today = new Date(); today.setHours(0, 0, 0, 0)
   // התאריך המוקדם ביותר שניתן לבחור
   const minDate = minDaysBack != null
@@ -58,7 +62,9 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const f = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const f = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setNotice(null) }
+    }
     document.addEventListener('mousedown', f)
     return () => document.removeEventListener('mousedown', f)
   }, [])
@@ -72,7 +78,13 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   const pick = (d: Date) => {
     const dd = new Date(d); dd.setHours(0, 0, 0, 0)
     if (maxToday && dd > today) return
-    if (minDate && dd < minDate) return
+    // תאריך מוקדם מדי: קודם התעלמנו בשקט, והמשתמש נשאר בלי מושג למה
+    // הלחיצה שלו לא עשתה כלום. עכשיו מסבירים.
+    if (minDate && dd < minDate) {
+      setNotice(minDateMessage ?? 'לא ניתן לבחור תאריך מוקדם מזה.')
+      return
+    }
+    setNotice(null)
     onChange(isoOf(dd))
     setOpen(false)
   }
@@ -153,9 +165,19 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
             ))}
           </div>
 
+          {/* הסבר על תאריך חסום — מופיע רק אחרי ניסיון בחירה, ולא כאזהרה קבועה */}
+          {notice && (
+            <div role="alert" className="flex items-start gap-2 mb-3 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+              <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-600" />
+              <p className="text-[13px] leading-snug font-medium">{notice}</p>
+            </div>
+          )}
+
           {/* כותרת ניווט — קליק על החודש/שנה פותח רשימת בחירה */}
           <div className="flex items-center justify-between mb-2">
-            <button type="button" disabled={prevDisabled} onClick={mode === 'hebrew' ? hPrev : gPrev} className={`p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed ${view !== 'days' ? 'invisible' : ''}`} title="חודש קודם"><ChevronRight size={18} /></button>
+            {/* כשיש minDateMessage הניווט אחורה נשאר פתוח: אחרת המשתמש נתקע מול
+                חץ מושבת בלי לדעת למה, ולא מגיע לתאריך שיציג לו את ההסבר. */}
+            <button type="button" disabled={prevDisabled && !minDateMessage} onClick={mode === 'hebrew' ? hPrev : gPrev} className={`p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed ${view !== 'days' ? 'invisible' : ''}`} title="חודש קודם"><ChevronRight size={18} /></button>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setView(v => v === 'months' ? 'days' : 'months')}
                 className={`text-sm font-bold rounded-lg px-2.5 py-1 transition-colors ${view === 'months' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-800 hover:bg-slate-100'}`}>
@@ -180,14 +202,22 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
               <div className="grid grid-cols-7 gap-0.5">
                 {cells.map((c, i) => {
                   if (!c) return <div key={i} />
-                  const disabled = (maxToday && c.date > today) || (!!minDate && c.date < minDate)
+                  // תאריך עתידי — חסום לחלוטין (אין מה להסביר).
+                  // תאריך מוקדם מדי — נשאר לחיץ בכוונה: כפתור disabled אינו יורה
+                  // onClick, ואז הלחיצה "לא עושה כלום" בלי שום הסבר. כאן הלחיצה
+                  // מציגה את הסיבה (minDateMessage).
+                  const tooLate = maxToday && c.date > today
+                  const tooEarly = !!minDate && c.date < minDate
+                  const dim = tooLate || tooEarly
                   const isSel = selected && sameYMD(c.date, selected)
                   const isToday = sameYMD(c.date, today)
                   return (
-                    <button key={i} type="button" disabled={disabled} onClick={() => pick(c.date)}
+                    <button key={i} type="button" disabled={tooLate} onClick={() => pick(c.date)}
+                      title={tooEarly ? 'מחוץ לטווח ההגשה — לחצו לפרטים' : undefined}
                       className={`h-9 rounded-lg text-sm flex items-center justify-center transition-colors
                         ${isSel ? 'bg-indigo-600 text-white font-bold'
-                          : disabled ? 'text-slate-300 cursor-not-allowed'
+                          : tooEarly ? 'text-slate-300 hover:bg-amber-50 hover:text-amber-700 cursor-help'
+                          : dim ? 'text-slate-300 cursor-not-allowed'
                           : isToday ? 'bg-indigo-50 text-indigo-700 font-semibold hover:bg-indigo-100'
                           : 'text-slate-700 hover:bg-slate-100'}`}>
                       {c.label}
