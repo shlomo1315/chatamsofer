@@ -9,6 +9,7 @@ import AddUserButton from './AddUserButton'
 import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
+import EmailTextsManager from './EmailTextsManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
@@ -142,8 +143,13 @@ export default async function SettingsPage() {
           <GovDataSettings />
         </Collapsible>
 
-        {/* Email templates */}
-        <Collapsible title="תבניות מייל" icon={<Mail size={16} className="text-indigo-500" />}>
+        {/* עריכת הטקסטים של כל המיילים היוצאים */}
+        <Collapsible title="הודעות מייל" icon={<Mail size={16} className="text-violet-500" />}>
+          <EmailTextsManager />
+        </Collapsible>
+
+        {/* Email templates — קבצים מצורפים לתבניות (לא טקסטים) */}
+        <Collapsible title="קבצים מצורפים לתבניות" icon={<Mail size={16} className="text-indigo-500" />}>
           <EmailTemplatesManager />
         </Collapsible>
 
