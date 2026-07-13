@@ -87,3 +87,19 @@ body {
 .mail-editor ul { list-style: disc; padding-inline-start: 1.5rem; }
 .mail-editor ol { list-style: decimal; padding-inline-start: 1.5rem; }
 .mail-editor a { color: #4f46e5; text-decoration: underline; }
+
+/* עוזר — הילה פועמת סביב הכפתור הצף.
+   איטית ועדינה בכוונה: animate-ping הרגיל אגרסיבי מדי ומסיח את העין. */
+@keyframes ping-slow {
+  0%   { transform: scale(1);    opacity: 0.35; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.animate-ping-slow {
+  animation: ping-slow 2.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* כיבוד העדפת המשתמש להפחתת תנועה */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ping-slow { animation: none; }
+}

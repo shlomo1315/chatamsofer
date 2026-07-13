@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { Sparkles, X, Send, Loader2, AlertCircle } from 'lucide-react'
+import { BrainCircuit, X, Send, Loader2, AlertCircle } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עוזר AI — כפתור צף בכל מסכי הניהול.
@@ -65,30 +65,41 @@ export default function AssistantWidget() {
 
   return (
     <>
-      {/* הכפתור הצף */}
+      {/* הכפתור הצף — שמאל למטה, עם הילה פועמת עדינה ותיאור במעבר עכבר */}
       {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          title="עוזר חכם"
-          className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-xl shadow-indigo-500/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
-        >
-          <Sparkles size={22} />
-        </button>
+        <div className="fixed bottom-6 left-6 z-40 group">
+          {/* התיאור — מופיע במעבר עכבר */}
+          <div className="absolute bottom-1/2 translate-y-1/2 left-full ml-3 whitespace-nowrap opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 pointer-events-none">
+            <div className="bg-slate-900 text-white text-[13px] font-medium rounded-xl px-3.5 py-2.5 shadow-xl">
+              לחצו כאן לפתיחת <span className="font-bold text-indigo-300">עוזר</span> — העוזר החכם שלי
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="פתיחת עוזר — העוזר החכם"
+            className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 text-white shadow-xl shadow-indigo-500/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+          >
+            {/* הילה פועמת — עדינה, לא מסיחה */}
+            <span className="absolute inset-0 rounded-2xl bg-indigo-500 opacity-40 animate-ping-slow" />
+            <BrainCircuit size={26} className="relative z-10" strokeWidth={1.75} />
+          </button>
+        </div>
       )}
 
       {/* חלון הצ'אט */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-40 w-[min(400px,calc(100vw-3rem))] h-[min(560px,calc(100vh-6rem))] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+        <div className="fixed bottom-6 left-6 z-40 w-[min(400px,calc(100vw-3rem))] h-[min(560px,calc(100vh-6rem))] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
           {/* כותרת */}
           <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5 text-white">
               <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <Sparkles size={16} />
+                <BrainCircuit size={17} strokeWidth={1.75} />
               </div>
               <div>
-                <p className="font-bold text-sm leading-tight">עוזר חכם</p>
-                <p className="text-indigo-200 text-[11px]">שאל אותי על המערכת</p>
+                <p className="font-bold text-sm leading-tight">עוזר</p>
+                <p className="text-indigo-200 text-[11px]">העוזר החכם · שאל אותי על המערכת</p>
               </div>
             </div>
             <button
@@ -102,11 +113,15 @@ export default function AssistantWidget() {
           {/* השיחה */}
           <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 bg-slate-50/60">
             {msgs.length === 0 && (
-              <div className="flex flex-col gap-2.5 mt-2">
-                <p className="text-sm text-slate-500 leading-relaxed">
-                  שלום! אני יכול לענות על שאלות בנוגע למערכת — נתונים, בקשות ממתינות, סטטיסטיקה.
-                </p>
-                <p className="text-xs text-slate-400 font-semibold mt-1">לדוגמה:</p>
+              <div className="flex flex-col gap-2.5">
+                {/* ברכת פתיחה — מוצגת מיד, כמו הודעה ראשונה בשיחה */}
+                <div className="self-end max-w-[90%] bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-3 text-sm leading-relaxed text-slate-800">
+                  שלום, שמי <span className="font-bold text-indigo-700">עוזר</span> ואני אשמח לעזור לך.
+                  <br />
+                  במה היית רוצה להתמקד כרגע?
+                </div>
+
+                <p className="text-xs text-slate-400 font-semibold mt-2">אפשר להתחיל מכאן:</p>
                 {SUGGESTIONS.map(s => (
                   <button
                     key={s}

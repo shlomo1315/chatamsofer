@@ -2140,7 +2140,7 @@ export default function PublicPortalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
 
       {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
       {declModalOpen && (
@@ -4344,19 +4344,22 @@ export default function PublicPortalPage() {
           <Mail size={11} />
           מערכת מאובטחת · כל הפרטים מוצפנים
         </p>
+      </main>
 
-        <p className="text-center text-[11px] text-slate-300 mt-3 mb-2">
+      {/* קרדיט — מוצמד לתחתית הדף (mt-auto דוחף אותו למטה כשהתוכן קצר) */}
+      <footer className="mt-auto border-t border-slate-200 bg-white/60 py-5">
+        <p className="text-center text-sm text-slate-500">
           אפיון ופיתוח:{' '}
           <a
             href="https://r-lavan.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-slate-400 hover:text-indigo-500 transition-colors"
+            className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
           >
             r-lavan
           </a>
         </p>
-      </main>
+      </footer>
     </div>
   )
 }
