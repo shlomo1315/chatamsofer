@@ -282,7 +282,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50" dir="rtl">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
               <CreditCard size={20} className="text-white" />
@@ -311,7 +311,9 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* max-w-6xl (1152px) — הטבלה דורשת min-w 1100px, ו-max-w-4xl (896px)
+          חתך אותה תמיד. ממורכז, עם רווח נשימה בצדדים במסכים רחבים. */}
+      <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
         {/* Filter Cards */}
         <div className="grid grid-cols-3 gap-3">
           {statCards.map(s => {
@@ -361,9 +363,11 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                     הורד אקסל
                   </button>
                 </div>
-                {/* min-w מבטיח שהעמודות לא יידחסו — במסך צר הטבלה נגללת אופקית */}
+                {/* min-w מבטיח שהעמודות לא יידחסו — במסך צר הטבלה נגללת אופקית.
+                    1000px נכנס בנוחות בתוך max-w-6xl (1152px) פחות ה-padding,
+                    כך שבמסך רגיל אין גלילה אופקית כלל. */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full min-w-[1100px] table-fixed text-sm text-right border-collapse">
+                  <table className="w-full min-w-[1000px] table-fixed text-sm text-right border-collapse">
                     <colgroup>
                       <col style={{ width: '17%' }} />  {/* שם */}
                       <col style={{ width: '11%' }} />  {/* ת.ז. */}
