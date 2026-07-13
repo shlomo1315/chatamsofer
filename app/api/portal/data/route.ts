@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
-import { addDays } from 'date-fns'
+import { isWithinRecoveryWindow } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,13 +43,11 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // מציגים יולדות שחלון 6 השבועות שלהן עדיין פעיל — כולל יום הסיום עצמו
-  const today0 = new Date(); today0.setHours(0, 0, 0, 0)
-  const filtered = (data ?? []).filter((a: { birth_date: string; six_weeks_end?: string }) => {
-    const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
-    end.setHours(0, 0, 0, 0)
-    return end >= today0
-  })
+  // פורטל בית ההחלמה — חלון הזכאות כאן הוא 5 שבועות (35 יום), לא 6.
+  // 6 שבועות הוא תוקף כרטיס המזון, וזה חלון אחר. הארכה ידנית נגררת לשניהם.
+  const filtered = (data ?? []).filter((a: { birth_date: string; six_weeks_end?: string }) =>
+    isWithinRecoveryWindow(a),
+  )
 
   return NextResponse.json({ aids: filtered })
 }

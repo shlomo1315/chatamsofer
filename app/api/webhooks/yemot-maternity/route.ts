@@ -18,6 +18,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { addDays } from 'date-fns'
 import { getNedarimCreds, setMagneticCard, findClientByZeout, getClientCardFull } from '@/lib/nedarim'
 import { getMaternityMessages, type MaternityMsg, type MaternityMessages } from '@/lib/yemotMaternityMessages'
+import { cardWindowEnd, CARD_WINDOW_DAYS } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
 
@@ -228,8 +229,10 @@ async function findActiveAid(callerPhone: string) {
   const aids = (allAids ?? []).filter((a) => a.status !== 'cancelled')
 
   const now = new Date()
+  // המענה הטלפוני עוסק בכרטיס הנדרים — ולכן החלון כאן הוא 6 שבועות (תוקף
+  // הכרטיס), ולא 5 השבועות של בית ההחלמה. אל "תתקן" את זה ל-35.
   const active = aids.find((a) => {
-    const end = a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
+    const end = cardWindowEnd(a) ?? addDays(new Date(a.birth_date), CARD_WINDOW_DAYS)
     return end >= now
   })
 

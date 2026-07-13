@@ -3,16 +3,9 @@ import { useState, useMemo } from 'react'
 import { Home, Clock, CheckCircle2, Star } from 'lucide-react'
 import type { MaternityAid } from '@/types'
 import MaternityTable from '../MaternityTable'
+import { isWithinRecoveryWindow } from '@/lib/maternity'
 
-// פעיל = בתוך 6 שבועות מהלידה (six_weeks_end בעתיד); לא פעיל = כבר עבר.
-function isWithinSixWeeks(aid: MaternityAid): boolean {
-  const end = aid.six_weeks_end
-    ? new Date(aid.six_weeks_end)
-    : (aid.birth_date ? new Date(new Date(aid.birth_date).getTime() + 42 * 86400000) : null)
-  if (!end) return false
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  return end >= today
-}
+// פעיל = בתוך חלון הזכאות לבית החלמה (5 שבועות מהלידה — לא 6, שזה הכרטיס).
 
 export type HomeRating = { avg: number; count: number }
 
@@ -39,7 +32,7 @@ export default function RecoveryHomesView({ aids, homes, ratings = {} }: {
 
   const matchStatus = (a: MaternityAid) => {
     if (status === 'all') return true
-    const active = isWithinSixWeeks(a)
+    const active = isWithinRecoveryWindow(a)
     return status === 'active' ? active : !active
   }
   const matchHome = (a: MaternityAid) => home === 'all' || a.recovery_home === home
@@ -67,7 +60,7 @@ export default function RecoveryHomesView({ aids, homes, ratings = {} }: {
 
   // ספירת פעיל/לא פעיל — מכבדת את בית החלמה הנבחר
   const byHome = useMemo(() => aids.filter(matchHome), [aids, home])
-  const activeCount = byHome.filter(isWithinSixWeeks).length
+  const activeCount = byHome.filter(isWithinRecoveryWindow).length
   const inactiveCount = byHome.length - activeCount
 
   return (
@@ -104,8 +97,8 @@ export default function RecoveryHomesView({ aids, homes, ratings = {} }: {
       {/* שורה נפרדת מתחת: פעיל / לא פעיל */}
       <div className="flex gap-2 flex-wrap">
         {([
-          { key: 'active', label: 'פעיל (בתוך 6 שבועות)', count: activeCount, icon: CheckCircle2, sel: 'bg-green-100 text-green-800 border-green-400' },
-          { key: 'inactive', label: 'לא פעיל (עבר 6 שבועות)', count: inactiveCount, icon: Clock, sel: 'bg-red-100 text-red-800 border-red-400' },
+          { key: 'active', label: 'פעיל (בתוך 5 שבועות)', count: activeCount, icon: CheckCircle2, sel: 'bg-green-100 text-green-800 border-green-400' },
+          { key: 'inactive', label: 'לא פעיל (עבר 5 שבועות)', count: inactiveCount, icon: Clock, sel: 'bg-red-100 text-red-800 border-red-400' },
           { key: 'all', label: 'הכל', count: byHome.length, icon: null, sel: 'bg-slate-200 text-slate-800 border-slate-400' },
         ] as const).map(s => {
           const sel = status === s.key

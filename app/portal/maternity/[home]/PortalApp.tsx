@@ -4,7 +4,8 @@ import {
   Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
   AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
 } from 'lucide-react'
-import { format, differenceInDays, addDays } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
+import { recoveryWindowEnd } from '@/lib/maternity'
 import { he } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,8 +51,8 @@ const motherName = (m?: Mother) => {
   return [m.family_name, m.full_name].filter(Boolean).join(' ') || '—'
 }
 
-const endDate = (a: Aid) =>
-  a.six_weeks_end ? new Date(a.six_weeks_end) : addDays(new Date(a.birth_date), 42)
+// חלון הזכאות בבית החלמה: 5 שבועות (35 יום) — לא 6, שזה תוקף כרטיס המזון.
+const endDate = (a: Aid) => recoveryWindowEnd(a) ?? new Date(a.birth_date)
 
 const daysLeft = (a: Aid) => differenceInDays(endDate(a), new Date())
 
