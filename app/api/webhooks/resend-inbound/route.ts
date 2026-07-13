@@ -393,7 +393,19 @@ export async function POST(request: NextRequest) {
   // (4) דואר שהגיע לכתובת ה-copy של ה-subdomain (in.chasamsofer.info) ללא נמען מקורי מזוהה —
   // משייכים ל"משרד ראשי" כדי שלא יישאר יתום מחוץ לכל התיבות.
   const isInboundCopy = (knownDept || orgRecipient) ? false : candidates.some(a => a.endsWith('.chasamsofer.info'))
-  const resolvedToEmail = knownDept ?? orgRecipient ?? (isInboundCopy ? 'office@chasamsofer.info' : to.email)
+
+  // (5) ⚠️ בקשה (לידה/הלוואה/סיוע) — תמיד מנותבת ל-igud, גם אם הגיעה
+  // דרך כתובת ה-copy של ה-subdomain. בלי זה היא נופלת ל-'main',
+  // isIgud יוצא false, ומייל הדחייה עם פירוט השגיאות לא נשלח —
+  // המשתמש נשאר בלי מענה ובלי לדעת מה חסר.
+  const isRequestMail = isRequestSubject(
+    decodeMimeWords(String(data.subject ?? data.Subject ?? '').trim() || getHeader(data.headers, 'subject').trim()),
+  )
+
+  const resolvedToEmail = knownDept
+    ?? (isRequestMail ? 'igud@chasamsofer.info' : undefined)
+    ?? orgRecipient
+    ?? (isInboundCopy ? 'office@chasamsofer.info' : to.email)
 
   // ── בידוד ארגוני: קליטה רק של דואר שמופנה לדומיין של חתם סופר ──
   // אותו webhook נכנס עלול לקבל דואר ממערכות אחרות שמשתמשות באותה תשתית Resend.
@@ -669,6 +681,31 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // מחושבים תמיד — קליטת הבקשה רצה גם ב-retry, כשה-isNew הוא false
+  const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
+  const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+
+  // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
+  // (מגן על נושא פגום/מקודד, כשהגוף הוא טופס בקשה תקין.)
+  let requestSubject = subject
+  if (!isRequestSubject(subject)) {
+    const idInBody = (bodyText.match(/מזה[הא][:\s]*?(\d{9})/) || bodyText.match(/ת\.?\s*ז[:\s.]*?(\d{9})/))?.[1] ?? null
+    let bodyType: string | null = null
+    if (/בית\s*החלמה/.test(bodyText) && /תאריך\s*לידה/.test(bodyText)) {
+      bodyType = /לידה\s*שקטה/.test(bodyText) ? 'בקשת לידה שקטה' : 'בקשת לידה'
+    } else if (/מטרת\s*ההלוואה|מספר\s*תשלומים|סכום\s*ההלוואה/.test(bodyText)) {
+      bodyType = 'בקשת הלוואה'
+    } else if (/סיבת\s*הבקשה/.test(bodyText)) {
+      bodyType = 'בקשת סיוע רפואי'
+    }
+    if (bodyType && idInBody) {
+      requestSubject = `${bodyType} · ת.ז ${idInBody}`
+      console.warn('[resend-inbound] נושא לא זוהה — נפילה-לאחור לזיהוי לפי הגוף:', requestSubject)
+    }
+  }
+
+  const requestBody = bodyText
+
   const isNew = (insertedRows?.length ?? 0) > 0
   if (isNew) {
     try {
@@ -691,11 +728,7 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
-    // קליטת בקשות במייל: מזוהה לפי הנושא ("בקשת...") — ולא לפי התיבה שאליה נותב.
-    // חשוב: משלוח כפול של Google עלול לגרום לבקשה לאיגוד להיפתר לתיבת "משרד ראשי"
-    // (עותק subdomain), ואז הגייטינג לפי isIgud החמיץ את הקליטה לחלוטין. לכן מזהים לפי הנושא.
-    const isIgud = departmentByEmail(resolvedToEmail)?.key === 'igud'
-    // אבחון קליטה — שומר את הנושא הגולמי/מפוענח והחלטת הניתוב, כדי לאבחן כשל זיהוי בקשה.
+    // אבחון קליטה — שומר את הנושא והחלטת הניתוב, לאבחון כשל זיהוי בקשה.
     try {
       await admin.from('app_settings').upsert({
         key: 'mail_intake_debug',
@@ -706,50 +739,41 @@ export async function POST(request: NextRequest) {
           rawSubject: String(data.subject ?? data.Subject ?? ''),
           headerSubject: getHeader(data.headers, 'subject'),
           decodedSubject: subject,
-          isRequestSubject: isRequestSubject(subject),
+          effectiveSubject: requestSubject,
+          isRequestSubject: isRequestSubject(requestSubject),
           plainLen: (plain ?? '').length, htmlLen: (html ?? '').length,
         }),
         updated_at: new Date().toISOString(),
       }, { onConflict: 'key' })
     } catch { /* אבחון בלבד */ }
-    // גוף לקליטה: מעדיפים טקסט; אם רק HTML — ממירים תוך שמירת שבירות שורה
-    const bodyText = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+  }
 
-    // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
-    // (מגן על המקרה שבו הנושא הגיע פגום/מקודד/שונה, אך הגוף הוא טופס בקשה תקין
-    //  עם שורת "(מזהה: XXXXXXXXX)" ומרקרים של השדות.)
-    let effectiveSubject = subject
-    if (!isRequestSubject(subject)) {
-      const idInBody = (bodyText.match(/מזה[הא][:\s]*?(\d{9})/) || bodyText.match(/ת\.?\s*ז[:\s.]*?(\d{9})/))?.[1] ?? null
-      let bodyType: string | null = null
-      if (/בית\s*החלמה/.test(bodyText) && /תאריך\s*לידה/.test(bodyText)) {
-        bodyType = /לידה\s*שקטה/.test(bodyText) ? 'בקשת לידה שקטה' : 'בקשת לידה'
-      } else if (/מטרת\s*ההלוואה|מספר\s*תשלומים|סכום\s*ההלוואה/.test(bodyText)) {
-        bodyType = 'בקשת הלוואה'
-      } else if (/סיבת\s*הבקשה/.test(bodyText)) {
-        bodyType = 'בקשת סיוע רפואי'
-      }
-      if (bodyType && idInBody) {
-        effectiveSubject = `${bodyType} · ת.ז ${idInBody}`
-        console.warn('[resend-inbound] נושא לא זוהה — נפילה-לאחור לזיהוי לפי הגוף:', effectiveSubject)
-      }
-    }
-
-    if (isRequestSubject(effectiveSubject)) {
-      try {
-        const handled = await handleEmailRequest(admin, { fromEmail: from.email, subject: effectiveSubject, body: bodyText, attachments })
-        if (!handled && isIgud) {
-          await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
-        }
-      } catch (e) {
-        console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
-      }
-    } else if (isIgud) {
-      try {
+  // ── קליטת בקשה שהוגשה במייל (לידה / הלוואה / סיוע) ──
+  //
+  // ⚠️ חייב לרוץ מחוץ ל-if (isNew): Resend שולח את ה-webhook יותר מפעם אחת
+  // (retry על timeout). בריצה השנייה ה-upsert מדלג, isNew הופך false, וכל
+  // הבלוק היה מדולג — הבקשה לא נקלטה ומייל הדחייה עם פירוט השגיאות
+  // מעולם לא נשלח. handleEmailRequest מזהה כפילות בעצמו, אז זה בטוח.
+  if (requestSubject && isRequestSubject(requestSubject)) {
+    try {
+      const handled = await handleEmailRequest(admin, {
+        fromEmail: from.email,
+        subject: requestSubject,
+        body: requestBody,
+        attachments,
+      })
+      if (!handled && isIgud) {
         await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
-      } catch (e) {
-        console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
       }
+    } catch (e) {
+      console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
+    }
+  } else if (isIgud && isNew) {
+    // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
+    try {
+      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+    } catch (e) {
+      console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }
   }
 
