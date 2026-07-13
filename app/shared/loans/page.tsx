@@ -282,7 +282,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50" dir="rtl">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
               <CreditCard size={20} className="text-white" />
@@ -311,9 +311,8 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      {/* max-w-6xl (1152px) — הטבלה דורשת min-w 1100px, ו-max-w-4xl (896px)
-          חתך אותה תמיד. ממורכז, עם רווח נשימה בצדדים במסכים רחבים. */}
-      <main className="max-w-6xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* max-w-7xl (1280px) — 8 עמודות צריכות מקום. ממורכז, עם רווח בצדדים. */}
+      <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
         {/* Filter Cards */}
         <div className="grid grid-cols-3 gap-3">
           {statCards.map(s => {
@@ -363,31 +362,33 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                     הורד אקסל
                   </button>
                 </div>
-                {/* min-w מבטיח שהעמודות לא יידחסו — במסך צר הטבלה נגללת אופקית.
-                    1000px נכנס בנוחות בתוך max-w-6xl (1152px) פחות ה-padding,
-                    כך שבמסך רגיל אין גלילה אופקית כלל. */}
+                {/* min-w נמוך מרוחב המכל (1280 פחות padding) — כך הטבלה נמתחת
+                    לרוחב המלא בלי גלילה אופקית, ורק במסך צר באמת היא נגללת. */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full min-w-[1000px] table-fixed text-sm text-right border-collapse">
+                  <table className="w-full min-w-[880px] table-fixed text-sm text-right border-collapse">
+                    {/* טלפון וסכום הם whitespace-nowrap — הם לא יכולים להתכווץ,
+                        ואם צרים מדי הם דוחפים את הטבלה מעבר לרוחב שלה. לכן הם
+                        מקבלים מקום מובטח, והמייל (break-all) מתכווץ במקומם. */}
                     <colgroup>
-                      <col style={{ width: '17%' }} />  {/* שם */}
+                      <col style={{ width: '16%' }} />  {/* שם */}
                       <col style={{ width: '11%' }} />  {/* ת.ז. */}
-                      <col style={{ width: '15%' }} />  {/* רחוב */}
+                      <col style={{ width: '14%' }} />  {/* רחוב */}
                       <col style={{ width: '10%' }} />  {/* עיר */}
-                      <col style={{ width: '12%' }} />  {/* טלפון */}
-                      <col style={{ width: '18%' }} />  {/* מייל */}
-                      <col style={{ width: '9%' }} />   {/* סכום */}
-                      <col style={{ width: '8%' }} />   {/* סטטוס */}
+                      <col style={{ width: '13%' }} />  {/* טלפון — nowrap */}
+                      <col style={{ width: '16%' }} />  {/* מייל — נשבר */}
+                      <col style={{ width: '11%' }} />  {/* סכום — nowrap */}
+                      <col style={{ width: '9%' }} />   {/* סטטוס */}
                     </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">שם</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">ת.ז.</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">רחוב</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">עיר</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">טלפון</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">מייל</th>
-                        <th className="px-4 py-3.5 border-l border-slate-100 font-semibold">סכום מאושר</th>
-                        <th className="px-4 py-3.5 font-semibold">סטטוס</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">שם</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">ת.ז.</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">רחוב</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">עיר</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">טלפון</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">מייל</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">סכום מאושר</th>
+                        <th className="px-3 py-3.5 font-semibold">סטטוס</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -395,30 +396,30 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                         const isDone = !!l.disbursed_at
                         return (
                           <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle">
                               <div className="font-semibold text-slate-900 break-words">{borrowerName(l.beneficiary)}</div>
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
 
                             {/* כתובת — רחוב ועיר בעמודות נפרדות. break-words מונע גלישה החוצה. */}
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
                               {l.beneficiary?.address || '—'}
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
                               {l.beneficiary?.city || '—'}
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle whitespace-nowrap">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle whitespace-nowrap">
                               {l.beneficiary?.phone
                                 ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{l.beneficiary.phone}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle">
                               {l.beneficiary?.email
                                 ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 break-all">{l.beneficiary.email}</a>
                                 : <span className="text-slate-300">—</span>}
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
-                            <td className="px-4 py-3.5 align-middle">
+                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
+                            <td className="px-3 py-3.5 align-middle">
                               {isDone
                                 ? <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 whitespace-nowrap"><CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}</span>
                                 : <button onClick={() => setActiveModal(l)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-1.5 hover:bg-indigo-100 transition-colors whitespace-nowrap"><Clock3 size={13} /> סמן כבוצעה</button>}
