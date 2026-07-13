@@ -29,6 +29,11 @@ export interface TableSpec {
   statusCol?: string
   /** קשר למשפחה — כדי לצרף שם בעלים לרשומה */
   joinBeneficiary?: boolean
+  /**
+   * מסלול המסך במערכת, עם {id} כמציין מקום.
+   * מאפשר לעוזר לצרף לתשובה כפתור שמוביל ישירות לכרטסת.
+   */
+  route?: string
 }
 
 export const TABLES: TableSpec[] = [
@@ -40,6 +45,7 @@ export const TABLES: TableSpec[] = [
     columns: ['id', 'family_name', 'full_name', 'spouse_name', 'id_number', 'spouse_id_number', 'phone', 'email', 'city', 'address', 'marital_status', 'children_count', 'children', 'eligibility_status', 'rejection_reason', 'lineage_node_id', 'created_at'],
     dateCol: 'created_at',
     searchCols: ['family_name', 'full_name', 'spouse_name', 'city'],
+    route: '/admin/beneficiaries/{id}',
     statusCol: 'eligibility_status',
   },
   {
@@ -59,6 +65,7 @@ export const TABLES: TableSpec[] = [
     dateCol: 'created_at',
     statusCol: 'status',
     joinBeneficiary: true,
+    route: '/admin/maternity/{id}',
   },
   {
     table: 'loans',
@@ -69,6 +76,7 @@ export const TABLES: TableSpec[] = [
     dateCol: 'created_at',
     statusCol: 'status',
     joinBeneficiary: true,
+    route: '/admin/loans/{id}',
   },
   {
     table: 'financial_aid_requests',
@@ -79,6 +87,7 @@ export const TABLES: TableSpec[] = [
     dateCol: 'created_at',
     statusCol: 'status',
     joinBeneficiary: true,
+    route: '/admin/financial-aid/{id}',
   },
   {
     table: 'widow_requests',
@@ -89,6 +98,7 @@ export const TABLES: TableSpec[] = [
     dateCol: 'created_at',
     statusCol: 'status',
     joinBeneficiary: true,
+    route: '/admin/widows/{id}',
   },
   {
     table: 'card_centers',

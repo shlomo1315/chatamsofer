@@ -35,6 +35,29 @@ export function schemaForUser(ctx: ToolCtx): string {
   return schemaFor(s => canView(ctx, s), ctx.isAdmin)
 }
 
+/**
+ * מה העוזר עושה כרגע — מוצג למשתמש בזמן ההמתנה, במקום ספינר מת.
+ * הניסוח נגזר מהכלי ומהטבלה בפועל, כך שהוא תמיד נכון.
+ */
+export function activityLabel(name: string, input: Record<string, unknown>): string {
+  const spec = tableByName(String(input.table ?? ''))
+  const what = spec?.label ?? 'הנתונים'
+
+  switch (name) {
+    case 'get_overview':
+      return 'עוזר בודק מה ממתין לך בכל האגפים…'
+    case 'count_data':
+      if (input.group_by) return `עוזר מפלח את ${what}…`
+      return `עוזר סופר את ${what}…`
+    case 'query_data':
+      if (input.search) return `עוזר מחפש "${String(input.search)}"…`
+      if (input.status) return `עוזר בודק את ${what}…`
+      return `עוזר שולף את ${what}…`
+    default:
+      return 'עוזר עובד…'
+  }
+}
+
 // ─── הגדרות הכלים ────────────────────────────────────────────────────────────
 
 export const TOOL_DEFS = [
@@ -191,11 +214,17 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
         ? `${spec.columns.join(', ')}, ${BEN_JOIN}`
         : spec.columns.join(', ')
 
+      /** מצרף לכל רשומה קישור ישיר לכרטסת שלה במערכת. */
+      const withLinks = (rows: Record<string, unknown>[]) =>
+        spec.route
+          ? rows.map(r => ({ ...r, קישור: spec.route!.replace('{id}', String(r.id)) }))
+          : rows
+
       const term = String(input.search ?? '').trim()
       if (term) {
         const rows = await searchRows(db, spec, term, input, select, limit)
         if (!rows.length) return { message: `לא נמצאו תוצאות עבור "${term}" ב${spec.label}` }
-        return { טבלה: spec.label, נמצאו: rows.length, רשומות: rows }
+        return { טבלה: spec.label, נמצאו: rows.length, רשומות: withLinks(rows) }
       }
 
       let q = buildQuery(db, spec, input, select)
@@ -207,7 +236,11 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
         return { error: 'שגיאה בשליפת הנתונים' }
       }
       if (!data?.length) return { message: `לא נמצאו רשומות ב${spec.label}` }
-      return { טבלה: spec.label, נמצאו: data.length, רשומות: data }
+      return {
+        טבלה: spec.label,
+        נמצאו: data.length,
+        רשומות: withLinks(data as unknown as Record<string, unknown>[]),
+      }
     }
 
     // ── ספירה ופילוח ────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
-import { TOOL_DEFS, runTool, schemaForUser, type ToolCtx } from '@/lib/assistant/tools'
+import { TOOL_DEFS, runTool, schemaForUser, activityLabel, type ToolCtx } from '@/lib/assistant/tools'
 import type { UserPermissions } from '@/types'
 import { rateLimit } from '@/lib/rateLimit'
 
@@ -48,6 +48,15 @@ ${schema}
    לשם פרטי ומשפחה.
 7. **אם באמת אין טבלה מתאימה** — אמור בכנות מה חסר, והצע מה כן תוכל להביא.
    אל תמציא מספרים לעולם.
+
+## קישורים לכרטסת — חשוב
+כשכלי מחזיר רשומה עם שדה "קישור", **הוסף אותו לתשובה** בשורה נפרדת בסוף,
+בפורמט הזה בדיוק:
+    [[קישור|טקסט הכפתור|/admin/...]]
+לדוגמה, אחרי שהצגת פרטי משפחה:
+    [[קישור|לכרטסת של משפחת ויסברג|/admin/beneficiaries/abc-123]]
+הממשק יהפוך את זה לכפתור לחיץ. אל תכתוב את הכתובת כטקסט רגיל.
+אם יש כמה רשומות — הוסף כפתור לכל אחת (עד 5).
 
 ## סגנון — קריטי
 - **אל תשתמש ב-Markdown.** הצ'אט מציג טקסט רגיל, ולכן ** ** יופיעו כתווים
@@ -112,50 +121,91 @@ export async function POST(request: NextRequest) {
     content: m.content,
   }))
 
-  try {
-    // לולאת כלים: המודל מבקש נתונים, אנחנו מריצים, והוא מסכם.
-    for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const res = await client.messages.create({
-        model: MODEL,
-        max_tokens: 1500,
-        system: buildSystem(schemaForUser(ctx)),
-        tools: TOOL_DEFS,
-        messages,
-      })
+  // תשובה זורמת (NDJSON): כל שורה היא אירוע.
+  //   {"type":"activity","text":"עוזר סופר את ההלוואות…"}
+  //   {"type":"reply","text":"..."}
+  //   {"type":"error","text":"..."}
+  // בלי זה המשתמש רואה ספינר מת ולא יודע שהעוזר באמת עובד.
+  const encoder = new TextEncoder()
+  const system = buildSystem(schemaForUser(ctx))
 
-      if (res.stop_reason !== 'tool_use') {
-        const text = res.content
-          .filter((c): c is Anthropic.TextBlock => c.type === 'text')
-          .map(c => c.text)
-          .join('\n')
-          .trim()
-        return NextResponse.json({ reply: text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.' })
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (obj: Record<string, string>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(obj) + '\n'))
       }
 
-      messages.push({ role: 'assistant', content: res.content })
+      try {
+        emit({ type: 'activity', text: 'עוזר חושב…' })
 
-      const results: Anthropic.ToolResultBlockParam[] = []
-      for (const block of res.content) {
-        if (block.type !== 'tool_use') continue
-        let out: unknown
-        try {
-          out = await runTool(ctx, block.name, block.input as Record<string, unknown>)
-        } catch (e) {
-          console.error('[assistant] כלי נכשל:', block.name, e)
-          out = { error: 'שליפת הנתונים נכשלה' }
+        for (let turn = 0; turn < MAX_TURNS; turn++) {
+          const res = await client.messages.create({
+            model: MODEL,
+            max_tokens: 1500,
+            system,
+            tools: TOOL_DEFS,
+            messages,
+          })
+
+          if (res.stop_reason !== 'tool_use') {
+            const text = res.content
+              .filter((c): c is Anthropic.TextBlock => c.type === 'text')
+              .map(c => c.text)
+              .join('\n')
+              .trim()
+            emit({ type: 'reply', text: text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.' })
+            controller.close()
+            return
+          }
+
+          messages.push({ role: 'assistant', content: res.content })
+
+          const calls = res.content.filter(
+            (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+          )
+
+          // מה העוזר עושה עכשיו — לפי הכלי בפועל, כך שהניסוח תמיד נכון
+          if (calls.length) {
+            emit({
+              type: 'activity',
+              text: activityLabel(calls[0].name, calls[0].input as Record<string, unknown>),
+            })
+          }
+
+          // הכלים רצים במקביל — סדרתי היה איטי כשהמודל מבקש כמה נתונים
+          const results = await Promise.all(calls.map(async (block) => {
+            let out: unknown
+            try {
+              out = await runTool(ctx, block.name, block.input as Record<string, unknown>)
+            } catch (e) {
+              console.error('[assistant] כלי נכשל:', block.name, e)
+              out = { error: 'שליפת הנתונים נכשלה' }
+            }
+            return {
+              type: 'tool_result' as const,
+              tool_use_id: block.id,
+              content: JSON.stringify(out),
+            }
+          }))
+
+          messages.push({ role: 'user', content: results })
+          emit({ type: 'activity', text: 'עוזר מנסח את התשובה…' })
         }
-        results.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify(out),
-        })
-      }
-      messages.push({ role: 'user', content: results })
-    }
 
-    return NextResponse.json({ reply: 'השאלה מורכבת מדי. נסה לפצל אותה לשאלות פשוטות יותר.' })
-  } catch (e) {
-    console.error('[assistant] שגיאה:', e)
-    return NextResponse.json({ error: 'העוזר אינו זמין כרגע. נסה שוב.' }, { status: 500 })
-  }
+        emit({ type: 'reply', text: 'השאלה מורכבת מדי. נסה לפצל אותה לשאלות פשוטות יותר.' })
+        controller.close()
+      } catch (e) {
+        console.error('[assistant] שגיאה:', e)
+        emit({ type: 'error', text: 'העוזר אינו זמין כרגע. נסה שוב.' })
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  })
 }

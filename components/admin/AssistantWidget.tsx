@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { BotMessageSquare, Sparkles, X, Send, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
+import { BotMessageSquare, Sparkles, X, Send, Loader2, AlertCircle, RotateCcw, ArrowLeft } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עוזר AI — כפתור צף בכל מסכי הניהול.
@@ -15,12 +15,31 @@ const SUGGESTIONS = [
   'כמה בקשות הלוואה ממתינות לאישור?',
 ]
 
+/**
+ * מחלץ מהתשובה כפתורי מעבר לכרטסת.
+ * העוזר מסמן אותם כ-[[קישור|טקסט|/admin/...]], והם מוצגים ככפתורים מתחת להודעה.
+ * רק מסלולים פנימיים (/admin/...) מתקבלים — הגנה מפני הפניה חיצונית.
+ */
+function parseLinks(raw: string): { text: string; links: { label: string; href: string }[] } {
+  const links: { label: string; href: string }[] = []
+  const text = raw.replace(/\[\[קישור\|([^|\]]+)\|([^\]]+)\]\]/g, (_m, label: string, href: string) => {
+    const clean = href.trim()
+    if (clean.startsWith('/admin/')) {
+      links.push({ label: label.trim(), href: clean })
+    }
+    return ''
+  }).trim()
+
+  return { text, links: links.slice(0, 5) }
+}
+
 export default function AssistantWidget() {
   const [open, setOpen] = useState(false)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [activity, setActivity] = useState('')   // מה העוזר עושה כרגע
 
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -57,23 +76,53 @@ export default function AssistantWidget() {
     setBusy(true)
     setErr('')
 
+    setActivity('עוזר חושב…')
+
     try {
       const res = await fetch('/api/admin/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: next }),
       })
-      const d = await res.json()
 
+      // שגיאות (401/429/503) חוזרות כ-JSON רגיל, לא כזרם
       if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
         setErr(d.error ?? 'שגיאה')
         return
       }
-      setMsgs(m => [...m, { role: 'assistant', content: d.reply }])
+      if (!res.body) { setErr('שגיאת תקשורת'); return }
+
+      // NDJSON — שורה לכל אירוע. מציג את פעילות העוזר בזמן אמת.
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''          // השורה האחרונה עשויה להיות חלקית
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          let ev: { type?: string; text?: string }
+          try { ev = JSON.parse(line) } catch { continue }
+
+          if (ev.type === 'activity') setActivity(ev.text ?? '')
+          else if (ev.type === 'reply') {
+            setMsgs(m => [...m, { role: 'assistant', content: ev.text ?? '' }])
+          }
+          else if (ev.type === 'error') setErr(ev.text ?? 'שגיאה')
+        }
+      }
     } catch {
       setErr('שגיאת תקשורת — נסה שוב')
     } finally {
       setBusy(false)
+      setActivity('')
     }
   }
 
@@ -169,22 +218,43 @@ export default function AssistantWidget() {
               </div>
             )}
 
-            {msgs.map((m, i) => (
-              <div
-                key={i}
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
-                  m.role === 'user'
-                    ? 'self-start bg-indigo-600 text-white rounded-br-md'
-                    : 'self-end bg-white border border-slate-200 text-slate-800 rounded-bl-md'
-                }`}
-              >
-                {m.content}
-              </div>
-            ))}
+            {msgs.map((m, i) => {
+              const { text, links } = m.role === 'assistant'
+                ? parseLinks(m.content)
+                : { text: m.content, links: [] }
 
+              return (
+                <div key={i} className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === 'user' ? 'self-start' : 'self-end'}`}>
+                  <div
+                    className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                      m.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-br-md'
+                        : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'
+                    }`}
+                  >
+                    {text}
+                  </div>
+
+                  {/* כפתורי מעבר לכרטסת — העוזר מצרף אותם כשהתשובה נוגעת לרשומה */}
+                  {links.map((l, j) => (
+                    <a
+                      key={j}
+                      href={l.href}
+                      className="inline-flex items-center justify-between gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-xl px-3 py-2 text-[13px] font-semibold hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
+                    >
+                      <span className="truncate">{l.label}</span>
+                      <ArrowLeft size={14} className="shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              )
+            })}
+
+            {/* מה העוזר עושה כרגע — במקום ספינר מת */}
             {busy && (
-              <div className="self-end bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-2.5">
-                <Loader2 size={15} className="animate-spin text-indigo-500" />
+              <div className="self-end flex items-center gap-2 bg-white border border-slate-200 rounded-2xl rounded-bl-md px-3.5 py-2.5 max-w-[90%]">
+                <Loader2 size={14} className="animate-spin text-indigo-500 shrink-0" />
+                <span className="text-sm text-slate-500">{activity || 'עוזר עובד…'}</span>
               </div>
             )}
 
