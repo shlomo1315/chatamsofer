@@ -1317,6 +1317,18 @@ export default function MailClient() {
     recordEvent(msg, 'read')
   }
 
+  /** סימון כלא-נקרא — כדי לחזור אליו מאוחר יותר, כמו ב-Gmail. */
+  const markUnread = async (msg: ParsedMessage) => {
+    await fetch('/api/admin/mail/mark-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: msg.id, read: false }),
+    })
+    setMessages(ms => ms.map(m => m.id === msg.id ? { ...m, isRead: false } : m))
+    setSelected(null)          // סוגרים — אחרת הפתיחה תסמן אותו כנקרא שוב
+    loadUnreadCounts()
+  }
+
   const markHandled = (msg: ParsedMessage) => {
     setHandledIds(prev => new Set([...prev, msg.id]))
     recordEvent(msg, 'handled')
@@ -1673,6 +1685,12 @@ export default function MailClient() {
               <button onClick={() => { setReplyMsg(selected); setCompose(true) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
                 <Reply size={14} /> השב
+              </button>
+              {/* סימון כלא-נקרא — כמו ב-Gmail, כדי לחזור אליו אחר כך */}
+              <button onClick={() => markUnread(selected)}
+                title="סמן כלא נקרא"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                <Mail size={14} /> סמן כלא נקרא
               </button>
               <button onClick={() => setForwardMsg(selected)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">

@@ -37,6 +37,13 @@ async function analyze(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   // תשובות בירור שנכנסו לדואר — הן שייכות לצ'אט, לא לתיבה
   const inquiryReplies = (data ?? []).filter(m => isInquiryReply(String(m.subject ?? '')))
 
+  // מיילים שנשמרו תחת כתובת ה-copy של Google (dual-delivery) — זו אינה תיבה
+  // אמיתית, ולכן הם אינם מופיעים באף תיבה במסך. משייכים אותם למשרד הראשי.
+  const orphans = (data ?? []).filter(m =>
+    String(m.to_email ?? '').includes('@in.chasamsofer.info')
+    && !isInquiryReply(String(m.subject ?? '')),
+  )
+
   // פילוח לפי תיבה — כדי לראות מה יושב איפה
   const byBox: Record<string, number> = {}
   for (const m of data ?? []) {
@@ -44,7 +51,7 @@ async function analyze(db: NonNullable<ReturnType<typeof getServiceClient>>) {
     byBox[b] = (byBox[b] ?? 0) + 1
   }
 
-  return { total: data?.length ?? 0, byBox, inquiryReplies }
+  return { total: data?.length ?? 0, byBox, inquiryReplies, orphans }
 }
 
 export async function GET() {
@@ -55,13 +62,14 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   try {
-    const { total, byBox, inquiryReplies } = await analyze(db)
+    const { total, byBox, inquiryReplies, orphans } = await analyze(db)
 
     return NextResponse.json({
       mode: 'תצוגה מקדימה — לא שונה דבר',
       סהכ_מיילים: total,
       פילוח_לפי_תיבה: byBox,
       תשובות_בירור_שיוסרו: inquiryReplies.length,
+      מיילים_יתומים_שישויכו_למשרד: orphans.length,
       דוגמאות: inquiryReplies.slice(0, 20).map(m => ({
         נושא: m.subject,
         מאת: m.from_email,
@@ -89,18 +97,29 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { inquiryReplies } = await analyze(db)
+    const { inquiryReplies, orphans } = await analyze(db)
 
+    // 1. תשובות בירור — נמחקות. הן מוצגות בצ'אט של ההלוואה.
     let removed = 0
     for (const m of inquiryReplies) {
       const { error } = await db.from('inbound_emails').delete().eq('id', m.id)
       if (!error) removed++
     }
 
+    // 2. יתומים בכתובת ה-copy — משויכים למשרד הראשי כדי שיופיעו בתיבה.
+    //    מחיקה כאן הייתה מוחקת דואר אמיתי.
+    let reassigned = 0
+    for (const m of orphans) {
+      const { error } = await db.from('inbound_emails')
+        .update({ to_email: 'office@chasamsofer.info' })
+        .eq('id', m.id)
+      if (!error) reassigned++
+    }
+
     return NextResponse.json({
       ok: true,
-      הוסרו: removed,
-      message: `${removed} תשובות בירור הוסרו מהדואר הנכנס (הן מוצגות בצ'אט של ההלוואה)`,
+      תשובות_בירור_שהוסרו: removed,
+      יתומים_ששויכו_למשרד: reassigned,
     })
   } catch (e) {
     console.error('[mail/cleanup] ניקוי נכשל:', e)
