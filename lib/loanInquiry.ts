@@ -68,7 +68,7 @@ export async function sendLoanInquiry(
     body: `
       <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;">${greet}</p>
       <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
-        בנוגע לבקשת ההלוואה שהגשתם — נשמח לקבל מכם את הפרטים הבאים:
+        בנוגע לבקשת ההלוואה שהגשתם — להלן ההודעה מהמזכירות:
       </p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
         <tr><td style="background:#f0fdf4;border-right:4px solid #10b981;border-radius:0 12px 12px 0;padding:16px 20px;color:#065f46;font-size:15px;line-height:1.8;">
