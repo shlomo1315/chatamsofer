@@ -174,10 +174,12 @@ export async function handleLoanInquiryReply(
     is_read: false,               // ממתין לעיון המנהל -> יופיע בהתראות
   })
 
-  // חזרה לרשימת ההמתנה לאישור — רק אם הבקשה עדיין בבירור.
-  // (אם בינתיים אושרה או נדחתה, אין להחזיר אותה.)
+  // ⚠️ הסטטוס נשאר 'inquiry'. בעבר החזרנו אותו ל'pending', וזה מחק את המידע
+  // שהבקשה בכלל בבירור — היא נעלמה מהקובייה "בתהליך בירור" ברגע שהמבקש ענה,
+  // בדיוק כשהיא הכי דורשת טיפול. במקום זה, ההודעה האחרונה בשרשור היא שקובעת
+  // אם ממתינים לו או לנו (ראה תת-הסינון ב-LoansTable).
   await db.from('loans')
-    .update({ status: 'pending', updated_at: new Date().toISOString() })
+    .update({ updated_at: new Date().toISOString() })
     .eq('id', loanId)
     .eq('status', 'inquiry')
 

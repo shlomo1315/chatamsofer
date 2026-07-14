@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Send, Loader2, MessageSquare, AlertCircle, Mail } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
   applicantName?: string
   onSent?: () => void
 }) {
+  const router = useRouter()
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
@@ -76,7 +78,10 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
 
       setText('')
       await load()
-      onSent?.()          // רענון הסטטוס בדף (עבר ל"בתהליך בירור")
+      // שליחת ההודעה העבירה את הבקשה ל'בתהליך בירור' בשרת — מרעננים את
+      // ה-Server Component כדי שתווית הסטטוס בראש הדף תתעדכן מיד.
+      router.refresh()
+      onSent?.()
     } catch {
       setErr('שגיאת תקשורת')
     } finally {
