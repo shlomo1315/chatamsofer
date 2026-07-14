@@ -37,24 +37,21 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
 
   return (
     <div className="flex flex-col gap-4">
-      {/* שורה אחת תמיד — גלילה אופקית כשצר, בלי לחתוך את הכפתורים.
-          py-1/-my-1 נותנים מקום ל-ring; ה-spacer בסוף מונע חיתוך של
-          הכפתור האחרון בקצה אזור הגלילה. */}
-      <div className="-mx-1 -my-1 flex gap-2 overflow-x-auto px-1 py-1
-                      [-ms-overflow-style:none] [scrollbar-width:none]
-                      [&::-webkit-scrollbar]:hidden">
+      {/* flex-wrap — הטאבים עוברים לשורה הבאה כשאין מקום.
+          קודם הייתה כאן גלילה אופקית עם פס גלילה מוסתר, ואז הטאב האחרון
+          פשוט נראה חתוך בקצה בלי שום רמז שאפשר לגלול אליו.
+          py-1/-my-1 נותנים מקום ל-ring של הפוקוס. */}
+      <div className="-mx-1 -my-1 flex flex-wrap gap-2 px-1 py-1">
         {tabs.map(t => {
           const a = ACCENTS[t.accent ?? 'indigo']
           const isActive = t.key === active
           return (
             <button key={t.key} onClick={() => select(t.key)}
-              className={`inline-flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${isActive ? a.active : a.idle}`}>
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors ${isActive ? a.active : a.idle}`}>
               {t.icon}{t.label}
             </button>
           )
         })}
-        {/* מרווח בקצה — בלעדיו הכפתור האחרון נחתך בגבול אזור הגלילה */}
-        <div className="w-1 flex-shrink-0" aria-hidden />
       </div>
       <div>{current?.content}</div>
     </div>
