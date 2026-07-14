@@ -11,6 +11,7 @@ import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
 import EmailTextsManager from './EmailTextsManager'
 import AssistantLearning from './AssistantLearning'
+import MailCleanup from './MailCleanup'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
@@ -143,6 +144,11 @@ export default async function SettingsPage() {
         {/* Gov address data (cities/streets from Ministry of Interior) */}
         <Collapsible title="נתוני כתובות (משרד הפנים)" icon={<MapPin size={16} className="text-rose-500" />}>
           <GovDataSettings />
+        </Collapsible>
+
+        {/* ניקוי תיבת המייל */}
+        <Collapsible title="ניקוי תיבת המייל" icon={<MailWarning size={16} className="text-rose-500" />}>
+          <MailCleanup />
         </Collapsible>
 
         {/* למידת העוזר החכם */}

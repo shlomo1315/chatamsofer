@@ -30,7 +30,7 @@ export async function GET() {
       .limit(10),
 
     // המייל האחרון שנכנס עם plus-address. אם ריק — Resend לא ניתב אותו אלינו.
-    db.from('app_settings').select('value, updated_at').eq('key', 'plus_address_debug').maybeSingle(),
+    db.from('app_settings').select('value, updated_at').eq('key', 'loan_inquiry_debug').maybeSingle(),
   ])
 
   let lastPlus: unknown = null
@@ -63,7 +63,8 @@ export async function GET() {
 
     // ⚠️ הבדיקה המכריעה: אם זה null, המייל של המשתמש לא הגיע ל-webhook בכלל
     // (Resend לא ניתב את office+l...), ולא מדובר בבאג בקוד שלנו.
-    מייל_אחרון_עם_plus_address: lastPlus,
+    // ⚠️ המפתח לפתרון: מה Resend באמת שלח, והאם הטוקן נמצא בו
+    תשובת_בירור_אחרונה: lastPlus,
     מתי: dbg.data?.updated_at ?? null,
 
     הסבר: {

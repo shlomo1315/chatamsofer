@@ -668,6 +668,9 @@ export async function POST(request: NextRequest) {
   //
   // הזיהוי: כותרות השרשור (In-Reply-To / References) קיימות רק בתשובה.
   // זו הדרך היחידה שאינה תלויה בניסוח הנושא.
+  // מייל שהוא תשובה לבירור — מזוהה גם לפי הנושא, כרשת ביטחון אם הטוקן אבד.
+  const looksLikeLoanInquiry = /הודעה מגמ|בקשת ההלוואה/.test(subject)
+
   const isReplyToUs = Boolean(
     getHeader(data.headers, 'in-reply-to').trim() ||
     getHeader(data.headers, 'references').trim()
@@ -706,9 +709,41 @@ export async function POST(request: NextRequest) {
     // בפרודקשן. הגרסה הקודמת דרשה שהכתובת *תתחיל* ב-"office+l" (עוגן ^),
     // וזה נכשל: Resend מעביר את הנמענים בפורמט "Name <addr@x>" או עם
     // רווחים, ואז העוגן לא תואם. מחפשים את +l בכל מקום במחרוזת.
-    const loanTok = candidates
-      .map(a => String(a ?? '').match(/\+l([A-Za-z0-9_-]{8,})@/i)?.[1])
-      .find(Boolean)
+    // ⚠️ candidates לבדו לא הספיק: הוא נבנה מכתובות *מנורמלות*, ו-Resend
+    // מעביר את הנמען בפורמטים שונים. לכן סורקים גם את גוף ה-payload הגולמי
+    // ואת הכותרות — הטוקן חייב להופיע באחד מהם, אחרת התשובה אבודה.
+    const rawHaystack = [
+      ...candidates,
+      String(data.to ?? ''),
+      getHeader(data.headers, 'to'),
+      getHeader(data.headers, 'delivered-to'),
+      getHeader(data.headers, 'x-original-to'),
+      // מוצא-אחרון: כל ה-payload. יקר, אבל רץ רק כשיש חשד לתשובת בירור.
+      JSON.stringify(data.headers ?? {}),
+    ].join(' ')
+
+    const loanTok = rawHaystack.match(/\+l([A-Za-z0-9_-]{8,})@/i)?.[1]
+
+    // אבחון: נרשם תמיד כשהמייל נראה כתשובת בירור, גם אם הטוקן לא נמצא.
+    // בלי זה אי אפשר לדעת למה הקליטה נכשלה.
+    if (looksLikeLoanInquiry || loanTok) {
+      try {
+        await admin.from('app_settings').upsert({
+          key: 'loan_inquiry_debug',
+          value: JSON.stringify({
+            at: new Date().toISOString(),
+            from: from.email,
+            subject,
+            tokenFound: loanTok ?? null,
+            candidates,
+            rawTo: String(data.to ?? ''),
+            headerTo: getHeader(data.headers, 'to'),
+            deliveredTo: getHeader(data.headers, 'delivered-to'),
+          }),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'key' })
+      } catch { /* אבחון בלבד */ }
+    }
 
     if (loanTok) {
       try {
@@ -719,9 +754,17 @@ export async function POST(request: NextRequest) {
         if (await handleLoanInquiryReply(admin, loanTok, stripQuotedReply(raw))) {
           return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
         }
+        console.error('[resend-inbound] טוקן נמצא אך הקליטה נכשלה:', loanTok)
       } catch (e) {
         console.error('[resend-inbound] קליטת תשובת בירור נכשלה:', e)
       }
+    }
+
+    // ⚠️ רשת ביטחון: מייל שנראה כתשובת בירור אך הטוקן לא נמצא — לא ייצא
+    // ממנו מענה אוטומטי ולא ייקלט כבקשה. עדיף שיישאר בתיבה מאשר שהמשתמש
+    // יקבל שוב "המערכת בהרצה" בתגובה לתשובה שלו.
+    if (looksLikeLoanInquiry && !loanTok) {
+      console.error('[resend-inbound] תשובת בירור בלי טוקן — נשמרת בלבד:', subject)
     }
   }
 
@@ -812,13 +855,13 @@ export async function POST(request: NextRequest) {
     }
     // מענה אוטומטי לפניות יריד — "פנייתך התקבלה"
     try {
-      if (!isReplyToUs) await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] yerid auto-reply error:', e instanceof Error ? e.message : String(e))
     }
     // מענה אוטומטי לפניות תיבה 8 — הודעה על הגרלת כרטיסי טיסה
     try {
-      if (!isReplyToUs) await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
@@ -898,7 +941,7 @@ export async function POST(request: NextRequest) {
           attachments,
         })
         if (!handled && isIgud) {
-          if (!isReplyToUs) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
         }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
@@ -909,7 +952,7 @@ export async function POST(request: NextRequest) {
   } else if (isIgud && isNew) {
     // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
     try {
-      if (!isReplyToUs) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }
@@ -933,7 +976,7 @@ export async function POST(request: NextRequest) {
         .ilike('email', from.email)
         .maybeSingle()
 
-      if (!isReplyToUs) await maybeSendMaintenanceReply(admin, {
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeSendMaintenanceReply(admin, {
         fromEmail: from.email,
         beneficiaryId: known?.id ?? null,
         headers: data.headers,
