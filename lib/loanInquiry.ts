@@ -83,7 +83,7 @@ export async function sendLoanInquiry(
       </table>`,
   })
 
-  const sent = await deliverMail(email, 'בנוגע לבקשת ההלוואה — היכל החתם סופר', html, undefined, {
+  const sent = await deliverMail(email, 'הודעה מגמ״ח היכל החתם סופר', html, undefined, {
     ...mailFor('gemach'),
     replyTo: `office+l${token}@${INBOUND_DOMAIN}`,
     skipLog: true,

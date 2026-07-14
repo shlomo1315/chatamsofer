@@ -815,7 +815,20 @@ export async function POST(request: NextRequest) {
   // קיבלו את אותו מייל שוב ושוב על בקשה ישנה. handleEmailRequest אינו מזהה
   // כפילות בעצמו. לכן נעילה מפורשת לפי message_id: הראשון שתופס אותה מטפל,
   // וכל ניסיון חוזר נדחה. ה-upsert אטומי, ולכן בטוח גם בריצה מקבילה.
-  if (requestSubject && isRequestSubject(requestSubject)) {
+  // ⚠️ חסם מוחלט: מייל שהוא *תשובה* למייל שהמערכת שלחה לעולם אינו בקשה חדשה.
+  //
+  // הבאג: מייל הבירור נשלח עם הנושא "בנוגע לבקשת ההלוואה". detectReqType מחפש
+  // את המילה "הלוואה" — ולכן המערכת זיהתה את התשובה של המשתמש כבקשת הלוואה
+  // חדשה, לא מצאה ת"ז בנושא, ושלחה לו מייל דחייה. אותו דבר יקרה לכל מייל
+  // עתידי שהמערכת תשלח והנושא שלו יכיל "לידה" / "הלוואה" / "סיוע".
+  //
+  // הזיהוי: כותרות השרשור (In-Reply-To / References) קיימות רק בתשובה, ולא
+  // במייל חדש. זו הדרך היחידה שאינה תלויה בניסוח הנושא.
+  const inReplyTo = getHeader(data.headers, 'in-reply-to').trim()
+  const references = getHeader(data.headers, 'references').trim()
+  const isReplyToUs = Boolean(inReplyTo || references)
+
+  if (requestSubject && isRequestSubject(requestSubject) && !isReplyToUs) {
     // מפתח הנעילה חייב להיות יציב בין ניסיונות. messageId נופל-לאחור לערך
     // אקראי כשהכותרת חסרה — ואז הנעילה חסרת ערך. לכן במקרה כזה נועלים לפי
     // תוכן המייל (שולח + נושא), שזהה בכל ניסיון חוזר.

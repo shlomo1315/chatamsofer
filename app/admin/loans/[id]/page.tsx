@@ -183,7 +183,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                     <FileText size={16} />
                     <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-4 max-w-2xl">
                     {idDocs.find(d => d.doc_type === 'id_husband') && (
                       <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
                     )}
@@ -212,10 +212,10 @@ function LoanDocCard({ label, url, person }: { label: string; url?: string; pers
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+        <img src={href} alt={label} className="w-full h-72 object-contain rounded-lg bg-slate-50" />
       ) : isPdf ? (
         <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
-          className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
+          className="w-full h-72 rounded-lg bg-white border-0 pointer-events-none" />
       ) : (
         <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={28} className="text-slate-400" />
