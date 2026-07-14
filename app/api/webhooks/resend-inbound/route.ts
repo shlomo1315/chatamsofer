@@ -789,6 +789,9 @@ export async function POST(request: NextRequest) {
     headers: data.headers ?? null,
     attachments,
     is_read: false,
+    // תשובת בירור שהזיהוי שלה נכשל — לא מציפים בה את הדואר הנכנס; היא
+    // נכנסת תחת תווית "צ'אט", שם אפשר לטפל בה ידנית.
+    is_chat: looksLikeLoanInquiry,
     ...(campaignId ? { campaign_id: campaignId } : {}),
   }, { onConflict: 'message_id', ignoreDuplicates: true }).select('id')
 

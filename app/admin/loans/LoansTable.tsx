@@ -19,6 +19,8 @@ const borrowerName = (b?: BenRef) =>
   b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 
 type Filter = 'all' | 'pending' | 'inquiry' | 'approved' | 'rejected'
+/** בתוך הבירור: ממתינים לתשובתו · הוא השיב וממתין לטיפול. */
+type InquirySub = 'all' | 'waiting' | 'replied'
 
 // 'inquiry' (בתהליך בירור) מקבל קובייה משלו — קודם הוא לא נספר בשום מקום,
 // ולכן הטבלה הראתה 3 "ממתינות" בזמן שהקובייה ספרה 2.
@@ -49,11 +51,15 @@ const haystack = (l: Loan) => {
     .filter(Boolean).join(' ').toLowerCase()
 }
 
-export default function LoansTable({ data }: { data: Loan[] }) {
+export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; repliedIds?: string[] }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
+  const [sub, setSub] = useState<InquirySub>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
+
+  const replied = useMemo(() => new Set(repliedIds), [repliedIds])
+  const hasReplied = (l: Loan) => replied.has(String(l.id))
 
   const counts = useMemo(() => ({
     all: data.length,
@@ -63,10 +69,22 @@ export default function LoansTable({ data }: { data: Loan[] }) {
     rejected: data.filter(isRejected).length,
   }), [data])
 
+  const inquiryCounts = useMemo(() => {
+    const inq = data.filter(isInquiry)
+    const r = inq.filter(hasReplied).length
+    return { all: inq.length, replied: r, waiting: inq.length - r }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, replied])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return data.filter(l => matchesFilter(l, filter) && (q === '' || haystack(l).includes(q)))
-  }, [data, filter, query])
+    return data.filter(l => {
+      if (!matchesFilter(l, filter)) return false
+      if (filter === 'inquiry' && sub !== 'all' && hasReplied(l) !== (sub === 'replied')) return false
+      return q === '' || haystack(l).includes(q)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, filter, sub, query, replied])
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
@@ -83,7 +101,7 @@ export default function LoansTable({ data }: { data: Loan[] }) {
           const isActive = filter === c.key
           return (
             <button key={c.key}
-              onClick={() => setFilter(isActive && c.key !== 'all' ? 'all' : c.key)}
+              onClick={() => { setSub('all'); setFilter(isActive && c.key !== 'all' ? 'all' : c.key) }}
               className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}>
               <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
                 <Icon size={18} />
@@ -96,6 +114,27 @@ export default function LoansTable({ data }: { data: Loan[] }) {
           )
         })}
       </div>
+
+      {/* פילוח הבירור: את מי אנחנו מחכים לו — כדי לדעת לאן להיכנס לטפל */}
+      {filter === 'inquiry' && inquiryCounts.all > 0 && (
+        <div className="flex items-center gap-2 flex-wrap -mt-2">
+          {([
+            { key: 'all', label: 'הכל', n: inquiryCounts.all },
+            { key: 'replied', label: 'השיב — ממתין לטיפולכם', n: inquiryCounts.replied },
+            { key: 'waiting', label: 'ממתינים לתשובתו', n: inquiryCounts.waiting },
+          ] as { key: InquirySub; label: string; n: number }[]).map(t => (
+            <button key={t.key} onClick={() => setSub(t.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                sub === t.key
+                  ? 'bg-sky-600 border-sky-600 text-white'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300'
+              }`}>
+              {t.label}
+              <span className={`mr-1.5 tabular-nums ${sub === t.key ? 'text-sky-100' : 'text-slate-400'}`}>{t.n}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">

@@ -16,8 +16,13 @@ interface Msg {
   created_at: string
 }
 
-const fmt = (d: string) =>
-  new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+// "14.07.26 23:49" — הפורמט המבוקש
+const fmt = (d: string) => {
+  const t = new Date(d)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const date = `${p(t.getDate())}.${p(t.getMonth() + 1)}.${String(t.getFullYear()).slice(2)}`
+  return `${date} ${p(t.getHours())}:${p(t.getMinutes())}`
+}
 
 export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSent }: {
   loanId: string

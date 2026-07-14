@@ -107,6 +107,9 @@ export async function GET(request: NextRequest) {
     if (department) query = query.eq('department', department)
   } else {
     query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
+    // תוית "צ'אט" — תשובות לבירורי הלוואה. הן מוצגות בשרשור שבתיק ההלוואה,
+    // ולכן מוצאות מהדואר הנכנס ומקבלות תיקייה משלהן.
+    query = query.eq('is_chat', folder === 'CHAT')
     query = query.eq('source', 'resend')
     // דואר נכנס רגיל — המחלקה נגזרת מכתובת הנמען
     if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])

@@ -11,7 +11,7 @@ import {
   ChevronLeft, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Trash2, BarChart2,
   Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
-  Clock, Tag, Ban, Flag, Plus, ShieldCheck, Archive, UserPlus,
+  Clock, Tag, Ban, Flag, Plus, ShieldCheck, Archive, UserPlus, MessageSquare,
 } from 'lucide-react'
 
 const EMOJIS = ['😊','🙏','👍','🙌','❤️','✨','🎉','✅','📌','📞','📧','📅','⏰','💡','🔔','⚠️','😇','🤝','💪','🌟','📝','📎','🏠','👶','💳','🕯️','✡️','🍀','😀','🙂','👏','🎊']
@@ -42,6 +42,8 @@ const FOLDER_ITEMS = [
   { key: 'INBOX', label: 'דואר נכנס', icon: Inbox },
   { key: 'SENT',  label: 'דואר יוצא', icon: Send },
   { key: 'SCHEDULED', label: 'מתוזמנים', icon: Clock },
+  // תשובות לבירורי הלוואה — מוצגות בשרשור שבתיק ההלוואה, ולכן לא בדואר הנכנס
+  { key: 'CHAT',  label: 'צ׳אט', icon: MessageSquare },
   { key: 'SPAM',  label: 'ספאם', icon: Ban },
   { key: 'LEGACY', label: 'ארכיון מייל קודם', icon: Archive },
 ]

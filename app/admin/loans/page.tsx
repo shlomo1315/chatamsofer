@@ -20,8 +20,30 @@ async function getLoans(): Promise<Loan[]> {
   return data ?? []
 }
 
+/**
+ * לכל בקשה שבבירור — האם המבקש כבר השיב.
+ * ההודעה האחרונה בשרשור קובעת: 'staff' = ממתינים לתשובתו, 'applicant' = הוא
+ * השיב וממתין לטיפולנו. זה מה שמפריד את שתי הקבוצות בקובייה "בתהליך בירור".
+ */
+async function getReplied(loanIds: string[]): Promise<string[]> {
+  if (!loanIds.length || !isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('loan_messages')
+    .select('loan_id, direction, created_at')
+    .in('loan_id', loanIds)
+    .order('created_at', { ascending: true })
+
+  const last = new Map<string, string>()
+  for (const m of data ?? []) last.set(String(m.loan_id), String(m.direction))
+  return [...last.entries()].filter(([, dir]) => dir === 'applicant').map(([id]) => id)
+}
+
 export default async function LoansPage() {
   const loans = await getLoans()
+  const replied = await getReplied(
+    loans.filter(l => l.status === 'inquiry').map(l => String(l.id)),
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +75,7 @@ export default async function LoansPage() {
           <p className="text-slate-400 text-sm mt-1">הוסף הלוואה חדשה להתחלה</p>
         </div>
       ) : (
-        <LoansTable data={loans} />
+        <LoansTable data={loans} repliedIds={replied} />
       )}
     </div>
   )

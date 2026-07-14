@@ -13,7 +13,7 @@ function getAdmin() {
 }
 
 const VALID: Record<string, string[]> = {
-  loan: ['pending', 'approved', 'active', 'completed', 'rejected', 'defaulted'],
+  loan: ['pending', 'inquiry', 'approved', 'active', 'completed', 'rejected', 'defaulted'],
   maternity: ['pending', 'active', 'completed', 'cancelled'],
 }
 // שדות נוספים מותרים לעדכון לכל סוג (whitelist — מונע עדכון עמודות לא צפויות)

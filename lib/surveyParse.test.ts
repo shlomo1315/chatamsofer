@@ -16,6 +16,11 @@ describe('stripQuotedReply', () => {
     expect(stripQuotedReply(raw)).toBe('הטקסט שלי')
   })
 
+  it('מסיר ציטוט Gmail בעברית עם "מאת" (הפורמט שהגיע בפועל)', () => {
+    const raw = 'תשובתי\n\nבתאריך יום ג׳, 14 ביולי 2026 ב-23:49 מאת היכל החתם סופר · גמ"ח <g@chasamsofer.info>:\n\n> ההודעה המקורית'
+    expect(stripQuotedReply(raw)).toBe('תשובתי')
+  })
+
   it('מסיר חתימת מובייל', () => {
     expect(stripQuotedReply('תודה רבה\n\nSent from my iPhone')).toBe('תודה רבה')
   })
