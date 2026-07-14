@@ -675,7 +675,9 @@ export async function POST(request: NextRequest) {
 
   // אבחון: כל מייל שנכנס עם plus-address נרשם, כדי לדעת אם הוא הגיע בכלל.
   // בלי זה אי אפשר להבחין בין "Resend לא ניתב אותו" לבין "הקוד לא תפס אותו".
-  if (candidates.some(a => /^office\+/i.test(a))) {
+  // בלי עוגן ^ — Resend מעביר נמענים בפורמטים שונים, ועוגן היה גורם לאבחון
+  // להראות "לא הגיע" גם כשהמייל דווקא הגיע.
+  if (candidates.some(a => /\+[a-z][A-Za-z0-9_-]{6,}@/i.test(String(a ?? '')))) {
     try {
       await admin.from('app_settings').upsert({
         key: 'plus_address_debug',
@@ -700,8 +702,12 @@ export async function POST(request: NextRequest) {
   //   2. התשובה שייכת לצ'אט של ההלוואה, לא לדואר הנכנס. שמירתה שם רק
   //      מציפה את התיבה בהודעות שכבר מוצגות במקום הנכון.
   {
+    // ⚠️ הרג'קס זהה לזה של מכתבי הברכה (lib/inboundGratitude), שעובד
+    // בפרודקשן. הגרסה הקודמת דרשה שהכתובת *תתחיל* ב-"office+l" (עוגן ^),
+    // וזה נכשל: Resend מעביר את הנמענים בפורמט "Name <addr@x>" או עם
+    // רווחים, ואז העוגן לא תואם. מחפשים את +l בכל מקום במחרוזת.
     const loanTok = candidates
-      .map(a => a.match(/^office\+l([A-Za-z0-9_-]{6,})@/i)?.[1])
+      .map(a => String(a ?? '').match(/\+l([A-Za-z0-9_-]{8,})@/i)?.[1])
       .find(Boolean)
 
     if (loanTok) {
