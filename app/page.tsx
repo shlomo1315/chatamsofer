@@ -3321,7 +3321,7 @@ export default function PublicPortalPage() {
                     className="mt-0.5 w-4 h-4 accent-indigo-600"
                   />
                   <label htmlFor="decl" className="text-sm text-slate-700 leading-relaxed cursor-pointer">
-                    הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול המערכת.
+                    הנני מצהיר/ה שהפרטים שמסרתי נכונים ומדויקים, ואני מסכים/ה לאחסון המידע לצרכי ניהול המערכת ומאשר/ת קבלת דיוור במייל ובטלפון.
                   </label>
                 </div>
                 {regSignature && (
