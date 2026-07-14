@@ -1083,8 +1083,10 @@ export default function PublicPortalPage() {
   const [sigModalOpen, setSigModalOpen] = useState(false)
   // הטבות שהתקבלו בעבר מאיגוד הצאצאים
   const [pastBenefits, setPastBenefits] = useState({
+    // none = "לא קיבלתי הטבות בעבר". בלעדי — סימונו מנקה את כל השאר.
+    none: false,
     recovery_home: false, food_card: false, holiday_grant: false, catering: false,
-    tishrei_5785: false, pesach_5786: false, shavuot_5786: false,
+    tishrei_5786: false, pesach_5786: false, shavuot_5786: false,
     loan: false, loan_amount: '', other: false, other_details: '', notes: '',
     update_topics: [] as string[],
   })
@@ -1601,6 +1603,23 @@ export default function PublicPortalPage() {
     }
     if (!regForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
     if (showSpouseFields && !regForm.spouse_birth_date) { setError('אנא הזן תאריך לידה של האשה'); return }
+
+    // הטבות בעבר — חובה לסמן לפחות אפשרות אחת (או "לא קיבלתי הטבות בעבר").
+    // בלי זה אי אפשר להבחין בין "לא קיבל" לבין "שכח למלא".
+    {
+      const pb = pastBenefits
+      const picked = pb.none || pb.recovery_home || pb.food_card || pb.holiday_grant
+        || pb.catering || pb.tishrei_5786 || pb.pesach_5786 || pb.shavuot_5786
+        || pb.loan || pb.other
+      if (!picked) {
+        setError('בשאלה על הטבות שהתקבלו בעבר — יש לסמן לפחות אפשרות אחת, או לסמן "לא קיבלתי הטבות בעבר".')
+        return
+      }
+      if (pb.holiday_grant && !pb.tishrei_5786 && !pb.pesach_5786 && !pb.shavuot_5786) {
+        setError('סימנתם "מענק לקראת החגים" — יש לבחור באילו חגים קיבלתם אותו.')
+        return
+      }
+    }
     if (!declaredReg) { setError('אנא אשר את ההצהרה'); return }
     setError('')
     setLoading(true)
@@ -3149,26 +3168,83 @@ export default function PublicPortalPage() {
                   <Gift size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900">האם בעבר קיבלתם הטבות כלשהן מ&quot;איגוד הצאצאים&quot;?</h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-3">סמנו את כל ההטבות שקיבלתם — ניתן לבחור יותר מאפשרות אחת (לא חובה):</p>
+                <p className="text-xs text-slate-500 mb-3">סמנו את כל ההטבות שקיבלתם — ניתן לבחור יותר מאפשרות אחת. חובה לסמן לפחות אפשרות אחת:</p>
                 <div className="flex flex-col gap-2">
+                  {/* "לא קיבלתי" — בלעדי. סימונו מנקה את כל השאר, וסימון של
+                      הטבה כלשהי מבטל אותו. */}
+                  <label className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm font-medium ${pastBenefits.none ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={pastBenefits.none}
+                      onChange={e => {
+                        const on = e.target.checked
+                        setPastBenefits(p => on
+                          ? {
+                              ...p, none: true,
+                              recovery_home: false, food_card: false, holiday_grant: false,
+                              catering: false, tishrei_5786: false, pesach_5786: false,
+                              shavuot_5786: false, loan: false, loan_amount: '',
+                              other: false, other_details: '',
+                            }
+                          : { ...p, none: false })
+                      }}
+                      className="w-4 h-4 accent-emerald-600"
+                    />
+                    לא קיבלתי הטבות בעבר
+                  </label>
+
+                  <div className="h-px bg-slate-100 my-1" />
+
                   {([
                     ['recovery_home', 'בית החלמה ליולדות'],
                     ['food_card', 'כרטיס מזון ליולדות'],
                     ['holiday_grant', 'מענק לקראת החגים'],
                     ['catering', 'קייטרינג מוזל "ויגילו בשמחה"'],
-                    ['tishrei_5785', 'תשרי תשפ"ה'],
-                    ['pesach_5786', 'פסח תשפ"ו'],
-                    ['shavuot_5786', 'שבועות תשפ"ו'],
                   ] as const).map(([k, label]) => (
                     <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                      <input type="checkbox" checked={pastBenefits[k] as boolean} onChange={e => setPastBenefits(p => ({ ...p, [k]: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
+                      <input
+                        type="checkbox"
+                        checked={pastBenefits[k] as boolean}
+                        onChange={e => setPastBenefits(p => ({
+                          ...p,
+                          [k]: e.target.checked,
+                          none: false,      // בחירת הטבה מבטלת את "לא קיבלתי"
+                          // ביטול "מענק לקראת החגים" מנקה גם את החגים שתחתיו
+                          ...(k === 'holiday_grant' && !e.target.checked
+                            ? { tishrei_5786: false, pesach_5786: false, shavuot_5786: false }
+                            : {}),
+                        }))}
+                        className="w-4 h-4 accent-indigo-600"
+                      />
                       {label}
                     </label>
                   ))}
+
+                  {/* החגים — נפתחים רק אחרי סימון "מענק לקראת החגים" */}
+                  {pastBenefits.holiday_grant && (
+                    <div className="mr-6 pr-3 border-r-2 border-indigo-200 flex flex-col gap-2">
+                      <p className="text-xs text-slate-500">באילו חגים קיבלתם את המענק?</p>
+                      {([
+                        ['tishrei_5786', 'תשרי תשפ"ו'],
+                        ['pesach_5786', 'פסח תשפ"ו'],
+                        ['shavuot_5786', 'שבועות תשפ"ו'],
+                      ] as const).map(([k, label]) => (
+                        <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={pastBenefits[k] as boolean}
+                            onChange={e => setPastBenefits(p => ({ ...p, [k]: e.target.checked, none: false }))}
+                            className="w-4 h-4 accent-indigo-600"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                   {/* הלוואה + סכום */}
                   <div className={`rounded-lg border ${pastBenefits.loan ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm">
-                      <input type="checkbox" checked={pastBenefits.loan} onChange={e => setPastBenefits(p => ({ ...p, loan: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
+                      <input type="checkbox" checked={pastBenefits.loan} onChange={e => setPastBenefits(p => ({ ...p, loan: e.target.checked, none: false }))} className="w-4 h-4 accent-indigo-600" />
                       <span className={pastBenefits.loan ? 'text-indigo-800 font-medium' : 'text-slate-600'}>הלוואה</span>
                     </label>
                     {pastBenefits.loan && (
@@ -3184,7 +3260,7 @@ export default function PublicPortalPage() {
                   {/* עזרה אחרת + פירוט */}
                   <div className={`rounded-lg border ${pastBenefits.other ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm">
-                      <input type="checkbox" checked={pastBenefits.other} onChange={e => setPastBenefits(p => ({ ...p, other: e.target.checked }))} className="w-4 h-4 accent-indigo-600" />
+                      <input type="checkbox" checked={pastBenefits.other} onChange={e => setPastBenefits(p => ({ ...p, other: e.target.checked, none: false }))} className="w-4 h-4 accent-indigo-600" />
                       <span className={pastBenefits.other ? 'text-indigo-800 font-medium' : 'text-slate-600'}>עזרה אחרת</span>
                     </label>
                     {pastBenefits.other && (

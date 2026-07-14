@@ -658,6 +658,39 @@ export async function POST(request: NextRequest) {
     console.error('[resend-inbound] זיהוי קמפיין נכשל:', e)
   }
 
+  // ── האם המייל הוא *תשובה* למייל שאנחנו שלחנו? ──
+  //
+  // קריטי לשני דברים:
+  //   1. תשובה לעולם אינה בקשה חדשה. מייל הבירור נשלח עם נושא שמכיל
+  //      "הלוואה", ולכן detectReqType זיהה את התשובה כבקשה ושלח מייל דחייה.
+  //   2. אין לענות אוטומטית על תשובה. המשתמש ענה לנו — ואז קיבל בחזרה
+  //      "המערכת בהרצה" או מענה גנרי אחר, וזה נראה שבור.
+  //
+  // הזיהוי: כותרות השרשור (In-Reply-To / References) קיימות רק בתשובה.
+  // זו הדרך היחידה שאינה תלויה בניסוח הנושא.
+  const isReplyToUs = Boolean(
+    getHeader(data.headers, 'in-reply-to').trim() ||
+    getHeader(data.headers, 'references').trim()
+  )
+
+  // אבחון: כל מייל שנכנס עם plus-address נרשם, כדי לדעת אם הוא הגיע בכלל.
+  // בלי זה אי אפשר להבחין בין "Resend לא ניתב אותו" לבין "הקוד לא תפס אותו".
+  if (candidates.some(a => /^office\+/i.test(a))) {
+    try {
+      await admin.from('app_settings').upsert({
+        key: 'plus_address_debug',
+        value: JSON.stringify({
+          at: new Date().toISOString(),
+          from: from.email,
+          candidates,
+          isReplyToUs,
+          subject,
+        }),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+    } catch { /* אבחון בלבד */ }
+  }
+
   // ── תשובת המבקש לבירור הלוואה (office+l<token>@) ──
   //
   // ⚠️ חייב לרוץ *לפני* השמירה ולפני זיהוי הבקשות, משתי סיבות:
@@ -773,13 +806,13 @@ export async function POST(request: NextRequest) {
     }
     // מענה אוטומטי לפניות יריד — "פנייתך התקבלה"
     try {
-      await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      if (!isReplyToUs) await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] yerid auto-reply error:', e instanceof Error ? e.message : String(e))
     }
     // מענה אוטומטי לפניות תיבה 8 — הודעה על הגרלת כרטיסי טיסה
     try {
-      await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
+      if (!isReplyToUs) await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
     }
@@ -824,10 +857,6 @@ export async function POST(request: NextRequest) {
   //
   // הזיהוי: כותרות השרשור (In-Reply-To / References) קיימות רק בתשובה, ולא
   // במייל חדש. זו הדרך היחידה שאינה תלויה בניסוח הנושא.
-  const inReplyTo = getHeader(data.headers, 'in-reply-to').trim()
-  const references = getHeader(data.headers, 'references').trim()
-  const isReplyToUs = Boolean(inReplyTo || references)
-
   if (requestSubject && isRequestSubject(requestSubject) && !isReplyToUs) {
     // מפתח הנעילה חייב להיות יציב בין ניסיונות. messageId נופל-לאחור לערך
     // אקראי כשהכותרת חסרה — ואז הנעילה חסרת ערך. לכן במקרה כזה נועלים לפי
@@ -863,7 +892,7 @@ export async function POST(request: NextRequest) {
           attachments,
         })
         if (!handled && isIgud) {
-          await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+          if (!isReplyToUs) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
         }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
@@ -874,7 +903,7 @@ export async function POST(request: NextRequest) {
   } else if (isIgud && isNew) {
     // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
     try {
-      await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      if (!isReplyToUs) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
     } catch (e) {
       console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }
@@ -898,7 +927,7 @@ export async function POST(request: NextRequest) {
         .ilike('email', from.email)
         .maybeSingle()
 
-      await maybeSendMaintenanceReply(admin, {
+      if (!isReplyToUs) await maybeSendMaintenanceReply(admin, {
         fromEmail: from.email,
         beneficiaryId: known?.id ?? null,
         headers: data.headers,

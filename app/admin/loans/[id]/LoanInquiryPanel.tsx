@@ -46,6 +46,15 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
   useEffect(() => { void load() }, [load])
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
 
+  // רענון חי — תשובה שנקלטת במייל מופיעה כאן תוך שניות, בלי לרענן את הדף.
+  // גם מיד עם חזרה ללשונית, כדי שלא יהיה עיכוב עד לטיק הבא.
+  useEffect(() => {
+    const t = setInterval(() => { void load() }, 10_000)
+    const onFocus = () => { void load() }
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(t); window.removeEventListener('focus', onFocus) }
+  }, [load])
+
   const send = async () => {
     const body = text.trim()
     if (!body || sending) return
