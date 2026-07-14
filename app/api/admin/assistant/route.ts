@@ -4,6 +4,7 @@ import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { TOOL_DEFS, runTool, schemaForUser, activityLabel, type ToolCtx } from '@/lib/assistant/tools'
 import type { UserPermissions } from '@/types'
 import { rateLimit } from '@/lib/rateLimit'
+import { logQuestion, buildMemory, classifyOutcome } from '@/lib/assistant/memory'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עוזר AI — עונה על שאלות על המערכת בלבד.
@@ -20,8 +21,13 @@ export const maxDuration = 60
 const MODEL = 'claude-sonnet-5'   // מהיר ומדויק דיו למשימה הזו
 const MAX_TURNS = 6          // מגן מפני לולאת כלים אינסופית
 
-/** ההנחיה נבנית לכל משתמש לפי ההרשאות שלו — כך הוא רואה רק את מה שמותר לו. */
-function buildSystem(schema: string): string {
+/**
+ * ההנחיה נבנית לכל משתמש לפי ההרשאות שלו — כך הוא רואה רק את מה שמותר לו.
+ * memory = הזיכרון המצטבר: ידע שהמנהל הוסיף, והמונחים שהצוות משתמש בהם.
+ * זו הדרך שבה העוזר "לומד" — המודל עצמו אינו ניתן לאימון, אבל ההנחיה שלו
+ * נעשית מדויקת יותר ככל שנצבר שימוש.
+ */
+function buildSystem(schema: string, memory: string): string {
   return `אתה "עוזר" — העוזר החכם של מערכת הניהול של "היכל החתם סופר", עמותת חסד.
 
 המערכת מנהלת: איגוד הצאצאים (רישום משפחות), עץ הדורות (שושלת החתם סופר),
@@ -76,6 +82,7 @@ ${schema}
 ידע כללי, הלכה, פוליטיקה): "אני יכול לעזור רק בשאלות על מערכת הניהול של
 היכל החתם סופר."
 
+${memory ? `\n${memory}\n` : ''}
 ## היום
 ${new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`
 }
@@ -127,7 +134,19 @@ export async function POST(request: NextRequest) {
   //   {"type":"error","text":"..."}
   // בלי זה המשתמש רואה ספינר מת ולא יודע שהעוזר באמת עובד.
   const encoder = new TextEncoder()
-  const system = buildSystem(schemaForUser(ctx))
+
+  // הזיכרון המצטבר — ידע שהמנהל הוסיף + המונחים שהצוות משתמש בהם.
+  // כשל בבנייתו לא מפיל את העוזר; הוא פשוט יעבוד בלעדיו.
+  const memory = await buildMemory(db)
+  const system = buildSystem(schemaForUser(ctx), memory)
+
+  // שם המשתמש לרישום — כדי שהמנהל יראה מי שאל מה
+  const { data: prof } = await db
+    .from('profiles').select('full_name').eq('id', staff.userId).maybeSingle()
+  const userName = String(prof?.full_name ?? '').trim() || (staff.email ?? 'צוות')
+
+  const question = String(history[history.length - 1]?.content ?? '')
+  const toolsUsed: string[] = []
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -153,7 +172,18 @@ export async function POST(request: NextRequest) {
               .map(c => c.text)
               .join('\n')
               .trim()
-            emit({ type: 'reply', text: text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.' })
+            const reply = text || 'לא הצלחתי לנסח תשובה. נסה לשאול אחרת.'
+            // רישום — ממנו נבנה הזיכרון והמסך למנהל. לא חוסם את התשובה.
+            void logQuestion(db, {
+              userId: staff.userId,
+              userName: userName,
+              question,
+              answer: reply,
+              toolsUsed,
+              outcome: classifyOutcome(reply, toolsUsed),
+            })
+
+            emit({ type: 'reply', text: reply })
             controller.close()
             return
           }
@@ -177,6 +207,7 @@ export async function POST(request: NextRequest) {
             let out: unknown
             try {
               out = await runTool(ctx, block.name, block.input as Record<string, unknown>)
+              toolsUsed.push(block.name)
             } catch (e) {
               console.error('[assistant] כלי נכשל:', block.name, e)
               out = { error: 'שליפת הנתונים נכשלה' }
@@ -192,10 +223,21 @@ export async function POST(request: NextRequest) {
           emit({ type: 'activity', text: 'עוזר מנסח את התשובה…' })
         }
 
-        emit({ type: 'reply', text: 'השאלה מורכבת מדי. נסה לפצל אותה לשאלות פשוטות יותר.' })
+        const tooComplex = 'השאלה מורכבת מדי. נסה לפצל אותה לשאלות פשוטות יותר.'
+            // רישום — ממנו נבנה הזיכרון והמסך למנהל. לא חוסם את התשובה.
+            void logQuestion(db, {
+              userId: staff.userId,
+              userName: userName,
+              question,
+              answer: tooComplex,
+              toolsUsed,
+              outcome: 'error',
+            })
+        emit({ type: 'reply', text: tooComplex })
         controller.close()
       } catch (e) {
         console.error('[assistant] שגיאה:', e)
+        void logQuestion(db, { userId: staff.userId, userName, question, answer: String(e), toolsUsed, outcome: 'error' })
         emit({ type: 'error', text: 'העוזר אינו זמין כרגע. נסה שוב.' })
         controller.close()
       }

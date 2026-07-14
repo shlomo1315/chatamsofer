@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -10,6 +10,7 @@ import EditUserButton from './EditUserButton'
 import RecoveryHomeLinks from '../maternity/RecoveryHomeLinks'
 import DocTypesManager from './DocTypesManager'
 import EmailTextsManager from './EmailTextsManager'
+import AssistantLearning from './AssistantLearning'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
@@ -142,6 +143,11 @@ export default async function SettingsPage() {
         {/* Gov address data (cities/streets from Ministry of Interior) */}
         <Collapsible title="נתוני כתובות (משרד הפנים)" icon={<MapPin size={16} className="text-rose-500" />}>
           <GovDataSettings />
+        </Collapsible>
+
+        {/* למידת העוזר החכם */}
+        <Collapsible title="העוזר החכם — למידה" icon={<Sparkles size={16} className="text-amber-500" />}>
+          <AssistantLearning />
         </Collapsible>
 
         {/* עריכת הטקסטים של כל המיילים היוצאים */}
