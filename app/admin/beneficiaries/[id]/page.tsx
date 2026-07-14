@@ -98,7 +98,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   if (!beneficiary) {
     return (
-      <div className="flex flex-col gap-5 max-w-5xl">
+      <div className="flex flex-col gap-5">
         <div className="flex items-center gap-3">
           <Link href="/admin/beneficiaries" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
           <h1 className="text-xl font-bold text-slate-900">פרטי צאצא</h1>
@@ -365,7 +365,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   )
 
   return (
-    <div className="flex flex-col gap-5 max-w-5xl">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/beneficiaries" />
@@ -386,11 +386,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         { key: 'past_benefits', label: 'הטבות בעבר', accent: 'rose', icon: <Gift size={15} />, content: pastBenefitsTab },
         { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
-        { key: 'activity', label: 'היסטוריה', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
+        { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
         { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
         ...(beneficiary.email ? [{
           key: 'mail',
-          label: 'מיילים',
+          label: 'הודעות מיילים',
           accent: 'indigo' as const,
           icon: <Mail size={15} />,
           content: <BeneficiaryMailThread email={beneficiary.email} name={fullName} beneficiaryId={id} />,

@@ -254,11 +254,14 @@ export async function buildDraftLinks(
     financial_aid: 'להגשת בקשת סיוע רפואי',
   }
   // התאמת האפשרויות לפי הסטטוס המשפחתי:
-  //  • לידה + לידה שקטה — רק נשואים.
+  //  • לידה — רק נשואים.
   //  • הלוואה + סיוע רפואי — לכולם.
   //  • אלמנות ויתומים — רק אלמן/אלמנה.
+  //
+  // לידה שקטה הוסרה מרשימת הטיוטות לבקשת המשתמש. הטיפוס והטופס עצמם
+  // נשארים בקוד ופועלים (כולל קליטה במייל) — רק הקישור אינו מוצע במייל.
   const types: ReqType[] = married
-    ? ['birth', 'silent_birth', 'loan', 'financial_aid']
+    ? ['birth', 'loan', 'financial_aid']
     : ['loan', 'financial_aid']
   const links: { label: string; href: string }[] = []
   for (const t of types) {

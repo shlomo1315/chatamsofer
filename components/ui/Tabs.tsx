@@ -37,9 +37,10 @@ export default function Tabs({ tabs, param = 'tab' }: { tabs: TabDef[]; param?: 
 
   return (
     <div className="flex flex-col gap-4">
-      {/* flex-wrap — הטאבים עוברים לשורה הבאה כשאין מקום.
-          קודם הייתה כאן גלילה אופקית עם פס גלילה מוסתר, ואז הטאב האחרון
-          פשוט נראה חתוך בקצה בלי שום רמז שאפשר לגלול אליו.
+      {/* שורה אחת. הדף רחב מספיק (max-w-screen-2xl) כדי להכיל את כל הטאבים —
+          הבעיה הקודמת הייתה max-w-5xl על הדף עצמו, שחנק אותם.
+          flex-wrap נשאר כרשת ביטחון למסך צר, במקום גלילה עם פס מוסתר שגרמה
+          לטאב האחרון להיראות חתוך בלי שום רמז.
           py-1/-my-1 נותנים מקום ל-ring של הפוקוס. */}
       <div className="-mx-1 -my-1 flex flex-wrap gap-2 px-1 py-1">
         {tabs.map(t => {
