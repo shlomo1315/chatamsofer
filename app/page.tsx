@@ -3195,32 +3195,41 @@ export default function PublicPortalPage() {
 
                   <div className="h-px bg-slate-100 my-1" />
 
+                  {/* יולדות */}
                   {([
                     ['recovery_home', 'בית החלמה ליולדות'],
                     ['food_card', 'כרטיס מזון ליולדות'],
-                    ['holiday_grant', 'מענק לקראת החגים'],
-                    ['catering', 'קייטרינג מוזל "ויגילו בשמחה"'],
                   ] as const).map(([k, label]) => (
                     <label key={k} className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits[k] ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                       <input
                         type="checkbox"
                         checked={pastBenefits[k] as boolean}
-                        onChange={e => setPastBenefits(p => ({
-                          ...p,
-                          [k]: e.target.checked,
-                          none: false,      // בחירת הטבה מבטלת את "לא קיבלתי"
-                          // ביטול "מענק לקראת החגים" מנקה גם את החגים שתחתיו
-                          ...(k === 'holiday_grant' && !e.target.checked
-                            ? { tishrei_5786: false, pesach_5786: false, shavuot_5786: false }
-                            : {}),
-                        }))}
+                        onChange={e => setPastBenefits(p => ({ ...p, [k]: e.target.checked, none: false }))}
                         className="w-4 h-4 accent-indigo-600"
                       />
                       {label}
                     </label>
                   ))}
 
-                  {/* החגים — נפתחים רק אחרי סימון "מענק לקראת החגים" */}
+                  {/* מענק החגים — והחגים נפתחים מיד תחתיו, לפני הקייטרינג */}
+                  <label className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits.holiday_grant ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={pastBenefits.holiday_grant}
+                      onChange={e => setPastBenefits(p => ({
+                        ...p,
+                        holiday_grant: e.target.checked,
+                        none: false,
+                        // ביטול המענק מנקה גם את החגים שתחתיו
+                        ...(e.target.checked
+                          ? {}
+                          : { tishrei_5786: false, pesach_5786: false, shavuot_5786: false }),
+                      }))}
+                      className="w-4 h-4 accent-indigo-600"
+                    />
+                    מענק לקראת החגים
+                  </label>
+
                   {pastBenefits.holiday_grant && (
                     <div className="mr-6 pr-3 border-r-2 border-indigo-200 flex flex-col gap-2">
                       <p className="text-xs text-slate-500">באילו חגים קיבלתם את המענק?</p>
@@ -3241,6 +3250,17 @@ export default function PublicPortalPage() {
                       ))}
                     </div>
                   )}
+
+                  {/* קייטרינג — אחרי החגים */}
+                  <label className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-all duration-150 text-sm ${pastBenefits.catering ? 'border-indigo-300 bg-indigo-50 text-indigo-800 font-medium' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <input
+                      type="checkbox"
+                      checked={pastBenefits.catering}
+                      onChange={e => setPastBenefits(p => ({ ...p, catering: e.target.checked, none: false }))}
+                      className="w-4 h-4 accent-indigo-600"
+                    />
+                    קייטרינג מוזל &quot;ויגילו בשמחה&quot;
+                  </label>
                   {/* הלוואה + סכום */}
                   <div className={`rounded-lg border ${pastBenefits.loan ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
                     <label className="flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm">
