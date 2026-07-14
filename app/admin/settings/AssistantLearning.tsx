@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Plus, Trash2, AlertCircle, Check, BrainCircuit, TrendingUp } from 'lucide-react'
+import { Loader2, Plus, Trash2, AlertCircle, Check, BrainCircuit, TrendingUp, Sparkles } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // למידת העוזר.
@@ -43,6 +43,10 @@ export default function AssistantLearning() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
+  // ניתוח ע"י AI: מנתח למה העוזר נכשל ומציע ניסוח מוכן
+  const [analyzing, setAnalyzing] = useState<string | null>(null)
+  const [suggestion, setSuggestion] = useState<{ reason: string; knowledge: string } | null>(null)
+
   const load = useCallback(() => {
     fetch('/api/admin/assistant/learn')
       .then(r => r.json())
@@ -81,6 +85,33 @@ export default function AssistantLearning() {
     load()
   }
 
+  /** ה-AI מנתח למה העוזר נכשל, ומציע ניסוח מוכן ללמידה. */
+  const analyze = async (f: Failed) => {
+    setAnalyzing(f.id)
+    setSuggestion(null)
+    setMsg('')
+    try {
+      const res = await fetch('/api/admin/assistant/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: f.question, answer: f.answer }),
+      })
+      const d = await res.json()
+
+      if (!res.ok) { setMsg(d.error ?? 'הניתוח נכשל'); return }
+      if (!d.canHelp) { setMsg(d.reason || 'לא ניתן ללמד מהשאלה הזו'); return }
+
+      // ההצעה נכנסת לתיבת העריכה — המנהל מאשר או עורך
+      setSuggestion({ reason: d.reason, knowledge: d.knowledge })
+      setAdding(d.knowledge)
+      setSource(f.question)
+    } catch {
+      setMsg('שגיאת תקשורת')
+    } finally {
+      setAnalyzing(null)
+    }
+  }
+
   if (loading) {
     return <div className="flex items-center gap-2 text-slate-500 text-sm py-6"><Loader2 size={16} className="animate-spin" /> טוען…</div>
   }
@@ -117,7 +148,7 @@ export default function AssistantLearning() {
             שאלות שהעוזר לא הצליח לענות עליהן
           </h3>
           <p className="text-xs text-slate-500 mb-1">
-            לחצו על &quot;למד את זה&quot; כדי להוסיף לו את הידע החסר.
+            לחצו על &quot;נתח והצע&quot; — ה-AI ינתח למה הוא נכשל ויציע ניסוח מוכן, ואתם רק תאשרו.
           </p>
 
           <div className="flex flex-col gap-2 max-h-72 overflow-y-auto">
@@ -127,13 +158,26 @@ export default function AssistantLearning() {
                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{f.answer}</p>
                 <div className="flex items-center justify-between gap-2 mt-2">
                   <span className="text-[11px] text-slate-400">{f.user_name} · {fmt(f.created_at)}</span>
-                  <button
-                    type="button"
-                    onClick={() => { setAdding(''); setSource(f.question) }}
-                    className="text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 rounded-lg px-2.5 py-1 hover:bg-amber-200 transition-colors"
-                  >
-                    למד את זה
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {/* ה-AI מנתח למה הוא נכשל ומציע ניסוח — במקום שתכתוב מאפס */}
+                    <button
+                      type="button"
+                      onClick={() => analyze(f)}
+                      disabled={analyzing === f.id}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-800 bg-violet-100 border border-violet-300 rounded-lg px-2.5 py-1 hover:bg-violet-200 transition-colors disabled:opacity-50"
+                    >
+                      {analyzing === f.id
+                        ? <><Loader2 size={11} className="animate-spin" /> מנתח…</>
+                        : <><Sparkles size={11} className="fill-current" /> נתח והצע</>}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAdding(''); setSuggestion(null); setSource(f.question) }}
+                      className="text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 rounded-lg px-2.5 py-1 hover:bg-amber-200 transition-colors"
+                    >
+                      כתוב בעצמי
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -152,7 +196,18 @@ export default function AssistantLearning() {
           <div className="flex items-center gap-2 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
             <span className="text-slate-400">בעקבות:</span>
             <span className="font-medium truncate flex-1">{source}</span>
-            <button onClick={() => setSource('')} className="text-slate-400 hover:text-slate-600">×</button>
+            <button onClick={() => { setSource(''); setSuggestion(null) }} className="text-slate-400 hover:text-slate-600">×</button>
+          </div>
+        )}
+
+        {/* מה ה-AI הבין — מוצג כדי שתדע על מה ההצעה מבוססת */}
+        {suggestion && (
+          <div className="flex items-start gap-2 text-xs bg-violet-50 border border-violet-200 rounded-lg px-2.5 py-2">
+            <Sparkles size={13} className="text-violet-600 fill-current shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold text-violet-900 mb-0.5">הניתוח:</p>
+              <p className="text-violet-800 leading-relaxed">{suggestion.reason}</p>
+            </div>
           </div>
         )}
 
