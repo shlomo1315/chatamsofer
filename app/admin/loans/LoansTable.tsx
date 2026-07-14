@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus } from 'lucide-react'
+import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
 import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
@@ -10,20 +10,26 @@ import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
-// סמל השקל משמאל למספר
-const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
+// סמל השקל אחרי המספר — "₪5,000" נקרא הפוך בעברית
+const fmtCur = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('he-IL')} ₪`
 
 type BenRef = { full_name?: string; family_name?: string; id_number?: string; spouse_name?: string; spouse_id_number?: string }
 // שם הלווה — שם הבעל (full_name); אם אין בעל, שם האישה (spouse_name)
 const borrowerName = (b?: BenRef) =>
   b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 
-type Filter = 'all' | 'pending' | 'approved' | 'rejected'
+type Filter = 'all' | 'pending' | 'inquiry' | 'approved' | 'rejected'
+
+// 'inquiry' (בתהליך בירור) מקבל קובייה משלו — קודם הוא לא נספר בשום מקום,
+// ולכן הטבלה הראתה 3 "ממתינות" בזמן שהקובייה ספרה 2.
+const isPending = (l: Loan) => l.status === 'pending'
+const isInquiry = (l: Loan) => l.status === 'inquiry'
 const isApproved = (l: Loan) => l.status === 'approved' || l.status === 'active' || l.status === 'completed'
 const isRejected = (l: Loan) => l.status === 'rejected' || l.status === 'defaulted'
 const matchesFilter = (l: Loan, f: Filter) => {
   if (f === 'all') return true
-  if (f === 'pending') return l.status === 'pending'
+  if (f === 'pending') return isPending(l)
+  if (f === 'inquiry') return isInquiry(l)
   if (f === 'approved') return isApproved(l)
   return isRejected(l)
 }
@@ -32,6 +38,7 @@ interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתינות לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'inquiry', label: 'בתהליך בירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
   { key: 'approved', label: 'מאושרות', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושרות', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -50,7 +57,8 @@ export default function LoansTable({ data }: { data: Loan[] }) {
 
   const counts = useMemo(() => ({
     all: data.length,
-    pending: data.filter(l => l.status === 'pending').length,
+    pending: data.filter(isPending).length,
+    inquiry: data.filter(isInquiry).length,
     approved: data.filter(isApproved).length,
     rejected: data.filter(isRejected).length,
   }), [data])
@@ -69,7 +77,7 @@ export default function LoansTable({ data }: { data: Loan[] }) {
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
           const isActive = filter === c.key

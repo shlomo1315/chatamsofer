@@ -49,7 +49,7 @@ async function collectReport(admin: SupabaseClient, sinceISO: string) {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const [pending, awaiting, disbursed, fresh] = await Promise.all([
-    admin.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    admin.from('loans').select('id', { count: 'exact', head: true }).in('status', ['pending', 'inquiry']),
     admin.from('loans').select('id', { count: 'exact', head: true }).eq('status', 'approved').is('disbursed_at', null),
     admin.from('loans').select('id', { count: 'exact', head: true }).gte('disbursed_at', weekAgo),
     // ההלוואות שאושרו מאז השליחה הקודמת — אך ורק בסטטוס "מאושר"

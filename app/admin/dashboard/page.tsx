@@ -62,7 +62,7 @@ const getStats = unstable_cache(
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'approved'),
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'pending'),
       supabase.from('loans').select('id', headCount).eq('status', 'active'),
-      supabase.from('loans').select('id', headCount).eq('status', 'pending'),
+      supabase.from('loans').select('id', headCount).in('status', ['pending', 'inquiry']),
       supabase.from('loans').select('id', headCount).eq('status', 'defaulted'),
       supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']).gte('created_at', weekAgo),
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'active'),

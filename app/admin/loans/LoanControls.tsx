@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, ChevronDown, Loader2, Trash2, CheckCircle2 } from 'lucide-react'
+import { Clock, Check, X, ChevronDown, Loader2, Trash2, CheckCircle2, MessageSquare } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { Loan, LoanStatus } from '@/types'
@@ -115,6 +115,9 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
   const options: { value: LoanStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'approved',  label: 'אשר (זכאי)',      cls: 'text-green-700 hover:bg-green-50', icon: Check },
     { value: 'rejected',  label: 'דחה (לא זכאי)',   cls: 'text-red-600 hover:bg-red-50', icon: X },
+    // העברה ידנית לבירור — למקרה שהמנהל מעביר בקשה לבירור בלי לשלוח הודעה
+    // מהצ'אט (שליחת הודעה מעבירה לשם אוטומטית).
+    { value: 'inquiry',   label: 'העבר לבירור',     cls: 'text-sky-700 hover:bg-sky-50', icon: MessageSquare },
     { value: 'pending',   label: 'החזר לממתין',     cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
   const isApprovedLike = localStatus === 'approved' || localStatus === 'active' || localStatus === 'completed'
