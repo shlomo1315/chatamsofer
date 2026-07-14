@@ -13,13 +13,15 @@ import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BackButton from '@/components/ui/BackButton'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
+import FamilySummary from './FamilySummary'
+import LoanInquiryPanel from './LoanInquiryPanel'
 
 async function getLoan(id: string): Promise<Loan | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('loans')
-    .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
     .eq('id', id)
     .single()
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
@@ -64,13 +66,13 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
     )
   }
 
-  const b = loan.beneficiary as (Parameters<typeof FamilyApprovalGate>[0]['beneficiary'] & { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string; eligibility_status?: string }) | undefined
+  const b = loan.beneficiary as (Parameters<typeof FamilyApprovalGate>[0]['beneficiary'] & { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; phone?: string; email?: string; eligibility_status?: string }) | undefined
   const familyApproved = b?.eligibility_status === 'approved'
   // הלווה = הבעל (full_name); אם אין בעל, האישה (spouse_name)
   const borrower = b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name) : undefined
 
   return (
-    <div className="flex flex-col gap-5 max-w-2xl">
+    <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/loans" />
@@ -93,6 +95,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
       {/* שער אישור המשפחה — אם טרם אושרה, מציג פרטים+ייחוס ומאפשר אישור ישיר; חוסם אישור בקשה לפני כן */}
       {b && <FamilyApprovalGate beneficiary={b} />}
 
+      {/* פריסה דו-טורית: פרטי הבקשה מימין · סיכום המשפחה והבירור משמאל.
+          כך ההחלטה מתקבלת עם כל התמונה בלי לצאת מהמסך. */}
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start">
+        <div className="flex flex-col gap-5 min-w-0">
       <Card>
           <div className="flex items-center gap-2 text-indigo-600 mb-3">
             <CreditCard size={16} />
@@ -171,6 +177,14 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           <p className="text-sm text-slate-700">{loan.notes}</p>
         </Card>
       )}
+        </div>
+
+        {/* הטור השמאלי — סיכום המשפחה + שרשור הבירור */}
+        <aside className="flex flex-col gap-5 lg:sticky lg:top-4">
+          <FamilySummary loanId={loan.id} />
+          <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} />
+        </aside>
+      </div>
     </div>
   )
 }

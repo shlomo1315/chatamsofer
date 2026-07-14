@@ -702,6 +702,22 @@ export async function POST(request: NextRequest) {
         }
         console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
       }
+
+      // ── תשובת המבקש לבירור בקשת הלוואה (office+l<token>@) ──
+      // התשובה נכנסת לשרשור ההתכתבות, והבקשה חוזרת לרשימת ההמתנה לאישור.
+      const loanTok = candidates
+        .map(a => a.match(/^office\+l([A-Za-z0-9_-]{6,})@/i)?.[1])
+        .find(Boolean)
+
+      if (loanTok) {
+        const { handleLoanInquiryReply } = await import('@/lib/loanInquiry')
+        // הציטוט של המייל המקורי מוסר, כדי שהשרשור יכיל רק את מה שנכתב עכשיו
+        const { stripQuotedReply } = await import('@/lib/surveyParse')
+        const clean = stripQuotedReply(replyBody)
+        if (await handleLoanInquiryReply(admin, loanTok, clean)) {
+          return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
+        }
+      }
     } catch (e) {
       console.error('[resend-inbound] gratitude/feedback routing failed:', e)
     }

@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // הטוקן מקודד את סוג הפנייה ואת מזהה הלידה, ופג אחרי 90 יום.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PublicTokenKind = 'g' | 's' // g = gratitude, s = survey/feedback
+export type PublicTokenKind = 'g' | 's' | 'l' // g = gratitude, s = survey, l = loan inquiry
 
 const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום
 
@@ -69,6 +69,7 @@ export async function getOrCreateReplyToken(
   db: SupabaseClient,
   kind: PublicTokenKind,
   aidId: string,
+  entityTable = 'maternity_aids',
 ): Promise<string | null> {
   try {
     // קיים ובתוקף — משתמשים בו שוב
@@ -76,7 +77,7 @@ export async function getOrCreateReplyToken(
       .from('reply_tokens')
       .select('token')
       .eq('kind', kind)
-      .eq('entity_table', 'maternity_aids')
+      .eq('entity_table', entityTable)
       .eq('entity_id', aidId)
       .gt('expires_at', new Date().toISOString())
       .maybeSingle()
@@ -88,7 +89,7 @@ export async function getOrCreateReplyToken(
     const { error } = await db.from('reply_tokens').insert({
       token,
       kind,
-      entity_table: 'maternity_aids',
+      entity_table: entityTable,
       entity_id: aidId,
     })
     if (error) { console.error('[reply-token] הנפקה נכשלה:', error.message); return null }

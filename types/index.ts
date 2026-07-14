@@ -5,7 +5,7 @@ export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
 export type Gender = 'male' | 'female'
-export type LoanStatus = 'pending' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
+export type LoanStatus = 'pending' | 'inquiry' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
 export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloaded'
 export type CardStatus = 'pending' | 'approved' | 'rejected' | 'loaded' | 'awaiting_stock'
@@ -405,6 +405,7 @@ export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
 
 export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
   pending: 'ממתין',
+  inquiry: 'בתהליך בירור',
   approved: 'מאושר',
   active: 'פעיל',
   completed: 'הושלם',
