@@ -2771,7 +2771,7 @@ export default function PublicPortalPage() {
                     </Field>
                   </div>
                   <div className="col-span-2">
-                    <Field label="השתייכות קהילתית" hint="לא חובה">
+                    <Field label="השתייכות קהילתית" hint="לא חובה, אולם מומלץ לצורך היערכות ורישום להטבות בהמשך בעז״ה">
                       <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" />
                     </Field>
                   </div>
