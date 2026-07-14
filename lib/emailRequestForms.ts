@@ -6,6 +6,7 @@ import { validateIsraeliId } from './validation'
 export type ReqType = 'birth' | 'silent_birth' | 'loan' | 'financial_aid' | 'widow'
 
 // ── קבועי הלוואה — מקור אמת יחיד לפורטל, לטופס המייל ולמסכי הניהול ──
+export const LOAN_MIN_AMOUNT = 1_000
 export const LOAN_MAX_AMOUNT = 30_000
 export const LOAN_MAX_INSTALLMENTS = 60
 
@@ -115,8 +116,8 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
       ]
     case 'loan':
       return [
-        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: `מספר בלבד, ב-₪ · עד ${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ₪`, required: true },
-        { key: 'installments', label: 'מספר תשלומים', hint: `מספר בלבד · עד ${LOAN_MAX_INSTALLMENTS} תשלומים`, required: true },
+        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: `כתבו סכום בלבד בין ${LOAN_MIN_AMOUNT.toLocaleString('en-US')}-${LOAN_MAX_AMOUNT.toLocaleString('en-US')} וב-₪ בלבד`, required: true },
+        { key: 'installments', label: 'מספר התשלומים', hint: `כתבו מספר בלבד עד ${LOAN_MAX_INSTALLMENTS}`, required: true },
         { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_PURPOSES] },
         { key: 'declaration', label: 'האם פנית בעבר לגמ״ח חתם סופר?', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_DECLARATIONS] },
         { key: 'notes', label: 'הערות', required: false },
@@ -159,7 +160,6 @@ export function attachmentsFor(type: ReqType, ctx: Ctx): AttachmentSpec[] {
 export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): string {
   const L: string[] = []
   L.push('שימו לב — מלאו כל פרט בדיוק. אם פרט אחד חסר או אינו תקין, הבקשה לא תיקלט.')
-  L.push('ההגשה המומלצת היא דרך המערכת הדיגיטלית שלנו; אפשרות זו מיועדת לחסומים בלבד.')
   L.push('אנא השאירו את שמות השדות (לפני הנקודתיים) ללא שינוי, ומלאו רק אחרי הנקודתיים.')
   // מגבלות שחייבות להופיע לפני המילוי — אחרת המבקש ממלא טופס שנדחה ממילא.
   if (type === 'birth') {
@@ -196,10 +196,30 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   if (atts.length) {
     L.push('')
     L.push('━━━ קבצים לצירוף ━━━')
-    L.push('חובה לשנות את שם כל קובץ מצורף בדיוק לשם המבוקש (לפני הצירוף). קובץ ללא השם המדויק לא ייקלט!')
-    for (const a of atts) {
-      L.push(`• ${a.label} — שנו את שם הקובץ ל: "${a.name}"${a.required ? ' (חובה)' : ' (אם רלוונטי)'}`)
+    // ההסבר הישן היה טכני ולא ברור. עכשיו הוא מנוסח כשלושה צעדים, כי
+    // המערכת מזהה את הקובץ לפי שמו — ומשתמש שלא ישנה את השם, בקשתו תיפסל.
+    L.push('המערכת מזהה כל קובץ לפי השם שלו, ולכן חובה לשנות את שם הקובץ במחשב לפני שמצרפים אותו.')
+    L.push('')
+    L.push('מה עושים:')
+    L.push('  1. לוחצים על הקובץ במחשב בכפתור הימני של העכבר, ובוחרים "שנה שם".')
+    L.push('  2. מוחקים את השם הקיים וכותבים במקומו את השם המבוקש (ראו למטה) — בלי לשנות את הסיומת.')
+    L.push('  3. מצרפים את הקובץ למייל הזה ושולחים.')
+    L.push('')
+
+    const req = atts.filter(a => a.required)
+    const opt = atts.filter(a => !a.required)
+
+    if (req.length) {
+      L.push('קבצים שחובה לצרף:')
+      for (const a of req) L.push(`  • ${a.label} — שנו את שם הקובץ ל: ${a.name}`)
     }
+    if (opt.length) {
+      if (req.length) L.push('')
+      L.push('קבצים שניתן לצרף (רק אם יש):')
+      for (const a of opt) L.push(`  • ${a.label} — שנו את שם הקובץ ל: ${a.name}`)
+    }
+    L.push('')
+    L.push('שימו לב: קובץ שהשם שלו אינו מדויק — המערכת לא תזהה אותו, והבקשה לא תיקלט.')
   }
   L.push('')
   L.push(`(מזהה: ${idNumber})`)
@@ -356,6 +376,9 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
   if (type === 'loan') {
     const amount = parseInt((values.amount ?? '').replace(/[^\d]/g, ''), 10)
     if (!amount || amount <= 0) errors.push('סכום ההלוואה חסר או לא תקין')
+    // המינימום נאכף כי הטופס מבטיח "בין 1,000 ל-30,000" — בלי האכיפה,
+    // סכום נמוך יותר היה מתקבל והטופס היה משקר.
+    else if (amount < LOAN_MIN_AMOUNT) errors.push(`סכום ההלוואה המזערי הוא ${LOAN_MIN_AMOUNT.toLocaleString('en-US')} ₪`)
     else if (amount > LOAN_MAX_AMOUNT) errors.push(`סכום ההלוואה המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ₪`)
     else data.amount = amount
 

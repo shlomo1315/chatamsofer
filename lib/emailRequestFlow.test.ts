@@ -92,7 +92,7 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
   it('loan', () => {
     let d = buildDraftBody('loan', '318344884', ctx)
     d = fill(d, 'סכום ההלוואה המבוקש', '20000')
-    d = fill(d, 'מספר תשלומים', '24')
+    d = fill(d, 'מספר התשלומים', '24')
     d = fill(d, 'מטרת ההלוואה', 'שמחה משפחתית')
     d = fill(d, 'האם פנית בעבר', 'לא הגשתי')
 
@@ -104,7 +104,7 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
   it('loan — דוחה סכום מעל התקרה', () => {
     let d = buildDraftBody('loan', '318344884', ctx)
     d = fill(d, 'סכום ההלוואה המבוקש', '50000')   // מעל 30,000
-    d = fill(d, 'מספר תשלומים', '24')
+    d = fill(d, 'מספר התשלומים', '24')
     d = fill(d, 'מטרת ההלוואה', 'שמחה משפחתית')
     d = fill(d, 'האם פנית בעבר', 'לא הגשתי')
 
@@ -159,5 +159,35 @@ describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט 
     const r = validateRequest('birth', parseDraft('birth', d, ctx), ctx)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.errors.join(' ')).toContain('בית החלמה')
+  })
+})
+
+describe('מגבלות סכום ההלוואה', () => {
+  const loanBody = (amount: string) => {
+    let d = buildDraftBody('loan', '318344884', ctx)
+    d = fill(d, 'סכום ההלוואה המבוקש', amount)
+    d = fill(d, 'מספר התשלומים', '24')
+    d = fill(d, 'מטרת ההלוואה', 'שמחה משפחתית')
+    d = fill(d, 'האם פנית בעבר', 'לא הגשתי')
+    return d
+  }
+
+  it('סכום מתחת למינימום — נדחה', () => {
+    // הטופס מבטיח "בין 1,000 ל-30,000". בלי אכיפה, ההבטחה הייתה שקרית.
+    const r = validateRequest('loan', parseDraft('loan', loanBody('500'), ctx), ctx)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.join(' ')).toContain('1,000')
+  })
+
+  it('סכום מעל המקסימום — נדחה', () => {
+    const r = validateRequest('loan', parseDraft('loan', loanBody('50000'), ctx), ctx)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.errors.join(' ')).toContain('30,000')
+  })
+
+  it('בדיוק המינימום — מתקבל', () => {
+    const r = validateRequest('loan', parseDraft('loan', loanBody('1000'), ctx), ctx)
+    if (!r.ok) console.error('שגיאות:', r.errors)
+    expect(r.ok).toBe(true)
   })
 })
