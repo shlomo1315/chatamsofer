@@ -70,7 +70,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     db.from('documents')
       .select('id, doc_type, file_name, file_url')
       .eq('beneficiary_id', benId)
-      .in('doc_type', ['id_husband', 'id_wife']),
+      .in('doc_type', ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx']),
   ])
 
   const b = benRes.data

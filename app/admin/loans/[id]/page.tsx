@@ -37,7 +37,7 @@ async function getBeneficiaryIdDocs(beneficiaryId: string): Promise<{ doc_type: 
     .from('documents')
     .select('doc_type, file_url, file_name')
     .eq('beneficiary_id', beneficiaryId)
-    .in('doc_type', ['id_husband', 'id_wife'])
+    .in('doc_type', ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx'])
     .order('uploaded_at', { ascending: false })
   if (!data) return []
   const seen = new Set<string>()

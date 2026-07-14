@@ -10,10 +10,12 @@ export interface DocTypeOption {
 }
 
 export const DEFAULT_DOC_TYPES: DocTypeOption[] = [
-  { value: 'id_husband', label: 'ת.ז. הבעל (כולל ספח)' },
-  { value: 'id_wife',    label: 'ת.ז. האישה (כולל ספח)' },
-  { value: 'id_child',   label: 'ת.ז. ילד (כולל ספח)' },
-  { value: 'other',      label: 'מסמך אחר' },
+  { value: 'id_husband',      label: 'ת.ז. הבעל' },
+  { value: 'id_husband_appx', label: 'ספח ת.ז. הבעל' },
+  { value: 'id_wife',         label: 'ת.ז. האישה' },
+  { value: 'id_wife_appx',    label: 'ספח ת.ז. האישה' },
+  { value: 'id_child',        label: 'ת.ז. ילד (כולל ספח)' },
+  { value: 'other',           label: 'מסמך אחר' },
 ]
 
 // alias תאימות-לאחור (משמש כ-fallback סטטי)
@@ -29,4 +31,8 @@ export const docTypeLabel = (v: string, types: DocTypeOption[] = DEFAULT_DOC_TYP
 export const newDocTypeValue = () => `doc_${Math.random().toString(36).slice(2, 8)}`
 
 // מפתחות שאסור למחוק (ליבת המערכת)
-export const PROTECTED_DOC_TYPES = ['id_husband', 'id_wife', 'id_child', 'other']
+export const PROTECTED_DOC_TYPES = [
+  'id_husband', 'id_husband_appx',
+  'id_wife', 'id_wife_appx',
+  'id_child', 'other',
+]

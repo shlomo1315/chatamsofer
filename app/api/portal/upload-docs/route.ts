@@ -88,6 +88,41 @@ export async function POST(request: NextRequest) {
     const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path)
     lastUrl = urlData.publicUrl
 
+    // ── החלפה, לא הוספה ──
+    // קודם המערכת רק הוסיפה: מי שהעלה ת"ז שוב, נשארו לו שתיים, ואי אפשר
+    // היה לדעת איזו עדכנית. עכשיו הקובץ החדש דורס את הקודם מאותו סוג —
+    // גם הרשומה וגם הקובץ עצמו באחסון, כדי שלא יישארו קבצים יתומים.
+    //
+    // הסדר חשוב: מוחקים *אחרי* שההעלאה החדשה הצליחה. אם נמחק קודם ואז
+    // ההעלאה תיכשל — המשתמש יישאר בלי שום קובץ.
+    const { data: old } = await admin
+      .from('documents')
+      .select('id, file_url')
+      .eq('beneficiary_id', beneficiaryId)
+      .eq('doc_type', docType)
+
+    if (old?.length) {
+      // הקבצים מהאחסון
+      const paths = old
+        .map(d => {
+          const u = String(d.file_url ?? '')
+          const m = u.match(new RegExp(`/${BUCKET}/(.+)$`))
+          return m?.[1] ? decodeURIComponent(m[1]) : null
+        })
+        .filter((p): p is string => Boolean(p))
+
+      if (paths.length) {
+        await admin.storage.from(BUCKET).remove(paths)
+          .catch(e => console.error('[upload-docs] מחיקת קובץ ישן נכשלה:', e))
+      }
+
+      // הרשומות
+      await admin.from('documents')
+        .delete()
+        .eq('beneficiary_id', beneficiaryId)
+        .eq('doc_type', docType)
+    }
+
     await admin.from('documents').insert({
       beneficiary_id: beneficiaryId,
       doc_type: docType,

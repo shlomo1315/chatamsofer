@@ -18,6 +18,7 @@ import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
+  AlertTriangle,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -1093,15 +1094,34 @@ export default function PublicPortalPage() {
   const [regSuccess, setRegSuccess] = useState(false)
 
   // Docs upload (for pending users)
+  const [existingDocs, setExistingDocs] = useState<Record<string, { url: string; name: string }>>({})
   const [docFiles, setDocFiles] = useState<Record<string, File | null>>({})
-  const setDocFile = (key: string, f: File | null) => setDocFiles(prev => ({ ...prev, [key]: f }))
+
+  // אזהרת החלפת קובץ: מסמך שכבר קיים במערכת יידרס. מוצגת פעם אחת, בבחירה,
+  // כדי שהמשתמש לא ימחק בטעות מסמך תקין.
+  const [replaceWarn, setReplaceWarn] = useState<{ key: string; file: File } | null>(null)
+
+  const setDocFile = (key: string, f: File | null) => {
+    // קובץ קיים + קובץ חדש נבחר => מבקשים אישור לפני שדורסים
+    if (f && existingDocs[key]) {
+      setReplaceWarn({ key, file: f })
+      return
+    }
+    setDocFiles(prev => ({ ...prev, [key]: f }))
+  }
+
+  /** אישור ההחלפה — מכניס את הקובץ שנבחר בפועל. */
+  const confirmReplace = () => {
+    if (!replaceWarn) return
+    setDocFiles(prev => ({ ...prev, [replaceWarn.key]: replaceWarn.file }))
+    setReplaceWarn(null)
+  }
   const { docTypes: dynDocTypes } = useDocTypes()
   // תווית מסמך: עדיפות לתוויות המתארות, ואז לסוגים מותאמים מההגדרות
   const docLabel = (d: string) => DOC_LABELS[d] ?? dynDocTypes.find(t => t.value === d)?.label ?? 'מסמך'
   const [docsUploading, setDocsUploading] = useState(false)
   const [docsPendingReason, setDocsPendingReason] = useState<'birth' | 'loan' | null>(null)
   // מסמכים שכבר הועלו בעבר (מוצגים בעת כניסה חוזרת לקישור השלמת המסמכים)
-  const [existingDocs, setExistingDocs] = useState<Record<string, { url: string; name: string }>>({})
   const [replaceDoc, setReplaceDoc] = useState<Record<string, boolean>>({})
   // בורר מצב משפחתי — "אחר" פותח את שאר האפשרויות
   const [showOtherMarital, setShowOtherMarital] = useState(false)
@@ -4456,6 +4476,51 @@ export default function PublicPortalPage() {
           </a>
         </p>
       </footer>
+
+      {/* אזהרת החלפת מסמך — הקובץ הקיים יימחק לצמיתות */}
+      {replaceWarn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setReplaceWarn(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-amber-50 border-b border-amber-200 px-5 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <h3 className="font-bold text-slate-900">שימו לב — החלפת מסמך קיים</h3>
+            </div>
+
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <p className="text-sm text-slate-700 leading-relaxed">
+                עבור <strong>{docLabel(replaceWarn.key)}</strong> כבר קיים מסמך במערכת.
+              </p>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                העלאת הקובץ החדש <strong>תחליף את הקובץ הקיים</strong>. הקובץ הקודם יימחק לצמיתות ולא ניתן יהיה לשחזרו.
+              </p>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-[11px] text-slate-500 mb-0.5">הקובץ החדש</p>
+                <p className="text-sm font-semibold text-slate-800 truncate">{replaceWarn.file.name}</p>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReplaceWarn(null)}
+                className="text-sm font-medium text-slate-600 px-4 py-2 rounded-lg hover:bg-white transition-colors"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={confirmReplace}
+                className="text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                כן, החלף את הקובץ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

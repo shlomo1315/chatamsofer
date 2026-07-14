@@ -58,7 +58,7 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
     .from('documents')
     .select('doc_type, file_url, file_name')
     .eq('beneficiary_id', beneficiaryId)
-    .in('doc_type', ['id_husband', 'id_wife'])
+    .in('doc_type', ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx'])
     .order('uploaded_at', { ascending: false })
   if (!data) return []
   // מחזיר doc אחד לכל סוג (הכי חדש)
