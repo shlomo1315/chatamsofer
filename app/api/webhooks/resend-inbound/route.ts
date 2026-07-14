@@ -658,6 +658,34 @@ export async function POST(request: NextRequest) {
     console.error('[resend-inbound] זיהוי קמפיין נכשל:', e)
   }
 
+  // ── תשובת המבקש לבירור הלוואה (office+l<token>@) ──
+  //
+  // ⚠️ חייב לרוץ *לפני* השמירה ולפני זיהוי הבקשות, משתי סיבות:
+  //   1. הנושא הוא "בנוגע לבקשת ההלוואה", ו-detectReqType מחפש את המילה
+  //      "הלוואה" — כלומר המערכת זיהתה את המייל של עצמה כבקשה חדשה, ושלחה
+  //      למשתמש מייל דחייה ("לא צוינה תעודת זהות בשורת הנושא").
+  //   2. התשובה שייכת לצ'אט של ההלוואה, לא לדואר הנכנס. שמירתה שם רק
+  //      מציפה את התיבה בהודעות שכבר מוצגות במקום הנכון.
+  {
+    const loanTok = candidates
+      .map(a => a.match(/^office\+l([A-Za-z0-9_-]{6,})@/i)?.[1])
+      .find(Boolean)
+
+    if (loanTok) {
+      try {
+        const { handleLoanInquiryReply } = await import('@/lib/loanInquiry')
+        const { stripQuotedReply } = await import('@/lib/surveyParse')
+        const raw = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+
+        if (await handleLoanInquiryReply(admin, loanTok, stripQuotedReply(raw))) {
+          return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
+        }
+      } catch (e) {
+        console.error('[resend-inbound] קליטת תשובת בירור נכשלה:', e)
+      }
+    }
+  }
+
   const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
@@ -703,21 +731,6 @@ export async function POST(request: NextRequest) {
         console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
       }
 
-      // ── תשובת המבקש לבירור בקשת הלוואה (office+l<token>@) ──
-      // התשובה נכנסת לשרשור ההתכתבות, והבקשה חוזרת לרשימת ההמתנה לאישור.
-      const loanTok = candidates
-        .map(a => a.match(/^office\+l([A-Za-z0-9_-]{6,})@/i)?.[1])
-        .find(Boolean)
-
-      if (loanTok) {
-        const { handleLoanInquiryReply } = await import('@/lib/loanInquiry')
-        // הציטוט של המייל המקורי מוסר, כדי שהשרשור יכיל רק את מה שנכתב עכשיו
-        const { stripQuotedReply } = await import('@/lib/surveyParse')
-        const clean = stripQuotedReply(replyBody)
-        if (await handleLoanInquiryReply(admin, loanTok, clean)) {
-          return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
-        }
-      }
     } catch (e) {
       console.error('[resend-inbound] gratitude/feedback routing failed:', e)
     }

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink } from 'lucide-react'
+import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
@@ -8,6 +8,7 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
+import Tabs from '@/components/ui/Tabs'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BackButton from '@/components/ui/BackButton'
@@ -95,96 +96,107 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
       {/* שער אישור המשפחה — אם טרם אושרה, מציג פרטים+ייחוס ומאפשר אישור ישיר; חוסם אישור בקשה לפני כן */}
       {b && <FamilyApprovalGate beneficiary={b} />}
 
-      {/* פריסה דו-טורית: פרטי הבקשה מימין · סיכום המשפחה והבירור משמאל.
-          כך ההחלטה מתקבלת עם כל התמונה בלי לצאת מהמסך. */}
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_400px] gap-5 items-start">
-        <div className="flex flex-col gap-5 min-w-0">
-      <Card>
-          <div className="flex items-center gap-2 text-indigo-600 mb-3">
-            <CreditCard size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">פרטי הלוואה</span>
-          </div>
-          <div className="space-y-2 text-sm">
-            <p><span className="text-slate-500">סכום מבוקש: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
-            {loan.approved_amount != null && (
-              <p><span className="text-slate-500">סכום שאושר: </span><span className="font-bold text-green-700 ltr-num">{fmtCur(loan.approved_amount)}</span></p>
-            )}
-            <p><span className="text-slate-500">מספר תשלומים: </span>{loan.installments}</p>
-            <p><span className="text-slate-500">מטרה: </span>{loan.purpose ?? '—'}</p>
-            {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}
-            {loan.declaration && <p><span className="text-slate-500">פנייה קודמת לגמ״ח: </span>{loan.declaration}</p>}
-            <p><span className="text-slate-500">תאריך הגשה: </span><span className="ltr-num">{fmtDate(loan.created_at)}</span></p>
-          </div>
-      </Card>
+      {/* טאבים — אותו רכיב ואותו קו עיצובי ככרטסת הלידה והמוטב */}
+      <Tabs tabs={[
+        {
+          key: 'details', label: 'פרטי הבקשה', accent: 'indigo', icon: <CreditCard size={15} />,
+          content: (
+            <div className="flex flex-col gap-5">
+              <Card>
+                <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                  <CreditCard size={16} />
+                  <span className="text-xs font-semibold text-slate-500 uppercase">פרטי הלוואה</span>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <p><span className="text-slate-500">סכום מבוקש: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
+                  {loan.approved_amount != null && (
+                    <p><span className="text-slate-500">סכום שאושר: </span><span className="font-bold text-green-700 ltr-num">{fmtCur(loan.approved_amount)}</span></p>
+                  )}
+                  <p><span className="text-slate-500">מספר תשלומים: </span>{loan.installments}</p>
+                  <p><span className="text-slate-500">מטרה: </span>{loan.purpose ?? '—'}</p>
+                  {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}
+                  {loan.declaration && <p><span className="text-slate-500">פנייה קודמת לגמ״ח: </span>{loan.declaration}</p>}
+                  <p><span className="text-slate-500">תאריך הגשה: </span><span className="ltr-num">{fmtDate(loan.created_at)}</span></p>
+                </div>
+              </Card>
 
-      {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
-        <Card>
-          <div className="flex items-center gap-2 text-indigo-600 mb-3">
-            <FileText size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים מצורפים</span>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {loan.document_urls.map((d, i) => (
-              <div key={i} className="flex flex-col gap-1 w-24">
-                <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
-                <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
-                <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+              <Card>
+                <div className="flex items-center gap-2 mb-3">
+                  {loan.disbursed_at
+                    ? <CheckCircle2 size={16} className="text-emerald-500" />
+                    : <Clock size={16} className="text-amber-500" />}
+                  <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
+                </div>
+                {loan.disbursed_at ? (
+                  <div className="space-y-1.5 text-sm">
+                    <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
+                    <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
+                    {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
+                )}
+              </Card>
 
-      {idDocs.length > 0 && (
-        <Card>
-          <div className="flex items-center gap-2 text-indigo-600 mb-3">
-            <FileText size={16} />
-            <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {idDocs.find(d => d.doc_type === 'id_husband') && (
-              <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
-            )}
-            {idDocs.find(d => d.doc_type === 'id_wife') && (
-              <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
-            )}
-          </div>
-        </Card>
-      )}
+              {loan.notes && (
+                <Card>
+                  <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
+                  <p className="text-sm text-slate-700">{loan.notes}</p>
+                </Card>
+              )}
+            </div>
+          ),
+        },
+        {
+          key: 'family', label: 'סיכום המשפחה', accent: 'violet', icon: <Users size={15} />,
+          content: <FamilySummary loanId={loan.id} />,
+        },
+        {
+          key: 'inquiry', label: 'בירור מול המבקש', accent: 'sky', icon: <MessageSquare size={15} />,
+          content: <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} applicantName={borrower} />,
+        },
+        ...((Array.isArray(loan.document_urls) && loan.document_urls.length > 0) || idDocs.length > 0 ? [{
+          key: 'docs', label: 'מסמכים', accent: 'sky' as const, icon: <FileText size={15} />,
+          content: (
+            <div className="flex flex-col gap-5">
+              {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים מצורפים</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {loan.document_urls.map((d, i) => (
+                      <div key={i} className="flex flex-col gap-1 w-24">
+                        <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
+                        <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
+                        <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
-      {/* ביצוע הלוואה */}
-      <Card>
-        <div className="flex items-center gap-2 mb-3">
-          {loan.disbursed_at
-            ? <CheckCircle2 size={16} className="text-emerald-500" />
-            : <Clock size={16} className="text-amber-500" />}
-          <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
-        </div>
-        {loan.disbursed_at ? (
-          <div className="space-y-1.5 text-sm">
-            <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
-            <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
-            {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
-        )}
-      </Card>
-
-      {loan.notes && (
-        <Card>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
-          <p className="text-sm text-slate-700">{loan.notes}</p>
-        </Card>
-      )}
-        </div>
-
-        {/* הטור השמאלי — סיכום המשפחה + שרשור הבירור */}
-        <aside className="flex flex-col gap-5 lg:sticky lg:top-4">
-          <FamilySummary loanId={loan.id} />
-          <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} />
-        </aside>
-      </div>
+              {idDocs.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {idDocs.find(d => d.doc_type === 'id_husband') && (
+                      <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+                    )}
+                    {idDocs.find(d => d.doc_type === 'id_wife') && (
+                      <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
+          ),
+        }] : []),
+      ]} />
     </div>
   )
 }

@@ -110,7 +110,10 @@ const getStats = unstable_cache(
   { revalidate: 60 },
 )
 
-const fmtCur = (n: number) => new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
+// "20,000 ₪" — סימן המטבע אחרי המספר. Intl עם style:'currency' שם אותו לפני
+// ("₪20,000"), וזה נקרא הפוך בעברית.
+const fmtCur = (n: number) =>
+  `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 const fmt = (n: number) => n.toLocaleString('he-IL')
 
 function getGreeting() {

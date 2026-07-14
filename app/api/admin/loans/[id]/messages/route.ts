@@ -53,9 +53,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const text = String(body.message ?? '').trim()
   if (!text) return NextResponse.json({ error: 'ההודעה ריקה' }, { status: 400 })
 
+  // שם הנציג — מוצג בצ'אט בממשק הניהול (לא נשלח למבקש).
+  // ctx.email אינו מתאים: הוא הציג "4363773@gmail.com" במקום שם.
+  const { data: profile } = await db
+    .from('profiles').select('full_name').eq('id', ctx.userId).maybeSingle()
+
   const res = await sendLoanInquiry(db, id, text, {
     id: ctx.userId,
-    name: ctx.email ?? 'צוות',
+    name: String(profile?.full_name ?? '').trim() || 'צוות הגמ״ח',
   })
 
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 })

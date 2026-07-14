@@ -49,7 +49,9 @@ export default function PendingTasksPanel({ count }: { count: number }) {
       {/* KPI Card — same look as the other KpiCards */}
       <button
         onClick={handleOpen}
-        className="group relative flex flex-col gap-3 rounded-2xl border border-slate-100 bg-amber-50 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all text-right w-full cursor-pointer"
+        // אותו צל בדיוק כמו KpiCard — קודם היה רק hover:shadow-md, ולכן
+        // הקובייה נראתה שטוחה לצד השכנות שלה.
+        className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-amber-50 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200 text-right w-full cursor-pointer"
       >
         <div className="flex items-center justify-between">
           <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500 text-white shadow-sm">

@@ -19,9 +19,11 @@ interface Msg {
 const fmt = (d: string) =>
   new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
-export default function LoanInquiryPanel({ loanId, hasEmail, onSent }: {
+export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSent }: {
   loanId: string
   hasEmail: boolean
+  /** שם המבקש — מוצג על ההודעות שהוא שלח, במקום "המבקש" הגנרי. */
+  applicantName?: string
   onSent?: () => void
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([])
@@ -69,9 +71,9 @@ export default function LoanInquiryPanel({ loanId, hasEmail, onSent }: {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-[560px]">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-[600px]">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-        <MessageSquare size={16} className="text-emerald-600" />
+        <MessageSquare size={16} className="text-sky-600" />
         <h3 className="font-semibold text-slate-900 text-sm">בירור מול המבקש</h3>
         {msgs.length > 0 && (
           <span className="text-xs text-slate-400 mr-auto">{msgs.length} הודעות</span>
@@ -94,21 +96,38 @@ export default function LoanInquiryPanel({ loanId, hasEmail, onSent }: {
             </p>
           </div>
         ) : (
-          msgs.map(m => (
-            <div
-              key={m.id}
-              className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 ${
-                m.direction === 'staff'
-                  ? 'self-end bg-emerald-600 text-white rounded-bl-md'
-                  : 'self-start bg-white border border-slate-200 text-slate-800 rounded-br-md'
-              }`}
-            >
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.body}</p>
-              <p className={`text-[10px] mt-1.5 ${m.direction === 'staff' ? 'text-emerald-100' : 'text-slate-400'}`}>
-                {m.direction === 'staff' ? (m.sender_name || 'צוות') : 'המבקש'} · {fmt(m.created_at)}
-              </p>
-            </div>
-          ))
+          msgs.map(m => {
+            const isStaff = m.direction === 'staff'
+            // מי כתב: הנציג בשמו · המבקש בשמו. לא כתובת מייל — היא לא מוסיפה
+            // מידע כאן וגרמה לשורה להתבלגן.
+            const who = isStaff
+              ? (m.sender_name || 'צוות הגמ״ח')
+              : (applicantName || 'המבקש')
+
+            return (
+              <div
+                key={m.id}
+                className={`flex flex-col max-w-[85%] ${isStaff ? 'self-end items-end' : 'self-start items-start'}`}
+              >
+                {/* מי כתב — מחוץ לבועה, כדי שהבועה תישאר נקייה */}
+                <span className={`text-[11px] font-semibold mb-1 px-1 ${isStaff ? 'text-sky-700' : 'text-slate-600'}`}>
+                  {who}
+                </span>
+
+                <div
+                  className={`rounded-2xl px-3.5 py-2.5 ${
+                    isStaff
+                      ? 'bg-sky-500 text-white rounded-bl-md'
+                      : 'bg-white border border-slate-200 text-slate-800 rounded-br-md'
+                  }`}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.body}</p>
+                </div>
+
+                <span className="text-[10px] text-slate-400 mt-1 px-1">{fmt(m.created_at)}</span>
+              </div>
+            )
+          })
         )}
         <div ref={endRef} />
       </div>
@@ -137,14 +156,14 @@ export default function LoanInquiryPanel({ loanId, hasEmail, onSent }: {
               placeholder="כתבו מה חסר או מה נדרש להשלים…"
               rows={2}
               disabled={sending}
-              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 focus:bg-white transition-all disabled:opacity-60"
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-400 focus:bg-white transition-all disabled:opacity-60"
             />
             <button
               type="button"
               onClick={send}
               disabled={sending || !text.trim()}
               title="שליחה (Enter)"
-              className="w-10 h-10 shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-10 h-10 shrink-0 rounded-xl bg-sky-500 hover:bg-sky-600 text-white flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
