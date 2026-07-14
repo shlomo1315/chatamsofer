@@ -2196,7 +2196,7 @@ export default function PublicPortalPage() {
                 ולא על חצאי עדויות.
               </p>
               <p className="text-[15px] font-semibold text-red-800 leading-8 bg-white/80 border-r-4 border-red-400 rounded-lg px-4 py-3" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
-                גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור על החתם סופר.
+                גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
               </p>
             </div>
             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-all duration-150">
