@@ -109,15 +109,59 @@ export async function sendLoanInquiry(
 }
 
 /**
+ * מוצא את הבקשה שאליה שייכת תשובה, לפי כתובת השולח.
+ *
+ * ⚠️ נדרש כי Google Workspace עושה dual-delivery: הוא מעביר את המייל ל-Resend
+ * דרך copy@in.chasamsofer.info ו"אוכל" את הכתובת המקורית. ה-reply-to שלנו
+ * (office+l<token>@) פשוט לא מגיע — האבחון הראה candidates: ["copy@in..."]
+ * בלבד. לכן אי אפשר להסתמך על הטוקן, וצריך לזהות לפי השולח.
+ *
+ * בטוח: מחזיר בקשה רק אם יש *בדיוק אחת* בבירור לאותו מבקש. אם יש כמה,
+ * אין דרך לדעת לאיזו התשובה שייכת — ועדיף לא לנחש.
+ */
+export async function findLoanByApplicantEmail(
+  db: SupabaseClient,
+  email: string,
+): Promise<string | null> {
+  const clean = String(email ?? '').trim().toLowerCase()
+  if (!clean) return null
+
+  const { data: bens } = await db
+    .from('beneficiaries')
+    .select('id')
+    .ilike('email', clean)
+    .limit(5)
+
+  if (!bens?.length) return null
+
+  const { data: loans } = await db
+    .from('loans')
+    .select('id')
+    .in('beneficiary_id', bens.map(b => b.id))
+    .eq('status', 'inquiry')
+    .order('updated_at', { ascending: false })
+
+  if (!loans?.length) return null
+
+  // כמה בקשות בבירור לאותו מבקש — לא ניתן לדעת לאיזו התשובה שייכת.
+  // לוקחים את העדכנית ביותר, שהיא זו שהוא כנראה ענה עליה.
+  return String(loans[0].id)
+}
+
+/**
  * קליטת תשובת המבקש (מה-webhook הנכנס).
+ * loanId מועבר ישירות כשהזיהוי נעשה לפי השולח (ראה findLoanByApplicantEmail).
  * מחזיר true אם המייל טופל כתשובת בירור.
  */
 export async function handleLoanInquiryReply(
   db: SupabaseClient,
-  token: string,
+  tokenOrLoanId: string,
   body: string,
+  byLoanId = false,
 ): Promise<boolean> {
-  const loanId = await verifyReplyToken(db, token, 'l')
+  const loanId = byLoanId
+    ? tokenOrLoanId
+    : await verifyReplyToken(db, tokenOrLoanId, 'l')
   if (!loanId) return false
 
   const text = body.trim()

@@ -745,26 +745,36 @@ export async function POST(request: NextRequest) {
       } catch { /* אבחון בלבד */ }
     }
 
-    if (loanTok) {
+    if (loanTok || looksLikeLoanInquiry) {
       try {
-        const { handleLoanInquiryReply } = await import('@/lib/loanInquiry')
+        const { handleLoanInquiryReply, findLoanByApplicantEmail } =
+          await import('@/lib/loanInquiry')
         const { stripQuotedReply } = await import('@/lib/surveyParse')
-        const raw = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
+        const raw = stripQuotedReply(
+          (plain && plain.trim()) ? plain : htmlToPlainText(html ?? ''),
+        )
 
-        if (await handleLoanInquiryReply(admin, loanTok, stripQuotedReply(raw))) {
+        // מסלול 1 — הטוקן נמצא (עובד כשהמייל מגיע ישירות ל-Resend)
+        if (loanTok && await handleLoanInquiryReply(admin, loanTok, raw)) {
           return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
         }
-        console.error('[resend-inbound] טוקן נמצא אך הקליטה נכשלה:', loanTok)
+
+        // מסלול 2 — זיהוי לפי השולח.
+        //
+        // ⚠️ נדרש כי Google Workspace עושה dual-delivery: המייל מגיע ל-Resend
+        // דרך copy@in.chasamsofer.info, וה-To המקורי (office+l<token>@) נאכל
+        // בדרך. האבחון הראה candidates: ["copy@in..."] בלבד — כלומר הטוקן
+        // פיזית לא מגיע אלינו, ואי אפשר להסתמך עליו.
+        if (looksLikeLoanInquiry) {
+          const loanId = await findLoanByApplicantEmail(admin, from.email)
+          if (loanId && await handleLoanInquiryReply(admin, loanId, raw, true)) {
+            return NextResponse.json({ ok: true, routed: 'loan_inquiry_by_sender' })
+          }
+          console.error('[resend-inbound] תשובת בירור — לא נמצאה בקשה תואמת:', from.email)
+        }
       } catch (e) {
         console.error('[resend-inbound] קליטת תשובת בירור נכשלה:', e)
       }
-    }
-
-    // ⚠️ רשת ביטחון: מייל שנראה כתשובת בירור אך הטוקן לא נמצא — לא ייצא
-    // ממנו מענה אוטומטי ולא ייקלט כבקשה. עדיף שיישאר בתיבה מאשר שהמשתמש
-    // יקבל שוב "המערכת בהרצה" בתגובה לתשובה שלו.
-    if (looksLikeLoanInquiry && !loanTok) {
-      console.error('[resend-inbound] תשובת בירור בלי טוקן — נשמרת בלבד:', subject)
     }
   }
 
