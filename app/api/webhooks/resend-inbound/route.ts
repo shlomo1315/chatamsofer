@@ -974,12 +974,16 @@ export async function POST(request: NextRequest) {
   // ── מענה אוטומטי זמני ("המערכת בפיתוח") ──
   // נשלח רק אם ההגדרה מופעלת, ורק לשולח שאינו מזוהה כמוטב במערכת.
   //
+  // ⚠️ נשלח *רק* לתיבת המשרד (office / main). שאר התיבות (8, 9, 10, יריד וכו')
+  // פעילות ומקבלות טיפול רגיל — אסור לענות להן "המערכת בהרצה".
+  //
   // ⚠️ לא נשלח על מיילים שהם בקשה (לידה/הלוואה/סיוע) — הם מקבלים מענה
   // ייעודי (אישור קליטה או פירוט מה חסר), ומענה גנרי היה מסתיר אותו.
   try {
     const isRequest = isRequestSubject(subject)
+    const isOfficeMailbox = departmentByEmail(resolvedToEmail)?.key === 'main'
 
-    if (!isRequest) {
+    if (!isRequest && isOfficeMailbox) {
       const { maybeSendMaintenanceReply } = await import('@/lib/maintenanceReply')
 
       // מזוהה במערכת? (לפי כתובת המייל)
