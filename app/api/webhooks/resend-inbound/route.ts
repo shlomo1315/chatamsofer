@@ -754,8 +754,15 @@ export async function POST(request: NextRequest) {
           (plain && plain.trim()) ? plain : htmlToPlainText(html ?? ''),
         )
 
+        // מזהי השרשור מכותרות המייל הנכנס — לשרשור הודעות ההמשך שלנו לאותה שיחה.
+        const threadMeta = {
+          messageId: getHeader(data.headers, 'message-id').trim() || undefined,
+          references: (getHeader(data.headers, 'references').trim()
+            || getHeader(data.headers, 'in-reply-to').trim()) || undefined,
+        }
+
         // מסלול 1 — הטוקן נמצא (עובד כשהמייל מגיע ישירות ל-Resend)
-        if (loanTok && await handleLoanInquiryReply(admin, loanTok, raw)) {
+        if (loanTok && await handleLoanInquiryReply(admin, loanTok, raw, false, threadMeta)) {
           return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
         }
 
@@ -767,7 +774,7 @@ export async function POST(request: NextRequest) {
         // פיזית לא מגיע אלינו, ואי אפשר להסתמך עליו.
         if (looksLikeLoanInquiry) {
           const loanId = await findLoanByApplicantEmail(admin, from.email)
-          if (loanId && await handleLoanInquiryReply(admin, loanId, raw, true)) {
+          if (loanId && await handleLoanInquiryReply(admin, loanId, raw, true, threadMeta)) {
             return NextResponse.json({ ok: true, routed: 'loan_inquiry_by_sender' })
           }
           console.error('[resend-inbound] תשובת בירור — לא נמצאה בקשה תואמת:', from.email)

@@ -14,6 +14,8 @@ export interface MailOptions {
   scheduledAt?: string // ISO 8601 — תזמון שליחה דרך Resend (אם מוגדר, המייל יישלח במועד זה)
   tracking?: boolean   // מעקב פתיחות/קליקים (דיוור בלבד; מיילים תפעוליים ללא מעקב)
   unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
+  inReplyTo?: string   // שרשור: Message-ID של ההודעה שאליה זו תשובה
+  references?: string  // שרשור: שרשרת ה-Message-IDs הקודמים בשיחה (מופרדים ברווח)
 }
 
 // תיעוד מייל יוצא ב-Supabase כדי שיופיע בתיבת "דואר יוצא" של המחלקה. לא חוסם.
@@ -115,6 +117,10 @@ export async function deliverMail(
       headers: {
         ...unsubHeaders,
         'X-Entity-Ref-ID': `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        // שרשור מייל — In-Reply-To / References גורמים ללקוח המייל של הנמען
+        // לשרשר את ההודעה תחת אותה שיחה, במקום ליצור שרשור חדש.
+        ...(options?.inReplyTo ? { 'In-Reply-To': options.inReplyTo } : {}),
+        ...(options?.references ? { References: options.references } : {}),
       },
       ...(attachments?.length
         ? { attachments: attachments.map((a) => ({
