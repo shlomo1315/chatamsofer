@@ -40,14 +40,18 @@ export async function GET(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return jsonCors({ error: 'שגיאת שרת' }, { status: 500 }, origin)
 
-  // 1. מוטב רשום — לפי ת"ז הרשומה או ת"ז בן/בת הזוג (נשואים)
+  // 1. מוטב רשום (הבעל/הרשום או בן/בת הזוג) — נחסם מהגשה דרך נדרים.
+  //    מוחזר כמו קודם, בלי is_child, כדי שנדרים ימשיך לחסום אותו.
   const found = await resolveBeneficiaryByEnteredId<{ id: string }>(admin, idParam, 'id')
   if (found) return jsonCors({ found: true, message: EXISTS_MESSAGE }, undefined, origin)
 
-  // 2. קיים כילד בתוך children JSONB של רשומה אחרת
+  // 2. קיים כילד בתוך children JSONB של רשומה אחרת — *ילד של צאצא*.
+  //    מוחזר עם is_child=true + שם ההורה ושרשרת הייחוס, כדי שנדרים ינתב אותו
+  //    לרישום מהיר (ולא יחסום). זהה למידע שכבר מחזיר פורטל הרישום שלנו
+  //    (app/api/portal/lookup) עבור אותו מסלול בדיוק.
   const { data: rows, error } = await admin
     .from('beneficiaries')
-    .select('children')
+    .select('full_name, family_name, lineage_chain, children')
     .not('children', 'is', null)
   if (error) {
     console.error('[nedarim-lookup] db error:', error.message)
@@ -55,8 +59,23 @@ export async function GET(request: NextRequest) {
   }
   for (const row of rows ?? []) {
     const kids: Record<string, string>[] = Array.isArray(row.children) ? row.children : []
-    if (kids.some((k) => (k.id_number ?? '').replace(/\D/g, '') === idParam)) {
-      return jsonCors({ found: true, message: EXISTS_MESSAGE }, undefined, origin)
+    const match = kids.find((k) => (k.id_number ?? '').replace(/\D/g, '') === idParam)
+    if (match) {
+      const parentName = [row.family_name, row.full_name].filter(Boolean).join(' ')
+      return jsonCors({
+        found: true,
+        is_child: true,
+        parent_name: parentName,
+        // סדר הדורות עד ההורה: [{ generation, name, relation }]
+        lineage_chain: Array.isArray(row.lineage_chain) ? row.lineage_chain : null,
+        // פרטי הילד — לנוחות מילוי מראש בטופס הרישום המהיר
+        child: {
+          name: match.name ?? '',
+          id_number: idParam,
+          birth_date: match.birth_date ?? '',
+          gender: match.gender ?? '',
+        },
+      }, undefined, origin)
     }
   }
 
