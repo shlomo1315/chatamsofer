@@ -4,7 +4,7 @@
 // הכבד כולו. כך ההידרציה של הדף מהירה ותפריט הסטטוס נפתח מיד.
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, ChevronDown, CheckCircle2 } from 'lucide-react'
+import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
@@ -136,11 +136,15 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   const canEdit = useCan('maternity', 'edit')
   const [open, setOpen] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  // חלונית סיבת דחייה — נפתחת לפני מעבר לסטטוס 'cancelled' (דחייה),
+  // בין אם מבקשה ממתינה ובין אם מבטלים לידה שכבר אושרה.
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
-  const setStatus = async (next: MaternityStatus) => {
+  const setStatus = async (next: MaternityStatus, reason?: string) => {
     // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר לידה גם אם היחוס
     // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד בכפתור "אישור יחוס".
     // ── UI אופטימי: סוגרים מיד ומראים הצלחה, וכל העבודה מול השרת רצה ברקע ──
@@ -153,7 +157,11 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
         // עדכון סטטוס התיק — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
         const res = await fetch('/api/admin/request-status', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'maternity', id: aid.id, status: next }),
+          body: JSON.stringify({
+            type: 'maternity', id: aid.id, status: next,
+            // סיבת הדחייה נשמרת בתיק (עמודת rejection_reason)
+            ...(reason ? { extra: { rejection_reason: reason } } : {}),
+          }),
         })
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
 
@@ -174,6 +182,13 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
               body: JSON.stringify({ beneficiaryId: mother.id }),
             }).catch(() => {})
           }
+        }
+        // דחיית לידה עם סיבה — שולח ליולדת מייל מעוצב עם סיבת הדחייה
+        if (next === 'cancelled' && reason) {
+          void fetch('/api/admin/request-rejected', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: aid.id, reason }),
+          }).catch(() => {})
         }
         // רק כשלא מדובר בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
         if (!(advance && next !== 'pending')) router.refresh()
@@ -219,8 +234,64 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 
+  // בחירת אפשרות — דחייה ('cancelled') נפתחת דרך חלונית סיבה; השאר מיד.
+  const onOption = (value: MaternityStatus) => {
+    if (value === 'cancelled') {
+      setOpen(false)
+      setRejectReason('')
+      setRejectOpen(true)
+      return
+    }
+    void setStatus(value)
+  }
+
+  const confirmReject = () => {
+    const reason = rejectReason.trim()
+    if (!reason) return
+    setRejectOpen(false)
+    void setStatus('cancelled', reason)
+  }
+
   return (
     <div className="relative inline-block">
+      {rejectOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+          onClick={() => setRejectOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle size={20} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">דחיית בקשת לידה</h3>
+                <p className="text-xs text-slate-500">הסיבה תופיע במייל שיישלח ליולדת</p>
+              </div>
+            </div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">סיבת הדחייה</label>
+            <textarea
+              autoFocus
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={4}
+              placeholder="פרטו את סיבת הדחייה — הטקסט יישלח ליולדת כפי שהוא"
+              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm
+                         focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
+            />
+            <div className="mt-4 flex justify-start gap-2">
+              <button type="button" onClick={confirmReject} disabled={!rejectReason.trim()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-sm
+                           font-bold text-white transition hover:bg-red-700 disabled:opacity-40">
+                <X size={15} /> אישור דחייה
+              </button>
+              <button type="button" onClick={() => setRejectOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold
+                           text-slate-600 transition hover:bg-slate-50">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {showSuccess && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
@@ -255,7 +326,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
             {options.filter(o => o.value !== aid.status).map(o => {
               const OIcon = o.icon
               return (
-                <button key={o.value} onClick={() => setStatus(o.value)}
+                <button key={o.value} onClick={() => onOption(o.value)}
                   className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-right transition-colors ${o.cls}`}>
                   <OIcon size={15} /> {o.label}
                 </button>

@@ -19,7 +19,7 @@ const VALID: Record<string, string[]> = {
 // שדות נוספים מותרים לעדכון לכל סוג (whitelist — מונע עדכון עמודות לא צפויות)
 const EXTRA_ALLOWED: Record<string, string[]> = {
   loan: ['approved_amount'],
-  maternity: [],
+  maternity: ['rejection_reason'],
 }
 
 // עדכון סטטוס בקשת הלוואה/לידה + תיעוד מי המזכיר שטיפל ומתי.

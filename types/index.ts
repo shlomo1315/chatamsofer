@@ -176,6 +176,8 @@ export interface MaternityAid {
   card_center_id?: string
   approved_by?: string
   notes?: string
+  // סיבת דחייה — מוזנת בעת דחיית הבקשה (סטטוס 'cancelled') ונשלחת ליולדת במייל
+  rejection_reason?: string | null
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary

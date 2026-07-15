@@ -1073,6 +1073,47 @@ export function birthApprovedEmail(
   }
 }
 
+// ─── דחיית בקשת לידה — מייל ליולדת עם סיבת הדחייה ─────────────────────────────
+// נשלח כשדוחים בקשת לידה (סטטוס 'cancelled'), בין אם מבקשה ממתינה ובין אם
+// מבטלים לידה שכבר אושרה. הפנייה היא ליולדת (מרת), והסיבה שהוזנה מוצגת בבירור.
+export function birthRejectedEmail(opts: {
+  family_name?: string | null
+  mother_name?: string | null   // שם האשה (spouse_name / full_name)
+  reason?: string | null
+}): BuiltEmail {
+  const greet = greetMrs(opts.family_name, opts.mother_name)
+  const reason = (opts.reason ?? '').trim()
+  const officeLink = `<a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>`
+  const reasonBlock = reason ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:14px;font-weight:900;">סיבת הדחייה</p>
+        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.8;white-space:pre-wrap;">${escapeHtml(reason)}</p>
+      </td></tr>
+    </table>` : ''
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
+      לאחר בדיקת בקשת הלידה שהוגשה, אנו מצטערים להודיע כי הבקשה <strong>נדחתה</strong>.
+    </p>
+    ${reasonBlock}
+    <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">
+      לבירורים ולפרטים נוספים ניתן לפנות למשרד בכתובת ${officeLink}.
+    </p>
+    ${noReplyBox()}`
+  return {
+    subject: 'בנוגע לבקשת הלידה — היכל החתם סופר',
+    html: shell({
+      preheader: 'בנוגע לבקשת הלידה שהגשתם',
+      accent: '#dc2626',
+      title: 'בנוגע לבקשת הלידה',
+      subtitle: 'עזר יולדות · היכל החתם סופר',
+      body,
+    }),
+  }
+}
+
 // ─── אישור כרטיס מזון ליולדת (שובר) ───────────────────────────────────────────
 // בלוק "הפעלת הכרטיס" — הוראה מודגשת המשותפת למיילי הכרטיס. חובה להפעיל את הכרטיס דרך המוקד
 // הטלפוני, ורק ממספרי הטלפון המעודכנים במערכת. אם נמסרו מספרים — הם מוצגים במפורש (בכיוון LTR).
