@@ -91,11 +91,23 @@ export async function POST(request: NextRequest) {
     const recipients = Array.isArray(body?.recipients) ? body.recipients : []
 
     if (!name) return NextResponse.json({ error: 'יש לתת שם לקבוצה' }, { status: 400 })
-    if (!recipients.length) return NextResponse.json({ error: 'לא נבחרו נמענים' }, { status: 400 })
+    // קבוצה ריקה — נוצרת ממסך ניהול הקבוצות, וממלאים אותה בחברים אחר כך.
+    const allowEmpty = body?.allowEmpty === true
+    if (!recipients.length && !allowEmpty) {
+      return NextResponse.json({ error: 'לא נבחרו נמענים' }, { status: 400 })
+    }
 
     const { data: list, error: listErr } = await db
       .from('contact_lists').insert({ name }).select('id').single()
-    if (listErr || !list) return NextResponse.json({ error: 'יצירת הקבוצה נכשלה' }, { status: 500 })
+    if (listErr || !list) {
+      if (listErr && /duplicate|unique/i.test(listErr.message)) {
+        return NextResponse.json({ error: 'כבר קיימת קבוצה בשם הזה' }, { status: 409 })
+      }
+      return NextResponse.json({ error: 'יצירת הקבוצה נכשלה' }, { status: 500 })
+    }
+    if (!recipients.length) {
+      return NextResponse.json({ ok: true, listId: list.id, imported: 0 })
+    }
 
     const seen = new Set<string>()
     const rows = recipients
