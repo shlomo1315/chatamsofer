@@ -13,6 +13,7 @@ import StatusControl from './StatusControl'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
+import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
@@ -379,6 +380,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <LineageReliabilityHeaderButton beneficiaryId={id} />
           <StatusControl id={id} status={beneficiary.eligibility_status} advance />
           <BeneficiaryActions id={id} name={fullName} />
         </div>
