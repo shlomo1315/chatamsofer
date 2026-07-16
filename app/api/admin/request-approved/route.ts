@@ -5,7 +5,7 @@ import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
-import { buildMaternityVouchers, buildCardVoucherOnly } from '@/lib/maternityVoucher'
+import { buildMaternityVouchers } from '@/lib/maternityVoucher'
 import { recoveryDaysOf } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
   // ── אישור לידה: כל המוקדים הפעילים מוצגים בשובר (אין יותר מלאי/שריון/בחירת מוקד) ──
   // המודל החדש: היולדת מקבלת כרטיס תמיד, ויכולה לגשת לכל אחד מהמוקדים לקבלתו.
   const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null }
-  const isSilent = (birth.birth_type ?? 'live') === 'silent'
   let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
   let serial = birth.voucher_serial ?? null
   if (type === 'maternity') {
@@ -120,10 +119,8 @@ export async function POST(request: NextRequest) {
               serial,
               centers,
             }
-            // לידה שקטה — שובר כרטיס מזון בלבד (בלי שובר הבראה); רגילה — שניהם.
-            attachments = isSilent
-              ? await buildCardVoucherOnly(voucherInput)
-              : await buildMaternityVouchers(voucherInput)
+            // תמיד — שובר כרטיס מזון + שובר הבראה (כולל לידה שקטה)
+            attachments = await buildMaternityVouchers(voucherInput)
           } catch (e) { console.error('[request-approved] voucher build failed:', e) }
         }
 
