@@ -11,10 +11,6 @@ import {
 
 const ctx = {
   recoveryHomes: ['אם וילד', 'טלזסטון', 'ביכורים'],
-  centers: [
-    { id: 'c1', name: 'מוקד בית שמש רמה ב', city: 'בית שמש' },
-    { id: 'c2', name: 'מוקד בני ברק', city: 'בני ברק' },
-  ],
   pending: false,
 }
 
@@ -72,8 +68,6 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
     d = fill(d, 'שם הנולד/ת', 'יעקב')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456782')  // ת"ז תקינה
     d = fill(d, 'בית החלמה', 'טלזסטון')
-    d = fill(d, 'מספר מוקד', '1')
-
     const r = validateRequest('birth', parseDraft('birth', d, ctx), ctx)
     if (!r.ok) console.error('\n[birth] שגיאות:', r.errors)
     expect(r.ok).toBe(true)
@@ -141,8 +135,6 @@ describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט 
     d = fill(d, 'מין הנולד/ת', 'בן')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456789')  // ספרת ביקורת שגויה (התקינה: 2)
     d = fill(d, 'בית החלמה', 'טלזסטון')
-    d = fill(d, 'מספר מוקד', '1')
-
     const r = validateRequest('birth', parseDraft('birth', d, ctx), ctx)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.errors.join(' ')).toContain('תעודת הזהות')
@@ -154,8 +146,6 @@ describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט 
     d = fill(d, 'מין הנולד/ת', 'בן')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456782')
     d = fill(d, 'בית החלמה', 'בית שלא קיים')
-    d = fill(d, 'מספר מוקד', '1')
-
     const r = validateRequest('birth', parseDraft('birth', d, ctx), ctx)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.errors.join(' ')).toContain('בית החלמה')

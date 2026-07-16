@@ -47,10 +47,8 @@ export default function NewMaternityPage() {
   const [noBaby2Name, setNoBaby2Name] = useState(false)
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
-  const [cardCenterId, setCardCenterId] = useState('')
   const [notes, setNotes] = useState('')
   const [noBabyName, setNoBabyName] = useState(false)
-  const [cardCenters, setCardCenters] = useState<{ id: string; name: string; city: string | null }[]>([])
   const [certFile, setCertFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -68,13 +66,6 @@ export default function NewMaternityPage() {
           .map(r => r.name as string)
         setRecoveryHomes([...new Set([...RECOVERY_HOMES, ...allowed])])
       }
-    })
-  }, [supabase])
-
-  // מוקדי חלוקת הכרטיסים הפעילים — זהה לטופס הציבורי (בחירת מוקד לקבלת הכרטיס)
-  useEffect(() => {
-    supabase.from('card_centers').select('id, name, city').eq('is_active', true).order('name').then(({ data }) => {
-      if (Array.isArray(data)) setCardCenters(data.map(c => ({ id: c.id as string, name: c.name as string, city: (c.city as string) ?? null })))
     })
   }, [supabase])
 
@@ -154,7 +145,6 @@ export default function NewMaternityPage() {
     }
     if (!babyBirthDate) e.babyBirthDate = 'תאריך לידת תינוק חובה'
     if (!recoveryHome) e.recoveryHome = 'יש לבחור בית החלמה'
-    if (cardCenters.length > 0 && !cardCenterId) e.cardCenterId = 'יש לבחור מוקד לקבלת הכרטיס'
     if (!certFile) e.certFile = 'יש לצרף אישור לידה'
     return e
   }
@@ -218,7 +208,6 @@ export default function NewMaternityPage() {
           recovery_eligibility_days: defaultRecoveryDays(isTwins),
           birth_certificate_url: certUrl ?? null,
           recovery_home: recoveryHome || null,
-          card_center_id: cardCenterId || null,
           notes: notes.trim() || null,
           six_weeks_end: sixEnd,
           total_weeks: 6,
@@ -555,23 +544,6 @@ export default function NewMaternityPage() {
               </div>
               {fieldErrors.recoveryHome && <p className="text-xs text-red-600">{fieldErrors.recoveryHome}</p>}
             </div>
-
-            {/* Card center — מוקד לקבלת הכרטיס (זהה לטופס הציבורי) */}
-            {cardCenters.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium text-slate-600">מוקד לקבלת הכרטיס <span className="text-red-500">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {cardCenters.map(ctr => (
-                    <button key={ctr.id} type="button"
-                      onClick={() => { setCardCenterId(cardCenterId === ctr.id ? '' : ctr.id); clearErr('cardCenterId') }}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${cardCenterId === ctr.id ? 'bg-indigo-600 border-indigo-600 text-white' : `${fieldErrors.cardCenterId ? 'border-red-400' : 'border-slate-300'} text-slate-600 hover:bg-slate-50`}`}>
-                      {ctr.name}{ctr.city ? ` · ${ctr.city}` : ''}
-                    </button>
-                  ))}
-                </div>
-                {fieldErrors.cardCenterId && <p className="text-xs text-red-600">{fieldErrors.cardCenterId}</p>}
-              </div>
-            )}
 
             {/* Notes — הערות (לא חובה) */}
             <div className="flex flex-col gap-2">

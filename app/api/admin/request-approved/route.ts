@@ -5,7 +5,7 @@ import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
-import { buildMaternityVouchers } from '@/lib/maternityVoucher'
+import { buildMaternityVouchers, buildCardVoucherOnly } from '@/lib/maternityVoucher'
 import { recoveryDaysOf } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
@@ -50,23 +50,22 @@ export async function POST(request: NextRequest) {
   const ben = (req as unknown as Record<string, unknown>).beneficiary as (RequestApprovedBeneficiary & { id?: string; email?: string | null; eligibility_status?: string }) | null
   if (!ben?.id) return NextResponse.json({ error: 'נתמך לא נמצא' }, { status: 404 })
 
-  // ── אישור לידה: איתור המוקד שנבחר + בדיקת מלאי + מספר סידורי ──
-  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; card_center_id?: string | null; voucher_serial?: string | null }
-  let center: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null } | null = null
-  let stockAvailable = false
+  // ── אישור לידה: כל המוקדים הפעילים מוצגים בשובר (אין יותר מלאי/שריון/בחירת מוקד) ──
+  // המודל החדש: היולדת מקבלת כרטיס תמיד, ויכולה לגשת לכל אחד מהמוקדים לקבלתו.
+  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null }
+  const isSilent = (birth.birth_type ?? 'live') === 'silent'
+  let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
   let serial = birth.voucher_serial ?? null
   if (type === 'maternity') {
-    if (birth.card_center_id) {
-      const { data: ctr } = await admin
-        .from('card_centers')
-        .select('id, name, city, address, pickup_days, pickup_hours, stock')
-        .eq('id', birth.card_center_id)
-        .maybeSingle()
-      if (ctr) {
-        center = { name: ctr.name, city: ctr.city, address: ctr.address, pickup_days: ctr.pickup_days, pickup_hours: ctr.pickup_hours }
-        stockAvailable = (ctr.stock ?? 0) > 0
-      }
-    }
+    // כל המוקדים הפעילים — מוצגים בשובר ובמייל; היולדת בוחרת לאיזה לגשת
+    const { data: ctrs } = await admin
+      .from('card_centers')
+      .select('name, city, address, pickup_days, pickup_hours')
+      .eq('is_active', true)
+      .order('name')
+    centers = (ctrs ?? []).map(c => ({
+      name: c.name, city: c.city, address: c.address, pickup_days: c.pickup_days, pickup_hours: c.pickup_hours,
+    }))
     // מספר סידורי: תאריך הלידה DDMMYYYY + נקודה + 4 ספרות אחרונות של ת.ז היולדת (האשה)
     // (למשל 22062026.4488)
     if (!serial) {
@@ -81,20 +80,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ── עדכונים מהירים ב-DB (חובה לפני התגובה — כדי שהמסך יתעדכן מיד) ──
-  // עדכון הלידה: מספר סידורי + סטטוס שובר; אם יש מלאי — מונה "ממתינים לאיסוף" +1
+  // ── עדכון מהיר ב-DB: מספר סידורי + סטטוס שובר 'issued' (אין יותר מלאי) ──
   if (type === 'maternity') {
     await admin.from('maternity_aids').update({
       voucher_serial: serial,
-      card_voucher_status: stockAvailable ? 'issued' : 'awaiting_stock',
+      card_voucher_status: 'issued',
     }).eq('id', id).then(undefined, () => {})
-    if (stockAvailable && birth.card_center_id) {
-      // שריון מיידי של כרטיס: מורידים כרטיס אחד מהמלאי של המוקד כבר בעת אישור הלידה
-      // (המשפחה תבוא לאסוף אותו — הכרטיס כבר "תפוס" עבורה), ומעלים מונה ממתינים לאיסוף.
-      // החיבור בטלפון לא יוריד שוב מהמלאי כדי למנוע הורדה כפולה.
-      await admin.rpc('decrement_card_center_stock', { p_center_id: birth.card_center_id }).then(undefined, () => {})
-      await admin.rpc('bump_center_pending_pickups', { p_center_id: birth.card_center_id, p_delta: 1 }).then(undefined, () => {})
-    }
   }
 
   // אישור בקשה בלבד — אינו מאשר יחוס. אישור המשפחה ("אישור יחוס") נעשה בנפרד
@@ -112,23 +103,27 @@ export async function POST(request: NextRequest) {
         const benPhones = [(ben as { phone?: string | null }).phone, (ben as { spouse_phone?: string | null }).spouse_phone, (ben as { phone2?: string | null }).phone2]
         const mail = type === 'loan'
           ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { center, stockAvailable, serial, phones: benPhones })
+          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones })
 
-        // אישור לידה (רגילה, לא שקטה) → שובר הבראה תמיד; שובר כרטיס רק אם יש מלאי במוקד שנבחר
+        // אישור לידה → תמיד שובר כרטיס מזון (גם בלידה שקטה). שובר הבראה — רק בלידה רגילה.
         let attachments: MailAttachment[] | undefined
-        if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
+        if (type === 'maternity') {
           try {
             const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
             const b = ben as RequestApprovedBeneficiary & { id_number?: string | null; spouse_id_number?: string | null; address?: string | null; city?: string | null; phone?: string | null; spouse_phone?: string | null }
             // ת"ז היולדת = האשה (spouse), עם נפילה-לאחור לרשומה הראשית
             const motherId = b.spouse_id_number || b.id_number
-            attachments = await buildMaternityVouchers({
+            const voucherInput = {
               motherName, motherId, address: b.address, city: b.city, phone: b.phone, spousePhone: b.spouse_phone,
               birthDate: birth.birth_date, recoveryHome: birth.recovery_home,
               recoveryDays: recoveryDaysOf({ recovery_eligibility_days: birth.recovery_eligibility_days, is_twins: birth.is_twins }),
               serial,
-              centers: center ? [center] : [],
-            }, { includeCard: stockAvailable })
+              centers,
+            }
+            // לידה שקטה — שובר כרטיס מזון בלבד (בלי שובר הבראה); רגילה — שניהם.
+            attachments = isSilent
+              ? await buildCardVoucherOnly(voucherInput)
+              : await buildMaternityVouchers(voucherInput)
           } catch (e) { console.error('[request-approved] voucher build failed:', e) }
         }
 

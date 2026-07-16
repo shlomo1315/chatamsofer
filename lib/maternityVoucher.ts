@@ -302,8 +302,10 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     ['תאריך לידת התינוק', fmtDate(input.birthDate)],
   ])
 
-  // מוקדי האיסוף — שם, כתובת, ימים ושעות
+  // מוקדי האיסוף — שם, כתובת, ימים ושעות. ניתן לגשת לכל אחד מהם.
   y = centersBox(c, 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
+  y = paragraph(c, 'תוכלו לבחור בכל מוקד לקבלת הכרטיס.', W - MX, y, W - MX * 2, 11, NAVY, 3)
+  y -= 4
 
   // ── הפעלת הכרטיס — תיבת הדגשה (חובה לפני השימוש) ──
   {

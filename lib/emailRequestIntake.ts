@@ -29,9 +29,8 @@ async function loadCtx(admin: SupabaseClient, type: ReqType, pending: boolean) {
     if (silent) recovery.add(r.name)               // לידה שקטה: כל הבתים
     else if (a === 'regular' || a === 'both') recovery.add(r.name)
   }
-  const { data: cRows } = await admin.from('card_centers').select('id, name, city').eq('is_active', true).order('name')
-  const centers = (cRows ?? []).map((c) => ({ id: c.id as string, name: c.name as string, city: (c.city ?? null) as string | null }))
-  return { recoveryHomes: [...recovery], centers, pending }
+  // אין יותר בחירת מוקד — היולדת מקבלת כרטיס לכל מוקד (מוצגים בשובר בעת האישור)
+  return { recoveryHomes: [...recovery], pending }
 }
 
 // ממפה סוג בקשה לפרמטר ה-deep-link בדף הבית (?action=), כדי שהכפתור יפתח ישירות
@@ -141,7 +140,6 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
         baby_id_number: (data.baby_id_number as string) ?? null,
         baby_id_type: data.baby_id_number ? 'id' : null,
         recovery_home: data.recovery_home,
-        card_center_id: (data.card_center_id as string) ?? null,
         birth_certificate_url: matched['אישור-לידה'] ?? null,
         notes: data.notes ?? null,
         birth_type: type === 'silent_birth' ? 'silent' : 'live',
@@ -185,9 +183,6 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
   // מייל אישור עם כל הפרטים שהוגשו — כמו בהגשה דרך האתר (requestReceivedEmail).
   const s = (v: unknown) => (v == null || v === '') ? '' : String(v)
   const genderLbl = (g: unknown) => g === 'male' ? 'זכר' : g === 'female' ? 'נקבה' : ''
-  const centerName = (data.card_center_id as string)
-    ? (ctx.centers.find(c => c.id === data.card_center_id)?.name ?? '')
-    : ''
   let rows: [string, string][] = []
   let mailType: 'birth' | 'loan' | 'financial_aid' | 'widow' = 'birth'
   if (type === 'birth' || type === 'silent_birth') {
@@ -199,7 +194,6 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
       ['ת.ז הנולד/ת', s(data.baby_id_number)],
       ['תאריך לידה', s(data.birth_date)],
       ['בית החלמה', s(data.recovery_home)],
-      ['מוקד לקבלת הכרטיס', centerName],
       ['הערות', s(data.notes)],
     ].filter(([, v]) => v !== '') as [string, string][]
   } else if (type === 'loan') {

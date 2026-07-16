@@ -4,10 +4,6 @@ import { detectReqType, parseDraft } from './emailRequestForms'
 // הקשר מינימלי לבדיקות — כמו שה-webhook בונה אותו
 const ctx = {
   recoveryHomes: ['אם וילד', 'טלזסטון', 'ביכורים'],
-  centers: [
-    { id: 'c1', name: 'מוקד בית שמש', city: 'בית שמש' },
-    { id: 'c2', name: 'מוקד בני ברק', city: 'בני ברק' },
-  ],
   pending: false,
 }
 

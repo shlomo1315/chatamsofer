@@ -95,7 +95,6 @@ export function renderCatalogEmail(id: string, texts: EmailTexts): { subject: st
   }
 
   if (has('first_time_note')) parts.push(notice(t('first_time_note'), '#f59e0b'))
-  if (has('no_stock_note')) parts.push(notice(t('no_stock_note'), '#f59e0b'))
   if (has('print_note')) parts.push(notice(t('print_note'), accent))
   if (has('notice')) parts.push(notice(t('notice'), accent))
 

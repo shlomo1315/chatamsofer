@@ -983,15 +983,15 @@ export function loanApprovedEmail(
   }
 }
 
-export type FoodCardCenter = { name: string; city?: string | null; address?: string | null }
+export type FoodCardCenter = { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }
 
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
-  opts: { center?: FoodCardCenter | null; stockAvailable?: boolean; serial?: string | null; phones?: (string | null | undefined)[] } = {},
+  opts: { centers?: FoodCardCenter[]; serial?: string | null; phones?: (string | null | undefined)[] } = {},
 ): BuiltEmail {
-  const center = opts.center ?? null
-  const stockAvailable = !!opts.stockAvailable
+  // כל המוקדים הפעילים — היולדת יכולה לגשת לכל אחד מהם (אין יותר בחירת מוקד/מלאי)
+  const centers = (opts.centers ?? []).filter(c => c?.name)
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
   const t = (k: string) => textFor('birth_approved', k)
   const T = (k: string) => escapeHtml(t(k))
@@ -1013,32 +1013,34 @@ export function birthApprovedEmail(
     detailRow('עיר', b.city),
     detailRow('מספר ילדים', b.children_count != null ? String(b.children_count) : ''),
   ].join('')
-  // בלוק כרטיס המזון — לפי המוקד שנבחר ולפי זמינות המלאי בו
-  const centerPlace = center ? [center.city, center.address].filter(Boolean).join(', ') : ''
-  const foodCardBlock = stockAvailable
-    ? `
+  // בלוק כרטיס המזון — תמיד מוצג, עם רשימת כל המוקדים הפעילים.
+  // היולדת יכולה לגשת לכל אחד מהם לקבלת הכרטיס.
+  const centerRows = centers.map(c => {
+    const place = [c.address, c.city].filter(Boolean).join(', ')
+    const sched = [c.pickup_days, c.pickup_hours].filter(Boolean).join(' · ')
+    const meta = [place, sched].filter(Boolean).join(' · ')
+    return `<tr><td style="padding:10px 16px;border-top:1px solid #fef3c7;">
+        <span style="color:#92400e;font-size:15px;font-weight:800;">${escapeHtml(c.name)}</span>
+        ${meta ? `<br/><span style="color:#b45309;font-size:13px;">${escapeHtml(meta)}</span>` : ''}
+      </td></tr>`
+  }).join('')
+  const centersTable = centers.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">${centerRows}</table>`
+    : ''
+  const foodCardBlock = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">${T('card_title')}</p>
         <p style="margin:0;color:#92400e;font-size:14px;line-height:1.7;">
           ${t('card_text')}
         </p>
-        ${center ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">
-          <tr><td style="padding:10px 16px;color:#92400e;font-size:15px;font-weight:800;">${center.name}</td>
-              <td style="padding:10px 16px;color:#b45309;font-size:13px;text-align:left;">${centerPlace || '—'}</td></tr>
-        </table>` : ''}
+        <p style="margin:12px 0 0;color:#92400e;font-size:14px;font-weight:800;line-height:1.7;">
+          תוכלו לבחור בכל מוקד לקבלת הכרטיס:
+        </p>
+        ${centersTable}
       </td></tr>
     </table>
     ${cardActivationNotice(opts.phones)}`
-    : `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 6px;color:#b91c1c;font-size:15px;font-weight:900;">${T('card_title_no_stock')}</p>
-        <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.7;">
-          ${t('no_stock_note').replace(/\{מוקד\}/g, center ? ` (<strong>${center.name}</strong>)` : '')}
-        </p>
-      </td></tr>
-    </table>`
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">

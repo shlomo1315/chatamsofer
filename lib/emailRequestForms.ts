@@ -85,7 +85,7 @@ export type Field = {
 export type AttachmentSpec = { name: string; label: string; required: boolean }
 
 // ── הגדרות לכל סוג בקשה (השדות נבנים דינמית עם בתי החלמה/מוקדים) ──
-type Ctx = { recoveryHomes: string[]; centers: { id: string; name: string; city: string | null }[]; pending: boolean }
+type Ctx = { recoveryHomes: string[]; pending: boolean }
 
 function idAttachments(pending: boolean): AttachmentSpec[] {
   return pending
@@ -105,7 +105,6 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
         { key: 'baby_name', label: 'שם הנולד/ת', hint: 'אם אין עדיין שם — השאירו ריק', required: false },
         { key: 'baby_id_number', label: 'תעודת זהות של הנולד/ת', hint: '9 ספרות כולל ספרת ביקורת', required: true },
         { key: 'recovery_home', label: 'בית החלמה', hint: 'השאירו רק אחד, מחקו את השאר', required: true, options: ctx.recoveryHomes },
-        { key: 'card_center', label: 'מספר מוקד לקבלת הכרטיס', hint: 'כתבו את המספר של המוקד מהרשימה למטה', required: true, options: ctx.centers.map((c, i) => `${i + 1}. ${c.name}${c.city ? ` (${c.city})` : ''}`) },
         { key: 'notes', label: 'הערות', required: false },
       ]
     case 'silent_birth':
@@ -179,17 +178,11 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   L.push('━━━ פרטי הבקשה ━━━')
   for (const f of fieldsFor(type, ctx)) {
     const hint = f.hint ? ` (${f.hint})` : ''
-    if (f.options && f.key !== 'card_center') {
+    if (f.options) {
       L.push(`${f.label}${hint}: ${f.options.join(' / ')}`)
     } else {
       L.push(`${f.label}${hint}: `)
     }
-  }
-  // רשימת מוקדים ממוספרת (אם רלוונטי)
-  if (type === 'birth' && ctx.centers.length) {
-    L.push('')
-    L.push('רשימת המוקדים (כתבו את המספר בשורת "מספר מוקד"):')
-    ctx.centers.forEach((c, i) => L.push(`  ${i + 1}. ${c.name}${c.city ? ` (${c.city})` : ''}`))
   }
   // קבצים מצורפים — שמות חובה
   const atts = attachmentsFor(type, ctx)
@@ -367,10 +360,7 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
     else if (!validateIsraeliId(bid)) errors.push('תעודת הזהות של הנולד/ת אינה תקינה (בדקו את ספרת הביקורת)')
     else data.baby_id_number = bid
     data.baby_name = (values.baby_name ?? '').trim() || null
-    // מוקד לפי מספר מהרשימה
-    const num = parseInt((values.card_center ?? '').replace(/\D/g, ''), 10)
-    if (!num || num < 1 || num > ctx.centers.length) errors.push('מספר מוקד חסר או לא תקין (כתבו מספר מהרשימה)')
-    else data.card_center_id = ctx.centers[num - 1].id
+    // אין יותר בחירת מוקד — היולדת מקבלת כרטיס לכל מוקד (מוצגים בשובר)
   }
 
   if (type === 'loan') {

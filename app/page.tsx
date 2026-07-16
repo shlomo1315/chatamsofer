@@ -1140,7 +1140,7 @@ export default function PublicPortalPage() {
   // Birth request form
   const [birthForm, setBirthForm] = useState({
     birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '',
-    baby_id_number: '', baby_id_type: 'id', card_center_id: '',
+    baby_id_number: '', baby_id_type: 'id',
   })
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
@@ -1152,8 +1152,6 @@ export default function PublicPortalPage() {
   const [baby2IdError, setBaby2IdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
   const [recoveryHomesSilent, setRecoveryHomesSilent] = useState<string[]>([])
-  // מוקדי חלוקת הכרטיסים (לבחירה בטופס הלידה)
-  const [cardCenters, setCardCenters] = useState<{ id: string; name: string; city: string | null }[]>([])
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
   const [showSilentInfo, setShowSilentInfo] = useState(false)
@@ -1161,9 +1159,6 @@ export default function PublicPortalPage() {
     fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {
       if (Array.isArray(d.regular) && d.regular.length) setRecoveryHomes(d.regular)
       if (Array.isArray(d.silent)) setRecoveryHomesSilent(d.silent)
-    }).catch(() => {})
-    fetch('/api/portal/card-centers').then(r => r.json()).then(d => {
-      if (Array.isArray(d.centers)) setCardCenters(d.centers)
     }).catch(() => {})
   }, [])
 
@@ -1793,7 +1788,6 @@ export default function PublicPortalPage() {
       if (id1 && id1 === id2) { setError('שני התאומים חייבים להיות עם תעודות זהות שונות'); return }
     }
     if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
-    if (cardCenters.length > 0 && !birthForm.card_center_id) { setError('אנא בחר מוקד לקבלת הכרטיס'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
     if (needsIdWithRequest) {
@@ -1962,7 +1956,7 @@ export default function PublicPortalPage() {
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setBabyIdError(''); setNoBabyName(false)
     setIsTwins(false); setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' }); setNoBaby2Name(false); setBaby2IdError('')
-    setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id', card_center_id: '' })
+    setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
     setBirthCertFile(null)
     setDocFiles({})
     setStep('new-birth')
@@ -3861,24 +3855,6 @@ export default function PublicPortalPage() {
                     </div>
                   </Field>
                 </div>
-                {cardCenters.length > 0 && (
-                  <div className="col-span-2">
-                    <Field label="מוקד לקבלת הכרטיס" required hint="המוקד שממנו תרצו לאסוף את כרטיס המזון">
-                      <div className="flex flex-wrap gap-2">
-                        {cardCenters.map(ctr => (
-                          <button key={ctr.id} type="button"
-                            onClick={() => setBirthForm(f => ({ ...f, card_center_id: f.card_center_id === ctr.id ? '' : ctr.id }))}
-                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
-                              birthForm.card_center_id === ctr.id
-                                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
-                            }`}
-                          >{ctr.name}{ctr.city ? ` · ${ctr.city}` : ''}</button>
-                        ))}
-                      </div>
-                    </Field>
-                  </div>
-                )}
                 <div className="col-span-2">
                   <Field label="הערות">
                     <textarea value={birthForm.notes} onChange={setBirth('notes')} rows={3}
