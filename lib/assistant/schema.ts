@@ -52,9 +52,10 @@ export const TABLES: TableSpec[] = [
     table: 'lineage_nodes',
     label: 'עץ הדורות',
     perm: 'lineage',
-    about: 'שושלת החתם סופר. כל שורה היא אדם/ענף. generation = מספר הדור, parent_id = האב בעץ. משפחות משויכות דרך beneficiaries.lineage_node_id.',
-    columns: ['id', 'name', 'generation', 'parent_id', 'notes'],
+    about: 'שושלת (עץ הדורות) של החתם סופר. כל שורה היא אדם/ענף בעץ. generation = מספר הדור, parent_id = האב בעץ, relation = בן/חתן. משפחות רשומות משויכות דרך beneficiaries.lineage_node_id. ⚠️ לכל שאלה על אדם מסוים בעץ — כמה ילדים/נכדים/צאצאים יש לו, מי האב/האבות הקדמונים, מי האחים, באיזה דור, וכמה משפחות רשומות בענף שלו — השתמש בכלי lineage_tree (הוא יודע לטייל בעץ ולספור). query_data/count_data כאן מחזירים רק שורות שטוחות ולא סופרים צאצאים.',
+    columns: ['id', 'name', 'generation', 'parent_id', 'relation', 'status', 'notes'],
     searchCols: ['name'],
+    statusCol: 'status',
   },
   {
     table: 'maternity_aids',

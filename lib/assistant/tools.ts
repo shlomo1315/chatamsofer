@@ -53,8 +53,113 @@ export function activityLabel(name: string, input: Record<string, unknown>): str
       if (input.search) return `עוזר מחפש "${String(input.search)}"…`
       if (input.status) return `עוזר בודק את ${what}…`
       return `עוזר שולף את ${what}…`
+    case 'lineage_tree':
+      return input.name ? `עוזר בודק בעץ הדורות את "${String(input.name)}"…` : 'עוזר בודק את עץ הדורות…'
     default:
       return 'עוזר עובד…'
+  }
+}
+
+// ─── עץ הדורות: איתור אדם וספירת צאצאים/נכדים/אבות (רק צמתים מאומתים) ──────────
+interface LNode { id: string; name: string; generation: number; parent_id: string | null; relation: string | null }
+const LINEAGE_STOP = ['הרב', 'רבי', 'מרן', 'מרת', 'של']
+
+async function lineageTree(db: SupabaseClient, rawName: string): Promise<unknown> {
+  const term = String(rawName ?? '').trim()
+  if (!term) return { error: 'יש לציין שם לחיפוש בעץ הדורות' }
+
+  const { data, error } = await db
+    .from('lineage_nodes')
+    .select('id, name, generation, parent_id, relation')
+    .eq('status', 'verified')
+  if (error) return { error: 'שגיאה בשליפת עץ הדורות' }
+  const nodes = (data ?? []) as LNode[]
+  if (!nodes.length) return { message: 'עץ הדורות ריק' }
+
+  const byId = new Map(nodes.map(n => [n.id, n]))
+  const childrenOf = new Map<string, LNode[]>()
+  for (const n of nodes) {
+    if (!n.parent_id) continue
+    const arr = childrenOf.get(n.parent_id) ?? []
+    arr.push(n)
+    childrenOf.set(n.parent_id, arr)
+  }
+  const nameOf = (id: string | null) => (id && byId.get(id)?.name) || null
+  const relHe = (r: string | null) => (r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : '')
+
+  // התאמת השם — מילה-מילה, כל המילים חייבות להופיע (עמיד לתארים/רווחים)
+  const words = term.split(/\s+/).map(w => w.trim().toLowerCase())
+    .filter(w => w.length >= 2 && !LINEAGE_STOP.includes(w))
+  const matches = words.length
+    ? nodes.filter(n => { const hay = n.name.toLowerCase(); return words.every(w => hay.includes(w)) })
+    : nodes.filter(n => n.name.trim() === term)
+
+  if (!matches.length) {
+    return { message: `לא נמצא "${term}" בעץ הדורות (ייתכן שהצומת עדיין אינו מאומת).` }
+  }
+  if (matches.length > 1) {
+    return {
+      הבהרה: `נמצאו ${matches.length} צמתים בשם דומה — נא לבחור לפי האב והדור ולשאול שוב:`,
+      מועמדים: matches.map(n => ({
+        שם: n.name, דור: n.generation, האב: nameOf(n.parent_id) ?? '(שורש)',
+        ילדים_ישירים: (childrenOf.get(n.id) ?? []).length,
+      })),
+    }
+  }
+
+  const node = matches[0]
+
+  // צאצאים — BFS על כל תת-העץ
+  const descendants: LNode[] = []
+  const queue = [...(childrenOf.get(node.id) ?? [])]
+  while (queue.length) {
+    const c = queue.shift()!
+    descendants.push(c)
+    const kids = childrenOf.get(c.id)
+    if (kids) queue.push(...kids)
+  }
+  const children = childrenOf.get(node.id) ?? []
+  const grandchildren = children.flatMap(c => childrenOf.get(c.id) ?? [])
+
+  // אבות קדמונים — מהאב ועד השורש
+  const ancestors: { שם: string; דור: number }[] = []
+  let p = node.parent_id
+  while (p) {
+    const pn = byId.get(p)
+    if (!pn) break
+    ancestors.push({ שם: pn.name, דור: pn.generation })
+    p = pn.parent_id
+  }
+
+  const siblings = (node.parent_id ? (childrenOf.get(node.parent_id) ?? []) : [])
+    .filter(n => n.id !== node.id).map(n => n.name)
+
+  const byGen: Record<string, number> = {}
+  for (const d of descendants) {
+    const k = `דור ${d.generation}`
+    byGen[k] = (byGen[k] ?? 0) + 1
+  }
+
+  // משפחות רשומות בענף — הצומת עצמו + כל צאצאיו
+  const branchIds = [node.id, ...descendants.map(d => d.id)]
+  let registeredFamilies = 0
+  try {
+    const { count } = await db.from('beneficiaries')
+      .select('id', { count: 'exact', head: true })
+      .in('lineage_node_id', branchIds)
+    registeredFamilies = count ?? 0
+  } catch { /* ספירת המשפחות היא תוספת — כשל לא מפיל את התשובה */ }
+
+  return {
+    אדם: { שם: node.name, דור: node.generation, ...(relHe(node.relation) ? { קשר_לאב: relHe(node.relation) } : {}) },
+    האב: node.parent_id ? (nameOf(node.parent_id) ?? '—') : '(שורש העץ)',
+    אבות_קדמונים: ancestors,
+    אחים: siblings,
+    ילדים_ישירים: { מספר: children.length, שמות: children.map(c => c.name) },
+    נכדים: { מספר: grandchildren.length, שמות: grandchildren.map(c => c.name) },
+    סהכ_צאצאים: descendants.length,
+    צאצאים_לפי_דור: byGen,
+    משפחות_רשומות_בענף: registeredFamilies,
   }
 }
 
@@ -104,6 +209,23 @@ export const TOOL_DEFS = [
       'לאחרונה, דואר שלא נקרא. השתמש בזה לשאלות כמו "מה המצב?", "מה ממתין לי?", ' +
       '"תן לי סיכום". מהיר — עדיף על מספר קריאות ל-count_data.',
     input_schema: { type: 'object' as const, properties: {}, required: [] },
+  },
+  {
+    name: 'lineage_tree',
+    description:
+      'עונה על כל שאלה בעץ הדורות (שושלת החתם סופר) לגבי אדם מסוים. מקבל שם (למשל "שמעון סופר") ' +
+      'ומחזיר: כמה ילדים ישירים, כמה נכדים, כמה סה״כ צאצאים (כל הדורות מתחת) ופילוח לפי דור, ' +
+      'מי האב ומי האבות הקדמונים עד השורש, מי האחים, באיזה דור הוא נמצא, וכמה משפחות רשומות ' +
+      'במערכת משויכות לענף שלו. השתמש בכלי הזה לכל שאלת יוחסין ("כמה נכדים ל...", "מי הילדים של...", ' +
+      '"מי האבא של...", "כמה צאצאים ל..."). אם השם מופיע יותר מפעם אחת בעץ — יוחזרו המועמדים לבחירה. ' +
+      'סופר רק צמתים מאומתים.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'שם האדם בעץ הדורות, למשל "שמעון סופר"' },
+      },
+      required: ['name'],
+    },
   },
 ]
 
@@ -323,6 +445,12 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
 
       if (!Object.keys(out).length) return { error: 'אין לך הרשאות צפייה לאף אגף.' }
       return out
+    }
+
+    // ── עץ הדורות — שאלות יוחסין ──────────────────────────────────────────────
+    case 'lineage_tree': {
+      if (!canView(ctx, 'lineage')) return { error: 'אין לך הרשאה לצפות בעץ הדורות.' }
+      return lineageTree(db, String(input.name ?? ''))
     }
 
     default:

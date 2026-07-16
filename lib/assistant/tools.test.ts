@@ -107,3 +107,56 @@ describe('הכלים קריאה בלבד', () => {
     expect(r.error).toContain('לא מוכר')
   })
 })
+
+describe('עץ הדורות (lineage_tree)', () => {
+  it('מזכיר ללא הרשאת עץ הדורות נחסם', async () => {
+    const r = await runTool(secretary('loans'), 'lineage_tree', { name: 'שמעון סופר' }) as { error?: string }
+    expect(r.error, 'עץ הדורות נחשף בלי הרשאה!').toContain('אין לך הרשאה')
+  })
+
+  const nodes = [
+    { id: 'r', name: 'החתם סופר', generation: 1, parent_id: null, relation: null },
+    { id: 's', name: 'שמעון סופר', generation: 2, parent_id: 'r', relation: 'son' },
+    { id: 'c1', name: 'ראובן סופר', generation: 3, parent_id: 's', relation: 'son' },
+    { id: 'c2', name: 'לוי סופר', generation: 3, parent_id: 's', relation: 'son' },
+    { id: 'g1', name: 'יהודה סופר', generation: 4, parent_id: 'c1', relation: 'son' },
+  ]
+  // מסד מזויף שמחזיר את העץ ל-lineage_nodes וספירת משפחות ל-beneficiaries
+  function treeDb(ns: unknown[], famCount = 0): ToolCtx['db'] {
+    const node = () => {
+      const b: Record<string, unknown> = {}
+      Object.assign(b, { select: () => b, eq: () => b, then: (res: (v: unknown) => unknown) => res({ data: ns, error: null }) })
+      return b
+    }
+    const ben = () => {
+      const b: Record<string, unknown> = {}
+      Object.assign(b, { select: () => b, in: () => b, then: (res: (v: unknown) => unknown) => res({ count: famCount }) })
+      return b
+    }
+    return { from: (t: string) => (t === 'lineage_nodes' ? node() : ben()) } as never
+  }
+  const lineageAdmin = (db: ToolCtx['db']): ToolCtx => ({ db, perms: {} as never, isAdmin: true })
+
+  it('סופר ילדים, נכדים וסה״כ צאצאים', async () => {
+    const r = await runTool(lineageAdmin(treeDb(nodes, 4)), 'lineage_tree', { name: 'שמעון סופר' }) as {
+      ילדים_ישירים: { מספר: number }; נכדים: { מספר: number }; סהכ_צאצאים: number
+      אבות_קדמונים: { שם: string }[]; משפחות_רשומות_בענף: number
+    }
+    expect(r.ילדים_ישירים.מספר).toBe(2)   // ראובן + לוי
+    expect(r.נכדים.מספר).toBe(1)          // יהודה
+    expect(r.סהכ_צאצאים).toBe(3)          // ראובן + לוי + יהודה
+    expect(r.אבות_קדמונים).toEqual([{ שם: 'החתם סופר', דור: 1 }])
+    expect(r.משפחות_רשומות_בענף).toBe(4)
+  })
+
+  it('שם כפול → מחזיר מועמדים להבהרה', async () => {
+    const dup = [...nodes, { id: 's2', name: 'שמעון סופר', generation: 3, parent_id: 'c1', relation: 'son' }]
+    const r = await runTool(lineageAdmin(treeDb(dup)), 'lineage_tree', { name: 'שמעון סופר' }) as { מועמדים?: unknown[] }
+    expect(r.מועמדים?.length).toBe(2)
+  })
+
+  it('שם שלא קיים → הודעת "לא נמצא"', async () => {
+    const r = await runTool(lineageAdmin(treeDb(nodes)), 'lineage_tree', { name: 'משה רבינו' }) as { message?: string }
+    expect(r.message).toContain('לא נמצא')
+  })
+})
