@@ -12,6 +12,7 @@ import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
+import LineageReliabilityPanel from './LineageReliabilityPanel'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
@@ -282,6 +283,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           </div>
         )
       })()}
+
+      {/* ציון אמינות יוחסין — ייעוצי, לא מאשר */}
+      <LineageReliabilityPanel beneficiaryId={id} />
 
       {/* visual tree with this beneficiary's branch highlighted */}
       <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />

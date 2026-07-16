@@ -1,6 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserPermissions, SectionKey } from '@/types'
 import { TABLES, tableByName, schemaFor, type TableSpec } from './schema'
+import { assessLineageReliability } from '../lineageReliability'
+
+/** גיל בשנים מתאריך לידה (או null אם חסר/לא תקין). */
+function ageFromBirthDate(s: string | null | undefined): number | null {
+  if (!s) return null
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return null
+  const now = new Date()
+  let age = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--
+  return age >= 0 && age < 130 ? age : null
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הכלים של העוזר — קריאה בלבד.
@@ -55,6 +68,8 @@ export function activityLabel(name: string, input: Record<string, unknown>): str
       return `עוזר שולף את ${what}…`
     case 'lineage_tree':
       return input.name ? `עוזר בודק בעץ הדורות את "${String(input.name)}"…` : 'עוזר בודק את עץ הדורות…'
+    case 'lineage_reliability':
+      return 'עוזר בודק את אמינות היוחסין…'
     default:
       return 'עוזר עובד…'
   }
@@ -140,15 +155,29 @@ async function lineageTree(db: SupabaseClient, rawName: string): Promise<unknown
     byGen[k] = (byGen[k] ?? 0) + 1
   }
 
-  // משפחות רשומות בענף — הצומת עצמו + כל צאצאיו
+  // משפחות רשומות בענף + גילאים. גיל קיים רק למי שרשום במערכת עם תאריך לידה —
+  // לצמתים היסטוריים בעץ אין תאריך לידה, ואסור להמציא.
   const branchIds = [node.id, ...descendants.map(d => d.id)]
+  const bdayByNode = new Map<string, string>()
   let registeredFamilies = 0
   try {
-    const { count } = await db.from('beneficiaries')
-      .select('id', { count: 'exact', head: true })
+    const { data: bens } = await db.from('beneficiaries')
+      .select('lineage_node_id, birth_date')
       .in('lineage_node_id', branchIds)
-    registeredFamilies = count ?? 0
-  } catch { /* ספירת המשפחות היא תוספת — כשל לא מפיל את התשובה */ }
+    const rows = (bens ?? []) as { lineage_node_id: string | null; birth_date: string | null }[]
+    registeredFamilies = rows.length
+    for (const b of rows) {
+      if (b.lineage_node_id && b.birth_date && !bdayByNode.has(b.lineage_node_id)) {
+        bdayByNode.set(b.lineage_node_id, b.birth_date)
+      }
+    }
+  } catch { /* תוספת — כשל לא מפיל את התשובה */ }
+
+  const knownAges: { שם: string; גיל: number }[] = []
+  for (const nd of [node, ...descendants]) {
+    const age = ageFromBirthDate(bdayByNode.get(nd.id))
+    if (age != null) knownAges.push({ שם: nd.name, גיל: age })
+  }
 
   return {
     אדם: { שם: node.name, דור: node.generation, ...(relHe(node.relation) ? { קשר_לאב: relHe(node.relation) } : {}) },
@@ -160,6 +189,8 @@ async function lineageTree(db: SupabaseClient, rawName: string): Promise<unknown
     סהכ_צאצאים: descendants.length,
     צאצאים_לפי_דור: byGen,
     משפחות_רשומות_בענף: registeredFamilies,
+    גילאים_ידועים: knownAges,
+    הערת_גיל: 'גיל זמין רק למי שרשום במערכת עם תאריך לידה. לצמתים היסטוריים בעץ אין תאריך לידה — אל תמציא גיל, אמור שאין נתון.',
   }
 }
 
@@ -225,6 +256,24 @@ export const TOOL_DEFS = [
         name: { type: 'string', description: 'שם האדם בעץ הדורות, למשל "שמעון סופר"' },
       },
       required: ['name'],
+    },
+  },
+  {
+    name: 'lineage_reliability',
+    description:
+      'נותן "ציון אמינות יוחסין" ייעוצי למשפחה שנרשמה (בעיקר כזו שממתינה לאישור): עד כמה קו ' +
+      'היוחסין שהיא סימנה מתיישב עם כלל העץ. מחזיר: עוגן מאומת בעץ, כמה משפחות רשומות על אותו גזע, ' +
+      'האם השורה שסומנה נתמכת על ידי אחרים או חריגה, כמה דורות חדשים הוסיפה, וציון + מגמה. ' +
+      '⚠️ ייעוצי בלבד — לא מאשר ולא משפיע על המשפחה, רק מסייע לבדיקה הידנית. השתמש בזה לשאלות כמו ' +
+      '"כמה אמין הנרשם X?", "בדוק אמינות יוחסין של...". קבל beneficiaryId, או name, או idNumber.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        beneficiaryId: { type: 'string', description: 'מזהה המשפחה (uuid), אם ידוע' },
+        name: { type: 'string', description: 'שם המשפחה/הנרשם לחיפוש' },
+        idNumber: { type: 'string', description: 'ת"ז של הנרשם או בן/בת הזוג' },
+      },
+      required: [],
     },
   },
 ]
@@ -451,6 +500,36 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
     case 'lineage_tree': {
       if (!canView(ctx, 'lineage')) return { error: 'אין לך הרשאה לצפות בעץ הדורות.' }
       return lineageTree(db, String(input.name ?? ''))
+    }
+
+    // ── ציון אמינות יוחסין ────────────────────────────────────────────────────
+    case 'lineage_reliability': {
+      if (!canView(ctx, 'lineage')) return { error: 'אין לך הרשאה לצפות בעץ הדורות.' }
+      let id = String(input.beneficiaryId ?? '').trim()
+      if (!id) {
+        const idNum = String(input.idNumber ?? '').replace(/\D/g, '')
+        const nm = String(input.name ?? '').trim()
+        if (idNum.length >= 7) {
+          const { data } = await db.from('beneficiaries').select('id')
+            .or(`id_number.eq.${idNum},spouse_id_number.eq.${idNum}`).limit(1)
+          id = (data?.[0] as { id?: string } | undefined)?.id ?? ''
+        } else if (nm) {
+          const bspec = tableByName('beneficiaries')!
+          const rows = await searchRows(db, bspec, nm, {}, 'id, family_name, full_name, spouse_name', 5)
+          if (rows.length > 1) {
+            return {
+              הבהרה: 'נמצאו כמה משפחות תואמות — ציין מזהה מדויק ובדוק שוב:',
+              מועמדים: rows.map(r => ({
+                id: r.id,
+                שם: [r.family_name, r.spouse_name || r.full_name].filter(Boolean).join(' ') || r.full_name,
+              })),
+            }
+          }
+          id = rows.length ? String(rows[0].id) : ''
+        }
+        if (!id) return { message: 'לא נמצאה משפחה תואמת. ציין מזהה, שם מלא, או ת"ז.' }
+      }
+      return assessLineageReliability(db, id)
     }
 
     default:

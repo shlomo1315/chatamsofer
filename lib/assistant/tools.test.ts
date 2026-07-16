@@ -114,6 +114,11 @@ describe('עץ הדורות (lineage_tree)', () => {
     expect(r.error, 'עץ הדורות נחשף בלי הרשאה!').toContain('אין לך הרשאה')
   })
 
+  it('מזכיר ללא הרשאת עץ הדורות נחסם גם מבדיקת אמינות', async () => {
+    const r = await runTool(secretary('loans'), 'lineage_reliability', { beneficiaryId: 'x' }) as { error?: string }
+    expect(r.error, 'בדיקת אמינות נחשפה בלי הרשאה!').toContain('אין לך הרשאה')
+  })
+
   const nodes = [
     { id: 'r', name: 'החתם סופר', generation: 1, parent_id: null, relation: null },
     { id: 's', name: 'שמעון סופר', generation: 2, parent_id: 'r', relation: 'son' },
@@ -130,7 +135,9 @@ describe('עץ הדורות (lineage_tree)', () => {
     }
     const ben = () => {
       const b: Record<string, unknown> = {}
-      Object.assign(b, { select: () => b, in: () => b, then: (res: (v: unknown) => unknown) => res({ count: famCount }) })
+      // הקוד שולף שורות (lineage_node_id, birth_date) וסופר את אורכן
+      const rows = Array.from({ length: famCount }, () => ({ lineage_node_id: null, birth_date: null }))
+      Object.assign(b, { select: () => b, in: () => b, then: (res: (v: unknown) => unknown) => res({ data: rows }) })
       return b
     }
     return { from: (t: string) => (t === 'lineage_nodes' ? node() : ben()) } as never
