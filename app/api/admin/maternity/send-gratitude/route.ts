@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { sendScheduled } from '@/lib/scheduledMailSenders'
 
 // שליחה ידנית של בקשת מכתב ברכה / משוב בית החלמה — בלי להמתין לתזמון.
@@ -11,7 +11,7 @@ const VALID: Kind[] = ['gratitude_letter', 'gratitude_reminder', 'recovery_surve
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('maternity', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   let payload: { aidId?: string; kind?: string }
   try { payload = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }

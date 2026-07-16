@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // מחיקת משוב שהתקבל.
 // אחרי המחיקה הקישור חוזר להיות פעיל — היולדת תוכל למלא מחדש.
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function DELETE(_r: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('maternity', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { runCampaignSender } from '@/lib/newsletter/sender'
 
 // עצירה / חידוש של קמפיין בשליחה.
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

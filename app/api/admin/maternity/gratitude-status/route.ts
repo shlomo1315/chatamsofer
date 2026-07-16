@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // מצב מכתב הברכה והמשוב ללידה מסוימת — לטאב בכרטסת היולדת.
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   const ctx = await requirePermission('maternity', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const aidId = request.nextUrl.searchParams.get('aidId')
   if (!aidId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })

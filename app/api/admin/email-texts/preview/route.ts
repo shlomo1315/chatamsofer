@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { specById, type EmailTexts } from '@/lib/emailCatalog'
 import { renderCatalogEmail } from '@/lib/emailCatalogRender'
 
@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('reports', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   let body: { id?: string; texts?: EmailTexts }
   try { body = await request.json() } catch {

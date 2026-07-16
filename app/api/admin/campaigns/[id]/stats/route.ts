@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // סטטיסטיקות קמפיין — מדדים, נמענים, וקליקים לפי קישור.
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

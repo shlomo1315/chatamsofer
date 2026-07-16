@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // רשימת קמפיינים + יצירת קמפיין חדש.
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -47,7 +47,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'add')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

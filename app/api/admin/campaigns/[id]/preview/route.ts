@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { resolveSegment, type SegmentDef } from '@/lib/newsletter/segments'
 import { applyMerge } from '@/lib/newsletter/merge'
 import { buildCampaignHtml, type Block } from '@/lib/newsletter/blocks'
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 // GET — תצוגה מקדימה: המייל כפי שייראה אצל נמען אמיתי
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // POST — שליחת מייל בדיקה לכתובת שנבחרה
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

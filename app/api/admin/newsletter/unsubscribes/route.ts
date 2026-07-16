@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // ניהול רשימת ההסרות — מי ביקש להיות מוסר, והחזרה לרשימה.
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ const REASON_LABELS: Record<string, string> = {
 
 export async function GET() {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -54,7 +54,7 @@ export async function GET() {
 // DELETE — החזרה לרשימת התפוצה
 export async function DELETE(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const email = (request.nextUrl.searchParams.get('email') ?? '').toLowerCase().trim()
   if (!email) return NextResponse.json({ error: 'חסרה כתובת' }, { status: 400 })

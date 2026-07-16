@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { resolveSegment, type SegmentDef } from '@/lib/newsletter/segments'
 
 // מונה קהל חי — כמה נמענים יוצאים מהמסננים שנבחרו.
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 // מקודדת בקוד — כדי שלא יוצגו אפשרויות שאין להן אף רשומה.
 export async function GET() {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

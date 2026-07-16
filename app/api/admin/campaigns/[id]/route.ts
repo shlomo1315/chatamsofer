@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // טעינה / עדכון / מחיקה של קמפיין.
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ const EDITABLE = [
 
 export async function GET(_r: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
@@ -27,7 +27,7 @@ export async function GET(_r: NextRequest, { params }: { params: Promise<{ id: s
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(_r: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

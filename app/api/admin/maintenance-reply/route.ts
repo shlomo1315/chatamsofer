@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireAdmin, getServiceClient } from '@/lib/apiAuth'
+import { requireAdmin, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // הגדרות המענה האוטומטי הזמני ("המערכת בפיתוח").
 // נשמר ב-app_settings תחת maintenance_reply.
@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: MaintenanceReplySettings = {
 
 export async function GET() {
   const ctx = await requireAdmin()
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -40,7 +40,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const ctx = await requireAdmin()
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

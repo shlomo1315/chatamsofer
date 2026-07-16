@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // רשימות נמענים חיצוניות — הורדת תבנית CSV והעלאת רשימה.
 // למי שרוצה לשלוח לקהל שאינו קיים במערכת.
@@ -10,7 +10,7 @@ const MAX_ROWS = 10_000
 // GET — הורדת קובץ דוגמה למילוי
 export async function GET(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   if (request.nextUrl.searchParams.get('template') === '1') {
     // BOM — בלעדיו Excel מציג עברית כג'יבריש
@@ -77,7 +77,7 @@ function parseCsvLine(line: string): string[] {
 // POST — יצירת קבוצה: מקובץ, או מנמענים שנבחרו מקבוצה קיימת
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
 // DELETE — מחיקת רשימה
 export async function DELETE(request: NextRequest) {
   const ctx = await requirePermission('newsletter', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const id = request.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })

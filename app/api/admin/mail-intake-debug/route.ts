@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { isRequestSubject } from '@/lib/emailRequestIntake'
 import { detectReqType } from '@/lib/emailRequestForms'
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const ctx = await requirePermission('reports', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

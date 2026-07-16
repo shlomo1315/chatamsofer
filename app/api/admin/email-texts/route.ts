@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { EMAIL_CATALOG, EMAIL_TEXTS_KEY, type EmailTexts } from '@/lib/emailCatalog'
 import { setEmailTexts, loadEmailTexts } from '@/lib/emailTextsStore'
 
@@ -35,7 +35,7 @@ function sanitize(input: unknown): EmailTexts {
 
 export async function GET() {
   const ctx = await requirePermission('reports', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -52,7 +52,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const ctx = await requirePermission('reports', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

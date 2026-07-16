@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { signedDocUrl } from '@/lib/docUrl'
 
 // סיכום המשפחה שמאחורי בקשת ההלוואה — כדי שההחלטה תתקבל עם כל התמונה,
@@ -36,7 +36,7 @@ function isMarried(c: Child): boolean {
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('loans', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 
 // שכפול קמפיין — יוצר טיוטה חדשה עם כל התוכן, הקהל וההגדרות של המקור.
 // שימושי לשליחה חוזרת או לקמפיין דומה, בלי לבנות הכל מחדש.
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(_r: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('newsletter', 'add')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()

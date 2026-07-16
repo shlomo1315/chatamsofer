@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { buildGratitudeVoucher } from '@/lib/gratitudeVoucher'
 
 // ניהול מכתב ברכה — אישור/דחייה, עריכת חתימה/אנונימיות, והפקת ה-PDF.
@@ -35,7 +35,7 @@ function benOf(row: LetterRow | null): BenFull | null {
 // GET ?pdf=1 — הפקת השובר המעוצב לצפייה
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('maternity', 'view')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // PATCH — עדכון סטטוס / חתימה / אנונימיות
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const ctx = await requirePermission('maternity', 'edit')
-  if (ctx instanceof NextResponse) return ctx
+  if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   const { id } = await params
   const db = getServiceClient()
