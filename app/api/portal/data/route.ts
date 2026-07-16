@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       is_twins, babies, recovery_eligibility_days,
       recovery_from, recovery_to, card_number, notes, recovery_arrived,
       recovery_amount, recovery_amount_status, recovery_nights, recovery_receipt_number,
+      recovery_receipt_url, recovery_locked, recovery_edit_requested_at,
       beneficiary:beneficiaries(
         id, full_name, family_name, spouse_name, spouse_id_number, phone, address, city
       )

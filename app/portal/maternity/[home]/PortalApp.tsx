@@ -290,12 +290,14 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     () => Object.fromEntries(aids.map(a => [a.id, !!a.recovery_edit_requested_at])),
   )
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null)
+  const [uploadErr, setUploadErr] = useState<Record<string, string>>({})
   const [confirmAid, setConfirmAid] = useState<string | null>(null)
   const [missingModal, setMissingModal] = useState<{ id: string; fields: string[] } | null>(null)
   const [requesting, setRequesting] = useState<string | null>(null)
 
   const uploadReceipt = async (aidId: string, file: File) => {
     setUploadingReceipt(aidId)
+    setUploadErr(m => ({ ...m, [aidId]: '' }))
     try {
       const fd = new FormData()
       fd.append('home', home); fd.append('aidId', aidId); fd.append('file', file)
@@ -304,9 +306,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       if (r.ok && d.url) {
         setReceiptUrl(m => ({ ...m, [aidId]: d.url }))
         setReceiptFile(m => ({ ...m, [aidId]: file }))
+      } else {
+        // כשל העלאה — מציגים סיבה במקום להשאיר את הנציג תקוע בלי משוב
+        setUploadErr(m => ({ ...m, [aidId]: d.error || 'העלאת הקובץ נכשלה — נסו שוב' }))
       }
-    } catch { /* התעלם */ }
-    setUploadingReceipt(null)
+    } catch {
+      setUploadErr(m => ({ ...m, [aidId]: 'שגיאת רשת בהעלאת הקובץ — נסו שוב' }))
+    } finally {
+      setUploadingReceipt(null)
+    }
   }
 
   // רשימת השדות החסרים — להצגה בחלונית התראה כשלוחצים "אישור ושליחה" והטופס לא מלא
@@ -679,12 +687,15 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 <span className="text-sm font-semibold text-slate-600">קובץ קבלה (תמונה/PDF)</span>
                                 <input
                                   type="file" accept="image/*,application/pdf"
-                                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(aid.id, f) }}
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(aid.id, f); e.target.value = '' }}
                                   className="w-full text-sm file:ml-3 file:rounded-lg file:border-0 file:bg-emerald-100 file:px-4 file:py-2 file:text-emerald-700 file:font-semibold file:cursor-pointer"
                                 />
                                 {uploadingReceipt === aid.id
                                   ? <span className="text-xs text-slate-400">מעלה…</span>
                                   : receiptUrl[aid.id] && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> קובץ הועלה</span>}
+                                {uploadErr[aid.id] && (
+                                  <span className="inline-flex items-center gap-1 text-xs text-rose-600"><AlertCircle size={13} /> {uploadErr[aid.id]}</span>
+                                )}
                               </label>
                               <button type="button"
                                 onClick={() => {
