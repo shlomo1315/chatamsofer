@@ -16,8 +16,8 @@ export default function LineageReliabilityHeaderButton({ beneficiaryId }: { bene
   return (
     <>
       <button onClick={openAndRun}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-2">
-        <ShieldCheck size={15} /> בדוק אמינות (AI)
+        className="flex items-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-1.5 transition-colors">
+        <ShieldCheck size={14} /> בדוק אמינות (AI)
       </button>
 
       {open && (
