@@ -12,7 +12,7 @@ function fakeDb() {
   const chain: Record<string, unknown> = {}
   const self = () => chain
   Object.assign(chain, {
-    from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self,
+    from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self, in: self,
     then: (r: (v: unknown) => unknown) => r({ data: [{ id: '1', secret: 'רגיש' }], count: 99 }),
   })
   return chain as never
@@ -22,9 +22,11 @@ const secretary = (section: string): ToolCtx => ({
   db: fakeDb(),
   perms: { [section]: 'view' } as never,
   isAdmin: false,
+  mailboxEmails: null,
+  mailboxKeys: null,
 })
 
-const admin: ToolCtx = { db: fakeDb(), perms: {}, isAdmin: true }
+const admin: ToolCtx = { db: fakeDb(), perms: {}, isAdmin: true, mailboxEmails: null, mailboxKeys: null }
 
 describe('אכיפת הרשאות', () => {
   it('מזכירת יולדות אינה יכולה לשלוף הלוואות', async () => {
@@ -42,6 +44,20 @@ describe('אכיפת הרשאות', () => {
     expect(r.error).toContain('אין לך הרשאה')
   })
 
+  // ⚠️ תיבות הדואר מסוננות פר-משתמש במסך המייל. בלי אכיפה זהה כאן, העוזר
+  // היה דלת עורפית שמחזירה את דואר כל המחלקות לכל איש צוות.
+  it('משתמש שחסום מתיבות הדואר לא מקבל דואר גם דרך העוזר', async () => {
+    const blocked: ToolCtx = { db: fakeDb(), perms: {} as never, isAdmin: false, mailboxEmails: [], mailboxKeys: [] }
+    const r = await runTool(blocked, 'query_data', { table: 'inbound_emails' }) as { error?: string }
+    expect(r.error, 'דואר נחשף למשתמש חסום!').toContain('אין לך הרשאה')
+  })
+
+  it('משתמש שחסום מתיבות הדואר לא מקבל ספירת דואר בסקירה', async () => {
+    const blocked: ToolCtx = { db: fakeDb(), perms: {} as never, isAdmin: false, mailboxEmails: [], mailboxKeys: [] }
+    const r = await runTool(blocked, 'get_overview', {}) as Record<string, unknown>
+    expect(r['דואר'], 'ספירת דואר נחשפה למשתמש חסום!').toBeUndefined()
+  })
+
   it('מזכירת הלוואות אינה יכולה לראות את עץ הדורות', async () => {
     const r = await runTool(secretary('loans'), 'query_data', { table: 'lineage_nodes' }) as { error?: string }
     expect(r.error).toContain('אין לך הרשאה')
@@ -55,6 +71,31 @@ describe('אכיפת הרשאות', () => {
   it('דואר פתוח לכל איש צוות (אינו אגף)', async () => {
     const r = await runTool(secretary('loans'), 'count_data', { table: 'inbound_emails' }) as { error?: string }
     expect(r.error).toBeUndefined()
+  })
+
+  // ⚠️ רגרסיה: sent_emails חייב להיות מסונן לפי department (מפתחות), לא from_email
+  // (עמודה שאינה קיימת בטבלה). db שמתעד לפי איזו עמודה סוננה מוודא זאת.
+  it('דואר יוצא מסונן לפי department עם מפתחות התיבה (לא from_email)', async () => {
+    const calls: { col: string; vals: unknown }[] = []
+    const recordingDb = () => {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      Object.assign(chain, {
+        from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self,
+        in: (col: string, vals: unknown) => { calls.push({ col, vals }); return chain },
+        then: (r: (v: unknown) => unknown) => r({ data: [], count: 0 }),
+      })
+      return chain as never
+    }
+    const ctx: ToolCtx = {
+      db: recordingDb(), perms: {} as never, isAdmin: false,
+      mailboxEmails: ['igud@chasamsofer.info'], mailboxKeys: ['igud'],
+    }
+    await runTool(ctx, 'query_data', { table: 'sent_emails' })
+    const scope = calls.find(c => c.col === 'department' || c.col === 'from_email')
+    expect(scope, 'sent_emails לא סונן כלל').toBeDefined()
+    expect(scope!.col, 'sent_emails סונן לפי from_email שאינו קיים בטבלה').toBe('department')
+    expect(scope!.vals).toEqual(['igud'])
   })
 
   it('מנהל רואה הכל', async () => {
@@ -142,7 +183,7 @@ describe('עץ הדורות (lineage_tree)', () => {
     }
     return { from: (t: string) => (t === 'lineage_nodes' ? node() : ben()) } as never
   }
-  const lineageAdmin = (db: ToolCtx['db']): ToolCtx => ({ db, perms: {} as never, isAdmin: true })
+  const lineageAdmin = (db: ToolCtx['db']): ToolCtx => ({ db, perms: {} as never, isAdmin: true, mailboxEmails: null, mailboxKeys: null })
 
   it('סופר ילדים, נכדים וסה״כ צאצאים', async () => {
     const r = await runTool(lineageAdmin(treeDb(nodes, 4)), 'lineage_tree', { name: 'שמעון סופר' }) as {

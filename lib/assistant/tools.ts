@@ -29,6 +29,20 @@ export interface ToolCtx {
   db: SupabaseClient
   perms: UserPermissions
   isAdmin: boolean
+  /**
+   * כתובות התיבות שהמשתמש רשאי לראות. null = ללא הגבלה (מנהל).
+   * [] = חסום לחלוטין (משתמש mail_only ללא תיבות).
+   * ⚠️ חובה — בלעדיו העוזר עוקף את אכיפת התיבות של מסך המייל.
+   * משמש לסינון inbound_emails לפי to_email (כתובת).
+   */
+  mailboxEmails: string[] | null
+  /**
+   * מפתחות התיבות המורשות (מפתחות מחלקה). null = ללא הגבלה (מנהל).
+   * משמש לסינון sent_emails לפי עמודת department, שמכילה מפתחות ולא כתובות —
+   * בדיוק כמו מסך /api/admin/mail/messages. חייב להיות עקבי עם mailboxEmails
+   * (שניהם null יחד, או שניהם מסננים את אותה קבוצת תיבות).
+   */
+  mailboxKeys: string[] | null
 }
 
 function canView(ctx: ToolCtx, section: SectionKey): boolean {
@@ -37,10 +51,35 @@ function canView(ctx: ToolCtx, section: SectionKey): boolean {
   return lvl === 'view' || lvl === 'edit' || lvl === 'add'
 }
 
+/** טבלאות הדואר — הגישה אליהן נקבעת לפי התיבות המורשות, לא לפי מחלקה.
+ *  לכל טבלה: העמודה לסינון + מקור הערכים (כתובות מייל / מפתחות מחלקה).
+ *  ⚠️ sent_emails מסונן לפי department (מפתחות), לא from_email (שאינו קיים בטבלה). */
+const MAIL_TABLES: Record<string, { col: string; source: 'emails' | 'keys' }> = {
+  inbound_emails: { col: 'to_email', source: 'emails' },
+  sent_emails: { col: 'department', source: 'keys' },
+}
+
 /** האם המשתמש רשאי לגעת בטבלה. */
 function allowed(ctx: ToolCtx, spec: TableSpec): boolean {
-  if (spec.perm === null) return true          // פתוח לכל הצוות (למשל דואר)
+  // ⚠️ perm:null אינו "פתוח לכל": בטבלאות הדואר הגישה מסוננת פר-תיבה.
+  // משתמש שחסום מהתיבות (mailboxEmails === []) לא יראה דואר גם דרך העוזר —
+  // אחרת הוא עוקף את האכיפה שב-/api/admin/mail/messages.
+  if (spec.table in MAIL_TABLES) {
+    return ctx.mailboxEmails === null || ctx.mailboxEmails.length > 0
+  }
+  if (spec.perm === null) return true
   return canView(ctx, spec.perm)
+}
+
+/** מגביל שאילתת דואר לתיבות המורשות. מחזיר את השאילתה כפי שהיא למנהל. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function scopeToMailboxes(ctx: ToolCtx, spec: TableSpec, query: any): any {
+  const m = MAIL_TABLES[spec.table]
+  if (!m) return query
+  // כל טבלה מסוננת מהמקור המתאים לה: inbound לפי כתובות, sent לפי מפתחות.
+  const values = m.source === 'keys' ? ctx.mailboxKeys : ctx.mailboxEmails
+  if (values === null) return query          // מנהל — ללא הגבלה
+  return query.in(m.col, values)
 }
 
 /** תיאור כל הטבלאות שהמשתמש רשאי לראות — נשלח למודל בהנחיה. */
@@ -291,17 +330,24 @@ function sinceISO(days?: number): string | null {
 
 const BEN_JOIN = 'beneficiary:beneficiaries(family_name, full_name, spouse_name, id_number, phone, city)'
 
-/** בונה שאילתה עם כל הסינונים. משותף ל-query ול-count. */
+/**
+ * בונה שאילתה עם כל הסינונים. משותף ל-query ול-count.
+ * מקבל ctx (ולא db) כדי שהגבלת התיבות תיאכף כאן — בנקודה אחת ששני הכלים
+ * עוברים דרכה, ולא תלויה בכך שכל קורא יזכור לסנן.
+ */
 function buildQuery(
-  db: SupabaseClient,
+  ctx: ToolCtx,
   spec: TableSpec,
   input: Record<string, unknown>,
   select: string,
   countOnly = false,
 ) {
+  const db = ctx.db
   let q = countOnly
     ? db.from(spec.table).select(select, { count: 'exact', head: true })
     : db.from(spec.table).select(select)
+
+  q = scopeToMailboxes(ctx, spec, q)
 
   if (input.status && spec.statusCol) {
     q = q.eq(spec.statusCol, String(input.status))
@@ -321,7 +367,7 @@ function buildQuery(
  * מחפשים מילה-מילה, ואז מדרגים לפי כמה מילים תאמו.
  */
 async function searchRows(
-  db: SupabaseClient,
+  ctx: ToolCtx,
   spec: TableSpec,
   term: string,
   input: Record<string, unknown>,
@@ -337,7 +383,7 @@ async function searchRows(
     const idFilter = spec.columns.includes('spouse_id_number')
       ? `id_number.eq.${digits},spouse_id_number.eq.${digits}`
       : `id_number.eq.${digits}`
-    const { data } = await buildQuery(db, spec, input, select).or(idFilter).limit(limit)
+    const { data } = await buildQuery(ctx, spec, input, select).or(idFilter).limit(limit)
     if (data?.length) return data as never
   }
 
@@ -349,7 +395,7 @@ async function searchRows(
   const hits = new Map<string, Record<string, unknown>>()
   for (const w of words) {
     const or = cols.map(c => `${c}.ilike.%${w}%`).join(',')
-    const { data } = await buildQuery(db, spec, input, select).or(or).limit(60)
+    const { data } = await buildQuery(ctx, spec, input, select).or(or).limit(60)
     for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
       hits.set(String(r.id ?? JSON.stringify(r)), r)
     }
@@ -393,12 +439,12 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
 
       const term = String(input.search ?? '').trim()
       if (term) {
-        const rows = await searchRows(db, spec, term, input, select, limit)
+        const rows = await searchRows(ctx, spec, term, input, select, limit)
         if (!rows.length) return { message: `לא נמצאו תוצאות עבור "${term}" ב${spec.label}` }
         return { טבלה: spec.label, נמצאו: rows.length, רשומות: withLinks(rows) }
       }
 
-      let q = buildQuery(db, spec, input, select)
+      let q = buildQuery(ctx, spec, input, select)
       if (spec.dateCol) q = q.order(spec.dateCol, { ascending: false })
 
       const { data, error } = await q.limit(limit)
@@ -427,7 +473,7 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
           return { error: `העמודה "${groupBy}" אינה קיימת ב${spec.label}.` }
         }
         // שולפים רק את עמודת הפילוח וסופרים בצד שלנו
-        const { data, error } = await buildQuery(db, spec, input, groupBy).limit(2000)
+        const { data, error } = await buildQuery(ctx, spec, input, groupBy).limit(2000)
         if (error) return { error: 'שגיאה בשליפת הנתונים' }
 
         const counts: Record<string, number> = {}
@@ -439,7 +485,7 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
         return { טבלה: spec.label, פילוח_לפי: groupBy, סהכ: data?.length ?? 0, תוצאות: Object.fromEntries(sorted) }
       }
 
-      const { count, error } = await buildQuery(db, spec, input, 'id', true)
+      const { count, error } = await buildQuery(ctx, spec, input, 'id', true)
       if (error) return { error: 'שגיאה בספירה' }
       return { טבלה: spec.label, כמות: count ?? 0 }
     }
@@ -481,14 +527,19 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
         })())
       }
 
-      // דואר
-      jobs.push((async () => {
-        const [today, unread] = await Promise.all([
-          db.from('inbound_emails').select('id', { count: 'exact', head: true }).gte('created_at', sinceISO(1)!),
-          db.from('inbound_emails').select('id', { count: 'exact', head: true }).eq('is_read', false),
-        ])
-        out['דואר'] = { התקבלו_היום: today.count ?? 0, לא_נקראו: unread.count ?? 0 }
-      })())
+      // דואר — רק לתיבות שהמשתמש מורשה אליהן. משתמש חסום לא יראה ספירה כלל.
+      const mailSpec = tableByName('inbound_emails')
+      if (mailSpec && allowed(ctx, mailSpec)) {
+        jobs.push((async () => {
+          const scoped = () =>
+            scopeToMailboxes(ctx, mailSpec, db.from('inbound_emails').select('id', { count: 'exact', head: true }))
+          const [today, unread] = await Promise.all([
+            scoped().gte('created_at', sinceISO(1)!),
+            scoped().eq('is_read', false),
+          ])
+          out['דואר'] = { התקבלו_היום: today.count ?? 0, לא_נקראו: unread.count ?? 0 }
+        })())
+      }
 
       await Promise.all(jobs)
 
@@ -515,7 +566,7 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
           id = (data?.[0] as { id?: string } | undefined)?.id ?? ''
         } else if (nm) {
           const bspec = tableByName('beneficiaries')!
-          const rows = await searchRows(db, bspec, nm, {}, 'id, family_name, full_name, spouse_name', 5)
+          const rows = await searchRows(ctx, bspec, nm, {}, 'id, family_name, full_name, spouse_name', 5)
           if (rows.length > 1) {
             return {
               הבהרה: 'נמצאו כמה משפחות תואמות — ציין מזהה מדויק ובדוק שוב:',

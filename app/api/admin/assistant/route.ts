@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, getServiceClient, allowedMailboxKeys } from '@/lib/apiAuth'
+import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 import { TOOL_DEFS, runTool, schemaForUser, activityLabel, type ToolCtx } from '@/lib/assistant/tools'
 import type { UserPermissions } from '@/types'
 import { rateLimit } from '@/lib/rateLimit'
@@ -128,10 +129,21 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // התיבות שהמשתמש מורשה אליהן — אותה אכיפה כמו במסך המייל.
+  // בלעדיה העוזר היה מחזיר דואר מכל המחלקות לכל איש צוות.
+  const mailKeys = allowedMailboxKeys(staff)
+  const mailboxEmails = mailKeys === null
+    ? null
+    : mailKeys.map(k => DEPARTMENTS[k as DepartmentKey]?.email).filter((e): e is string => !!e)
+
   const ctx: ToolCtx = {
     db,
     perms: (staff.permissions ?? {}) as UserPermissions,
     isAdmin: staff.role === 'admin',
+    mailboxEmails,
+    // sent_emails מסונן לפי department (מפתחות), ולכן העוזר צריך גם את המפתחות
+    // הגולמיים ולא רק את הכתובות. עקבי עם mailboxEmails (שניהם null למנהל).
+    mailboxKeys: mailKeys,
   }
 
   const client = new Anthropic({ apiKey: key })
