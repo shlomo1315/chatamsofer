@@ -44,6 +44,19 @@ export async function POST(request: NextRequest) {
   if (password && password.length < 6) return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים' }, { status: 400 })
   if (!VALID_ROLES.includes(role)) return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
 
+  // ניקוי פרופיל יתום: משתמש שנמחק בעבר כשרק ה-Auth נמחק והפרופיל נשאר, חוסם
+  // יצירה מחדש (unique על email). אם קיים פרופיל כזה בלי משתמש Auth תואם — מסירים
+  // אותו כדי לאפשר חיבור מחדש. (אם קיים משתמש Auth פעיל — createUser ייכשל כרגיל.)
+  {
+    const { data: orphan } = await admin.from('profiles').select('id').ilike('email', email).maybeSingle()
+    if (orphan?.id) {
+      const { data: authUser, error: authLookupErr } = await admin.auth.admin.getUserById(orphan.id)
+      // מוחקים רק כשוודאי שאין משתמש Auth תואם (fail-closed): שגיאת שירות לא
+      // תגרום למחיקת פרופיל של משתמש פעיל.
+      if (!authLookupErr && !authUser?.user) await admin.from('profiles').delete().eq('id', orphan.id)
+    }
+  }
+
   // יצירת משתמש האימות — עם סיסמה אם הוזנה, אחרת ללא (כניסה עם Google בלבד)
   const { data: created, error: authErr } = await admin.auth.admin.createUser({
     email, email_confirm: true, user_metadata: { full_name },
@@ -86,8 +99,16 @@ export async function DELETE(request: NextRequest) {
   const { id } = body
   if (!id) return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
 
+  // מוחקים גם את הפרופיל וגם את משתמש ה-Auth. קודם הפרופיל — כי הוא זה שחוסם
+  // יצירה מחדש (unique על email). אם רק Auth נמחק, נשאר פרופיל יתום שמונע גם
+  // התחברות (אין Auth) וגם חיבור מחדש ("כבר קיים").
+  await admin.from('profiles').delete().eq('id', id)
+
   const { error } = await admin.auth.admin.deleteUser(id)
-  if (error) return NextResponse.json({ error: `שגיאה במחיקה: ${error.message}` }, { status: 500 })
+  // "not found" — משתמש ה-Auth כבר נמחק בעבר; הפרופיל נוקה כעת, אז זו הצלחה.
+  if (error && !/not found|does not exist/i.test(error.message)) {
+    return NextResponse.json({ error: `שגיאה במחיקה: ${error.message}` }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true })
 }
