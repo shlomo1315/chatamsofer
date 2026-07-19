@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { Loader2, Save, RotateCcw, Eye, ChevronDown, Check, AlertCircle } from 'lucide-react'
+import { Loader2, Save, RotateCcw, Eye, ChevronDown, Check, AlertCircle, Download } from 'lucide-react'
 import { EMAIL_CATALOG, GROUP_LABELS, textOf, type EmailGroup, type EmailTexts } from '@/lib/emailCatalog'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +118,14 @@ export default function EmailTextsManager() {
         לאחר השמירה, השינוי חל <strong>מיד</strong> על המייל הבא שיישלח.
         העיצוב (לוגו, צבעים, מסגרות) נשאר אחיד ואינו ניתן לעריכה, כדי שטעות לא תוכל לשבור מייל.
       </p>
+
+      {/* הורדת מסמך מרוכז (PDF) של כל נוסחי המיילים — לעריכה "מול העיניים" */}
+      <a
+        href="/api/admin/email-catalog-pdf"
+        className="inline-flex items-center gap-2 self-start rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 py-2 text-sm font-semibold transition-colors"
+      >
+        <Download size={15} /> הורדת כל נוסחי המיילים (PDF)
+      </a>
 
       {/* קבוצות — רק מיילים שהתבנית שלהם באמת קוראת את הטקסטים הערוכים.
           הצגת מייל שאינו wired הייתה מטעה: העריכה לא הייתה משפיעה על כלום. */}
