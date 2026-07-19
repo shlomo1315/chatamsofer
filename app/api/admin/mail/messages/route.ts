@@ -37,6 +37,12 @@ export async function GET(request: NextRequest) {
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim().replace(/[,()*%_\\"']/g, ' ').trim()
   const department = request.nextUrl.searchParams.get('department') ?? ''
 
+  // דפדוף: 50 לעמוד. מושכים PAGE_SIZE+1 כדי לדעת אם קיים עמוד הבא בלי ספירה נפרדת.
+  const PAGE_SIZE = 50
+  const page = Math.max(0, parseInt(request.nextUrl.searchParams.get('page') ?? '0', 10) || 0)
+  const rangeFrom = page * PAGE_SIZE
+  const rangeTo = rangeFrom + PAGE_SIZE // כולל — שורה עודפת אחת לזיהוי hasMore
+
   const admin = getAdminClient()
   const nowIso = new Date().toISOString()
 
@@ -62,7 +68,7 @@ export async function GET(request: NextRequest) {
   // ── דואר יוצא / מתוזמן ──
   if (folder === 'SENT' || folder === 'SCHEDULED') {
     const assignments = await labelsFor()
-    let query = admin.from('sent_emails').select('*').limit(50)
+    let query = admin.from('sent_emails').select('*').range(rangeFrom, rangeTo)
     if (folder === 'SCHEDULED') {
       query = query.gt('scheduled_at', nowIso).order('scheduled_at', { ascending: true })
     } else {
@@ -74,7 +80,10 @@ export async function GET(request: NextRequest) {
     if (q) query = query.or(`subject.ilike.%${q}%,to_email.ilike.%${q}%`)
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    const messages = (data ?? []).map(m => ({
+    // השורה ה-51 (אם קיימת) מציינת שיש עמוד הבא — חותכים אותה ומחזירים hasMore.
+    const rows = data ?? []
+    const hasMore = rows.length > PAGE_SIZE
+    const messages = rows.slice(0, PAGE_SIZE).map(m => ({
       id: m.id,
       threadId: m.id,
       subject: m.subject ?? '',
@@ -90,21 +99,24 @@ export async function GET(request: NextRequest) {
       labelIds: assignments[m.id] ?? [],
       scheduledAt: m.scheduled_at ?? null,
     }))
-    return NextResponse.json({ messages })
+    return NextResponse.json({ messages, page, pageSize: PAGE_SIZE, hasMore })
   }
 
   // ── דואר נכנס / ספאם / ארכיון (LEGACY) ──
   const assignments = await labelsFor()
   const isLegacy = folder === 'LEGACY'
-  let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).limit(50)
+  let query = admin.from('inbound_emails').select('*').order('received_at', { ascending: false }).range(rangeFrom, rangeTo)
   if (isLegacy) {
     query = query.eq('source', 'legacy')
+    // תשובות צ'אט (בירורי הלוואה) אינן חלק מהארכיון — מוצאות גם כאן, כמו בדואר הרגיל.
+    query = query.eq('is_chat', false)
     const sub = request.nextUrl.searchParams.get('sub')
     if (sub === 'assigned') query = query.not('beneficiary_id', 'is', null)
     else if (sub === 'unassigned') query = query.is('beneficiary_id', null)
-    // ארכיון מסונן לפי המחלקה שאליה שויכה תיבת המקור (עמודת department).
-    // ללא בחירת מחלקה — מוצג הארכיון של כל התיבות.
-    if (department) query = query.eq('department', department)
+    // ארכיון מסונן לפי המחלקות המורשות (effectiveKeys), בדיוק כמו הדואר היוצא —
+    // ולא לפי פרמטר department גולמי מהלקוח (שאיפשר קריאת ארכיון של מחלקה זרה).
+    if (effectiveKeys && effectiveKeys.length === 1) query = query.eq('department', effectiveKeys[0])
+    else if (effectiveKeys && effectiveKeys.length > 1) query = query.in('department', effectiveKeys)
   } else {
     query = folder === 'SPAM' ? query.eq('is_spam', true) : query.eq('is_spam', false)
     // תוית "צ'אט" — תשובות לבירורי הלוואה. הן מוצגות בשרשור שבתיק ההלוואה,
@@ -119,7 +131,10 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const messages = (data ?? []).map(m => ({
+  // השורה ה-51 (אם קיימת) מסמנת שיש עמוד הבא — חותכים אותה ומחזירים hasMore.
+  const rows = data ?? []
+  const hasMore = rows.length > PAGE_SIZE
+  const messages = rows.slice(0, PAGE_SIZE).map(m => ({
     id: m.id,
     threadId: m.id,
     subject: m.subject ?? '',
@@ -151,5 +166,5 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  return NextResponse.json({ messages })
+  return NextResponse.json({ messages, page, pageSize: PAGE_SIZE, hasMore })
 }

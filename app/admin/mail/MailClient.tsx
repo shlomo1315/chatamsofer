@@ -8,7 +8,7 @@ import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import DocThumb from '@/components/ui/DocThumb'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
-  ChevronLeft, Loader2, Reply, User, Phone, MapPin,
+  ChevronLeft, ChevronRight, Loader2, Reply, User, Phone, MapPin,
   CheckCircle2, ExternalLink, Forward, Trash2, BarChart2,
   Paperclip, Download, FolderOpen, FileText, Bold, Italic, Underline, List, ListOrdered, Smile, Palette,
   Clock, Tag, Ban, Flag, Plus, ShieldCheck, Archive, UserPlus, MessageSquare,
@@ -1112,6 +1112,12 @@ export default function MailClient() {
   const [assigningMsgId, setAssigningMsgId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ParsedMessage[]>([])
   const [selected, setSelected] = useState<ParsedMessage | null>(null)
+  // דפדוף: עמוד נוכחי (0-מבוסס) והאם קיים עמוד הבא. 50 מיילים לעמוד.
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  // ref לעמוד הנוכחי — כדי שהרענון החי (Realtime/focus) יטען מחדש את אותו עמוד
+  // ולא יזרוק את המשתמש לעמוד 0 ויאבד את מקומו.
+  const pageRef = useRef(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [compose, setCompose] = useState(false)
@@ -1204,7 +1210,7 @@ export default function MailClient() {
     } catch { /* silent */ }
   }, [])
 
-  const load = useCallback(async (f: string, q?: string, silent = false) => {
+  const load = useCallback(async (f: string, q?: string, silent = false, pageArg = 0) => {
     // רענון רקע (silent) — לא מציג "טוען מיילים" ולא סוגר את ההודעה הפתוחה
     if (!silent) {
       setLoading(true)
@@ -1215,7 +1221,7 @@ export default function MailClient() {
     // אם לא נבחרה תיבה — נופלים לתיבת המשתמש. השרת ממילא אוכף אילו תיבות מותרות למשתמש.
     const dept = activeDepartmentRef.current ?? (myProfileRef.current?.department ?? null)
     const sub = f === 'LEGACY' ? `&sub=${legacySubRef.current}` : ''
-    const res = await fetch(`/api/admin/mail/messages?folder=${f}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}${sub}`)
+    const res = await fetch(`/api/admin/mail/messages?folder=${f}&page=${pageArg}${q ? `&q=${encodeURIComponent(q)}` : ''}${dept ? `&department=${dept}` : ''}${sub}`)
     const data = await res.json()
     if (data.error && !data.messages) {
       setLoadError(data.error)
@@ -1226,6 +1232,10 @@ export default function MailClient() {
     const msgs: ParsedMessage[] = data.messages ?? []
 
     setMessages(msgs)
+    const effectivePage = data.page ?? pageArg
+    setPage(effectivePage)
+    pageRef.current = effectivePage
+    setHasMore(!!data.hasMore)
 
     // Detect new INBOX messages for toast notifications
     if (f === 'INBOX') {
@@ -1266,6 +1276,12 @@ export default function MailClient() {
 
   useEffect(() => { load(folder) }, [folder, load])
 
+  // ניווט בין עמודי הרשימה (50 לעמוד). לא יורד מתחת ל-0 ולא מעבר לעמוד האחרון.
+  const goToPage = useCallback((next: number) => {
+    if (next < 0) return
+    load(folder, searchRef.current || undefined, false, next)
+  }, [folder, load])
+
   // רענון כשמחליפים בין משויכים/לא-משויכים בתוך ארכיון המייל הקודם
   useEffect(() => {
     if (folder === 'LEGACY') load(folder, searchRef.current || undefined)
@@ -1287,7 +1303,8 @@ export default function MailClient() {
   // רענון מיידי לכל מייל בנפרד — Supabase Realtime: כל הוספה/שינוי בטבלת המיילים
   // (נכנס/יוצא) דוחף עדכון חי למסך. רענון נוסף בחזרה לחלון. אין פולינג — Realtime מספיק.
   useEffect(() => {
-    const refresh = () => load(folder, searchRef.current || undefined, true)
+    // רענון שומר על העמוד הנוכחי (pageRef) — כדי לא לזרוק את המשתמש לעמוד 0.
+    const refresh = () => load(folder, searchRef.current || undefined, true, pageRef.current)
     const supabase = createClient()
     // Realtime עלול לפרוץ במקבצים (כולל כתיבות של האפליקציה עצמה — סימון נקרא/ספאם/מעקב) —
     // דוחסים אותם לרענון אחד עם debounce קצר במקום שרשרת רענונים מלאים.
@@ -1634,6 +1651,34 @@ export default function MailClient() {
             })()
           )}
         </div>
+
+        {/* פס דפדוף — 50 מיילים לעמוד, חצים קדימה/אחורה כמו בג'ימייל. מוצג רק
+            כשיש יותר מעמוד אחד. בעברית: "הקודמים" (חדשים יותר) מימין, "הבאים" משמאל. */}
+        {!loading && !loadError && (page > 0 || hasMore) && (
+          <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-slate-50 text-sm">
+            <span className="text-slate-500">
+              מיילים {page * 50 + 1}–{page * 50 + messages.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 0}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                title="הקודמים">
+                <ChevronRight size={16} /> הקודמים
+              </button>
+              <button
+                type="button"
+                onClick={() => goToPage(page + 1)}
+                disabled={!hasMore}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                title="הבאים">
+                הבאים <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Message View */}
