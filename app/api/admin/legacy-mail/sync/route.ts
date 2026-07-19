@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   if (accountId) {
     const { data: acc } = await db
       .from('gmail_accounts')
-      .select('id, refresh_token, department, label_id, last_sync_epoch')
+      .select('id, refresh_token, department, label_id, last_sync_epoch, import_target_email')
       .eq('id', accountId)
       .maybeSingle()
     if (acc) { account = acc; departmentKey = acc.department as string }

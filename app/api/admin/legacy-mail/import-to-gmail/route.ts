@@ -38,13 +38,14 @@ export async function POST(request: NextRequest) {
   const db = admin()
   const { data: acc } = await db
     .from('gmail_accounts')
-    .select('id, refresh_token, department')
+    .select('id, refresh_token, department, import_target_email')
     .eq('id', accountId)
     .maybeSingle()
   if (!acc) return NextResponse.json({ error: 'התיבה לא נמצאה' }, { status: 404 })
 
-  const deptEmail = DEPARTMENTS[acc.department as DepartmentKey]?.email
-  if (!deptEmail) return NextResponse.json({ error: 'למחלקה זו אין כתובת Gmail' }, { status: 400 })
+  // כתובת היעד: מה שהוגדר ידנית לתיבה, ובנפילה — כתובת המחלקה.
+  const targetEmail = (acc.import_target_email as string | null)?.trim() || DEPARTMENTS[acc.department as DepartmentKey]?.email
+  if (!targetEmail) return NextResponse.json({ error: 'לא הוגדרה כתובת יעד ל-Gmail' }, { status: 400 })
 
   // מיילים של המחלקה שטרם יובאו ל-Gmail
   const { data: rows } = await db
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
 
   let deptGmail, labelId: string
   try {
-    deptGmail = getWorkspaceGmailClient(deptEmail)
+    deptGmail = getWorkspaceGmailClient(targetEmail)
     labelId = await ensureArchiveLabel(deptGmail)
   } catch (e) {
     console.error('[import-to-gmail] workspace client failed:', e)

@@ -19,6 +19,7 @@ interface Mailbox {
   unmatched: number
   lastError: string | null
   isLegacyToken?: boolean
+  importTargetEmail?: string | null
 }
 
 interface SyncRun {
@@ -109,10 +110,33 @@ export default function LegacyMailSettings() {
     }
   }
 
-  // ייבוא ל-Gmail של המחלקה — רץ בבאצ'ים עד שכל המיילים יובאו.
+  // ייבוא ל-Gmail — שואל לאיזו כתובת Gmail להזריק (ברירת מחדל: כתובת המחלקה),
+  // שומר את הבחירה, ואז מייבא בבאצ'ים עד שכל המיילים הושלמו.
   async function importToGmail(box: Mailbox) {
     if (!box.id) return
+    const target = window.prompt(
+      `לאיזו כתובת Gmail להזריק את המיילים של "${box.label}"?\nהשאר ריק כדי להשתמש בכתובת המחלקה (${box.departmentLabel}).`,
+      box.importTargetEmail ?? '',
+    )
+    if (target === null) return  // ביטול
     setSyncingId(box.id)
+    try {
+      // שמירת כתובת היעד לפני הייבוא
+      const setRes = await fetch('/api/admin/legacy-mail/set-import-target', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: box.id, email: target.trim() || null }),
+      })
+      if (!setRes.ok) {
+        const e = await setRes.json()
+        toast.error(e.error || 'שגיאה בשמירת כתובת היעד')
+        setSyncingId(null)
+        return
+      }
+    } catch {
+      toast.error('שגיאת רשת')
+      setSyncingId(null)
+      return
+    }
     let total = 0
     try {
       for (let guard = 0; guard < 1000; guard++) {

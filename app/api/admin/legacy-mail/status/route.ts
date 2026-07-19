@@ -21,6 +21,7 @@ export interface MailboxStatus {
   unmatched: number
   lastError: string | null
   isLegacyToken?: boolean
+  importTargetEmail?: string | null
 }
 
 function admin() {
@@ -59,7 +60,7 @@ export async function GET() {
   // ── תיבות מטבלת gmail_accounts (ריבוי תיבות) ──
   const { data: accounts, error: accErr } = await db
     .from('gmail_accounts')
-    .select('id, email, label, department, is_active, last_sync_at, total_synced, last_sync_count, last_error')
+    .select('id, email, label, department, is_active, last_sync_at, total_synced, last_sync_count, last_error, import_target_email')
     .order('created_at')
 
   if (!accErr) {
@@ -78,6 +79,7 @@ export async function GET() {
         lastSyncCount: Number(a.last_sync_count ?? 0),
         unmatched: stats.unmatched,
         lastError: (a.last_error as string) ?? null,
+        importTargetEmail: (a.import_target_email as string) ?? null,
       })
     }
   }

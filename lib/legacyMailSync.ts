@@ -10,6 +10,8 @@ export interface GmailAccount {
   department: string
   label_id?: string | null
   last_sync_epoch?: number | null
+  // כתובת יעד לייבוא ל-Gmail — ריק = כתובת המחלקה
+  import_target_email?: string | null
 }
 
 // הוספת התווית של התיבה לכל המיילים שנקלטו — ב-mail_label_assignments (app_settings),
@@ -123,7 +125,9 @@ export async function syncLegacyMail(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deptGmail: any = null
   let deptArchiveLabelId: string | null = null
-  const deptEmail = forcedDept ? DEPARTMENTS[forcedDept as DepartmentKey]?.email : null
+  // כתובת היעד: מה שהוגדר ידנית לתיבה, ובנפילה — כתובת המחלקה.
+  const deptEmail = account?.import_target_email?.trim()
+    || (forcedDept ? DEPARTMENTS[forcedDept as DepartmentKey]?.email : null)
   if (isWorkspaceConfigured() && deptEmail) {
     try {
       deptGmail = getWorkspaceGmailClient(deptEmail)
