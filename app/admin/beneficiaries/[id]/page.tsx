@@ -10,6 +10,7 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
+import ReturnedFixesBanner from './ReturnedFixesBanner'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
@@ -385,6 +386,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <BeneficiaryActions id={id} name={fullName} />
         </div>
       </div>
+
+      {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 
       <Tabs tabs={[
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },

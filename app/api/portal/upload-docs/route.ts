@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { maybeMarkDocsReturned } from '@/lib/docsReturnCheck'
 
 export const dynamic = 'force-dynamic'
 
@@ -137,13 +138,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
   }
 
-  // אם הצאצא השלים בקשת השלמת מסמכים ידנית (docs_pending) — חוזר ל"ממתין לאישור" + ניקוי הרשימה.
-  // בכל מקרה אחר (כולל העלאת ת.ז כחלק מהגשת בקשה) — הסטטוס נשאר כפי שהוא (ממתין/מאושר).
+  // מעגל תיקונים: בסטטוס "השלמת מסמכים" — רק כשהצאצא השלים את *כל* הנדרש
+  // (כל המסמכים + תיקון דורות אם סומן) הוא עובר ל"הוחזר תיקון — לבדיקה".
+  // בכל מקרה אחר (כולל העלאת ת.ז כחלק מהגשת בקשה) — הסטטוס נשאר כפי שהוא.
+  let returned = false
   if (ben.eligibility_status === 'docs_pending') {
-    await admin.from('beneficiaries')
-      .update({ eligibility_status: 'pending', required_docs: '', updated_at: new Date().toISOString() })
-      .eq('id', beneficiaryId)
+    returned = await maybeMarkDocsReturned(admin, beneficiaryId)
   }
 
-  return NextResponse.json({ ok: true, uploaded, url: lastUrl })
+  return NextResponse.json({ ok: true, uploaded, url: lastUrl, returned })
 }

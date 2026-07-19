@@ -8,6 +8,7 @@ const statusConfig: Record<string, { label: string; classes: string; dotColor: s
   rejected:     { label: 'נדחה',                     classes: 'bg-red-50 text-red-700 border-red-200',           dotColor: 'bg-red-500' },
   review:       { label: 'ממתין לאישור מסמכים',       classes: 'bg-violet-50 text-violet-700 border-violet-200', dotColor: 'bg-violet-500' },
   docs_pending: { label: 'השלמת מסמכים',              classes: 'bg-blue-50 text-blue-700 border-blue-200',       dotColor: 'bg-blue-500' },
+  docs_returned: { label: 'הוחזר תיקון — לבדיקה',      classes: 'bg-teal-50 text-teal-700 border-teal-200',       dotColor: 'bg-teal-500' },
   active:       { label: 'פעיל',                     classes: 'bg-emerald-50 text-emerald-700 border-emerald-200', dotColor: 'bg-emerald-500' },
   completed:    { label: 'הושלם',                    classes: 'bg-zinc-100 text-zinc-600 border-zinc-200',       dotColor: 'bg-zinc-400' },
   cancelled:    { label: 'בוטל',                     classes: 'bg-red-50 text-red-700 border-red-200',           dotColor: 'bg-red-500' },

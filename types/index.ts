@@ -3,7 +3,7 @@ export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid' | 'newsletter'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
-export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending'
+export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending' | 'docs_returned'
 export type Gender = 'male' | 'female'
 export type LoanStatus = 'pending' | 'inquiry' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
@@ -91,6 +91,13 @@ export interface Beneficiary {
   rejection_reason?: string
   docs_notes?: string
   required_docs?: string
+  // מעגל תיקונים — בקשת תיקון עץ דורות + מעקב שליחה/החזרה
+  lineage_fix_required?: boolean
+  lineage_fix_note?: string | null
+  lineage_fixed_at?: string | null
+  lineage_chain_before_fix?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[] | null
+  docs_sent_at?: string | null
+  docs_returned_at?: string | null
   nedarim_id?: string
   created_at: string
   updated_at: string
@@ -403,6 +410,7 @@ export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
   rejected: 'נדחה',
   review: 'ממתין לאישור מסמכים',
   docs_pending: 'השלמת מסמכים',
+  docs_returned: 'הוחזר תיקון — לבדיקה',
 }
 
 export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {

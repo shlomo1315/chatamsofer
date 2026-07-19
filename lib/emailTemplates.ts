@@ -513,7 +513,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 // ─── מענה אוטומטי לצאצא קיים ──────────────────────────────────────────────────
 const STATUS_LABELS_HE: Record<string, string> = {
   pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר',
-  rejected: 'לא מאושר', docs_pending: 'השלמת מסמכים',
+  rejected: 'לא מאושר', docs_pending: 'השלמת מסמכים', docs_returned: 'הוחזר תיקון — בבדיקת המשרד',
 }
 
 export interface ContactBeneficiary {
@@ -640,11 +640,16 @@ export function docsPendingEmail(
   maritalStatus?: string | null,
   explicitDocs?: string[],
   extraNote?: string,
+  lineageFixNote?: string | null,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
   const t = (k: string) => textFor('docs_pending', k)
-  const docs = (explicitDocs && explicitDocs.length) ? explicitDocs : requiredDocLabels(maritalStatus)
+  // כשהבקשה היא רק תיקון דורות (בלי מסמכים) — explicitDocs ריק במכוון ותיבת
+  // המסמכים לא מוצגת; הנפילה לפי מצב משפחתי רלוונטית רק כשאין lineageFixNote.
+  const docs = (explicitDocs && explicitDocs.length)
+    ? explicitDocs
+    : (lineageFixNote ? [] : requiredDocLabels(maritalStatus))
   const docsList = docs.map(d =>
     `<li style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:700;">${d}</li>`
   ).join('')
@@ -656,12 +661,20 @@ export function docsPendingEmail(
       ${t('intro')}
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+    ${docs.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:18px 20px;">
         <p style="margin:0 0 10px;color:#92400e;font-size:14px;font-weight:800;">${escapeHtml(t('docs_title'))}</p>
         <ul style="margin:0;padding-right:20px;">${docsList}</ul>
       </td></tr>
-    </table>
+    </table>` : ''}
+    ${lineageFixNote && lineageFixNote.trim() ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 10px;color:#3730a3;font-size:14px;font-weight:800;">תיקון עץ הדורות</p>
+        <p style="margin:0 0 10px;color:#4338ca;font-size:14px;line-height:1.7;">נמצא אי-דיוק בשרשרת הדורות שמסרת:</p>
+        <p style="margin:0 0 10px;color:#312e81;font-size:14px;line-height:1.7;font-weight:700;">${escapeHtml(lineageFixNote.trim())}</p>
+        <p style="margin:0;color:#4338ca;font-size:14px;line-height:1.7;">בכניסה לאזור האישי תתבקש/י לעדכן את שרשרת הדורות מחדש.</p>
+      </td></tr>
+    </table>` : ''}
     ${extraNote && extraNote.trim() ? `<p style="margin:0 0 24px;color:#475569;font-size:14px;line-height:1.7;background:#f8fafc;border-radius:10px;padding:14px 18px;">${extraNote}</p>` : ''}
 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">

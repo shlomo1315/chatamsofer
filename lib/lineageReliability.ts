@@ -44,7 +44,7 @@ type Bene = {
 
 const DISCLAIMER = 'נתונים לסקירה בלבד — אינם קובעים ואינם משנים דבר במשפחה.'
 const STATUS_HE: Record<string, string> = {
-  pending: 'ממתין לאישור', docs_pending: 'ממתין למסמכים', approved: 'מאושר', rejected: 'נדחה',
+  pending: 'ממתין לאישור', docs_pending: 'ממתין למסמכים', docs_returned: 'הוחזר תיקון — לבדיקה', approved: 'מאושר', rejected: 'נדחה',
 }
 
 function bandOf(score: number): { band: ReliabilityBand; label: string } {

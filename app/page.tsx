@@ -71,6 +71,10 @@ interface FoundBeneficiary {
   lineage_node_id?: string
   lineage_manual?: string[]
   lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
+  // מעגל תיקונים — בקשת תיקון עץ דורות מהמזכירות
+  lineage_fix_required?: boolean
+  lineage_fix_note?: string | null
+  lineage_fixed_at?: string | null
   created_at: string
 }
 
@@ -1041,6 +1045,9 @@ export default function PublicPortalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childSelf, regForm.marital_status])
   const [lineageResult, setLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
+  // מעגל תיקונים: תיקון עץ דורות מהאזור האישי — תוצאת המבורר + מצב שליחה
+  const [fixLineageResult, setFixLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
+  const [fixLineageSubmitting, setFixLineageSubmitting] = useState(false)
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>([])
@@ -2034,8 +2041,22 @@ export default function PublicPortalPage() {
     setError(''); setDocsUploading(true)
     try {
       const newDocs = requiredDocs.filter(d => docFiles[d])
-      // אין קבצים חדשים — כל הנדרש כבר קיים במערכת. אין צורך בהעלאה חוזרת.
+      // אין קבצים חדשים — כל הנדרש כבר קיים במערכת. אין צורך בהעלאה חוזרת,
+      // אבל במעגל תיקונים (docs_pending) חייבים להריץ את בדיקת ההשלמה בצד שרת —
+      // אחרת הצאצא נשאר תקוע ב"השלמת מסמכים" בלי שאף אחד יידע שסיים.
       if (newDocs.length === 0) {
+        if (beneficiary.eligibility_status === 'docs_pending') {
+          try {
+            const r = await fetch('/api/portal/docs-complete', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+            })
+            const d = await r.json()
+            if (r.ok && d.returned) {
+              setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_returned', required_docs: '' } : b)
+            }
+          } catch { /* לא חוסם — הבדיקה תרוץ שוב בפעולה הבאה */ }
+        }
         setStep('dashboard')
         setDocsUploading(false)
         return
@@ -2053,13 +2074,66 @@ export default function PublicPortalPage() {
         return next
       })
       setDocFiles({}); setReplaceDoc({})
-      // השלמת בקשת מסמכים ידנית → חזרה ל"ממתין לאישור" וניקוי הרשימה
-      if (beneficiary.eligibility_status === 'docs_pending') {
-        setBeneficiary(b => b ? { ...b, eligibility_status: 'pending', required_docs: '' } : b)
+      // מעגל תיקונים: הסטטוס מתחלף ל"הוחזר תיקון" רק כשהשרת אישר שהכול הושלם
+      // (כל המסמכים + תיקון דורות אם נדרש). אם עוד נדרש תיקון דורות — נשארים
+      // במסך כדי שהצאצא ישלים גם אותו.
+      if (beneficiary.eligibility_status === 'docs_pending' && data.returned) {
+        setBeneficiary(b => b ? { ...b, eligibility_status: 'docs_returned', required_docs: '' } : b)
       }
-      setStep('dashboard')
+      if (!(beneficiary.lineage_fix_required && !beneficiary.lineage_fixed_at)) setStep('dashboard')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setDocsUploading(false)
+  }
+
+  // ── מעגל תיקונים: תיקון עץ הדורות מהאזור האישי ──
+  // המזכירות סימנה שהדורות דורשים תיקון; הצאצא בונה מחדש את השרשרת באותו מבורר
+  // כמו בהרשמה, והתיקון נשלח לשרת (השרשרת הישנה נשמרת שם להשוואה).
+  const lineageFixNeeded = !!beneficiary?.lineage_fix_required && !beneficiary?.lineage_fixed_at
+
+  // שם הצאצא לדור האחרון בשרשרת — כמו בהרשמה: "שלמה ושרה ניימאן"
+  const fixSelfName = (() => {
+    if (!beneficiary) return ''
+    const married = (beneficiary.marital_status ?? '').startsWith('נשו')
+    const given = married && beneficiary.spouse_name
+      ? `${beneficiary.full_name} ו${beneficiary.spouse_name}`.trim()
+      : (beneficiary.full_name || '')
+    return [given, beneficiary.family_name].filter(Boolean).join(' ').trim()
+  })()
+
+  const handleFixLineageSubmit = async () => {
+    if (!beneficiary) return
+    if (!fixLineageResult.valid) { setError('יש להשלים את שרשרת הדורות — כולל הוספת עצמך כדור האחרון וסימון בן/חתן.'); return }
+    setError(''); setFixLineageSubmitting(true)
+    try {
+      const anc = fixLineageResult.ancestors
+      const chain = [
+        { generation: 1, name: 'רבינו החתם סופר', relation: null as 'son' | 'son_in_law' | null },
+        ...anc.map((a, i) => ({ generation: i + 2, name: a.name, relation: a.relation })),
+        { generation: anc.length + 2, name: fixSelfName, relation: fixLineageResult.selfRelation },
+      ]
+      const res = await fetch('/api/portal/fix-lineage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          beneficiary_id: beneficiary.id,
+          lineage_node_id: fixLineageResult.nodeId,
+          lineage_manual: anc.filter(a => a.isNew).map(a => a.name),
+          lineage_chain: chain,
+          lineage_new_nodes: [
+            ...anc.filter(a => a.isNew).map(a => ({ name: a.name, relation: a.relation })),
+            { name: fixSelfName, relation: fixLineageResult.selfRelation },
+          ],
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשליחת התיקון'); return }
+      setBeneficiary(b => b ? {
+        ...b,
+        lineage_fixed_at: new Date().toISOString(),
+        lineage_chain: chain,
+        ...(data.returned ? { eligibility_status: 'docs_returned' as const, required_docs: '' } : {}),
+      } : b)
+    } catch { setError('שגיאת רשת. אנא נסה שוב.') }
+    setFixLineageSubmitting(false)
   }
 
   // הצגת שדה מסמך זהות: קובץ חדש שנבחר / קובץ שכבר התקבל (עם אפשרות החלפה) / שדה העלאה
@@ -3615,6 +3689,14 @@ export default function PublicPortalPage() {
               </div>
             )}
 
+            {/* מעגל תיקונים: התיקון הוגש במלואו וממתין לבדיקת המשרד */}
+            {beneficiary.eligibility_status === 'docs_returned' && (
+              <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 text-sm text-teal-700">
+                <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                <span>התיקון שהגשת התקבל במלואו וממתין לבדיקת המשרד. אין צורך בפעולה נוספת — נעדכן אותך בהודעה מסודרת.</span>
+              </div>
+            )}
+
             {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות) */}
             <Card>
               <div className="flex items-center gap-2 mb-3">
@@ -3710,6 +3792,8 @@ export default function PublicPortalPage() {
               <h2 className="font-bold text-slate-900 text-lg">השלמת מסמכים</h2>
             </div>
 
+            {/* חלק המסמכים — מוסתר כשהסבב הוא תיקון דורות בלבד (לא סומנו מסמכים חסרים) */}
+            {!(isDocsPending && beneficiary.lineage_fix_required && !(beneficiary.required_docs ?? '').trim()) && (
             <Card>
               <div className="flex items-start gap-3 mb-5">
                 <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -3768,6 +3852,65 @@ export default function PublicPortalPage() {
                 לאחר בדיקת המסמכים במזכירות תקבלו על כך הודעה מסודרת.
               </p>
             </Card>
+            )}
+
+            {/* מעגל תיקונים: תיקון עץ הדורות שביקשה המזכירות */}
+            {beneficiary.lineage_fix_required && (
+              <Card>
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <GitBranch size={20} className="text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900 mb-1">תיקון סדר הדורות</p>
+                    <p className="text-sm text-slate-600 leading-relaxed">המשרד מצא אי-דיוק בשרשרת הדורות שמסרת ומבקש לעדכן אותה.</p>
+                  </div>
+                </div>
+
+                {beneficiary.lineage_fix_note && (
+                  <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 text-sm text-violet-800 mb-4">
+                    <span className="font-bold">הערת המשרד: </span>{beneficiary.lineage_fix_note}
+                  </div>
+                )}
+
+                {!lineageFixNeeded ? (
+                  <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
+                    <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>תיקון הדורות נשלח וממתין לבדיקת המשרד. אין צורך בפעולה נוספת.</span>
+                  </div>
+                ) : (
+                  <>
+                    {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
+                      <div className="mb-4">
+                        <p className="text-xs font-semibold text-slate-500 mb-1.5">השרשרת הנוכחית (הדורשת תיקון):</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {beneficiary.lineage_chain.map((c, i) => (
+                            <span key={i} className="flex items-center gap-1">
+                              {i > 0 && <ChevronLeft size={11} className="text-slate-300" />}
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">{c.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-sm font-semibold text-slate-800 mb-2">בנו מחדש את שרשרת הדורות המתוקנת:</p>
+                    <LineageBuilder selfName={fixSelfName} onChange={setFixLineageResult} />
+
+                    {error && <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
+
+                    <button type="button" onClick={handleFixLineageSubmit} disabled={fixLineageSubmitting || !fixLineageResult.valid}
+                      className="mt-4 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-violet-500 to-violet-700 hover:from-violet-600 hover:to-violet-800 disabled:from-violet-300 disabled:to-violet-300 shadow-[0_6px_16px_-6px_rgba(124,58,237,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(124,58,237,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150">
+                      {fixLineageSubmitting ? <Loader2 size={18} className="animate-spin" /> : <GitBranch size={18} />}
+                      שליחת תיקון הדורות
+                    </button>
+                    <p className="text-xs text-slate-400 text-center mt-3">
+                      שמות חדשים שיתווספו ייכנסו לעץ בסטטוס "ממתין לאימות" עד לבדיקת המשרד.
+                    </p>
+                  </>
+                )}
+              </Card>
+            )}
           </div>
         )}
 

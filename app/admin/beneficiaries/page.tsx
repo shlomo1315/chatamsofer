@@ -16,7 +16,7 @@ const LIST_COLUMNS =
   'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active'
 
 // כרטיסי הסטטוס שהטבלה מציגה — ה-counts נשלפים לכל אחד בנפרד מ-DB.
-const STATUS_KEYS = ['pending', 'docs_pending', 'approved', 'rejected', 'review'] as const
+const STATUS_KEYS = ['pending', 'docs_pending', 'docs_returned', 'approved', 'rejected', 'review'] as const
 
 // עמודות שהחיפוש החופשי מכסה (ilike). trigram indexes קיימים על שם/טלפון.
 const SEARCH_COLUMNS = [

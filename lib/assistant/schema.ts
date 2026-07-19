@@ -186,6 +186,7 @@ export const STATUS_HE: Record<string, Record<string, string>> = {
     rejected: 'נדחה',
     review: 'בבדיקה',
     docs_pending: 'ממתין להשלמת מסמכים',
+    docs_returned: 'הוחזר תיקון — ממתין לבדיקה',
   },
   maternity_aids: {
     pending: 'ממתינה לאישור',

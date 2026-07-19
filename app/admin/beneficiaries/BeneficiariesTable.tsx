@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText } from 'lucide-react'
+import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, ClipboardCheck } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
 import SortButtons, { SortMode } from '@/components/ui/SortButtons'
 import Pagination from '@/components/ui/Pagination'
@@ -14,6 +14,7 @@ const STATUS_CHIP: Record<string, string> = {
   pending:      'bg-amber-100 text-amber-800 ring-amber-200',
   review:       'bg-violet-100 text-violet-800 ring-violet-200',
   docs_pending: 'bg-blue-100 text-blue-800 ring-blue-200',
+  docs_returned: 'bg-teal-100 text-teal-800 ring-teal-200',
   approved:     'bg-green-100 text-green-800 ring-green-200',
   rejected:     'bg-red-100 text-red-800 ring-red-200',
 }
@@ -196,12 +197,9 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
 ]
 
 // Status filter buckets
-type Filter = 'all' | 'pending' | 'review' | 'approved' | 'rejected' | 'docs_pending'
+type Filter = 'all' | 'pending' | 'review' | 'approved' | 'rejected' | 'docs_pending' | 'docs_returned'
 const matchesFilter = (row: Beneficiary, f: Filter) => {
   if (f === 'all') return true
-  if (f === 'pending') return row.eligibility_status === 'pending'
-  if (f === 'review') return row.eligibility_status === 'review'
-  if (f === 'docs_pending') return row.eligibility_status === 'docs_pending'
   return row.eligibility_status === f
 }
 
@@ -217,6 +215,7 @@ const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Users, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לאישור ראשוני', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
   { key: 'docs_pending', label: 'השלמת מסמכים', icon: FileText, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
+  { key: 'docs_returned', label: 'הוחזרו תיקונים', icon: ClipboardCheck, base: 'border-teal-200 hover:border-teal-300', active: 'border-teal-400 ring-2 ring-teal-200 bg-teal-50', iconCls: 'bg-teal-100 text-teal-700' },
   { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -245,7 +244,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
   return (
     <div className="flex flex-col gap-5">
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
           const isActive = activeFilter === c.key

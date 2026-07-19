@@ -56,6 +56,7 @@ const ELIGIBILITY_LABELS: Record<string, string> = {
   rejected: 'נדחה',
   review: 'בבדיקה',
   docs_pending: 'ממתין למסמכים',
+  docs_returned: 'הוחזר תיקון',
 }
 
 const CARD = 'rounded-2xl border border-slate-200 bg-white'

@@ -16,6 +16,7 @@ const STYLES: Record<string, string> = {
   approved:     'bg-green-100 text-green-800 hover:bg-green-200 border-green-200',
   rejected:     'bg-red-100 text-red-800 hover:bg-red-200 border-red-200',
   docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
+  docs_returned: 'bg-teal-100 text-teal-800 hover:bg-teal-200 border-teal-200',
   review:       'bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200',
 }
 
@@ -41,6 +42,9 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsNotes, setDocsNotes]         = useState('')
   const [docsChecklist, setDocsChecklist] = useState<string[]>([])
+  // בקשת תיקון עץ דורות — חלק ממעגל התיקונים
+  const [lineageFix, setLineageFix]         = useState(false)
+  const [lineageFixNote, setLineageFixNote] = useState('')
   const toggleDoc = (key: string) =>
     setDocsChecklist(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
 
@@ -59,14 +63,25 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   const label     = ELIGIBILITY_LABELS[localStatus] || localStatus
   const Icon      = isPending ? Clock : localStatus === 'approved' ? Check : localStatus === 'rejected' ? X : FileText
 
-  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string }) => {
+  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string; lineage_fix_required?: boolean; lineage_fix_note?: string }) => {
     setSaving(true)
     try {
-      // כשעוברים לסטטוס שאינו "השלמת מסמכים" — מנקים את רשימת המסמכים הנדרשים
+      // כשעוברים לסטטוס שאינו "השלמת מסמכים" — מנקים את רשימת המסמכים הנדרשים.
+      // יציאה ממעגל התיקונים (אישור/דחייה/החזרה לממתין) מנקה גם את שדות המעגל,
+      // כדי שסבב עתידי יתחיל נקי; כניסה לסבב חדש מאפסת את חותמות ההחזרה.
       const update: Record<string, unknown> = {
         eligibility_status: next,
         updated_at: new Date().toISOString(),
-        ...(next === 'docs_pending' ? {} : { required_docs: '' }),
+        ...(next === 'docs_pending'
+          ? { lineage_fixed_at: null, docs_returned_at: null, docs_sent_at: new Date().toISOString() }
+          : next === 'docs_returned'
+            ? {}
+            : {
+                required_docs: '',
+                lineage_fix_required: false, lineage_fix_note: '',
+                lineage_fixed_at: null, lineage_chain_before_fix: null,
+                docs_sent_at: null, docs_returned_at: null,
+              }),
         ...extra,
       }
       const { error } = await supabase.from('beneficiaries').update(update).eq('id', id)
@@ -216,6 +231,26 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
                 )
               })}
             </div>
+            {/* תיקון עץ הדורות — חלק ממעגל התיקונים: הצאצא יידרש לבנות מחדש את השרשרת בפורטל */}
+            <div className={`rounded-lg border mb-3 transition-colors ${lineageFix ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200'}`}>
+              <label className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-sm ${lineageFix ? 'text-indigo-800 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <input type="checkbox" checked={lineageFix} onChange={() => setLineageFix(v => !v)}
+                  className="w-4 h-4 accent-indigo-600" />
+                עץ הדורות דרוש תיקון
+              </label>
+              {lineageFix && (
+                <div className="px-3 pb-3">
+                  <textarea
+                    value={lineageFixNote}
+                    onChange={e => setLineageFixNote(e.target.value)}
+                    placeholder="מה לא תקין בדורות? (חובה — יוצג לצאצא במייל ובפורטל)..."
+                    rows={2}
+                    className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                  />
+                  <p className="text-[11px] text-indigo-600 mt-1">הצאצא יתבקש לבנות מחדש את שרשרת הדורות שלו באזור האישי.</p>
+                </div>
+              )}
+            </div>
             <textarea
               value={docsNotes}
               onChange={e => setDocsNotes(e.target.value)}
@@ -224,16 +259,19 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
             />
             <div className="flex gap-2 mt-4 justify-end">
-              <button onClick={() => { setShowDocsModal(false); setDocsNotes(''); setDocsChecklist([]) }}
+              <button onClick={() => { setShowDocsModal(false); setDocsNotes(''); setDocsChecklist([]); setLineageFix(false); setLineageFixNote('') }}
                 className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
                 ביטול
               </button>
               <button
-                disabled={saving || docsChecklist.length === 0}
+                disabled={saving || (docsChecklist.length === 0 && !lineageFix) || (lineageFix && !lineageFixNote.trim())}
                 onClick={() => {
                   setShowDocsModal(false)
-                  applyStatus('docs_pending', { docs_notes: docsNotes, required_docs: docsChecklist.join(',') })
-                  setDocsChecklist([]); setDocsNotes('')
+                  applyStatus('docs_pending', {
+                    docs_notes: docsNotes, required_docs: docsChecklist.join(','),
+                    lineage_fix_required: lineageFix, lineage_fix_note: lineageFix ? lineageFixNote.trim() : '',
+                  })
+                  setDocsChecklist([]); setDocsNotes(''); setLineageFix(false); setLineageFixNote('')
                 }}
                 className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving && <Loader2 size={13} className="animate-spin" />}

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const client = getClient()
   const { data: ben, error } = await client
     .from('beneficiaries')
-    .select('email, full_name, family_name, id_number, phone, city, marital_status, spouse_name, children_count, required_docs')
+    .select('email, full_name, family_name, id_number, phone, city, marital_status, spouse_name, children_count, required_docs, lineage_fix_required, lineage_fix_note')
     .eq('id', id)
     .maybeSingle()
 
@@ -43,7 +43,11 @@ export async function POST(request: NextRequest) {
     const labelOf = (k: string) => types.find(t => t.value === k)?.label ?? k
     const keys = (ben.required_docs ?? '').split(',').map((s: string) => s.trim()).filter(Boolean)
     const labels = keys.map(labelOf)
-    payload = docsPendingEmail([ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name, undefined, ben.marital_status, labels, docsNotes)
+    payload = docsPendingEmail(
+      [ben.family_name, ben.full_name].filter(Boolean).join(' ') || ben.full_name,
+      undefined, ben.marital_status, labels, docsNotes,
+      ben.lineage_fix_required ? ben.lineage_fix_note : null,
+    )
   } else {
     return NextResponse.json({ ok: true, skipped: 'no template for status' })
   }
