@@ -62,6 +62,7 @@ export interface SyncResult {
 export async function syncLegacyMail(
   admin: SupabaseClient,
   departmentKey?: string,
+  opts?: { full?: boolean },
 ): Promise<SyncResult> {
   const gmail = await getLegacyGmailClient()
 
@@ -75,8 +76,12 @@ export async function syncLegacyMail(
     console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', e)
   }
 
+  // סנכרון מלא (full) מתעלם מהסמן ומושך את כל ההיסטוריה — נדרש כי הסמן
+  // (legacy_mail_last_sync) גלובלי לכל התיבות, וסנכרון של תיבה אחת מזיז אותו
+  // לכולן, כך שתיבה אחרת מקבלת after:<epoch> ו-0 תוצאות. ה-upsert עם
+  // ignoreDuplicates ממילא מונע כפילויות, כך שמשיכה חוזרת בטוחה.
   const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
-  const lastEpoch = cur?.value ? Number(cur.value) : 0
+  const lastEpoch = opts?.full ? 0 : (cur?.value ? Number(cur.value) : 0)
   const q = lastEpoch ? `after:${lastEpoch}` : ''
 
   const results: ItemResult[] = []

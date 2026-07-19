@@ -63,14 +63,14 @@ export default function LegacyMailSettings() {
 
   useEffect(() => { load() }, [load])
 
-  async function sync(box: Mailbox) {
+  async function sync(box: Mailbox, full = false) {
     const key = box.id ?? 'legacy'
     setSyncingId(key)
     try {
       const res = await fetch('/api/admin/legacy-mail/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId: box.id, department: box.department }),
+        body: JSON.stringify({ accountId: box.id, department: box.department, full }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שגיאה בסנכרון')
@@ -78,7 +78,7 @@ export default function LegacyMailSettings() {
       if (d.failed > 0) {
         toast.error(`נקלטו ${d.imported}, אך ${d.failed} מיילים נכשלו. ${d.error ?? ''}`)
       } else if (d.imported === 0) {
-        toast.success('אין מיילים חדשים — הכל מסונכרן')
+        toast.success(full ? 'לא נמצאו מיילים חדשים בתיבה (כל ההיסטוריה כבר קיימת או ריקה)' : 'אין מיילים חדשים — הכל מסונכרן')
       } else {
         toast.success(`נקלטו ${d.imported} מיילים חדשים (${d.matched} שויכו ללקוח)`)
       }
@@ -165,14 +165,26 @@ export default function LegacyMailSettings() {
                     <p className="text-xs text-slate-400 font-mono mr-6 truncate">{box.email}</p>
                   )}
                 </div>
-                <Button
-                  variant="secondary"
-                  onClick={() => sync(box)}
-                  disabled={isSyncing || syncingId !== null}
-                >
-                  {isSyncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
-                  {isSyncing ? 'מסנכרן…' : 'סנכרון'}
-                </Button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Button
+                    variant="secondary"
+                    onClick={() => sync(box)}
+                    disabled={isSyncing || syncingId !== null}
+                  >
+                    {isSyncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                    {isSyncing ? 'מסנכרן…' : 'סנכרון'}
+                  </Button>
+                  {/* סנכרון מלא — מתעלם מהסמן ומושך את כל ההיסטוריה. פותר מצב שבו
+                      הסמן הגלובלי "דילג" קדימה וסנכרון רגיל מחזיר 0 מיילים. */}
+                  <Button
+                    variant="ghost"
+                    onClick={() => sync(box, true)}
+                    disabled={isSyncing || syncingId !== null}
+                    title="מושך את כל ההיסטוריה מחדש (בטוח — כפילויות נמנעות)"
+                  >
+                    סנכרון מלא
+                  </Button>
+                </div>
               </div>
 
               {/* הדיווח המפולח */}

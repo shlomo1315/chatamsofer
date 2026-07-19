@@ -23,10 +23,13 @@ export async function POST(request: Request) {
   // אפשר לסנכרן תיבה ספציפית (accountId) או את התיבה הישנה (ברירת מחדל)
   let accountId: string | null = null
   let departmentKey: string | undefined
+  let full = false
   try {
     const body = await request.json()
     accountId = body?.accountId ?? null
     departmentKey = body?.department ?? undefined
+    // סנכרון מלא — מתעלם מהסמן הגלובלי ומושך את כל ההיסטוריה מחדש (בטוח: כפילויות נמנעות)
+    full = body?.full === true
   } catch { /* גוף ריק — סנכרון התיבה הישנה */ }
 
   // אם התבקשה תיבה מהטבלה — נשלוף את המחלקה שלה
@@ -42,7 +45,7 @@ export async function POST(request: Request) {
   const startedAt = new Date().toISOString()
 
   try {
-    const result = await syncLegacyMail(db, departmentKey)
+    const result = await syncLegacyMail(db, departmentKey, { full })
 
     // רישום הריצה בלוג — כדי שיהיה דיווח מלא ומדויק
     await db.from('gmail_sync_runs').insert({
