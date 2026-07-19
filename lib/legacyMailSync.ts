@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel } from './gmail'
-import { departmentByEmail } from './departments'
+import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
+import { isWorkspaceConfigured, getWorkspaceGmailClient, ensureArchiveLabel, importRawMessage } from './googleWorkspace'
 
 // חשבון Gmail מטבלת gmail_accounts — טוקן, מחלקה, תווית וסמן סנכרון פר-תיבה.
 export interface GmailAccount {
@@ -115,6 +116,24 @@ export async function syncLegacyMail(
     console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', e)
   }
 
+  // ── ייבוא ל-Google Workspace: תיבת ה-Gmail של המחלקה ──
+  // אם ה-Service Account מוגדר ולמחלקת התיבה יש כתובת — מכינים לקוח מתחזה
+  // ותווית "ארכיון מייל ישן" פעם אחת, ומזריקים לתיבה בתוך הלולאה. מושבת בשקט
+  // אם ה-SA לא מוגדר או ההכנה נכשלת — לא חוסם את הסנכרון.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let deptGmail: any = null
+  let deptArchiveLabelId: string | null = null
+  const deptEmail = forcedDept ? DEPARTMENTS[forcedDept as DepartmentKey]?.email : null
+  if (isWorkspaceConfigured() && deptEmail) {
+    try {
+      deptGmail = getWorkspaceGmailClient(deptEmail)
+      deptArchiveLabelId = await ensureArchiveLabel(deptGmail)
+    } catch (e) {
+      console.error(`[legacy-sync] Workspace import unavailable for ${deptEmail}:`, e)
+      deptGmail = null
+    }
+  }
+
   // הסמן פר-תיבה: לתיבה ספציפית — last_sync_epoch שלה; אחרת הסמן הגלובלי הישן.
   // סנכרון מלא (full) מתעלם מהסמן ומושך את כל ההיסטוריה. upsert עם
   // ignoreDuplicates מונע כפילויות, כך שמשיכה חוזרת בטוחה.
@@ -201,18 +220,32 @@ export async function syncLegacyMail(
         results.push({ imported, matched: !!beneficiaryId })
         if (imported) importedGmailIds.push(gmailMessageId)
 
-        // עותק ארכיון בתיבת office — לא חוסם
-        if (imported && officeGmail && archiveLabelId) {
+        // עותק ארכיון בתיבת office + הזרקה לתיבת ה-Gmail של המחלקה — לא חוסם.
+        // מושכים raw פעם אחת ומשתמשים בו לשני היעדים.
+        if (imported && ((officeGmail && archiveLabelId) || (deptGmail && deptArchiveLabelId))) {
           try {
             const rawFull = await gmail.users.messages.get({ userId: 'me', id, format: 'raw' })
-            if (rawFull.data.raw) {
-              await officeGmail.users.messages.insert({
-                userId: 'me',
-                requestBody: { raw: rawFull.data.raw, labelIds: [archiveLabelId] },
-              })
+            const raw = rawFull.data.raw
+            if (raw) {
+              if (officeGmail && archiveLabelId) {
+                try {
+                  await officeGmail.users.messages.insert({
+                    userId: 'me', requestBody: { raw, labelIds: [archiveLabelId] },
+                  })
+                } catch (e) { console.error(`[legacy-sync] office archive insert failed for ${id}:`, e) }
+              }
+              // הזרקה לתיבת ה-Gmail של המחלקה + סימון imported_to_gmail_at למניעת כפילות
+              if (deptGmail && deptArchiveLabelId) {
+                try {
+                  await importRawMessage(deptGmail, raw, deptArchiveLabelId)
+                  await admin.from('inbound_emails')
+                    .update({ imported_to_gmail_at: new Date().toISOString() })
+                    .eq('gmail_message_id', gmailMessageId)
+                } catch (e) { console.error(`[legacy-sync] dept Gmail import failed for ${id}:`, e) }
+              }
             }
           } catch (e) {
-            console.error(`[legacy-sync] Gmail archive insert failed for ${id}:`, e)
+            console.error(`[legacy-sync] raw fetch failed for ${id}:`, e)
           }
         }
       } catch (err) {

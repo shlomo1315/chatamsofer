@@ -109,6 +109,31 @@ export default function LegacyMailSettings() {
     }
   }
 
+  // ייבוא ל-Gmail של המחלקה — רץ בבאצ'ים עד שכל המיילים יובאו.
+  async function importToGmail(box: Mailbox) {
+    if (!box.id) return
+    setSyncingId(box.id)
+    let total = 0
+    try {
+      for (let guard = 0; guard < 1000; guard++) {
+        const res = await fetch('/api/admin/legacy-mail/import-to-gmail', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId: box.id }),
+        })
+        const d = await res.json()
+        if (!res.ok) throw new Error(d.error || 'שגיאה בייבוא')
+        total += d.imported ?? 0
+        if (d.done || (d.imported === 0)) break
+        toast.success(`יובאו ${total} מיילים... (נותרו ${d.remaining})`)
+      }
+      toast.success(total > 0 ? `הושלם — ${total} מיילים יובאו לתיבת ה-Gmail של המחלקה` : 'אין מיילים חדשים לייבוא')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="py-6 text-center text-slate-400">
@@ -212,6 +237,17 @@ export default function LegacyMailSettings() {
                       title="מסמן את כל המיילים הקיימים של תיבה זו בתווית שלה"
                     >
                       שייך תווית
+                    </Button>
+                  )}
+                  {/* ייבוא המיילים לתוך תיבת ה-Gmail האמיתית של המחלקה (Workspace) */}
+                  {box.id && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => importToGmail(box)}
+                      disabled={isSyncing || syncingId !== null}
+                      title="מזריק את כל המיילים הישנים לתוך תיבת ה-Gmail של המחלקה, עם תווית 'ארכיון מייל ישן'"
+                    >
+                      ייבא ל-Gmail
                     </Button>
                   )}
                 </div>
