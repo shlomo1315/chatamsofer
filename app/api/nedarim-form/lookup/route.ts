@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
   // 1. מוטב רשום (הבעל/הרשום או בן/בת הזוג) — נחסם מהגשה דרך נדרים.
   //    מוחזר כמו קודם, בלי is_child, כדי שנדרים ימשיך לחסום אותו.
   const found = await resolveBeneficiaryByEnteredId<{ id: string }>(admin, idParam, 'id')
-  if (found) return jsonCors({ found: true, message: EXISTS_MESSAGE }, undefined, origin)
+  if (found) return jsonCors({ found: true, type: 'head', message: EXISTS_MESSAGE }, undefined, origin)
 
   // 2. קיים כילד בתוך children JSONB של רשומה אחרת — *ילד של צאצא*.
   //    מוחזר עם is_child=true + שם ההורה ושרשרת הייחוס, כדי שנדרים ינתב אותו
@@ -64,8 +64,11 @@ export async function GET(request: NextRequest) {
       const parentName = [row.family_name, row.full_name].filter(Boolean).join(' ')
       return jsonCors({
         found: true,
+        type: 'child',
         is_child: true,
         parent_name: parentName,
+        // שם המשפחה לבדו — להצגת "משפחת X" ולמילוי אוטומטי של שדה שם המשפחה
+        family_name: row.family_name ?? '',
         // סדר הדורות עד ההורה: [{ generation, name, relation }]
         lineage_chain: Array.isArray(row.lineage_chain) ? row.lineage_chain : null,
         // פרטי הילד — לנוחות מילוי מראש בטופס הרישום המהיר
