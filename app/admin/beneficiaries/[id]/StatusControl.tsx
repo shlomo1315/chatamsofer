@@ -73,7 +73,10 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         eligibility_status: next,
         updated_at: new Date().toISOString(),
         ...(next === 'docs_pending'
-          ? { lineage_fixed_at: null, docs_returned_at: null, docs_sent_at: new Date().toISOString() }
+          // סבב תיקון חדש: מאפסים גם את ה-snapshot כדי שהתיקון הבא יצלם כבסיס
+          // את השרשרת הנוכחית (תוצאת הסבב הקודם), ולא את המקור מלפני סבב 1 —
+          // אחרת הבאנר משווה מול גרסה ישנה מדי ומציג הבדלים שכבר טופלו.
+          ? { lineage_fixed_at: null, docs_returned_at: null, lineage_chain_before_fix: null, docs_sent_at: new Date().toISOString() }
           : next === 'docs_returned'
             ? {}
             : {

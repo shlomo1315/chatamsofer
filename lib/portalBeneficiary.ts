@@ -9,11 +9,13 @@ export async function loadDashboardDocs(
   admin: SupabaseClient,
   beneficiaryId: string,
 ): Promise<Record<string, { url: string; name: string }>> {
+  // כל סוגי המסמכים של הצאצא — לא רק ת"ז בעל/אישה. אחרת מסמך שהמזכירות
+  // ביקשה (ת"ז ילד / ספח / מותאם) שכבר קיים במערכת נחשב בפורטל כ"לא הועלה",
+  // והצאצא נחסם או נאלץ להעלות שוב מסמך שכבר יש למשרד.
   const { data: docs } = await admin
     .from('documents')
     .select('doc_type, file_url, file_name, uploaded_at')
     .eq('beneficiary_id', beneficiaryId)
-    .in('doc_type', ['id_husband', 'id_wife'])
     .order('uploaded_at', { ascending: false })
   const documents: Record<string, { url: string; name: string }> = {}
   for (const d of docs ?? []) {

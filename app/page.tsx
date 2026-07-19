@@ -3723,6 +3723,30 @@ export default function PublicPortalPage() {
               )}
             </Card>
 
+            {/* צאצא במעגל תיקונים (docs_pending) — כניסה מהדשבורד למסך ההשלמה/תיקון דורות.
+                הבלוק הכללי למטה מוסתר ב-docs_pending, ובלי הכרטיס הזה הצאצא היה תלוי
+                אך ורק בקישור מהמייל (?action=docs) — ואם סגר אותו, נתקע. */}
+            {isDocsPending && (
+              <button
+                onClick={() => { setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
+                className="flex items-center gap-4 bg-amber-50 rounded-2xl border-2 border-amber-200 p-5 hover:border-amber-400 transition-all duration-150 text-right shadow-sm group"
+              >
+                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-amber-200 transition-all duration-150">
+                  {beneficiary.lineage_fix_required && !beneficiary.lineage_fixed_at
+                    ? <GitBranch size={22} className="text-amber-600" />
+                    : <FileText size={22} className="text-amber-600" />}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-900">
+                    {beneficiary.lineage_fix_required && !beneficiary.lineage_fixed_at ? 'השלמת מסמכים ותיקון דורות' : 'השלמת מסמכים נדרשים'}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">המשרד ממתין להשלמה מצידך — לחצו כאן</p>
+                </div>
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 flex-shrink-0">נדרש</span>
+                <ChevronLeft size={18} className="text-slate-300 group-hover:text-amber-400" />
+              </button>
+            )}
+
             {/* אזור אישי: השלמת מסמכים (לא מאושר) + עדכון פרטים אישיים. הגשת בקשות נעשית
                 דרך הקישורים שבמיילים (?action=...), לא מהדשבורד. */}
             {!isRejected && !isDocsPending && (
