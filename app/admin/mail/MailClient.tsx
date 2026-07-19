@@ -1282,6 +1282,27 @@ export default function MailClient() {
     load(folder, searchRef.current || undefined, false, next)
   }, [folder, load])
 
+  // פס דפדוף — חצים קדימה/אחורה כמו בג'ימייל. מרונדר גם למעלה וגם למטה כדי
+  // שאפשר יהיה לדפדף בלי לגלול. edge='top' מוסיף גבול תחתון, 'bottom' גבול עליון.
+  const paginationBar = (edge: 'top' | 'bottom') =>
+    !loading && !loadError && (page > 0 || hasMore) ? (
+      <div className={`flex items-center justify-between px-4 py-2 bg-slate-50 text-sm ${edge === 'top' ? 'border-b border-slate-200' : 'border-t border-slate-200'}`}>
+        <span className="text-slate-500">מיילים {page * 50 + 1}–{page * 50 + messages.length}</span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => goToPage(page - 1)} disabled={page === 0}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            title="הקודמים">
+            <ChevronRight size={16} /> הקודמים
+          </button>
+          <button type="button" onClick={() => goToPage(page + 1)} disabled={!hasMore}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            title="הבאים">
+            הבאים <ChevronLeft size={16} />
+          </button>
+        </div>
+      </div>
+    ) : null
+
   // רענון כשמחליפים בין משויכים/לא-משויכים בתוך ארכיון המייל הקודם
   useEffect(() => {
     if (folder === 'LEGACY') load(folder, searchRef.current || undefined)
@@ -1544,6 +1565,9 @@ export default function MailClient() {
           </div>
         )}
 
+        {/* פס דפדוף עליון — כדי לדפדף בלי לגלול לתחתית */}
+        {paginationBar('top')}
+
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32 gap-2 text-slate-400 text-sm">
@@ -1652,33 +1676,8 @@ export default function MailClient() {
           )}
         </div>
 
-        {/* פס דפדוף — 50 מיילים לעמוד, חצים קדימה/אחורה כמו בג'ימייל. מוצג רק
-            כשיש יותר מעמוד אחד. בעברית: "הקודמים" (חדשים יותר) מימין, "הבאים" משמאל. */}
-        {!loading && !loadError && (page > 0 || hasMore) && (
-          <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-slate-50 text-sm">
-            <span className="text-slate-500">
-              מיילים {page * 50 + 1}–{page * 50 + messages.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => goToPage(page - 1)}
-                disabled={page === 0}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
-                title="הקודמים">
-                <ChevronRight size={16} /> הקודמים
-              </button>
-              <button
-                type="button"
-                onClick={() => goToPage(page + 1)}
-                disabled={!hasMore}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
-                title="הבאים">
-                הבאים <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* פס דפדוף תחתון */}
+        {paginationBar('bottom')}
       </div>
 
       {/* Message View */}
