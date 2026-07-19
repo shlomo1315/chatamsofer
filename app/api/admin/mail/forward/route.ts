@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, forbidden } from '@/lib/apiAuth'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { canAccessInboundMail, allowedMailboxEmails } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,15 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminClient()
 
+  // אימות גישה כפול: (1) המשתמש מורשה לקרוא את המייל המקורי — אחרת אפשר להעביר
+  // לעצמו מייל של מחלקה זרה ולקרוא את תוכנו; (2) מחלקת היעד היא אחת התיבות
+  // המורשות לו — אחרת אפשר "לשתול" מייל בתיבה זרה. מנהל עובר את שניהם (null).
+  if (!(await canAccessInboundMail(admin, staff, String(messageId)))) return forbidden()
+  const allowedEmails = allowedMailboxEmails(staff)
+  if (allowedEmails !== null && !allowedEmails.includes(dep.email)) {
+    return forbidden('אין הרשאה להעביר לתיבה זו')
+  }
+
   // שליפת המקור
   const { data: original, error: fetchErr } = await admin
     .from('inbound_emails')
@@ -39,8 +49,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'המייל המקורי לא נמצא' }, { status: 404 })
   }
 
+  // ה-note מגיע מהמשתמש ומוזרק ל-HTML — escape כדי למנוע הזרקת HTML/סקריפט לתיבת היעד.
+  const escapeHtml = (s: string) => s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
   const noteHtml = note
-    ? `<div style="background:#fffbeb;border-right:3px solid #f59e0b;padding:8px 12px;margin-bottom:12px;color:#92400e;font-size:13px;">${note}</div>`
+    ? `<div style="background:#fffbeb;border-right:3px solid #f59e0b;padding:8px 12px;margin-bottom:12px;color:#92400e;font-size:13px;">${escapeHtml(String(note))}</div>`
     : ''
   const forwardedBody = `
     ${noteHtml}

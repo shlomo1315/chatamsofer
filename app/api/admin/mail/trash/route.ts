@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, forbidden } from '@/lib/apiAuth'
+import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
+  // מניעת מחיקה חוצת-מחלקות: רק מי שמורשה לתיבת המייל רשאי למחוק אותו.
+  if (!(await canAccessInboundMail(admin, staff, String(id)))) return forbidden()
   await admin.from('inbound_emails').delete().eq('id', id)
   return NextResponse.json({ ok: true })
 }

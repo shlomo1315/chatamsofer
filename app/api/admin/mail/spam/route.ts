@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, forbidden } from '@/lib/apiAuth'
+import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } },
   )
+  // מניעת הסתרת מייל של מחלקה זרה: רק מי שמורשה לתיבה רשאי לסמן/לבטל ספאם.
+  if (!(await canAccessInboundMail(admin, staff, String(messageId)))) return forbidden()
   const { error } = await admin.from('inbound_emails').update({ is_spam: !!isSpam }).eq('id', messageId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

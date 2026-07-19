@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireAdmin, unauthorized, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,8 +12,10 @@ function getClient() {
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return unauthorized()
+  // סטטיסטיקות הדואר חוצות-מחלקה (נפחים, ספירות פר-משתמש ושמות עובדים) הן מידע
+  // ניהולי — מוגבל למנהל בלבד. קודם כל איש צוות ראה נתונים של כל המחלקות.
+  const staff = await requireAdmin()
+  if (!staff) return forbidden()
 
   const range = request.nextUrl.searchParams.get('range') ?? '7' // days
   const days = Math.min(parseInt(range) || 7, 90)

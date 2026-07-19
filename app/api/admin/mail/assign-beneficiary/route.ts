@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireStaff, unauthorized, forbidden } from '@/lib/apiAuth'
+import { canAccessInboundMail } from '@/lib/mailAccess'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,10 @@ export async function POST(req: NextRequest) {
   let body: { messageId?: string; beneficiaryId?: string | null }
   try { body = await req.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
-  const { data, error } = await admin().from('inbound_emails')
+  const db = admin()
+  // מניעת שיוך חוצה-מחלקות על מיילי ארכיון: רק מי שמורשה לתיבה רשאי.
+  if (!(await canAccessInboundMail(db, staff, String(body.messageId)))) return forbidden()
+  const { data, error } = await db.from('inbound_emails')
     .update({ beneficiary_id: body.beneficiaryId ?? null })
     .eq('id', body.messageId)
     .eq('source', 'legacy')
