@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { DEFAULT_LABELS, type MailLabel } from '@/lib/mailLabels'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,16 +102,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ error: 'unknown action' }, { status: 400 })
 }
 
-// ─── Types & defaults ──────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
+// DEFAULT_LABELS ו-MailLabel מיובאים מ-lib/mailLabels (מקור אמת יחיד).
 
-interface MailLabel { id: string; name: string; color: string }
 interface InternalEmail { name: string; email: string }
-
-const DEFAULT_LABELS: MailLabel[] = [
-  { id: 'label-loans',    name: 'הלוואות',        color: '#3b82f6' },
-  { id: 'label-maternity', name: 'יולדות',         color: '#ec4899' },
-  { id: 'label-widows',   name: 'אלמנות',         color: '#8b5cf6' },
-  { id: 'label-decision', name: 'הגורם המאשר',     color: '#0ea5e9' },
-  { id: 'label-urgent',   name: 'דחוף',           color: '#ef4444' },
-  { id: 'label-done',     name: 'טופל',           color: '#22c55e' },
-]

@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { saveLegacyRefreshToken, getLegacyOAuthClient } from '@/lib/gmail'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
 import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
+import { DEFAULT_LABELS } from '@/lib/mailLabels'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,9 @@ export async function GET(request: NextRequest) {
   // המחלקה שנבחרה לפני ההפניה ל-Google (נישאת ב-state, מקודדת base64url)
   let department: string | null = null
   let label = ''
+  let labelId = ''       // תווית קיימת שנבחרה
+  let labelName = ''     // שם לתווית חדשה שתיווצר
+  let labelColor = '#6366f1'
   try {
     const raw = request.nextUrl.searchParams.get('state') ?? ''
     if (raw) {
@@ -40,6 +44,9 @@ export async function GET(request: NextRequest) {
       const state = JSON.parse(decoded)
       if (state.department && state.department in DEPARTMENTS) department = state.department
       label = String(state.label ?? '').slice(0, 60)
+      labelId = String(state.labelId ?? '').slice(0, 60)
+      labelName = String(state.labelName ?? '').slice(0, 60).trim()
+      if (state.color) labelColor = String(state.color).slice(0, 20)
     }
   } catch { /* state לא תקין — ניפול לתיבה הישנה */ }
 
@@ -57,20 +64,51 @@ export async function GET(request: NextRequest) {
   const db = admin()
 
   if (department && mailboxEmail && db) {
-    // רישום התיבה בטבלה — כולל שיוך המחלקה
+    // תווית התיבה: אם נבחרה קיימת — משתמשים בה; אם הוקלד שם חדש — יוצרים תווית
+    // ב-mail_label_defs (אותו מנגנון כמו create_label) ומקבלים id.
+    let resolvedLabelId = labelId || null
+    if (!resolvedLabelId && labelName) {
+      try {
+        const { data: cur } = await db.from('app_settings').select('value').eq('key', 'mail_label_defs').maybeSingle()
+        // ⚠️ ברירת המחדל חייבת להיות DEFAULT_LABELS ולא [] — 6 התוויות המובנות
+        // קיימות רק כ-fallback בקוד ולא נשמרות ב-DB. אם נכתוב [newLabel] בלבד,
+        // כל התוויות המובנות ייעלמו לצמיתות מכל מסכי המייל. זהה ל-create_label הקנוני.
+        let labels: { id: string; name: string; color: string }[]
+        try { labels = cur?.value ? JSON.parse(cur.value as string) : [...DEFAULT_LABELS] } catch { labels = [...DEFAULT_LABELS] }
+        // שם שכבר קיים — שימוש חוזר במקום כפילות
+        const existing = labels.find(l => l.name === labelName)
+        if (existing) {
+          resolvedLabelId = existing.id
+        } else {
+          const newLabel = { id: crypto.randomUUID(), name: labelName, color: labelColor }
+          labels.push(newLabel)
+          await db.from('app_settings').upsert({
+            key: 'mail_label_defs',
+            value: JSON.stringify(labels),
+            updated_at: new Date().toISOString(),
+          })
+          resolvedLabelId = newLabel.id
+        }
+      } catch (e) {
+        console.error('[gmail-legacy/callback] label create failed (non-blocking):', e)
+      }
+    }
+
+    // רישום התיבה בטבלה — מחלקה + תווית + טוקן פר-תיבה
     const { error } = await db.from('gmail_accounts').upsert({
       email: mailboxEmail,
-      label: label || DEPARTMENTS[department as DepartmentKey].label,
+      label: label || labelName || DEPARTMENTS[department as DepartmentKey].label,
       department,
+      label_id: resolvedLabelId,
       refresh_token: tokens.refresh_token,
       is_active: true,
     }, { onConflict: 'email' })
 
     if (error) console.error('[gmail-legacy/callback] gmail_accounts upsert:', error.message)
+  } else {
+    // אין מחלקה בחיבור (זרימה ישנה) — נשמר בטוקן הגלובלי לתאימות לאחור.
+    await saveLegacyRefreshToken(tokens.refresh_token)
   }
-
-  // שמירה גם בטוקן הישן — הסנכרון הנוכחי עדיין קורא ממנו
-  await saveLegacyRefreshToken(tokens.refresh_token)
 
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin).replace(/\/$/, '')
   return NextResponse.redirect(`${base}/admin/settings`)

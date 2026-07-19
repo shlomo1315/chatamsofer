@@ -90,6 +90,25 @@ export default function LegacyMailSettings() {
     }
   }
 
+  async function applyLabel(box: Mailbox) {
+    if (!box.id) return
+    setSyncingId(box.id)
+    try {
+      const res = await fetch('/api/admin/legacy-mail/apply-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: box.id }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'שגיאה בשיוך התווית')
+      toast.success(d.labeled > 0 ? `${d.labeled} מיילים סומנו בתווית` : 'כל המיילים כבר מסומנים')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="py-6 text-center text-slate-400">
@@ -184,6 +203,17 @@ export default function LegacyMailSettings() {
                   >
                     סנכרון מלא
                   </Button>
+                  {/* שיוך התווית של התיבה למיילים ישנים שכבר נקלטו (לפני שהוגדרה תווית) */}
+                  {box.id && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => applyLabel(box)}
+                      disabled={isSyncing || syncingId !== null}
+                      title="מסמן את כל המיילים הקיימים של תיבה זו בתווית שלה"
+                    >
+                      שייך תווית
+                    </Button>
+                  )}
                 </div>
               </div>
 

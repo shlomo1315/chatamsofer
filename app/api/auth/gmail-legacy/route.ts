@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
 
   const department = request.nextUrl.searchParams.get('department') ?? ''
   const label = (request.nextUrl.searchParams.get('label') ?? '').slice(0, 60)
+  // תווית התיבה — קיימת (labelId) או חדשה (labelName + color)
+  const labelId = (request.nextUrl.searchParams.get('labelId') ?? '').slice(0, 60)
+  const labelName = (request.nextUrl.searchParams.get('labelName') ?? '').slice(0, 60)
+  const color = (request.nextUrl.searchParams.get('color') ?? '').slice(0, 20)
 
   const base = (process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, '')
 
@@ -25,7 +29,7 @@ export async function GET(request: NextRequest) {
   const url = new URL(getLegacyAuthUrl())
   // ה-state חייב להיות מחרוזת בטוחה ל-URL. JSON גולמי (עם { " : ) שובר את
   // Google ומחזיר 500 — לכן מקודדים ב-base64url.
-  const state = Buffer.from(JSON.stringify({ department, label })).toString('base64url')
+  const state = Buffer.from(JSON.stringify({ department, label, labelId, labelName, color })).toString('base64url')
   url.searchParams.set('state', state)
   return NextResponse.redirect(url.toString())
 }

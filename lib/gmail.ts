@@ -261,10 +261,15 @@ export async function getLegacyRefreshToken(): Promise<string | null> {
   return data?.value ?? null
 }
 
+// לקוח Gmail (קריאה בלבד) לכל refresh token — משמש תיבות מרובות מ-gmail_accounts.
+export function getGmailClientForToken(refreshToken: string) {
+  const oauth = getLegacyOAuthClient()
+  oauth.setCredentials({ refresh_token: refreshToken })
+  return google.gmail({ version: 'v1', auth: oauth })
+}
+
 export async function getLegacyGmailClient() {
   const token = await getLegacyRefreshToken()
   if (!token) throw new Error('Legacy Gmail not connected')
-  const oauth = getLegacyOAuthClient()
-  oauth.setCredentials({ refresh_token: token })
-  return google.gmail({ version: 'v1', auth: oauth })
+  return getGmailClientForToken(token)
 }

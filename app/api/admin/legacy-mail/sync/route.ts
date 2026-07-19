@@ -32,20 +32,22 @@ export async function POST(request: Request) {
     full = body?.full === true
   } catch { /* גוף ריק — סנכרון התיבה הישנה */ }
 
-  // אם התבקשה תיבה מהטבלה — נשלוף את המחלקה שלה
+  // אם התבקשה תיבה מהטבלה — טוענים את החשבון המלא (טוקן/מחלקה/תווית/סמן פר-תיבה)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let account: any = null
   if (accountId) {
     const { data: acc } = await db
       .from('gmail_accounts')
-      .select('department')
+      .select('id, refresh_token, department, label_id, last_sync_epoch')
       .eq('id', accountId)
       .maybeSingle()
-    if (acc?.department) departmentKey = acc.department as string
+    if (acc) { account = acc; departmentKey = acc.department as string }
   }
 
   const startedAt = new Date().toISOString()
 
   try {
-    const result = await syncLegacyMail(db, departmentKey, { full })
+    const result = await syncLegacyMail(db, departmentKey, { full, account: account ?? undefined })
 
     // רישום הריצה בלוג — כדי שיהיה דיווח מלא ומדויק
     await db.from('gmail_sync_runs').insert({

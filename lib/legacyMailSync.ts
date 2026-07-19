@@ -1,6 +1,41 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { getLegacyGmailClient, getBody, getGmailClient, ensureLabel } from './gmail'
+import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel } from './gmail'
 import { departmentByEmail } from './departments'
+
+// חשבון Gmail מטבלת gmail_accounts — טוקן, מחלקה, תווית וסמן סנכרון פר-תיבה.
+export interface GmailAccount {
+  id: string
+  refresh_token: string
+  department: string
+  label_id?: string | null
+  last_sync_epoch?: number | null
+}
+
+// הוספת התווית של התיבה לכל המיילים שנקלטו — ב-mail_label_assignments (app_settings),
+// אותו מנגנון של שיוך ידני. הוספה בלי כפילות.
+async function applyLabelToMessages(admin: SupabaseClient, labelId: string, gmailMessageIds: string[]) {
+  if (!labelId || !gmailMessageIds.length) return
+  // ממפים gmail_message_id → id של השורה ב-inbound_emails (המפתח ב-assignments)
+  const { data: rows } = await admin
+    .from('inbound_emails')
+    .select('id, gmail_message_id')
+    .in('gmail_message_id', gmailMessageIds)
+  const ids = (rows ?? []).map(r => String(r.id))
+  if (!ids.length) return
+
+  const { data: cur } = await admin.from('app_settings').select('value').eq('key', 'mail_label_assignments').maybeSingle()
+  let assignments: Record<string, string[]> = {}
+  try { assignments = cur?.value ? JSON.parse(cur.value as string) : {} } catch { assignments = {} }
+  for (const id of ids) {
+    const existing = assignments[id] ?? []
+    if (!existing.includes(labelId)) assignments[id] = [...existing, labelId]
+  }
+  await admin.from('app_settings').upsert({
+    key: 'mail_label_assignments',
+    value: JSON.stringify(assignments),
+    updated_at: new Date().toISOString(),
+  })
+}
 
 // זיהוי לקוח למייל היסטורי — אותו דפוס כמו resend-inbound (maybeAutoReplyIgud):
 // ת"ז 9 ספרות בנושא (רשום או בן/בת זוג) → נפילה לכתובת השולח.
@@ -62,9 +97,13 @@ export interface SyncResult {
 export async function syncLegacyMail(
   admin: SupabaseClient,
   departmentKey?: string,
-  opts?: { full?: boolean },
+  opts?: { full?: boolean; account?: GmailAccount },
 ): Promise<SyncResult> {
-  const gmail = await getLegacyGmailClient()
+  const account = opts?.account
+  // מקור ה-Gmail: תיבה ספציפית (טוקן פר-תיבה) או התיבה הישנה הגלובלית (תאימות לאחור).
+  const gmail = account ? getGmailClientForToken(account.refresh_token) : await getLegacyGmailClient()
+  // המחלקה: של התיבה כשקיימת; אחרת ה-departmentKey שהתקבל, ואם אין — לפי ה-To.
+  const forcedDept = account?.department ?? departmentKey
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let officeGmail: any = null
@@ -76,15 +115,20 @@ export async function syncLegacyMail(
     console.error('[legacy-sync] office Gmail unavailable, skipping archive copy:', e)
   }
 
-  // סנכרון מלא (full) מתעלם מהסמן ומושך את כל ההיסטוריה — נדרש כי הסמן
-  // (legacy_mail_last_sync) גלובלי לכל התיבות, וסנכרון של תיבה אחת מזיז אותו
-  // לכולן, כך שתיבה אחרת מקבלת after:<epoch> ו-0 תוצאות. ה-upsert עם
-  // ignoreDuplicates ממילא מונע כפילויות, כך שמשיכה חוזרת בטוחה.
-  const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
-  const lastEpoch = opts?.full ? 0 : (cur?.value ? Number(cur.value) : 0)
+  // הסמן פר-תיבה: לתיבה ספציפית — last_sync_epoch שלה; אחרת הסמן הגלובלי הישן.
+  // סנכרון מלא (full) מתעלם מהסמן ומושך את כל ההיסטוריה. upsert עם
+  // ignoreDuplicates מונע כפילויות, כך שמשיכה חוזרת בטוחה.
+  let globalCursorRaw: string | null = null
+  if (!account) {
+    const { data: cur } = await admin.from('app_settings').select('value').eq('key', LAST_SYNC_KEY).maybeSingle()
+    globalCursorRaw = (cur?.value as string) ?? null
+  }
+  const storedEpoch = account ? Number(account.last_sync_epoch ?? 0) : (globalCursorRaw ? Number(globalCursorRaw) : 0)
+  const lastEpoch = opts?.full ? 0 : storedEpoch
   const q = lastEpoch ? `after:${lastEpoch}` : ''
 
   const results: ItemResult[] = []
+  const importedGmailIds: string[] = []  // לצורך החלת תווית התיבה בסוף
   let pageToken: string | undefined
   let maxEpoch = lastEpoch
   let firstError: string | undefined
@@ -112,8 +156,8 @@ export async function syncLegacyMail(
 
         const beneficiaryId = await resolveBeneficiaryId(admin, { subject, fromEmail })
 
-        // שיוך מחלקה: המחלקה שהוגדרה לתיבה, ובנפילה — לפי כתובת ה-To.
-        const department = departmentKey ?? departmentByEmail(toEmail)?.key ?? 'main'
+        // שיוך מחלקה: המחלקה של התיבה (forcedDept), ובנפילה — לפי כתובת ה-To.
+        const department = forcedDept ?? departmentByEmail(toEmail)?.key ?? 'main'
 
         const row = {
           gmail_message_id: gmailMessageId,
@@ -155,6 +199,7 @@ export async function syncLegacyMail(
 
         const imported = (inserted?.length ?? 0) > 0
         results.push({ imported, matched: !!beneficiaryId })
+        if (imported) importedGmailIds.push(gmailMessageId)
 
         // עותק ארכיון בתיבת office — לא חוסם
         if (imported && officeGmail && archiveLabelId) {
@@ -181,12 +226,25 @@ export async function syncLegacyMail(
     pageToken = list.data.nextPageToken ?? undefined
   } while (pageToken)
 
+  // עדכון הסמן: פר-תיבה על gmail_accounts, אחרת הסמן הגלובלי הישן.
   if (maxEpoch > lastEpoch) {
-    await admin.from('app_settings').upsert({
-      key: LAST_SYNC_KEY,
-      value: String(maxEpoch + 1),
-      updated_at: new Date().toISOString(),
-    })
+    if (account) {
+      await admin.from('gmail_accounts')
+        .update({ last_sync_epoch: maxEpoch + 1 })
+        .eq('id', account.id)
+    } else {
+      await admin.from('app_settings').upsert({
+        key: LAST_SYNC_KEY,
+        value: String(maxEpoch + 1),
+        updated_at: new Date().toISOString(),
+      })
+    }
+  }
+
+  // החלת תווית התיבה על כל המיילים שנקלטו — כל מייל מהתיבה מקבל את תוויתה.
+  if (account?.label_id && importedGmailIds.length) {
+    try { await applyLabelToMessages(admin, account.label_id, importedGmailIds) }
+    catch (e) { console.error('[legacy-sync] apply label failed:', e) }
   }
 
   const summary = summarizeSync(results)
@@ -195,4 +253,37 @@ export async function syncLegacyMail(
     ...summary,
     ...(firstError ? { error: firstError } : {}),
   }
+}
+
+// שיוך בדיעבד: מחיל את תווית התיבה על מיילים ישנים שכבר נקלטו (source='legacy',
+// מחלקה תואמת). מחזיר כמה סומנו.
+export async function applyLabelToExistingMail(
+  admin: SupabaseClient,
+  account: GmailAccount,
+): Promise<number> {
+  if (!account.label_id) return 0
+  const { data: rows } = await admin
+    .from('inbound_emails')
+    .select('id')
+    .eq('source', 'legacy')
+    .eq('department', account.department)
+  const ids = (rows ?? []).map(r => String(r.id))
+  if (!ids.length) return 0
+
+  const { data: cur } = await admin.from('app_settings').select('value').eq('key', 'mail_label_assignments').maybeSingle()
+  let assignments: Record<string, string[]> = {}
+  try { assignments = cur?.value ? JSON.parse(cur.value as string) : {} } catch { assignments = {} }
+  let added = 0
+  for (const id of ids) {
+    const existing = assignments[id] ?? []
+    if (!existing.includes(account.label_id)) { assignments[id] = [...existing, account.label_id]; added++ }
+  }
+  if (added) {
+    await admin.from('app_settings').upsert({
+      key: 'mail_label_assignments',
+      value: JSON.stringify(assignments),
+      updated_at: new Date().toISOString(),
+    })
+  }
+  return added
 }
