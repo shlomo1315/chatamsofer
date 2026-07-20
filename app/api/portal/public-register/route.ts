@@ -11,6 +11,7 @@ import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registr
 import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { normalizePhone } from '@/lib/phone'
+import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 
 export const dynamic = 'force-dynamic'
 
@@ -222,6 +223,19 @@ export async function POST(request: NextRequest) {
     if (error.code === '23505') return NextResponse.json({ error: 'פרטים אלו כבר קיימים במערכת' }, { status: 409 })
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
+
+  // שיוך למפרע: מיילים ישנים של הנרשם שכבר במערכת אך ללא שיוך — לקשר אליו כעת (לא חוסם).
+  try {
+    const { data: newBen } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
+    if (newBen?.id) {
+      await attachOrphanMailToBeneficiary(admin, {
+        id: newBen.id,
+        email: email ? String(email).toLowerCase().trim() : null,
+        id_number: cleanId,
+        spouse_id_number: cleanSpouseId || null,
+      })
+    }
+  } catch (e) { console.error('[public-register] attach orphan mail failed:', e) }
 
   // הכנסת הדורות שהנרשם הוסיף ידנית (אבות + הנרשם) לעץ הדורות בסטטוס "ממתין לאימות",
   // משורשרים תחת הצומת המאומת שנבחר. הנרשם מקושר לצומת האחרון (מיקומו בעץ).

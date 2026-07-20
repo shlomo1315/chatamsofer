@@ -5,6 +5,7 @@ import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
+import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 
 function verifyNonce(nonce: string, email: string): boolean {
   try {
@@ -104,12 +105,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'כתובת אימייל זו כבר רשומה במערכת' }, { status: 409 })
   }
 
-  const { error } = await adminClient.from('beneficiaries').insert({
+  const cleanEmail = String(email).toLowerCase().trim()
+  const cleanSpouseId = spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null
+  const { data: insertedBen, error } = await adminClient.from('beneficiaries').insert({
     id_number: cleanId,
     full_name: String(full_name).trim(),
     phone: String(phone).trim(),
     phone2: phone2 ? String(phone2).trim() : null,
-    email: String(email).toLowerCase().trim(),
+    email: cleanEmail,
     address: address ? String(address).trim() : null,
     city: city ? String(city).trim() : null,
     birth_date: birth_date || null,
@@ -119,10 +122,10 @@ export async function POST(request: NextRequest) {
     notes: notes ? String(notes).trim() : null,
     lineage_node_id: lineage_node_id ? String(lineage_node_id) : null,
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
-    spouse_id_number: spouse_id_number ? String(spouse_id_number).replace(/\D/g, '') : null,
+    spouse_id_number: cleanSpouseId,
     eligibility_status: 'pending',
     is_active: true,
-  })
+  }).select('id').single()
 
   if (error) {
     console.error('Registration error:', error.message)
@@ -132,8 +135,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
 
+  // שיוך למפרע: מיילים ישנים של הנרשם שכבר במערכת אך ללא שיוך — לקשר אליו כעת (לא חוסם).
+  if (insertedBen?.id) {
+    attachOrphanMailToBeneficiary(adminClient, {
+      id: insertedBen.id, email: cleanEmail, id_number: cleanId, spouse_id_number: cleanSpouseId,
+    }).catch(e => console.error('[register] attach orphan mail failed:', e))
+  }
+
   // Send confirmation email (non-blocking)
-  sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: String(email).toLowerCase().trim() }, mailFor('igud'))
+  sendEmail({ ...templateRegistrationConfirmed(String(full_name).trim()), to: cleanEmail }, mailFor('igud'))
     .catch(e => console.error('[register] confirmation email failed:', e))
 
   return NextResponse.json({ ok: true })

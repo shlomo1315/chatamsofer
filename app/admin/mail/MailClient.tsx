@@ -1685,7 +1685,7 @@ export default function MailClient() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-slate-900 text-base break-words whitespace-pre-wrap" title={selected.subject}>{selected.subject}</h2>
+              <h2 className="font-semibold text-slate-900 text-base break-words line-clamp-2" title={selected.subject}>{selected.subject}</h2>
               {(selected.labelIds ?? []).length > 0 && (
                 <div className="flex items-center gap-1 flex-wrap mt-1"><LabelChips ids={selected.labelIds} defs={labelDefs} /></div>
               )}
@@ -1716,7 +1716,7 @@ export default function MailClient() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2 flex-wrap justify-end min-w-0 max-w-[65%]">
               {/* Handled toggle */}
               {handledIds.has(selected.id) ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg font-semibold">

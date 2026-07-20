@@ -64,6 +64,44 @@ export async function resolveBeneficiaryId(
   return null
 }
 
+// שיוך למפרע: כשנתמך נרשם, משייך אליו מיילים ישנים שכבר נקלטו למערכת אך נותרו
+// ללא שיוך (beneficiary_id IS NULL) — לפי כתובת המייל שלו, או לפי ת"ז/ת"ז בן-הזוג
+// שמופיעה בנושא. מקביל ל-resolveBeneficiaryId אך לכיוון ההפוך (נתמך → מיילים).
+// מחזיר כמה מיילים שויכו. נועד להיקרא אחרי כל רישום.
+export async function attachOrphanMailToBeneficiary(
+  admin: SupabaseClient,
+  beneficiary: { id: string; email?: string | null; id_number?: string | null; spouse_id_number?: string | null },
+): Promise<number> {
+  const email = (beneficiary.email || '').toLowerCase().trim()
+  const ids = [beneficiary.id_number, beneficiary.spouse_id_number]
+    .map(s => String(s ?? '').trim())
+    .filter(s => /^\d{9}$/.test(s))
+
+  const orClauses: string[] = []
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) orClauses.push(`from_email.ilike.${email}`)
+  // ת"ז 9 ספרות בנושא — כמו ב-resolveBeneficiaryId (רשום או בן/בת זוג)
+  for (const id of ids) orClauses.push(`subject.ilike.%${id}%`)
+  if (!orClauses.length) return 0
+
+  const { data: rows } = await admin
+    .from('inbound_emails')
+    .select('id')
+    .is('beneficiary_id', null)
+    .or(orClauses.join(','))
+  const orphanIds = (rows ?? []).map(r => r.id)
+  if (!orphanIds.length) return 0
+
+  const { error } = await admin
+    .from('inbound_emails')
+    .update({ beneficiary_id: beneficiary.id })
+    .in('id', orphanIds)
+  if (error) {
+    console.error('[attach-orphan-mail] update failed:', error.message)
+    return 0
+  }
+  return orphanIds.length
+}
+
 type ItemResult = { imported: boolean; matched: boolean; failed?: boolean }
 
 export function summarizeSync(items: ItemResult[]) {

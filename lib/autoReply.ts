@@ -48,6 +48,25 @@ function isAutomatedHeaders(headers: any[]): boolean {
   return false
 }
 
+// בודק אם ה-thread כבר קיבל התייחסות — כדי לא לשלוח "קיבלנו את פנייתך" על תגובה
+// בשרשור קיים (סקר, המשך שיחה). מחזיר true אם ל-thread יש יותר מהודעה אחת, או אם
+// כבר יש בו הודעה יוצאת מהמשרד (officeEmail בכותרת From). רק thread עם הודעה אחת
+// בלבד וללא תשובת משרד נחשב "פנייה ראשונה".
+async function threadAlreadyEngaged(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  gmail: any, threadId: string | undefined, officeEmail: string,
+): Promise<boolean> {
+  if (!threadId) return false
+  const thread = await gmail.users.threads.get({
+    userId: 'me', id: threadId, format: 'metadata', metadataHeaders: ['From'],
+  })
+  const messages = thread.data.messages ?? []
+  if (messages.length > 1) return true
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return messages.some((m: any) =>
+    extractEmail(getHeader(m.payload?.headers ?? [], 'from')) === officeEmail)
+}
+
 // מונע הרצות חופפות (חשוב למתזמן הפנימי)
 let running = false
 
@@ -115,6 +134,15 @@ export async function runAutoReply(opts: { dry?: boolean } = {}): Promise<AutoRe
           continue
         }
         seenSenders.add(fromEmail)
+
+        // תגובה בשרשור קיים (סקר, המשך שיחה) או thread שכבר קיבל תשובת משרד —
+        // מדלגים בלי לשלוח "קיבלנו את פנייתך" שוב. רק פנייה ראשונה בשרשור זוכה למענה.
+        if (await threadAlreadyEngaged(gmail, threadId, officeEmail)) {
+          if (dry) { plan.push({ from: fromEmail, action: 'דילוג — שרשור פעיל' }); skipped++; continue }
+          await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { addLabelIds: [labelId] } })
+          skipped++
+          continue
+        }
 
         // חיפוש הפונה בכרטסת הנתמכים לפי כתובת מייל מדויקת
         const { data: rows } = await db
