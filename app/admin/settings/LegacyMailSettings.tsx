@@ -145,7 +145,7 @@ export default function LegacyMailSettings() {
           body: JSON.stringify({ accountId: box.id }),
         })
         const d = await res.json()
-        if (!res.ok) throw new Error(d.error || 'שגיאה בייבוא')
+        if (!res.ok) throw new Error(d.detail ? `${d.error}\n${d.detail}` : (d.error || 'שגיאה בייבוא'))
         total += d.imported ?? 0
         if (d.done || (d.imported === 0)) break
         toast.success(`יובאו ${total} מיילים... (נותרו ${d.remaining})`)

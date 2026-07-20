@@ -20,6 +20,21 @@ function admin() {
 
 const BATCH = 50  // כמה מיילים לייבא בכל קריאה (מגבלת זמן + quota)
 
+// מחלץ את סיבת השגיאה האמיתית של Google (נבלעת בתוך אובייקט מקונן), כדי שתגיע ל-UI.
+// שגיאות אופייניות: unauthorized_client (delegation/scopes) · invalid_grant (כתובת יעד לא קיימת).
+function describeWorkspaceError(e: unknown): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const err = e as any
+  const parts = [
+    err?.response?.data?.error_description,   // JWT/OAuth: "unauthorized_client", "invalid_grant"...
+    err?.response?.data?.error,
+    err?.errors?.[0]?.message,                // Gmail API errors
+    err?.message,
+  ].filter((s) => typeof s === 'string' && s.trim())
+  // הסרת כפילויות, ואיחוד לשורה אחת קריאה
+  return [...new Set(parts)].join(' · ') || 'שגיאה לא ידועה'
+}
+
 // ייבוא בדיעבד: מזריק מיילים ישנים שכבר נמשכו למערכת לתוך תיבת ה-Gmail של המחלקה.
 // למיילים הישנים אין raw שמור ב-DB, ולכן מושכים אותו מחדש מתיבת המקור (הטוקן של
 // ה-account). מסמנים imported_to_gmail_at כדי שהרצה חוזרת לא תכפיל.
@@ -64,7 +79,10 @@ export async function POST(request: NextRequest) {
     labelId = await ensureArchiveLabel(deptGmail)
   } catch (e) {
     console.error('[import-to-gmail] workspace client failed:', e)
-    return NextResponse.json({ error: 'שגיאה בחיבור לתיבת היעד — בדוק את הגדרת ה-Service Account.' }, { status: 500 })
+    return NextResponse.json({
+      error: `שגיאה בחיבור לתיבת היעד (${targetEmail}) — בדוק את הגדרת ה-Service Account.`,
+      detail: describeWorkspaceError(e),
+    }, { status: 500 })
   }
 
   const sourceGmail = getGmailClientForToken(acc.refresh_token)
