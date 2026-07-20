@@ -109,29 +109,22 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     return s
   }, [nodeId, allNodes])
 
-  // בכרטסת: מציגים רק את הייחוס הישיר של הנהנה — טור אנכי נקי (שורש למעלה, הנהנה למטה).
-  // ה-canvas מצטמצם לגודל הטור, כדי שכל השרשרת תהיה גלויה מיד בלי גלילה מיותרת.
-  const { alignedById, alignedW, alignedH } = useMemo(() => {
+  // בכרטסת: הייחוס של הנהנה מיושר לטור אנכי ממורכז מלכתחילה (שורש למעלה, הנהנה למטה).
+  // שאר העץ נשאר במקומו — מעומעם ברקע (לא מוסתר), כמו במסך הניהול.
+  const alignedById = useMemo(() => {
     const m = new Map<string, { x: number; y: number; cx: number }>()
-    if (!nodeId || branch.size === 0) return { alignedById: m, alignedW: 0, alignedH: 0 }
+    if (!nodeId || branch.size === 0) return m
     const chain = positions
       .filter(p => branch.has(p.node.id))
       .sort((a, b) => a.node.generation - b.node.generation)
-    const colCx = PAD + NW / 2
+    const colCx = Math.max(w / 2, NW / 2 + PAD)
     chain.forEach((p, i) => {
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
     })
-    return {
-      alignedById: m,
-      alignedW: NW + PAD * 2,
-      alignedH: PAD * 2 + chain.length * (NH + VGAP),
-    }
-  }, [nodeId, branch, positions])
-  // גדלי הרינדור: כשמיושר — לפי הטור; אחרת — כל העץ
+    return m
+  }, [nodeId, branch, positions, w])
   const isAligned = alignedById.size > 0
-  const rw = isAligned ? alignedW : w
-  const rh = isAligned ? alignedH : h
 
   // wheel zoom toward cursor
   useEffect(() => {
@@ -199,8 +192,9 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
       const c = canvasRef.current
       if (!c) return
       if (isAligned) {
-        // מיושר: הטור צר וממורכז אופקית, וגלילה לראש כדי לראות את כל השרשרת מההתחלה
-        c.scrollLeft = Math.max(0, (rw * zoom - c.clientWidth) / 2)
+        // מיושר: הטור ממורכז אופקית (ב-w/2) — גוללים אליו, ולראש כדי לראות את השרשרת מלמעלה
+        const colCx = Math.max(w / 2, NW / 2 + PAD)
+        c.scrollLeft = Math.max(0, colCx * zoom - c.clientWidth / 2)
         c.scrollTop = 0
         return
       }
@@ -213,7 +207,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         if (s > 0) c.scrollLeft = s
       }
     })
-  }, [positions, w, zoom, nodeId, alignedById, isAligned, rw])
+  }, [positions, w, zoom, nodeId, alignedById, isAligned])
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#7C3AED' }}>
@@ -244,12 +238,10 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
           border: '1.5px solid #e6ddc8', height: 420, cursor: 'grab',
         }}
       >
-        <div style={{ position: 'relative', width: rw * zoom, height: (rh + 60) * zoom, minWidth: '100%' }}>
-          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={rw * zoom} height={(rh + 60) * zoom}>
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
               const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
-              // כשמיושר — מציגים רק את קווי השרשרת, השאר מוסתר (ה-canvas צר סביב הטור)
-              if (isAligned && !onBranch) return null
               const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
               const x1 = (fa?.cx ?? e.from.cx) * zoom, y1 = ((fa?.y ?? e.from.y) + NH) * zoom
               const x2 = (ta?.cx ?? e.to.cx) * zoom, y2 = (ta?.y ?? e.to.y) * zoom
@@ -272,8 +264,6 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
 
           {positions.map(pos => {
             const onBranch = branch.has(pos.node.id)
-            // כשמיושר — מרנדרים רק את שרשרת הייחוס (השאר מחוץ ל-canvas הצר)
-            if (isAligned && !onBranch) return null
             const genPal = pal(pos.node.generation)
             const st = pos.node.status ?? 'verified'
             // צבע הצומת לפי סטטוס — אחיד עם עץ הניהול

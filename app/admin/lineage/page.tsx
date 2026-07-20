@@ -400,6 +400,17 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     return m
   }, [selected, pathBranch, positions, w])
 
+  // בבחירת צומת — גלילה חלקה לטור המיושר (הנבחר), כדי שהבחירה תיראה גם אם המסך גולל הצידה.
+  useEffect(() => {
+    if (!selected) return
+    const al = alignedById.get(selected)
+    const el = canvasRef.current
+    if (!al || !el) return
+    const targetX = al.cx * zoom - el.clientWidth / 2
+    const targetY = al.y * zoom - el.clientHeight / 3
+    el.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: 'smooth' })
+  }, [selected, alignedById, zoom])
+
   if (!nodes.length) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 18, color: '#94A3B8' }}>
       <div style={{ width: 72, height: 72, borderRadius: 20, background: 'linear-gradient(135deg,#F5F0FF,#EFF6FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #C4B5FD' }}>

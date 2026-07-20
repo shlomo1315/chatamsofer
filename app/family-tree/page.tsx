@@ -278,6 +278,17 @@ export default function FamilyTreePage() {
     return m
   }, [selected, pathBranch, positions, w])
 
+  // בבחירת צומת — גלילה חלקה לטור המיושר, כדי שהבחירה תיראה גם אם המסך גולל הצידה.
+  useEffect(() => {
+    if (!selected) return
+    const al = alignedById.get(selected)
+    const el = canvasRef.current
+    if (!al || !el) return
+    const targetX = al.cx * zoom - el.clientWidth / 2
+    const targetY = al.y * zoom - el.clientHeight / 3
+    el.scrollTo({ left: Math.max(0, targetX), top: Math.max(0, targetY), behavior: 'smooth' })
+  }, [selected, alignedById, zoom])
+
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return []
