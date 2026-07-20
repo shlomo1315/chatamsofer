@@ -137,6 +137,14 @@ export default function EmailTextsManager() {
         >
           <Download size={15} /> בקרת מיילים — עיצוב מלא (PDF)
         </a>
+        <a
+          href="/api/admin/public-texts-review"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 px-3.5 py-2 text-sm font-semibold transition-colors"
+        >
+          <Download size={15} /> בקרת נוסחים — ממשק ציבורי (PDF)
+        </a>
       </div>
 
       {/* קבוצות — רק מיילים שהתבנית שלהם באמת קוראת את הטקסטים הערוכים.
