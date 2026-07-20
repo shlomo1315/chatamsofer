@@ -2,13 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
 import { EMAIL_TEXTS_KEY, type EmailTexts } from '@/lib/emailCatalog'
-import { buildEmailCatalogPdf } from '@/lib/emailCatalogPdf'
+import { buildEmailCatalogHtml } from '@/lib/emailCatalogHtml'
 
 export const dynamic = 'force-dynamic'
-export const runtime = 'nodejs'   // pdf-lib/fontkit דורשים Node runtime (לא Edge)
-export const maxDuration = 60     // בניית PDF עם פונט embedded עלולה לקחת זמן
+export const runtime = 'nodejs'
+export const maxDuration = 30
 
-// מסמך PDF מרוכז של כל נוסחי המיילים — עם הנוסח האפקטיבי (הערוך בהגדרות).
+// מסמך HTML מרוכז של כל נוסחי המיילים — מעוצב כמו המייל, נפתח בטאב חדש.
+// עם הנוסח האפקטיבי (הערוך בהגדרות, ובהיעדרו ברירת המחדל שבקוד).
 export async function GET() {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
@@ -24,17 +25,12 @@ export async function GET() {
       if (data?.value) { try { texts = JSON.parse(String(data.value)) } catch { /* נעשה שימוש בברירות המחדל */ } }
     }
 
-    const pdf = await buildEmailCatalogPdf(texts)
-    const today = new Date().toISOString().slice(0, 10)
-    return new NextResponse(Buffer.from(pdf), {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(`נוסחי-מיילים-${today}.pdf`)}`,
-      },
+    const html = buildEmailCatalogHtml(texts)
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
   } catch (e) {
-    // כשל בבניית ה-PDF — מחזירים JSON ברור במקום לקרוס ל-401/Basic Auth דרך ה-proxy.
-    console.error('[email-catalog-pdf] build failed:', e)
-    return NextResponse.json({ error: `שגיאה בהפקת ה-PDF: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
+    console.error('[email-catalog-html] build failed:', e)
+    return NextResponse.json({ error: `שגיאה בהפקת המסמך: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 }

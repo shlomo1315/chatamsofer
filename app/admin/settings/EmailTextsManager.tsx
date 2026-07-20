@@ -119,12 +119,14 @@ export default function EmailTextsManager() {
         העיצוב (לוגו, צבעים, מסגרות) נשאר אחיד ואינו ניתן לעריכה, כדי שטעות לא תוכל לשבור מייל.
       </p>
 
-      {/* הורדת מסמך מרוכז (PDF) של כל נוסחי המיילים — לעריכה "מול העיניים" */}
+      {/* מסמך מרוכז מעוצב של כל נוסחי המיילים — נפתח בטאב חדש (לקריאה/הדפסה/שמירה כ-PDF) */}
       <a
         href="/api/admin/email-catalog-pdf"
+        target="_blank"
+        rel="noopener noreferrer"
         className="inline-flex items-center gap-2 self-start rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 py-2 text-sm font-semibold transition-colors"
       >
-        <Download size={15} /> הורדת כל נוסחי המיילים (PDF)
+        <Download size={15} /> צפייה בכל נוסחי המיילים
       </a>
 
       {/* קבוצות — רק מיילים שהתבנית שלהם באמת קוראת את הטקסטים הערוכים.
