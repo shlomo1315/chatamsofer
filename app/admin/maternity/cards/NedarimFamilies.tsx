@@ -92,6 +92,10 @@ export default function NedarimFamilies() {
   const [view, setView] = useState<'families' | 'history'>('families')
   const [stats, setStats] = useState<Stats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  // בחירה מרובה למחיקה: קבוצת ClientId מסומנים + מודאל אישור + התקדמות מחיקה
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState<{ done: number; total: number } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError('')
@@ -130,6 +134,42 @@ export default function NedarimFamilies() {
   const filtered = q
     ? families.filter(f => [f.FamilyName, f.FirstName, f.Zeout, f.Phone, f.Groupe].filter(Boolean).join(' ').includes(q))
     : families
+
+  // ─── בחירה מרובה למחיקה ───
+  const toggleOne = (clientId: string) => setChecked(prev => {
+    const next = new Set(prev)
+    if (next.has(clientId)) next.delete(clientId); else next.add(clientId)
+    return next
+  })
+  // "בחר הכל" פועל על השורות המסוננות בלבד (מה שהמשתמש רואה)
+  const filteredIds = filtered.map(f => String(f.ClientId))
+  const allFilteredChecked = filteredIds.length > 0 && filteredIds.every(id => checked.has(id))
+  const toggleAll = () => setChecked(prev => {
+    const next = new Set(prev)
+    if (allFilteredChecked) filteredIds.forEach(id => next.delete(id))
+    else filteredIds.forEach(id => next.add(id))
+    return next
+  })
+  const clearChecked = () => setChecked(new Set())
+
+  // המשפחות שסומנו למחיקה (לפי כל הרשימה, לא רק המסוננת)
+  const checkedFamilies = families.filter(f => checked.has(String(f.ClientId)))
+
+  const runBulkDelete = async () => {
+    setConfirmingBulk(false)
+    const targets = checkedFamilies
+    setBulkDeleting({ done: 0, total: targets.length })
+    let failed = 0
+    for (let i = 0; i < targets.length; i++) {
+      const d = await api('SaveClientCard', { ClientId: String(targets[i].ClientId), Deleted: '1' })
+      if (String(d.Result).toUpperCase() !== 'OK') failed++
+      setBulkDeleting({ done: i + 1, total: targets.length })
+    }
+    setBulkDeleting(null)
+    setChecked(new Set())
+    await load(); await loadStats()
+    if (failed > 0) setError(`${failed} מתוך ${targets.length} משפחות לא נמחקו. נסה שוב.`)
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -193,6 +233,22 @@ export default function NedarimFamilies() {
           className="flex-1 text-sm bg-transparent outline-none" />
       </div>
 
+      {/* סרגל פעולות בחירה מרובה — מופיע כשסומנה לפחות משפחה אחת */}
+      <AdminOnly>
+        {checked.size > 0 && (
+          <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-lg px-4 py-2.5">
+            <span className="text-sm font-medium text-rose-800">{checked.size} משפחות נבחרו</span>
+            <div className="flex items-center gap-2">
+              <button onClick={clearChecked} className="text-sm text-slate-500 hover:text-slate-700 px-2">בטל בחירה</button>
+              <button onClick={() => setConfirmingBulk(true)}
+                className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold px-3.5 py-2 rounded-lg">
+                <Trash2 size={15} /> מחק נבחרות
+              </button>
+            </div>
+          </div>
+        )}
+      </AdminOnly>
+
       {error && (
         <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
           <AlertTriangle size={15} /> {error}
@@ -208,10 +264,14 @@ export default function NedarimFamilies() {
             <CreditCard size={28} /><span className="text-sm">{error ? 'לא ניתן לטעון נתונים' : q ? 'לא נמצאו תוצאות' : 'אין משפחות'}</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-[16px] border-collapse" dir="rtl">
-              <thead>
-                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 bg-slate-50">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 [&>th]:bg-slate-50">
+                  <AdminOnly><th className="px-4 py-4 border-l border-slate-200 w-px">
+                    <input type="checkbox" checked={allFilteredChecked} onChange={toggleAll}
+                      title="בחר הכל" className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
+                  </th></AdminOnly>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">שם משפחה</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">מזהה משפחה</th>
                   <th className="px-5 py-4 font-bold border-l border-slate-200">ת.ז</th>
@@ -227,8 +287,13 @@ export default function NedarimFamilies() {
               <tbody>
                 {filtered.map(f => {
                   const info = f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
+                  const isChecked = checked.has(String(f.ClientId))
                   return (
-                  <tr key={f.ClientId} onClick={() => setSelected(f)} className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer">
+                  <tr key={f.ClientId} onClick={() => setSelected(f)} className={`border-b border-slate-100 cursor-pointer transition-colors ${isChecked ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-emerald-50/40'}`}>
+                    <AdminOnly><td className="px-4 py-4 border-l border-slate-100 w-px" onClick={e => e.stopPropagation()}>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleOne(String(f.ClientId))}
+                        className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
+                    </td></AdminOnly>
                     <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
                     <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Zeout || '—'}</span></td>
@@ -267,6 +332,49 @@ export default function NedarimFamilies() {
 
       {selected && <FamilyModal family={selected} onClose={() => setSelected(null)} onChanged={() => { load(); loadStats() }} />}
       {adding && <EditFamilyModal onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load() }} />}
+
+      {/* מודאל אישור מחיקה מרובה — מציג את רשימת המשפחות שיימחקו */}
+      {confirmingBulk && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={() => setConfirmingBulk(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-slate-100">
+              <AlertTriangle size={18} className="text-rose-600" />
+              <h2 className="font-bold text-slate-900">מחיקת {checkedFamilies.length} משפחות</h2>
+            </div>
+            <div className="p-5 flex flex-col gap-3 overflow-y-auto">
+              <p className="text-sm text-slate-600">המשפחות הבאות יימחקו לצמיתות מנדרים קארד. פעולה זו <strong>אינה הפיכה</strong>.</p>
+              <div className="flex flex-col gap-1 max-h-64 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-2">
+                {checkedFamilies.map(f => (
+                  <div key={f.ClientId} className="flex items-center justify-between text-sm px-2 py-1">
+                    <span className="font-medium text-slate-700 truncate">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</span>
+                    <span className="ltr-num text-xs text-slate-400">{f.Zeout || `#${f.ClientId}`}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-slate-100">
+              <button onClick={() => setConfirmingBulk(false)} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">ביטול</button>
+              <button onClick={runBulkDelete}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold">
+                <Trash2 size={15} /> מחק {checkedFamilies.length} משפחות
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* חיווי התקדמות מחיקה מרובה */}
+      {bulkDeleting && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm p-6 flex flex-col items-center gap-3">
+            <Loader2 size={28} className="animate-spin text-rose-600" />
+            <p className="text-sm font-medium text-slate-700">מוחק משפחות… {bulkDeleting.done} מתוך {bulkDeleting.total}</p>
+            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-full bg-rose-500 transition-all" style={{ width: `${bulkDeleting.total ? (bulkDeleting.done / bulkDeleting.total) * 100 : 0}%` }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

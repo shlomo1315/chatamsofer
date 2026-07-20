@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -23,6 +23,7 @@ import RegistrationGate from './RegistrationGate'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
 import MaintenanceReplySettings from './MaintenanceReplySettings'
+import CardStockAlertSettings from './CardStockAlertSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -178,6 +179,11 @@ export default async function SettingsPage() {
         {/* Nedarim Card connection */}
         <Collapsible title="נדרים קארד" icon={<CreditCard size={16} className="text-emerald-500" />}>
           <NedarimSettings />
+        </Collapsible>
+
+        {/* Card stock low-balance alert (threshold + recipient emails) */}
+        <Collapsible title="התראת מלאי כרטיסי מזון" icon={<Package size={16} className="text-emerald-500" />}>
+          <CardStockAlertSettings />
         </Collapsible>
 
         {/* Loans portal */}

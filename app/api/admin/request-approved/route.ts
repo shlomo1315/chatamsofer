@@ -96,6 +96,17 @@ export async function POST(request: NextRequest) {
   // ── תופעות לוואי איטיות ברקע (מייל+שוברים, והטענת נדרים) — לא חוסמות את התגובה.
   // ב-Railway השרת נשאר חי, כך שהעבודה ברקע מסתיימת גם לאחר שהתגובה נשלחה.
   void (async () => {
+    // 0. אישור לידה → ניכוי כרטיס מהמלאי הגלובלי + הטענת נדרים (loadMaternityCardOnApproval).
+    // חייב לרוץ לפני בניית המייל, כדי לדעת אם לצרף שובר כרטיס מזון: אם אין מלאי (awaitingStock)
+    // → היולדת נכנסת לתור המתנה, לא נטען כלום, ולא מצרפים שובר כרטיס (רק שובר בית החלמה).
+    let cardInStock = true
+    if (type === 'maternity') {
+      try {
+        const r = await loadMaternityCardOnApproval(admin, id)
+        if (r.awaitingStock) cardInStock = false
+      } catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
+    }
+
     // 1. מייל אישור הבקשה (+ שוברים ללידה)
     if (ben.email) {
       try {
@@ -120,8 +131,9 @@ export async function POST(request: NextRequest) {
               serial,
               centers,
             }
-            // תמיד — שובר כרטיס מזון + שובר הבראה (כולל לידה שקטה)
-            attachments = await buildMaternityVouchers(voucherInput)
+            // שובר הבראה תמיד; שובר כרטיס מזון רק אם יש מלאי כרטיסים. אם אין מלאי —
+            // היולדת בתור המתנה, ותקבל את שובר הכרטיס אוטומטית ברגע שיתחדש המלאי.
+            attachments = await buildMaternityVouchers(voucherInput, { includeCard: cardInStock })
             // דף הנחיות — רק בלידה רגילה (הטקסט מברך על הולדת התינוק ומדבר על ימי הבראה)
             if ((birth.birth_type ?? 'live') !== 'silent') {
               const b2 = birth as { baby_name?: string | null; baby_gender?: string | null }
@@ -140,13 +152,7 @@ export async function POST(request: NextRequest) {
       } catch (e) { console.error('[request-approved] mail failed:', e) }
     }
 
-    // 2. אישור לידה → הטענת 600 ₪ אוטומטית בנדרים (איתור/הקמת המשפחה לפי ת.ז)
-    if (type === 'maternity') {
-      try { await loadMaternityCardOnApproval(admin, id) }
-      catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
-    }
-
-    // 3. אישור לידה (רגילה) → תזמון בקשת מכתב ברכה לנדיב, 10 ימים מהיום.
+    // 2. אישור לידה (רגילה) → תזמון בקשת מכתב ברכה לנדיב, 10 ימים מהיום.
     // המועד נדחה אוטומטית אם נופל בשבת/חג. לידה שקטה — לא נשלח.
     if (type === 'maternity' && (birth.birth_type ?? 'live') !== 'silent') {
       try {
