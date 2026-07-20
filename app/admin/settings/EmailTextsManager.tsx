@@ -119,15 +119,25 @@ export default function EmailTextsManager() {
         העיצוב (לוגו, צבעים, מסגרות) נשאר אחיד ואינו ניתן לעריכה, כדי שטעות לא תוכל לשבור מייל.
       </p>
 
-      {/* מסמך מרוכז מעוצב של כל נוסחי המיילים — נפתח בטאב חדש (לקריאה/הדפסה/שמירה כ-PDF) */}
-      <a
-        href="/api/admin/email-catalog-pdf"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 self-start rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 py-2 text-sm font-semibold transition-colors"
-      >
-        <Download size={15} /> צפייה בכל נוסחי המיילים
-      </a>
+      {/* שני מצבי צפייה: טקסט לעריכה, ובקרה מעוצבת מלאה (כל מייל בעמוד נפרד, בדיוק כפי שנשלח) */}
+      <div className="flex flex-wrap gap-2">
+        <a
+          href="/api/admin/email-catalog-pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3.5 py-2 text-sm font-semibold transition-colors"
+        >
+          <Download size={15} /> צפייה בנוסחים (טקסט)
+        </a>
+        <a
+          href="/api/admin/email-review"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 self-start rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3.5 py-2 text-sm font-semibold transition-colors"
+        >
+          <Download size={15} /> בקרת מיילים — עיצוב מלא (PDF)
+        </a>
+      </div>
 
       {/* קבוצות — רק מיילים שהתבנית שלהם באמת קוראת את הטקסטים הערוכים.
           הצגת מייל שאינו wired הייתה מטעה: העריכה לא הייתה משפיעה על כלום. */}
