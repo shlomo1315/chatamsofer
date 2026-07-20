@@ -2,9 +2,10 @@
 import { useState, useCallback } from 'react'
 import {
   Clock, ArrowUpRight, Users, Landmark, Baby,
-  HeartHandshake, HandCoins, X, Loader2, ExternalLink,
+  HeartHandshake, HandCoins, X, Loader2, ExternalLink, Trash2,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useStaffPermissions } from '@/components/StaffPermissions'
 
 interface PendingTask {
   id: string
@@ -28,9 +29,11 @@ function formatDate(iso: string) {
 }
 
 export default function PendingTasksPanel({ count }: { count: number }) {
+  const { isAdmin } = useStaffPermissions()   // רק מנהל מלא רשאי להסתיר בקשות מהלוח
   const [open, setOpen] = useState(false)
   const [tasks, setTasks] = useState<PendingTask[]>([])
   const [loading, setLoading] = useState(false)
+  const [dismissing, setDismissing] = useState<string | null>(null)
   // המספר הגדול מגיע מ-getStats (ממוטמן), ולכן עלול לפגר אחרי הרשימה הטרייה.
   // ברגע שהפאנל נטען, liveCount מסתנכרן לספירה המדויקת כדי שהמספר יתאים לרשימה.
   const [liveCount, setLiveCount] = useState<number | null>(null)
@@ -48,6 +51,27 @@ export default function PendingTasksPanel({ count }: { count: number }) {
       setLoading(false)
     }
   }, [])
+
+  // הסתרת בקשה מהלוח בלבד (לא נוגע בנתונים) — מנהל מלא. מסיר מיד מהרשימה ומעדכן את המונה.
+  async function dismiss(task: PendingTask) {
+    if (!window.confirm(`להסיר את "${task.name}" מרשימת הממתינים לטיפול?\n(הבקשה עצמה נשארת במערכת — רק נעלמת מכאן)`)) return
+    setDismissing(task.id)
+    try {
+      const res = await fetch('/api/admin/dashboard/pending-tasks/dismiss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: task.type, id: task.id }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'ההסתרה נכשלה'); return }
+      setTasks(prev => {
+        const next = prev.filter(t => t.id !== task.id)
+        setLiveCount(next.length)
+        return next
+      })
+    } finally {
+      setDismissing(null)
+    }
+  }
 
   const shown = liveCount ?? count
 
@@ -141,6 +165,17 @@ export default function PendingTasksPanel({ count }: { count: number }) {
                         <span className="text-[11px] text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline">
                           {cfg.label}
                         </span>
+                        {/* הסתרה מהלוח — מנהל מלא בלבד. לא מנווט (preventDefault) ולא נוגע בנתונים */}
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismiss(task) }}
+                            disabled={dismissing === task.id}
+                            title="הסר מרשימת הממתינים (הבקשה נשארת במערכת)"
+                            className="flex-shrink-0 p-1.5 rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 transition-colors disabled:opacity-40"
+                          >
+                            {dismissing === task.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          </button>
+                        )}
                         <ExternalLink size={13} className="text-zinc-300 group-hover:text-zinc-500 transition-colors flex-shrink-0" />
                       </Link>
                     )

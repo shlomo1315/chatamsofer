@@ -16,7 +16,7 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
-    const [beneficiaries, loans, maternity, widows, financial] = await Promise.all([
+    const [beneficiaries, loans, maternity, widows, financial, dismissed] = await Promise.all([
       supabase.from('beneficiaries')
         .select('id, full_name, family_name, created_at')
         .eq('eligibility_status', 'pending')
@@ -42,7 +42,14 @@ export async function GET() {
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(30),
+      // בקשות שמנהל מלא הסתיר מהלוח (לא נוגע בנתונים — רק מסתיר מכאן)
+      supabase.from('dismissed_pending_tasks').select('entity_type, entity_id'),
     ])
+
+    // סט המזהים שהוסתרו, לפי "type:id" — לסינון מהיר
+    const dismissedSet = new Set(
+      (dismissed?.data ?? []).map((d: { entity_type: string; entity_id: string }) => `${d.entity_type}:${d.entity_id}`),
+    )
 
     type Ben = { full_name?: string; family_name?: string } | null
 
@@ -82,7 +89,9 @@ export async function GET() {
         href: `/admin/financial-aid/${f.id}`,
         createdAt: f.created_at,
       })),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    ]
+      .filter(t => !dismissedSet.has(`${t.type}:${t.id}`))   // מחריגים בקשות שהוסתרו
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     return NextResponse.json({ tasks })
   } catch {
