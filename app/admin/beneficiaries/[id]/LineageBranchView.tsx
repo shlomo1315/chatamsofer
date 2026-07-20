@@ -108,6 +108,22 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     return s
   }, [nodeId, allNodes])
 
+  // בכרטסת: המסלול של הנהנה מוצג מיושר לטור אנכי מלכתחילה (שורש למעלה, הנהנה למטה) —
+  // הוא הפוקוס, אין צורך בבחירה. שאר הצמתים נשארים במקומם המקורי (אפורים/מעומעמים).
+  const alignedById = useMemo(() => {
+    const m = new Map<string, { x: number; y: number; cx: number }>()
+    if (!nodeId || branch.size === 0) return m
+    const chain = positions
+      .filter(p => branch.has(p.node.id))
+      .sort((a, b) => a.node.generation - b.node.generation)
+    const colCx = Math.max(w / 2, NW / 2 + PAD)
+    chain.forEach((p, i) => {
+      const y = PAD + i * (NH + VGAP)
+      m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
+    })
+    return m
+  }, [nodeId, branch, positions, w])
+
   // wheel zoom toward cursor
   useEffect(() => {
     const el = canvasRef.current
@@ -216,7 +232,9 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
-              const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+              const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
+              const x1 = (fa?.cx ?? e.from.cx) * zoom, y1 = ((fa?.y ?? e.from.y) + NH) * zoom
+              const x2 = (ta?.cx ?? e.to.cx) * zoom, y2 = (ta?.y ?? e.to.y) * zoom
               const mid = (y1 + y2) / 2
               const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
               const col = onBranch ? pal(e.from.node.generation).ring : '#CBD5E1'
@@ -247,9 +265,11 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
             const relOverlay = pos.node.relation === 'son_in_law'
               ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
               : ''
+            const al = alignedById.get(pos.node.id)
+            const rx = al?.x ?? pos.x, ry = al?.y ?? pos.y
             return (
               <div key={pos.node.id} style={{
-                position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
+                position: 'absolute', left: rx * zoom, top: ry * zoom,
                 width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
                 background: relOverlay + p.bg,
                 border: st === 'verified' ? 'none' : `${Math.max(1.5, 2 * zoom)}px dashed #fff`,
@@ -260,7 +280,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                 transform: isTarget ? 'scale(1.07)' : 'scale(1)',
                 zIndex: isTarget ? 20 : 2, userSelect: 'none',
                 opacity: onBranch ? 1 : 0.32,
-                transition: 'opacity .2s',
+                transition: 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), opacity .2s',
               }}>
                 {/* תג סטטוס: ✓ ירוק=מאושר · ! כתום=ממתין לאימות · ✕ אדום=נדחה — גודל קבוע כדי שיהיה ברור בכל זום */}
                 <div style={{

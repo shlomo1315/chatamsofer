@@ -383,6 +383,23 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     return s
   }, [selected, positions])
 
+  // יישור מסלול: כשצומת נבחר, הצמתים שבמסלולו (הוא + אבותיו) מתיישרים לטור אנכי
+  // ממורכז — שורש למעלה, הנבחר למטה. מפה מ-id למיקום המיושר; שאר הצמתים לא כאן
+  // (נשארים במקומם המקורי, מעומעמים). בלי selected — ריק, והכל מוצג כעץ רגיל.
+  const alignedById = useMemo(() => {
+    const m = new Map<string, { x: number; y: number; cx: number }>()
+    if (!selected || pathBranch.size === 0) return m
+    const chain = positions
+      .filter(p => pathBranch.has(p.node.id))
+      .sort((a, b) => a.node.generation - b.node.generation)  // שורש → נבחר
+    const colCx = Math.max(w / 2, NW / 2 + PAD)
+    chain.forEach((p, i) => {
+      const y = PAD + i * (NH + VGAP)
+      m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
+    })
+    return m
+  }, [selected, pathBranch, positions, w])
+
   if (!nodes.length) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 320, gap: 18, color: '#94A3B8' }}>
       <div style={{ width: 72, height: 72, borderRadius: 20, background: 'linear-gradient(135deg,#F5F0FF,#EFF6FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #C4B5FD' }}>
@@ -469,7 +486,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
-              const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+              // כשיש מסלול מיושר — קצות הקו נלקחים מהמיקום המיושר (טור אנכי), אחרת המקורי
+              const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
+              const fx = fa?.cx ?? e.from.cx, fy = fa?.y ?? e.from.y
+              const tx = ta?.cx ?? e.to.cx, ty = ta?.y ?? e.to.y
+              const x1 = fx * zoom, y1 = (fy + NH) * zoom, x2 = tx * zoom, y2 = ty * zoom
               const mid = (y1 + y2) / 2
               const col = pal(e.from.node.generation).ring
               // חיבור אורתוגונלי מסודר (כמו אילן יוחסין קלאסי): יורד מההורה לגובה האמצע,
@@ -510,6 +531,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               : nodeStatus === 'rejected'
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
                 : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', light: '#FFF7ED', text: '#9A3412' }
+            // מיקום הרינדור: מיושר (טור אנכי) אם הצומת במסלול הנבחר, אחרת המקורי
+            const al = alignedById.get(pos.node.id)
+            const rx = al?.x ?? pos.x, ry = al?.y ?? pos.y
             return (
               <div
                 key={pos.node.id}
@@ -518,7 +542,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 onMouseLeave={scheduleHideHover}
                 onClick={e => { e.stopPropagation(); if (mergeMode) { onToggleMerge(pos.node.id); return } setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                 style={{
-                  position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
+                  position: 'absolute', left: rx * zoom, top: ry * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
                   background: relOverlay + p.bg,
                   boxShadow: inMerge
@@ -530,7 +554,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                  transition: 'box-shadow .2s, transform .2s, opacity .2s',
+                  transition: 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s',
                   opacity: isDimmed ? 0.25 : 1,
                   zIndex: (isSel || hovered === pos.node.id) ? 50 : 2, userSelect: 'none',
                 }}>

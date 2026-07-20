@@ -263,6 +263,21 @@ export default function FamilyTreePage() {
     return s
   }, [selected, positions])
 
+  // יישור מסלול נבחר לטור אנכי ממורכז (שורש למעלה, הנבחר למטה) — כמו במסך הניהול.
+  const alignedById = useMemo(() => {
+    const m = new Map<string, { x: number; y: number; cx: number }>()
+    if (!selected || pathBranch.size === 0) return m
+    const chain = positions
+      .filter(p => pathBranch.has(p.node.id))
+      .sort((a, b) => a.node.generation - b.node.generation)
+    const colCx = Math.max(w / 2, NW / 2 + PAD)
+    chain.forEach((p, i) => {
+      const y = PAD + i * (NH + VGAP)
+      m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
+    })
+    return m
+  }, [selected, pathBranch, positions, w])
+
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     if (!q) return []
@@ -453,8 +468,10 @@ export default function FamilyTreePage() {
               {/* SVG edges */}
               <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
                 {edges.map((e, i) => {
-                  const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom
-                  const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+                  // קצות הקו מהמיקום המיושר אם הצומת במסלול, אחרת המקורי
+                  const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
+                  const x1 = (fa?.cx ?? e.from.cx) * zoom, y1 = ((fa?.y ?? e.from.y) + NH) * zoom
+                  const x2 = (ta?.cx ?? e.to.cx) * zoom, y2 = (ta?.y ?? e.to.y) * zoom
                   const mid = (y1 + y2) / 2
                   const col = pal(e.from.node.generation).ring
                   // חיבור אורתוגונלי מסודר (יורד→אופקי→יורד, פינות מעוגלות) — זהה למסך הניהול
@@ -481,13 +498,15 @@ export default function FamilyTreePage() {
                   ? !pathBranch.has(pos.node.id)
                   : generationFilter !== null && pos.node.generation !== generationFilter
                 const p = pal(pos.node.generation)
+                const al = alignedById.get(pos.node.id)
+                const rx = al?.x ?? pos.x, ry = al?.y ?? pos.y
                 return (
                   <div
                     key={pos.node.id}
                     data-ft-node="1"
                     onClick={e => { e.stopPropagation(); setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
                     style={{
-                      position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
+                      position: 'absolute', left: rx * zoom, top: ry * zoom,
                       width: NW * zoom, height: NH * zoom, borderRadius: 14 * zoom,
                       background: p.bg,
                       boxShadow: isSel
@@ -496,7 +515,7 @@ export default function FamilyTreePage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer',
                       transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                      transition: 'box-shadow .2s, transform .2s, opacity .2s',
+                      transition: 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s',
                       opacity: isDimmed ? 0.2 : 1,
                       zIndex: isSel ? 20 : 2, userSelect: 'none',
                     }}>
