@@ -397,15 +397,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
     })
-    // רצועה נקייה סביב הטור; כל צומת שאינו במסלול ונופל בתוכה נדחף החוצה לפי צדו
-    const halfClear = NW * 1.6
+    // שאר העץ זז כבלוק אחיד הצידה (offset קבוע לכל צד) — המבנה היחסי נשמר, בלי חפיפה.
+    // כך נפתחת רצועה נקייה סביב הטור המרכזי, ושני צדי העץ נשארים מסודרים.
+    const SHIFT = NW * 1.4
     positions.forEach(p => {
       if (pathBranch.has(p.node.id)) return
-      const dist = p.cx - colCx
-      if (Math.abs(dist) < halfClear) {
-        const push = (dist >= 0 ? 1 : -1) * (halfClear - Math.abs(dist))
-        m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
-      }
+      const push = p.cx < colCx ? -SHIFT : SHIFT
+      m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
     })
     return m
   }, [selected, pathBranch, positions, w])

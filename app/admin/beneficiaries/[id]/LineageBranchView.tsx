@@ -122,14 +122,12 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
     })
-    const halfClear = NW * 1.6
+    // שאר העץ זז כבלוק אחיד הצידה (offset קבוע לכל צד) — מסודר, בלי חפיפה.
+    const SHIFT = NW * 1.4
     positions.forEach(p => {
       if (branch.has(p.node.id)) return
-      const dist = p.cx - colCx
-      if (Math.abs(dist) < halfClear) {
-        const push = (dist >= 0 ? 1 : -1) * (halfClear - Math.abs(dist))
-        m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
-      }
+      const push = p.cx < colCx ? -SHIFT : SHIFT
+      m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
     })
     return m
   }, [nodeId, branch, positions, w])
