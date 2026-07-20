@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
+import RecoveryDatePicker from './RecoveryDatePicker'
 import { he } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,6 +38,8 @@ interface Aid {
   recovery_amount?: number | null
   recovery_amount_status?: string | null
   recovery_nights?: number | null
+  recovery_stay_from?: string | null
+  recovery_stay_to?: string | null
   recovery_receipt_number?: string | null
   recovery_receipt_url?: string | null
   recovery_locked?: boolean | null
@@ -273,6 +276,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [nightsInput, setNightsInput] = useState<Record<string, string>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_nights != null ? String(a.recovery_nights) : String(recoveryDays(a))])),
   )
+  // טווח ימי השהייה בבית ההחלמה (נבחר בלוח). from = יום הגעה · to = יום עזיבה.
+  const [stayFrom, setStayFrom] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_stay_from ?? null])),
+  )
+  const [stayTo, setStayTo] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_stay_to ?? null])),
+  )
   const [receiptInput, setReceiptInput] = useState<Record<string, string>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_number ?? ''])),
   )
@@ -322,7 +332,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     const missing: string[] = []
     const amt = Number(amountInput[aidId])
     if (!(Number.isFinite(amt) && amt > 0)) missing.push('סכום שמומש')
-    if ((nightsInput[aidId] ?? '').trim() === '') missing.push('מספר לילות')
+    if (!stayFrom[aidId] || !stayTo[aidId]) missing.push('תאריכי השהייה בלוח')
     if ((receiptInput[aidId] ?? '').trim() === '') missing.push('מספר קבלה')
     if (!receiptUrl[aidId]) missing.push('קובץ קבלה')
     return missing
@@ -339,7 +349,12 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         body: JSON.stringify({
           home, aidId,
           amount: Number(amountInput[aidId]),
-          nights: nightsInput[aidId],
+          // מספר הלילות נגזר מהטווח שנבחר בלוח (הפרש הימים בין הגעה לעזיבה)
+          nights: (stayFrom[aidId] && stayTo[aidId])
+            ? String(Math.round((new Date(stayTo[aidId]!).getTime() - new Date(stayFrom[aidId]!).getTime()) / 86400000))
+            : nightsInput[aidId],
+          stayFrom: stayFrom[aidId] ?? null,
+          stayTo: stayTo[aidId] ?? null,
           receiptNumber: (receiptInput[aidId] ?? '').trim(),
         }),
       })
@@ -659,21 +674,21 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   />
                                 </div>
                               </label>
-                              <label className="flex flex-col gap-1.5 text-right">
-                                <span className="text-sm font-semibold text-slate-600">מספר לילות <span className="font-normal text-slate-400">(עד {recoveryDays(aid)})</span></span>
-                                <input
-                                  value={nightsInput[aid.id] ?? ''}
-                                  onChange={e => {
-                                    // חסימת קלט מעל מספר ימי הזכאות — אפשר פחות, לא יותר
-                                    const digits = e.target.value.replace(/\D/g, '')
-                                    const max = recoveryDays(aid)
-                                    const clamped = digits === '' ? '' : String(Math.min(Number(digits), max))
-                                    setNightsInput(mm => ({ ...mm, [aid.id]: clamped }))
+                              <div className="flex flex-col gap-1.5 text-right sm:col-span-2">
+                                <span className="text-sm font-semibold text-slate-600">ימי השהייה בבית ההחלמה <span className="font-normal text-slate-400">(עד {recoveryDays(aid)} לילות)</span></span>
+                                <RecoveryDatePicker
+                                  maxNights={recoveryDays(aid)}
+                                  from={stayFrom[aid.id] ?? null}
+                                  to={stayTo[aid.id] ?? null}
+                                  onChange={(f, t) => {
+                                    setStayFrom(mm => ({ ...mm, [aid.id]: f }))
+                                    setStayTo(mm => ({ ...mm, [aid.id]: t }))
+                                    // מסנכרן את מספר הלילות (נגזר מהטווח) לתצוגות הקיימות
+                                    const n = (f && t) ? String(Math.round((new Date(t).getTime() - new Date(f).getTime()) / 86400000)) : ''
+                                    setNightsInput(mm => ({ ...mm, [aid.id]: n }))
                                   }}
-                                  inputMode="numeric" placeholder={String(recoveryDays(aid))}
-                                  className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                 />
-                              </label>
+                              </div>
                               <label className="flex flex-col gap-1.5 text-right">
                                 <span className="text-sm font-semibold text-slate-600">מספר קבלה</span>
                                 <input

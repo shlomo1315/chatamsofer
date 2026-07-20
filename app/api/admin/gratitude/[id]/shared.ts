@@ -2,6 +2,7 @@ import type { getServiceClient } from '@/lib/apiAuth'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { DEPARTMENTS } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
+import { toHebrewDate } from '@/lib/hebrewDate'
 
 // עוזרים משותפים ל-endpoints של מכתב ברכה (צפייה / שליחה במייל).
 // מרוכז כאן כדי שטעינת המכתב ובניית קלט השובר יהיו במקום אחד.
@@ -17,6 +18,8 @@ export type AidInfo = {
   recovery_home?: string | null
   recovery_eligibility_days?: number | null
   is_twins?: boolean | null
+  recovery_stay_from?: string | null
+  recovery_stay_to?: string | null
   beneficiary?: BenFull | null
 }
 
@@ -36,7 +39,7 @@ type Db = NonNullable<ReturnType<typeof getServiceClient>>
 
 const SELECT =
   'id, body, signature, is_anonymous, status, created_at, sent_to_donor_at, sent_to_donor_email, ' +
-  'aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, ' +
+  'aid:maternity_aids(birth_date, recovery_home, recovery_eligibility_days, is_twins, recovery_stay_from, recovery_stay_to, ' +
   'beneficiary:beneficiaries(family_name, full_name, spouse_name, city, address, id_number, spouse_id_number, email))'
 
 export async function loadGratitudeLetter(db: Db, id: string): Promise<GratitudeLetterRow | null> {
@@ -70,6 +73,10 @@ export function voucherInputFromRow(row: GratitudeLetterRow) {
   const days = aid ? recoveryDaysOf({
     recovery_eligibility_days: aid.recovery_eligibility_days, is_twins: aid.is_twins,
   }) : undefined
+  // תאריכי שהייה בעברית — רק אם שניהם קיימים (הגנה: אחרת לא מוסיפים לשובר).
+  const stayDatesHe = (aid?.recovery_stay_from && aid?.recovery_stay_to)
+    ? `שהתה בבית ההחלמה מ${toHebrewDate(aid.recovery_stay_from)} עד ${toHebrewDate(aid.recovery_stay_to)}`
+    : undefined
   return {
     mode: 'filled' as const,
     body: row.body ?? '',
@@ -83,6 +90,7 @@ export function voucherInputFromRow(row: GratitudeLetterRow) {
     recoveryDays: days,
     recoveryHome: aid?.recovery_home ?? undefined,
     letterDate: row.created_at ?? undefined,
+    stayDatesHe,
   }
 }
 

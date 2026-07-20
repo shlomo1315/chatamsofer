@@ -18,7 +18,7 @@ function getAdminClient() {
 
 // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
 export async function POST(request: NextRequest) {
-  const { home, aidId, amount, nights, receiptNumber } = await request.json()
+  const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   const amt = Number(amount)
   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
@@ -28,6 +28,22 @@ export async function POST(request: NextRequest) {
   }
   const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
   if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
+
+  // טווח תאריכי השהייה — חובה, פורמט ISO, ובתוך חלון 5 השבועות האחרונים
+  const ISO = /^\d{4}-\d{2}-\d{2}$/
+  const from = typeof stayFrom === 'string' && ISO.test(stayFrom) ? stayFrom : null
+  const to = typeof stayTo === 'string' && ISO.test(stayTo) ? stayTo : null
+  if (!from || !to) return NextResponse.json({ error: 'יש לסמן את תאריכי השהייה בלוח' }, { status: 400 })
+  const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
+  const todayMs = new Date(new Date().toISOString().slice(0, 10)).getTime()
+  const windowStart = todayMs - 35 * 86400000
+  if (toMs < fromMs || fromMs < windowStart || toMs > todayMs) {
+    return NextResponse.json({ error: 'תאריכי השהייה מחוץ לחלון הזכאות (עד 5 שבועות אחורה)' }, { status: 400 })
+  }
+  // מספר הלילות חייב להתאים להפרש שבטווח
+  if (Math.round((toMs - fromMs) / 86400000) !== nightsNum) {
+    return NextResponse.json({ error: 'מספר הלילות אינו תואם את הטווח שנבחר' }, { status: 400 })
+  }
 
   const cookieStore = await cookies()
   if (!verifyRecoveryPortalToken(cookieStore.get(portalCookieName(home))?.value, home)) {
@@ -62,6 +78,8 @@ export async function POST(request: NextRequest) {
   const { error } = await admin.from('maternity_aids').update({
     recovery_amount: amt,
     recovery_nights: nightsNum,
+    recovery_stay_from: from,
+    recovery_stay_to: to,
     recovery_receipt_number: receipt,
     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
     recovery_amount_at: new Date().toISOString(),

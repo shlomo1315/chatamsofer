@@ -417,6 +417,14 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   </span>
                 </div>
               )}
+              {aid.recovery_stay_from && aid.recovery_stay_to && (
+                <div className="text-sm mt-2">
+                  <span className="text-slate-500">שהתה בפועל: </span>
+                  <span className="font-semibold text-slate-700">
+                    {new Date(aid.recovery_stay_from).toLocaleDateString('he-IL')} – {new Date(aid.recovery_stay_to).toLocaleDateString('he-IL')}
+                  </span>
+                </div>
+              )}
               {aid.recovery_amount != null && (
                 <div className="text-sm mt-2 flex items-center gap-2 flex-wrap">
                   <span className="text-slate-500">סכום שמומש ע״י בית ההחלמה: </span>

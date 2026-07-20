@@ -27,6 +27,7 @@ export interface GratitudeVoucherInput {
   recoveryDays?: number   // ימי הבראה שקיבלה — מודפס למעלה
   recoveryHome?: string   // שם בית ההחלמה — מודפס למעלה
   letterDate?: string     // תאריך כתיבת המכתב (ISO) — מודפס למעלה
+  stayDatesHe?: string    // טווח שהייה בבית ההחלמה בתאריך עברי (מוכן מראש) — מודפס למעלה
 }
 
 /**
@@ -91,6 +92,11 @@ export async function buildGratitudeVoucher(input: GratitudeVoucherInput): Promi
   }
   if (infoParts.length) {
     centerText(c, infoParts.join(' · '), W / 2, y, 12, SUB)
+    y -= 16
+  }
+  // תאריכי השהייה בבית ההחלמה (עברי) — רק אם קיימים. הגנה: אין תאריך → לא מדפיסים כלל.
+  if ((input.stayDatesHe ?? '').trim()) {
+    centerText(c, input.stayDatesHe!.trim(), W / 2, y, 12, SUB)
     y -= 16
   }
   if ((input.letterDate ?? '').trim()) {

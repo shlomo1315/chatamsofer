@@ -170,6 +170,8 @@ export interface MaternityAid {
   recovery_amount_status?: string
   recovery_amount_at?: string
   recovery_nights?: number
+  recovery_stay_from?: string | null
+  recovery_stay_to?: string | null
   recovery_receipt_number?: string
   recovery_receipt_url?: string
   recovery_locked?: boolean
