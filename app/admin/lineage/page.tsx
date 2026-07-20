@@ -86,13 +86,15 @@ function collectEdges(positions: Positioned[]) {
 
 // ─── Colors ───
 
+// סולם דורות "קלף וחותם": כל דור בגוון מלא מעט מתקדם — זהב חם → נחושת → ארד → יין → חום עתיק.
+// מבנה האובייקט זהה (bg/ring/shadow/light/text) כדי שכל שאר הקוד המשתמש ב-pal(g) לא ישתנה.
 const PALETTE = [
-  { bg: 'linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%)', ring: '#7C3AED', shadow: 'rgba(124,58,237,0.38)', light: '#F5F0FF', text: '#5B21B6' },
-  { bg: 'linear-gradient(135deg,#2563EB 0%,#1E40AF 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.32)',  light: '#EFF6FF', text: '#1E40AF' },
-  { bg: 'linear-gradient(135deg,#0891B2 0%,#0E7490 100%)', ring: '#0891B2', shadow: 'rgba(8,145,178,0.32)',  light: '#ECFEFF', text: '#0E7490' },
-  { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', ring: '#059669', shadow: 'rgba(5,150,105,0.32)',  light: '#ECFDF5', text: '#047857' },
-  { bg: 'linear-gradient(135deg,#D97706 0%,#B45309 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.32)',  light: '#FFFBEB', text: '#B45309' },
-  { bg: 'linear-gradient(135deg,#DB2777 0%,#BE185D 100%)', ring: '#DB2777', shadow: 'rgba(219,39,119,0.32)', light: '#FDF2F8', text: '#BE185D' },
+  { bg: 'linear-gradient(160deg,#e0b94a 0%,#c69e2d 78%)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)', light: '#FBF3DA', text: '#8a6a1e' },
+  { bg: 'linear-gradient(160deg,#d3a344 0%,#bf8b34 78%)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)', light: '#FAEFD6', text: '#7d5a1f' },
+  { bg: 'linear-gradient(160deg,#c68a4e 0%,#b3703a 78%)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)', light: '#F6E9D8', text: '#7a4a26' },
+  { bg: 'linear-gradient(160deg,#b56f4f 0%,#a15a3d 78%)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)',  light: '#F3E2D8', text: '#6f3a2a' },
+  { bg: 'linear-gradient(160deg,#a15a58 0%,#8c4a44 78%)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)',  light: '#F0DEDC', text: '#5f3230' },
+  { bg: 'linear-gradient(160deg,#867059 0%,#6f5a44 78%)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)',  light: '#EBE4D8', text: '#4d3f30' },
 ]
 const pal = (g: number) => PALETTE[g % PALETTE.length]
 
@@ -452,9 +454,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
           overflow: 'auto',
           overflowAnchor: 'none',
           borderRadius: 18,
-          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
-          border: '1.5px solid #E8E0F5',
-          boxShadow: '0 4px 32px rgba(109,40,217,0.07)',
+          // רקע קלף עדין מאוד — נגיעת זהב + קווי סרגל דהויים, משתלב ב-slate/זהב של האתר
+          background:
+            'radial-gradient(60% 50% at 50% 0%, rgba(198,158,45,0.05), transparent 70%),' +
+            'repeating-linear-gradient(0deg, transparent 0 39px, rgba(27,50,86,0.025) 39px 40px),' +
+            'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
+          border: '1.5px solid #e6ddc8',
+          boxShadow: '0 4px 32px rgba(140,110,40,0.08)',
           height: 'calc(100vh - 260px)',
           minHeight: 400,
           cursor: 'grab',
@@ -466,12 +472,18 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
               const mid = (y1 + y2) / 2
               const col = pal(e.from.node.generation).ring
-              const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
+              // חיבור אורתוגונלי מסודר (כמו אילן יוחסין קלאסי): יורד מההורה לגובה האמצע,
+              // אופקי לעמודת הילד, ואז יורד לילד. פינות מעוגלות עדין לרכות.
+              const r = Math.min(10 * zoom, Math.abs(x2 - x1) / 2, Math.abs(mid - y1))
+              const dir = x2 >= x1 ? 1 : -1
+              const d = Math.abs(x2 - x1) < 1
+                ? `M${x1},${y1} L${x2},${y2}`
+                : `M${x1},${y1} L${x1},${mid - r} Q${x1},${mid} ${x1 + dir * r},${mid} L${x2 - dir * r},${mid} Q${x2},${mid} ${x2},${mid + r} L${x2},${y2}`
               const isPathEdge = selected && pathBranch.has(e.from.node.id) && pathBranch.has(e.to.node.id)
               return (
                 <g key={i}>
-                  <path d={d} fill="none" stroke="#fff" strokeWidth={isPathEdge ? 8 : 5} strokeLinecap="round" opacity={selected && !isPathEdge ? 0.1 : 0.9} />
-                  <path d={d} fill="none" stroke={col} strokeWidth={isPathEdge ? 4 : 2.5} strokeLinecap="round" opacity={selected && !isPathEdge ? 0.08 : 0.85} />
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={isPathEdge ? 8 : 5} strokeLinecap="round" strokeLinejoin="round" opacity={selected && !isPathEdge ? 0.1 : 0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={isPathEdge ? 4 : 2.5} strokeLinecap="round" strokeLinejoin="round" opacity={selected && !isPathEdge ? 0.08 : 0.85} />
                 </g>
               )
             })}
