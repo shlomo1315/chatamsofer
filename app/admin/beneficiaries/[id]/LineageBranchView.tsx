@@ -26,13 +26,14 @@ interface Pos { node: TNode; x: number; y: number; cx: number; cy: number }
 
 const NW = 172, NH = 58, HGAP = 48, VGAP = 96, PAD = 72
 
+// סולם דורות "קלף וחותם": זהב חם → נחושת → ארד → יין → חום עתיק (זהה למסך הניהול).
 const PALETTE = [
-  { bg: 'linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%)', ring: '#7C3AED', shadow: 'rgba(124,58,237,0.38)' },
-  { bg: 'linear-gradient(135deg,#2563EB 0%,#1E40AF 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.32)'  },
-  { bg: 'linear-gradient(135deg,#0891B2 0%,#0E7490 100%)', ring: '#0891B2', shadow: 'rgba(8,145,178,0.32)'  },
-  { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', ring: '#059669', shadow: 'rgba(5,150,105,0.32)'  },
-  { bg: 'linear-gradient(135deg,#D97706 0%,#B45309 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.32)'  },
-  { bg: 'linear-gradient(135deg,#DB2777 0%,#BE185D 100%)', ring: '#DB2777', shadow: 'rgba(219,39,119,0.32)' },
+  { bg: 'linear-gradient(160deg,#e0b94a,#c69e2d)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)' },
+  { bg: 'linear-gradient(160deg,#d3a344,#bf8b34)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)' },
+  { bg: 'linear-gradient(160deg,#c68a4e,#b3703a)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)' },
+  { bg: 'linear-gradient(160deg,#b56f4f,#a15a3d)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)'  },
+  { bg: 'linear-gradient(160deg,#a15a58,#8c4a44)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)'  },
+  { bg: 'linear-gradient(160deg,#867059,#6f5a44)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)'  },
 ]
 const pal = (g: number) => PALETTE[g % PALETTE.length]
 
@@ -205,8 +206,11 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         dir="ltr"
         style={{
           overflow: 'auto', overflowAnchor: 'none', borderRadius: 14,
-          background: 'linear-gradient(180deg,#FCFCFF 0%,#F7F5FF 100%)',
-          border: '1.5px solid #E8E0F5', height: 420, cursor: 'grab',
+          // רקע קלף עדין — עקבי עם מסך הניהול
+          background:
+            'radial-gradient(60% 50% at 50% 0%, rgba(198,158,45,0.05), transparent 70%),' +
+            'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
+          border: '1.5px solid #e6ddc8', height: 420, cursor: 'grab',
         }}
       >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
@@ -216,11 +220,16 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
               const mid = (y1 + y2) / 2
               const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
               const col = onBranch ? pal(e.from.node.generation).ring : '#CBD5E1'
-              const d = `M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`
+              // חיבור אורתוגונלי מסודר (יורד→אופקי→יורד, פינות מעוגלות) — זהה למסך הניהול
+              const r = Math.min(10 * zoom, Math.abs(x2 - x1) / 2, Math.abs(mid - y1))
+              const dir = x2 >= x1 ? 1 : -1
+              const d = Math.abs(x2 - x1) < 1
+                ? `M${x1},${y1} L${x2},${y2}`
+                : `M${x1},${y1} L${x1},${mid - r} Q${x1},${mid} ${x1 + dir * r},${mid} L${x2 - dir * r},${mid} Q${x2},${mid} ${x2},${mid + r} L${x2},${y2}`
               return (
                 <g key={i}>
-                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" opacity={0.9} />
-                  <path d={d} fill="none" stroke={col} strokeWidth={onBranch ? 3 : 2} strokeLinecap="round" opacity={onBranch ? 0.95 : 0.5} />
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={onBranch ? 3 : 2} strokeLinecap="round" strokeLinejoin="round" opacity={onBranch ? 0.95 : 0.5} />
                 </g>
               )
             })}

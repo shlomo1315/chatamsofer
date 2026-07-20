@@ -72,13 +72,14 @@ function canvasSize(pos: Positioned[]) {
 
 // ─── Color palette ───
 
+// סולם דורות "קלף וחותם": זהב חם → נחושת → ארד → יין → חום עתיק (זהה למסך הניהול).
 const PALETTE = [
-  { bg: 'linear-gradient(140deg,#7C3AED,#4C1D95)', ring: '#7C3AED', shadow: 'rgba(109,40,217,0.45)', light: '#F5F0FF', text: '#4C1D95' },
-  { bg: 'linear-gradient(140deg,#1D4ED8,#1E3A8A)', ring: '#1D4ED8', shadow: 'rgba(29,78,216,0.40)',  light: '#EFF6FF', text: '#1E3A8A' },
-  { bg: 'linear-gradient(140deg,#0369A1,#0C4A6E)', ring: '#0369A1', shadow: 'rgba(3,105,161,0.40)',  light: '#F0F9FF', text: '#0C4A6E' },
-  { bg: 'linear-gradient(140deg,#047857,#064E3B)', ring: '#047857', shadow: 'rgba(4,120,87,0.40)',   light: '#F0FDF4', text: '#064E3B' },
-  { bg: 'linear-gradient(140deg,#B45309,#78350F)', ring: '#B45309', shadow: 'rgba(180,83,9,0.40)',   light: '#FFFBEB', text: '#78350F' },
-  { bg: 'linear-gradient(140deg,#BE185D,#831843)', ring: '#BE185D', shadow: 'rgba(190,24,93,0.40)',  light: '#FDF2F8', text: '#831843' },
+  { bg: 'linear-gradient(160deg,#e0b94a,#c69e2d)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.40)', light: '#FBF3DA', text: '#8a6a1e' },
+  { bg: 'linear-gradient(160deg,#d3a344,#bf8b34)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.38)', light: '#FAEFD6', text: '#7d5a1f' },
+  { bg: 'linear-gradient(160deg,#c68a4e,#b3703a)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.38)', light: '#F6E9D8', text: '#7a4a26' },
+  { bg: 'linear-gradient(160deg,#b56f4f,#a15a3d)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.38)',  light: '#F3E2D8', text: '#6f3a2a' },
+  { bg: 'linear-gradient(160deg,#a15a58,#8c4a44)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.38)',  light: '#F0DEDC', text: '#5f3230' },
+  { bg: 'linear-gradient(160deg,#867059,#6f5a44)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.38)',  light: '#EBE4D8', text: '#4d3f30' },
 ]
 function pal(gen: number) { return PALETTE[gen % PALETTE.length] }
 
@@ -436,10 +437,12 @@ export default function FamilyTreePage() {
             dir="ltr"
             style={{
               overflow: 'auto', overflowAnchor: 'none',
-              borderRadius: 20, background: '#fff',
-              border: '1px solid #E8E0F5',
-              boxShadow: '0 4px 24px rgba(109,40,217,0.08)',
-              backgroundImage: 'radial-gradient(circle, #D8CCF0 1px, transparent 1px)',
+              borderRadius: 20,
+              // רקע קלף עדין עם נקודות זהב דהויות — עקבי עם מסך הניהול
+              background: 'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
+              border: '1px solid #e6ddc8',
+              boxShadow: '0 4px 24px rgba(140,110,40,0.08)',
+              backgroundImage: 'radial-gradient(circle, rgba(198,158,45,0.22) 1px, transparent 1px)',
               backgroundSize: '28px 28px', backgroundPosition: '14px 14px',
               height: 'calc(100vh - 220px)', minHeight: 400,
               cursor: 'grab',
@@ -454,12 +457,18 @@ export default function FamilyTreePage() {
                   const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
                   const mid = (y1 + y2) / 2
                   const col = pal(e.from.node.generation).ring
+                  // חיבור אורתוגונלי מסודר (יורד→אופקי→יורד, פינות מעוגלות) — זהה למסך הניהול
+                  const r = Math.min(10 * zoom, Math.abs(x2 - x1) / 2, Math.abs(mid - y1))
+                  const dir = x2 >= x1 ? 1 : -1
+                  const d = Math.abs(x2 - x1) < 1
+                    ? `M${x1},${y1} L${x2},${y2}`
+                    : `M${x1},${y1} L${x1},${mid - r} Q${x1},${mid} ${x1 + dir * r},${mid} L${x2 - dir * r},${mid} Q${x2},${mid} ${x2},${mid + r} L${x2},${y2}`
                   const isPathEdge = selected && pathBranch.has(e.from.node.id) && pathBranch.has(e.to.node.id)
                   const dimEdge = selected && !isPathEdge
                   return (
                     <g key={i}>
-                      <path d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke="#fff" strokeWidth={isPathEdge ? 8 : 5} strokeLinecap="round" opacity={dimEdge ? 0.1 : 0.9} />
-                      <path d={`M${x1},${y1} C${x1},${mid} ${x2},${mid} ${x2},${y2}`} fill="none" stroke={col} strokeWidth={isPathEdge ? 4 : 2.5} strokeLinecap="round" opacity={dimEdge ? 0.08 : 0.85} />
+                      <path d={d} fill="none" stroke="#fff" strokeWidth={isPathEdge ? 8 : 5} strokeLinecap="round" strokeLinejoin="round" opacity={dimEdge ? 0.1 : 0.9} />
+                      <path d={d} fill="none" stroke={col} strokeWidth={isPathEdge ? 4 : 2.5} strokeLinecap="round" strokeLinejoin="round" opacity={dimEdge ? 0.08 : 0.85} />
                     </g>
                   )
                 })}
