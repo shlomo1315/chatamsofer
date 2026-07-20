@@ -124,13 +124,32 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'מפתח השירות אינו מוגדר' }, { status: 500 })
   }
 
-  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[]; department?: string | null; mail_only?: boolean; allowed_mailboxes?: string[] }
+  let body: { id?: string; full_name?: string; role?: string; is_active?: boolean; phone?: string; permissions?: Record<string, string>; mail_account?: string | null; mail_label_ids?: string[]; department?: string | null; mail_only?: boolean; allowed_mailboxes?: string[]; password?: string; sendReset?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids, department, mail_only, allowed_mailboxes } = body
+  const { id, full_name, role, is_active, phone, permissions, mail_account, mail_label_ids, department, mail_only, allowed_mailboxes, password, sendReset } = body
 
   if (!id) return NextResponse.json({ error: 'חסר מזהה משתמש' }, { status: 400 })
   if (role && !VALID_ROLES.includes(role)) return NextResponse.json({ error: 'תפקיד לא תקין' }, { status: 400 })
+
+  // ── שינוי סיסמה ידני (מנהל מלא) ──
+  if (typeof password === 'string' && password.length > 0) {
+    if (password.length < 6) return NextResponse.json({ error: 'הסיסמה חייבת להכיל לפחות 6 תווים' }, { status: 400 })
+    const { error: pwErr } = await admin.auth.admin.updateUserById(id, { password })
+    if (pwErr) return NextResponse.json({ error: `שגיאה בעדכון הסיסמה: ${pwErr.message}` }, { status: 500 })
+    return NextResponse.json({ ok: true, passwordUpdated: true })
+  }
+
+  // ── שליחת מייל איפוס סיסמה לכתובת המשתמש ──
+  if (sendReset) {
+    const { data: prof } = await admin.from('profiles').select('email').eq('id', id).maybeSingle()
+    const email = (prof?.email as string | undefined)?.trim()
+    if (!email) return NextResponse.json({ error: 'למשתמש אין כתובת מייל רשומה' }, { status: 400 })
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://chasamsofer.co.il').replace(/\/$/, '')
+    const { error: resetErr } = await admin.auth.resetPasswordForEmail(email, { redirectTo: `${siteUrl}/reset-password` })
+    if (resetErr) return NextResponse.json({ error: `שגיאה בשליחת המייל: ${resetErr.message}` }, { status: 500 })
+    return NextResponse.json({ ok: true, resetSent: true, email })
+  }
 
   const updates: Record<string, unknown> = {}
   if (full_name !== undefined) updates.full_name = String(full_name).trim()

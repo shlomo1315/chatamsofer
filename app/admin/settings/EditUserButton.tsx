@@ -50,6 +50,11 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
   // Department state
   const [department, setDepartment] = useState<string>(profile.department ?? '')
 
+  // שינוי סיסמה + מייל איפוס (מנהל מלא)
+  const [newPassword, setNewPassword] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwMsg, setPwMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+
   // "מייל בלבד" + תיבות מורשות
   const [mailOnly, setMailOnly] = useState<boolean>(profile.mail_only ?? false)
   const [allowedMailboxes, setAllowedMailboxes] = useState<string[]>(profile.allowed_mailboxes ?? [])
@@ -106,6 +111,38 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
       setError('שגיאת רשת — נסה שוב')
       setSaving(false)
     }
+  }
+
+  // שינוי סיסמה ידני
+  const updatePassword = async () => {
+    if (newPassword.length < 6) { setPwMsg({ type: 'err', text: 'הסיסמה חייבת להכיל לפחות 6 תווים' }); return }
+    setPwBusy(true); setPwMsg(null)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: profile.id, password: newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setPwMsg({ type: 'err', text: data.error ?? 'שגיאה' }); return }
+      setPwMsg({ type: 'ok', text: 'הסיסמה עודכנה בהצלחה' })
+      setNewPassword('')
+    } catch { setPwMsg({ type: 'err', text: 'שגיאת רשת' }) }
+    finally { setPwBusy(false) }
+  }
+
+  // שליחת מייל איפוס סיסמה
+  const sendResetEmail = async () => {
+    setPwBusy(true); setPwMsg(null)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: profile.id, sendReset: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setPwMsg({ type: 'err', text: data.error ?? 'שגיאה' }); return }
+      setPwMsg({ type: 'ok', text: `מייל איפוס נשלח ל-${data.email ?? 'המשתמש'}` })
+    } catch { setPwMsg({ type: 'err', text: 'שגיאת רשת' }) }
+    finally { setPwBusy(false) }
   }
 
   const deleteUser = async () => {
@@ -286,6 +323,31 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                     className={`relative w-10 h-5 rounded-full transition-colors ${isActive ? 'bg-indigo-500' : 'bg-slate-300'}`}>
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${isActive ? 'left-5' : 'left-0.5'}`} />
                   </button>
+                </div>
+
+                {/* ── סיסמה: שינוי ידני + מייל איפוס (מנהל מלא) ── */}
+                <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
+                  <span className="text-xs font-semibold text-slate-600">סיסמה</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newPassword}
+                      onChange={e => { setNewPassword(e.target.value); setPwMsg(null) }}
+                      placeholder="סיסמה חדשה (לפחות 6 תווים)"
+                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <button type="button" onClick={updatePassword} disabled={pwBusy || newPassword.length < 6}
+                      className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs font-medium whitespace-nowrap">
+                      {pwBusy ? <Loader2 size={13} className="animate-spin" /> : 'עדכן סיסמה'}
+                    </button>
+                  </div>
+                  <button type="button" onClick={sendResetEmail} disabled={pwBusy}
+                    className="self-start text-xs font-medium text-indigo-600 hover:text-indigo-800 underline disabled:opacity-50">
+                    שלח למשתמש מייל לאיפוס סיסמה
+                  </button>
+                  {pwMsg && (
+                    <p className={`text-xs ${pwMsg.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>{pwMsg.text}</p>
+                  )}
                 </div>
 
                 {error && (
