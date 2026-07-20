@@ -107,7 +107,7 @@ const getStats = unstable_cache(
     }
   },
   ['dashboard-stats'],
-  { revalidate: 60 },
+  { revalidate: 15 },
 )
 
 // "20,000 ₪" — סימן המטבע אחרי המספר. Intl עם style:'currency' שם אותו לפני
@@ -289,19 +289,22 @@ function KpiCard({ label, value, sub, subPositive, subWarning, icon, color, href
   return (
     <Link href={href}
       className={`group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 ${c.bg} p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200`}>
-      <div className="flex items-center justify-between">
-        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon} shadow-sm`}>
-          {icon}
-        </span>
+      {/* המספר בולט למעלה; האייקון עובר לשורת התווית מתחתיו */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[13px] text-slate-500 mb-1">{label}</p>
+          <p className="text-2xl font-bold text-slate-900 ltr-num">{value}</p>
+        </div>
         <ArrowUpRight size={15} className={`${c.text} opacity-0 group-hover:opacity-100 transition-opacity`} />
       </div>
-      <div>
-        <p className="text-[13px] text-slate-500 mb-1">{label}</p>
-        <p className="text-2xl font-bold text-slate-900 ltr-num">{value}</p>
+      <div className="flex items-center gap-2">
+        <span className={`w-9 h-9 rounded-xl flex items-center justify-center ${c.icon} shadow-sm flex-shrink-0`}>
+          {icon}
+        </span>
+        <p className={`text-xs font-medium ${subWarning ? 'text-amber-600' : subPositive ? 'text-emerald-600' : 'text-slate-400'}`}>
+          {sub}
+        </p>
       </div>
-      <p className={`text-xs font-medium ${subWarning ? 'text-amber-600' : subPositive ? 'text-emerald-600' : 'text-slate-400'}`}>
-        {sub}
-      </p>
     </Link>
   )
 }

@@ -6,6 +6,7 @@ import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
 import { buildMaternityVouchers } from '@/lib/maternityVoucher'
+import { buildInstructionsSheet } from '@/lib/instructionsSheet'
 import { recoveryDaysOf } from '@/lib/maternity'
 
 export const dynamic = 'force-dynamic'
@@ -121,6 +122,17 @@ export async function POST(request: NextRequest) {
             }
             // תמיד — שובר כרטיס מזון + שובר הבראה (כולל לידה שקטה)
             attachments = await buildMaternityVouchers(voucherInput)
+            // דף הנחיות — רק בלידה רגילה (הטקסט מברך על הולדת התינוק ומדבר על ימי הבראה)
+            if ((birth.birth_type ?? 'live') !== 'silent') {
+              const b2 = birth as { baby_name?: string | null; baby_gender?: string | null }
+              const sheet = await buildInstructionsSheet({
+                familyName: ben.family_name ?? undefined,
+                babyName: b2.baby_name ?? undefined,
+                babyGender: b2.baby_gender ?? undefined,
+                recoveryDays: voucherInput.recoveryDays,
+              })
+              attachments = [...(attachments ?? []), sheet]
+            }
           } catch (e) { console.error('[request-approved] voucher build failed:', e) }
         }
 

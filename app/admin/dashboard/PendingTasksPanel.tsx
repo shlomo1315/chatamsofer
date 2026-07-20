@@ -31,6 +31,9 @@ export default function PendingTasksPanel({ count }: { count: number }) {
   const [open, setOpen] = useState(false)
   const [tasks, setTasks] = useState<PendingTask[]>([])
   const [loading, setLoading] = useState(false)
+  // המספר הגדול מגיע מ-getStats (ממוטמן), ולכן עלול לפגר אחרי הרשימה הטרייה.
+  // ברגע שהפאנל נטען, liveCount מסתנכרן לספירה המדויקת כדי שהמספר יתאים לרשימה.
+  const [liveCount, setLiveCount] = useState<number | null>(null)
 
   const handleOpen = useCallback(async () => {
     setOpen(true)
@@ -38,11 +41,15 @@ export default function PendingTasksPanel({ count }: { count: number }) {
     try {
       const res = await fetch('/api/admin/dashboard/pending-tasks')
       const data = await res.json()
-      setTasks(data.tasks ?? [])
+      const list: PendingTask[] = data.tasks ?? []
+      setTasks(list)
+      setLiveCount(list.length)
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const shown = liveCount ?? count
 
   return (
     <>
@@ -53,19 +60,22 @@ export default function PendingTasksPanel({ count }: { count: number }) {
         // הקובייה נראתה שטוחה לצד השכנות שלה.
         className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-amber-50 p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_10px_24px_-14px_rgba(15,23,42,0.18)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.08),0_18px_36px_-16px_rgba(79,70,229,0.3)] hover:-translate-y-0.5 transition-all duration-200 text-right w-full cursor-pointer"
       >
-        <div className="flex items-center justify-between">
-          <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500 text-white shadow-sm">
-            <Clock size={18} />
-          </span>
+        {/* המספר בולט למעלה; האייקון עובר לשורת התווית מתחתיו */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[13px] text-slate-500 mb-1">ממתינים לטיפול</p>
+            <p className="text-2xl font-bold text-slate-900 ltr-num">{shown}</p>
+          </div>
           <ArrowUpRight size={15} className="text-amber-600 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
-        <div>
-          <p className="text-[13px] text-slate-500 mb-1">ממתינים לטיפול</p>
-          <p className="text-2xl font-bold text-slate-900 ltr-num">{count}</p>
+        <div className="flex items-center gap-2">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-amber-500 text-white shadow-sm flex-shrink-0">
+            <Clock size={18} />
+          </span>
+          <p className="text-xs font-medium text-amber-600">
+            {shown > 0 ? 'בקשות בכל האגפים' : 'אין בקשות ממתינות'}
+          </p>
         </div>
-        <p className="text-xs font-medium text-amber-600">
-          {count > 0 ? 'בקשות בכל האגפים' : 'אין בקשות ממתינות'}
-        </p>
       </button>
 
       {/* Slide-over panel */}
@@ -85,7 +95,7 @@ export default function PendingTasksPanel({ count }: { count: number }) {
                 </span>
                 <div>
                   <h2 className="text-base font-bold text-zinc-900">ממתינים לטיפול</h2>
-                  <p className="text-xs text-zinc-500">{count} בקשות פתוחות בכל האגפים</p>
+                  <p className="text-xs text-zinc-500">{shown} בקשות פתוחות בכל האגפים</p>
                 </div>
               </div>
               <button
