@@ -78,7 +78,8 @@ function collectEdges(positions: Pos[]) {
 export default function LineageBranchView({ nodeId }: { nodeId: string | null }) {
   const [allNodes, setAllNodes] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
-  const [zoom, setZoom] = useState(0.65)
+  // בכרטסת מציגים טור ייחוס יחיד — zoom גבוה יותר כדי שהשמות יהיו קריאים
+  const [zoom, setZoom] = useState(0.9)
   const canvasRef = useRef<HTMLDivElement>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
@@ -108,21 +109,29 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     return s
   }, [nodeId, allNodes])
 
-  // בכרטסת: המסלול של הנהנה מוצג מיושר לטור אנכי מלכתחילה (שורש למעלה, הנהנה למטה) —
-  // הוא הפוקוס, אין צורך בבחירה. שאר הצמתים נשארים במקומם המקורי (אפורים/מעומעמים).
-  const alignedById = useMemo(() => {
+  // בכרטסת: מציגים רק את הייחוס הישיר של הנהנה — טור אנכי נקי (שורש למעלה, הנהנה למטה).
+  // ה-canvas מצטמצם לגודל הטור, כדי שכל השרשרת תהיה גלויה מיד בלי גלילה מיותרת.
+  const { alignedById, alignedW, alignedH } = useMemo(() => {
     const m = new Map<string, { x: number; y: number; cx: number }>()
-    if (!nodeId || branch.size === 0) return m
+    if (!nodeId || branch.size === 0) return { alignedById: m, alignedW: 0, alignedH: 0 }
     const chain = positions
       .filter(p => branch.has(p.node.id))
       .sort((a, b) => a.node.generation - b.node.generation)
-    const colCx = Math.max(w / 2, NW / 2 + PAD)
+    const colCx = PAD + NW / 2
     chain.forEach((p, i) => {
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
     })
-    return m
-  }, [nodeId, branch, positions, w])
+    return {
+      alignedById: m,
+      alignedW: NW + PAD * 2,
+      alignedH: PAD * 2 + chain.length * (NH + VGAP),
+    }
+  }, [nodeId, branch, positions])
+  // גדלי הרינדור: כשמיושר — לפי הטור; אחרת — כל העץ
+  const isAligned = alignedById.size > 0
+  const rw = isAligned ? alignedW : w
+  const rh = isAligned ? alignedH : h
 
   // wheel zoom toward cursor
   useEffect(() => {
@@ -189,6 +198,12 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     requestAnimationFrame(() => {
       const c = canvasRef.current
       if (!c) return
+      if (isAligned) {
+        // מיושר: הטור צר וממורכז אופקית, וגלילה לראש כדי לראות את כל השרשרת מההתחלה
+        c.scrollLeft = Math.max(0, (rw * zoom - c.clientWidth) / 2)
+        c.scrollTop = 0
+        return
+      }
       const sel = nodeId ? positions.find(p => p.node.id === nodeId) : null
       if (sel) {
         c.scrollLeft = sel.cx * zoom - c.clientWidth / 2
@@ -198,7 +213,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         if (s > 0) c.scrollLeft = s
       }
     })
-  }, [positions, w, zoom, nodeId])
+  }, [positions, w, zoom, nodeId, alignedById, isAligned, rw])
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '20px 0', color: '#7C3AED' }}>
@@ -213,7 +228,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     <div style={{ direction: 'rtl' }}>
       <div style={{ display: 'flex', gap: 5, marginBottom: 8, justifyContent: 'flex-end' }}>
         <button type="button" onClick={() => setZoom(z => Math.min(2.5, z + 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>+</button>
-        <button type="button" onClick={() => { setZoom(0.65); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
+        <button type="button" onClick={() => { setZoom(0.9); didCenter.current = false }} style={{ height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 10, cursor: 'pointer', padding: '0 7px', color: '#64748B', fontWeight: 600 }}>{Math.round(zoom * 100)}%</button>
         <button type="button" onClick={() => setZoom(z => Math.max(0.35, z - 0.1))} style={{ width: 26, height: 26, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366F1', fontWeight: 700 }}>−</button>
       </div>
 
@@ -229,14 +244,16 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
           border: '1.5px solid #e6ddc8', height: 420, cursor: 'grab',
         }}
       >
-        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
-          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
+        <div style={{ position: 'relative', width: rw * zoom, height: (rh + 60) * zoom, minWidth: '100%' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={rw * zoom} height={(rh + 60) * zoom}>
             {edges.map((e, i) => {
+              const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
+              // כשמיושר — מציגים רק את קווי השרשרת, השאר מוסתר (ה-canvas צר סביב הטור)
+              if (isAligned && !onBranch) return null
               const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
               const x1 = (fa?.cx ?? e.from.cx) * zoom, y1 = ((fa?.y ?? e.from.y) + NH) * zoom
               const x2 = (ta?.cx ?? e.to.cx) * zoom, y2 = (ta?.y ?? e.to.y) * zoom
               const mid = (y1 + y2) / 2
-              const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
               const col = onBranch ? pal(e.from.node.generation).ring : '#CBD5E1'
               // חיבור אורתוגונלי מסודר (יורד→אופקי→יורד, פינות מעוגלות) — זהה למסך הניהול
               const r = Math.min(10 * zoom, Math.abs(x2 - x1) / 2, Math.abs(mid - y1))
@@ -254,12 +271,14 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
           </svg>
 
           {positions.map(pos => {
+            const onBranch = branch.has(pos.node.id)
+            // כשמיושר — מרנדרים רק את שרשרת הייחוס (השאר מחוץ ל-canvas הצר)
+            if (isAligned && !onBranch) return null
             const genPal = pal(pos.node.generation)
             const st = pos.node.status ?? 'verified'
             // צבע הצומת לפי סטטוס — אחיד עם עץ הניהול
             const p = st === 'verified' ? genPal : st === 'rejected' ? STATUS_NODE.rejected : STATUS_NODE.pending
             const badge = statusBadge(st)
-            const onBranch = branch.has(pos.node.id)
             const isTarget = pos.node.id === nodeId
             // אותו עיקרון כמו בעץ הניהול: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
             const relOverlay = pos.node.relation === 'son_in_law'
@@ -280,7 +299,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                 transform: isTarget ? 'scale(1.07)' : 'scale(1)',
                 zIndex: isTarget ? 20 : 2, userSelect: 'none',
                 opacity: onBranch ? 1 : 0.32,
-                transition: 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), opacity .2s',
+                transition: 'opacity .2s',
               }}>
                 {/* תג סטטוס: ✓ ירוק=מאושר · ! כתום=ממתין לאימות · ✕ אדום=נדחה — גודל קבוע כדי שיהיה ברור בכל זום */}
                 <div style={{

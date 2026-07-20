@@ -554,7 +554,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                  transition: 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s',
+                  // אנימציית מיקום רק כשיש יישור פעיל — אחרת הזום (שמשנה left/top) היה "נגרר" ומקפץ
+                  transition: selected
+                    ? 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s'
+                    : 'box-shadow .2s, transform .2s, opacity .2s',
                   opacity: isDimmed ? 0.25 : 1,
                   zIndex: (isSel || hovered === pos.node.id) ? 50 : 2, userSelect: 'none',
                 }}>
