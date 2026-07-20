@@ -21,13 +21,13 @@ function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0, 0, 0, 
 function parseISO(s: string): Date { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd) }
 
 interface Props {
-  maxNights: number                     // מספר הלילות המקסימלי שאושר (2 רגילה / 4 תאומים)
+  maxDays: number                       // מספר ימי הזכאות (2 רגילה / 4 תאומים) — סה"כ תאים לסימון
   from: string | null                   // יום הגעה נבחר (ISO)
-  to: string | null                     // יום עזיבה נבחר (ISO)
+  to: string | null                     // יום אחרון נבחר (ISO)
   onChange: (from: string | null, to: string | null) => void
 }
 
-export default function RecoveryDatePicker({ maxNights, from, to, onChange }: Props) {
+export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Props) {
   const today = startOfDay(new Date())
   const minDate = new Date(today.getTime() - WINDOW_DAYS * DAY_MS)
   // חודש התצוגה — מתחיל מחודש היום, ניתן לדפדף אחורה עד חלון הזכאות
@@ -52,10 +52,10 @@ export default function RecoveryDatePicker({ maxNights, from, to, onChange }: Pr
 
   function pickDay(d: Date) {
     if (!inRange(d)) return
-    // לחיצה על יום ההגעה → המערכת משלימה את יום הסיום לפי מספר הלילות שאושרו.
-    // maxNights לילות = הגעה + maxNights ימים (יום הגעה + לילות = יום עזיבה).
+    // לחיצה על יום ההגעה → המערכת מסמנת סה"כ maxDays ימים (כולל יום ההגעה).
+    // זכאות של 2 ימים = 2 תאים בסך הכל (הגעה + יום נוסף), לא 3.
     const arrival = startOfDay(d)
-    let departure = new Date(arrival.getTime() + maxNights * DAY_MS)
+    let departure = new Date(arrival.getTime() + (maxDays - 1) * DAY_MS)
     if (departure.getTime() > today.getTime()) departure = today   // לא חורגים מהיום
     onChange(iso(arrival), iso(departure))
   }
@@ -65,6 +65,10 @@ export default function RecoveryDatePicker({ maxNights, from, to, onChange }: Pr
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 select-none" dir="rtl">
+      {/* הנחיה */}
+      <p className="text-xs text-slate-500 leading-relaxed mb-2 text-center">
+        נא סמנו את היום הראשון שבו היולדת הגיעה — המערכת תסמן אוטומטית את שאר הימים בהתאם לזכאות שקיבלה.
+      </p>
       {/* כותרת חודש + ניווט */}
       <div className="flex items-center justify-between mb-2">
         <button type="button" onClick={() => canGoBack && setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
@@ -114,10 +118,10 @@ export default function RecoveryDatePicker({ maxNights, from, to, onChange }: Pr
       <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 text-center">
         {fromD && toD ? (
           <span className="font-semibold text-slate-700">
-            שהתה {Math.round((toD.getTime() - fromD.getTime()) / DAY_MS)} לילות · {fromD.toLocaleDateString('he-IL')} – {toD.toLocaleDateString('he-IL')}
+            {Math.round((toD.getTime() - fromD.getTime()) / DAY_MS) + 1} ימים · {fromD.toLocaleDateString('he-IL')} – {toD.toLocaleDateString('he-IL')}
           </span>
         ) : (
-          <span>לחצי על יום ההגעה — המערכת תשלים את יום העזיבה ({maxNights} לילות)</span>
+          <span>סמנו את יום ההגעה ({maxDays} ימי זכאות)</span>
         )}
       </div>
     </div>

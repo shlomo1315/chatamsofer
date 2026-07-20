@@ -22,12 +22,13 @@ export default async function DashboardLayout({
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        // עמודות ספציפיות בלבד (במקום *) — מקטין את המטען בכל טעינת מסך ניהול
         const { data } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, full_name, email, role, permissions, mail_only, allowed_mailboxes, department')
           .eq('id', user.id)
           .single()
-        profile = data
+        profile = data as Profile | null
       }
     } catch {
       // Supabase not available

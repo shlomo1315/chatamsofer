@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
   if (toMs < fromMs || fromMs < windowStart || toMs > todayMs) {
     return NextResponse.json({ error: 'תאריכי השהייה מחוץ לחלון הזכאות (עד 5 שבועות אחורה)' }, { status: 400 })
   }
-  // מספר הלילות חייב להתאים להפרש שבטווח
-  if (Math.round((toMs - fromMs) / 86400000) !== nightsNum) {
-    return NextResponse.json({ error: 'מספר הלילות אינו תואם את הטווח שנבחר' }, { status: 400 })
+  // מספר הימים חייב להתאים לטווח (הפרש + 1, כולל יום ההגעה)
+  if (Math.round((toMs - fromMs) / 86400000) + 1 !== nightsNum) {
+    return NextResponse.json({ error: 'מספר הימים אינו תואם את הטווח שנבחר' }, { status: 400 })
   }
 
   const cookieStore = await cookies()

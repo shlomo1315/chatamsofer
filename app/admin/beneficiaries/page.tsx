@@ -63,7 +63,7 @@ async function getBeneficiaries(p: ReturnType<typeof readListParams>): Promise<L
   // כשל בספירה אינו מפיל את הדף — נופל ל-0 (הרשימה עצמה חשובה יותר).
   const countFor = async (status: string): Promise<[string, number]> => {
     try {
-      let q = supabase.from('beneficiaries').select('*', { count: 'exact', head: true })
+      let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
       if (status !== 'all') q = q.eq('eligibility_status', status)
       if (p.q) q = q.or(searchOr(p.q))
       const { count: c, error: cErr } = await q

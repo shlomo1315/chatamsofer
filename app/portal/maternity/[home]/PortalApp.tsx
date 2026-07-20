@@ -349,9 +349,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         body: JSON.stringify({
           home, aidId,
           amount: Number(amountInput[aidId]),
-          // מספר הלילות נגזר מהטווח שנבחר בלוח (הפרש הימים בין הגעה לעזיבה)
+          // מספר הימים נגזר מהטווח שנבחר בלוח (הפרש + 1, כולל יום ההגעה)
           nights: (stayFrom[aidId] && stayTo[aidId])
-            ? String(Math.round((new Date(stayTo[aidId]!).getTime() - new Date(stayFrom[aidId]!).getTime()) / 86400000))
+            ? String(Math.round((new Date(stayTo[aidId]!).getTime() - new Date(stayFrom[aidId]!).getTime()) / 86400000) + 1)
             : nightsInput[aidId],
           stayFrom: stayFrom[aidId] ?? null,
           stayTo: stayTo[aidId] ?? null,
@@ -677,14 +677,14 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                               <div className="flex flex-col gap-1.5 text-right sm:col-span-2">
                                 <span className="text-sm font-semibold text-slate-600">ימי השהייה בבית ההחלמה <span className="font-normal text-slate-400">(עד {recoveryDays(aid)} לילות)</span></span>
                                 <RecoveryDatePicker
-                                  maxNights={recoveryDays(aid)}
+                                  maxDays={recoveryDays(aid)}
                                   from={stayFrom[aid.id] ?? null}
                                   to={stayTo[aid.id] ?? null}
                                   onChange={(f, t) => {
                                     setStayFrom(mm => ({ ...mm, [aid.id]: f }))
                                     setStayTo(mm => ({ ...mm, [aid.id]: t }))
-                                    // מסנכרן את מספר הלילות (נגזר מהטווח) לתצוגות הקיימות
-                                    const n = (f && t) ? String(Math.round((new Date(t).getTime() - new Date(f).getTime()) / 86400000)) : ''
+                                    // מספר הימים = הפרש הימים + 1 (כולל יום ההגעה)
+                                    const n = (f && t) ? String(Math.round((new Date(t).getTime() - new Date(f).getTime()) / 86400000) + 1) : ''
                                     setNightsInput(mm => ({ ...mm, [aid.id]: n }))
                                   }}
                                 />
