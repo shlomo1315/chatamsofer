@@ -96,7 +96,14 @@ export default function CityStreetPicker({
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  // נרמול להשוואת רחוב מול הרשימה (רווחים כפולים / קצוות)
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+
+  // הרחוב "נתפס" רק אם הוא קיים ברשימת הרחובות של העיר — כמו שהעיר עובדת.
+  // מלל חופשי שאינו ברשימה משדר כתובת ריקה, כך שוולידציית "רחוב חובה" תעצור.
   function emitAddress(street: string, num: string) {
+    const isValid = streets.some(s => norm(s) === norm(street))
+    if (!isValid) { onAddressChange(''); return }
     const combined = num.trim() ? `${street.trim()} ${num.trim()}` : street.trim()
     onAddressChange(combined)
   }
@@ -105,6 +112,10 @@ export default function CityStreetPicker({
   // בלי הקלדה אין רשימה (אין תקיעה, ומופיע בדיוק מה שמחפשים).
   const filteredCities = cityInput.trim() ? allCities.filter(c => c.includes(cityInput.trim())) : []
   const filteredStreets = streetInput.trim() ? streets.filter(s => s.includes(streetInput.trim())) : []
+  // הוקלד רחוב שאינו תואם אף רחוב ברשימה — חיווי שצריך לבחור מהרשימה.
+  const streetUnmatched =
+    !!city && !loadingStreets && streets.length > 0 &&
+    streetInput.trim() !== '' && !streets.some(s => norm(s) === norm(streetInput))
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -205,8 +216,17 @@ export default function CityStreetPicker({
               ))}
             </ul>
           )}
+          {/* הוקלד רחוב שאין לו התאמה ברשימה, וגם אין תוצאות סינון — הבהרה שאין רחוב כזה */}
+          {showStreet && !loadingStreets && streetInput.trim() !== '' && filteredStreets.length === 0 && streets.length > 0 && (
+            <div className="absolute z-50 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg px-3 py-2 text-sm text-slate-400">
+              לא נמצא רחוב כזה בעיר
+            </div>
+          )}
         </div>
         {addressError && <p className="text-xs text-red-500">{addressError}</p>}
+        {!addressError && streetUnmatched && (
+          <p className="text-xs text-amber-600">יש לבחור רחוב מתוך הרשימה של העיר</p>
+        )}
       </div>
 
       {/* ── House Number ── */}

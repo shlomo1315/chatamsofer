@@ -12,6 +12,7 @@ import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
+import { getStreets } from '@/lib/govData'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,6 +68,25 @@ export async function POST(request: NextRequest) {
     const housePart = (m ? m[2] : '').trim()
     if (!streetPart || !housePart) {
       return NextResponse.json({ error: 'יש להזין כתובת מלאה — רחוב ומספר בית' }, { status: 400 })
+    }
+    // אכיפה: הרחוב חייב להיות מתוך רשימת הרחובות הרשמית של אותה עיר (gov_streets).
+    // מונע הזנת מלל חופשי — גם בטופס הציבורי וגם בנדרים (שמנתב לכאן).
+    const adminDb = getAdminClient()
+    if (adminDb) {
+      try {
+        const streets = await getStreets(adminDb, String(city).trim())
+        // אם למערכת יש רשימת רחובות לעיר — הרחוב שהוזן חייב להופיע בה (השוואה מנורמלת).
+        if (streets.length > 0) {
+          const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+          const target = norm(streetPart)
+          if (!streets.some(s => norm(s) === target)) {
+            return NextResponse.json(
+              { error: 'יש לבחור רחוב מתוך הרשימה של העיר. לא ניתן להזין רחוב שאינו קיים.' },
+              { status: 400 },
+            )
+          }
+        }
+      } catch { /* כשל בשליפת רחובות — לא חוסמים את הרישום (fail-open) */ }
     }
   }
 
