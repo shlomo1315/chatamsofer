@@ -253,7 +253,10 @@ function Row({ icon, label, value, ltr }: { icon: React.ReactNode; label: string
 // ─── Data Table ───────────────────────────────────────────────────────────────
 function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogout: () => void }) {
   const [query, setQuery] = useState('')
-  const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('all')
+  // ברירת מחדל: "טרם סומן" — אלה שעדיין מחכים לטיפול (הפוקוס של בית ההחלמה)
+  const [arrivedFilter, setArrivedFilter] = useState<'all' | 'arrived' | 'not' | 'pending'>('pending')
+  // accordion — כל לידה סגורה כברירת מחדל, נפתחת רק בלחיצה (מונע גלילה אינסופית)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Aid | null>(null)
   const [logoErr, setLogoErr] = useState(false)
   const [hebrewInfo, setHebrewInfo] = useState<{ hebrewDate: string; parasha: string; hebrewYear: string } | null>(null)
@@ -381,6 +384,8 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   }
   const markArrived = async (aidId: string, value: boolean | null) => {
     const prev = arrived[aidId] ?? null
+    // סימון "הגיעה" פותח אוטומטית את הטופס (סכום/לוח/קבלה) — כדי שאפשר למלא מיד
+    if (value === true) setExpandedId(aidId)
     setArrived(m => ({ ...m, [aidId]: value })); setSavingId(aidId)
     try {
       const r = await fetch('/api/portal/arrived', {
@@ -546,9 +551,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {([
             { key: 'all', label: 'סה״כ', count: counts.all, base: 'bg-white border-slate-200', sel: 'ring-2 ring-indigo-400 border-indigo-300', num: 'text-slate-800' },
+            // "טרם סומן" מיד אחרי "סה״כ" — אלה שמחכים לטיפול (ברירת המחדל בכניסה)
+            { key: 'pending', label: 'טרם סומן', count: counts.pending, base: 'bg-amber-50 border-amber-200', sel: 'ring-2 ring-amber-400', num: 'text-amber-700' },
             { key: 'arrived', label: 'הגיעו', count: counts.arrived, base: 'bg-green-50 border-green-200', sel: 'ring-2 ring-green-400', num: 'text-green-700' },
             { key: 'not', label: 'לא הגיעו', count: counts.not, base: 'bg-red-50 border-red-200', sel: 'ring-2 ring-red-400', num: 'text-red-700' },
-            { key: 'pending', label: 'טרם סומן', count: counts.pending, base: 'bg-amber-50 border-amber-200', sel: 'ring-2 ring-amber-400', num: 'text-amber-700' },
           ] as const).map(c => {
             const pct = counts.all ? Math.round((c.count / counts.all) * 100) : 0
             const active = arrivedFilter === c.key
@@ -598,11 +604,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                     const status = amountStatus[aid.id] ?? null
                     const editing = editingAmt[aid.id] ?? false
                     const amountVal = Number(amountInput[aid.id])
-                    const showForm = a === true && !(status && !editing)
+                    // הטופס המורחב נפתח רק כשהשורה מורחבת (accordion) — לא אוטומטית
+                    const isExpanded = expandedId === aid.id
+                    const showForm = isExpanded && a === true && !(status && !editing)
                     return (
                       <Fragment key={aid.id}>
                       <tr className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
-                        onClick={() => setSelected(aid)}>
+                        onClick={() => setExpandedId(prev => prev === aid.id ? null : aid.id)}>
                         <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center align-middle">{motherName(m)}</td>
                         <td className="px-4 py-3.5 font-mono text-slate-500 text-center align-middle"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                         <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">
@@ -651,9 +659,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                           )}
                         </td>
                         <td className="px-4 py-3.5 text-center align-middle">
-                          <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium">
+                          <button type="button" onClick={e => { e.stopPropagation(); setSelected(aid) }}
+                            className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium hover:text-indigo-800">
                             <ChevronLeft size={13} /> פרטים
-                          </span>
+                          </button>
                         </td>
                       </tr>
 
