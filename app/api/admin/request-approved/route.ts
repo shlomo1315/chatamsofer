@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         const benPhones = [(ben as { phone?: string | null }).phone, (ben as { spouse_phone?: string | null }).spouse_phone, (ben as { phone2?: string | null }).phone2]
         const mail = type === 'loan'
           ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
-          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones })
+          : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones, cardInStock })
 
         // אישור לידה → תמיד שובר כרטיס מזון (גם בלידה שקטה). שובר הבראה — רק בלידה רגילה.
         let attachments: MailAttachment[] | undefined

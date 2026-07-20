@@ -1001,8 +1001,11 @@ export type FoodCardCenter = { name: string; city?: string | null; address?: str
 export function birthApprovedEmail(
   b: RequestApprovedBeneficiary,
   birth: { baby_name?: string | null; baby_gender?: string | null; birth_date?: string | null; recovery_home?: string | null },
-  opts: { centers?: FoodCardCenter[]; serial?: string | null; phones?: (string | null | undefined)[] } = {},
+  opts: { centers?: FoodCardCenter[]; serial?: string | null; phones?: (string | null | undefined)[]; cardInStock?: boolean } = {},
 ): BuiltEmail {
+  // כשאין מלאי כרטיסים — לא מצרפים שובר כרטיס ולא מציגים בלוק כרטיס/מוקדים. במקום זאת
+  // מוצגת הודעה שהכרטיס יישלח כשיתחדש המלאי. ברירת מחדל true (תאימות אחורה).
+  const cardInStock = opts.cardInStock !== false
   // כל המוקדים הפעילים — היולדת יכולה לגשת לכל אחד מהם (אין יותר בחירת מוקד/מלאי)
   const centers = (opts.centers ?? []).filter(c => c?.name)
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
@@ -1040,7 +1043,8 @@ export function birthApprovedEmail(
   const centersTable = centers.length
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 0;border:1px solid #fcd34d;border-radius:10px;overflow:hidden;background:#ffffff;">${centerRows}</table>`
     : ''
-  const foodCardBlock = `
+  // בלוק כרטיס המזון — רק כשיש מלאי. אחרת מציגים הודעת "אין כרגע מלאי".
+  const foodCardBlock = cardInStock ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
       <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">${T('card_title')}</p>
@@ -1053,12 +1057,21 @@ export function birthApprovedEmail(
         ${centersTable}
       </td></tr>
     </table>
-    ${cardActivationNotice(opts.phones)}`
+    ${cardActivationNotice(opts.phones)}` : `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+      <tr><td style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 6px;color:#b45309;font-size:15px;font-weight:900;">כרטיס מזון — יישלח בהמשך</p>
+        <p style="margin:0;color:#92400e;font-size:14px;line-height:1.7;">
+          כרטיס המזון עבורכם יישלח אליכם במייל נפרד בימים הקרובים. שובר הכרטיס אינו מצורף להודעה זו —
+          מיד עם הכנתו תקבלו הודעת עדכון ובה שובר הכרטיס לאיסוף. תודה על הסבלנות.
+        </p>
+      </td></tr>
+    </table>`
   const body = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
         <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${T('vouchers_note')}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${cardInStock ? T('vouchers_note') : 'מצורף שובר ההבראה. שובר כרטיס המזון יישלח בהודעת עדכון נפרדת מיד עם התחדשות המלאי.'}</p>
       </td></tr>
     </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>

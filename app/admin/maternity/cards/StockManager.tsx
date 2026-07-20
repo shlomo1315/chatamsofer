@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -9,7 +10,7 @@ type LedgerRow = {
   reason: 'restock' | 'birth_approval' | 'manual_out' | 'auto_assign' | 'adjust'
   note: string | null
   created_at: string
-  aid?: { beneficiary?: { family_name?: string; spouse_name?: string; full_name?: string } } | null
+  aid?: { id?: string; beneficiary?: { family_name?: string; spouse_name?: string; full_name?: string; id_number?: string; spouse_id_number?: string } } | null
 }
 
 const REASON_LABEL: Record<LedgerRow['reason'], string> = {
@@ -20,17 +21,28 @@ const REASON_LABEL: Record<LedgerRow['reason'], string> = {
   adjust: 'התאמה',
 }
 
-const fmtDateTime = (s: string) => {
+// תאריך ושעה מופרדים — כדי שלא ייווצר פסיק RTL שבור בין התאריך לשעה
+const fmtDate = (s: string) => {
   const d = new Date(s)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+const fmtTime = (s: string) => {
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
 }
 const benName = (r: LedgerRow) => {
   const b = r.aid?.beneficiary
   if (!b) return null
   return [b.family_name, b.spouse_name || b.full_name].filter(Boolean).join(' ') || null
 }
+// ת"ז היולדת (האשה קודם, נפילה-לאחור לראשי)
+const benId = (r: LedgerRow) => {
+  const b = r.aid?.beneficiary
+  return b ? (b.spouse_id_number || b.id_number || null) : null
+}
 
 export default function StockManager() {
+  const router = useRouter()
   const canEdit = useCan('maternity_cards', 'edit')
   const [balance, setBalance] = useState<number | null>(null)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
@@ -122,14 +134,32 @@ export default function StockManager() {
                   <tbody>
                     {ledger.map(r => {
                       const name = benName(r)
+                      const zeout = benId(r)
+                      const aidId = r.aid?.id
+                      // שורה הקשורה ליולדת → לחיצה פותחת את כרטסת הלידה
+                      const clickable = !!aidId
                       return (
-                        <tr key={r.id} className="border-b border-slate-100">
-                          <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap"><span className="ltr-num">{fmtDateTime(r.created_at)}</span></td>
+                        <tr key={r.id}
+                          onClick={clickable ? () => router.push(`/admin/maternity/${aidId}`) : undefined}
+                          className={`border-b border-slate-100 ${clickable ? 'cursor-pointer hover:bg-emerald-50/40' : ''}`}>
+                          <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">
+                            <span className="ltr-num">{fmtDate(r.created_at)}</span>
+                            <span className="text-slate-300 mx-1.5">·</span>
+                            <span className="ltr-num">{fmtTime(r.created_at)}</span>
+                          </td>
                           <td className="px-4 py-2.5 text-slate-700">{REASON_LABEL[r.reason]}</td>
                           <td className={`px-4 py-2.5 font-bold ${r.delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             <span className="ltr-num">{r.delta > 0 ? `+${r.delta}` : r.delta}</span>
                           </td>
-                          <td className="px-4 py-2.5 text-slate-500">{[name, r.note].filter(Boolean).join(' · ') || '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-500">
+                            {name ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="text-slate-700 font-medium">{name}</span>
+                                {zeout && <span className="ltr-num text-xs text-slate-400">{zeout}</span>}
+                              </span>
+                            ) : (r.note || '—')}
+                            {name && r.note ? <span className="text-slate-400"> · {r.note}</span> : null}
+                          </td>
                         </tr>
                       )
                     })}

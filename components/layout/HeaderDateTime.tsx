@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { HDate, Sedra, Locale, HebrewCalendar, flags, Zmanim, Location } from '@hebcal/core'
 import { Clock, CalendarDays, BookOpen, Sparkles, Sunrise, Sun, Sunset, MoonStar } from 'lucide-react'
 
@@ -92,19 +92,34 @@ export default function HeaderDateTime() {
     const t = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // מפתחות ייצוב ל-useMemo: היום (YYYY-MM-DD) והדקה. החישובים הכבדים של @hebcal
+  // (פרשה/חגים/תאריך עברי/זמני הלכה) אינם משתנים כל שנייה — רק כשהיום/הדקה מתחלפים.
+  // בלי זה, השעון היה מריץ עשרות חישובים אסטרונומיים כל שנייה ותוקע את כל המערכת.
+  const dayKey = now ? `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}` : ''
+  const minuteKey = now ? `${dayKey}-${now.getHours()}-${now.getMinutes()}` : ''
+
+  // תאריך לועזי/עברי/פרשה/חגים — מחושבים פעם ביום
+  const dayInfo = useMemo(() => {
+    if (!now) return { greg: '', hebrew: '', parsha: '', holidays: [] as string[] }
+    let hebrew = ''
+    try { hebrew = new HDate(now).renderGematriya(true) } catch { /* ignore */ }
+    return {
+      greg: now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      hebrew,
+      parsha: computeParsha(now),
+      holidays: computeHolidays(now),
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayKey])
+
+  // הזמן ההלכתי הקרוב — מחושב פעם בדקה (די והותר לתצוגת "בעוד שעתיים ו־30 דקות")
+  const nz = useMemo(() => (now ? nextZman(now) : null), [minuteKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!now) return null
 
+  const { greg, hebrew, parsha, holidays } = dayInfo
   const time = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  const greg = now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  // תאריך עברי בגימטריה (יום + חודש + שנה באותיות עבריות) — למשל "ט״ז בסיון תשפ״ו"
-  let hebrew = ''
-  try {
-    hebrew = new HDate(now).renderGematriya(true)
-  } catch { /* ignore */ }
-  const parsha = computeParsha(now)
-  const holidays = computeHolidays(now)
-  // הזמן ההלכתי הקרוב + כמה זמן נשאר עד אליו
-  const nz = nextZman(now)
   const nzTime = nz ? nz.t.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: ZMANIM_TZ }) : ''
   const nzRemaining = nz ? remaining(nz.t.getTime() - now.getTime()) : ''
 

@@ -16,7 +16,7 @@ export async function GET() {
   const balance = await getStockBalance(admin)
   const { data: ledger } = await admin
     .from('card_stock_ledger')
-    .select('id, delta, reason, note, created_at, aid:maternity_aids(id, beneficiary:beneficiaries(family_name, spouse_name, full_name))')
+    .select('id, delta, reason, note, created_at, aid:maternity_aids(id, beneficiary:beneficiaries(family_name, spouse_name, full_name, id_number, spouse_id_number))')
     .order('created_at', { ascending: false })
     .limit(50)
 

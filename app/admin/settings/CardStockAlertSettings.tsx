@@ -4,7 +4,8 @@ import { Loader2, Plus, X, Check, Mail } from 'lucide-react'
 
 // הגדרות התראת מלאי כרטיסי מזון: סף התראה + רשימת מיילים שיקבלו התראה כשהמלאי נמוך.
 export default function CardStockAlertSettings() {
-  const [threshold, setThreshold] = useState('5')
+  const [thresholds, setThresholds] = useState<number[]>([30])
+  const [newThreshold, setNewThreshold] = useState('')
   const [emails, setEmails] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState('')
   const [loading, setLoading] = useState(true)
@@ -16,12 +17,20 @@ export default function CardStockAlertSettings() {
     try {
       const r = await fetch('/api/admin/card-stock/alert-settings', { cache: 'no-store' })
       const d = await r.json()
-      setThreshold(String(d.threshold ?? 5))
+      setThresholds(Array.isArray(d.thresholds) && d.thresholds.length ? d.thresholds : [30])
       setEmails(Array.isArray(d.emails) ? d.emails : [])
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
   useEffect(() => { const t = setTimeout(() => { void load() }, 0); return () => clearTimeout(t) }, [load])
+
+  const addThreshold = () => {
+    const n = Math.trunc(Number(newThreshold))
+    if (!n || n < 0) { setErr('יש להזין מספר חיובי'); return }
+    if (thresholds.includes(n)) { setErr('סף זה כבר קיים'); return }
+    setThresholds([...thresholds, n].sort((a, b) => b - a)); setNewThreshold(''); setErr('')
+  }
+  const removeThreshold = (n: number) => setThresholds(thresholds.filter(x => x !== n))
 
   const addEmail = () => {
     const e = newEmail.trim()
@@ -37,7 +46,7 @@ export default function CardStockAlertSettings() {
     try {
       const r = await fetch('/api/admin/card-stock/alert-settings', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threshold: Number(threshold) || 0, emails }),
+        body: JSON.stringify({ thresholds, emails }),
       })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה בשמירה') } else { setMsg('ההגדרות נשמרו'); setTimeout(() => setMsg(''), 3000) }
@@ -53,12 +62,27 @@ export default function CardStockAlertSettings() {
         כשמלאי כרטיסי המזון יורד לסף שהוגדר או פחות — תישלח התראה במייל לכתובות הרשומות כאן.
       </p>
 
-      {/* סף */}
-      <div className="flex flex-col gap-1.5 max-w-xs">
-        <label className="text-sm font-medium text-slate-700">סף התראה (מספר כרטיסים)</label>
-        <input value={threshold} onChange={e => setThreshold(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" dir="ltr"
-          className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-center w-28 focus:outline-none focus:ring-2 focus:ring-emerald-400" placeholder="5" />
-        <p className="text-xs text-slate-400">ברירת מחדל: 5</p>
+      {/* ספי התראה — אפשר להגדיר כמה ספים (למשל 30, 10, 5) ותישלח התראה בכל חצייה */}
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium text-slate-700">ספי התראה (מספר כרטיסים)</label>
+        <p className="text-xs text-slate-400 -mt-1">תישלח התראה בכל פעם שהמלאי יורד לאחד מהספים הבאים.</p>
+        <div className="flex flex-wrap gap-2">
+          {thresholds.map(n => (
+            <span key={n} className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-1.5 text-sm font-semibold">
+              <span className="ltr-num">{n}</span> כרטיסים
+              <button onClick={() => removeThreshold(n)} className="text-emerald-400 hover:text-red-600"><X size={14} /></button>
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <input value={newThreshold} onChange={e => setNewThreshold(e.target.value.replace(/[^\d]/g, ''))} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addThreshold() } }}
+            inputMode="numeric" dir="ltr" placeholder="למשל 10"
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-center w-28 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          <button onClick={addThreshold}
+            className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg px-3.5 py-2">
+            <Plus size={15} /> הוסף סף
+          </button>
+        </div>
       </div>
 
       {/* מיילים */}

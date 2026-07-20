@@ -17,24 +17,26 @@ export async function GET() {
   return NextResponse.json(settings, { headers: NO_STORE })
 }
 
-// POST: שמירת הגדרות — { threshold, emails[] }
+// POST: שמירת הגדרות — { thresholds[], emails[] }
 export async function POST(request: NextRequest) {
   if (!(await requirePermission('maternity_cards', 'edit'))) return forbidden()
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { threshold?: number; emails?: string[] }
+  let body: { thresholds?: number[]; emails?: string[] }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
-  const threshold = Math.max(0, Math.trunc(Number(body.threshold)))
-  const finalThreshold = Number.isFinite(threshold) ? threshold : DEFAULT_ALERT_THRESHOLD
+  // ספים: מנקים, ממוין יורד וייחודי. אם ריק → ברירת מחדל
+  const rawT = Array.isArray(body.thresholds) ? body.thresholds : []
+  let thresholds = [...new Set(rawT.map(n => Math.trunc(Number(n))).filter(n => Number.isFinite(n) && n >= 0))].sort((a, b) => b - a)
+  if (!thresholds.length) thresholds = [DEFAULT_ALERT_THRESHOLD]
 
   const rawEmails = Array.isArray(body.emails) ? body.emails : []
   const emails = [...new Set(rawEmails.map(e => String(e).trim()).filter(Boolean))]
   const invalid = emails.filter(e => !isEmail(e))
   if (invalid.length) return NextResponse.json({ error: `כתובת מייל לא תקינה: ${invalid[0]}` }, { status: 400 })
 
-  const ok = await saveAlertSettings(admin, { threshold: finalThreshold, emails })
+  const ok = await saveAlertSettings(admin, { thresholds, emails })
   if (!ok) return NextResponse.json({ error: 'שמירה נכשלה' }, { status: 500 })
-  return NextResponse.json({ threshold: finalThreshold, emails })
+  return NextResponse.json({ thresholds, emails })
 }

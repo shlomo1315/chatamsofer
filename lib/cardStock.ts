@@ -6,9 +6,10 @@ import { getServiceClient } from '@/lib/apiAuth'
 // אישור לידה מנכה כרטיס אחד (אטומי); הוספת מלאי / הורדה ידנית = תנועות מפורשות.
 
 const ALERT_KEY = 'card_stock_alert'
-export const DEFAULT_ALERT_THRESHOLD = 5
+export const DEFAULT_ALERT_THRESHOLD = 30
 
-export type StockAlertSettings = { threshold: number; emails: string[] }
+// ספי התראה מרובים — נשלחת התראה בכל פעם שהמלאי חוצה כלפי מטה אחד מהספים.
+export type StockAlertSettings = { thresholds: number[]; emails: string[] }
 
 // המלאי הנוכחי (סכום כל התנועות). null אם אין חיבור.
 export async function getStockBalance(admin: SupabaseClient): Promise<number> {
@@ -47,18 +48,26 @@ export async function addStockMovement(
 // ─── הגדרות התראה (סף + מיילים) ─────────────────────────────────────────────
 export async function getAlertSettings(admin?: SupabaseClient): Promise<StockAlertSettings> {
   const client = admin ?? getServiceClient()
-  if (!client) return { threshold: DEFAULT_ALERT_THRESHOLD, emails: [] }
+  if (!client) return { thresholds: [DEFAULT_ALERT_THRESHOLD], emails: [] }
   const { data } = await client.from('app_settings').select('value').eq('key', ALERT_KEY).maybeSingle()
   if (data?.value) {
     try {
-      const v = JSON.parse(data.value) as Partial<StockAlertSettings>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const v = JSON.parse(data.value) as any
+      // תמיכה אחורה: פורמט ישן { threshold: number } → מומר לרשימה
+      let thresholds: number[] = []
+      if (Array.isArray(v.thresholds)) thresholds = v.thresholds.map(Number).filter((n: number) => Number.isFinite(n) && n >= 0)
+      else if (Number.isFinite(Number(v.threshold))) thresholds = [Number(v.threshold)]
+      if (!thresholds.length) thresholds = [DEFAULT_ALERT_THRESHOLD]
+      // ייחודי + ממוין יורד (הסף הגבוה מתריע קודם)
+      thresholds = [...new Set(thresholds)].sort((a, b) => b - a)
       return {
-        threshold: Number.isFinite(Number(v.threshold)) ? Number(v.threshold) : DEFAULT_ALERT_THRESHOLD,
-        emails: Array.isArray(v.emails) ? v.emails.filter(e => typeof e === 'string' && e.trim()) : [],
+        thresholds,
+        emails: Array.isArray(v.emails) ? v.emails.filter((e: unknown) => typeof e === 'string' && e.trim()) : [],
       }
     } catch { /* value אינו JSON */ }
   }
-  return { threshold: DEFAULT_ALERT_THRESHOLD, emails: [] }
+  return { thresholds: [DEFAULT_ALERT_THRESHOLD], emails: [] }
 }
 
 export async function saveAlertSettings(admin: SupabaseClient, s: StockAlertSettings): Promise<boolean> {

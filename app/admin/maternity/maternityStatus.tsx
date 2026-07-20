@@ -140,6 +140,10 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // בין אם מבקשה ממתינה ובין אם מבטלים לידה שכבר אושרה.
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  // אזהרת מלאי — נפתחת לפני אישור לידה כשאין כרטיסים במלאי. המזכיר מאשר במודע
+  // שהיולדת תיכנס לרשימת המתנה ותקבל שובר כרטיס אוטומטית כשיתחדש המלאי.
+  const [stockWarnOpen, setStockWarnOpen] = useState(false)
+  const [checkingStock, setCheckingStock] = useState(false)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
@@ -234,12 +238,29 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 
-  // בחירת אפשרות — דחייה ('cancelled') נפתחת דרך חלונית סיבה; השאר מיד.
-  const onOption = (value: MaternityStatus) => {
+  // בחירת אפשרות — דחייה ('cancelled') נפתחת דרך חלונית סיבה; אישור לידה ('active')
+  // בודק מלאי כרטיסים ומזהיר אם ריק; השאר מיד.
+  const onOption = async (value: MaternityStatus) => {
     if (value === 'cancelled') {
       setOpen(false)
       setRejectReason('')
       setRejectOpen(true)
+      return
+    }
+    // אישור לידה — בדיקת מלאי כרטיסים. אם אין מלאי, מזהירים לפני האישור.
+    if (value === 'active') {
+      setOpen(false)
+      setCheckingStock(true)
+      try {
+        const r = await fetch('/api/admin/card-stock', { cache: 'no-store' })
+        const d = await r.json()
+        setCheckingStock(false)
+        if (r.ok && typeof d.balance === 'number' && d.balance <= 0) {
+          setStockWarnOpen(true) // אין מלאי → מודאל אזהרה, האישור ימתין לאישור המזכיר
+          return
+        }
+      } catch { setCheckingStock(false) /* בדיקת המלאי היא תוספת — כשל לא חוסם אישור */ }
+      void setStatus('active')
       return
     }
     void setStatus(value)
@@ -254,6 +275,40 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
 
   return (
     <div className="relative inline-block">
+      {/* אזהרת אין-מלאי לפני אישור לידה */}
+      {stockWarnOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+          onClick={() => setStockWarnOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle size={20} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">אין מלאי כרטיסי מזון</h3>
+                <p className="text-xs text-slate-500">שובר הכרטיס לא יישלח כעת</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 leading-relaxed">
+              כרגע אין כרטיסים במלאי. אם תאשרו את הלידה — היולדת תיכנס ל<strong>רשימת המתנה</strong>,
+              תקבל מייל אישור עם שובר ההבראה בלבד (<strong>ללא שובר כרטיס מזון</strong>), וברגע שיתחדש
+              המלאי היא תשויך אוטומטית ותקבל את שובר הכרטיס במייל נפרד.
+            </div>
+            <div className="mt-4 flex justify-start gap-2">
+              <button type="button" onClick={() => { setStockWarnOpen(false); void setStatus('active') }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-5 py-2.5 text-sm
+                           font-bold text-white transition hover:bg-amber-700">
+                <Check size={15} /> אשר בכל זאת (לרשימת המתנה)
+              </button>
+              <button type="button" onClick={() => setStockWarnOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold
+                           text-slate-600 transition hover:bg-slate-50">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {rejectOpen && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
           onClick={() => setRejectOpen(false)}>
@@ -326,8 +381,8 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
             {options.filter(o => o.value !== aid.status).map(o => {
               const OIcon = o.icon
               return (
-                <button key={o.value} onClick={() => onOption(o.value)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-right transition-colors ${o.cls}`}>
+                <button key={o.value} onClick={() => onOption(o.value)} disabled={checkingStock}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-right transition-colors disabled:opacity-50 ${o.cls}`}>
                   <OIcon size={15} /> {o.label}
                 </button>
               )

@@ -6,6 +6,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import { wrapText } from './rtlText'
+import { toVisual } from './pdfBidi'
 import type { MailAttachment } from './sendMail'
 
 // מיוצאים לשימוש חוזר בשוברים נוספים (lib/gratitudeVoucher.ts) — אותו עיצוב בדיוק.
@@ -40,7 +41,7 @@ const GEM_TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
 const GEM_HUND = ['', 'ק', 'ר', 'ש', 'ת', 'תק', 'תר', 'תש', 'תת', 'תתק']
 function gematria(n: number): string {
   let s = GEM_HUND[Math.floor(n / 100)] || ''
-  let r = n % 100
+  const r = n % 100
   if (r === 15) s += 'טו'
   else if (r === 16) s += 'טז'
   else { s += GEM_TENS[Math.floor(r / 10)] || ''; s += GEM_ONES[r % 10] || '' }
@@ -78,17 +79,12 @@ export function loadLogo(): Buffer | null {
 
 export type Ctx = { page: PDFPage; font: PDFFont; logo: PDFImage | null }
 
-// כפיית כיוון שמאל-לימין על מספרים המשובצים בטקסט עברי (כתובות, שעות, תאריכים),
-// כדי שלא יוצגו הפוכים (למשל "יחזקאל 44"→"44 יחזקאל", "21:00"→"00:12").
-// משתמשים ב-LEFT-TO-RIGHT OVERRIDE (U+202D) … POP (U+202C) — כפייה חזקה שמכובדת
-// על ידי יותר צופי PDF מאשר ISOLATE (U+2066), שלא תמיד נתמך.
+// עיבוד bidi אמיתי (bidi-js): ממיר טקסט לוגי → visual — מספרים/שעות/מייל LTR מבודדים
+// נכון, סוגריים ממוראים, וכל השאר RTL. שם ההיסטורי isoNum נשמר לתאימות עם קוראים קיימים.
 export function isoNum(s: string): string {
-  // עוטפים כל מספר/טווח ב-LRO…POP; בטווח שעות ("19:00 - 21:00") מסירים את הרווחים
-  // הפנימיים כדי שכל הטווח יהיה טוקן LTR צמוד אחד — כך הוא מוצג תקין בכל צופה PDF
-  // (בדיוק כמו מספר השובר "01072026.2911" שמוצג נכון).
-  return String(s ?? '').replace(/\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g, m => `‭${m.replace(/\s*([-–])\s*/g, ' $1 ').replace(/\s+/g, ' ')}‬`)
+  return toVisual(String(s ?? ''))
 }
-// מדידת רוחב כולל בידוד מספרים
+// מדידת רוחב (על הטקסט ה-visual, עקבי עם הציור)
 export function tw(c: Ctx, text: string, size: number): number {
   return c.font.widthOfTextAtSize(isoNum(text), size)
 }
@@ -104,12 +100,50 @@ export function centerText(c: Ctx, text: string, cx: number, y: number, size: nu
   const w = c.font.widthOfTextAtSize(t, size)
   c.page.drawText(t, { x: cx - w / 2, y, size, font: c.font, color })
 }
-// פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה
+// פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה.
+// העטיפה נעשית על הטקסט הלוגי (לפי מילים); ההמרה ל-visual קורית בתוך rightText לכל שורה.
 export function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
-  const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(s, size))
+  const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(toVisual(s), size))
   for (const ln of lines) { rightText(c, ln, xRight, y, size, color); y -= size + lineGap }
   return y
 }
+// טקסט מודגש (faux-bold) — אין פונט bold נפרד, לכן מציירים פעמיים בהיסט זעיר.
+export function boldRightText(c: Ctx, text: string, xRight: number, y: number, size: number, color: RGB) {
+  const t = toVisual(text)
+  const w = c.font.widthOfTextAtSize(t, size)
+  c.page.drawText(t, { x: xRight - w, y, size, font: c.font, color })
+  c.page.drawText(t, { x: xRight - w + 0.35, y, size, font: c.font, color }) // היסט → אפקט הדגשה
+}
+
+// פסקה שבה החלק שלפני ":" הראשון מודגש (כותרת), והשאר רגיל. מיישר לימין, עם עטיפה.
+// למשל: "אישור: בקשתכם אושרה" → "אישור:" מודגש.
+export function paragraphWithBoldPrefix(
+  c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number,
+  titleColor: RGB, bodyColor: RGB, lineGap = 6,
+): number {
+  const ci = text.indexOf(':')
+  // אין ":" → פסקה רגילה
+  if (ci < 0) return paragraph(c, text, xRight, y, maxWidth, size, bodyColor, lineGap)
+  const title = text.slice(0, ci + 1)          // כולל הנקודתיים
+  const rest = text.slice(ci + 1).trim()
+  // הכותרת נכתבת בשורה הראשונה מימין; המשך הטקסט זורם אחריה (עטיפה פשוטה: כותרת בשורה, גוף בהמשך)
+  const titleVisual = toVisual(title)
+  const titleW = c.font.widthOfTextAtSize(titleVisual, size)
+  boldRightText(c, title, xRight, y, size, titleColor)
+  // גוף — בשורה שאחרי הכותרת אם צר, אחרת ממשיך משמאל לכותרת
+  const bodyRightStart = xRight - titleW - 6
+  const bodyMax = maxWidth - titleW - 6
+  const lines = wrapText(rest, bodyMax, s => c.font.widthOfTextAtSize(toVisual(s), size))
+  if (lines.length) {
+    rightText(c, lines[0], bodyRightStart, y, size, bodyColor)
+    y -= size + lineGap
+    for (let i = 1; i < lines.length; i++) { rightText(c, lines[i], xRight, y, size, bodyColor); y -= size + lineGap }
+  } else {
+    y -= size + lineGap
+  }
+  return y
+}
+
 // תיבת מסגרת מעוגלת (קו זהב)
 export function roundedBox(c: Ctx, x: number, y: number, w: number, h: number, border: RGB, fill?: RGB) {
   const r = 10
@@ -334,19 +368,12 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     let ay = y - titleH - 13
     for (const ln of wA) { rightText(c, ln, innerRight, ay, 11, INK); ay -= lineH }
 
-    // שורת המוקד — המספר הרב-ספרתי מצויר כטוקן נפרד כדי שלא יתהפך (מספר משובץ בעברית מוצג הפוך ב-PDF)
-    {
-      let x = innerRight
-      const s1 = 'להפעלה חייגו למוקד: '
-      rightText(c, s1, x, ay, 11, INK); x -= tw(c, s1, 11)
-      rightText(c, '02-3131325', x, ay, 11, NAVY); x -= tw(c, '02-3131325', 11)
-      rightText(c, ' שלוחה 1', x, ay, 11, INK)
-      ay -= lineH
-    }
+    // שורת המוקד — עם bidi אמיתי אפשר לכתוב את כל השורה כמקשה אחת (המספר יבודד LTR נכון)
+    rightText(c, 'להפעלה חייגו למוקד: 02-3131325 שלוחה 1', innerRight, ay, 11, NAVY); ay -= lineH
 
     for (const ln of wB) { rightText(c, ln, innerRight, ay, 11, RED); ay -= lineH }
 
-    // מספרי הטלפון המעודכנים — מצוירים כמקשה אחת של ספרות (ללא עברית מעורבת) כדי שיוצגו תקין
+    // מספרי הטלפון המעודכנים — מרווחים וממורכזים; ה-bidi מבודד כל מספר LTR
     if (uniqPhones.length) {
       centerText(c, uniqPhones.join('     '), W / 2, ay, 12, NAVY); ay -= lineH
     }

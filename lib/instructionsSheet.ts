@@ -5,8 +5,9 @@ import { PDFDocument } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import {
-  W, MX, H, NAVY, SUB, INK,
+  W, MX, H, NAVY, SUB, INK, GOLD,
   type Ctx, loadLogo, drawHeader, centerText, rightText, paragraph, goldDivider,
+  paragraphWithBoldPrefix, hebrewDate,
 } from './maternityVoucher'
 import type { MailAttachment } from './sendMail'
 
@@ -58,15 +59,22 @@ export async function buildInstructionsSheet(input: InstructionsSheetInput): Pro
 
   let y = drawHeader(c, 'אגף עזר ליולדות')
 
+  const xRight = W - MX
+  const maxWidth = W - MX * 2
+
+  // תאריך עברי + לועזי בראש הדף (משמאל התאריך הלועזי, מימין העברי)
+  const now = new Date()
+  const heDate = hebrewDate(now)
+  const gregDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
+  y -= 6
+  rightText(c, heDate ? `${heDate}  ·  ${gregDate}` : gregDate, xRight, y, 11, SUB)
+  y -= 20
+
   // כותרת "דף הנחיות"
-  y -= 18
   centerText(c, 'דף הנחיות', W / 2, y, 24, NAVY)
   y -= 12
   goldDivider(c, W / 2, y)
   y -= 30
-
-  const xRight = W - MX
-  const maxWidth = W - MX * 2
 
   // פתיח: "לכבוד משפחת ..." + ברכת מזל טוב
   const family = (input.familyName ?? '').trim()
@@ -79,29 +87,29 @@ export async function buildInstructionsSheet(input: InstructionsSheetInput): Pro
   y = paragraph(c, 'להלן מספר הנחיות:', xRight, y, maxWidth, 13, INK, 6)
   y -= 10
 
-  // תשעת הסעיפים הממוספרים
+  // תשעת הסעיפים הממוספרים — הכותרת שלפני ":" מודגשת בכל סעיף
   const clauses = buildClauses(input.recoveryDays)
   const numW = 18  // רוחב שמור למספר הסעיף
   clauses.forEach((clause, i) => {
     const num = `${i + 1}.`
     // המספר מודפס נפרד מימין, והטקסט עוטף בעמודה שמשמאל לו
     rightText(c, num, xRight, y, 12, NAVY)
-    y = paragraph(c, clause, xRight - numW, y, maxWidth - numW, 12, INK, 5)
+    y = paragraphWithBoldPrefix(c, clause, xRight - numW, y, maxWidth - numW, 12, NAVY, INK, 5)
     y -= 8
   })
 
-  // דרכי התקשרות
+  // דרכי התקשרות — הכותרת מודגשת; רווחים סביב המקף בטווח הימים ("א׳ - ו׳")
   y -= 4
-  y = paragraph(c,
+  y = paragraphWithBoldPrefix(c,
     `דרכי התקשרות: לשאלות ובירורים אנו זמינים במייל ${MATERNITY_EMAIL} ובטלפון ${MATERNITY_PHONE} ` +
-    `(עבור יולדות השוהות בפועל בבית ההחלמה, בימים א׳-ו׳ בשעות 10:30–13:00).`,
-    xRight, y, maxWidth, 11, SUB, 5)
-  y -= 18
+    `(עבור יולדות השוהות בפועל בבית ההחלמה, בימים א׳ - ו׳ בשעות 10:30–13:00).`,
+    xRight, y, maxWidth, 11, NAVY, SUB, 5)
+  y -= 22
 
-  // חתימה
-  y = paragraph(c, 'בברכה,', xRight, y, maxWidth, 13, NAVY, 4)
-  y = paragraph(c, 'מחלקת יולדות', xRight, y, maxWidth, 13, NAVY, 4)
-  y = paragraph(c, 'היכל החתם סופר', xRight, y, maxWidth, 13, NAVY, 4)
+  // חתימה — ממורכזת
+  centerText(c, 'בברכה,', W / 2, y, 13, NAVY); y -= 18
+  centerText(c, 'מחלקת יולדות', W / 2, y, 13, NAVY); y -= 18
+  centerText(c, 'היכל החתם סופר', W / 2, y, 13, GOLD); y -= 4
 
   // קו זהב מסיים בתחתית
   goldDivider(c, W / 2, 74, 90)
