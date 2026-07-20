@@ -263,7 +263,7 @@ export default function FamilyTreePage() {
     return s
   }, [selected, positions])
 
-  // יישור מסלול נבחר לטור אנכי ממורכז (שורש למעלה, הנבחר למטה) — כמו במסך הניהול.
+  // יישור מסלול נבחר לטור אנכי ממורכז + דחיפת שאר העץ הצידה — כמו במסך הניהול.
   const alignedById = useMemo(() => {
     const m = new Map<string, { x: number; y: number; cx: number }>()
     if (!selected || pathBranch.size === 0) return m
@@ -274,6 +274,15 @@ export default function FamilyTreePage() {
     chain.forEach((p, i) => {
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
+    })
+    const halfClear = NW * 1.6
+    positions.forEach(p => {
+      if (pathBranch.has(p.node.id)) return
+      const dist = p.cx - colCx
+      if (Math.abs(dist) < halfClear) {
+        const push = (dist >= 0 ? 1 : -1) * (halfClear - Math.abs(dist))
+        m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
+      }
     })
     return m
   }, [selected, pathBranch, positions, w])
@@ -526,10 +535,8 @@ export default function FamilyTreePage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: 'pointer',
                       transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                      // אנימציית מיקום רק כשיש יישור פעיל — אחרת הזום (שמשנה left/top) מקפץ
-                      transition: selected
-                        ? 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s'
-                        : 'box-shadow .2s, transform .2s, opacity .2s',
+                      // ללא אנימציה על left/top — גרמה לקפיצות בזום/גלילה. המיקום משתנה מיד.
+                      transition: 'box-shadow .2s, transform .2s, opacity .2s',
                       opacity: isDimmed ? 0.2 : 1,
                       zIndex: isSel ? 20 : 2, userSelect: 'none',
                     }}>

@@ -383,9 +383,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     return s
   }, [selected, positions])
 
-  // יישור מסלול: כשצומת נבחר, הצמתים שבמסלולו (הוא + אבותיו) מתיישרים לטור אנכי
-  // ממורכז — שורש למעלה, הנבחר למטה. מפה מ-id למיקום המיושר; שאר הצמתים לא כאן
-  // (נשארים במקומם המקורי, מעומעמים). בלי selected — ריק, והכל מוצג כעץ רגיל.
+  // יישור מסלול: כשצומת נבחר, הצמתים שבמסלולו (הוא + אבותיו) מתיישרים לטור אנכי ממורכז.
+  // שאר העץ נדחף הצידה — כדי שלא יחפוף על הטור — ונשאר מעומעם ברקע. מפה מלאה: לכל
+  // צומת המיקום הסופי (מיושר / נדחף). בלי selected — ריקה, והכל מוצג כעץ רגיל.
   const alignedById = useMemo(() => {
     const m = new Map<string, { x: number; y: number; cx: number }>()
     if (!selected || pathBranch.size === 0) return m
@@ -396,6 +396,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     chain.forEach((p, i) => {
       const y = PAD + i * (NH + VGAP)
       m.set(p.node.id, { x: colCx - NW / 2, y, cx: colCx })
+    })
+    // רצועה נקייה סביב הטור; כל צומת שאינו במסלול ונופל בתוכה נדחף החוצה לפי צדו
+    const halfClear = NW * 1.6
+    positions.forEach(p => {
+      if (pathBranch.has(p.node.id)) return
+      const dist = p.cx - colCx
+      if (Math.abs(dist) < halfClear) {
+        const push = (dist >= 0 ? 1 : -1) * (halfClear - Math.abs(dist))
+        m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
+      }
     })
     return m
   }, [selected, pathBranch, positions, w])
@@ -565,10 +575,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
-                  // אנימציית מיקום רק כשיש יישור פעיל — אחרת הזום (שמשנה left/top) היה "נגרר" ומקפץ
-                  transition: selected
-                    ? 'left .5s cubic-bezier(.4,0,.2,1), top .5s cubic-bezier(.4,0,.2,1), box-shadow .2s, transform .2s, opacity .2s'
-                    : 'box-shadow .2s, transform .2s, opacity .2s',
+                  // ללא אנימציה על left/top — היא גרמה לקפיצות בזום ובגלילה. המיקום משתנה מיד.
+                  transition: 'box-shadow .2s, transform .2s, opacity .2s',
                   opacity: isDimmed ? 0.25 : 1,
                   zIndex: (isSel || hovered === pos.node.id) ? 50 : 2, userSelect: 'none',
                 }}>
