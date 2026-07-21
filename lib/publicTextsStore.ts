@@ -23,9 +23,16 @@ function admin() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// ⚠️ המטמון חי בתוך תהליך בודד. השמירה מתבצעת בתהליך של ה-API, אך את
+// העמוד מרנדר תהליך אחר — ולכן רענון המטמון שם לא נראה כאן, והנוסח
+// הישן היה נדבק. TTL קצר מבטיח שכל תהליך מרענן מעצמו מול ה-DB.
+const TTL_MS = 10_000
+let fetchedAt = 0
+
 /** טוען את הטקסטים למטמון. בטוח לקריאה מרובה — טעינה אחת בלבד במקביל. */
 export async function loadPublicTexts(): Promise<PublicTexts> {
-  if (loaded) return cache
+  const fresh = loaded && Date.now() - fetchedAt < TTL_MS
+  if (fresh) return cache
   if (loading) { await loading; return cache }
 
   loading = (async () => {
@@ -34,8 +41,10 @@ export async function loadPublicTexts(): Promise<PublicTexts> {
       if (!db) return
       const { data } = await db
         .from('app_settings').select('value').eq('key', PUBLIC_TEXTS_KEY).maybeSingle()
-      if (data?.value) cache = JSON.parse(String(data.value))
+      // גם ערך ריק/חסר מתקבל — אחרת מחיקת כל הנוסחים לא הייתה מתפשטת
+      cache = data?.value ? JSON.parse(String(data.value)) : {}
       loaded = true
+      fetchedAt = Date.now()
     } catch (e) {
       console.error('[publicTexts] טעינה נכשלה — נעשה שימוש בברירות המחדל:', e)
     } finally {
@@ -54,6 +63,7 @@ export async function loadPublicTexts(): Promise<PublicTexts> {
 export function setPublicTexts(texts: PublicTexts): void {
   cache = texts ?? {}
   loaded = true
+  fetchedAt = Date.now()
 }
 
 /** תוכן המטמון הנוכחי, בלי לגעת ב-DB. */

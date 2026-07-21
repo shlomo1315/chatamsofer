@@ -17,21 +17,38 @@ import PublicPortalPage from '../PublicPortalPage'
 // המסכים שניתן לדלג אליהם ישירות מהבורר, בלי לעבור זיהוי ת"ז אמיתי.
 // ⚠️ מסכים שתלויים בנתוני מוטב (dashboard, docs-needed וכו') אינם כאן —
 // בלי מוטב טעון הם היו נופלים או מוצגים ריקים.
+// needsData: מסכים שהרינדור שלהם חסום מאחורי נתוני מוטב אמיתיים
+// (beneficiary / pendingAuth / childMatch). בלי כניסה אמיתית הם יוצגו
+// ריקים — מסומנים כאן כדי שלא ייראה כמו תקלה.
 const PREVIEW_STEPS = [
   { step: 'id-lookup' as const, label: 'מסך פתיחה' },
+  { step: 'not-found' as const, label: 'לא נמצא' },
+  { step: 'register' as const, label: 'הרשמה' },
+  { step: 'register-success' as const, label: 'הרשמה הושלמה' },
   { step: 'new-loan' as const, label: 'בקשת הלוואה' },
+  { step: 'request-sent' as const, label: 'בקשה נשלחה' },
+  { step: 'portal-auth' as const, label: 'אימות כניסה', needsData: true },
+  { step: 'found-as-child' as const, label: 'רשום כבן', needsData: true },
+  { step: 'dashboard' as const, label: 'אזור אישי', needsData: true },
+  { step: 'docs-needed' as const, label: 'השלמת מסמכים', needsData: true },
+  { step: 'new-birth' as const, label: 'דיווח לידה', needsData: true },
+  { step: 'new-silent-birth' as const, label: 'לידה שקטה', needsData: true },
+  { step: 'widow-dashboard' as const, label: 'אלמנות', needsData: true },
 ]
 
 export default function PublicTextsEditor({ initialTexts }: { initialTexts: PublicTexts }) {
   const router = useRouter()
   const [texts, setTexts] = useState<PublicTexts>(initialTexts ?? {})
+  // הבסיס להשוואת "יש שינויים" — מתעדכן אחרי שמירה מוצלחת, כך שהכפתור
+  // נכבה ו"ביטול" חוזר לנוסח שנשמר ולא לזה שנטען עם העמוד.
+  const [savedTexts, setSavedTexts] = useState<PublicTexts>(initialTexts ?? {})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
   const [previewStep, setPreviewStep] = useState<(typeof PREVIEW_STEPS)[number]['step']>('id-lookup')
 
   const dirty = useMemo(
-    () => JSON.stringify(texts) !== JSON.stringify(initialTexts ?? {}),
-    [texts, initialTexts],
+    () => JSON.stringify(texts) !== JSON.stringify(savedTexts),
+    [texts, savedTexts],
   )
 
   const onTextChange = (key: string, value: string) => {
@@ -52,6 +69,7 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
         setMsg({ type: 'err', text: data.error || 'השמירה נכשלה' })
       } else {
         setTexts(data.texts ?? {})
+        setSavedTexts(data.texts ?? {})
         setMsg({ type: 'ok', text: 'נשמר — הנוסח מעודכן באתר' })
       }
     } catch (e) {
@@ -66,7 +84,7 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
     router.push('/login')
   }
 
-  const resetAll = () => { setTexts(initialTexts ?? {}); setMsg(null) }
+  const resetAll = () => { setTexts(savedTexts); setMsg(null) }
 
   return (
     <>
@@ -79,14 +97,16 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
 
         <span className="w-px h-5 bg-slate-700" />
 
-        {/* בורר מסכים — מעבר ישיר בין תצוגות בלי להזין ת"ז */}
-        <div className="flex items-center gap-1 bg-slate-800 rounded-xl p-0.5">
+        {/* בורר מסכים — מעבר ישיר בין תצוגות בלי להזין ת"ז.
+            גליל אופקי: יש יותר מסכים ממה שנכנס לרוחב המסך. */}
+        <div className="flex items-center gap-1 bg-slate-800 rounded-xl p-0.5 max-w-[42vw] overflow-x-auto">
           {PREVIEW_STEPS.map(s => (
             <button key={s.step} onClick={() => setPreviewStep(s.step)}
+              title={s.needsData ? 'דורש כניסה אמיתית — עשוי להופיע ריק' : undefined}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                 previewStep === s.step ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
               }`}>
-              {s.label}
+              {s.label}{s.needsData && <span className="opacity-50 mr-0.5">*</span>}
             </button>
           ))}
         </div>
