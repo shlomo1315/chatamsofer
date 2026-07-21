@@ -8,8 +8,6 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 
-const MAX_AMOUNT = 30000
-const MAX_INSTALLMENTS = 60
 const MAX_FILES = 5
 const MAX_FILE_MB = 10
 const LOAN_PURPOSES = ['נישואי הבן/הבת', 'שמחה משפחתית', 'הוצאה רפואית', 'חובות מנישואי הילדים', 'רכישת דירה', 'אחר']
@@ -87,10 +85,9 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
     const e: Record<string, string> = {}
     if (!purpose) e.purpose = 'יש לבחור מטרת הלוואה'
     if (needsDetails && !purposeDetails.trim()) e.purposeDetails = 'יש לפרט את מטרת ההלוואה'
+    // ברמת המנהל אין תקרת סכום/תשלומים — רק ערך חיובי, כהגנה מטעות הקלדה
     if (!amountNum) e.amount = 'יש להזין סכום'
-    else if (amountNum > MAX_AMOUNT) e.amount = `הסכום המרבי הוא ${MAX_AMOUNT.toLocaleString('he-IL')}`
     if (!instNum) e.installments = 'יש להזין מספר תשלומים'
-    else if (instNum > MAX_INSTALLMENTS) e.installments = `מספר התשלומים המרבי הוא ${MAX_INSTALLMENTS}`
     if (docs.length === 0 && newFiles.length === 0) e.files = 'יש לצרף לפחות מסמך אחד'
     if (!declaration) e.declaration = 'יש לבחור תשובה'
     return e
@@ -185,22 +182,22 @@ export default function EditLoanPage({ params }: { params: Promise<{ id: string 
       <div className="bg-white rounded-xl border border-slate-200 p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">סכום ההלוואה המבוקש (₪) <span className="text-red-500">*</span></label>
-          <input type="text" inputMode="numeric" value={amount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_AMOUNT))); clearErr('amount') }}
+          <input type="text" inputMode="numeric" value={amount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v); clearErr('amount') }}
             className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} dir="ltr" />
-          <p className="text-[11px] text-slate-400">עד {MAX_AMOUNT.toLocaleString('he-IL')} ש״ח (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
+          <p className="text-[11px] text-slate-400">ללא תקרה (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
           {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">סכום שאושר בפועל (₪)</label>
-          <input type="text" inputMode="numeric" value={approvedAmount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setApprovedAmount(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_AMOUNT))) }}
+          <input type="text" inputMode="numeric" value={approvedAmount} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setApprovedAmount(v) }}
             className="rounded-lg border border-slate-300 focus:ring-indigo-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left" dir="ltr" placeholder="ריק = כסכום המבוקש" />
           <p className="text-[11px] text-slate-400">הסכום שמוצג בפורטל הביצוע</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className="text-xs font-medium text-slate-600">מספר תשלומים להחזר <span className="text-red-500">*</span></label>
-          <input type="text" inputMode="numeric" value={installments} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_INSTALLMENTS))); clearErr('installments') }}
+          <input type="text" inputMode="numeric" value={installments} onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v); clearErr('installments') }}
             className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} dir="ltr" />
-          <p className="text-[11px] text-slate-400">עד {MAX_INSTALLMENTS} תשלומים</p>
+          <p className="text-[11px] text-slate-400">ללא תקרה</p>
           {fieldErrors.installments && <p className="text-xs text-red-600">{fieldErrors.installments}</p>}
         </div>
       </div>

@@ -7,8 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import type { Beneficiary } from '@/types'
 import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 
-const MAX_AMOUNT = 30000
-const MAX_INSTALLMENTS = 60
 const MAX_FILES = 5
 const MAX_FILE_MB = 10
 
@@ -24,9 +22,6 @@ const LOAN_PURPOSES: { value: string; desc?: string }[] = [
   { value: 'רכישת דירה', desc: 'לתשומת לב: ההלוואה לצורך זה היא רק בעת הרכישה בפועל, ורק לצורך דירה ראשונה ולא לצורך רכישת נכס נוסף' },
   { value: 'אחר' },
 ]
-
-const fmtCur = (n: number) =>
-  new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
 
 const ELIGIBILITY_LABEL: Record<string, string> = {
   pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר', rejected: 'לא מאושר',
@@ -116,10 +111,9 @@ export default function NewLoanPage() {
     const e: Record<string, string> = {}
     if (!purpose) e.purpose = 'יש לבחור מטרת הלוואה'
     if (needsDetails && !purposeDetails.trim()) e.purposeDetails = 'יש לפרט את מטרת ההלוואה'
+    // ברמת המנהל אין תקרת סכום/תשלומים — רק ערך חיובי, כהגנה מטעות הקלדה
     if (!amountNum) e.amount = 'יש להזין סכום'
-    else if (amountNum > MAX_AMOUNT) e.amount = `הסכום המרבי הוא ${fmtCur(MAX_AMOUNT)}`
     if (!instNum) e.installments = 'יש להזין מספר תשלומים'
-    else if (instNum > MAX_INSTALLMENTS) e.installments = `מספר התשלומים המרבי הוא ${MAX_INSTALLMENTS}`
     if (files.length === 0) e.files = 'יש לצרף לפחות מסמך אחד (אישור רב)'
     if (!declaration) e.declaration = 'יש לבחור תשובה'
     return e
@@ -285,21 +279,21 @@ export default function NewLoanPage() {
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-slate-600">סכום ההלוואה המבוקש (₪) <span className="text-red-500">*</span></label>
                 <input type="text" inputMode="numeric" value={amount}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_AMOUNT))); clearErr('amount') }}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v); clearErr('amount') }}
                   placeholder="0"
                   className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
                   dir="ltr" />
-                <p className="text-[11px] text-slate-400">עד {MAX_AMOUNT.toLocaleString('he-IL')} ש״ח (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
+                <p className="text-[11px] text-slate-400">ללא תקרה (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
                 {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-slate-600">מספר תשלומים להחזר <span className="text-red-500">*</span></label>
                 <input type="text" inputMode="numeric" value={installments}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v === '' ? '' : String(Math.min(parseInt(v, 10), MAX_INSTALLMENTS))); clearErr('installments') }}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setInstallments(v); clearErr('installments') }}
                   placeholder="בחר/י מספר תשלומים"
                   className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.installments ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
                   dir="ltr" />
-                <p className="text-[11px] text-slate-400">עד {MAX_INSTALLMENTS} תשלומים</p>
+                <p className="text-[11px] text-slate-400">ללא תקרה</p>
                 {fieldErrors.installments && <p className="text-xs text-red-600">{fieldErrors.installments}</p>}
               </div>
             </div>
