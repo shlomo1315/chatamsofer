@@ -13,6 +13,7 @@ import { he } from 'date-fns/locale'
 import type { Beneficiary } from '@/types'
 import ConfettiSuccess from '@/components/ui/ConfettiSuccess'
 import LineageBranchView from '@/app/admin/beneficiaries/[id]/LineageBranchView'
+import { AdminOnly } from '@/components/StaffPermissions'
 
 const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
 
@@ -48,6 +49,9 @@ export default function NewMaternityPage() {
   const [babyBirthDate, setBabyBirthDate] = useState('')
   const [recoveryHome, setRecoveryHome] = useState('')
   const [notes, setNotes] = useState('')
+  // שדות מנהל בלבד — דריסה ידנית של ימי הזכאות והסכום להטענה. ריק = ברירת המחדל.
+  const [recoveryDaysOverride, setRecoveryDaysOverride] = useState('')
+  const [cardLoadAmount, setCardLoadAmount] = useState('')
   const [noBabyName, setNoBabyName] = useState(false)
   const [certFile, setCertFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
@@ -205,14 +209,17 @@ export default function NewMaternityPage() {
           baby_gender: babyGender || null,
           is_twins: isTwins,
           babies,
-          recovery_eligibility_days: defaultRecoveryDays(isTwins),
+          recovery_eligibility_days: recoveryDaysOverride !== '' ? Number(recoveryDaysOverride) : defaultRecoveryDays(isTwins),
           birth_certificate_url: certUrl ?? null,
           recovery_home: recoveryHome || null,
           notes: notes.trim() || null,
           six_weeks_end: sixEnd,
-          total_weeks: 6,
-          card_balance: 0,
-          weekly_amount: 0,
+          card_balance: 0, // יתרה בפועל — נצברת רק בהטענה אמיתית מול נדרים
+          // הסכום שהמנהל קבע הוא סכום כולל. הטענת הכרטיס מציגה
+          // weekly_amount × total_weeks, ולכן total_weeks=1 כדי שהמכפלה
+          // תיתן בדיוק את הסכום שהוזן. ריק = התנהגות קיימת (0 × 6).
+          weekly_amount: cardLoadAmount !== '' ? Number(cardLoadAmount) : 0,
+          total_weeks: cardLoadAmount !== '' ? 1 : 6,
           status: 'pending',
         })
         .select()
@@ -253,7 +260,8 @@ export default function NewMaternityPage() {
           ...(isTwins ? [`תינוק/ת שני: ${baby2Name.trim()}${baby2Gender ? (baby2Gender === 'male' ? ' · בן' : ' · בת') : ''}`] : []),
           babyBirthDate ? `לידה ${format(new Date(babyBirthDate), 'dd/MM/yyyy', { locale: he })}` : '',
           recoveryHome ? `בית החלמה: ${recoveryHome}` : '',
-          `זכאות בית החלמה: ${defaultRecoveryDays(isTwins)} ימים`,
+          `זכאות בית החלמה: ${recoveryDaysOverride !== '' ? Number(recoveryDaysOverride) : defaultRecoveryDays(isTwins)} ימים`,
+          cardLoadAmount !== '' ? `סכום להטענה: ₪${Number(cardLoadAmount).toLocaleString('he-IL')}` : '',
         ].filter(Boolean),
       })
       setTimeout(() => router.push(`/admin/maternity/${inserted.id}`), 3000)
@@ -544,6 +552,37 @@ export default function NewMaternityPage() {
               </div>
               {fieldErrors.recoveryHome && <p className="text-xs text-red-600">{fieldErrors.recoveryHome}</p>}
             </div>
+
+            {/* שדות מנהל בלבד — ללא תקרה. מזכירות לא רואה אותם. */}
+            <AdminOnly>
+              <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                <p className="text-[11px] font-semibold text-amber-800">הגדרות מנהל — ללא מגבלה</p>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-slate-600">ימי זכאות בבית החלמה</label>
+                  <input type="text" inputMode="numeric" value={recoveryDaysOverride}
+                    onChange={e => setRecoveryDaysOverride(e.target.value.replace(/\D/g, ''))}
+                    placeholder={String(defaultRecoveryDays(isTwins))}
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ltr-num text-left"
+                    dir="ltr" />
+                  <p className="text-[11px] text-slate-500">
+                    ריק = ברירת המחדל ({defaultRecoveryDays(isTwins)} ימים{isTwins ? ' — תאומים' : ''}). ניתן להזין כל מספר.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-slate-600">סכום להטענה לכרטיס המזון (₪)</label>
+                  <input type="text" inputMode="numeric" value={cardLoadAmount}
+                    onChange={e => setCardLoadAmount(e.target.value.replace(/\D/g, ''))}
+                    placeholder="0"
+                    className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 ltr-num text-left"
+                    dir="ltr" />
+                  <p className="text-[11px] text-slate-500">
+                    סכום כולל, ללא תקרה. יוצג כברירת מחדל במסך הטענת הכרטיס — ההטענה עצמה נעשית שם.
+                  </p>
+                </div>
+              </div>
+            </AdminOnly>
 
             {/* Notes — הערות (לא חובה) */}
             <div className="flex flex-col gap-2">
