@@ -98,17 +98,15 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
 
-  // רענון חי — כשבית ההחלמה מסמן הגעה/אי-הגעה, הממשק מתעדכן מיד (realtime) + גיבוי בפולינג
+  // רענון תקופתי — פולינג בלבד. Supabase Realtime (WebSocket) הוסר: בתכנית החינמית הוא
+  // נכשל שוב ושוב (retry loop), חוסם את ה-main thread ומאט כל לחיצה. פולינג כל 90 שניות
+  // + רענון מיידי בחזרה ללשונית נותן עדכניות סבירה בלי העומס. (אם יעברו ל-Supabase Pro,
+  // אפשר להחזיר Realtime — שם ה-WebSocket יציב.)
   useEffect(() => {
-    const supabase = createClient()
-    const ch = supabase
-      .channel('maternity-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'maternity_aids' }, () => router.refresh())
-      .subscribe()
-    // עדכון חי מתבצע דרך ה-realtime למעלה; ה-poll הוא רק גיבוי — בתדירות נמוכה
-    // כדי לא להעמיס רענוני-עמוד ברקע שמאטים את התגובה ללחיצות.
-    const poll = setInterval(() => router.refresh(), 60000)
-    return () => { supabase.removeChannel(ch); clearInterval(poll) }
+    const poll = setInterval(() => router.refresh(), 90000)
+    const onFocus = () => router.refresh()
+    window.addEventListener('focus', onFocus)
+    return () => { clearInterval(poll); window.removeEventListener('focus', onFocus) }
   }, [router])
 
   const counts = useMemo(() => ({

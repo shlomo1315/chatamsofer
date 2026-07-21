@@ -335,11 +335,11 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     const uniqPhones = [...new Set(phones)]
 
     // טקסטים מקוצרים — כדי שהבלוק לא יגלוש מהמסגרת
-    const lineA = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות טלפונית למוקד:'
-    const lineMoked = 'להפעלה חייגו למוקד: 02-3131325 שלוחה 1'
+    const lineA = 'לאחר קבלת הכרטיס, חובה להפעילו בהתקשרות למוקד:'
+    const lineMoked = 'להפעלה חייגו: 02-3131325 שלוחה 1'
     const lineB = uniqPhones.length
-      ? 'שימו לב: הזיהוי אוטומטי לפי מספרי הטלפון שבמערכת — ההפעלה אפשרית רק מהמספרים הבאים:'
-      : 'שימו לב: הזיהוי אוטומטי לפי מספרי הטלפון שבמערכת — ההפעלה אפשרית רק ממספרים אלו.'
+      ? 'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק מהמספרים:'
+      : 'הזיהוי אוטומטי לפי הטלפון שבמערכת — ההפעלה רק ממספרים אלו.'
     const wA = wrapText(lineA, innerW, measure)
     const wB = wrapText(lineB, innerW, measure)
     const titleH = 20
@@ -356,7 +356,8 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     rightText(c, lineMoked, innerRight, ay, FS, NAVY); ay -= lineH
     for (const ln of wB) { rightText(c, ln, innerRight, ay, FS, RED); ay -= lineH }
     if (uniqPhones.length) {
-      centerText(c, uniqPhones.join('     '), W / 2, ay, FS + 1, NAVY); ay -= lineH
+      // כל מספר עטוף ב-RLM (הקשר RTL) כדי שיוצג נכון גם כשהוא מבודד בשורה משלו
+      centerText(c, uniqPhones.map(p => `‏${p}‏`).join('     '), W / 2, ay, FS + 1, NAVY); ay -= lineH
     }
 
     y = y - boxH - 10
@@ -364,14 +365,14 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
   // הערות בתחתית
   y = paragraph(c,
-    'הכרטיס בתוקף לשימוש עד 6 שבועות ממועד הלידה, ורק עבור רכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
-    W - MX, y, W - MX * 2, 10, SUB, 3)
-  y -= 6
+    'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
+    W - MX, y, W - MX * 2, 9.5, SUB, 2)
+  y -= 5
 
-  // ברכה וחתימה — לא יורד מתחת לשולי המסגרת (מינימום y=52)
-  const blessY = Math.max(y, 52)
-  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 12, NAVY)
-  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 16, 10.5, SUB)
+  // ברכה וחתימה — מצוירות מתחת לתוכן (לא חופפות). אם המקום צר, יורדות מעט אך נשארות במסגרת.
+  const blessY = Math.max(y, 46)
+  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
+  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
 
   return Buffer.from(await doc.save()).toString('base64')
 }
