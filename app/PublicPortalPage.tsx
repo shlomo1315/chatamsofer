@@ -15,6 +15,7 @@ import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
 import { textOf, type PublicTexts } from '@/lib/publicTexts'
+import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
@@ -137,7 +138,8 @@ const DOC_LABELS: Record<string, string> = {
 // ─── Shared helpers ───
 
 function Field({ label, required, children, hint }: {
-  label: string; required?: boolean; children: React.ReactNode; hint?: string
+  // ReactNode (ולא string) כדי שתווית תוכל להיות <EditableText> במצב עריכה
+  label: React.ReactNode; required?: boolean; children: React.ReactNode; hint?: React.ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -919,7 +921,12 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
 
 // ─── Main page ───
 
-export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
+export default function PublicPortalPage({ texts, editMode, onTextChange }: {
+  texts?: PublicTexts
+  /** מצב עריכה חיה — נדלק רק כשמנהל פותח את האתר דרך /edit. */
+  editMode?: boolean
+  onTextChange?: (key: string, value: string) => void
+}) {
   // t(key) — הנוסח האפקטיבי: מה שנערך ב-/edit, ובהיעדרו ברירת המחדל שבקוד.
   const t = useCallback((key: string) => textOf(texts, key), [texts])
 
@@ -2252,6 +2259,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
   }
 
   return (
+    <EditProvider editing={!!editMode} texts={texts ?? {}} setKey={(k, v) => onTextChange?.(k, v)}>
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100" dir="rtl">
 
       {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
@@ -4181,7 +4189,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-2xl z-10">
                 <div className="flex items-center gap-2">
                   <CreditCard size={18} className="text-blue-600" />
-                  <h3 className="font-bold text-slate-900">{t('loan.modal.title')}</h3>
+                  <EditableText k="loan.modal.title" as="h3" className="font-bold text-slate-900" />
                 </div>
                 <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
                   className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
@@ -4194,7 +4202,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                 {renderIdDocsSection()}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
-                    <Field label={t('loan.purpose.label')} required>
+                    <Field label={<EditableText k="loan.purpose.label" />} required>
                       <SelectInput value={loanForm.purpose} onChange={setLoan('purpose')} required>
                         <option value="">{t('loan.purpose.placeholder')}</option>
                         {LOAN_PURPOSES.map(p => (
@@ -4210,7 +4218,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                   </div>
                   {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
                     <div className="col-span-2">
-                      <Field label={t('loan.purposeDetails.label')} required hint="פרט/י בהרחבה על מטרת ההלוואה והצורך">
+                      <Field label={<EditableText k="loan.purposeDetails.label" />} required hint="פרט/י בהרחבה על מטרת ההלוואה והצורך">
                         <textarea value={loanForm.purpose_details} onChange={setLoan('purpose_details')} rows={4}
                           placeholder={t('loan.purposeDetails.placeholder')}
                           className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full" />
@@ -4252,7 +4260,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                     </div>
                   )}
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label={t('loan.amount.label')} required hint={t('loan.amount.hint')}>
+                    <Field label={<EditableText k="loan.amount.label" />} required hint={<EditableText k="loan.amount.hint" />}>
                       <TextInput
                         type="number" min="100" max="30000" step="100"
                         value={loanForm.amount} onChange={setLoanClamped('amount', 30000)}
@@ -4261,7 +4269,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label={t('loan.installments.label')} required hint={t('loan.installments.hint')}>
+                    <Field label={<EditableText k="loan.installments.label" />} required hint={<EditableText k="loan.installments.hint" />}>
                       <TextInput
                         type="number" min="1" max="60"
                         value={loanForm.installments} onChange={setLoanClamped('installments', 60)}
@@ -4272,13 +4280,13 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                   <div className="col-span-2">
                     <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800 font-bold">
                       <AlertCircle size={16} className="flex-shrink-0" />
-                      {t('loan.currency.notice')}
+                      <EditableText k="loan.currency.notice" />
                     </div>
                   </div>
                   {loanForm.amount && loanForm.installments && (
                     <div className="col-span-2">
                       <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
-                        {t('loan.monthly.label')}{' '}
+                        <EditableText k="loan.monthly.label" />{' '}
                         <strong>
                         {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
                             .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
@@ -4287,7 +4295,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                     </div>
                   )}
                   <div className="col-span-2">
-                    <Field label={t('loan.declaration.label')} required>
+                    <Field label={<EditableText k="loan.declaration.label" />} required>
                       <div className="flex flex-col gap-2">
                         {LOAN_DECLARATIONS.map(opt => (
                           <label key={opt} className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -4303,7 +4311,7 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                     </Field>
                   </div>
                   <div className="col-span-2">
-                    <Field label={t('loan.notes.label')}>
+                    <Field label={<EditableText k="loan.notes.label" />}>
                       <textarea value={loanForm.notes} onChange={setLoan('notes')} rows={3}
                         placeholder={t('loan.notes.placeholder')}
                         className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none w-full"
@@ -4318,12 +4326,12 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
                     className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
-                    {t('loan.cancel')}
+                    <EditableText k="loan.cancel" />
                   </button>
                   <button type="submit" disabled={loading}
                     className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
                     {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                    {loading ? t('loan.submitting') : t('loan.submit')}
+                    {loading ? t('loan.submitting') : <EditableText k="loan.submit" />}
                   </button>
                 </div>
               </form>
@@ -4670,5 +4678,6 @@ export default function PublicPortalPage({ texts }: { texts?: PublicTexts }) {
         </div>
       )}
     </div>
+    </EditProvider>
   )
 }

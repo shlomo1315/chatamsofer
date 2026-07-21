@@ -1,33 +1,34 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import Link from 'next/link'
-import { ArrowRight, Loader2, Check, AlertTriangle, RotateCcw, Pencil } from 'lucide-react'
-import { PUBLIC_TEXT_GROUPS, textOf, type PublicTexts } from '@/lib/publicTexts'
+import { useRouter } from 'next/navigation'
+import { Loader2, Check, AlertTriangle, RotateCcw, Pencil, LogOut } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import type { PublicTexts } from '@/lib/publicTexts'
+import PublicPortalPage from '../PublicPortalPage'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// עורך הנוסחים של הממשק הציבורי.
+// עריכה חיה: האתר הציבורי האמיתי, עם סרגל שמירה צף.
 //
-// פיילוט: מודל בקשת ההלוואה. כל שדה מציג את הנוסח האפקטיבי (ערוך או
-// ברירת מחדל), וניתן לשחזר לברירת המחדל בלחיצה.
+// זה אותו PublicPortalPage שהגולשים רואים — לא עותק ולא תצוגה מקדימה.
+// ההבדל היחיד הוא editMode, שהופך כל טקסט עטוף לניתן ללחיצה ולעריכה.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function PublicTextsEditor({ initialTexts }: { initialTexts: PublicTexts }) {
+  const router = useRouter()
   const [texts, setTexts] = useState<PublicTexts>(initialTexts ?? {})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
 
-  // ההשוואה היא מול הנוסח שנטען מהשרת — כך "שמור" נדלק רק על שינוי אמיתי.
   const dirty = useMemo(
     () => JSON.stringify(texts) !== JSON.stringify(initialTexts ?? {}),
     [texts, initialTexts],
   )
 
-  const setKey = (key: string, val: string) =>
-    setTexts(prev => ({ ...prev, [key]: val }))
-
-  const resetKey = (key: string) =>
-    setTexts(prev => { const n = { ...prev }; delete n[key]; return n })
+  const onTextChange = (key: string, value: string) => {
+    setTexts(prev => (prev[key] === value ? prev : { ...prev, [key]: value }))
+    setMsg(null)
+  }
 
   const save = async () => {
     setSaving(true); setMsg(null)
@@ -41,10 +42,8 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
       if (!res.ok || data.ok === false) {
         setMsg({ type: 'err', text: data.error || 'השמירה נכשלה' })
       } else {
-        // השרת מחזיר את הנוסח אחרי הסינון — מסתנכרנים אליו, כדי שמה
-        // שמוצג יהיה בדיוק מה שנשמר (ולא מה שהוקלד).
         setTexts(data.texts ?? {})
-        setMsg({ type: 'ok', text: 'נשמר. הנוסח מעודכן באתר.' })
+        setMsg({ type: 'ok', text: 'נשמר — הנוסח מעודכן באתר' })
       }
     } catch (e) {
       setMsg({ type: 'err', text: e instanceof Error ? e.message : 'שגיאת רשת' })
@@ -53,80 +52,59 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
     }
   }
 
+  const logout = async () => {
+    try { await createClient().auth.signOut() } catch { /* בכל מקרה יוצאים */ }
+    router.push('/login')
+  }
+
+  const resetAll = () => { setTexts(initialTexts ?? {}); setMsg(null) }
+
   return (
-    <div className="min-h-screen bg-slate-50" dir="rtl">
-      <header className="sticky top-0 z-10 bg-white border-b border-slate-200">
-        <div className="max-w-3xl mx-auto px-5 py-3 flex items-center gap-3">
-          <Link href="/admin/dashboard" className="text-slate-400 hover:text-slate-600">
-            <ArrowRight size={20} />
-          </Link>
-          <div className="flex items-center gap-2 flex-1">
-            <Pencil size={18} className="text-indigo-600" />
-            <h1 className="font-bold text-slate-900">עריכת נוסחים — ממשק ציבורי</h1>
-          </div>
-          <button onClick={save} disabled={saving || !dirty}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-            {saving ? 'שומר...' : 'שמירה'}
-          </button>
+    <>
+      {/* סרגל העריכה — צף מעל האתר, לא חלק ממנו */}
+      <div dir="rtl" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2 bg-slate-900/95 backdrop-blur text-white rounded-2xl shadow-2xl px-3 py-2.5 border border-slate-700">
+        <div className="flex items-center gap-1.5 px-1 text-indigo-300">
+          <Pencil size={15} />
+          <span className="text-xs font-semibold whitespace-nowrap">מצב עריכה</span>
         </div>
-        {msg && (
-          <div className={`max-w-3xl mx-auto px-5 pb-3 text-sm flex items-center gap-2 ${msg.type === 'ok' ? 'text-emerald-700' : 'text-red-600'}`}>
-            {msg.type === 'ok' ? <Check size={15} /> : <AlertTriangle size={15} />}
+
+        <span className="w-px h-5 bg-slate-700" />
+
+        {msg ? (
+          <span className={`text-xs flex items-center gap-1.5 whitespace-nowrap ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
+            {msg.type === 'ok' ? <Check size={13} /> : <AlertTriangle size={13} />}
             {msg.text}
-          </div>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-400 whitespace-nowrap">
+            {dirty ? 'יש שינויים שלא נשמרו' : 'לחץ על טקסט כדי לערוך'}
+          </span>
         )}
-      </header>
 
-      <main className="max-w-3xl mx-auto px-5 py-6 flex flex-col gap-6">
-        <p className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-          שלב ראשון: מודל בקשת ההלוואה. שדה שנשאר ריק מציג את נוסח ברירת המחדל —
-          כך שמחיקה בטעות לא מעלימה טקסט מהאתר.
-        </p>
+        {dirty && (
+          <button onClick={resetAll} title="ביטול כל השינויים"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <RotateCcw size={14} />
+          </button>
+        )}
 
-        {PUBLIC_TEXT_GROUPS.map(group => (
-          <section key={group.title} className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4">
-            <h2 className="text-sm font-semibold text-slate-700">{group.title}</h2>
+        <button onClick={save} disabled={saving || !dirty}
+          className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap">
+          {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+          {saving ? 'שומר...' : 'שמירה'}
+        </button>
 
-            {group.entries.map(entry => {
-              const edited = texts[entry.key]
-              const isEdited = typeof edited === 'string' && edited.trim() !== ''
-              const value = isEdited ? edited : ''
-              return (
-                <div key={entry.key} className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs font-medium text-slate-600">{entry.hint ?? entry.key}</label>
-                    {isEdited && (
-                      <>
-                        <span className="text-[10px] bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5 font-medium">נערך</span>
-                        <button type="button" onClick={() => resetKey(entry.key)}
-                          title="שחזור לנוסח המקורי"
-                          className="text-slate-400 hover:text-slate-600">
-                          <RotateCcw size={13} />
-                        </button>
-                      </>
-                    )}
-                  </div>
+        <span className="w-px h-5 bg-slate-700" />
 
-                  {entry.multiline ? (
-                    <textarea value={value} onChange={e => setKey(entry.key, e.target.value)}
-                      placeholder={entry.fallback} rows={2}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
-                  ) : (
-                    <input type="text" value={value} onChange={e => setKey(entry.key, e.target.value)}
-                      placeholder={entry.fallback}
-                      className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  )}
+        <button onClick={logout} title="התנתקות"
+          className="flex items-center gap-1.5 text-slate-300 hover:text-white px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors text-xs whitespace-nowrap">
+          <LogOut size={14} />
+          התנתקות
+        </button>
+      </div>
 
-                  <p className="text-[11px] text-slate-400">
-                    נוסח מקורי: {textOf(null, entry.key)}
-                  </p>
-                </div>
-              )
-            })}
-          </section>
-        ))}
-      </main>
-    </div>
+      {/* האתר האמיתי */}
+      <PublicPortalPage texts={texts} editMode onTextChange={onTextChange} />
+    </>
   )
 }
