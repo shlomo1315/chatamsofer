@@ -2675,7 +2675,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <AlertCircle size={30} className="text-amber-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-2">לא מופיע במערכת</h2>
+                <EditableText k="notfound.title" as="h2" className="text-xl font-bold text-slate-900 mb-2" />
                 <p className="text-slate-600 text-sm leading-relaxed">
                   {docType === 'passport' ? 'מספר הדרכון' : 'מספר תעודת הזהות'}{' '}
                   <span className="font-semibold text-slate-800" dir="ltr">{idInput}</span>
@@ -2689,7 +2689,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150"
                   >
                     <User size={18} />
-                    רישום למערכת
+                    <EditableText k="notfound.register" />
                   </button>
                 ) : (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed">
@@ -2701,7 +2701,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm"
                 >
                   <ArrowRight size={16} />
-                  חזרה לכניסה
+                  <EditableText k="notfound.back" />
                 </button>
               </div>
             </Card>
@@ -2774,25 +2774,33 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={() => setStep('not-found')} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
-              <h2 className="font-bold text-slate-900 text-lg">טופס רישום</h2>
+              <EditableText k="register.title" as="h2" className="font-bold text-slate-900 text-lg" />
             </div>
 
             {/* הבהרה — רישום פעם אחת בלבד */}
             <div className="bg-red-50 border-2 border-red-200 rounded-2xl px-4 py-3.5 text-sm text-red-800 leading-relaxed">
-              <p className="font-bold mb-1">יש להירשם פעם אחת בלבד</p>
-              <p>מי שברשותו גם תעודת זהות וגם דרכון — יירשם עם <strong>אמצעי זיהוי אחד בלבד</strong>, והוא ישמש אותו לאורך כל התהליך. <strong>הירשמות פעם שנייה תגרום לחסימת החשבון לצמיתות.</strong></p>
+              <EditableText k="register.once.title" as="p" className="font-bold mb-1" />
+              <p>
+                <EditableText k="register.once.body1" />{' '}
+                <strong><EditableText k="register.once.bold1" /></strong>
+                <EditableText k="register.once.body2" />{' '}
+                <strong><EditableText k="register.once.warn" /></strong>
+              </p>
             </div>
 
             {/* Marital — FIRST */}
             <Card>
               <div className="flex items-center gap-2 mb-3">
                 <Heart size={18} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-900">מצב משפחתי</h3>
+                <EditableText k="register.marital.title" as="h3" className="font-semibold text-slate-900" />
               </div>
               {/* הבהרה — ראשי משפחה בלבד */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
-                <p className="font-bold mb-0.5">שימו לב — הרישום מיועד לראשי משפחה בלבד</p>
-                <p>אין רישום כלל לבחורים או לילדים. <strong>רישום של בחור או ילד יגרום לחסימת הרישום שלו בעתיד.</strong></p>
+                <EditableText k="register.heads.title" as="p" className="font-bold mb-0.5" />
+                <p>
+                  <EditableText k="register.heads.body" />{' '}
+                  <strong><EditableText k="register.heads.warn" /></strong>
+                </p>
               </div>
               {(() => {
                 const otherActive = showOtherMarital || OTHER_MARITAL_OPTIONS.some(o => o.value === regForm.marital_status)

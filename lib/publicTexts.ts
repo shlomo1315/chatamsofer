@@ -50,6 +50,55 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
     ],
   },
   {
+    title: 'לא נמצא במערכת',
+    entries: [
+      { key: 'notfound.title', fallback: 'לא מופיע במערכת', hint: 'כותרת המסך' },
+      { key: 'notfound.register', fallback: 'רישום למערכת', hint: 'כפתור הרישום' },
+      { key: 'notfound.back', fallback: 'חזרה לכניסה', hint: 'כפתור חזרה' },
+    ],
+  },
+
+  {
+    title: 'טופס רישום',
+    entries: [
+      { key: 'register.title', fallback: 'טופס רישום', hint: 'כותרת המסך' },
+      { key: 'register.once.title', fallback: 'יש להירשם פעם אחת בלבד', hint: 'כותרת ההודעה האדומה' },
+      // ⚠️ מפוצל לשלושה — ההדגשות (bold) הן חלק מהמבנה, ועריכה של
+      // פסקה אחת שלמה הייתה מוחקת אותן (הסניטייזר מסיר תגיות HTML).
+      {
+        key: 'register.once.body1',
+        fallback: 'מי שברשותו גם תעודת זהות וגם דרכון — יירשם עם',
+        hint: 'ההודעה האדומה — תחילת המשפט', multiline: true,
+      },
+      { key: 'register.once.bold1', fallback: 'אמצעי זיהוי אחד בלבד', hint: 'ההודעה האדומה — מודגש' },
+      {
+        key: 'register.once.body2',
+        fallback: ', והוא ישמש אותו לאורך כל התהליך.',
+        hint: 'ההודעה האדומה — המשך', multiline: true,
+      },
+      {
+        key: 'register.once.warn',
+        fallback: 'הירשמות פעם שנייה תגרום לחסימת החשבון לצמיתות.',
+        hint: 'ההודעה האדומה — אזהרה מודגשת', multiline: true,
+      },
+      { key: 'register.marital.title', fallback: 'מצב משפחתי', hint: 'כותרת הכרטיס' },
+      { key: 'register.heads.title', fallback: 'שימו לב — הרישום מיועד לראשי משפחה בלבד', hint: 'כותרת ההודעה הצהובה' },
+      {
+        key: 'register.heads.body',
+        fallback: 'אין רישום כלל לבחורים או לילדים.',
+        hint: 'ההודעה הצהובה — גוף', multiline: true,
+      },
+      {
+        key: 'register.heads.warn',
+        fallback: 'רישום של בחור או ילד יגרום לחסימת הרישום שלו בעתיד.',
+        hint: 'ההודעה הצהובה — אזהרה מודגשת', multiline: true,
+      },
+      { key: 'register.marital.married', fallback: 'נשואים', hint: 'כפתור נשואים' },
+      { key: 'register.marital.other', fallback: 'אחר', hint: 'כפתור אחר' },
+    ],
+  },
+
+  {
     title: 'בקשת הלוואה',
     entries: [
       { key: 'loan.modal.title', fallback: 'בקשת הלוואה', hint: 'כותרת החלון' },
