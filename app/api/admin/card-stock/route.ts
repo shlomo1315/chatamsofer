@@ -48,10 +48,16 @@ export async function GET() {
 
   // מספר היולדות בתור ההמתנה למלאי — מוצג במסך כדי שיהיה ברור כמה
   // מהכרטיסים שיתווספו יחולקו מיד, וכמה באמת יישארו במלאי.
-  const { count: awaiting } = await admin
+  // ⚠️ שתי עמודות מסמנות המתנה למלאי, ולא אחת:
+  //   card_status         — התור הגלובלי (נקבע ב-loadMaternityCardOnApproval)
+  //   card_voucher_status — תור שובר הכרטיס (מוקדים)
+  // ספירה לפי אחת בלבד החזירה 0 גם כשיולדת אמיתית המתינה בתור.
+  const { data: awaitingRows, error: awaitingErr } = await admin
     .from('maternity_aids')
-    .select('id', { count: 'exact', head: true })
-    .eq('card_status', 'awaiting_stock')
+    .select('id')
+    .or('card_status.eq.awaiting_stock,card_voucher_status.eq.awaiting_stock')
+  if (awaitingErr) console.error('[card-stock] awaiting query failed:', awaitingErr.message)
+  const awaiting = awaitingRows?.length ?? 0
 
   return NextResponse.json({ balance, ledger: ledger ?? [], awaiting: awaiting ?? 0 }, { headers: NO_STORE })
 }

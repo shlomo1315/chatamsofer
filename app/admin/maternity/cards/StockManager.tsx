@@ -300,7 +300,11 @@ function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, o
 
             <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 mt-0.5">
               <span className="font-medium text-slate-700">סך הכל יהיה במלאי אחרי העדכון</span>
-              <span className="font-bold text-slate-900 ltr-num">{finalBalance} כרטיסים</span>
+              {/* dir=rtl על העטיפה — אחרת ltr-num מציב את המילה לפני המספר
+                  ("כרטיסים 10"). המספר עצמו נשאר LTR. */}
+              <span className="font-bold text-slate-900" dir="rtl">
+                <span className="ltr-num">{finalBalance}</span> כרטיסים
+              </span>
             </div>
 
             {isAdd && qtyNum > 0 && stillWaiting > 0 && (

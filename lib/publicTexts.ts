@@ -201,6 +201,42 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
   },
 
   {
+    title: 'הרשמה הושלמה',
+    entries: [
+      { key: 'regdone.title', fallback: 'הרישום התקבל בהצלחה!', hint: 'כותרת המסך' },
+      { key: 'regdone.mail.title', fallback: 'חשוב — בדקו את תיבת המייל', hint: 'כותרת ההודעה הצהובה' },
+      {
+        key: 'regdone.mail.body',
+        fallback: 'כל העדכונים והבקשות נשלחים למייל הרשום. אנא בדקו את תיבת הדואר בהקדם, וגם את תיבת ה',
+        hint: 'ההודעה הצהובה — תחילת המשפט', multiline: true,
+      },
+      { key: 'regdone.mail.spam', fallback: 'ספאם', hint: 'המילה המודגשת (ספאם)' },
+      {
+        key: 'regdone.mail.body2',
+        fallback: ' — ואם מצאתם שם הודעה מאיתנו, סמנו אותה כ״לא ספאם״ (Not spam). כך תקבלו את כל ההודעות, ותעזרו גם לנרשמים הבאים לקבל אותן ישירות לתיבת הדואר.',
+        hint: 'ההודעה הצהובה — המשך', multiline: true,
+      },
+    ],
+  },
+
+  {
+    title: 'רשום כבן במשפחה',
+    entries: [
+      { key: 'child.title', fallback: 'שים לב', hint: 'כותרת המסך' },
+      { key: 'child.field.id', fallback: 'תעודת זהות', hint: 'תווית ת"ז' },
+      { key: 'child.field.birthDate', fallback: 'תאריך לידה', hint: 'תווית תאריך לידה' },
+    ],
+  },
+
+  {
+    title: 'לידה שקטה',
+    entries: [
+      { key: 'silent.title', fallback: 'בקשה לאחר לידה שקטה', hint: 'כותרת המסך' },
+      { key: 'silent.details.title', fallback: 'פרטי הבקשה', hint: 'כותרת מקטע הפרטים' },
+    ],
+  },
+
+  {
     title: 'בקשה נשלחה',
     entries: [
       { key: 'sent.title', fallback: 'הבקשה נשלחה!', hint: 'כותרת המסך' },

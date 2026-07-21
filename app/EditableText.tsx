@@ -71,6 +71,8 @@ export default function EditableText({ k, as = 'span', className = '' }: {
       contentEditable
       suppressContentEditableWarning
       spellCheck={false}
+      // ⚠️ dir מפורש — בלעדיו contentEditable מקליד עברית הפוך ("םולש").
+      dir="rtl"
       title="לחץ לעריכה"
       onFocus={() => setFocused(true)}
       onBlur={(e: React.FocusEvent<HTMLElement>) => { setFocused(false); setKey(k, e.currentTarget.textContent ?? '') }}

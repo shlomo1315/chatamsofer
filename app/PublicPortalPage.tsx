@@ -2723,7 +2723,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users size={28} className="text-indigo-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-3">שים לב</h2>
+                <EditableText k="child.title" as="h2" className="text-xl font-bold text-slate-900 mb-3" />
                 <p className="text-slate-600 text-sm leading-relaxed mb-1">
                   אתה רשום אצלינו במערכת בתור ילד של
                 </p>
@@ -2731,8 +2731,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 {/* פרטי הילד הרשום */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4">
                   <p className="col-span-2"><span className="text-slate-400 text-xs block">שם</span><span className="font-medium text-slate-800">{childMatch.childData.name || '—'}</span></p>
-                  <p><span className="text-slate-400 text-xs block">תעודת זהות</span><span className="ltr-num text-slate-700">{childMatch.childData.id_number}</span></p>
-                  {childMatch.childData.birth_date && <p><span className="text-slate-400 text-xs block">תאריך לידה</span><span className="text-slate-700 ltr-num">{(() => { try { return new Date(childMatch.childData.birth_date).toLocaleDateString('he-IL') } catch { return childMatch.childData.birth_date } })()}</span></p>}
+                  <p><EditableText k="child.field.id" className="text-slate-400 text-xs block" /><span className="ltr-num text-slate-700">{childMatch.childData.id_number}</span></p>
+                  {childMatch.childData.birth_date && <p><EditableText k="child.field.birthDate" className="text-slate-400 text-xs block" /><span className="text-slate-700 ltr-num">{(() => { try { return new Date(childMatch.childData.birth_date).toLocaleDateString('he-IL') } catch { return childMatch.childData.birth_date } })()}</span></p>}
                 </div>
                 <p className="text-slate-500 text-sm">
                   כדי שתירשם אתה בעצמך, עבור לרישום מהיר.
@@ -3530,7 +3530,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                   <CheckCircle2 size={38} className="text-green-600" />
                 </div>
-                <h2 className="text-xl font-bold text-slate-900 mb-2">הרישום התקבל בהצלחה!</h2>
+                <EditableText k="regdone.title" as="h2" className="text-xl font-bold text-slate-900 mb-2" />
                 <p className="text-slate-600 mb-5 leading-relaxed">
                   מעכשיו ניתן להגיש בקשות ישירות דרך הפורטל האישי שלך.<br />
                   בהגשה הראשונה יתבקשו ממך גם צילומי תעודת זהות.
@@ -3539,9 +3539,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
               {/* תזכורת ספאם — לוודא שההודעות מהמערכת מתקבלות */}
               <div className="text-right bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
-                <p className="text-sm font-bold text-amber-800 mb-1">חשוב — בדקו את תיבת המייל</p>
+                <EditableText k="regdone.mail.title" as="p" className="text-sm font-bold text-amber-800 mb-1" />
                 <p className="text-xs text-amber-700 leading-relaxed">
-                  כל העדכונים והבקשות נשלחים למייל הרשום. אנא בדקו את תיבת הדואר בהקדם, וגם את תיבת ה<strong>ספאם</strong> — ואם מצאתם שם הודעה מאיתנו, סמנו אותה כ״לא ספאם״ (Not spam). כך תקבלו את כל ההודעות, ותעזרו גם לנרשמים הבאים לקבל אותן ישירות לתיבת הדואר.
+                  <EditableText k="regdone.mail.body" /><strong><EditableText k="regdone.mail.spam" /></strong><EditableText k="regdone.mail.body2" />
                 </p>
               </div>
 
@@ -4117,7 +4117,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
-              <h2 className="font-bold text-slate-900 text-lg">בקשה לאחר לידה שקטה</h2>
+              <EditableText k="silent.title" as="h2" className="font-bold text-slate-900 text-lg" />
             </div>
 
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 leading-relaxed">
@@ -4129,7 +4129,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <Heart size={18} className="text-rose-500" />
-                <h3 className="font-semibold text-slate-900">פרטי הבקשה</h3>
+                <EditableText k="silent.details.title" as="h3" className="font-semibold text-slate-900" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">

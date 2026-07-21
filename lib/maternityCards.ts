@@ -164,10 +164,12 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
 
   let balance = await getStockBalance(admin)
   if (balance <= 0) return out
+  // ⚠️ שתי עמודות מסמנות המתנה — card_status (תור גלובלי) ו-card_voucher_status
+  // (תור השובר). סינון לפי אחת בלבד השאיר יולדות אמיתיות מחוץ לתור.
   const { data: waiting } = await admin
     .from('maternity_aids')
     .select('id')
-    .eq('card_status', 'awaiting_stock')
+    .or('card_status.eq.awaiting_stock,card_voucher_status.eq.awaiting_stock')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
   if (!waiting?.length) return out
 
@@ -192,6 +194,21 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
       continue
     }
 
+    // ⚠️ already = הכרטיס כבר נטען בעבר (card_load_status='loaded'), ולכן לא
+    // נוכה כרטיס עכשיו. בלי הטיפול הזה היולדת נשארה תקועה בתור לנצח:
+    // הלולאה ספרה "הצלחה", הסטטוס לא נוקה, והשובר לא נשלח. מנקים ושולחים.
+    if (r.already) {
+      await admin.from('maternity_aids').update({
+        card_status: 'loaded',
+        card_voucher_status: 'issued',
+        updated_at: new Date().toISOString(),
+      }).eq('id', w.id)
+      const v = await sendCardVoucher(admin, w.id, null)
+      if (!v.ok) { out.failed++; out.errors.push(v.error || 'שליחת השובר נכשלה') }
+      else out.processed++
+      continue
+    }
+
     // הטעינה הצליחה → הכרטיס נוכה, שולחים שובר
     const voucher = await sendCardVoucher(admin, w.id, null)
     // ⚠️ הכרטיס כבר נוכה והוטען. אם השובר לא נשלח — היולדת לא יודעת שיש לה
@@ -200,6 +217,11 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
       out.failed++
       out.errors.push(voucher.error || 'שליחת השובר נכשלה')
     } else {
+      // ניקוי תור השובר — loadMaternityCardOnApproval מעדכן card_status בלבד,
+      // ובלי זה היולדת הייתה חוזרת לתור בכל הוספת מלאי.
+      await admin.from('maternity_aids')
+        .update({ card_voucher_status: 'issued', updated_at: new Date().toISOString() })
+        .eq('id', w.id)
       out.processed++
     }
     balance = await getStockBalance(admin)
