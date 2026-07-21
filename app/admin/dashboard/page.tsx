@@ -30,6 +30,7 @@ interface DashData {
   aidPending: number
   aidAwaiting: number
   aidApproved: number
+  dismissedTasks: number
 }
 
 const EMPTY: DashData = {
@@ -37,7 +38,7 @@ const EMPTY: DashData = {
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
   maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
-  aidPending: 0, aidAwaiting: 0, aidApproved: 0,
+  aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedTasks: 0,
 }
 
 // ספירות הדשבורד ארגון-רחבות (count/head — ללא העברת שורות) ואינן דורשות דיוק של שנייה.
@@ -55,7 +56,7 @@ const getStats = unstable_cache(
       maternityActive, maternityPending, cardsLoaded, cardsPending,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
-      activeLoanAmounts, cardCenters,
+      activeLoanAmounts, cardCenters, dismissedTasks,
     ] = await Promise.all([
       supabase.from('beneficiaries').select('id', headCount),
       supabase.from('beneficiaries').select('id', headCount).gte('created_at', weekAgo),
@@ -77,6 +78,8 @@ const getStats = unstable_cache(
       supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'approved'),
       supabase.from('loans').select('amount').eq('status', 'active'),
       supabase.from('card_centers').select('stock'),
+      // בקשות שהוסתרו מלוח "ממתינים לטיפול" — מנוכות מהמונה כדי שיתאים לרשימה בפאנל
+      supabase.from('dismissed_pending_tasks').select('entity_type', { count: 'exact', head: true }),
     ])
 
     const loadedCount = cardsLoaded.count ?? 0
@@ -101,6 +104,7 @@ const getStats = unstable_cache(
       aidPending: aidPending.count ?? 0,
       aidAwaiting: aidAwaiting.count ?? 0,
       aidApproved: aidApproved.count ?? 0,
+      dismissedTasks: dismissedTasks.count ?? 0,
     }
     } catch {
       return EMPTY
@@ -126,7 +130,8 @@ function getGreeting() {
 
 export default async function DashboardPage() {
   const s = await getStats()
-  const pendingTotal = s.pending + s.pendingLoans + s.maternityPending + s.widowPending + s.aidPending
+  // מנכים את הבקשות שהוסתרו מהלוח כדי שהמונה יתאים לרשימה בפאנל (שגם היא מסננת אותן).
+  const pendingTotal = Math.max(0, s.pending + s.pendingLoans + s.maternityPending + s.widowPending + s.aidPending - s.dismissedTasks)
 
   return (
     <div className="flex flex-col gap-8 pb-10">
