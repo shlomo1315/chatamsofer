@@ -11,7 +11,8 @@
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "backup:trigger": "node scripts/trigger-backup.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
