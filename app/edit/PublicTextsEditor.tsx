@@ -14,11 +14,20 @@ import PublicPortalPage from '../PublicPortalPage'
 // ההבדל היחיד הוא editMode, שהופך כל טקסט עטוף לניתן ללחיצה ולעריכה.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// המסכים שניתן לדלג אליהם ישירות מהבורר, בלי לעבור זיהוי ת"ז אמיתי.
+// ⚠️ מסכים שתלויים בנתוני מוטב (dashboard, docs-needed וכו') אינם כאן —
+// בלי מוטב טעון הם היו נופלים או מוצגים ריקים.
+const PREVIEW_STEPS = [
+  { step: 'id-lookup' as const, label: 'מסך פתיחה' },
+  { step: 'new-loan' as const, label: 'בקשת הלוואה' },
+]
+
 export default function PublicTextsEditor({ initialTexts }: { initialTexts: PublicTexts }) {
   const router = useRouter()
   const [texts, setTexts] = useState<PublicTexts>(initialTexts ?? {})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null)
+  const [previewStep, setPreviewStep] = useState<(typeof PREVIEW_STEPS)[number]['step']>('id-lookup')
 
   const dirty = useMemo(
     () => JSON.stringify(texts) !== JSON.stringify(initialTexts ?? {}),
@@ -70,6 +79,20 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
 
         <span className="w-px h-5 bg-slate-700" />
 
+        {/* בורר מסכים — מעבר ישיר בין תצוגות בלי להזין ת"ז */}
+        <div className="flex items-center gap-1 bg-slate-800 rounded-xl p-0.5">
+          {PREVIEW_STEPS.map(s => (
+            <button key={s.step} onClick={() => setPreviewStep(s.step)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+                previewStep === s.step ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+              }`}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <span className="w-px h-5 bg-slate-700" />
+
         {msg ? (
           <span className={`text-xs flex items-center gap-1.5 whitespace-nowrap ${msg.type === 'ok' ? 'text-emerald-400' : 'text-red-400'}`}>
             {msg.type === 'ok' ? <Check size={13} /> : <AlertTriangle size={13} />}
@@ -104,7 +127,7 @@ export default function PublicTextsEditor({ initialTexts }: { initialTexts: Publ
       </div>
 
       {/* האתר האמיתי */}
-      <PublicPortalPage texts={texts} editMode onTextChange={onTextChange} />
+      <PublicPortalPage texts={texts} editMode onTextChange={onTextChange} forceStep={previewStep} />
     </>
   )
 }

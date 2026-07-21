@@ -921,16 +921,20 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
 
 // ─── Main page ───
 
-export default function PublicPortalPage({ texts, editMode, onTextChange }: {
+export default function PublicPortalPage({ texts, editMode, onTextChange, forceStep }: {
   texts?: PublicTexts
   /** מצב עריכה חיה — נדלק רק כשמנהל פותח את האתר דרך /edit. */
   editMode?: boolean
   onTextChange?: (key: string, value: string) => void
+  /** דילוג ישיר למסך מסוים — לתצוגה מקדימה ב-/edit בלי להזין ת"ז אמיתית. */
+  forceStep?: Step
 }) {
   // t(key) — הנוסח האפקטיבי: מה שנערך ב-/edit, ובהיעדרו ברירת המחדל שבקוד.
   const t = useCallback((key: string) => textOf(texts, key), [texts])
 
-  const [step, setStep] = useState<Step>('id-lookup')
+  const [step, setStep] = useState<Step>(forceStep ?? 'id-lookup')
+  // ב-/edit הבורר מחליף מסך ישירות, בלי לעבור את זרימת הזיהוי האמיתית.
+  useEffect(() => { if (forceStep) setStep(forceStep) }, [forceStep])
   const [idInput, setIdInput] = useState('')
   const [docType, setDocType] = useState<'id' | 'passport'>('id')
   const [regDocType, setRegDocType] = useState<'id' | 'passport'>('id')
@@ -1149,6 +1153,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange }: {
 
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
+  // מודל ההלוואה נשלט בדגל נפרד (ולא ב-step), ולכן הבורר ב-/edit פותח
+  // אותו במפורש. חייב לשבת אחרי ההצהרה — אחרת שגיאת TDZ בזמן ריצה.
+  useEffect(() => {
+    if (!editMode) return
+    setLoanModalOpen(forceStep === 'new-loan')
+  }, [editMode, forceStep])
 
   // Financial aid modal
   const [aidModalOpen, setAidModalOpen] = useState(false)
@@ -2368,27 +2378,27 @@ export default function PublicPortalPage({ texts, editMode, onTextChange }: {
               <div className="w-20 h-20 rounded-2xl overflow-hidden mx-auto mb-4">
                 <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">ברוכים הבאים</h2>
+              <EditableText k="welcome.title" as="h2" className="text-2xl font-bold text-slate-900 mb-2" />
             </div>
 
             <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl px-4 py-3 text-center">
-              <p className="text-sm font-bold text-amber-900 leading-relaxed">לעת עתה הרישום לאיגוד הצאצאים הוא לתושבי ארץ הקודש בלבד</p>
+              <EditableText k="welcome.notice" as="p" className="text-sm font-bold text-amber-900 leading-relaxed" />
             </div>
 
             <Card>
               <form onSubmit={handleLookup} className="flex flex-col gap-4">
                 {/* doc-type toggle */}
                 <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-                  {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                  {([['id', 'welcome.tab.id'], ['passport', 'welcome.tab.passport']] as const).map(([v, tk]) => (
                     <button key={v} type="button"
                       onClick={() => { setDocType(v); setIdInput(''); setError('') }}
                       className={`flex-1 py-2 text-sm font-medium transition-all duration-150 ${docType === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
-                    >{l}</button>
+                    ><EditableText k={tk} /></button>
                   ))}
                 </div>
 
                 {docType === 'id' ? (
-                  <Field label='מספר תעודת זהות' required hint="הזן 9 ספרות כולל ספרת ביקורת">
+                  <Field label={<EditableText k="welcome.id.label" />} required hint={<EditableText k="welcome.id.hint" />}>
                     <TextInput
                       value={idInput}
                       onChange={e => setIdInput(e.target.value.replace(/\D/g, ''))}
@@ -2401,7 +2411,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange }: {
                     />
                   </Field>
                 ) : (
-                  <Field label='מספר דרכון' required>
+                  <Field label={<EditableText k="welcome.passport.label" />} required>
                     <TextInput
                       value={idInput}
                       onChange={e => setIdInput(e.target.value.toUpperCase())}
@@ -2420,7 +2430,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange }: {
                   className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
                 >
                   {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-                  {loading ? 'מחפש...' : 'כניסה למערכת'}
+                  {loading ? t('welcome.submitting') : <EditableText k="welcome.submit" />}
                 </button>
               </form>
             </Card>
@@ -4614,7 +4624,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange }: {
 
         <p className="text-center text-xs text-slate-400 mt-6 flex items-center justify-center gap-1">
           <Mail size={11} />
-          מערכת מאובטחת · כל הפרטים מוצפנים
+          <EditableText k="welcome.footer" />
         </p>
       </main>
 

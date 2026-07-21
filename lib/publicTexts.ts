@@ -28,8 +28,27 @@ export interface PublicTextGroup {
   entries: PublicTextEntry[]
 }
 
-// ─── פיילוט: מודל בקשת הלוואה ───────────────────────────────────────────────
 export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
+  {
+    title: 'מסך פתיחה — זיהוי',
+    entries: [
+      { key: 'welcome.title', fallback: 'ברוכים הבאים', hint: 'הכותרת הראשית' },
+      {
+        key: 'welcome.notice',
+        fallback: 'לעת עתה הרישום לאיגוד הצאצאים הוא לתושבי ארץ הקודש בלבד',
+        hint: 'הודעת ההדגשה הצהובה',
+        multiline: true,
+      },
+      { key: 'welcome.tab.id', fallback: 'תעודת זהות', hint: 'לשונית ת"ז' },
+      { key: 'welcome.tab.passport', fallback: 'דרכון', hint: 'לשונית דרכון' },
+      { key: 'welcome.id.label', fallback: 'מספר תעודת זהות', hint: 'תווית שדה ת"ז' },
+      { key: 'welcome.id.hint', fallback: 'הזן 9 ספרות כולל ספרת ביקורת', hint: 'שורת העזרה מתחת לת"ז' },
+      { key: 'welcome.passport.label', fallback: 'מספר דרכון', hint: 'תווית שדה הדרכון' },
+      { key: 'welcome.submit', fallback: 'כניסה למערכת', hint: 'כפתור הכניסה' },
+      { key: 'welcome.submitting', fallback: 'מחפש...', hint: 'הכפתור בזמן חיפוש' },
+      { key: 'welcome.footer', fallback: 'מערכת מאובטחת · כל הפרטים מוצפנים', hint: 'שורת התחתית' },
+    ],
+  },
   {
     title: 'בקשת הלוואה',
     entries: [
