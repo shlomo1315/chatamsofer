@@ -14,7 +14,7 @@ import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
-import { textOf, type PublicTexts } from '@/lib/publicTexts'
+import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
@@ -940,7 +940,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [regDocType, setRegDocType] = useState<'id' | 'passport'>('id')
   const [spouseDocType, setSpouseDocType] = useState<'id' | 'passport'>('id')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setErrorRaw] = useState('')
+  // כל setError בקובץ עובר דרך כאן: הנוסח שבקוד מתורגם לנוסח הערוך ב-/edit
+  // (אם קיים). כך 127 מקומות הקריאה נשארים כפי שהם, בלי סיכון של עריכה ידנית.
+  const setError = useCallback(
+    (msg: string) => setErrorRaw(msg ? errorText(texts, msg) : msg),
+    [texts],
+  )
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   // רישום כילד רשום — השיוך נקבע אוטומטית מההורה

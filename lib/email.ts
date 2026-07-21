@@ -64,9 +64,7 @@ export function templateStatusApproved(name: string): EmailPayload {
       <p style="margin:0 0 12px;color:#475569;font-size:15px;line-height:1.6;">
         שמחים לבשר לך כי בקשתך <strong>אושרה</strong> במערכת היכל החתם סופר.
       </p>
-      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin:20px 0;">
-        <p style="margin:0;color:#166534;font-size:14px;font-weight:600;">הסטטוס שלך: מאושר</p>
-      </div>
+      <!-- הסטטוס אינו מוצג במיילים — מוצג רק בממשק הניהול. -->
       <p style="margin:16px 0 0;color:#475569;font-size:14px;">לשאלות ופרטים נוספים ניתן לפנות אלינו.</p>
     `),
   }

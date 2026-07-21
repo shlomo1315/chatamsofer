@@ -26,6 +26,11 @@ export interface PublicTextEntry {
 export interface PublicTextGroup {
   title: string
   entries: PublicTextEntry[]
+  /**
+   * קבוצה שלא ניתן להגיע אליה בעריכה במקום — הודעות שגיאה מופיעות רק
+   * בתנאים מסוימים (ת"ז שגויה, שדה חסר), ולכן הן נערכות מרשימה בסרגל.
+   */
+  listOnly?: boolean
 }
 
 export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
@@ -228,6 +233,130 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
       { key: 'loan.cancel', fallback: 'ביטול', hint: 'כפתור הביטול' },
     ],
   },
+
+  // ─── הודעות שגיאה ─────────────────────────────────────────────────────────
+  // listOnly: מופיעות רק בתנאים מסוימים (ת"ז שגויה, שדה חסר), ולכן אי אפשר
+  // ללחוץ עליהן במסך. נערכות מרשימה בסרגל.
+  {
+    title: 'הודעות שגיאה — זיהוי וכניסה',
+    listOnly: true,
+    entries: [
+      { key: 'err.id.empty', fallback: 'אנא הזן מספר תעודת זהות' },
+      { key: 'err.id.invalid', fallback: 'תעודת הזהות שהזנתם אינה תקינה' },
+      { key: 'err.passport.empty', fallback: 'אנא הזן מספר דרכון' },
+      { key: 'err.code.call', fallback: 'אנא הזן את הקוד שהוקרא בשיחה' },
+      { key: 'err.code.email', fallback: 'אנא הזן את הקוד שנשלח למייל' },
+      { key: 'err.password.mismatch', fallback: 'הסיסמאות אינן תואמות' },
+      {
+        key: 'err.nophone',
+        fallback: 'לא נמצא מספר טלפון במערכת עבור משתמש זה. אנא היכנס עם סיסמה או פנה למשרד.',
+        multiline: true,
+      },
+      { key: 'err.network', fallback: 'שגיאת רשת' },
+      { key: 'err.network.retry', fallback: 'שגיאת רשת. אנא נסה שוב.' },
+    ],
+  },
+
+  {
+    title: 'הודעות שגיאה — טופס הרשמה',
+    listOnly: true,
+    entries: [
+      { key: 'err.required', fallback: 'אנא מלא את כל שדות החובה' },
+      { key: 'err.required.name', fallback: 'אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון' },
+      { key: 'err.form.fix', fallback: 'אנא תקן את שגיאות הטופס' },
+      { key: 'err.city.empty', fallback: 'אנא בחר עיר מגורים' },
+      { key: 'err.street.empty', fallback: 'אנא הזן שם רחוב' },
+      { key: 'err.house.empty', fallback: 'אנא הזן מספר בית' },
+      { key: 'err.birthdate.empty', fallback: 'אנא הזן תאריך לידה' },
+      { key: 'err.birthdate.wife', fallback: 'אנא הזן תאריך לידה של האשה' },
+      { key: 'err.phone.atleastone', fallback: 'אנא הזן לפחות מספר טלפון אחד' },
+      {
+        key: 'err.phone.invalid',
+        fallback: 'טלפון נוסף אינו תקין — יש להזין מספר נייד ישראלי המתחיל ב-05',
+        multiline: true,
+      },
+      { key: 'err.phone.dupWife', fallback: 'טלפון נוסף זהה לטלפון האשה — יש להזין מספר אחר', multiline: true },
+      { key: 'err.phone.dupHusband', fallback: 'טלפון נוסף זהה לטלפון הבעל — יש להזין מספר אחר', multiline: true },
+      {
+        key: 'err.phone.verify',
+        fallback: 'יש לאמת לפחות מספר טלפון אחד — לחצו על "קבלת קוד אימות בשיחה" ליד אחד הטלפונים.',
+        multiline: true,
+      },
+      {
+        key: 'err.email.verify',
+        fallback: 'יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").',
+        multiline: true,
+      },
+      { key: 'err.email.verifyNew', fallback: 'יש לאמת את כתובת המייל החדשה בקוד שנשלח אליה.', multiline: true },
+      { key: 'err.phone.verifyNew', fallback: 'יש לאמת את מספר הטלפון החדש בקוד שיוקרא בשיחה.', multiline: true },
+      { key: 'err.declaration', fallback: 'אנא אשר את ההצהרה' },
+      { key: 'err.lineage.declare', fallback: 'יש לאשר את הצהרת הייחוס לפני בחירת סדר הדורות', multiline: true },
+      {
+        key: 'err.lineage.incomplete',
+        fallback: 'יש להשלים את סדר הדורות עד הדור שלך, לסמן בן/חתן בכל דור וללחוץ "הוסף אותי"',
+        multiline: true,
+      },
+      {
+        key: 'err.lineage.chain',
+        fallback: 'יש להשלים את שרשרת הדורות — כולל הוספת עצמך כדור האחרון וסימון בן/חתן.',
+        multiline: true,
+      },
+      {
+        key: 'err.benefits.select',
+        fallback: 'בשאלה על הטבות שהתקבלו בעבר — יש לסמן לפחות אפשרות אחת, או לסמן "לא קיבלתי הטבות בעבר".',
+        multiline: true,
+      },
+      {
+        key: 'err.benefits.holidays',
+        fallback: 'סימנתם "מענק לקראת החגים" — יש לבחור באילו חגים קיבלתם אותו.',
+        multiline: true,
+      },
+      { key: 'err.upload.id', fallback: 'שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.' },
+    ],
+  },
+
+  {
+    title: 'הודעות שגיאה — בקשות',
+    listOnly: true,
+    entries: [
+      { key: 'err.request.type', fallback: 'בחר סוג בקשה' },
+      { key: 'err.married.only', fallback: 'בקשה זו זמינה לרשומים במצב נשואים בלבד.', multiline: true },
+      {
+        key: 'err.married.birth',
+        fallback: 'בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.',
+        multiline: true,
+      },
+      { key: 'err.docs.pending', fallback: 'נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.', multiline: true },
+      { key: 'err.loan.purpose', fallback: 'אנא פרט את מטרת ההלוואה' },
+      { key: 'err.loan.wedding', fallback: 'יש לצרף הזמנה של החתונה' },
+      { key: 'err.loan.max', fallback: 'הסכום המרבי הוא 30,000 ₪' },
+      { key: 'err.loan.installments', fallback: 'מספר התשלומים המרבי הוא 60' },
+      { key: 'err.aid.reason', fallback: 'אנא פרט את סיבת הבקשה' },
+      { key: 'err.doc.attach', fallback: 'אנא צרף מסמך' },
+      { key: 'err.doc.approval', fallback: 'אנא צרף מסמך אישור' },
+      { key: 'err.upload.doc', fallback: 'שגיאה בהעלאת המסמך. אנא נסה שוב.' },
+    ],
+  },
+
+  {
+    title: 'הודעות שגיאה — דיווח לידה',
+    listOnly: true,
+    entries: [
+      { key: 'err.birth.home', fallback: 'אנא בחר בית החלמה' },
+      { key: 'err.birth.cert', fallback: 'אנא צרף אישור לידה' },
+      { key: 'err.birth.babyId', fallback: 'אנא הזן תעודת זהות או דרכון של הנולד/ת' },
+      { key: 'err.birth.babyIdInvalid', fallback: 'תעודת הזהות של הנולד/ת אינה תקינה' },
+      { key: 'err.birth.baby2Gender', fallback: 'אנא בחר בן או בת עבור התינוק השני' },
+      { key: 'err.birth.baby2Id', fallback: 'אנא הזן תעודת זהות או דרכון של התינוק השני' },
+      { key: 'err.birth.baby2IdInvalid', fallback: 'תעודת הזהות של התינוק השני אינה תקינה' },
+      { key: 'err.birth.twinsSameId', fallback: 'שני התאומים חייבים להיות עם תעודות זהות שונות', multiline: true },
+      {
+        key: 'err.birth.window',
+        fallback: 'ניתן להגיש בקשה עד 30 יום מתאריך הלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.',
+        multiline: true,
+      },
+    ],
+  },
 ]
 
 /** כל הערכים בשטוח — לחיפוש מפתח יחיד. */
@@ -252,4 +381,22 @@ export function textOf(texts: PublicTexts | null | undefined, key: string): stri
   const edited = texts?.[key]
   if (typeof edited === 'string' && edited.trim() !== '') return edited
   return fallbackOf(key)
+}
+
+// ─── הודעות שגיאה: מיפוי לפי הנוסח המקורי ───────────────────────────────────
+// ⚠️ ב-127 מקומות בקוד נקרא setError('<נוסח>'). במקום לגעת בכל אחד מהם
+// (ולסכן טעות באחד), הנוסח עצמו משמש כמפתח: errorText() מוצא את המפתח
+// המתאים ומחזיר את הנוסח הערוך, ואם אין — את המקורי כפי שהוא.
+//
+// המשמעות: הודעה שאינה בקטלוג עדיין עובדת — היא פשוט לא ניתנת לעריכה.
+const KEY_BY_FALLBACK: Record<string, string> = Object.fromEntries(
+  PUBLIC_TEXT_GROUPS.filter(g => g.listOnly)
+    .flatMap(g => g.entries)
+    .map(e => [e.fallback, e.key]),
+)
+
+/** הנוסח האפקטיבי של הודעת שגיאה, לפי הנוסח המקורי שבקוד. */
+export function errorText(texts: PublicTexts | null | undefined, original: string): string {
+  const key = KEY_BY_FALLBACK[original]
+  return key ? textOf(texts, key) : original
 }

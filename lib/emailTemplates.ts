@@ -479,11 +479,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
       מעתה ניתן להגיש בקשות לאחת מההטבות ישירות מכאן — לחצו על הכפתור המתאים:
     </p>
 
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
-      <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">הסטטוס שלך: <span style="color:#16a34a;">מאושר</span></p>
-      </td></tr>
-    </table>
+    <!-- הסטטוס אינו מוצג במיילים — מוצג רק בממשק הניהול. -->
 
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הצאצא שלך:</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
@@ -511,10 +507,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 }
 
 // ─── מענה אוטומטי לצאצא קיים ──────────────────────────────────────────────────
-const STATUS_LABELS_HE: Record<string, string> = {
-  pending: 'ממתין לאישור', review: 'ממתין לאישור מסמכים', approved: 'מאושר',
-  rejected: 'לא מאושר', docs_pending: 'השלמת מסמכים', docs_returned: 'הוחזר תיקון — בבדיקת המשרד',
-}
+// (תוויות הסטטוס בעברית הוסרו — הסטטוס אינו מוצג עוד במיילים.)
 
 export interface ContactBeneficiary {
   name: string
@@ -528,12 +521,9 @@ export interface ContactBeneficiary {
 
 export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
-  const statusHe = STATUS_LABELS_HE[b.eligibility_status ?? ''] ?? (b.eligibility_status ?? '—')
+  // הסטטוס עצמו אינו מוצג במייל (ממשק הניהול בלבד), אך עדיין קובע את
+  // ניסוח ההנחיה למטה — מאושר מפנה למערכת, אחרת לטיפול המשרד.
   const isApproved = b.eligibility_status === 'approved'
-
-  const statusColor = isApproved ? '#22c55e' : '#f59e0b'
-  const statusBg    = isApproved ? '#f0fdf4' : '#fffbeb'
-  const statusBorder = isApproved ? '#22c55e' : '#f59e0b'
 
   const body = `
     ${autoReplyNote()}
@@ -547,13 +537,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
            style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;margin:0 0 24px;overflow:hidden;">
       ${detailRow('שם', b.name)}
-      <tr>
-        <td style="padding:10px 16px;color:#64748b;font-size:13px;width:38%;border-bottom:1px solid #f1f5f9;font-weight:500;">סטטוס</td>
-        <td style="padding:10px 16px;border-bottom:1px solid #f1f5f9;">
-          <span style="display:inline-block;background:${statusBg};color:${statusColor};border:1px solid ${statusBorder}33;
-                       font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;">${statusHe}</span>
-        </td>
-      </tr>
+      <!-- הסטטוס אינו מוצג במיילים — מוצג רק בממשק הניהול. -->
       ${detailRow('תעודת זהות', b.id_number)}
       ${detailRow('טלפון', b.phone)}
       ${detailRow('עיר', b.city)}
