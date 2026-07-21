@@ -3607,35 +3607,35 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               {/* Personal details */}
               <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
                 {beneficiary.id_number && (
-                  <div><span className="text-slate-400 text-xs block">ת.ז.</span><span className="text-slate-700" dir="ltr">{beneficiary.id_number}</span></div>
+                  <div><EditableText k="dash.field.id" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.id_number}</span></div>
                 )}
                 {beneficiary.phone && (
-                  <div><span className="text-slate-400 text-xs block">טלפון</span><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
+                  <div><EditableText k="dash.field.phone" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
                 )}
                 {beneficiary.email && (
-                  <div className="col-span-2"><span className="text-slate-400 text-xs block">מייל</span><span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span></div>
+                  <div className="col-span-2"><EditableText k="dash.field.email" className="text-slate-400 text-xs block" /><span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span></div>
                 )}
                 {beneficiary.marital_status && (
-                  <div><span className="text-slate-400 text-xs block">מצב משפחתי</span><span className="text-slate-700">{beneficiary.marital_status}</span></div>
+                  <div><EditableText k="dash.field.marital" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.marital_status}</span></div>
                 )}
                 {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_name && (
-                  <div><span className="text-slate-400 text-xs block">שם בן/בת הזוג</span><span className="text-slate-700">{beneficiary.spouse_name}</span></div>
+                  <div><EditableText k="dash.field.spouse" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.spouse_name}</span></div>
                 )}
                 {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_id_number && (
-                  <div><span className="text-slate-400 text-xs block">ת.ז בן/בת הזוג</span><span className="text-slate-700" dir="ltr">{beneficiary.spouse_id_number}</span></div>
+                  <div><EditableText k="dash.field.spouseId" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.spouse_id_number}</span></div>
                 )}
                 {(beneficiary.address || beneficiary.city) && (
-                  <div className="col-span-2"><span className="text-slate-400 text-xs block">כתובת</span><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
+                  <div className="col-span-2"><EditableText k="dash.field.address" className="text-slate-400 text-xs block" /><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
                 )}
                 {beneficiary.children_count != null && (
-                  <div><span className="text-slate-400 text-xs block">מספר ילדים</span><span className="text-slate-700">{beneficiary.children_count}</span></div>
+                  <div><EditableText k="dash.field.children" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.children_count}</span></div>
                 )}
               </div>
 
               {/* סדר הייחוס שסומן */}
               {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-100">
-                  <span className="text-slate-400 text-xs block mb-1.5">סדר הייחוס</span>
+                  <EditableText k="dash.field.lineage" className="text-slate-400 text-xs block mb-1.5" />
                   <div className="flex items-center gap-1 flex-wrap">
                     {beneficiary.lineage_chain.map((c, i) => (
                       <span key={i} className="flex items-center gap-1">
@@ -3660,7 +3660,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <CheckCircle2 size={20} className="text-indigo-600" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-bold text-slate-900 mb-1">שים לב — אתם כבר רשומים אצלנו</p>
+                  <EditableText k="already.title" as="p" className="font-bold text-slate-900 mb-1" />
                   <p className="text-sm text-slate-600 leading-relaxed">
                     לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
                     כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
@@ -3697,8 +3697,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
                   <div className="bg-gradient-to-l from-pink-500 to-rose-500 px-6 py-4">
-                    <h2 className="text-white font-bold text-lg">השלמת שם הילד — חובה</h2>
-                    <p className="text-pink-100 text-xs mt-0.5">כדי להמשיך ולהגיש בקשה חדשה (לידה, הלוואה, סיוע רפואי ועוד) יש להשלים תחילה את שם הילד</p>
+                    <EditableText k="babyname.title" as="h2" className="text-white font-bold text-lg" />
+                    <EditableText k="babyname.subtitle" as="p" className="text-pink-100 text-xs mt-0.5" />
                   </div>
                   <div className="px-6 py-5 flex flex-col gap-4">
                     <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -3733,7 +3733,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             <Card>
               <div className="flex items-center gap-2 mb-3">
                 <FileText size={16} className="text-indigo-500" />
-                <h3 className="font-semibold text-slate-800 text-sm">סטטוס הבקשות שלי</h3>
+                <EditableText k="dash.status.title" as="h3" className="font-semibold text-slate-800 text-sm" />
               </div>
               {statusSentTo ? (
                 <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
@@ -3845,7 +3845,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={() => { setStep('dashboard'); setError('') }} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
-              <h2 className="font-bold text-slate-900 text-lg">השלמת מסמכים</h2>
+              <EditableText k="docs.title" as="h2" className="font-bold text-slate-900 text-lg" />
             </div>
 
             {/* חלק המסמכים — מוסתר כשהסבב הוא תיקון דורות בלבד (לא סומנו מסמכים חסרים) */}
@@ -3918,8 +3918,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <GitBranch size={20} className="text-violet-600" />
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-900 mb-1">תיקון סדר הדורות</p>
-                    <p className="text-sm text-slate-600 leading-relaxed">המשרד מצא אי-דיוק בשרשרת הדורות שמסרת ומבקש לעדכן אותה.</p>
+                    <EditableText k="docs.lineage.title" as="p" className="font-semibold text-slate-900 mb-1" />
+                    <EditableText k="docs.lineage.body" as="p" className="text-sm text-slate-600 leading-relaxed" />
                   </div>
                 </div>
 
@@ -3977,7 +3977,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
-              <h2 className="font-bold text-slate-900 text-lg">בקשת הבראה ליולדת</h2>
+              <EditableText k="birth.title" as="h2" className="font-bold text-slate-900 text-lg" />
             </div>
 
             {renderIdDocsSection()}
@@ -3985,11 +3985,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             <Card>
               <div className="flex items-center gap-2 mb-4">
                 <Baby size={18} className="text-pink-500" />
-                <h3 className="font-semibold text-slate-900">פרטי הלידה</h3>
+                <EditableText k="birth.details.title" as="h3" className="font-semibold text-slate-900" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
-                  <Field label="תאריך הלידה" required>
+                  <Field label={<EditableText k="birth.date.label" />} required>
                     {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
                     <HebrewDatePicker
                       value={birthForm.birth_date}
@@ -4002,7 +4002,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
                 {/* בורר לידת תאומים — לפני פרטי התינוקות */}
                 <div className="col-span-2">
-                  <Field label="סוג לידה" required>
+                  <Field label={<EditableText k="birth.type.label" />} required>
                     <div className="flex gap-2">
                       {[{ v: false, l: 'לידה רגילה' }, { v: true, l: 'לידת תאומים' }].map(({ v, l }) => (
                         <button key={String(v)} type="button"
@@ -4013,7 +4013,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         >{l}</button>
                       ))}
                     </div>
-                    {isTwins && <p className="mt-1.5 text-xs text-indigo-600">בלידת תאומים יש למלא את פרטי שני התינוקות בנפרד. הזכאות בבית ההחלמה תהיה 4 ימים.</p>}
+                    {isTwins && <EditableText k="birth.twins.note" as="p" className="mt-1.5 text-xs text-indigo-600" />}
                   </Field>
                 </div>
 
@@ -4039,7 +4039,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   />
                 )}
                 <div className="col-span-2">
-                  <Field label="בית החלמה" required>
+                  <Field label={<EditableText k="birth.home.label" />} required>
                     <div className="flex flex-wrap gap-2">
                       {recoveryHomes.map(h => (
                         <button key={h} type="button"
@@ -4063,7 +4063,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </Field>
                 </div>
                 <div className="col-span-2">
-                  <Field label="אישור לידה" required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
+                  <Field label={<EditableText k="birth.cert.label" />} required hint={`אישור הלידה מבית החולים. ${UPLOAD_HINT}`}>
                     {birthCertFile ? (
                       <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <span className="text-sm text-green-700 flex items-center gap-2">
@@ -4127,7 +4127,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2 sm:col-span-1">
-                  <Field label="תאריך הלידה" required>
+                  <Field label={<EditableText k="birth.date.label" />} required>
                     <HebrewDatePicker
                       value={silentForm.birth_date}
                       onChange={iso => setSilentForm(f => ({ ...f, birth_date: iso }))}
@@ -4138,7 +4138,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </Field>
                 </div>
                 <div className="col-span-2">
-                  <Field label="בית החלמה" required>
+                  <Field label={<EditableText k="birth.home.label" />} required>
                     <div className="flex flex-wrap gap-2">
                       {recoveryHomesSilent.map(h => (
                         <button key={h} type="button"
@@ -4610,21 +4610,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
                 <CheckCircle2 size={38} className="text-green-600" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-2">הבקשה נשלחה!</h2>
+              <EditableText k="sent.title" as="h2" className="text-xl font-bold text-slate-900 mb-2" />
               <p className="text-slate-600 mb-6 leading-relaxed">
-                הבקשה התקבלה במערכת ותטופל בהקדם.
+                <EditableText k="sent.body1" />
                 <br />
-                יישלח אליכם הודעה.
+                <EditableText k="sent.body2" />
               </p>
               <div className="flex flex-col gap-2">
                 <button onClick={backToDashboard}
                   className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-150 text-sm"
                 >
-                  <User size={16} /> חזרה לאזור האישי
+                  <User size={16} /> <EditableText k="sent.back" />
                 </button>
                 <button onClick={backToHome}
                   className="flex items-center justify-center gap-2 text-slate-500 hover:text-slate-700 py-2 text-sm">
-                  <ArrowRight size={16} /> יציאה
+                  <ArrowRight size={16} /> <EditableText k="sent.exit" />
                 </button>
               </div>
             </div>

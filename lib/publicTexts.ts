@@ -132,6 +132,76 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
   },
 
   {
+    title: 'אזור אישי — פרטים',
+    entries: [
+      { key: 'dash.field.id', fallback: 'ת.ז.', hint: 'תווית תעודת זהות' },
+      { key: 'dash.field.phone', fallback: 'טלפון', hint: 'תווית טלפון' },
+      { key: 'dash.field.email', fallback: 'מייל', hint: 'תווית מייל' },
+      { key: 'dash.field.marital', fallback: 'מצב משפחתי', hint: 'תווית מצב משפחתי' },
+      { key: 'dash.field.spouse', fallback: 'שם בן/בת הזוג', hint: 'תווית שם בן/בת הזוג' },
+      { key: 'dash.field.spouseId', fallback: 'ת.ז בן/בת הזוג', hint: 'תווית ת.ז בן/בת הזוג' },
+      { key: 'dash.field.address', fallback: 'כתובת', hint: 'תווית כתובת' },
+      { key: 'dash.field.children', fallback: 'מספר ילדים', hint: 'תווית מספר ילדים' },
+      { key: 'dash.field.lineage', fallback: 'סדר הייחוס', hint: 'תווית סדר הייחוס' },
+      { key: 'dash.status.title', fallback: 'סטטוס הבקשות שלי', hint: 'כותרת מקטע הסטטוס' },
+    ],
+  },
+
+  {
+    title: 'דיווח לידה',
+    entries: [
+      { key: 'birth.title', fallback: 'בקשת הבראה ליולדת', hint: 'כותרת המסך' },
+      { key: 'birth.details.title', fallback: 'פרטי הלידה', hint: 'כותרת מקטע הפרטים' },
+      { key: 'birth.date.label', fallback: 'תאריך הלידה', hint: 'תווית תאריך' },
+      { key: 'birth.type.label', fallback: 'סוג לידה', hint: 'תווית סוג הלידה' },
+      {
+        key: 'birth.twins.note',
+        fallback: 'בלידת תאומים יש למלא את פרטי שני התינוקות בנפרד. הזכאות בבית ההחלמה תהיה 4 ימים.',
+        hint: 'הערה בלידת תאומים', multiline: true,
+      },
+      { key: 'birth.home.label', fallback: 'בית החלמה', hint: 'תווית בית ההחלמה' },
+      { key: 'birth.notes.label', fallback: 'הערות', hint: 'תווית הערות' },
+      { key: 'birth.cert.label', fallback: 'אישור לידה', hint: 'תווית אישור הלידה' },
+    ],
+  },
+
+  {
+    title: 'בקשה נשלחה',
+    entries: [
+      { key: 'sent.title', fallback: 'הבקשה נשלחה!', hint: 'כותרת המסך' },
+      { key: 'sent.body1', fallback: 'הבקשה התקבלה במערכת ותטופל בהקדם.', hint: 'שורה ראשונה', multiline: true },
+      { key: 'sent.body2', fallback: 'יישלח אליכם הודעה.', hint: 'שורה שנייה' },
+      { key: 'sent.back', fallback: 'חזרה לאזור האישי', hint: 'כפתור חזרה' },
+      { key: 'sent.exit', fallback: 'יציאה', hint: 'כפתור יציאה' },
+    ],
+  },
+
+  {
+    title: 'השלמת מסמכים',
+    entries: [
+      { key: 'docs.title', fallback: 'השלמת מסמכים', hint: 'כותרת המסך' },
+      { key: 'docs.lineage.title', fallback: 'תיקון סדר הדורות', hint: 'כותרת תיקון הדורות' },
+      {
+        key: 'docs.lineage.body',
+        fallback: 'המשרד מצא אי-דיוק בשרשרת הדורות שמסרת ומבקש לעדכן אותה.',
+        hint: 'הסבר תיקון הדורות', multiline: true,
+      },
+    ],
+  },
+
+  {
+    title: 'אזור אישי — השלמת שם הילד',
+    entries: [
+      { key: 'babyname.title', fallback: 'השלמת שם הילד — חובה', hint: 'כותרת החלון' },
+      {
+        key: 'babyname.subtitle',
+        fallback: 'כדי להמשיך ולהגיש בקשה חדשה (לידה, הלוואה, סיוע רפואי ועוד) יש להשלים תחילה את שם הילד',
+        hint: 'הסבר מתחת לכותרת', multiline: true,
+      },
+    ],
+  },
+
+  {
     title: 'בקשת הלוואה',
     entries: [
       { key: 'loan.modal.title', fallback: 'בקשת הלוואה', hint: 'כותרת החלון' },
