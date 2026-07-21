@@ -1,4 +1,4 @@
-name: גיבוי יומי
+name: daily-backup
 
 # מתזמן מובנה ואמין לגיבוי היומי — קורא ל-endpoint /api/cron/backup פעם ביום.
 # מחליף מתזמן חיצוני (cron-job.org וכו') שעלול להיעצר. ה-endpoint אידמפוטנטי
@@ -9,25 +9,25 @@ name: גיבוי יומי
 
 on:
   schedule:
-    # 22:00 UTC = 00:00–01:00 שעון ישראל (תלוי שעון קיץ) — גיבוי לילי.
+    # 22:00 UTC = 00:00-01:00 שעון ישראל (תלוי שעון קיץ) — גיבוי לילי.
     - cron: '0 22 * * *'
-  workflow_dispatch: {}  # אפשר גם להריץ ידנית מ-GitHub → Actions
+  workflow_dispatch: {}
 
 jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: קריאה ל-endpoint הגיבוי
+      - name: Trigger backup endpoint
         run: |
           BASE="${BACKUP_URL:-https://chasamsofer.co.il}"
-          echo "מפעיל גיבוי מול $BASE"
+          echo "Triggering backup at $BASE"
           HTTP=$(curl -s -o /tmp/out.json -w "%{http_code}" --max-time 300 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             "$BASE/api/cron/backup")
           echo "HTTP $HTTP"
           cat /tmp/out.json || true
           if [ "$HTTP" != "200" ]; then
-            echo "::error::הגיבוי נכשל (HTTP $HTTP)"
+            echo "::error::Backup failed (HTTP $HTTP)"
             exit 1
           fi
         env:
