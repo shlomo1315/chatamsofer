@@ -179,12 +179,22 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   if (balance <= 0) return out
   // ⚠️ שתי עמודות מסמנות המתנה — card_status (תור גלובלי) ו-card_voucher_status
   // (תור השובר). סינון לפי אחת בלבד השאיר יולדות אמיתיות מחוץ לתור.
-  const { data: waiting } = await admin
+  // ⚠️ לא מסתפקים בסימון awaiting_stock: יולדות שאושרו אך נתקעו בסטטוס אחר
+  // (pending/approved) מעולם לא נכנסו לתור, ולכן לא קיבלו כרטיס ולא שובר
+  // גם אחרי חידוש מלאי. נסרקות כאן כל הלידות המאושרות שטרם נטענו בפועל.
+  const { data: candidates } = await admin
     .from('maternity_aids')
-    .select('id')
-    .or('card_status.eq.awaiting_stock,card_voucher_status.eq.awaiting_stock')
+    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id')
+    .eq('status', 'active')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
-  if (!waiting?.length) return out
+
+  const waiting = (candidates ?? []).filter(a =>
+    // טרם נטען בפועל
+    a.card_load_status !== 'loaded' && !a.card_tlush_id &&
+    // ולא נדחה/בוטל ידנית
+    a.card_status !== 'rejected',
+  )
+  if (!waiting.length) return out
 
   for (const w of waiting) {
     if (balance <= 0) break

@@ -117,8 +117,11 @@ const getCachedNedarimCardStats = unstable_cache(
 
     // יתרה כללית — מקור אמת: Total מטבלת המשפחות, אחרת סכום Ytra, אחרת מהכרטיסים
     const totalRemaining = tableTotal || sumYtra || remainingFromCards
-    // "סה״כ מוטען בארנקים" = הסכום הזמין כעת בפועל בכל הכרטיסים. נפילה-לאחור ליתרה/לסכום הטעינות.
-    const loadedFinal = remainingFromCards || totalRemaining || totalLoaded
+    // "סה״כ מוטען בארנקים" = הסכום הזמין כעת בפועל בכל הכרטיסים.
+    // ⚠️ ללא נפילה-לאחור ל-totalLoaded: זהו סכום כל הטעינות ההיסטוריות,
+    // ולכן כשפורקים כסף מהמשפחות היתרה יורדת ל-0 אך הסכום ההיסטורי נשאר —
+    // והמסך המשיך להציג "7,200 ₪" כאילו הכסף עדיין שם. 0 הוא ערך תקין.
+    const loadedFinal = remainingFromCards
 
     return {
       familiesCount: families.length,

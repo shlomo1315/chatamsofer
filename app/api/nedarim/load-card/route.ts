@@ -10,6 +10,7 @@ import {
   addTlush,
   getClientCard,
 } from '@/lib/nedarim'
+import { getStockBalance, consumeOneCard } from '@/lib/cardStock'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,19 @@ export async function POST(request: NextRequest) {
   // הטענה מותרת רק לתיק מאושר (ולא לתיק שממתין לאישור)
   if (aid.status !== 'active') {
     return NextResponse.json({ error: 'ניתן להטעין כרטיס רק לתיק יולדת מאושר' }, { status: 400 })
+  }
+
+  // ⚠️ בלי מלאי אין טעינה — גם במסלול הידני הזה. עד כה המסלול פנה לנדרים
+  // וטען כסף בלי לבדוק מלאי כלל, כך שהיה אפשר לטעון גם כשהמלאי 0 והמלאי
+  // לא היה יורד. אין מלאי → היולדת נכנסת לתור, והטעינה תתבצע בחידוש המלאי.
+  const stock = await getStockBalance(admin)
+  if (stock <= 0) {
+    await admin.from('maternity_aids')
+      .update({ card_status: 'awaiting_stock', updated_at: new Date().toISOString() })
+      .eq('id', aid.id)
+    return NextResponse.json({
+      error: 'אין כרטיסים במלאי — היולדת נכנסה לתור ההמתנה. הכרטיס ייטען אוטומטית כשיתחדש המלאי.',
+    }, { status: 409 })
   }
 
   // סכום: מהבקשה, או חישוב אוטומטי (שבועי × מספר שבועות)
@@ -133,7 +147,16 @@ export async function POST(request: NextRequest) {
     if (card?.totalFreeAmount != null) newBalance = card.totalFreeAmount
   } catch { /* שמירה על האומדן */ }
 
+  // ניכוי הכרטיס מהמלאי — אחרי שהטעינה הצליחה בפועל. בלי זה המלאי
+  // והכסף יוצאים מסנכרון: כסף נטען אך המלאי נשאר כשהיה.
+  try {
+    await consumeOneCard(admin, { reason: 'birth_approval', aidId: aid.id, by: staff.userId })
+  } catch (e) {
+    console.error('[load-card] ניכוי הכרטיס מהמלאי נכשל:', e)
+  }
+
   await admin.from('maternity_aids').update({
+    card_status: 'loaded',
     card_load_status: 'loaded',
     card_tlush_id: result.tlushId,
     card_load_amount: amount,
