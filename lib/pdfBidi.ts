@@ -1,18 +1,19 @@
-// עיבוד bidi אמיתי לטקסט עברי ב-PDF (pdf-lib אינו מיישם אלגוריתם bidi בעצמו).
-// getReorderedString ממיר טקסט בסדר לוגי → סדר visual (כולל היפוך סוגריים, בידוד
-// מספרים/מייל/שעות), וזה מה ש-pdf-lib מצייר כפי שהוא. מחליף את הפתרון הידני הישן (isoNum).
-import bidiFactory from 'bidi-js'
+// כפיית LTR על מספרים/שעות/תאריכים המשובצים בטקסט עברי ב-PDF.
+//
+// pdf-lib עם פונט עברי מציג טקסט עברי טהור נכון; הבעיה היחידה היא רצפי ספרות (מספרים,
+// שעות, תאריכים) שמוצגים הפוכים. עוטפים כל רצף כזה ב-LRO…POP כך שיוצג LTR תקין.
+// (bidi-js/getReorderedString נוסה ונזנח — הוא ביצע reordering על כל הטקסט וגרם להיפוך.)
+const LRO = '‭' // LEFT-TO-RIGHT OVERRIDE
+const POP = '‬' // POP DIRECTIONAL FORMATTING
 
-const bidi = bidiFactory()
-
-// ממיר שורת טקסט אחת (בלי newlines) מסדר לוגי לסדר visual לציור ב-PDF.
 export function toVisual(text: string): string {
-  const s = String(text ?? '')
-  if (!s) return s
-  try {
-    const levels = bidi.getEmbeddingLevels(s, 'rtl') // בסיס RTL — טקסט עברי
-    return bidi.getReorderedString(s, levels)
-  } catch {
-    return s // כשל → הטקסט המקורי (עדיף מקריסה)
-  }
+  let s = String(text ?? '')
+  // כתובות מייל / דומיינים (רצף לטיני עם @ או .) — כטוקן LTR שלם
+  s = s.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, m => `${LRO}${m}${POP}`)
+  // מספרים / שעות / תאריכים / טלפונים — כולל טווחים ("19:00 - 21:00")
+  s = s.replace(
+    /\d[\d.,:/]*(?:\s*[-–]\s*\d[\d.,:/]*)*/g,
+    m => `${LRO}${m.replace(/\s*([-–])\s*/g, ' $1 ').replace(/\s+/g, ' ')}${POP}`,
+  )
+  return s
 }

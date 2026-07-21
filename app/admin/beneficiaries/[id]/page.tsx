@@ -92,10 +92,15 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 
 export default async function BeneficiaryDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const beneficiary = await getBeneficiary(id)
+  // הרצה מקבילית: getBeneficiary/getBirthCertificates/getActivity תלויים רק ב-id.
+  // רק getLineagePath תלוי בצומת היחוס של המוטב, לכן נשלף אחרי שיש beneficiary.
+  // (בעבר כל ה-queries רצו בסדרה = 4 סבבי רשת רצופים; זו הייתה סיבת האיטיות בטעינת הכרטסת.)
+  const [beneficiary, birthCerts, activity] = await Promise.all([
+    getBeneficiary(id),
+    getBirthCertificates(id),
+    getActivity(id),
+  ])
   const lineagePath = await getLineagePath(beneficiary?.lineage_node_id)
-  const birthCerts = await getBirthCertificates(id)
-  const activity = await getActivity(id)
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
