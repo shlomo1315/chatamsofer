@@ -360,7 +360,12 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
       )}
       {canEdit ? (
         <button
-          onClick={() => setOpen(o => !o)}
+          onClick={() => {
+            // מדידה זמנית: זמן מהלחיצה עד סיום פתיחת התפריט (לאבחון האיטיות). נראה ב-console (F12).
+            const _t = performance.now()
+            setOpen(o => !o)
+            requestAnimationFrame(() => console.log(`[perf-click] תפריט סטטוס נפתח ב-${Math.round(performance.now() - _t)}ms`))
+          }}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
         >
           <Icon size={13} />
