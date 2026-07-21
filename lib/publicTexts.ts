@@ -50,6 +50,39 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
     ],
   },
   {
+    title: 'אימות כניסה',
+    entries: [
+      { key: 'auth.title.login', fallback: 'כניסה לאזור האישי', hint: 'כותרת — כניסה' },
+      { key: 'auth.title.setup', fallback: 'הגדרת סיסמה', hint: 'כותרת — הגדרה ראשונה' },
+      { key: 'auth.title.reset', fallback: 'איפוס סיסמה', hint: 'כותרת — איפוס' },
+      {
+        key: 'auth.phone.choose',
+        fallback: 'בחר/י מספר טלפון אליו נצלצל ונקריא את קוד הכניסה:',
+        hint: 'הנחיה לבחירת טלפון', multiline: true,
+      },
+      { key: 'auth.call.incoming', fallback: 'בקרוב תתקבל אצלך שיחה מהמערכת שלנו', hint: 'הודעה אחרי שליחה' },
+      { key: 'auth.call.valid', fallback: 'הקוד תקף ל-5 דקות', hint: 'תוקף הקוד' },
+      { key: 'auth.code.label', fallback: 'קוד מהשיחה', hint: 'תווית שדה הקוד' },
+      { key: 'auth.code.hint', fallback: '6 ספרות שהוקראו בשיחה', hint: 'שורת עזרה לקוד' },
+      { key: 'auth.call.again', fallback: 'התקשרו אליי שוב', hint: 'קישור לשיחה חוזרת' },
+      { key: 'auth.back', fallback: 'חזרה', hint: 'קישור חזרה' },
+      { key: 'auth.emailcode.label', fallback: 'קוד מהמייל', hint: 'תווית קוד מהמייל' },
+      { key: 'auth.emailcode.hint', fallback: '6 ספרות שנשלחו למייל', hint: 'שורת עזרה לקוד מהמייל' },
+      { key: 'auth.emailcode.submit', fallback: 'כניסה', hint: 'כפתור הכניסה' },
+      { key: 'auth.emailcode.again', fallback: 'שלחו לי קוד חדש', hint: 'קישור לקוד חדש' },
+    ],
+  },
+
+  {
+    title: 'כבר רשומים (איגוד הצאצאים)',
+    entries: [
+      { key: 'already.title', fallback: 'שים לב — אתם כבר רשומים אצלנו', hint: 'כותרת ההודעה' },
+      { key: 'already.benefits', fallback: 'קבלת קישור להגשת בקשות למייל', hint: 'כפתור קבלת קישור' },
+      { key: 'already.status', fallback: 'צפייה בסטטוס הבקשה שלי (יישלח למייל)', hint: 'כפתור בדיקת סטטוס' },
+    ],
+  },
+
+  {
     title: 'לא נמצא במערכת',
     entries: [
       { key: 'notfound.title', fallback: 'לא מופיע במערכת', hint: 'כותרת המסך' },

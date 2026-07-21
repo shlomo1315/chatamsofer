@@ -23,9 +23,15 @@ function admin() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
+// ⚠️ המטמון חי בתוך תהליך בודד. השמירה במסך ההגדרות מרעננת את המטמון
+// בתהליך שקיבל אותה בלבד — אך מייל עשוי להישלח מתהליך אחר, שהחזיק
+// loaded=true והמשיך להשתמש בנוסח ישן. TTL קצר מבטיח רענון עצמאי.
+const TTL_MS = 10_000
+let fetchedAt = 0
+
 /** טוען את הטקסטים למטמון. בטוח לקריאה מרובה — טעינה אחת בלבד במקביל. */
 export async function loadEmailTexts(): Promise<void> {
-  if (loaded) return
+  if (loaded && Date.now() - fetchedAt < TTL_MS) return
   if (loading) return loading
 
   loading = (async () => {
@@ -34,8 +40,10 @@ export async function loadEmailTexts(): Promise<void> {
       if (!db) return
       const { data } = await db
         .from('app_settings').select('value').eq('key', EMAIL_TEXTS_KEY).maybeSingle()
-      if (data?.value) cache = JSON.parse(String(data.value))
+      // גם ערך חסר מתקבל — אחרת איפוס כל הנוסחים לא היה מתפשט
+      cache = data?.value ? JSON.parse(String(data.value)) : {}
       loaded = true
+      fetchedAt = Date.now()
     } catch (e) {
       console.error('[emailTexts] טעינה נכשלה — נעשה שימוש בברירות המחדל:', e)
     } finally {
@@ -50,6 +58,7 @@ export async function loadEmailTexts(): Promise<void> {
 export function setEmailTexts(texts: EmailTexts): void {
   cache = texts ?? {}
   loaded = true
+  fetchedAt = Date.now()
 }
 
 /**

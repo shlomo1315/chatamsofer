@@ -2445,16 +2445,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="w-16 h-16 rounded-2xl overflow-hidden mx-auto mb-3">
                 <img src="/logo.png" alt="לוגו" className="w-full h-full object-contain" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900 mb-1">
-                {authMode === 'login' ? 'כניסה לאזור האישי' : authIsSetup ? 'הגדרת סיסמה' : 'איפוס סיסמה'}
-              </h2>
+              <EditableText
+                k={authMode === 'login' ? 'auth.title.login' : authIsSetup ? 'auth.title.setup' : 'auth.title.reset'}
+                as="h2" className="text-xl font-bold text-slate-900 mb-1"
+              />
               <p className="text-sm text-slate-500 ltr-num">{pendingAuth.id}</p>
             </div>
 
             <Card>
               {phoneStep === 'choose' ? (
                   <div className="flex flex-col gap-3">
-                    <p className="text-sm text-slate-600 text-center leading-relaxed">בחר/י מספר טלפון אליו נצלצל ונקריא את קוד הכניסה:</p>
+                    <EditableText k="auth.phone.choose" as="p" className="text-sm text-slate-600 text-center leading-relaxed" />
                     {authPhones.map((p) => (
                       <button key={p.index} type="button" disabled={loading}
                         onClick={() => handleSendPhoneCode(p.index)}
@@ -2464,12 +2465,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     ))}
                     {error && <ErrorBox message={error} />}
                     <button type="button" onClick={() => { setError(''); setPhoneStep('') }}
-                      className="text-sm text-slate-500 hover:text-slate-700 underline mx-auto">חזרה</button>
+                      className="text-sm text-slate-500 hover:text-slate-700 underline mx-auto"><EditableText k="auth.back" /></button>
                   </div>
                 ) : phoneStep === 'code' ? (
                   <form onSubmit={handleVerifyPhoneCode} className="flex flex-col gap-4">
                     <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-3 text-center text-sm text-green-700 leading-relaxed">
-                      <p className="font-semibold mb-1">בקרוב תתקבל אצלך שיחה מהמערכת שלנו</p>
+                      <EditableText k="auth.call.incoming" as="p" className="font-semibold mb-1" />
                       <p>
                         המספר המתקשר: <span className="font-semibold ltr-num" dir="ltr">02-3131325</span>
                         {authPhoneHint && <> · אל <span className="font-semibold ltr-num">{authPhoneHint}</span></>}
@@ -2477,9 +2478,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <p className="mt-1 text-green-600">
                         לאחר המענה יש להמתין מספר שניות עד שהמערכת תקריא את הקוד, ואז להזין אותו בשדה שלמטה.
                       </p>
-                      <p className="mt-1 text-xs text-green-600">הקוד תקף ל-5 דקות</p>
+                      <EditableText k="auth.call.valid" as="p" className="mt-1 text-xs text-green-600" />
                     </div>
-                    <Field label="קוד מהשיחה" required hint="6 ספרות שהוקראו בשיחה">
+                    <Field label={<EditableText k="auth.code.label" />} required hint={<EditableText k="auth.code.hint" />}>
                       <TextInput value={authCode}
                         onChange={e => setAuthCode(e.target.value.replace(/\D/g, ''))}
                         placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
@@ -2493,9 +2494,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </button>
                     <div className="flex items-center justify-center gap-4">
                       <button type="button" onClick={() => { setError(''); setPhoneStep('choose') }} disabled={loading}
-                        className="text-sm text-slate-500 hover:text-slate-700 underline">התקשרו אליי שוב</button>
+                        className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.call.again" /></button>
                       <button type="button" onClick={() => { setError(''); setPhoneStep('') }}
-                        className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה</button>
+                        className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.back" /></button>
                     </div>
                   </form>
                 ) : authMode === 'login' ? (
@@ -2506,7 +2507,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <CheckCircle2 size={20} className="text-indigo-600" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-bold text-slate-900 mb-1">שים לב — אתם כבר רשומים אצלנו</p>
+                      <EditableText k="already.title" as="p" className="font-bold text-slate-900 mb-1" />
                       <p className="text-sm text-slate-600 leading-relaxed">
                         לפי המידע במערכת אתם נמנים עם רשומי <span className="font-semibold">איגוד הצאצאים</span>.
                         כדי להגיש בקשות לסיוע בעת שמחה, לגמ״ח ולשאר ההטבות — שלחו מייל לכתובת{' '}
@@ -2534,7 +2535,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <button type="button" onClick={sendBenefitsLink} disabled={benefitsSending}
                         className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
                         {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                        קבלת קישור להגשת בקשות למייל
+                        <EditableText k="already.benefits" />
                       </button>
                       {benefitsErr && <p className="text-xs text-red-600">{benefitsErr}</p>}
                     </>
@@ -2550,7 +2551,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <button type="button" onClick={sendStatusEmail} disabled={statusSending}
                         className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm">
                         {statusSending ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                        צפייה בסטטוס הבקשה שלי (יישלח למייל)
+                        <EditableText k="already.status" />
                       </button>
                       {statusErr && <p className="text-xs text-red-600">{statusErr}</p>}
                     </>
@@ -2562,7 +2563,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
                     שלחנו קוד זמני למייל שלך{authEmailHint ? <> <span className="font-semibold ltr-num" dir="ltr">{authEmailHint}</span></> : ''} · הקוד תקף ל-10 דקות בלבד
                   </div>
-                  <Field label="קוד מהמייל" required hint="6 ספרות שנשלחו למייל">
+                  <Field label={<EditableText k="auth.emailcode.label" />} required hint={<EditableText k="auth.emailcode.hint" />}>
                     <TextInput value={authCode}
                       onChange={e => setAuthCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr"
@@ -2572,13 +2573,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <button type="submit" disabled={loading}
                     className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
                     {loading ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
-                    {loading ? 'מאמת...' : 'כניסה'}
+                    {loading ? 'מאמת...' : <EditableText k="auth.emailcode.submit" />}
                   </button>
                   <div className="flex items-center justify-center gap-4">
                     <button type="button" onClick={handleSendCode} disabled={loading}
-                      className="text-sm text-slate-500 hover:text-slate-700 underline">שלחו לי קוד חדש</button>
+                      className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.emailcode.again" /></button>
                     <button type="button" onClick={() => { setError(''); setEmailStep('') }}
-                      className="text-sm text-slate-500 hover:text-slate-700 underline">חזרה</button>
+                      className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.back" /></button>
                   </div>
                 </form>
                 ) : (
@@ -3680,7 +3681,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         className="mt-3 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
                       >
                         {benefitsSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                        קבלת קישור להגשת בקשות למייל
+                        <EditableText k="already.benefits" />
                       </button>
                       {benefitsErr && <p className="text-xs text-red-600 mt-2">{benefitsErr}</p>}
                     </>
