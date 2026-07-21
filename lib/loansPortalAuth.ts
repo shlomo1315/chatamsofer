@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 export const PORTAL_COOKIE = 'loans_portal_token'
 const TOKEN_DAYS_VALID = 14
@@ -33,20 +33,36 @@ export async function setPortalPassword(plaintext: string): Promise<void> {
   )
 }
 
+/**
+ * "טביעת אצבע" של הסיסמה הנוכחית — נכנסת לחתימת הטוקן.
+ *
+ * ⚠️ בלעדיה החלפת סיסמה לא מבטלת טוקנים קיימים: מי שקיבל את הקישור פעם
+ * נשאר בפנים 14 יום גם אחרי שהחלפתם את הסיסמה כדי לחסום אותו. עכשיו כל
+ * setPortalPassword משנה את ה-hash, ולכן פוסל אוטומטית כל טוקן ישן.
+ *
+ * נגזר מה-hash (ולא מהסיסמה) — כך שהסיסמה עצמה לעולם לא נכנסת לחתימה.
+ */
+async function passwordFingerprint(): Promise<string> {
+  const hash = await getStoredPasswordHash()
+  if (!hash) return 'none'
+  return createHmac('sha256', secret()).update(`pw:${hash}`).digest('hex').slice(0, 16)
+}
+
 export async function verifyPortalPassword(plaintext: string): Promise<boolean> {
   const hash = await getStoredPasswordHash()
   if (!hash) return false
   return bcrypt.compare(plaintext, hash)
 }
 
-// טוקן: "<day>.<hmac>" — תקף TOKEN_DAYS_VALID ימים
-export function issuePortalToken(): string {
+// טוקן: "<day>.<hmac>" — תקף TOKEN_DAYS_VALID ימים, וקשור לסיסמה הנוכחית
+export async function issuePortalToken(): Promise<string> {
   const day = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
-  const sig = createHmac('sha256', secret()).update(`loans_portal:${day}`).digest('hex')
+  const fp = await passwordFingerprint()
+  const sig = createHmac('sha256', secret()).update(`loans_portal:${day}:${fp}`).digest('hex')
   return `${day}.${sig}`
 }
 
-export function verifyPortalToken(token: string | undefined): boolean {
+export async function verifyPortalToken(token: string | undefined): Promise<boolean> {
   if (!token) return false
   const dot = token.indexOf('.')
   if (dot < 0) return false
@@ -55,7 +71,8 @@ export function verifyPortalToken(token: string | undefined): boolean {
   if (isNaN(day)) return false
   const now = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
   if (now - day > TOKEN_DAYS_VALID || day > now) return false
-  const expected = createHmac('sha256', secret()).update(`loans_portal:${day}`).digest('hex')
+  const fp = await passwordFingerprint()
+  const expected = createHmac('sha256', secret()).update(`loans_portal:${day}:${fp}`).digest('hex')
   // constant-time comparison
-  return sig.length === expected.length && sig === expected
+  return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
 }

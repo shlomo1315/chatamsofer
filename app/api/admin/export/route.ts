@@ -1,16 +1,29 @@
-// ייצוא נתוני מחלקה לקובץ אקסל (CSV עם BOM שנפתח ישירות באקסל). admin/staff בלבד.
+// ייצוא נתוני מחלקה לקובץ אקסל (CSV עם BOM שנפתח ישירות באקסל).
 // שימוש: /api/admin/export?type=beneficiaries|loans|maternity|financial_aid|widows
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
+import type { SectionKey } from '@/types'
 
 export const dynamic = 'force-dynamic'
+
+// ⚠️ הייצוא מחזיר ת"ז, כתובות וטלפונים — הנתונים הרגישים ביותר במערכת.
+// קודם הוא דרש requireStaff() בלבד, שמאשר כל תפקיד ואינו בודק מחלקה: איש
+// גבייה שהרשאתו מוגבלת להלוואות יכול היה להוריד את כל המוטבים והיולדות.
+// כאן ה-type נגזר להרשאת המחלקה המתאימה, ונדרשת הרשאת 'view' עליה.
+const SECTION_BY_TYPE: Record<string, SectionKey> = {
+  beneficiaries: 'beneficiaries',
+  loans: 'loans',
+  maternity: 'maternity',
+  financial_aid: 'financial_aid',
+  widows: 'widows',
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>
 
 const STATUS_HE: Record<string, string> = {
   pending: 'ממתין', approved: 'מאושר', rejected: 'נדחה', docs_pending: 'השלמת מסמכים',
-  review: 'בבדיקה', active: 'פעיל', cancelled: 'בוטל', loaded: 'נטען', disbursed: 'בוצע',
+  docs_returned: 'הוחזר תיקון', review: 'בבדיקה', active: 'פעיל', cancelled: 'בוטל', loaded: 'נטען', disbursed: 'בוצע',
 }
 const he = (s?: string | null) => (s ? (STATUS_HE[s] ?? s) : '')
 const famName = (b?: Row | null) => b ? [b.family_name, b.full_name].filter(Boolean).join(' ') : ''
@@ -26,11 +39,17 @@ function toCsv(headers: string[], rows: (string | number | null | undefined)[][]
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  const type = request.nextUrl.searchParams.get('type') ?? ''
+
+  // ההרשאה נבדקת מול המחלקה שממנה מייצאים — לא רק "האם אתה איש צוות".
+  const section = SECTION_BY_TYPE[type]
+  if (!section) return NextResponse.json({ error: 'סוג ייצוא לא מוכר' }, { status: 400 })
+  const ctx = await requirePermission(section, 'view')
+  if (!ctx) return forbidden()
+
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const type = request.nextUrl.searchParams.get('type') ?? ''
   let headers: string[] = []
   let rows: (string | number | null | undefined)[][] = []
   let filename = 'export'

@@ -15,7 +15,16 @@ function signNonce(email: string): string {
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const next = requestUrl.searchParams.get('next') ?? '/admin/dashboard'
+
+  // ⚠️ next נשלט ע"י מי ששלח את הקישור. new URL(next, origin) מתעלם מה-origin
+  // כשהערך הוא כתובת מלאה, כך ש-next=https://evil.com היה מפנה לשם אחרי
+  // התחברות מוצלחת — פישינג ממונף על הדומיין של העמותה. מקבלים רק נתיב
+  // פנימי; "//host" נדחה גם הוא, כי הדפדפן קורא אותו ככתובת חיצונית.
+  // 'register' הוא ערך-דגל של זרימת ההרשמה (נבדק בהמשך), לא נתיב — ולכן מותר.
+  const rawNext = requestUrl.searchParams.get('next') ?? '/admin/dashboard'
+  const next = rawNext === 'register' || (rawNext.startsWith('/') && !rawNext.startsWith('//'))
+    ? rawNext
+    : '/admin/dashboard'
 
   // הכתובת הציבורית האמיתית — מאחורי פרוקסי/לואד-בלאנסר, requestUrl.origin עלול להיות
   // הכתובת הפנימית (למשל http://localhost:8080). קוראים את ה-host האמיתי מהכותרות.

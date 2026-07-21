@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const ok = await verifyPortalPassword(String(password))
     if (!ok) return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
 
-    const token = issuePortalToken()
+    const token = await issuePortalToken()
     const res = NextResponse.json({ ok: true })
     res.cookies.set(PORTAL_COOKIE, token, {
       httpOnly: true,

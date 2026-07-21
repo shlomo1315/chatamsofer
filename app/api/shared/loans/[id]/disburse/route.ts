@@ -11,7 +11,7 @@ function adminClient() {
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const token = req.cookies.get(PORTAL_COOKIE)?.value
-  if (!verifyPortalToken(token)) {
+  if (!(await verifyPortalToken(token))) {
     return NextResponse.json({ error: 'נדרשת אימות' }, { status: 401 })
   }
 
