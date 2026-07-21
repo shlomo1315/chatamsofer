@@ -459,6 +459,8 @@ export interface ApprovedDetails {
 }
 
 export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, details: ApprovedDetails = {}): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('registration_approved', k)
   const base = portalBase.replace(/\/$/, '')
   const fullName = [details.family_name, name].filter(Boolean).join(' ') || name
   const detailsRows = [
@@ -481,7 +483,7 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
 
     <!-- הסטטוס אינו מוצג במיילים — מוצג רק בממשק הניהול. -->
 
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">פרטי הצאצא שלך:</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${escapeHtml(t('details_title'))}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
            style="margin:0 0 28px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
       ${detailsRows}
@@ -501,8 +503,8 @@ export function approvalEmail(name: string, portalBase = PORTAL_BASE_DEFAULT, de
     </p>
   `
   return {
-    subject: 'הרישום לאיגוד הצאצאים אושר — היכל החתם סופר',
-    html: shell({ preheader: 'הרישום לאיגוד הצאצאים התקבל ואושר! ניתן כעת להגיש בקשות.', accent: '#22c55e', title: 'הרישום אושר בהצלחה', subtitle: 'ברוכים הבאים להיכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#22c55e', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -520,6 +522,8 @@ export interface ContactBeneficiary {
 }
 
 export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('existing_contact', k)
   const base = portalBase.replace(/\/$/, '')
   // הסטטוס עצמו אינו מוצג במייל (ממשק הניהול בלבד), אך עדיין קובע את
   // ניסוח ההנחיה למטה — מאושר מפנה למערכת, אחרת לטיפול המשרד.
@@ -527,10 +531,10 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
 
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(t('kicker'))}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetByStatus(null, b.name, b.marital_status)}</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
-      תודה שפנית אלינו. ריכזנו עבורך את הפרטים הרשומים במערכת:
+      ${escapeHtml(t('intro'))}
     </p>
 
     <!-- Details card -->
@@ -546,7 +550,7 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
     </table>
 
     <p style="margin:0 0 18px;color:#334155;font-size:15px;font-weight:700;text-align:center;">
-      ${isApproved ? 'ניתן להגיש בקשה ישירות דרך המערכת הדיגיטלית שלנו:' : 'לטיפול בבקשתך:'}
+      ${escapeHtml(isApproved ? t('next_approved') : t('next_pending'))}
     </p>
 
     ${btnPair(
@@ -569,10 +573,12 @@ export function existingContactEmail(b: ContactBeneficiary, portalBase = PORTAL_
 
 // ─── הזמנה להרשמה / מייל לא מזוהה ───────────────────────────────────────────
 export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('registration_invite', k)
   const base = portalBase.replace(/\/$/, '')
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">קיבלנו את פנייתך</p>
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(t('kicker'))}</p>
     <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">שלום וברכה,</h2>
     <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">
       תודה על פנייתך ל<strong>היכל החתם סופר</strong>.<br/>
@@ -612,8 +618,8 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
     </p>
   `
   return {
-    subject: 'קיבלנו את פנייתך — היכל החתם סופר',
-    html: shell({ preheader: 'כתובת המייל שלך לא נמצאה — כנס/י למערכת הדיגיטלית לבדיקה.', accent: '#6366f1', title: 'קיבלנו את פנייתך', subtitle: 'היכל החתם סופר', body }),
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#6366f1', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -834,6 +840,8 @@ export function financialAidInquiryEmail(
   b: { family_name?: string | null; full_name?: string | null; id_number?: string | null; spouse_name?: string | null; marital_status?: string | null; phone?: string | null; city?: string | null; children_count?: number | null },
   reason?: string | null,
 ): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const tAid = (k: string) => textFor('financial_aid_inquiry', k)
   const fullName = [b.family_name, b.full_name].filter(Boolean).join(' ') || (b.full_name ?? '')
   const rows = [
     detailRow('שם מלא', fullName),
@@ -865,7 +873,7 @@ export function financialAidInquiryEmail(
   `
   return {
     subject: `בקשת סיוע רפואי — ${fullName}${b.id_number ? ` (ת.ז ${b.id_number})` : ''}`,
-    html: shell({ preheader: 'בקשת סיוע רפואי להחלטתך — השב בסכום או X.', accent: '#6366f1', title: 'בקשת סיוע רפואי', subtitle: 'היכל החתם סופר', body }),
+    html: shell({ preheader: tAid('preheader'), accent: '#6366f1', title: tAid('title'), subtitle: tAid('subtitle'), body }),
   }
 }
 
@@ -1093,13 +1101,15 @@ export function birthRejectedEmail(opts: {
   mother_name?: string | null   // שם האשה (spouse_name / full_name)
   reason?: string | null
 }): BuiltEmail {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('birth_rejected', k)
   const greet = greetMrs(opts.family_name, opts.mother_name)
   const reason = (opts.reason ?? '').trim()
   const officeLink = `<a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>`
   const reasonBlock = reason ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#b91c1c;font-size:14px;font-weight:900;">סיבת הדחייה</p>
+        <p style="margin:0 0 8px;color:#b91c1c;font-size:14px;font-weight:900;">${escapeHtml(t('reason_title'))}</p>
         <p style="margin:0;color:#991b1b;font-size:14px;line-height:1.8;white-space:pre-wrap;">${escapeHtml(reason)}</p>
       </td></tr>
     </table>` : ''
@@ -1107,20 +1117,20 @@ export function birthRejectedEmail(opts: {
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
-      לאחר בדיקת בקשת הלידה שהוגשה, אנו מצטערים להודיע כי הבקשה <strong>נדחתה</strong>.
+      ${escapeHtml(t('body'))}
     </p>
     ${reasonBlock}
     <p style="margin:14px 0 0;color:#334155;font-size:13px;line-height:1.7;">
-      לבירורים ולפרטים נוספים ניתן לפנות למשרד בכתובת ${officeLink}.
+      ${escapeHtml(t('office_note')).replace(/\{מייל_משרד\}/g, officeLink)}
     </p>
     ${noReplyBox()}`
   return {
-    subject: 'בנוגע לבקשת הלידה — היכל החתם סופר',
+    subject: t('subject'),
     html: shell({
-      preheader: 'בנוגע לבקשת הלידה שהגשתם',
+      preheader: t('preheader'),
       accent: '#dc2626',
-      title: 'בנוגע לבקשת הלידה',
-      subtitle: 'עזר יולדות · היכל החתם סופר',
+      title: t('title'),
+      subtitle: t('subtitle'),
       body,
     }),
   }
@@ -1268,13 +1278,15 @@ export function recoveryRealizedEmail(opts: {
     detailRow('סכום שמומש', '₪' + opts.amount.toLocaleString('he-IL')) +
     detailRow('מספר לילות', opts.nights != null ? String(opts.nights) : '—') +
     detailRow('מספר קבלה', opts.receipt)
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const t = (k: string) => textFor('recovery_realized', k)
   const body = `
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">יולדת סימנה מימוש זכאות החלמה בפורטל בית ההחלמה.</p>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">${escapeHtml(t('body'))}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
   `
   return {
     subject: `מימוש זכאות החלמה · ${opts.motherName} · ${opts.home}`,
-    html: shell({ preheader: `${opts.motherName} מימשה זכאות החלמה`, accent: '#059669', title: 'מימוש זכאות החלמה', subtitle: 'היכל החתם סופר', body }),
+    html: shell({ preheader: `${opts.motherName} מימשה זכאות החלמה`, accent: '#059669', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
 
@@ -1283,13 +1295,15 @@ export function recoveryEditRequestEmail(opts: {
   home: string
   motherName: string
 }): { subject: string; html: string } {
+  // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
+  const tEdit = (k: string) => textFor('recovery_edit_request', k)
   const body = `
     <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">בית החלמה <b>${escapeHtml(opts.home)}</b> ביקש לתקן את הרשומה של היולדת <b>${escapeHtml(opts.motherName)}</b>.</p>
-    <p style="margin:0;color:#475569;font-size:15px;line-height:1.8;">הרשומה נעולה. ניתן לפתוח אותה לעריכה ממסך ההחלמה או מכרטסת הלידה.</p>
+    <p style="margin:0;color:#475569;font-size:15px;line-height:1.8;">${escapeHtml(tEdit('locked_note'))}</p>
   `
   return {
     subject: `בקשת תיקון · ${opts.motherName} · ${opts.home}`,
-    html: shell({ preheader: `בקשת תיקון מ${opts.home}`, accent: '#d97706', title: 'בקשת תיקון רשומה', subtitle: 'היכל החתם סופר', body }),
+    html: shell({ preheader: `בקשת תיקון מ${opts.home}`, accent: '#d97706', title: tEdit('title'), subtitle: tEdit('subtitle'), body }),
   }
 }
 

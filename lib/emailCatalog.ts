@@ -507,6 +507,144 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'title', label: 'כותרת ראשית', default: 'קיבלנו את פנייתכם' },
     ],
   },
+
+  // ─── מיילים שהתווספו לקטלוג (היו קיימים בקוד אך לא ניתנים לעריכה) ────────
+  {
+    id: 'birth_rejected',
+    group: 'maternity',
+    title: 'בקשת הלידה נדחתה',
+    trigger: 'כשמנהל דוחה בקשת לידה ומזין סיבה. הסיבה נכללת במייל',
+    recipient: 'היולדת',
+    department: 'maternity',
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'בנוגע לבקשת הלידה — היכל החתם סופר' },
+      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'בנוגע לבקשת הלידה שהגשתם' },
+      { key: 'title', label: 'כותרת ראשית', default: 'בנוגע לבקשת הלידה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'עזר יולדות · היכל החתם סופר' },
+      {
+        key: 'body', label: 'גוף ההודעה',
+        default: 'לאחר בדיקת בקשת הלידה שהוגשה, אנו מצטערים להודיע כי הבקשה נדחתה.',
+        multiline: true,
+      },
+      { key: 'reason_title', label: 'כותרת בלוק סיבת הדחייה', default: 'סיבת הדחייה' },
+      {
+        key: 'office_note', label: 'שורת הפנייה למשרד',
+        default: 'לבירורים ולפרטים נוספים ניתן לפנות למשרד בכתובת {מייל_משרד}.',
+        multiline: true, vars: ['{מייל_משרד}'],
+      },
+    ],
+  },
+
+  {
+    id: 'registration_approved',
+    group: 'registration',
+    title: 'הרישום לאיגוד אושר',
+    trigger: 'כשמנהל מאשר את רישום המשפחה לאיגוד הצאצאים',
+    recipient: 'הנרשם',
+    department: 'main',
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'הרישום לאיגוד הצאצאים אושר — היכל החתם סופר' },
+      {
+        key: 'preheader', label: 'שורת התצוגה המקדימה',
+        default: 'הרישום לאיגוד הצאצאים התקבל ואושר! ניתן כעת להגיש בקשות.', multiline: true,
+      },
+      { key: 'title', label: 'כותרת ראשית', default: 'הרישום אושר בהצלחה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'ברוכים הבאים להיכל החתם סופר' },
+      { key: 'details_title', label: 'כותרת טבלת הפרטים', default: 'פרטי הצאצא שלך:' },
+    ],
+  },
+
+  {
+    id: 'registration_invite',
+    group: 'registration',
+    title: 'הזמנה להרשמה (מייל לא מזוהה)',
+    trigger: 'כשמתקבלת פנייה במייל מכתובת שאינה רשומה במערכת',
+    recipient: 'הפונה',
+    department: 'main',
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'קיבלנו את פנייתך — היכל החתם סופר' },
+      {
+        key: 'preheader', label: 'שורת התצוגה המקדימה',
+        default: 'כתובת המייל שלך לא נמצאה — כנס/י למערכת הדיגיטלית לבדיקה.', multiline: true,
+      },
+      { key: 'title', label: 'כותרת ראשית', default: 'קיבלנו את פנייתך' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
+      { key: 'kicker', label: 'תווית קטנה מעל הכותרת', default: 'קיבלנו את פנייתך' },
+    ],
+  },
+
+  {
+    id: 'existing_contact',
+    group: 'registration',
+    title: 'מענה אוטומטי — צאצא קיים',
+    trigger: 'כשפונה במייל מזוהה כרשום במערכת',
+    recipient: 'הצאצא',
+    department: 'main',
+    fields: [
+      { key: 'kicker', label: 'תווית קטנה מעל הכותרת', default: 'קיבלנו את פנייתך' },
+      {
+        key: 'intro', label: 'משפט הפתיחה',
+        default: 'תודה שפנית אלינו. ריכזנו עבורך את הפרטים הרשומים במערכת:', multiline: true,
+      },
+      {
+        key: 'next_approved', label: 'הנחיה — משפחה מאושרת',
+        default: 'ניתן להגיש בקשה ישירות דרך המערכת הדיגיטלית שלנו:', multiline: true,
+      },
+      { key: 'next_pending', label: 'הנחיה — טרם אושרה', default: 'לטיפול בבקשתך:' },
+    ],
+  },
+
+  {
+    id: 'financial_aid_inquiry',
+    group: 'aid',
+    title: 'בקשת סיוע רפואי — להחלטת מנהל',
+    trigger: 'נשלח למנהל להחלטה. תשובה בסכום או X',
+    recipient: 'המנהל',
+    department: 'financial_aid',
+    fields: [
+      {
+        key: 'preheader', label: 'שורת התצוגה המקדימה',
+        default: 'בקשת סיוע רפואי להחלטתך — השב בסכום או X.', multiline: true,
+      },
+      { key: 'title', label: 'כותרת ראשית', default: 'בקשת סיוע רפואי' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
+    ],
+  },
+
+  {
+    id: 'recovery_realized',
+    group: 'maternity',
+    title: 'התראה — מימוש זכאות החלמה',
+    trigger: 'כשבית החלמה מסמן מימוש זכאות בפורטל. התראה תפעולית פנימית',
+    recipient: 'מחלקת יולדות',
+    department: 'maternity',
+    fields: [
+      { key: 'title', label: 'כותרת ראשית', default: 'מימוש זכאות החלמה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
+      {
+        key: 'body', label: 'גוף ההודעה',
+        default: 'יולדת סימנה מימוש זכאות החלמה בפורטל בית ההחלמה.', multiline: true,
+      },
+    ],
+  },
+
+  {
+    id: 'recovery_edit_request',
+    group: 'maternity',
+    title: 'התראה — בקשת תיקון רשומה',
+    trigger: 'כשבית החלמה מבקש לתקן רשומה נעולה',
+    recipient: 'מחלקת יולדות',
+    department: 'maternity',
+    fields: [
+      { key: 'title', label: 'כותרת ראשית', default: 'בקשת תיקון רשומה' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
+      {
+        key: 'locked_note', label: 'הסבר על הנעילה',
+        default: 'הרשומה נעולה. ניתן לפתוח אותה לעריכה ממסך ההחלמה או מכרטסת הלידה.',
+        multiline: true,
+      },
+    ],
+  },
 ]
 
 /** מפתח ה-app_settings שבו נשמרות העריכות. */
