@@ -197,11 +197,9 @@ export function detailsBox(c: Ctx, title: string, y: number, rows: [string, stri
   let ry = y - titleH - 18
   const valRight = x + w - 16
   for (const [label, value] of rows) {
-    // קודם הכותרת (label) בצד ימין, ואחריה הערך (value) משמאלה — "שם היולדת: ויסברג גיטי"
-    const labelText = `${label}: `
-    rightText(c, labelText, valRight, ry, 12, NAVY)
-    const lW = tw(c, labelText, 12)
-    rightText(c, value || '—', valRight - lW, ry, 12, INK)
+    // label+value כמחרוזת אחת — ההקשר העברי של ה-label מבטיח שמספרים (ת"ז/טלפון/תאריך)
+    // יוצגו נכון (toVisual מהפך, ו-pdf-lib מהפך בחזרה בהקשר RTL).
+    rightText(c, `${label}: ${value || '—'}`, valRight, ry, 12, NAVY)
     ry -= rowH
   }
   return y - boxH - 16
@@ -211,31 +209,27 @@ export function detailsBox(c: Ctx, title: string, y: number, rows: [string, stri
 type Center = { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }
 function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number {
   const x = MX, w = W - MX * 2
-  const titleH = 24
+  const titleH = 22
   const items = centers.filter(cn => cn.name)
-  const perH = 23
+  const perH = 20        // גובה מוקד מוקטן — כדי שרשימה ארוכה (6 מוקדים) תיכנס בעמוד
   const contentH = items.length ? items.length * perH : 22
-  const boxH = titleH + contentH + 8
+  const boxH = titleH + contentH + 6
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
   c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: NAVY })
-  rightText(c, title, x + w - 14, y - titleH + 7, 12.5, rgb(1, 1, 1))
+  rightText(c, title, x + w - 14, y - titleH + 6, 12, rgb(1, 1, 1))
 
-  let ry = y - titleH - 15
+  let ry = y - titleH - 14
   if (!items.length) {
     rightText(c, 'רשימת המוקדים תימסר לכם על ידי המזכירות', x + w - 16, ry, 11, SUB)
   } else {
     for (const cn of items) {
       // שורה 1: נקודת זהב + שם המוקד
       c.page.drawSvgPath('M 0 -2.2 L 2.2 0 L 0 2.2 L -2.2 0 Z', { x: x + w - 9, y: ry + 4, color: GOLD, borderWidth: 0 })
-      rightText(c, cn.name, x + w - 18, ry, 11.5, NAVY)
-      // שורה 2: כתובת · ימים · שעות. את השעות (טווח רב-ספרתי) מציירים כטוקן נפרד כדי שלא
-      // יתהפכו — טווח שעות המשובץ בתוך טקסט עברי מוצג הפוך במנוע ה-PDF (כמו מספר טלפון).
+      rightText(c, cn.name, x + w - 18, ry, 11, NAVY)
+      // שורה 2: כתובת · ימים · שעות — כמחרוזת אחת (toVisual מטפל בהיפוך טווח השעות).
       const addr = [cn.address, cn.city].filter(Boolean).join(', ')
-      const hours = (cn.pickup_hours || '').trim()
-      const hebPart = [addr, cn.pickup_days].filter(Boolean).join('  ·  ')
-      let dx = x + w - 18
-      if (hebPart) { rightText(c, hebPart, dx, ry - 12.5, 9, SUB); dx -= tw(c, hebPart, 9) }
-      if (hours) rightText(c, (hebPart ? '  ·  ' : '') + hours, dx, ry - 12.5, 9, SUB)
+      const line2 = [addr, cn.pickup_days, (cn.pickup_hours || '').trim()].filter(Boolean).join('  ·  ')
+      if (line2) rightText(c, line2, x + w - 18, ry - 12.5, 9, SUB)
       ry -= perH
     }
   }
@@ -262,18 +256,14 @@ type VoucherInput = {
 // ולא הפוך כפי שקרה כשהוא היה משובץ בתוך מחרוזת עברית.
 function serialLine(c: Ctx, serial: string | null | undefined, y: number) {
   if (!serial) return
-  const label = 'מס׳ שובר: '
-  rightText(c, label, MX + 150, y, 9, SUB)
-  const lW = tw(c, label, 9)
-  rightText(c, serial, MX + 150 - lW, y, 9, SUB)
+  // מחרוזת אחת — toVisual מטפל בהיפוך המספר; ציור מפוצל היה גורם להיפוך כפול.
+  rightText(c, `מס׳ שובר: ${serial}`, MX + 150, y, 9, SUB)
 }
 
-// שורת "הונפק בתאריך": חלק עברי מימין + תאריך לועזי כמספר עצמאי משמאלו (מוצג תקין).
+// שורת "הונפק בתאריך" — מחרוזת אחת (toVisual מטפל בתאריך הלועזי).
 export function drawIssueDate(c: Ctx, y: number) {
   const { prefix, greg } = issueDateParts()
-  rightText(c, prefix, W - MX, y, 10, SUB)
-  const pW = tw(c, prefix, 10)
-  rightText(c, greg, W - MX - pW, y, 10, SUB)
+  rightText(c, `${prefix}${greg}`, W - MX, y, 10, SUB)
 }
 
 async function renderFoodCard(input: VoucherInput): Promise<string> {
@@ -290,41 +280,34 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   // תאריך + מספר סידורי
   drawIssueDate(c, y)
   serialLine(c, input.serial, y)
-  y -= 24
+  y -= 22
 
   // כותרת ראשית
-  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 21, NAVY)
-  y -= 11
-  goldDivider(c, W / 2, y); y -= 21
+  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 19, NAVY)
+  y -= 10
+  goldDivider(c, W / 2, y); y -= 18
 
   // לכבוד
-  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 21
+  rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 12, INK); y -= 18
 
   // פסקת פתיחה (ללא סכום בתוך המשפט — הסכום מוצג כשדה נפרד כדי שיוצג תקין)
   y = paragraph(c,
     'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
-    W - MX, y, W - MX * 2, 12, SUB, 5)
+    W - MX, y, W - MX * 2, 11, SUB, 4)
   y -= 3
 
-  // סכום הכרטיס — תיבת הדגשה (המספר לבדו, מוצג תקין)
-  const amH = 32
+  // סכום הכרטיס — תיבת הדגשה. מחרוזת אחת (toVisual מטפל בהיפוך "600").
+  const amH = 28
   c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
-  // מצויר כך שייקרא "600 ש"ח": המספר לבדו (מוצג תקין) מימין, ו-ש"ח לשמאלו
-  const amtLabel = 'סכום טעינת הכרטיס: '
-  rightText(c, amtLabel, W - MX - 14, y - 21, 14, NAVY)
-  const amtLabelW = c.font.widthOfTextAtSize(amtLabel, 14)
-  const numRight = W - MX - 14 - amtLabelW - 4
-  rightText(c, '600', numRight, y - 22, 18, NAVY)
-  const numW = c.font.widthOfTextAtSize('600', 18)
-  rightText(c, 'ש"ח', numRight - numW - 12, y - 21, 14, NAVY)
-  y = y - amH - 10
+  rightText(c, 'סכום טעינת הכרטיס: 600 ש"ח', W - MX - 14, y - 19, 14, NAVY)
+  y = y - amH - 8
 
   // אזהרה אדומה
-  const warnH = 40
+  const warnH = 34
   c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
-  let wy = y - 15
-  wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 12, RED, 4)
-  y = y - warnH - 12
+  let wy = y - 13
+  wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 11, RED, 3)
+  y = y - warnH - 8
 
   // פרטי היולדת
   y = detailsBox(c, 'פרטי היולדת', y, [
