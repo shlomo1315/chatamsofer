@@ -14,11 +14,37 @@ export async function GET() {
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
 
   const balance = await getStockBalance(admin)
-  const { data: ledger } = await admin
+  // ⚠️ שליפה שטוחה + חיבור ידני, ולא join מקונן. ה-join המקונן
+  // (aid:maternity_aids(beneficiary:beneficiaries(...))) החזיר aid ריק
+  // ועמודת "פרטים" ביומן הופיעה כ-"—" בכל שורה של אישור לידה.
+  const { data: rawLedger, error: ledgerErr } = await admin
     .from('card_stock_ledger')
-    .select('id, delta, reason, note, created_at, aid:maternity_aids(id, beneficiary:beneficiaries(family_name, spouse_name, full_name, id_number, spouse_id_number))')
+    .select('id, delta, reason, note, created_at, aid_id')
     .order('created_at', { ascending: false })
     .limit(50)
+  if (ledgerErr) console.error('[card-stock] ledger query failed:', ledgerErr.message)
+
+  const aidIds = [...new Set((rawLedger ?? []).map(r => r.aid_id).filter(Boolean))] as string[]
+
+  // מיפוי תיק → פרטי היולדת, בשאילתה אחת
+  const aidMap = new Map<string, { id: string; beneficiary: Record<string, unknown> | null }>()
+  if (aidIds.length) {
+    const { data: aids, error: aidsErr } = await admin
+      .from('maternity_aids')
+      .select('id, beneficiary:beneficiaries(family_name, spouse_name, full_name, id_number, spouse_id_number)')
+      .in('id', aidIds)
+    if (aidsErr) console.error('[card-stock] aids query failed:', aidsErr.message)
+    for (const a of aids ?? []) {
+      const benRaw = (a as Record<string, unknown>).beneficiary
+      const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, unknown> | null
+      aidMap.set(a.id as string, { id: a.id as string, beneficiary: ben ?? null })
+    }
+  }
+
+  const ledger = (rawLedger ?? []).map(r => ({
+    ...r,
+    aid: r.aid_id ? aidMap.get(r.aid_id) ?? null : null,
+  }))
 
   // מספר היולדות בתור ההמתנה למלאי — מוצג במסך כדי שיהיה ברור כמה
   // מהכרטיסים שיתווספו יחולקו מיד, וכמה באמת יישארו במלאי.

@@ -254,6 +254,31 @@ function LineageTreePicker({
     return s
   }, [selected, allNodes, selfName])
 
+  // יישור המסלול הנבחר לטור אנכי במרכז — אותה התנהגות כמו בעץ הדורות
+  // הראשי (LineageBranchView). בלעדיה המסלול היה מפוזר והצמתים נחפפו.
+  const alignedById = useMemo(() => {
+    const m = new Map<string, { x: number; y: number; cx: number }>()
+    if (!selected || !positions.length) return m
+    const onPath = positions.filter(p => branch.has(p.node.id))
+    if (onPath.length < 2) return m
+    // סדר לפי דור (y) — מהשורש כלפי מטה
+    const sorted = [...onPath].sort((a, b) => a.y - b.y)
+    const colCx = w / 2
+    sorted.forEach((p, i) => {
+      const y = TP_PAD + i * (TP_NH + TP_VGAP)
+      m.set(p.node.id, { x: colCx - TP_NW / 2, y, cx: colCx })
+    })
+    // שאר העץ זז כבלוק אחיד הצידה — נפתחת רצועה נקייה במרכז לטור המיושר
+    const SHIFT = TP_NW * 1.4
+    positions.forEach(p => {
+      if (branch.has(p.node.id)) return
+      const push = p.cx < colCx ? -SHIFT : SHIFT
+      m.set(p.node.id, { x: p.x + push, y: p.y, cx: p.cx + push })
+    })
+    return m
+  }, [selected, branch, positions, w])
+  const isAligned = alignedById.size > 0
+
   // Center horizontally on first load
   useEffect(() => {
     if (!positions.length || didCenter.current) return
@@ -361,8 +386,13 @@ function LineageTreePicker({
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
-              const x1 = e.from.cx * zoom, y1 = (e.from.y + TP_NH) * zoom
-              const x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+              // הקווים עוקבים אחרי המיקום המיושר, אחרת היו מתנתקים מהצמתים
+              const af = alignedById.get(e.from.node.id)
+              const at = alignedById.get(e.to.node.id)
+              const fx = af?.cx ?? e.from.cx, fy = af?.y ?? e.from.y
+              const tx = at?.cx ?? e.to.cx, ty = at?.y ?? e.to.y
+              const x1 = fx * zoom, y1 = (fy + TP_NH) * zoom
+              const x2 = tx * zoom, y2 = ty * zoom
               const mid = (y1 + y2) / 2
               const onBranch = branch.has(e.from.node.id) && branch.has(e.to.node.id)
               const col = onBranch ? tpPal(e.from.node.generation).ring : '#CBD5E1'
@@ -389,7 +419,8 @@ function LineageTreePicker({
                 onClick={() => { if (isSelf) return; handleNodeClick(pos) }}
                 style={{
                   position: 'absolute',
-                  left: pos.x * zoom, top: pos.y * zoom,
+                  left: (alignedById.get(pos.node.id)?.x ?? pos.x) * zoom,
+                  top: (alignedById.get(pos.node.id)?.y ?? pos.y) * zoom,
                   width: TP_NW * zoom, height: TP_NH * zoom,
                   borderRadius: 16 * zoom,
                   background: p.bg,
@@ -399,9 +430,12 @@ function LineageTreePicker({
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transform: isSel ? 'scale(1.12) translateY(-2px)' : onBranch ? 'scale(1.06)' : 'scale(1)',
+                  // ⚠️ ללא transition על left/top — היא גררה את הצמתים וגרמה
+                  // לקפיצות בזום ובגלילה. המיקום משתנה מיד, חלק.
                   transition: 'box-shadow .2s, transform .2s, opacity .2s',
                   zIndex: isSel ? 21 : onBranch ? 15 : 2, userSelect: 'none',
-                  opacity: !selected || onBranch ? 1 : 0.4,
+                  // כשיש מסלול מיושר — שאר העץ מעומעם חזק יותר, כמו בעץ הראשי
+                  opacity: !selected ? 1 : onBranch ? 1 : isAligned ? 0.32 : 0.4,
                 }}>
                 {/* generation badge */}
                 <div style={{
