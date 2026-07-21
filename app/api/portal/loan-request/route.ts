@@ -7,6 +7,7 @@ import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
+import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,15 @@ export async function POST(request: NextRequest) {
 
   if (!beneficiary_id || !amount || !installments || !purpose) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // ההצהרה על פנייה קודמת לגמ"ח — שדה חובה, ורק אחת מהאפשרויות המוכרות
+  const parsedDeclaration = String(declaration ?? '').trim()
+  if (!parsedDeclaration) {
+    return NextResponse.json({ error: 'חסרה תשובה: האם פנית בעבר לגמ"ח חתם סופר?' }, { status: 400 })
+  }
+  if (!LOAN_DECLARATIONS.includes(parsedDeclaration as typeof LOAN_DECLARATIONS[number])) {
+    return NextResponse.json({ error: 'התשובה על פנייה קודמת לגמ"ח אינה תקינה' }, { status: 400 })
   }
 
   // אימות סשן הפורטל — הגשת בקשה רק עבור המוטב שאותר בסשן הנוכחי
@@ -88,7 +98,7 @@ export async function POST(request: NextRequest) {
     monthly_payment: Math.round(monthly_payment * 100) / 100,
     purpose: String(purpose).trim(),
     purpose_details: purpose_details ? String(purpose_details).trim() : null,
-    declaration: declaration ? String(declaration) : null,
+    declaration: parsedDeclaration,
     notes: notes ? String(notes).trim() : null,
     document_urls: Array.isArray(document_urls) && document_urls.length ? document_urls : null,
     status: 'pending',
@@ -114,7 +124,7 @@ export async function POST(request: NextRequest) {
           ['סכום מבוקש', `₪${parsedAmount.toLocaleString('he-IL')}`],
           ['מספר תשלומים', parsedInstallments],
           ['תשלום חודשי משוער', `₪${Math.round(monthly_payment).toLocaleString('he-IL')}`],
-          ['פנייה קודמת לגמ"ח', declaration ? String(declaration) : ''],
+          ['פנייה קודמת לגמ"ח', parsedDeclaration],
           ['הערות', notes ? String(notes).trim() : ''],
         ],
         documents: signedDocs,

@@ -1849,6 +1849,7 @@ export default function PublicPortalPage() {
     if (Number(loanForm.installments) > 60) { setError('מספר התשלומים המרבי הוא 60'); return }
     if (loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && !loanForm.purpose_details.trim()) { setError('אנא פרט את מטרת ההלוואה'); return }
     if (loanForm.purpose === WEDDING_PURPOSE && !loanWeddingFile) { setError('יש לצרף הזמנה של החתונה'); return }
+    if (!loanForm.declaration) { setError('אנא בחר תשובה: האם פנית בעבר לגמ"ח חתם סופר?'); return }
     if (!beneficiary) return
     if (needsIdWithRequest) {
       const miss = missingRequestIdDocs()
