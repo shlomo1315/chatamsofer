@@ -345,40 +345,38 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   {
     const innerRight = W - MX - 14
     const innerW = W - MX * 2 - 28
-    const measure = (s: string) => c.font.widthOfTextAtSize(s, 11)
+    const FS = 10           // פונט מוקטן — כדי שכל הבלוק ייכנס בתוך המסגרת
+    const measure = (s: string) => c.font.widthOfTextAtSize(s, FS)
     // מספרי הטלפון המעודכנים של היולדת/בעלה — רק מהם ניתן להפעיל את הכרטיס
     const phones = [input.phone, input.spousePhone].map(p => String(p ?? '').trim()).filter(Boolean)
     const uniqPhones = [...new Set(phones)]
 
-    const lineA = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות למוקד הטלפוני, ולפעול לפי ההנחיות:'
+    // טקסטים מקוצרים — כדי שהבלוק לא יגלוש מהמסגרת
+    const lineA = 'לאחר קבלת הכרטיס מהמוקד, חובה להפעילו בהתקשרות טלפונית למוקד:'
+    const lineMoked = 'להפעלה חייגו למוקד: 02-3131325 שלוחה 1'
     const lineB = uniqPhones.length
-      ? 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים אצלנו — ההפעלה אפשרית אך ורק בשיחה מהמספרים הבאים:'
-      : 'שימו לב: המערכת מזהה אתכם אוטומטית לפי מספרי הטלפון המעודכנים במערכת — ההפעלה אפשרית אך ורק בשיחה ממספרים אלו.'
+      ? 'שימו לב: הזיהוי אוטומטי לפי מספרי הטלפון שבמערכת — ההפעלה אפשרית רק מהמספרים הבאים:'
+      : 'שימו לב: הזיהוי אוטומטי לפי מספרי הטלפון שבמערכת — ההפעלה אפשרית רק ממספרים אלו.'
     const wA = wrapText(lineA, innerW, measure)
     const wB = wrapText(lineB, innerW, measure)
-    const titleH = 22
-    const lineH = 15
-    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 14
+    const titleH = 20
+    const lineH = 13.5
+    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 12
 
     c.page.drawRectangle({ x: MX, y: y - boxH, width: W - MX * 2, height: boxH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1.2 })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: NAVY })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: 3, color: GOLD })
-    rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', innerRight, y - titleH + 7, 12, rgb(1, 1, 1))
+    rightText(c, 'הפעלת הכרטיס — חובה לפני השימוש!', innerRight, y - titleH + 6, 11, rgb(1, 1, 1))
 
-    let ay = y - titleH - 13
-    for (const ln of wA) { rightText(c, ln, innerRight, ay, 11, INK); ay -= lineH }
-
-    // שורת המוקד — עם bidi אמיתי אפשר לכתוב את כל השורה כמקשה אחת (המספר יבודד LTR נכון)
-    rightText(c, 'להפעלה חייגו למוקד: 02-3131325 שלוחה 1', innerRight, ay, 11, NAVY); ay -= lineH
-
-    for (const ln of wB) { rightText(c, ln, innerRight, ay, 11, RED); ay -= lineH }
-
-    // מספרי הטלפון המעודכנים — מרווחים וממורכזים; ה-bidi מבודד כל מספר LTR
+    let ay = y - titleH - 12
+    for (const ln of wA) { rightText(c, ln, innerRight, ay, FS, INK); ay -= lineH }
+    rightText(c, lineMoked, innerRight, ay, FS, NAVY); ay -= lineH
+    for (const ln of wB) { rightText(c, ln, innerRight, ay, FS, RED); ay -= lineH }
     if (uniqPhones.length) {
-      centerText(c, uniqPhones.join('     '), W / 2, ay, 12, NAVY); ay -= lineH
+      centerText(c, uniqPhones.join('     '), W / 2, ay, FS + 1, NAVY); ay -= lineH
     }
 
-    y = y - boxH - 12
+    y = y - boxH - 10
   }
 
   // הערות בתחתית

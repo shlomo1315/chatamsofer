@@ -100,13 +100,17 @@ async function getLineagePath(nodeId?: string | null): Promise<string[]> {
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
 
 export default async function MaternityDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const _t0 = Date.now()
   const { id } = await params
   const aid = await getAid(id)
+  const _tAid = Date.now()
   const ben = aid?.beneficiary as Beneficiary | undefined
   const [lineagePath, idDocs] = await Promise.all([
     getLineagePath(ben?.lineage_node_id),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
   ])
+  // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
+  console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
 
   if (!aid && isSupabaseConfigured()) notFound()
