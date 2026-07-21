@@ -1,8 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2 } from 'lucide-react'
-import { useCan } from '@/components/StaffPermissions'
+import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { useStaffPermissions } from '@/components/StaffPermissions'
 
 type LedgerRow = {
   id: string
@@ -43,8 +43,12 @@ const benId = (r: LedgerRow) => {
 
 export default function StockManager() {
   const router = useRouter()
-  const canEdit = useCan('maternity_cards', 'edit')
+  // ניהול המלאי שמור למנהל בלבד — לא למזכירות, גם אם יש לה הרשאת עריכה
+  // לכרטיסים. ⚠️ זו שכבת UI; האכיפה האמיתית היא ב-API (requirePermission).
+  const { isAdmin } = useStaffPermissions()
+  const canEdit = isAdmin
   const [balance, setBalance] = useState<number | null>(null)
+  const [awaiting, setAwaiting] = useState(0)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<'add' | 'remove' | null>(null)
@@ -56,6 +60,7 @@ export default function StockManager() {
       const r = await fetch('/api/admin/card-stock', { cache: 'no-store' })
       const d = await r.json()
       setBalance(typeof d.balance === 'number' ? d.balance : 0)
+      setAwaiting(typeof d.awaiting === 'number' ? d.awaiting : 0)
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -93,6 +98,11 @@ export default function StockManager() {
           {low && !loading && (
             <p className="flex items-center gap-1.5 text-xs text-rose-600 font-medium mt-1.5">
               <AlertTriangle size={13} /> מלאי נמוך — מומלץ להוסיף כרטיסים
+            </p>
+          )}
+          {!loading && awaiting > 0 && (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700 font-medium mt-1.5">
+              <Clock size={13} /> {awaiting} יולדות ממתינות למלאי
             </p>
           )}
         </div>
@@ -175,8 +185,10 @@ export default function StockManager() {
         <StockMovementModal
           mode={modal}
           currentBalance={balance ?? 0}
+          awaiting={awaiting}
           onClose={() => setModal(null)}
           onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 4000); load() }}
+          onRefresh={load}
         />
       )}
     </div>
@@ -184,14 +196,26 @@ export default function StockManager() {
 }
 
 // מודאל הוספת / הורדת מלאי
-function StockMovementModal({ mode, currentBalance, onClose, onDone }: {
-  mode: 'add' | 'remove'; currentBalance: number; onClose: () => void; onDone: (msg: string) => void
+function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, onRefresh }: {
+  mode: 'add' | 'remove'; currentBalance: number; awaiting: number
+  onClose: () => void; onDone: (msg: string) => void; onRefresh: () => void
 }) {
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const isAdd = mode === 'add'
+
+  // ── חישוב הסיכום ──
+  // ⚠️ המלאי אחרי הוספה אינו balance+qty: הכרטיסים מחולקים תחילה ליולדות
+  // הממתינות (processAwaitingStock, FIFO), ורק מה שנשאר יושב במלאי.
+  const qtyNum = Math.max(0, Math.trunc(Number(qty) || 0))
+  const poolAfterAdd = currentBalance + qtyNum          // המלאי הזמין לחלוקה
+  const toWaiting = isAdd ? Math.min(awaiting, poolAfterAdd) : 0
+  const stillWaiting = isAdd ? Math.max(0, awaiting - toWaiting) : 0
+  const finalBalance = isAdd
+    ? poolAfterAdd - toWaiting
+    : Math.max(0, currentBalance - qtyNum)
 
   const submit = async () => {
     const n = Math.trunc(Number(qty))
@@ -205,6 +229,19 @@ function StockMovementModal({ mode, currentBalance, onClose, onDone }: {
       })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
+
+      // ⚠️ כשל בשיוך לממתינות אינו כשל של הוספת המלאי — המלאי כן נוסף.
+      // מציגים אותו במודאל במקום לסגור עם הודעת הצלחה מטעה.
+      if (isAdd && (d.notConfigured || d.failed > 0)) {
+        const detail = Array.isArray(d.errors) && d.errors.length ? ` (${d.errors[0]})` : ''
+        setErr(d.notConfigured
+          ? `נוספו ${n} כרטיסים, אך השיוך לממתינות נכשל — נדרים אינו מוגדר${detail}`
+          : `נוספו ${n} כרטיסים. ${d.processed} יולדות קיבלו שובר, ${d.failed} נכשלו${detail}`)
+        setBusy(false)
+        onRefresh()
+        return
+      }
+
       const processedMsg = isAdd && d.processed > 0 ? ` — ${d.processed} יולדות מרשימת ההמתנה קיבלו שובר` : ''
       onDone(isAdd ? `נוספו ${n} כרטיסים למלאי${processedMsg}` : `הורדו ${n} כרטיסים מהמלאי`)
     } catch { setErr('שגיאת רשת'); setBusy(false) }
@@ -232,9 +269,47 @@ function StockMovementModal({ mode, currentBalance, onClose, onDone }: {
               className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
               placeholder={isAdd ? 'לדוגמה: קבלת 50 כרטיסים חדשים' : 'לדוגמה: נשלח ידנית ליולדת פלונית'} />
           </div>
-          {!isAdd && (
-            <p className="text-xs text-slate-400">מלאי נוכחי: {currentBalance} כרטיסים</p>
-          )}
+          {/* סיכום חי — מה קורה למלאי אחרי העדכון.
+              בהוספה: הכרטיסים מחולקים קודם לממתינות (FIFO), והיתרה נשארת במלאי. */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-col gap-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">כמות המלאי הקיימת במערכת</span>
+              <span className="font-semibold text-slate-800 ltr-num">{currentBalance}</span>
+            </div>
+
+            {isAdd && awaiting > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-amber-700">יולדות הממתינות למלאי</span>
+                <span className="font-semibold text-amber-700 ltr-num">{awaiting}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">{isAdd ? 'כמות הכרטיסים שהינך מוסיף כעת' : 'כמות הכרטיסים שהינך מוריד כעת'}</span>
+              <span className={`font-semibold ltr-num ${isAdd ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {qtyNum > 0 ? (isAdd ? `+${qtyNum}` : `-${qtyNum}`) : '—'}
+              </span>
+            </div>
+
+            {isAdd && qtyNum > 0 && toWaiting > 0 && (
+              <div className="flex items-center justify-between text-amber-700">
+                <span>מתוכם יחולקו מיד לממתינות</span>
+                <span className="font-semibold ltr-num">{toWaiting}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between border-t border-slate-200 pt-1.5 mt-0.5">
+              <span className="font-medium text-slate-700">סך הכל יהיה במלאי אחרי העדכון</span>
+              <span className="font-bold text-slate-900 ltr-num">{finalBalance} כרטיסים</span>
+            </div>
+
+            {isAdd && qtyNum > 0 && stillWaiting > 0 && (
+              <p className="text-xs text-amber-700 pt-0.5">
+                {stillWaiting} יולדות עדיין יישארו בהמתנה — אין מספיק כרטיסים לכולן.
+              </p>
+            )}
+          </div>
+
           {isAdd && (
             <p className="text-xs text-slate-500 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
               יולדות שממתינות למלאי ישויכו אוטומטית לפי סדר הוותק ויקבלו שובר במייל.

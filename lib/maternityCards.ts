@@ -103,7 +103,11 @@ export async function loadMaternityCardOnApproval(
 
 // שולח ליולדת מייל "כרטיס מזון אושר" + שובר הכרטיס (PDF) מצורף (best-effort).
 // נקרא כשמלאי מתחדש ויולדת מתור ההמתנה מקבלת את כרטיסה.
-export async function sendCardVoucher(admin: SupabaseClient, aidId: string, centerName?: string | null) {
+// מחזיר האם השובר אכן נשלח. ⚠️ קודם החזירה void ובלעה כל כשל — כך יולדת
+// יכלה לקבל כרטיס בלי לדעת עליו, ואיש לא ידע שהמייל לא יצא.
+export async function sendCardVoucher(
+  admin: SupabaseClient, aidId: string, centerName?: string | null,
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const { data: aid } = await admin
       .from('maternity_aids')
@@ -113,7 +117,7 @@ export async function sendCardVoucher(admin: SupabaseClient, aidId: string, cent
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const a = aid as any
     const ben = a?.beneficiary
-    if (!ben?.email) return
+    if (!ben?.email) return { ok: false, error: 'אין כתובת מייל ליולדת — השובר לא נשלח' }
 
     // בניית שובר הכרטיס (PDF) לצירוף — best-effort; אם נכשל, נשלח את המייל בלבד
     let attachments: import('@/lib/sendMail').MailAttachment[] | undefined
@@ -131,37 +135,75 @@ export async function sendCardVoucher(admin: SupabaseClient, aidId: string, cent
     } catch (e) { console.error('[maternityCards] card voucher build failed:', e) }
 
     const mail = maternityCardEmail(ben, { centerName, phones: [ben.phone, ben.spouse_phone] })
-    await deliverMail(ben.email, mail.subject, mail.html, attachments, mailFor('maternity'))
+    const sent = await deliverMail(ben.email, mail.subject, mail.html, attachments, mailFor('maternity'))
+    if (sent && sent.ok === false) {
+      console.error('[maternityCards] voucher mail failed:', sent.error)
+      return { ok: false, error: sent.error || 'שליחת השובר נכשלה' }
+    }
+    return { ok: true }
   } catch (e) {
     console.error('[maternityCards] voucher mail failed:', e)
+    return { ok: false, error: e instanceof Error ? e.message : 'שליחת השובר נכשלה' }
   }
 }
 
 // מעבד את תור "ממתין למלאי" מול המלאי הגלובלי: יולדות ותיקות קודם (FIFO). לכל אחת —
 // מטעין בפועל בנדרים (loadMaternityCardOnApproval מנכה כרטיס אטומית) ושולח שובר. נעצר
 // ברגע שהמלאי אוזל. מחזיר כמה טופלו. נקרא אחרי הוספת מלאי חדש.
-export async function processAwaitingStock(admin: SupabaseClient): Promise<number> {
+export interface AwaitingStockResult {
+  processed: number
+  /** נכשלו למרות שהיה מלאי — היולדת נשארה בתור ולא קיבלה שובר. */
+  failed: number
+  /** נדרים אינו מוגדר — אף יולדת לא תטופל עד שיוגדר. */
+  notConfigured: boolean
+  errors: string[]
+}
+
+export async function processAwaitingStock(admin: SupabaseClient): Promise<AwaitingStockResult> {
+  const out: AwaitingStockResult = { processed: 0, failed: 0, notConfigured: false, errors: [] }
+
   let balance = await getStockBalance(admin)
-  if (balance <= 0) return 0
+  if (balance <= 0) return out
   const { data: waiting } = await admin
     .from('maternity_aids')
     .select('id')
     .eq('card_status', 'awaiting_stock')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
-  if (!waiting?.length) return 0
+  if (!waiting?.length) return out
 
-  let processed = 0
   for (const w of waiting) {
     if (balance <= 0) break
     // loadMaternityCardOnApproval מנכה כרטיס אטומית ומטעין בנדרים. אם אין מלאי → awaitingStock=true.
     const r = await loadMaternityCardOnApproval(admin, w.id)
     if (r.awaitingStock) break        // המלאי אזל בדיוק כעת — עוצרים
-    if (!r.ok) continue               // כשל נדרים ליולדת ספציפית — הכרטיס הוחזר, ממשיכים לבאה
+
+    // ⚠️ נדרים לא מוגדר → אף יולדת לא תיטען. קודם הלולאה המשיכה בשקט:
+    // המלאי נשאר תקוע, היולדות לא קיבלו שובר, ואיש לא ידע. עוצרים ומדווחים.
+    if (r.notConfigured) {
+      out.notConfigured = true
+      out.errors.push('נדרים אינו מוגדר — לא ניתן להטעין כרטיסים')
+      break
+    }
+
+    if (!r.ok) {
+      // כשל ליולדת ספציפית — הכרטיס הוחזר למלאי. ממשיכים לבאה, אך סופרים ומדווחים.
+      out.failed++
+      if (r.error) out.errors.push(r.error)
+      continue
+    }
+
     // הטעינה הצליחה → הכרטיס נוכה, שולחים שובר
-    await sendCardVoucher(admin, w.id, null)
+    const voucher = await sendCardVoucher(admin, w.id, null)
+    // ⚠️ הכרטיס כבר נוכה והוטען. אם השובר לא נשלח — היולדת לא יודעת שיש לה
+    // כרטיס. נספר ככשל כדי שהמסך יציג זאת, ולא ידווח על הצלחה שקרית.
+    if (!voucher.ok) {
+      out.failed++
+      out.errors.push(voucher.error || 'שליחת השובר נכשלה')
+    } else {
+      out.processed++
+    }
     balance = await getStockBalance(admin)
-    processed++
   }
-  return processed
+  return out
 }
 

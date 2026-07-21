@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement } from '@/lib/cardStock'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
@@ -20,13 +20,22 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(50)
 
-  return NextResponse.json({ balance, ledger: ledger ?? [] }, { headers: NO_STORE })
+  // מספר היולדות בתור ההמתנה למלאי — מוצג במסך כדי שיהיה ברור כמה
+  // מהכרטיסים שיתווספו יחולקו מיד, וכמה באמת יישארו במלאי.
+  const { count: awaiting } = await admin
+    .from('maternity_aids')
+    .select('id', { count: 'exact', head: true })
+    .eq('card_status', 'awaiting_stock')
+
+  return NextResponse.json({ balance, ledger: ledger ?? [], awaiting: awaiting ?? 0 }, { headers: NO_STORE })
 }
 
 // POST: תנועת מלאי ידנית — { delta, note?, aidId? }.
 // delta חיובי = הוספת מלאי (restock), שלילי = הורדה ידנית (manual_out).
 export async function POST(request: NextRequest) {
-  const staff = await requirePermission('maternity_cards', 'edit')
+  // ⚠️ תנועות מלאי שמורות למנהל בלבד (לא למזכירות עם הרשאת עריכה):
+  // הוספת מלאי מפעילה שיוך אוטומטי ליולדות וטעינת כסף אמיתי בנדרים.
+  const staff = await requireAdmin()
   if (!staff) return forbidden()
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -58,14 +67,22 @@ export async function POST(request: NextRequest) {
 
   // הוספת מלאי → שיוך אוטומטי (FIFO) לממתינות + איפוס סמן ההתראה אם חזרנו מעל הסף
   let processed = 0
+  let failed = 0
+  let notConfigured = false
+  let stockErrors: string[] = []
   if (delta > 0) {
     await resetAlertIfAboveThreshold(admin, balance)
-    processed = await processAwaitingStock(admin)
+    const res = await processAwaitingStock(admin)
+    processed = res.processed
+    failed = res.failed
+    notConfigured = res.notConfigured
+    stockErrors = res.errors
     balance = await getStockBalance(admin) // רענון אחרי השיוך
   } else {
     // הורדה ידנית עלולה להוריד אותנו לסף — בדיקת התראה
     await maybeSendLowStockAlert(admin, balance)
   }
 
-  return NextResponse.json({ balance, processed })
+  // failed/notConfigured מדווחים למסך — כדי שכשל בשיוך לא ייעלם בשקט
+  return NextResponse.json({ balance, processed, failed, notConfigured, errors: stockErrors })
 }

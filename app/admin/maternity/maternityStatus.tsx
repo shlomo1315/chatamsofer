@@ -4,7 +4,7 @@
 // הכבד כולו. כך ההידרציה של הדף מהירה ותפריט הסטטוס נפתח מיד.
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
@@ -289,10 +289,23 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 <p className="text-xs text-slate-500">שובר הכרטיס לא יישלח כעת</p>
               </div>
             </div>
-            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 leading-relaxed">
-              כרגע אין כרטיסים במלאי. אם תאשרו את הלידה — היולדת תיכנס ל<strong>רשימת המתנה</strong>,
-              תקבל מייל אישור עם שובר ההבראה בלבד (<strong>ללא שובר כרטיס מזון</strong>), וברגע שיתחדש
-              המלאי היא תשויך אוטומטית ותקבל את שובר הכרטיס במייל נפרד.
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 leading-relaxed flex flex-col gap-2">
+              <p className="m-0">
+                כרגע אין כרטיסים במלאי. אם תאשרו את הלידה — היולדת תיכנס ל<strong>רשימת המתנה</strong>.
+              </p>
+              <p className="m-0 flex items-start gap-1.5">
+                <Mail size={14} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  <strong>היולדת תקבל מייל</strong> אישור עם שובר ההבראה בלבד
+                  (<strong>ללא שובר כרטיס מזון</strong>).
+                </span>
+              </p>
+              <p className="m-0 flex items-start gap-1.5">
+                <Mail size={14} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  כשיתחדש המלאי היא תשויך אוטומטית ו<strong>תקבל מייל נוסף</strong> עם שובר הכרטיס.
+                </span>
+              </p>
             </div>
             <div className="mt-4 flex justify-start gap-2">
               <button type="button" onClick={() => { setStockWarnOpen(false); void setStatus('active') }}
