@@ -72,8 +72,19 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { delta?: number; note?: string; aidId?: string | null }
+  let body: { delta?: number; note?: string; aidId?: string | null; runQueue?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+
+  // הרצת התור בלבד (delta=0) — לטיפול ביולדות שנתקעו ולא נכנסו לתור,
+  // בלי להוסיף מלאי. מאפשר "לשחרר" מצב תקוע מהמסך.
+  if (body.runQueue) {
+    const res = await processAwaitingStock(admin)
+    return NextResponse.json({
+      balance: await getStockBalance(admin),
+      processed: res.processed, failed: res.failed,
+      notConfigured: res.notConfigured, errors: res.errors,
+    })
+  }
 
   const delta = Math.trunc(Number(body.delta))
   if (!Number.isFinite(delta) || delta === 0) {

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw } from 'lucide-react'
 import { useStaffPermissions } from '@/components/StaffPermissions'
 
 type LedgerRow = {
@@ -69,6 +69,26 @@ export default function StockManager() {
 
   const low = balance != null && balance <= 5
 
+  const [running, setRunning] = useState(false)
+  const runQueue = async () => {
+    setRunning(true)
+    try {
+      const r = await fetch('/api/admin/card-stock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runQueue: true }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setFlash(d.error || 'הפעולה נכשלה') }
+      else if (d.notConfigured) setFlash('נדרים אינו מוגדר — לא ניתן להטעין כרטיסים')
+      else if (d.processed > 0 || d.failed > 0) {
+        setFlash(`${d.processed} יולדות קיבלו כרטיס ושובר${d.failed ? ` · ${d.failed} נכשלו` : ''}`)
+      } else setFlash('אין יולדות שממתינות לטיפול')
+      setTimeout(() => setFlash(''), 6000)
+      load()
+    } catch { setFlash('שגיאת רשת'); setTimeout(() => setFlash(''), 4000) }
+    setRunning(false)
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -115,6 +135,13 @@ export default function StockManager() {
             <button onClick={() => setModal('remove')}
               className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-semibold rounded-lg px-4 py-2 whitespace-nowrap">
               <Minus size={15} /> הורדת כרטיס
+            </button>
+            {/* שחרור יולדות שנתקעו — אושרו אך לא נכנסו לתור ולכן לא נטענו */}
+            <button onClick={runQueue} disabled={running}
+              title="מטעין כרטיס ושולח שובר לכל יולדת מאושרת שטרם קיבלה"
+              className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-amber-50 text-amber-700 border border-amber-300 text-sm font-semibold rounded-lg px-4 py-2 whitespace-nowrap disabled:opacity-50">
+              {running ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              טיפול בממתינות
             </button>
           </div>
         )}
