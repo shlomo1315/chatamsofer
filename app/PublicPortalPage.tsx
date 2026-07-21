@@ -2863,12 +2863,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="שם פרטי" required>
+                    <Field label={<EditableText k="reg.firstName" />} required>
                       <TextInput value={regForm.full_name} onChange={setReg('full_name')} placeholder="ישראל" required />
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="שם משפחה" required>
+                    <Field label={<EditableText k="reg.lastName" />} required>
                       <TextInput value={regForm.family_name} onChange={setReg('family_name')} placeholder="ישראלי" required />
                     </Field>
                   </div>
@@ -2892,12 +2892,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="תאריך לידה" required>
+                    <Field label={<EditableText k="reg.birthDate" />} required>
                       <HebrewDatePicker value={regForm.birth_date} onChange={iso => setRegForm(f => ({ ...f, birth_date: iso }))} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 50 }} />
                     </Field>
                   </div>
                   <div className="col-span-2">
-                    <Field label="השתייכות קהילתית" hint="לא חובה, אולם מומלץ לצורך היערכות ורישום להטבות בהמשך בעז״ה">
+                    <Field label={<EditableText k="reg.community" />} hint={<EditableText k="reg.community.hint" />}>
                       <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" />
                     </Field>
                   </div>
@@ -2911,12 +2911,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <User size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">פרטי האשה</h3>
+                  <EditableText k="reg.wife.title" as="h3" className="font-semibold text-slate-900" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* סוג מסמך זיהוי — שורה נפרדת מלאה כדי שכל השדות יישארו מיושרים */}
                   <div className="col-span-2">
-                    <Field label="סוג מסמך זיהוי של האשה" required>
+                    <Field label={<EditableText k="reg.wife.docType" />} required>
                       <div className="flex rounded-xl border border-slate-200 overflow-hidden w-full sm:max-w-xs">
                         {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
                           <button key={v} type="button"
@@ -2928,7 +2928,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="שם פרטי" required>
+                    <Field label={<EditableText k="reg.firstName" />} required>
                       <TextInput value={regForm.spouse_name} onChange={setReg('spouse_name')} placeholder="שם מלא" required />
                     </Field>
                   </div>
@@ -2966,7 +2966,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </Field>
                   </div>
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="תאריך לידה של האשה" required>
+                    <Field label={<EditableText k="reg.wife.birthDate" />} required>
                       <HebrewDatePicker value={regForm.spouse_birth_date} onChange={iso => setRegForm(f => ({ ...f, spouse_birth_date: iso }))} maxToday yearFirst birthYearRange={{ minAge: 18, maxAge: 50 }} />
                     </Field>
                   </div>
@@ -2979,7 +2979,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <Phone size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">פרטי קשר</h3>
+                  <EditableText k="reg.contact.title" as="h3" className="font-semibold text-slate-900" />
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 leading-relaxed mb-4">
                   <p className="font-bold">שימו לב — יש לדייק בפרטי הקשר</p>
@@ -2988,7 +2988,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label={showSpouseFields ? 'טלפון בעל' : 'טלפון ראשי'} hint="מספר נייד ישראלי המתחיל ב-05">
+                    <Field label={<EditableText k={showSpouseFields ? 'reg.phone.husband' : 'reg.phone.main'} />} hint={<EditableText k="reg.phone.hint" />}>
                       <TextInput type="tel" value={regForm.phone}
                         onChange={e => { setReg('phone')(e); setPhoneError('') }}
                         onBlur={() => {
@@ -3010,7 +3010,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </div>
                   {showSpouseFields && (
                     <div className="col-span-2 sm:col-span-1">
-                      <Field label="טלפון אשה" hint="לא חובה">
+                      <Field label={<EditableText k="reg.phone.wife" />} hint={<EditableText k="reg.optional" />}>
                         <TextInput type="tel"
                           value={regForm.spouse_phone}
                           onChange={e => { setReg('spouse_phone')(e); setSpousePhoneError('') }}
@@ -3029,13 +3029,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </div>
                   )}
                   <div className="col-span-2 sm:col-span-1">
-                    <Field label="טלפון נוסף" hint="לא חובה">
+                    <Field label={<EditableText k="reg.phone.extra" />} hint={<EditableText k="reg.optional" />}>
                       <TextInput type="tel" value={regForm.phone2} onChange={setReg('phone2')} placeholder="0500000000" dir="ltr" maxLength={11} />
                       <VerifyControl channel="phone" value={regForm.phone2} valid={validatePhone(regForm.phone2)} onToken={setRegPhone2Token} optionalHint={anyPhoneVerified ? phoneOptionalHint : undefined} />
                     </Field>
                   </div>
                   <div className="col-span-2">
-                    <Field label="דואר אלקטרוני" required>
+                    <Field label={<EditableText k="reg.email" />} required>
                       <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
                       <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken} />
                     </Field>
@@ -3049,7 +3049,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <MapPin size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">כתובת</h3>
+                  <EditableText k="reg.address.title" as="h3" className="font-semibold text-slate-900" />
                 </div>
                 <CityStreetPicker
                   city={regForm.city}
@@ -3068,7 +3068,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Card>
                 <div className="flex items-center gap-2 mb-1">
                   <GitBranch size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">סדר הדורות — שיוך לחתם סופר <span className="text-red-500">*</span></h3>
+                  <h3 className="font-semibold text-slate-900"><EditableText k="reg.lineage.title" /> <span className="text-red-500">*</span></h3>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">בנה את סדר הייחוס דור אחר דור עד רבינו החתם סופר זיע&quot;א, וסמן בכל דור בן/חתן.</p>
 
@@ -3133,12 +3133,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Card>
                 <div className="flex items-center gap-2 mb-4">
                   <Users size={18} className="text-indigo-600" />
-                  <h3 className="font-semibold text-slate-900">ילדים</h3>
+                  <EditableText k="reg.children.title" as="h3" className="font-semibold text-slate-900" />
                 </div>
 
                 {/* Count field */}
                 <div className="mb-4">
-                  <Field label="מספר ילדים">
+                  <Field label={<EditableText k="reg.children.count" />}>
                     <TextInput
                       type="number" min="0" max="20"
                       value={children.length === 0 && regForm.children_count === '0' ? '' : String(children.length)}
@@ -3207,7 +3207,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="תאריך לידה" required>
+                            <Field label={<EditableText k="reg.birthDate" />} required>
                               <HebrewDatePicker value={child.birth_date}
                                 onChange={iso => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: iso } : c))} maxToday yearFirst />
                             </Field>
@@ -4490,7 +4490,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <Users size={16} className="text-indigo-600" />
                     <h3 className="text-sm font-semibold text-slate-900">מספר ילדים / פרטי הילדים</h3>
                   </div>
-                  <Field label="מספר ילדים">
+                  <Field label={<EditableText k="reg.children.count" />}>
                     <TextInput
                       type="number" min="0" max="20" inputMode="numeric" placeholder="0" className="w-28"
                       value={editChildren.length === 0 ? '' : String(editChildren.length)}
@@ -4552,7 +4552,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="תאריך לידה" required>
+                            <Field label={<EditableText k="reg.birthDate" />} required>
                               <HebrewDatePicker value={child.birth_date}
                                 onChange={iso => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, birth_date: iso } : c))} maxToday yearFirst />
                             </Field>

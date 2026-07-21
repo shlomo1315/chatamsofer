@@ -137,6 +137,36 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
   },
 
   {
+    title: 'טופס רישום — שדות',
+    entries: [
+      { key: 'reg.wife.title', fallback: 'פרטי האשה', hint: 'כותרת מקטע האשה' },
+      { key: 'reg.contact.title', fallback: 'פרטי קשר', hint: 'כותרת מקטע פרטי הקשר' },
+      { key: 'reg.address.title', fallback: 'כתובת', hint: 'כותרת מקטע הכתובת' },
+      { key: 'reg.children.title', fallback: 'ילדים', hint: 'כותרת מקטע הילדים' },
+      { key: 'reg.firstName', fallback: 'שם פרטי', hint: 'תווית שם פרטי' },
+      { key: 'reg.lastName', fallback: 'שם משפחה', hint: 'תווית שם משפחה' },
+      { key: 'reg.birthDate', fallback: 'תאריך לידה', hint: 'תווית תאריך לידה' },
+      { key: 'reg.wife.birthDate', fallback: 'תאריך לידה של האשה', hint: 'תווית תאריך לידה — אשה' },
+      { key: 'reg.wife.docType', fallback: 'סוג מסמך זיהוי של האשה', hint: 'תווית סוג מסמך — אשה' },
+      { key: 'reg.community', fallback: 'השתייכות קהילתית', hint: 'תווית השתייכות קהילתית' },
+      {
+        key: 'reg.community.hint',
+        fallback: 'לא חובה, אולם מומלץ לצורך היערכות ורישום להטבות בהמשך בעז״ה',
+        hint: 'שורת עזרה — השתייכות קהילתית', multiline: true,
+      },
+      { key: 'reg.phone.husband', fallback: 'טלפון בעל', hint: 'תווית טלפון בעל' },
+      { key: 'reg.phone.main', fallback: 'טלפון ראשי', hint: 'תווית טלפון ראשי (רווק/אלמן)' },
+      { key: 'reg.phone.hint', fallback: 'מספר נייד ישראלי המתחיל ב-05', hint: 'שורת עזרה לטלפון' },
+      { key: 'reg.phone.wife', fallback: 'טלפון אשה', hint: 'תווית טלפון אשה' },
+      { key: 'reg.phone.extra', fallback: 'טלפון נוסף', hint: 'תווית טלפון נוסף' },
+      { key: 'reg.optional', fallback: 'לא חובה', hint: 'שורת עזרה — שדה לא חובה' },
+      { key: 'reg.email', fallback: 'דואר אלקטרוני', hint: 'תווית מייל' },
+      { key: 'reg.children.count', fallback: 'מספר ילדים', hint: 'תווית מספר ילדים' },
+      { key: 'reg.lineage.title', fallback: 'סדר הדורות — שיוך לחתם סופר', hint: 'כותרת מקטע סדר הדורות' },
+    ],
+  },
+
+  {
     title: 'אזור אישי — פרטים',
     entries: [
       { key: 'dash.field.id', fallback: 'ת.ז.', hint: 'תווית תעודת זהות' },
