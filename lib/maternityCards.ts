@@ -17,9 +17,6 @@ export const MATERNITY_LOAD_AMOUNT = 600
 export async function loadMaternityCardOnApproval(
   admin: SupabaseClient, aidId: string, amount = MATERNITY_LOAD_AMOUNT,
 ): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; error?: string; clientId?: string | null }> {
-  const creds = await getNedarimCreds()
-  if (!creds) return { ok: false, notConfigured: true }
-
   const { data: aid } = await admin
     .from('maternity_aids')
     .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id')
@@ -27,7 +24,9 @@ export async function loadMaternityCardOnApproval(
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
   if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
 
-  // ניכוי כרטיס מהמלאי הגלובלי — אטומי. אם אין מלאי → אין טעינה, נכנסת לתור המתנה.
+  // ⚠️ המלאי נבדק לפני הכל — לפני נדרים ולפני כל פנייה חיצונית.
+  // אין מלאי → היולדת נכנסת לתור ההמתנה ולא נוגעים בנדרים בכלל.
+  // ה-600 ₪ ייטענו רק כשיתחדש המלאי, דרך processAwaitingStock.
   let remaining: number | null
   try {
     remaining = await consumeOneCard(admin, { reason: 'birth_approval', aidId: aid.id })
@@ -40,6 +39,20 @@ export async function loadMaternityCardOnApproval(
     await logActivity(admin, { action: 'maternity_card_awaiting_stock', entityType: 'maternity_aid', entityId: aid.id, details: { reason: 'no_stock_on_approval' } })
     return { ok: true, awaitingStock: true }
   }
+
+  // רק עכשיו — יש כרטיס פנוי — ניגשים לנדרים.
+  // אם נדרים אינו מוגדר, מחזירים את הכרטיס שנוכה כדי שלא ייבלע.
+  const creds = await getNedarimCreds()
+  if (!creds) {
+    try {
+      await admin.from('card_stock_ledger').insert({
+        delta: 1, reason: 'adjust', aid_id: aid.id,
+        note: 'החזרה אוטומטית — נדרים אינו מוגדר',
+      })
+    } catch { /* החזרה best-effort */ }
+    return { ok: false, notConfigured: true }
+  }
+
   // ירדנו למלאי נמוך? נשלח התראה (best-effort, לא חוסם)
   await maybeSendLowStockAlert(admin, remaining)
 
