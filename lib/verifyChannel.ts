@@ -84,7 +84,15 @@ export async function sendVerifyCode(
     }
   } else {
     const r = await placeCodeCall(raw, code)
-    if (!r.ok && !r.notConfigured) console.error('[verify/send] call failed:', r.error)
+    // ⚠️ כשל בשיחה החזיר עד כה ok:true — המשתמש ראה "מתקשרים אליך כעת"
+    // בזמן שהחיוג נכשל, ונשאר להמתין לשיחה שלא תגיע. מדווחים במפורש.
+    if (!r.ok && !r.notConfigured) {
+      console.error('[verify/send] call failed:', r.error)
+      return {
+        status: 502,
+        body: { error: 'החיוג נכשל. נסו שוב, או בחרו אימות במייל.' },
+      }
+    }
   }
 
   return { status: 200, body: { ok: true, sent: true } }

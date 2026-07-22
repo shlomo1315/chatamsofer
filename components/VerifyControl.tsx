@@ -115,6 +115,13 @@ export default function VerifyControl({
               📩 לא קיבלתם את המייל? בדקו בתיבת ה<strong>ספאם</strong> וסמנו את ההודעה כ״לא ספאם״.
             </p>
           )}
+          {/* אותה הנחיה שמופיעה באימות הטלפון בבקשות — המערכת מקריאה את הקוד
+              רק כמה שניות אחרי המענה, ובלי ההסבר נדמה שהשיחה נכשלה. */}
+          {channel !== 'email' && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+              ☎️ לאחר המענה יש להמתין מספר שניות עד שהמערכת תקריא את הקוד, ואז להזין אותו בשדה שלמטה.
+            </p>
+          )}
           <div className="relative flex items-center">
             <input value={code} onChange={e => onCodeChange(e.target.value)}
               placeholder="000000" inputMode="numeric" maxLength={6} dir="ltr" disabled={loading} autoFocus

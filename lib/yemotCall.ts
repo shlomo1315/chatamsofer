@@ -75,7 +75,11 @@ export function placeCodeCall(
   phone: string,
   code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  return runTtsCall(phone, spokenCode(code))
+  // ⚠️ ttsSafe חובה כאן. spokenCode בונה הפסקות בעזרת נקודות — מנגנון תקין
+  // ב-webhook (id_list_message), אך ב-RunCampaign הנקודות שוברות את ההקראה
+  // ("שגיאה בהקראה"). כל שאר קריאות ה-TTS כבר עוברות דרך ttsSafe; זו הייתה
+  // היחידה ששלחה טקסט גולמי.
+  return runTtsCall(phone, ttsSafe(spokenCode(code)))
 }
 
 // שיחה יוצאת שמנגנת קובץ מוקלט (קול טבעי) דרך תבנית קמפיין ייעודית שמנגנת קובץ.
