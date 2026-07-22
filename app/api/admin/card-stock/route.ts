@@ -52,12 +52,19 @@ export async function GET() {
   //   card_status         — התור הגלובלי (נקבע ב-loadMaternityCardOnApproval)
   //   card_voucher_status — תור שובר הכרטיס (מוקדים)
   // ספירה לפי אחת בלבד החזירה 0 גם כשיולדת אמיתית המתינה בתור.
+  // ⚠️ אותו סינון בדיוק כמו processAwaitingStock — אחרת המונה מציג מספר
+  // אחד והתור מטפל באחר. קודם נספרו רק awaiting_stock, ולכן יולדות
+  // בסטטוס approved שהתור כן מטפל בהן לא הופיעו כלל.
   const { data: awaitingRows, error: awaitingErr } = await admin
     .from('maternity_aids')
-    .select('id')
-    .or('card_status.eq.awaiting_stock,card_voucher_status.eq.awaiting_stock')
+    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type')
+    .eq('status', 'active')
   if (awaitingErr) console.error('[card-stock] awaiting query failed:', awaitingErr.message)
-  const awaiting = awaitingRows?.length ?? 0
+  const awaiting = (awaitingRows ?? []).filter(a =>
+    a.card_load_status !== 'loaded' && !a.card_tlush_id &&
+    a.card_status !== 'rejected' &&
+    a.birth_type !== 'silent',
+  ).length
 
   return NextResponse.json({ balance, ledger: ledger ?? [], awaiting: awaiting ?? 0 }, { headers: NO_STORE })
 }

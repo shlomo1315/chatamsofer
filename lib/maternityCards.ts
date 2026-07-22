@@ -216,13 +216,13 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     .eq('status', 'active')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
 
+  // ⚠️ לידה מאושרת (status='active') שטרם נטענה — היא ממתינה לכרטיס, נקודה.
+  // סינון לפי card_status פספס יולדות שנתקעו ב-'pending' ומעולם לא סומנו
+  // awaiting_stock, ולכן לא קיבלו כרטיס ולא שובר גם אחרי חידוש מלאי.
+  // החריגים היחידים: לידה שקטה (אין לה כרטיס) ומי שנדחתה ידנית.
   const waiting = (candidates ?? []).filter(a =>
-    // טרם נטען בפועל
     a.card_load_status !== 'loaded' && !a.card_tlush_id &&
-    // ⚠️ רק מי שבאמת ממתינה לכרטיס. בלי הסינון הזה הסריקה טענה כסף
-    // גם ליולדות שלא אושר להן כרטיס כלל — כולל לידה שקטה.
-    (a.card_status === 'awaiting_stock' || a.card_voucher_status === 'awaiting_stock' ||
-     a.card_status === 'approved') &&
+    a.card_status !== 'rejected' &&
     a.birth_type !== 'silent',
   )
   if (!waiting.length) return out
