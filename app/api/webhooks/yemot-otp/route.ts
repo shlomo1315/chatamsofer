@@ -55,6 +55,32 @@ function yemotText(commands: string[], callId?: string) {
 const hangupMsg = (text: string, callId?: string) =>
   yemotText([`id_list_message=t-${tts(text)}`, 'go_to_folder=hangup'], callId)
 
+/**
+ * קוד אימות ממתין מטופס ההרשמה או מטופס נדרים (שניהם דרך lib/verifyChannel),
+ * ששומרים ב-app_settings תחת verify:phone:<טלפון מנורמל>.
+ * מחזיר את הקוד ומוחק אותו מהרשומה (הקראה חד-פעמית), או null אם אין/פג תוקף.
+ * ה-hash נשאר — בלעדיו האימות בטופס היה נשבר.
+ */
+async function readPendingVerifyCode(admin: SupabaseClient, caller: string): Promise<string | null> {
+  const key = `verify:phone:${caller}`
+  const { data } = await admin.from('app_settings').select('value').eq('key', key).maybeSingle()
+  if (!data?.value) return null
+  try {
+    const rec = JSON.parse(String(data.value)) as Record<string, unknown> & { plain?: string; expires?: number }
+    if (!rec.plain) return null
+    if (rec.expires && rec.expires < Date.now()) return null
+    const code = String(rec.plain).replace(/\D/g, '')
+    if (!code) return null
+    delete rec.plain
+    await admin.from('app_settings')
+      .update({ value: JSON.stringify(rec), updated_at: new Date().toISOString() })
+      .eq('key', key)
+    return code
+  } catch {
+    return null   // רשומה פגומה — מתעלמים, לא מפילים את השיחה
+  }
+}
+
 export async function POST(req: NextRequest) { return handle(req) }
 export async function GET(req: NextRequest) { return handle(req) }
 
@@ -113,6 +139,14 @@ async function handle(req: NextRequest) {
   })
 
   if (!row || !row.portal_phone_code_plain) {
+    // ⚠️ נפילה-לאחור: קוד מטופס ההרשמה / טופס נדרים. מגיעים לכאן רק אחרי
+    // שמסלול הכניסה לא מצא דבר — כך שהכניסה אינה מושפעת כלל. בנרשם חדש
+    // אין רשומה ב-beneficiaries, ולכן הקוד נשמר ב-app_settings.
+    const reg = await readPendingVerifyCode(admin, caller)
+    if (reg) {
+      console.log(`[yemot-otp] reading signup code callId=${callId}`)
+      return hangupMsg(spokenCode(reg), callId)
+    }
     console.log('[yemot-otp] no pending code for caller')
     return hangupMsg('לא נמצא קוד פעיל אנא בקשו קוד חדש מהאתר', callId)
   }
