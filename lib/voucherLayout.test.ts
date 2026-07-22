@@ -36,6 +36,21 @@ describe('שובר כרטיס מזון — פריסה', () => {
     expect(parsed.getPageCount()).toBe(1)
   })
 
+  it('בלי מוקדים — השובר נבנה אך מציג הודעת גיבוי', async () => {
+    // ⚠️ בדיוק המצב שקרה בחידוש מלאי: sendCardVoucher לא העביר centers,
+    // והשובר יצא בלי רשימת המוקדים — היולדת לא ידעה לאן לגשת.
+    // הבדיקה מוודאת שהמצב הזה עדיין מפיק PDF תקין (ולא קורס),
+    // אך הוא אינו התנהגות רצויה — ראו העברת centers ב-sendCardVoucher.
+    const out = await buildCardVoucherOnly({
+      motherName: 'ויסברג גיטי', motherId: '207212911',
+      address: 'איש מצליח 1', city: 'עמנואל',
+      phone: '0527101315', birthDate: '2026-07-20',
+      centers: [],
+    })
+    const pdf = Buffer.from(out[0].contentB64, 'base64')
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
+  })
+
   it('מספרי הטלפון להפעלה נשמרים כסדרם ואינם הפוכים', async () => {
     const { toVisual } = await import('./pdfBidi')
     // toVisual הופך ספרות בכוונה — נכון רק כשיש הקשר עברי באותה שורה.

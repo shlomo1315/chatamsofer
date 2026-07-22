@@ -136,7 +136,7 @@ export async function sendCardVoucher(
   try {
     const { data: aid } = await admin
       .from('maternity_aids')
-      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
+      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, voucher_serial, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
       .eq('id', aidId)
       .maybeSingle()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,12 +150,26 @@ export async function sendCardVoucher(
       const { buildCardVoucherOnly } = await import('@/lib/maternityVoucher')
       const { recoveryDaysOf } = await import('@/lib/maternity')
       const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '')
+
+      // ⚠️ מוקדי האיסוף — בלעדיהם השובר יוצא עם "רשימת המוקדים תימסר לכם
+      // על ידי המזכירות", והיולדת לא יודעת לאן לגשת. אותה שאילתה כמו
+      // בזרימת אישור הלידה.
+      const { data: ctrs } = await admin
+        .from('card_centers')
+        .select('name, city, address, pickup_days, pickup_hours')
+        .eq('is_active', true)
+        .order('name')
+
       attachments = await buildCardVoucherOnly({
         motherName,
         motherId: ben.spouse_id_number || ben.id_number,
         address: ben.address, city: ben.city, phone: ben.phone, spousePhone: ben.spouse_phone,
         birthDate: a.birth_date, recoveryHome: a.recovery_home,
         recoveryDays: recoveryDaysOf({ recovery_eligibility_days: a.recovery_eligibility_days, is_twins: a.is_twins }),
+        serial: a.voucher_serial ?? null,
+        centers: centerName
+          ? (ctrs ?? []).filter(c => c.name === centerName)
+          : (ctrs ?? []),
       })
     } catch (e) { console.error('[maternityCards] card voucher build failed:', e) }
 
