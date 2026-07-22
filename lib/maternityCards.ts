@@ -250,14 +250,21 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     // נוכה כרטיס עכשיו. בלי הטיפול הזה היולדת נשארה תקועה בתור לנצח:
     // הלולאה ספרה "הצלחה", הסטטוס לא נוקה, והשובר לא נשלח. מנקים ושולחים.
     if (r.already) {
+      // ⚠️ הכסף כבר נטען בנדרים בעבר, ולכן אין טעינה חוזרת ואין ניכוי
+      // כרטיס נוסף — הכרטיס שלה כבר נוכה אז. כאן רק משלימים את מה שלא
+      // הושלם: ניקוי הסטטוס ושליחת השובר שלא יצא.
+      const v = await sendCardVoucher(admin, w.id, null)
+      if (!v.ok) {
+        out.failed++
+        out.errors.push(v.error || 'שליחת השובר נכשלה')
+        continue   // לא מסמנים 'issued' — אחרת השובר לא יישלח שוב לעולם
+      }
       await admin.from('maternity_aids').update({
         card_status: 'loaded',
         card_voucher_status: 'issued',
         updated_at: new Date().toISOString(),
       }).eq('id', w.id)
-      const v = await sendCardVoucher(admin, w.id, null)
-      if (!v.ok) { out.failed++; out.errors.push(v.error || 'שליחת השובר נכשלה') }
-      else out.processed++
+      out.processed++
       continue
     }
 

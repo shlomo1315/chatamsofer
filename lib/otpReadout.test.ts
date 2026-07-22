@@ -30,6 +30,27 @@ describe('הקראת קוד OTP בימות', () => {
     }
   })
 
+  it('החזרה השנייה מכילה את הקוד המלא', () => {
+    // ⚠️ ההקראה חוזרת פעמיים. אם החזרה השנייה חסרה ספרות, המאזין
+    // שמפספס את הראשונה נשאר בלי קוד תקין.
+    const code = '907162'
+    const out = slowText(spokenCode(code))
+    const words = code.split('').map(d =>
+      ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
+    const seq = words.join(' , ')
+    expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
+  })
+
+  it('יש מילות חיץ לפני הספרה הראשונה', () => {
+    // ⚠️ תחילת ההקראה נבלעת בזמן שהקו מתייצב אחרי המענה. בלי מילות חיץ
+    // לפני הקוד, הספרה הראשונה נחתכה וההקראה הראשונה נשמעה בת 5 ספרות.
+    const out = spokenCode('907162')
+    const firstDigit = out.indexOf('תשע')
+    const prefix = out.slice(0, firstDigit).trim().split(/\s+/).filter(Boolean)
+    // לפחות 4 מילים לפני הספרה הראשונה — מרווח בטוח לחיתוך
+    expect(prefix.length).toBeGreaterThanOrEqual(4)
+  })
+
   it('גוף התשובה לימות נשאר פרמטר יחיד ותקין', () => {
     const body = `id_list_message=t-${slowText(spokenCode('123456'))}&go_to_folder=hangup&`
     // בדיוק שני פרמטרים — נקודה נוספת הייתה מפצלת את ההודעה

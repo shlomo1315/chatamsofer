@@ -68,7 +68,14 @@ export async function sendVerifyCode(
 
   const code = generateCode()
   const hash = await hashCode(code)
-  const record = JSON.stringify({ hash, expires: Date.now() + CODE_TTL_MS, attempts: 0 })
+  // ⚠️ באימות טלפון נשמר גם הקוד הגלוי. הוובהוק של ימות מקריא לפי מספר
+  // המתקשר: בכניסה הקוד נשלף מ-portal_phone_code_plain בטבלת המוטבים, אך
+  // בהרשמה ובטופס נדרים אין עדיין רשומה שם — ובלי זה אין מה להקריא.
+  // נמחק מיד עם ההקראה (חד-פעמי); ה-hash נשאר לאימות.
+  const record = JSON.stringify({
+    hash, expires: Date.now() + CODE_TTL_MS, attempts: 0,
+    ...(channel === 'phone' ? { plain: code } : {}),
+  })
   const key = `verify:${channel}:${value}`
   const { error: upErr } = await admin.from('app_settings').upsert(
     { key, value: record, updated_at: new Date().toISOString() }, { onConflict: 'key' },
