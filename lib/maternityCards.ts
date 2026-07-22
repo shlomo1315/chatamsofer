@@ -70,7 +70,7 @@ export async function loadMaternityCardOnApproval(
 
   const { data: b } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, id_number, address, city, phone, phone2, email, nedarim_id')
+    .select('id, full_name, family_name, id_number, spouse_id_number, address, city, phone, phone2, email, nedarim_id')
     .eq('id', aid.beneficiary_id).maybeSingle()
   if (!b) return { ok: false, error: 'המשפחה לא נמצאה' }
 
@@ -82,13 +82,25 @@ export async function loadMaternityCardOnApproval(
   }
 
   // 1) איתור/הקמת המשפחה בנדרים לפי ת.ז
+  // ⚠️ נפילה-לאחור לת"ז האשה: היולדת היא האשה, ובחלק מהרשומות ת"ז הבעל
+  // ריקה. חיפוש לפי id_number בלבד נכשל אז ב"שגיאה באיתור משפחה", והכרטיס
+  // לא נטען. saveClientCard דורש Zeout — בלעדיו גם ההקמה נכשלת.
+  const zeout = b.id_number || b.spouse_id_number || null
   let clientId = b.nedarim_id ? String(b.nedarim_id) : null
   try {
-    if (!clientId && b.id_number) clientId = await findClientByZeout(creds, String(b.id_number))
-    if (!clientId) clientId = await saveClientCard(creds, b)
+    if (!clientId && zeout) clientId = await findClientByZeout(creds, String(zeout))
+    if (!clientId) clientId = await saveClientCard(creds, { ...b, id_number: zeout })
     if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
   } catch (e) { await restoreCard(); return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים' } }
-  if (!clientId) { await restoreCard(); return { ok: false, error: 'לא ניתן לאתר או להקים את המשפחה בנדרים' } }
+  if (!clientId) {
+    await restoreCard()
+    return {
+      ok: false,
+      error: zeout
+        ? 'לא ניתן לאתר או להקים את המשפחה בנדרים'
+        : 'למשפחה אין תעודת זהות במערכת — לא ניתן להקים אותה בנדרים',
+    }
+  }
 
   // 2) הטענת הזכאות — משויכת לקבוצת "הגבלת חנויות" של עזר יולדות (LimitedId)
   const limitedId = await getMaternityLimitedId()
