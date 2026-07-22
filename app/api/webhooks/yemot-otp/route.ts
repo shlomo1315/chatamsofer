@@ -37,10 +37,12 @@ function adminClient(): SupabaseClient | null {
   return _admin
 }
 
-// טקסט TTS — הסרת תווים שאסורים בימות. ⚠️ פסיק ',' חותך את ההודעה — תמיד מוסר.
-// נקודה '.' לעומת זאת נשמרת: היא מפרידת-הודעות שיוצרת הפסקה (מנגנון ההאטה של
-// הקראת הקוד). מכווצים רווחים אך שומרים על הנקודות.
-const TTS_INVALID = /[,\-"'&|=]/g
+// טקסט TTS — הסרת תווים שימות מפרשת כתחביר ולא כטקסט.
+// ⚠️ הנקודה '.' היא *מפריד הטוקנים* של id_list_message. טקסט שמכיל נקודות
+// מפוצל אצל ימות לטוקנים נפרדים ("t-קוד הכניסה שלך הוא אחת", "שתיים", …),
+// והשברים אינם טוקנים חוקיים — התוצאה היא "שגיאה בהקראה". לכן הנקודה
+// מוסרת, בדיוק כמו ב-yemot-maternity שעובד. ההאטה מושגת בפסיקים.
+const TTS_INVALID = /[.,\-"'&|=]/g
 function tts(text: string): string {
   return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -54,6 +56,13 @@ function yemotText(commands: string[], callId?: string) {
 
 const hangupMsg = (text: string, callId?: string) =>
   yemotText([`id_list_message=t-${tts(text)}`, 'go_to_folder=hangup'], callId)
+
+// הקראת הקוד: פסיק בין המילים יוצר הפסקה קצרה בימות (ספרה-אחרי-ספרה),
+// בלי לפצל את ההודעה — בניגוד לנקודה, שהיא מפריד טוקנים. אותה שיטה
+// בדיוק כמו slowTokenOf ב-yemot-maternity שעובד.
+const slowText = (text: string) => tts(text).split(' ').filter(Boolean).join(' , ')
+const hangupSlow = (text: string, callId?: string) =>
+  yemotText([`id_list_message=t-${slowText(text)}`, 'go_to_folder=hangup'], callId)
 
 export async function POST(req: NextRequest) { return handle(req) }
 export async function GET(req: NextRequest) { return handle(req) }
@@ -136,5 +145,7 @@ async function handle(req: NextRequest) {
   // נקודות שמפרידות הודעות וגורמות להשהיה ארוכה לפני/בין ההקראות).
   const message = spokenCode(code)
   console.log(`[yemot-otp] reading code to caller (****${code.slice(-2)}) callId=${callId}`)
-  return hangupMsg(message, callId)
+  // hangupSlow — פסיקים במקום נקודות: הנקודות פיצלו את ההודעה לטוקנים
+  // שבורים אצל ימות וגרמו ל"שגיאה בהקראה".
+  return hangupSlow(message, callId)
 }
