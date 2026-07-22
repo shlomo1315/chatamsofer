@@ -523,6 +523,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשמנהל דוחה בקשת לידה ומזין סיבה. הסיבה נכללת במייל',
     recipient: 'היולדת',
     department: 'maternity',
+    wired: true,
     fields: [
       { key: 'subject', label: 'שורת הנושא', default: 'בנוגע לבקשת הלידה — היכל החתם סופר' },
       { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'בנוגע לבקשת הלידה שהגשתם' },
@@ -549,6 +550,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשמנהל מאשר את רישום המשפחה לאיגוד הצאצאים',
     recipient: 'הנרשם',
     department: 'main',
+    wired: true,
     fields: [
       { key: 'subject', label: 'שורת הנושא', default: 'הרישום לאיגוד הצאצאים אושר — היכל החתם סופר' },
       {
@@ -568,6 +570,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשמתקבלת פנייה במייל מכתובת שאינה רשומה במערכת',
     recipient: 'הפונה',
     department: 'main',
+    wired: true,
     fields: [
       { key: 'subject', label: 'שורת הנושא', default: 'קיבלנו את פנייתך — היכל החתם סופר' },
       {
@@ -587,6 +590,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשפונה במייל מזוהה כרשום במערכת',
     recipient: 'הצאצא',
     department: 'main',
+    wired: true,
     fields: [
       { key: 'kicker', label: 'תווית קטנה מעל הכותרת', default: 'קיבלנו את פנייתך' },
       {
@@ -608,6 +612,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'נשלח למנהל להחלטה. תשובה בסכום או X',
     recipient: 'המנהל',
     department: 'financial_aid',
+    wired: true,
     fields: [
       {
         key: 'preheader', label: 'שורת התצוגה המקדימה',
@@ -625,6 +630,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשבית החלמה מסמן מימוש זכאות בפורטל. התראה תפעולית פנימית',
     recipient: 'מחלקת יולדות',
     department: 'maternity',
+    wired: true,
     fields: [
       { key: 'title', label: 'כותרת ראשית', default: 'מימוש זכאות החלמה' },
       { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
@@ -642,6 +648,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
     trigger: 'כשבית החלמה מבקש לתקן רשומה נעולה',
     recipient: 'מחלקת יולדות',
     department: 'maternity',
+    wired: true,
     fields: [
       { key: 'title', label: 'כותרת ראשית', default: 'בקשת תיקון רשומה' },
       { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
