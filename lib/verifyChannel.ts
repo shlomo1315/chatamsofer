@@ -68,13 +68,7 @@ export async function sendVerifyCode(
 
   const code = generateCode()
   const hash = await hashCode(code)
-  // באימות טלפון נשמר גם הקוד הגלוי — הוובהוק של ימות קורא אותו כדי
-  // להקריא למתקשר (בהרשמה אין עדיין רשומה ב-beneficiaries). נמחק מיד
-  // עם ההקראה; ה-hash נשאר לאימות. במייל אין צורך — הקוד נשלח בגוף המייל.
-  const record = JSON.stringify({
-    hash, expires: Date.now() + CODE_TTL_MS, attempts: 0,
-    ...(channel === 'phone' ? { plain: code } : {}),
-  })
+  const record = JSON.stringify({ hash, expires: Date.now() + CODE_TTL_MS, attempts: 0 })
   const key = `verify:${channel}:${value}`
   const { error: upErr } = await admin.from('app_settings').upsert(
     { key, value: record, updated_at: new Date().toISOString() }, { onConflict: 'key' },

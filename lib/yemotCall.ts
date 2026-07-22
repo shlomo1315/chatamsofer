@@ -75,8 +75,6 @@ export function placeCodeCall(
   phone: string,
   code: string,
 ): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
-  // ⚠️ ללא ttsSafe. הנקודות ב-spokenCode הן מנגנון ההפסקה בין הספרות
-  // (id_list_message), והסרתן שברה את ההקראה בכל המסלולים.
   return runTtsCall(phone, spokenCode(code))
 }
 
