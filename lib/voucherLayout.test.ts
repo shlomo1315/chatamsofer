@@ -36,6 +36,19 @@ describe('שובר כרטיס מזון — פריסה', () => {
     expect(parsed.getPageCount()).toBe(1)
   })
 
+  it('לידה שקטה — בלי ברכות ובלי המילה "יולדת"', async () => {
+    const out = await buildCardVoucherOnly({
+      motherName: 'ויסברג גיטי', motherId: '207212911',
+      address: 'איש מצליח 1', city: 'עמנואל',
+      phone: '0527101315', birthDate: '2026-07-20',
+      centers: CENTERS, silent: true,
+    })
+    const pdf = Buffer.from(out[0].contentB64, 'base64')
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-')
+    const { PDFDocument } = await import('pdf-lib')
+    expect((await PDFDocument.load(pdf)).getPageCount()).toBe(1)
+  })
+
   it('בלי מוקדים — השובר נבנה אך מציג הודעת גיבוי', async () => {
     // ⚠️ בדיוק המצב שקרה בחידוש מלאי: sendCardVoucher לא העביר centers,
     // והשובר יצא בלי רשימת המוקדים — היולדת לא ידעה לאן לגשת.

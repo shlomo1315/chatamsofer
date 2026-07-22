@@ -136,7 +136,7 @@ export async function sendCardVoucher(
   try {
     const { data: aid } = await admin
       .from('maternity_aids')
-      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, voucher_serial, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
+      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, voucher_serial, birth_type, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
       .eq('id', aidId)
       .maybeSingle()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -170,6 +170,8 @@ export async function sendCardVoucher(
         centers: centerName
           ? (ctrs ?? []).filter(c => c.name === centerName)
           : (ctrs ?? []),
+        // לידה שקטה — בלי ברכות ובלי המילה "יולדת" בשובר
+        silent: (a.birth_type ?? 'live') === 'silent',
       })
     } catch (e) { console.error('[maternityCards] card voucher build failed:', e) }
 

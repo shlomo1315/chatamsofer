@@ -60,16 +60,27 @@ const hangupMsg = (text: string, callId?: string) =>
 // הקראת הקוד: פסיק בין המילים יוצר הפסקה קצרה בימות (ספרה-אחרי-ספרה),
 // בלי לפצל את ההודעה — בניגוד לנקודה, שהיא מפריד טוקנים. אותה שיטה
 // בדיוק כמו slowTokenOf ב-yemot-maternity שעובד.
-// כל פסיק = הפסקה קצרה בימות. מילות הקישור נשארות ברצף טבעי (פסיק בודד),
-// ואילו *ספרות הקוד* מופרדות בשלושה פסיקים — הקראה איטית וברורה שמאפשרת
-// לרשום, בלי להאריך מיותר את כל השיחה.
+// ⚠️ ההאטה האמיתית מגיעה מ*ריבוי הודעות*, לא מפסיקים: הנקודה היא מפריד
+// הטוקנים של id_list_message, וימות עוצרת בין הודעה להודעה. פסיקים נשמעים
+// כטקסט ולכן שלושה פסיקים רק החמירו.
+// לכן: כל ספרה היא טוקן t- נפרד (הפסקה מלאה בין ספרה לספרה), ומילות
+// הקישור מקובצות לטוקן אחד רציף כדי לא להאריך את השיחה.
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
-const slowText = (text: string) =>
-  tts(text).split(' ').filter(Boolean)
-    .map(w => (DIGIT_SET.has(w) ? `${w} , ,` : w))
-    .join(' , ')
+function slowTokens(text: string): string {
+  const words = tts(text).split(' ').filter(Boolean)
+  const tokens: string[] = []
+  let buf: string[] = []
+  const flush = () => { if (buf.length) { tokens.push(`t-${buf.join(' ')}`); buf = [] } }
+  for (const w of words) {
+    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w}`) }   // ספרה = הודעה נפרדת
+    else buf.push(w)
+  }
+  flush()
+  return tokens.join('.')   // הנקודה מפרידה בין ההודעות — כאן היא תקינה
+}
+// slowTokens כבר מחזיר טוקנים מלאים (t-…) מופרדים בנקודה — בלי t- נוסף
 const hangupSlow = (text: string, callId?: string) =>
-  yemotText([`id_list_message=t-${slowText(text)}`, 'go_to_folder=hangup'], callId)
+  yemotText([`id_list_message=${slowTokens(text)}`, 'go_to_folder=hangup'], callId)
 
 /**
  * קוד אימות ממתין מטופס ההרשמה או מטופס נדרים (שניהם דרך lib/verifyChannel),

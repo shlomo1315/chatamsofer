@@ -2,7 +2,7 @@
 // לוגיקת סטטוס תיק היולדת (בקרת סטטוס, סנכרון סטטוס התינוק בכרטסת, מחיקת תיק) —
 // חולצה מ-MaternityTable כדי שדף כרטסת היולדת (וכפתורי הפעולה) לא יטענו את רכיב הטבלה
 // הכבד כולו. כך ההידרציה של הדף מהירה ותפריט הסטטוס נפתח מיד.
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -135,6 +135,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   const toast = useToast()
   const canEdit = useCan('maternity', 'edit')
   const [open, setOpen] = useState(false)
+  // מיקום התפריט הצף (fixed) — מחושב מהכפתור בכל פתיחה
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0 })
   const [showSuccess, setShowSuccess] = useState(false)
   // חלונית סיבת דחייה — נפתחת לפני מעבר לסטטוס 'cancelled' (דחייה),
   // בין אם מבקשה ממתינה ובין אם מבטלים לידה שכבר אושרה.
@@ -373,11 +376,20 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
       )}
       {canEdit ? (
         <button
+          ref={btnRef}
           onClick={() => {
-            // מדידה זמנית: זמן מהלחיצה עד סיום פתיחת התפריט (לאבחון האיטיות). נראה ב-console (F12).
-            const _t = performance.now()
+            // מיקום התפריט מחושב מהכפתור, כי הוא מרונדר כ-fixed מחוץ לטבלה.
+            const r = btnRef.current?.getBoundingClientRect()
+            if (r) {
+              const MENU_W = 176, MENU_H = 190, GAP = 6
+              // נפתח מתחת לכפתור; אם אין מקום — מעליו. אותו היגיון אופקית.
+              const top = r.bottom + MENU_H + GAP > window.innerHeight
+                ? Math.max(GAP, r.top - MENU_H - GAP)
+                : r.bottom + GAP
+              const left = Math.max(GAP, Math.min(r.left, window.innerWidth - MENU_W - GAP))
+              setMenuPos({ top, left })
+            }
             setOpen(o => !o)
-            requestAnimationFrame(() => console.log(`[perf-click] תפריט סטטוס נפתח ב-${Math.round(performance.now() - _t)}ms`))
           }}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${pill.cls}`}
         >
@@ -393,9 +405,13 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
       )}
       {canEdit && open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          {/* נפתח לצד שמאל של הכפתור כדי לא להיחתך בתחתית הטבלה */}
-          <div className="absolute z-20 top-0 left-full ml-2 w-40 bg-white rounded-xl border border-slate-200 shadow-lg py-1">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          {/* ⚠️ fixed ולא absolute: התפריט היה כלוא בתוך גלילת הטבלה ונחתך,
+              כך ש"אישור יחוס" לא היה נגיש. המיקום מחושב מהכפתור עצמו. */}
+          <div
+            className="fixed z-[70] w-44 bg-white rounded-xl border border-slate-200 shadow-xl py-1"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
             {options.filter(o => o.value !== aid.status).map(o => {
               const OIcon = o.icon
               return (

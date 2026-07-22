@@ -251,6 +251,8 @@ type VoucherInput = {
   recoveryDays?: number | null
   serial?: string | null
   centers?: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
+  /** לידה שקטה — ⚠️ בלי ברכות "מזל טוב"/"לרגל השמחה" בשום מקום בשובר. */
+  silent?: boolean
 }
 
 // שורת מספר סידורי לשובר (פינה שמאלית עליונה).
@@ -277,7 +279,8 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   const page = doc.addPage([W, H])
   const c: Ctx = { page, font, logo }
 
-  let y = drawHeader(c, 'אגף עזר ליולדות')
+  // ⚠️ בלידה שקטה לא מופיעה המילה "יולדות/יולדת" בשום מקום בשובר.
+  let y = drawHeader(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות')
 
   // תאריך + מספר סידורי
   drawIssueDate(c, y)
@@ -294,7 +297,9 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
   // פסקת פתיחה (ללא סכום בתוך המשפט — הסכום מוצג כשדה נפרד כדי שיוצג תקין)
   y = paragraph(c,
-    'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
+    input.silent
+      ? 'הנהלת "היכל החתם סופר" אישרה את בקשתכם לקבלת כרטיס לרכישת מזון מוכן, כמפורט להלן.'
+      : 'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
     W - MX, y, W - MX * 2, 11, SUB, 4)
   y -= 3
 
@@ -312,8 +317,8 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   y = y - warnH - 8
 
   // פרטי היולדת
-  y = detailsBox(c, 'פרטי היולדת', y, [
-    ['שם היולדת', input.motherName],
+  y = detailsBox(c, input.silent ? 'פרטי המבקשת' : 'פרטי היולדת', y, [
+    [input.silent ? 'שם המבקשת' : 'שם היולדת', input.motherName],
     ['תעודת זהות', input.motherId || '—'],
     ['כתובת', input.address || '—'],
     ['עיר', input.city || '—'],
@@ -346,7 +351,9 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     const wB = wrapText(lineB, innerW, measure)
     const titleH = 20
     const lineH = 13.5
-    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 12
+    // ⚠️ ריפוד תחתון 20 (ולא 12): שורת המספרים נגעה בגבול המסגרת ונראתה
+    // כאילו היא חופפת לטקסט שמתחתיה.
+    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 20
 
     c.page.drawRectangle({ x: MX, y: y - boxH, width: W - MX * 2, height: boxH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1.2 })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: NAVY })
@@ -368,19 +375,24 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
       ay -= lineH
     }
 
-    y = y - boxH - 10
+    y = y - boxH - 14
   }
 
   // הערות בתחתית
   y = paragraph(c,
-    'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
+    input.silent
+      ? 'הכרטיס בתוקף עד 6 שבועות, ורק לרכישת מזון מוכן למשפחה. השובר אישי ואינו ניתן להעברה.'
+      : 'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
     W - MX, y, W - MX * 2, 9.5, SUB, 2)
-  y -= 5
+  y -= 8
 
-  // ברכה וחתימה — מצוירות מתחת לתוכן (לא חופפות). אם המקום צר, יורדות מעט אך נשארות במסגרת.
-  const blessY = Math.max(y, 46)
-  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
-  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
+  // ⚠️ ברכה וחתימה — יורדות תמיד מתחת לתוכן. קודם היה Math.max(y, 46),
+  // שדחף אותן *בחזרה למעלה* כשהמקום נגמר — היישר לתוך בלוק ההפעלה,
+  // וכל השורות התחתונות נראו חופפות. הרצפה 30 היא רק הגנה מפני גלישה
+  // מחוץ לעמוד, ונמוכה מספיק כדי שלא תיצור חפיפה בפריסה המלאה.
+  const blessY = Math.max(y, 30)
+  centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
+  centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
 
   return Buffer.from(await doc.save()).toString('base64')
 }
@@ -394,26 +406,31 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
   const page = doc.addPage([W, H])
   const c: Ctx = { page, font, logo }
 
-  let y = drawHeader(c, 'אגף עזר ליולדות')
+  // ⚠️ בלידה שקטה לא מופיעה המילה "יולדות/יולדת" בשום מקום בשובר.
+  let y = drawHeader(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות')
 
   drawIssueDate(c, y)
   serialLine(c, input.serial, y)
   y -= 24
 
-  centerText(c, 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
+  centerText(c, input.silent ? 'שובר הבראה' : 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
   y -= 12
   goldDivider(c, W / 2, y); y -= 26
 
   rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 22
-  centerText(c, 'מזל טוב לרגל השמחה!', W / 2, y, 13, GOLD); y -= 26
+  // ⚠️ בלידה שקטה אין ברכות — לא "מזל טוב" ולא "לרגל השמחה".
+  if (!input.silent) { centerText(c, 'מזל טוב לרגל השמחה!', W / 2, y, 13, GOLD); y -= 26 }
+  else y -= 6
 
   y = paragraph(c,
-    'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.',
+    input.silent
+      ? 'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.'
+      : 'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.',
     W - MX, y, W - MX * 2, 12.5, SUB, 6)
   y -= 12
 
-  y = detailsBox(c, 'פרטי היולדת והשהייה', y, [
-    ['שם היולדת', input.motherName],
+  y = detailsBox(c, input.silent ? 'פרטי המבקשת והשהייה' : 'פרטי היולדת והשהייה', y, [
+    [input.silent ? 'שם המבקשת' : 'שם היולדת', input.motherName],
     ['תעודת זהות', input.motherId || '—'],
     ['תאריך הלידה', fmtDate(input.birthDate)],
     ['בית החלמה', input.recoveryHome || 'ייקבע מול המזכירות'],
@@ -427,8 +444,8 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
     W - MX, y, W - MX * 2, 10.5, SUB, 4)
   y -= 12
 
-  centerText(c, 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
-  centerText(c, 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
+  centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
+  centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
 
   return Buffer.from(await doc.save()).toString('base64')
 }

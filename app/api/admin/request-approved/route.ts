@@ -130,6 +130,8 @@ export async function POST(request: NextRequest) {
               recoveryDays: recoveryDaysOf({ recovery_eligibility_days: birth.recovery_eligibility_days, is_twins: birth.is_twins }),
               serial,
               centers,
+              // לידה שקטה — בלי ברכות ובלי המילה "יולדת" בשוברים
+              silent: (birth.birth_type ?? 'live') === 'silent',
             }
             // שובר הבראה תמיד; שובר כרטיס מזון רק אם יש מלאי כרטיסים. אם אין מלאי —
             // היולדת בתור המתנה, ותקבל את שובר הכרטיס אוטומטית ברגע שיתחדש המלאי.
