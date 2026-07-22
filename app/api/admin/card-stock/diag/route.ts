@@ -37,7 +37,7 @@ export async function GET() {
   // כדי לגלות יולדות שנתקעו בסטטוס אחר ולכן מעולם לא נכנסו לתור.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, status, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
+    .select('id, status, birth_type, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
     .eq('status', 'active')
     .order('updated_at', { ascending: true })
     .limit(50)
@@ -47,7 +47,10 @@ export async function GET() {
   const rows = (aids ?? []).map(a => {
     const benRaw = (a as Record<string, unknown>).beneficiary
     const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string | null> | null
-    const inQueue = a.card_status === 'awaiting_stock' || a.card_voucher_status === 'awaiting_stock'
+    // ⚠️ אותו סינון בדיוק כמו processAwaitingStock — אחרת האבחון מדווח
+    // "לא ייטען לעולם" על יולדת שהתור דווקא כן מטפל בה.
+    const inQueue = a.card_load_status !== 'loaded' && !a.card_tlush_id &&
+      a.card_status !== 'rejected' && a.birth_type !== 'silent'
     const loaded = a.card_load_status === 'loaded' || !!a.card_tlush_id
     return {
       id: a.id,
