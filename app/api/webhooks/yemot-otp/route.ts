@@ -60,7 +60,14 @@ const hangupMsg = (text: string, callId?: string) =>
 // הקראת הקוד: פסיק בין המילים יוצר הפסקה קצרה בימות (ספרה-אחרי-ספרה),
 // בלי לפצל את ההודעה — בניגוד לנקודה, שהיא מפריד טוקנים. אותה שיטה
 // בדיוק כמו slowTokenOf ב-yemot-maternity שעובד.
-const slowText = (text: string) => tts(text).split(' ').filter(Boolean).join(' , ')
+// כל פסיק = הפסקה קצרה בימות. מילות הקישור נשארות ברצף טבעי (פסיק בודד),
+// ואילו *ספרות הקוד* מופרדות בשלושה פסיקים — הקראה איטית וברורה שמאפשרת
+// לרשום, בלי להאריך מיותר את כל השיחה.
+const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
+const slowText = (text: string) =>
+  tts(text).split(' ').filter(Boolean)
+    .map(w => (DIGIT_SET.has(w) ? `${w} , ,` : w))
+    .join(' , ')
 const hangupSlow = (text: string, callId?: string) =>
   yemotText([`id_list_message=t-${slowText(text)}`, 'go_to_folder=hangup'], callId)
 

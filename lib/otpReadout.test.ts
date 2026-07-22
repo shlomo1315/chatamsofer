@@ -6,9 +6,15 @@ import { spokenCode } from './yemotCall'
 // "שתיים", …) — שברים שאינם טוקנים חוקיים, והתוצאה "שגיאה בהקראה".
 // הבדיקות מקבעות את מה שנשלח בפועל לימות.
 
+// עותק מדויק של הלוגיקה ב-app/api/webhooks/yemot-otp/route.ts.
+// ⚠️ אם משנים שם — לעדכן גם כאן, אחרת הבדיקות מקבעות התנהגות ישנה.
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
-const slowText = (t: string) => tts(t).split(' ').filter(Boolean).join(' , ')
+const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
+const slowText = (t: string) =>
+  tts(t).split(' ').filter(Boolean)
+    .map(w => (DIGIT_SET.has(w) ? `${w} , ,` : w))
+    .join(' , ')
 
 describe('הקראת קוד OTP בימות', () => {
   it('הטקסט הנשלח אינו מכיל נקודות', () => {
@@ -19,8 +25,8 @@ describe('הקראת קוד OTP בימות', () => {
   it('ההפסקות נשמרות כפסיקים (הקראה איטית)', () => {
     const out = slowText(spokenCode('123456'))
     expect(out).toContain(' , ')
-    // כל ספרה כמילה בעברית, מופרדת בפסיק
-    expect(out).toContain('אחת , שתיים , שלוש')
+    // ספרות הקוד מופרדות בשלושה פסיקים — הפסקה ארוכה יותר, כדי שניתן לרשום
+    expect(out).toContain('אחת , , , שתיים , , , שלוש')
   })
 
   it('כל ספרות הקוד מוקראות', () => {
@@ -37,7 +43,7 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowText(spokenCode(code))
     const words = code.split('').map(d =>
       ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
-    const seq = words.join(' , ')
+    const seq = words.join(' , , , ')
     expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
   })
 
