@@ -212,8 +212,9 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   const titleH = 22
   const items = centers.filter(cn => cn.name)
   // ⚠️ כל מוקד תופס שתי שורות: שם ב-ry ופרטים ב-ry-12.5 (פונט 9).
-  // ב-perH=20 השורה השנייה נגעה בשם של המוקד הבא. 26 נותן מרווח נקי.
-  const perH = 26
+  // ב-perH=20 השורה השנייה נגעה בשם של המוקד הבא; 24 משאיר מרווח נקי
+  // ובו-זמנית חוסך 12 נק' על 6 מוקדים — מקום שנדרש לחתימה בתחתית.
+  const perH = 24
   const contentH = items.length ? items.length * perH : 22
   const boxH = titleH + contentH + 6
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
@@ -229,7 +230,9 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
       c.page.drawSvgPath('M 0 -2.2 L 2.2 0 L 0 2.2 L -2.2 0 Z', { x: x + w - 9, y: ry + 4, color: GOLD, borderWidth: 0 })
       rightText(c, cn.name, x + w - 18, ry, 11, NAVY)
       // שורה 2: כתובת · ימים · שעות — כמחרוזת אחת (toVisual מטפל בהיפוך טווח השעות).
-      const addr = [cn.address, cn.city].filter(Boolean).join(', ')
+      // ⚠️ רווח ולא פסיק: הפסיק מוסר ב-toVisual (הוא שובר את סדר ה-bidi),
+      // ולכן הופיע במקום שגוי אחרי שם הרחוב.
+      const addr = [cn.address, cn.city].filter(Boolean).join(' ')
       const line2 = [addr, cn.pickup_days, (cn.pickup_hours || '').trim()].filter(Boolean).join('  ·  ')
       if (line2) rightText(c, line2, x + w - 18, ry - 12.5, 9, SUB)
       ry -= perH
@@ -328,8 +331,10 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 
   // מוקדי האיסוף — שם, כתובת, ימים ושעות. ניתן לגשת לכל אחד מהם.
   y = centersBox(c, 'מוקדי איסוף הכרטיס', y, input.centers ?? [])
-  y = paragraph(c, 'תוכלו לבחור בכל מוקד לקבלת הכרטיס.', W - MX, y, W - MX * 2, 11, NAVY, 3)
-  y -= 4
+  // ⚠️ פונט וריווח מוקטנים — הבלוק שמתחת ירד נמוך מדי והחתימה נחתכה
+  // בקצה העמוד. הקיצור כאן מעלה את כל התחתית פנימה.
+  y = paragraph(c, 'תוכלו לבחור בכל מוקד לקבלת הכרטיס.', W - MX, y, W - MX * 2, 10, NAVY, 2)
+  y += 2
 
   // ── הפעלת הכרטיס — תיבת הדגשה (חובה לפני השימוש) ──
   {
