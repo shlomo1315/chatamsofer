@@ -95,6 +95,28 @@ async function handle(req: NextRequest) {
   // (אותה גישת חיפוש כמו ב-yemot-maternity — עמידה למקפים/קידומות.)
   if (last7.length !== 7) return hangupMsg('שגיאה במספר המתקשר', callId)
 
+  // ── קודם: קוד אימות מטופס ההרשמה ─────────────────────────────────────────
+  // ⚠️ הנרשם עדיין אינו קיים ב-beneficiaries, ולכן החיפוש למטה לא ימצא אותו.
+  // הקוד נשמר ב-app_settings תחת verify:phone:<טלפון מנורמל>.
+  const verifyKey = `verify:phone:${caller}`
+  const { data: vRow } = await admin
+    .from('app_settings').select('value').eq('key', verifyKey).maybeSingle()
+  if (vRow?.value) {
+    try {
+      const rec = JSON.parse(String(vRow.value)) as { plain?: string; expires?: number }
+      if (rec.plain && (!rec.expires || rec.expires > Date.now())) {
+        // הקראה חד-פעמית — מוחקים את הקוד הגלוי ומשאירים את ה-hash לאימות
+        const { plain: _drop, ...rest } = rec as Record<string, unknown> & { plain?: string }
+        void _drop
+        await admin.from('app_settings')
+          .update({ value: JSON.stringify(rest), updated_at: new Date().toISOString() })
+          .eq('key', verifyKey)
+        console.log(`[yemot-otp] reading registration code to caller callId=${callId}`)
+        return hangupMsg(spokenCode(String(rec.plain).replace(/\D/g, '')), callId)
+      }
+    } catch { /* רשומה פגומה — ממשיכים לחיפוש הרגיל */ }
+  }
+
   const { data, error } = await admin
     .from('beneficiaries')
     .select('id, phone, phone2, spouse_phone, portal_phone_code_plain, portal_phone_code_expires')
