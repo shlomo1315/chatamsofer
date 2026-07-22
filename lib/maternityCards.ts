@@ -271,7 +271,11 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
     if (!r.ok) {
       // כשל ליולדת ספציפית — הכרטיס הוחזר למלאי. ממשיכים לבאה, אך סופרים ומדווחים.
       out.failed++
-      if (r.error) out.errors.push(r.error)
+      // ⚠️ מזהה התיק נכלל בהודעה: בלעדיו אי אפשר לדעת *איזו* יולדת נכשלה
+      // ולמה, וכל אבחון הופך לניחוש.
+      const detail = r.error || 'שגיאה לא ידועה'
+      console.error(`[processAwaitingStock] aid=${w.id} נכשל:`, detail)
+      out.errors.push(`${detail} (תיק ${String(w.id).slice(0, 8)})`)
       continue
     }
 

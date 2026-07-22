@@ -20,11 +20,24 @@ export async function GET() {
   const balance = await getStockBalance(admin)
   const creds = await getNedarimCreds()
 
+  // ⚠️ בדיקה חיה מול נדרים — זה מה שלא ניתן לראות מהקוד. מחזירה את
+  // הודעת השגיאה המקורית שלהם, כדי לדעת אם הבעיה בחשבון או אצלנו.
+  let nedarimCheck: { ok: boolean; families?: number; error?: string } = { ok: false, error: 'לא מוגדר' }
+  if (creds) {
+    try {
+      const { getClientsTable } = await import('@/lib/nedarim')
+      const { families } = await getClientsTable(creds)
+      nedarimCheck = { ok: true, families: families.length }
+    } catch (e) {
+      nedarimCheck = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   // כל הלידות המאושרות שטרם נטענו — לא רק אלו שמסומנות awaiting_stock,
   // כדי לגלות יולדות שנתקעו בסטטוס אחר ולכן מעולם לא נכנסו לתור.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, status, card_status, card_voucher_status, card_load_status, card_tlush_id, card_center_id, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email)')
+    .select('id, status, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
     .eq('status', 'active')
     .order('updated_at', { ascending: true })
     .limit(50)
@@ -43,6 +56,10 @@ export async function GET() {
       card_status: a.card_status,
       card_voucher_status: a.card_voucher_status,
       card_load_status: a.card_load_status,
+      // ⚠️ שדות שנדרשים להטענה בנדרים — בלעדיהם ההקמה נכשלת
+      zeout: ben?.id_number || ben?.spouse_id_number || '(אין ת"ז!)',
+      nedarimId: ben?.nedarim_id || '(טרם הוקמה)',
+      lastLoadError: a.card_load_error || null,
       hasTlush: !!a.card_tlush_id,
       inQueue,
       loaded,
@@ -56,6 +73,7 @@ export async function GET() {
   return NextResponse.json({
     balance,
     nedarimConfigured: !!creds,
+    nedarimCheck,
     inQueueCount: rows.filter(r => r.inQueue).length,
     stuckCount: rows.filter(r => !r.inQueue && !r.loaded).length,
     rows,
