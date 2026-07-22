@@ -211,7 +211,9 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   const x = MX, w = W - MX * 2
   const titleH = 22
   const items = centers.filter(cn => cn.name)
-  const perH = 20        // גובה מוקד מוקטן — כדי שרשימה ארוכה (6 מוקדים) תיכנס בעמוד
+  // ⚠️ כל מוקד תופס שתי שורות: שם ב-ry ופרטים ב-ry-12.5 (פונט 9).
+  // ב-perH=20 השורה השנייה נגעה בשם של המוקד הבא. 26 נותן מרווח נקי.
+  const perH = 26
   const contentH = items.length ? items.length * perH : 22
   const boxH = titleH + contentH + 6
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
@@ -356,8 +358,14 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     rightText(c, lineMoked, innerRight, ay, FS, NAVY); ay -= lineH
     for (const ln of wB) { rightText(c, ln, innerRight, ay, FS, RED); ay -= lineH }
     if (uniqPhones.length) {
-      // כל מספר עטוף ב-RLM (הקשר RTL) כדי שיוצג נכון גם כשהוא מבודד בשורה משלו
-      centerText(c, uniqPhones.map(p => `‏${p}‏`).join('     '), W / 2, ay, FS + 1, NAVY); ay -= lineH
+      // ⚠️ המספרים מצוירים לבדם, ולכן אסור להעביר אותם דרך toVisual:
+      // toVisual הופך ספרות בכוונה (הרנדרר מצייר LTR-בתוך-עברית הפוך),
+      // אך כאן אין הקשר עברי — וההיפוך הציג "5131017250" במקום המספר.
+      // drawText ישירות שומר על הספרות כפי שהן.
+      const phonesLine = [...uniqPhones].reverse().join('     ')
+      const pw = c.font.widthOfTextAtSize(phonesLine, FS + 1)
+      c.page.drawText(phonesLine, { x: W / 2 - pw / 2, y: ay, size: FS + 1, font: c.font, color: NAVY })
+      ay -= lineH
     }
 
     y = y - boxH - 10
