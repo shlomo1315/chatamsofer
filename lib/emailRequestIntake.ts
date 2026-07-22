@@ -76,12 +76,26 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, eligibility_status, rejection_reason, marital_status')
+    .select('id, full_name, family_name, spouse_name, email, eligibility_status, rejection_reason, marital_status')
     .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
     .maybeSingle()
   const name = ben ? [ben.family_name, ben.full_name].filter(Boolean).join(' ') : ''
   if (!ben) {
     await reject(from, '', type, [`לא נמצאה רשומה לתעודת זהות ${idNumber}. ודאו שנרשמתם, או הירשמו במערכת הדיגיטלית שלנו`], idNumber, generic)
+    return true
+  }
+
+  // ⚠️ אבטחה: כתובת השולח במייל ניתנת לזיוף, ות"ז אינה סוד. בלי הבדיקה
+  // הזו כל אחד היה יכול לשלוח מייל עם ת"ז של מישהו אחר בשורת הנושא,
+  // לקבל בחזרה את שם המשפחה, המצב המשפחתי וסיבת הדחייה הפנימית שלו,
+  // וגם לפתוח על שמו בקשות ולצרף מסמכים. דורשים התאמה לכתובת הרשומה.
+  const benEmail = (ben.email || '').trim().toLowerCase()
+  if (!benEmail || benEmail !== from) {
+    console.warn(`[emailRequest] שולח שאינו תואם לרשומה — ת"ז ${idNumber}, from=${from}`)
+    // הודעה גנרית בלבד: לא חושפים אם הת"ז קיימת ולא שום פרט מהרשומה.
+    await reject(from, '', type, [
+      'לא ניתן לאמת את הבקשה מכתובת מייל זו. יש לשלוח מהכתובת הרשומה במערכת, או להגיש דרך המערכת הדיגיטלית.',
+    ], idNumber, generic)
     return true
   }
   if (ben.eligibility_status === 'rejected') {
