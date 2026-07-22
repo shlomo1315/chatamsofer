@@ -99,6 +99,8 @@ export async function loadMaternityCardOnApproval(
           e instanceof Error ? e.message : e)
       }
     }
+    // ⚠️ SaveClientCard משמש גם כ"הקמה אם לא קיימת" וגם כעדכון: נדרים
+    // מחזירים ClientId בשני המקרים. לכן אין צורך לבדוק קיום מראש.
     if (!clientId) clientId = await saveClientCard(creds, { ...b, id_number: zeout })
     if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
   } catch (e) {
@@ -120,8 +122,33 @@ export async function loadMaternityCardOnApproval(
   // 2) הטענת הזכאות — משויכת לקבוצת "הגבלת חנויות" של עזר יולדות (LimitedId)
   const limitedId = await getMaternityLimitedId()
   let result: Awaited<ReturnType<typeof addTlush>>
+
+  // ⚠️ nedarim_id שמור אצלנו עלול להיות מיושן — המשפחה נמחקה/אוחדה בנדרים.
+  // אז addTlush נכשל ב"שגיאה באיתור משפחה" והכרטיס לא נטען לעולם.
+  // מזהים את המצב, מקימים מחדש עם אותה ת"ז, ומנסים שוב פעם אחת.
+  const reviveClient = async (): Promise<string | null> => {
+    try {
+      const fresh = await saveClientCard(creds, { ...b, id_number: zeout }, null)
+      if (fresh && fresh !== b.nedarim_id) {
+        await admin.from('beneficiaries').update({ nedarim_id: fresh }).eq('id', b.id)
+        console.warn(`[maternityCards] nedarim_id ${b.nedarim_id} לא זוהה — הוקם מחדש כ-${fresh}`)
+      }
+      return fresh
+    } catch (e) {
+      console.error('[maternityCards] הקמה מחדש בנדרים נכשלה:', e instanceof Error ? e.message : e)
+      return null
+    }
+  }
+
   try {
     result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר', limitedId)
+    if (!result.ok && /איתור משפחה|לא נמצא|not found/i.test(result.message ?? '')) {
+      const revived = await reviveClient()
+      if (revived) {
+        clientId = revived
+        result = await addTlush(creds, clientId, amount, undefined, 'הטענת זכאות יולדת (אישור לידה) — היכל החתם סופר', limitedId)
+      }
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     await restoreCard()
