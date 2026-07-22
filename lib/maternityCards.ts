@@ -88,10 +88,25 @@ export async function loadMaternityCardOnApproval(
   const zeout = b.id_number || b.spouse_id_number || null
   let clientId = b.nedarim_id ? String(b.nedarim_id) : null
   try {
-    if (!clientId && zeout) clientId = await findClientByZeout(creds, String(zeout))
+    // ⚠️ החיפוש (GetClient_Table) עלול להיכשל מצד נדרים. זה אינו סיבה
+    // לוותר: אם ההקמה/עדכון (SaveClientCard) מצליחה — המשפחה קיימת
+    // ומקבלת ClientId. קודם כשל החיפוש הפיל את כל התהליך.
+    if (!clientId && zeout) {
+      try {
+        clientId = await findClientByZeout(creds, String(zeout))
+      } catch (e) {
+        console.error('[maternityCards] חיפוש המשפחה בנדרים נכשל — ממשיכים להקמה:',
+          e instanceof Error ? e.message : e)
+      }
+    }
     if (!clientId) clientId = await saveClientCard(creds, { ...b, id_number: zeout })
     if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
-  } catch (e) { await restoreCard(); return { ok: false, error: e instanceof Error ? e.message : 'שגיאת נדרים' } }
+  } catch (e) {
+    await restoreCard()
+    const msg = e instanceof Error ? e.message : 'שגיאת נדרים'
+    console.error('[maternityCards] הקמת/עדכון המשפחה בנדרים נכשלה:', msg, { zeout, aidId: aid.id })
+    return { ok: false, error: `נדרים: ${msg}` }
+  }
   if (!clientId) {
     await restoreCard()
     return {
