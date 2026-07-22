@@ -27,6 +27,18 @@ export async function loadMaternityCardOnApproval(
   // ⚠️ המלאי נבדק לפני הכל — לפני נדרים ולפני כל פנייה חיצונית.
   // אין מלאי → היולדת נכנסת לתור ההמתנה ולא נוגעים בנדרים בכלל.
   // ה-600 ₪ ייטענו רק כשיתחדש המלאי, דרך processAwaitingStock.
+  // ⚠️ בדיקת מלאי מקדימה לפני הניכוי האטומי: אם המלאי 0, יוצאים מיד
+  // לתור ההמתנה בלי לגעת בנדרים. הניכוי עצמו עדיין אטומי (מונע מרוץ),
+  // אך הבדיקה המוקדמת מבטיחה שגם כשל בניכוי לא ידלג לטעינה.
+  const stockNow = await getStockBalance(admin)
+  if (stockNow <= 0) {
+    await admin.from('maternity_aids')
+      .update({ card_status: 'awaiting_stock', updated_at: new Date().toISOString() })
+      .eq('id', aid.id)
+    await logActivity(admin, { action: 'maternity_card_awaiting_stock', entityType: 'maternity_aid', entityId: aid.id, details: { reason: 'no_stock_precheck' } })
+    return { ok: true, awaitingStock: true }
+  }
+
   let remaining: number | null
   try {
     remaining = await consumeOneCard(admin, { reason: 'birth_approval', aidId: aid.id })
@@ -184,15 +196,18 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // גם אחרי חידוש מלאי. נסרקות כאן כל הלידות המאושרות שטרם נטענו בפועל.
   const { data: candidates } = await admin
     .from('maternity_aids')
-    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id')
+    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type')
     .eq('status', 'active')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
 
   const waiting = (candidates ?? []).filter(a =>
     // טרם נטען בפועל
     a.card_load_status !== 'loaded' && !a.card_tlush_id &&
-    // ולא נדחה/בוטל ידנית
-    a.card_status !== 'rejected',
+    // ⚠️ רק מי שבאמת ממתינה לכרטיס. בלי הסינון הזה הסריקה טענה כסף
+    // גם ליולדות שלא אושר להן כרטיס כלל — כולל לידה שקטה.
+    (a.card_status === 'awaiting_stock' || a.card_voucher_status === 'awaiting_stock' ||
+     a.card_status === 'approved') &&
+    a.birth_type !== 'silent',
   )
   if (!waiting.length) return out
 

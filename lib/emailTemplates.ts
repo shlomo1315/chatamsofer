@@ -1063,7 +1063,7 @@ export function birthApprovedEmail(
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
       <tr><td style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:12px;padding:14px 18px;text-align:center;">
         <p style="margin:0;color:#3730a3;font-size:15px;font-weight:900;line-height:1.7;">${T('vouchers_title')}</p>
-        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${cardInStock ? T('vouchers_note') : 'מצורף שובר ההבראה. שובר כרטיס המזון יישלח בהודעת עדכון נפרדת מיד עם התחדשות המלאי.'}</p>
+        <p style="margin:4px 0 0;color:#4338ca;font-size:13px;line-height:1.7;">${cardInStock ? T('vouchers_note') : T('vouchers_note_no_stock')}</p>
       </td></tr>
     </table>
     <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${T('kicker')}</p>

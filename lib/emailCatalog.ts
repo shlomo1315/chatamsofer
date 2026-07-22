@@ -220,6 +220,13 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'subtitle', label: 'כותרת משנה', default: 'היכל החתם סופר' },
       { key: 'vouchers_title', label: 'כותרת בלוק השוברים', default: 'מצורפים למייל זה שוברים למימוש ההטבה!' },
       { key: 'vouchers_note', label: 'הסבר בלוק השוברים', default: 'הדפיסו את השוברים והביאו אותם לבית החלמה ו/או למוקדים לצורך מימוש ההטבה.', multiline: true },
+      {
+        key: 'vouchers_note_no_stock',
+        label: 'הסבר בלוק השוברים — כשאין כרטיס מזון במלאי',
+        default: 'מצורף שובר ההבראה. שובר כרטיס המזון יישלח אליכם בהמשך למייל.',
+        multiline: true,
+        hint: 'מוצג במקום ההסבר הרגיל כשהלידה אושרה ללא מלאי כרטיסים',
+      },
       { key: 'kicker', label: 'תווית קטנה מעל הכותרת', default: 'בשורה טובה!' },
       { key: 'heading_suffix', label: 'המשך הכותרת שאחרי הפנייה', default: 'בקשת ההבראה ליולדת אושרה' },
       { key: 'approved_note', label: 'ההודעה המודגשת על האישור', default: 'הבקשה שלכם טופלה ואושרה, מזל טוב!' },
