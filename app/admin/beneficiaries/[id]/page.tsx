@@ -11,6 +11,7 @@ import { he } from 'date-fns/locale'
 import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
 import ReturnedFixesBanner from './ReturnedFixesBanner'
+import LineageAlertModal from './LineageAlertModal'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
@@ -121,14 +122,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   ])
   const lineagePath = await getLineagePath(beneficiary?.lineage_node_id)
 
-  // דורות שסוטים מהנתיב המאושר — מחושב רק בבדיקה מעמיקה (אחרת מיותר), לצביעה אדומה.
-  const deviatingGens = beneficiary?.eligibility_status === 'deep_review'
-    ? await getDeviatingGenerations(
-        (Array.isArray(beneficiary.lineage_chain)
-          ? (beneficiary.lineage_chain as { generation: number; name: string }[])
-          : []),
-      )
-    : new Set<number>()
+  // דורות שסוטים מהנתיב המאושר — לצביעה אדומה ולהתראה. מחושב כשיש שרשרת
+  // שהוקלדה (lineage_chain), כדי לזהות מיד סדר דורות לא תקין — בכל סטטוס.
+  const typedChain = Array.isArray(beneficiary?.lineage_chain)
+    ? (beneficiary!.lineage_chain as { generation: number; name: string }[])
+    : []
+  const deviatingGens = typedChain.length ? await getDeviatingGenerations(typedChain) : new Set<number>()
+  // סטייה בתוך 5 הדורות הראשונים = סדר דורות חשוד → התראה קופצת בכניסה.
+  const earlyDeviation = [...deviatingGens].some(g => g <= 5)
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
@@ -429,6 +430,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <BeneficiaryActions id={id} name={fullName} />
         </div>
       </div>
+
+      {/* התראה קופצת בכניסה — סדר דורות לא תקין (סטייה ב-5 הדורות הראשונים) */}
+      {earlyDeviation && <LineageAlertModal generations={[...deviatingGens].filter(g => g <= 5)} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 

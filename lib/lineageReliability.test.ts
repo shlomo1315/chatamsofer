@@ -77,6 +77,33 @@ describe('assessLineageReliability — ספירה לפי צמתים', () => {
     expect(rB.anchor?.name).toBe('משה סופר')
   })
 
+  it('בחר ענף אמיתי אך הזין שמות שגויים בשרשרת → התאמה נמוכה', async () => {
+    // ⚠️ הבאג שתוקן: נרשם נתלה על צומת מאומת מבוסס (lineage_node_id תקין),
+    // אבל ה-lineage_chain שהקליד מכיל שמות מומצאים שאינם תואמים לעץ. עד
+    // התיקון קיבל ציון גבוה (78) כי הציון התעלם מהשמות; עכשיו נמוך.
+    const nodes = [
+      ...baseNodes,
+      { id: 'self3', name: 'דוד סופר', generation: 4, parent_id: 'avraham', status: 'pending' },
+    ]
+    const bene = {
+      id: 'b4', family_name: 'סופר', full_name: 'דוד', spouse_name: null,
+      eligibility_status: 'pending', lineage_node_id: 'self3',
+      // שמות שגויים בדורות 2-3 (במקום "שמעון סופר"/"אברהם סופר")
+      lineage_chain: [
+        { generation: 1, name: 'רבינו החתם סופר', relation: null },
+        { generation: 2, name: 'חצקלה דודזיזון', relation: 'son' },
+        { generation: 3, name: 'אסף מיכאלוב', relation: 'son' },
+        { generation: 4, name: 'דוד סופר', relation: 'son' },
+      ],
+    }
+    const familyRows = [...fam('avraham', 11), ...fam('self3', 1)]
+    const r = await assessLineageReliability(makeDb({ bene, nodes, familyRows }), 'b4')
+    // רוב השמות אינם תואמים → ציון נמוך למרות הענף המבוסס
+    expect(r.band).toBe('low')
+    expect(r.score).toBeLessThan(40)
+    expect(r.reasons?.some(x => x.includes('אינם תואמים'))).toBe(true)
+  })
+
   it('ללא שיוך לצומת → מדווח שאין נתוני עץ', async () => {
     const bene = { id: 'b3', family_name: 'כהן', full_name: 'לוי', spouse_name: null, eligibility_status: 'pending', lineage_node_id: null, lineage_chain: null }
     const r = await assessLineageReliability(makeDb({ bene, nodes: baseNodes, familyRows: [] }), 'b3')

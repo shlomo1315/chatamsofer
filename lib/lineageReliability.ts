@@ -177,12 +177,37 @@ export async function assessLineageReliability(db: SupabaseClient, beneficiaryId
     // שהוא תמיד חדש וטבעי לכל נרשם)
     newNodesAdded = pathNodes.filter(n => n.id !== leafId && n.generation > anchorNode.generation && n.status !== 'verified').length
 
+    // ⚠️ קריטי: התאמת השמות שהוקלדו (lineage_chain) לנתיב המאומת. עד כה
+    // הציון חושב אך ורק לפי הצומת שנבחר (lineage_node_id) והתעלם *לגמרי*
+    // מהשמות שהנרשם הקליד — כך שנרשם שבחר ענף אמיתי אך מילא שמות מומצאים
+    // ("חצקלה דודזיזון" במקום השם האמיתי) קיבל ציון גבוה. עכשיו בודקים כמה
+    // מהדורות שהוקלדו תואמים לצומת מאומת באותו דור (verified=true).
+    // ⚠️ רק שרשרת שהוקלדה ידנית (lineage_chain אמיתי) נבדקת להתאמת שמות.
+    // כשאין chain, buildClaimedPath בונה path מהעץ עצמו — שם כל צומת כבר תואם
+    // למזהה שלו, ואין טעם "להעניש" על שמות. בודקים רק כשהנרשם הקליד שמות.
+    const hasTypedChain = Array.isArray(ben.lineage_chain) && ben.lineage_chain.length > 0
+    const chainEntries = hasTypedChain ? claimedPath.filter(s => s.generation >= 1) : []
+    const matchedGens = chainEntries.filter(s => s.verified).length
+    const totalGens = chainEntries.length
+    // יחס ההתאמה: כמה מהשמות שהוקלדו תואמים לעץ המאומת. 1 = הכל תואם.
+    const matchRatio = totalGens > 0 ? matchedGens / totalGens : 0
+    const mismatchGens = totalGens - matchedGens
+
     // ── ציון ──
     score += Math.min(45, trunkFamilies * 6)
     score += Math.min(15, anchorNode.generation * 3)
     if (lineFamilies >= 3) score += 15
     if (newNodesAdded === 0) score += 15
     score -= Math.min(25, newNodesAdded * 10)
+
+    // ⚠️ עונש התאמת שמות — הלב של הבדיקה, אך *רק כשהנרשם הקליד שרשרת שמות*
+    // (lineage_chain). אם בחר צומת ישירות בלי להקליד שמות (chain ריק) — אין
+    // מה להשוות ולא מענישים. שמות שהוקלדו ואינם תואמים לעץ מורידים את הציון
+    // בחדות: זה בדיוק המצב שנרשם נתלה על ענף אמיתי אך הקליד שמות שגויים.
+    if (totalGens > 0) {
+      score = Math.round(score * (0.25 + 0.75 * matchRatio))  // עד 75% מהציון תלוי בהתאמת השמות
+      score -= mismatchGens * 12                               // עונש קבוע לכל דור שאינו תואם
+    }
 
     const topSibling = siblingLines[0]?.count ?? 0
     const uniqueLineUnderPopulated = newNodesAdded >= 1 && trunkFamilies >= 8 && lineFamilies <= 1 && topSibling >= 3
@@ -202,6 +227,13 @@ export async function assessLineageReliability(db: SupabaseClient, beneficiaryId
       reasons.push(`נוספו ${newNodesAdded} ${newNodesAdded === 1 ? 'דור חדש' : 'דורות חדשים'} מעל הנרשם שאינם מאומתים בעץ.`)
     } else {
       reasons.push('הנרשם חובר ישירות לצומת מאומת בעץ, בלי הוספת דורות חדשים.')
+    }
+    // ⚠️ אזהרת אי-התאמת שמות — הנקודה החשובה ביותר למנהל
+    if (mismatchGens > 0) {
+      const bad = chainEntries.filter(s => !s.verified).map(s => `דור ${s.generation} ("${stripTitles(s.name)}")`)
+      reasons.push(`⚠ ${mismatchGens} מתוך ${totalGens} השמות שהוזנו אינם תואמים לעץ המאומת: ${bad.join(', ')}. ייתכן שהנרשם נתלה על ענף קיים אך הזין שמות שגויים — נדרשת בדיקה מעמיקה.`)
+    } else if (totalGens > 0) {
+      reasons.push(`כל ${totalGens} השמות שהוזנו תואמים לעץ המאומת.`)
     }
   }
 
