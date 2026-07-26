@@ -20,6 +20,8 @@ export type MotherRef = {
   spouse_id_number?: string
   children?: unknown[]
   children_count?: number
+  // סטטוס אישור המשפחה (יחוס) — נדרש כדי להזהיר לפני אישור לידה של משפחה שטרם אושרה
+  eligibility_status?: string
 }
 
 export const STATUS_PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
@@ -147,6 +149,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // שהיולדת תיכנס לרשימת המתנה ותקבל שובר כרטיס אוטומטית כשיתחדש המלאי.
   const [stockWarnOpen, setStockWarnOpen] = useState(false)
   const [checkingStock, setCheckingStock] = useState(false)
+  // אזהרת משפחה שטרם אושרה — נפתחת לפני אישור לידה של משפחה בסטטוס שאינו 'approved',
+  // באותה רוח כמו הבאנר בכרטסת (FamilyApprovalGate). המזכיר יכול לאשר בכל זאת.
+  const [familyWarnOpen, setFamilyWarnOpen] = useState(false)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
@@ -241,8 +246,24 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 
+  // המשך אישור הלידה אחרי שער המשפחה: בדיקת מלאי כרטיסים ואז אישור.
+  // מופרד כדי שגם "אשר בכל זאת" מאזהרת המשפחה יעבור דרך אותה בדיקת מלאי.
+  const proceedApproveAfterFamily = async () => {
+    setCheckingStock(true)
+    try {
+      const r = await fetch('/api/admin/card-stock', { cache: 'no-store' })
+      const d = await r.json()
+      setCheckingStock(false)
+      if (r.ok && typeof d.balance === 'number' && d.balance <= 0) {
+        setStockWarnOpen(true) // אין מלאי → מודאל אזהרה, האישור ימתין לאישור המזכיר
+        return
+      }
+    } catch { setCheckingStock(false) /* בדיקת המלאי היא תוספת — כשל לא חוסם אישור */ }
+    void setStatus('active')
+  }
+
   // בחירת אפשרות — דחייה ('cancelled') נפתחת דרך חלונית סיבה; אישור לידה ('active')
-  // בודק מלאי כרטיסים ומזהיר אם ריק; השאר מיד.
+  // בודק אישור משפחה ומלאי כרטיסים ומזהיר אם צריך; השאר מיד.
   const onOption = async (value: MaternityStatus) => {
     if (value === 'cancelled') {
       setOpen(false)
@@ -250,20 +271,17 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
       setRejectOpen(true)
       return
     }
-    // אישור לידה — בדיקת מלאי כרטיסים. אם אין מלאי, מזהירים לפני האישור.
+    // אישור לידה — קודם מזהירים אם המשפחה טרם אושרה (כמו הבאנר בכרטסת),
+    // ואז בודקים מלאי כרטיסים. שתי האזהרות בשרשרת: משפחה → מלאי → אישור.
     if (value === 'active') {
       setOpen(false)
-      setCheckingStock(true)
-      try {
-        const r = await fetch('/api/admin/card-stock', { cache: 'no-store' })
-        const d = await r.json()
-        setCheckingStock(false)
-        if (r.ok && typeof d.balance === 'number' && d.balance <= 0) {
-          setStockWarnOpen(true) // אין מלאי → מודאל אזהרה, האישור ימתין לאישור המזכיר
-          return
-        }
-      } catch { setCheckingStock(false) /* בדיקת המלאי היא תוספת — כשל לא חוסם אישור */ }
-      void setStatus('active')
+      const mother = aid.beneficiary as MotherRef | undefined
+      const familyApproved = (mother?.eligibility_status ?? 'pending') === 'approved'
+      if (!familyApproved) {
+        setFamilyWarnOpen(true) // משפחה לא מאושרת → אזהרה; המשך יבדוק מלאי
+        return
+      }
+      await proceedApproveAfterFamily()
       return
     }
     void setStatus(value)
@@ -278,6 +296,48 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
 
   return (
     <div className="relative inline-block">
+      {/* אזהרת משפחה שטרם אושרה — לפני אישור לידה (מקבילה לבאנר בכרטסת) */}
+      {familyWarnOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+          onClick={() => setFamilyWarnOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle size={20} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">המשפחה טרם אושרה</h3>
+                <p className="text-xs text-slate-500">מומלץ לאשר את היחוס לפני אישור הלידה</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 leading-relaxed">
+              <p className="m-0">
+                המשפחה עדיין בסטטוס <strong>&quot;ממתין לאישור&quot;</strong>. ניתן לאשר את הלידה
+                בכל זאת, אך מומלץ קודם לאשר את היחוס (בכרטסת או בכפתור &quot;אישור יחוס&quot;).
+              </p>
+            </div>
+            <div className="mt-4 flex flex-wrap justify-start gap-2">
+              <button type="button"
+                onClick={async () => { setFamilyWarnOpen(false); await familyApprove(); await proceedApproveAfterFamily() }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm
+                           font-bold text-white transition hover:bg-emerald-700">
+                <Check size={15} /> אשר יחוס ולידה
+              </button>
+              <button type="button"
+                onClick={() => { setFamilyWarnOpen(false); void proceedApproveAfterFamily() }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2.5 text-sm
+                           font-bold text-white transition hover:bg-amber-700">
+                אשר לידה בכל זאת
+              </button>
+              <button type="button" onClick={() => setFamilyWarnOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold
+                           text-slate-600 transition hover:bg-slate-50">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* אזהרת אין-מלאי לפני אישור לידה */}
       {stockWarnOpen && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"

@@ -13,7 +13,7 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('maternity_aids')
-    .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count), card_center:card_centers(name)')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status), card_center:card_centers(name)')
     // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
     .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })
