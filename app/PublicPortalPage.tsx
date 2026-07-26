@@ -965,6 +965,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     fetch('/api/portal/department-gates').then(r => r.json())
       .then(d => { if (d.gates) setDeptGates(d.gates) }).catch(() => {})
   }, [])
+  // חלונית "המערכת בפיתוח" — נפתחת כשמנסים לגשת לבקשה של מחלקה סגורה (מקישור
+  // במייל או מכפתור). מציגה שם מחלקה. מקור האמת: ההגדרות בדף הניהול.
+  const [closedDeptModal, setClosedDeptModal] = useState<string | null>(null)
+  // בודק אם מחלקה פתוחה; אם סגורה — פותח חלונית ומחזיר false (חוסם).
+  const gateAllows = (dept: string, label: string): boolean => {
+    if (deptGates[dept]) return true
+    setClosedDeptModal(label)
+    return false
+  }
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   // רישום כילד רשום — השיוך נקבע אוטומטית מההורה
   const [childParentLineage, setChildParentLineage] = useState<ParentLineage | null>(null)
@@ -2037,7 +2046,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const canRequestBirth = !!beneficiary?.marital_status && MARRIED_STATUSES.includes(beneficiary.marital_status)
 
   const goToBirthForm = () => {
-    if (!deptGates.maternity) { setError('הגשת בקשות לעזר יולדות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
+    if (!gateAllows('maternity', 'עזר יולדות')) return
     if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setBabyIdError(''); setNoBabyName(false)
@@ -2048,7 +2057,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setStep('new-birth')
   }
   const goToSilentBirthForm = () => {
-    if (!deptGates.maternity) { setError('הגשת בקשות לעזר יולדות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
+    if (!gateAllows('maternity', 'עזר יולדות')) return
     if (!canRequestBirth) { setError('בקשה זו זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setShowSilentInfo(false)
@@ -2087,16 +2096,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(false)
   }
   const goToLoanForm = () => {
-    if (!deptGates.gemach) { setError('הגשת בקשות לגמ"ח ההלוואות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
+    if (!gateAllows('gemach', 'גמ"ח ההלוואות')) return
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setDocFiles({})
     setLoanModalOpen(true)
   }
-  // פתיחת מודל בקשת הסיוע — חסום אם המחלקה סגורה
+  // פתיחת מודל בקשת הסיוע — חסום אם המחלקה סגורה (חלונית "בפיתוח")
   const goToAidForm = () => {
-    if (!deptGates.financial_aid) { setError('הגשת בקשות לסיוע רפואי אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
+    if (!gateAllows('financial_aid', 'סיוע רפואי')) return
     setError(''); setAidModalOpen(true)
   }
 
@@ -2397,6 +2406,28 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             <button type="button" onClick={goToSilentBirthForm}
               className="w-full bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800 disabled:from-rose-300 disabled:to-rose-300 shadow-[0_6px_16px_-6px_rgba(225,29,72,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(225,29,72,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold rounded-xl py-3 transition-all duration-150">
               להמשך הבקשה
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* חלונית "המערכת בפיתוח" — מחלקה סגורה (מקישור במייל/כפתור). מקור האמת: ההגדרות. */}
+      {closedDeptModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => setClosedDeptModal(null)}>
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 text-center"
+            style={{ animation: 'pop-in 0.25s ease-out' }} onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 mx-auto bg-amber-100 rounded-2xl flex items-center justify-center mb-4">
+              <Clock size={30} className="text-amber-600" />
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mb-2">המערכת בפיתוח</h2>
+            <p className="text-sm text-slate-600 mb-1 leading-relaxed">
+              הגשת בקשות ל<strong>{closedDeptModal}</strong> אינה זמינה עדיין במערכת הדיגיטלית.
+            </p>
+            <p className="text-sm text-amber-700 font-semibold mb-5">אפשרות זו תיפתח בעזרת השם בימים הקרובים.</p>
+            <button type="button" onClick={() => setClosedDeptModal(null)}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl py-2.5 transition-colors">
+              הבנתי
             </button>
           </div>
         </div>

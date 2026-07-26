@@ -39,6 +39,10 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
 
+  // חלונית "בדיקה מעמיקה" — שורת הסבר למה היחוס דורש בדיקה (נשמרת ומוצגת למנהל)
+  const [showDeepModal, setShowDeepModal] = useState(false)
+  const [deepReason, setDeepReason] = useState('')
+
   // docs_pending modal
   const [showDocsModal, setShowDocsModal] = useState(false)
   const [docsNotes, setDocsNotes]         = useState('')
@@ -64,7 +68,7 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
   const label     = ELIGIBILITY_LABELS[localStatus] || localStatus
   const Icon      = isPending ? Clock : localStatus === 'approved' ? Check : localStatus === 'rejected' ? X : FileText
 
-  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string; lineage_fix_required?: boolean; lineage_fix_note?: string }) => {
+  const applyStatus = async (next: EligibilityStatus, extra?: { rejection_reason?: string; docs_notes?: string; required_docs?: string; lineage_fix_required?: boolean; lineage_fix_note?: string; deep_review_reason?: string }) => {
     setSaving(true)
     try {
       // כשעוברים לסטטוס שאינו "השלמת מסמכים" — מנקים את רשימת המסמכים הנדרשים.
@@ -127,6 +131,7 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
     setOpen(false)
     if (next === 'rejected') { setShowRejectModal(true); return }
     if (next === 'docs_pending') { setShowDocsModal(true); return }
+    if (next === 'deep_review') { setDeepReason(''); setShowDeepModal(true); return }
     applyStatus(next)
   }
 
@@ -134,6 +139,8 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
     { value: 'approved',     label: 'אישור יחוס',       cls: 'text-green-700 hover:bg-green-50',  icon: Check    },
     { value: 'rejected',     label: 'דחה',              cls: 'text-red-600 hover:bg-red-50',      icon: X        },
     { value: 'docs_pending', label: 'השלמת מסמכים',    cls: 'text-blue-600 hover:bg-blue-50',    icon: FileText },
+    // המסמכים והפרטים תקינים, רק היחוס צריך בדיקה — עובר לאחראי הבדיקה המעמיקה
+    { value: 'deep_review',  label: 'העבר לאישור מנהל לאחר בדיקת מסמכים', cls: 'text-orange-700 hover:bg-orange-50', icon: AlertTriangle },
     { value: 'pending',      label: 'החזר לממתין',      cls: 'text-amber-700 hover:bg-amber-50',  icon: Clock    },
   ]
 
@@ -203,6 +210,45 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
                 className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving && <Loader2 size={13} className="animate-spin" />}
                 אשר דחייה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deep review modal — הסבר למה היחוס דורש בדיקה מעמיקה (למנהל) */}
+      {showDeepModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-orange-600" />
+              </div>
+              <h2 className="text-base font-bold text-slate-900">העברה לבדיקת יחוס מעמיקה</h2>
+            </div>
+            <p className="text-sm text-slate-500 mb-3 leading-relaxed">
+              המסמכים והפרטים תקינים — רק סדר היחוס דורש בדיקה. פרטו מה לא ברור ביחוס,
+              וההסבר יוצג למנהל האחראי על הבדיקה.
+            </p>
+            <textarea
+              value={deepReason}
+              onChange={e => setDeepReason(e.target.value)}
+              placeholder="למה היחוס דורש בדיקה מעמיקה? (למשל: הוסיף דור שאינו במאגר בין דור 3 ל-4)"
+              rows={3}
+              autoFocus
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+            />
+            <div className="flex gap-2 mt-4 justify-end">
+              <button onClick={() => { setShowDeepModal(false); setDeepReason('') }}
+                className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">
+                ביטול
+              </button>
+              <button
+                disabled={saving || !deepReason.trim()}
+                onClick={() => { setShowDeepModal(false); applyStatus('deep_review', { deep_review_reason: deepReason.trim() }) }}
+                className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                העבר לבדיקה מעמיקה
               </button>
             </div>
           </div>

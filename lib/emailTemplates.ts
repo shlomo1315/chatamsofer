@@ -207,7 +207,7 @@ export function benefitsLinkEmail(
   name: string,
   portalBase: string = PORTAL_BASE_DEFAULT,
   details?: [string, string | number | null | undefined][],
-  draftLinks?: { label: string; href: string }[],
+  draftLinks?: { label: string; href: string; open?: boolean }[],
   maritalStatus?: string | null,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
@@ -231,7 +231,9 @@ export function benefitsLinkEmail(
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 10px;color:#9a3412;font-size:17px;font-weight:800;">${T('draft_title')}</p>
         <p style="margin:0 0 12px;color:#9a3412;font-size:14px;line-height:1.8;">${T('draft_note')}</p>
-        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${l.label}</a><br/>`).join('')}
+        ${draftLinks.map(l => l.open === false
+          ? `<span style="display:inline-block;margin:0 0 8px;color:#94a3b8;font-size:15px;font-weight:700;">${l.label} — המערכת בפיתוח ואפשרות זו תיפתח בעזרת השם בימים הקרובים</span><br/>`
+          : `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${l.label}</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
@@ -783,7 +785,10 @@ export function registrationReceivedEmail(
   portalBase = PORTAL_BASE_DEFAULT,
   // קישורי טיוטה מוכנה (mailto) — להגשת בקשה ישירות מהמייל, בלי להיכנס לאתר.
   // חיוני למי שחסום לגלישה. נבנים ע"י buildDraftLinks.
-  draftLinks?: { label: string; href: string }[],
+  draftLinks?: { label: string; href: string; open?: boolean }[],
+  // מצב הפתיחה/סגירה של המחלקות — כפתור של מחלקה סגורה מוצג אפור עם "בפיתוח".
+  // לא הועבר → כל הכפתורים פעילים (התנהגות קיימת).
+  gates?: { maternity?: boolean; gemach?: boolean; financial_aid?: boolean; widows?: boolean },
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   // הטקסטים ניתנים לעריכה במסך ההגדרות ("הודעות מייל").
@@ -795,7 +800,9 @@ export function registrationReceivedEmail(
       <tr><td style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 6px;color:#9a3412;font-size:14px;font-weight:900;">${escapeHtml(t('drafts_title'))}</p>
         <p style="margin:0 0 12px;color:#9a3412;font-size:13px;line-height:1.7;">${escapeHtml(t('drafts_note'))}</p>
-        ${draftLinks.map(l => `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${escapeHtml(l.label)}</a><br/>`).join('')}
+        ${draftLinks.map(l => l.open === false
+          ? `<span style="display:inline-block;margin:0 0 8px;color:#94a3b8;font-size:15px;font-weight:700;">${escapeHtml(l.label)} — המערכת בפיתוח ואפשרות זו תיפתח בעזרת השם בימים הקרובים</span><br/>`
+          : `<a href="${l.href}" style="display:inline-block;margin:0 0 8px;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${escapeHtml(l.label)}</a><br/>`).join('')}
       </td></tr>
     </table>` : ''
   const married = (d.marital_status ?? '').startsWith('נשו')
@@ -820,12 +827,20 @@ export function registrationReceivedEmail(
     <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;">${escapeHtml(t('details_title'))}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;font-weight:700;text-align:center;">${escapeHtml(t('buttons_title'))}</p>
-    ${[
-      married ? btn(`${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
-      btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
-      btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
-      widowerBen ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
-    ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')}
+    ${(() => {
+      // כפתור מחלקה: פעיל אם פתוחה (או שלא הועבר מצב שערים), אחרת אפור עם "בפיתוח".
+      // ⚠️ מקור האמת: ההגדרות בדף הניהול (gates). מחלקה סגורה = לא מפנה לטופס.
+      const grayBtn = (label: string) =>
+        `<div style="display:block;background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;border-radius:12px;padding:14px 20px;text-align:center;font-size:15px;font-weight:700;">${label}<br/><span style="font-size:12px;font-weight:600;">המערכת בפיתוח ואפשרות זו תיפתח בעזרת השם בימים הקרובים</span></div>`
+      const gatedBtn = (open: boolean | undefined, href: string, label: string, bg: string, fg: string) =>
+        (gates && open === false) ? grayBtn(label) : btn(href, label, bg, fg)
+      return [
+        married ? gatedBtn(gates?.maternity, `${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
+        gatedBtn(gates?.gemach, `${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
+        gatedBtn(gates?.financial_aid, `${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
+        widowerBen ? gatedBtn(gates?.widows, `${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
+      ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')
+    })()}
     ${draftBlock}
   `
   return {

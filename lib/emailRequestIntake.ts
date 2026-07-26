@@ -245,14 +245,22 @@ export function isRequestSubject(subject: string): boolean {
   return detectReqType(subject) !== null
 }
 
+// מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
+const REQ_TO_DEPT: Partial<Record<ReqType, import('./departmentGates').GatedDepartment>> = {
+  birth: 'maternity', silent_birth: 'maternity',
+  loan: 'gemach', financial_aid: 'financial_aid', widow: 'widows',
+}
+
 // בונה קישורי mailto לטיוטות הגשה במייל (לחסומים) — לכל סוג בקשה, עם הת"ז בנושא.
 // סיוע אלמנה מוצג רק אם מצב המשפחה אלמן/אלמנה, והתווית בהתאם (אלמן/אלמנה).
+// ⚠️ כל קישור מסומן ב-open (האם המחלקה פתוחה) — מחלקה סגורה מוצגת אפורה עם
+// "המערכת בפיתוח, אפשרות זו תיפתח בקרוב", בלי קישור פעיל.
 export async function buildDraftLinks(
   admin: SupabaseClient,
   idNumber: string,
   pending: boolean,
   maritalStatus?: string | null,
-): Promise<{ label: string; href: string }[]> {
+): Promise<{ label: string; href: string; open: boolean }[]> {
   const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
   const married = maritalStatus === 'נשואים'
   const LABELS: Partial<Record<ReqType, string>> = {
@@ -261,25 +269,29 @@ export async function buildDraftLinks(
     loan: 'להגשת בקשת הלוואה (גמ״ח)',
     financial_aid: 'להגשת בקשת סיוע רפואי',
   }
+  // מצב השערים (פתוח/סגור) לכל המחלקות — נטען פעם אחת.
+  const { getDepartmentGates } = await import('./departmentGates')
+  const gates = await getDepartmentGates(admin)
+  const isOpen = (t: ReqType) => {
+    const dept = REQ_TO_DEPT[t]
+    return dept ? gates[dept] : true
+  }
   // התאמת האפשרויות לפי הסטטוס המשפחתי:
   //  • לידה — רק נשואים.
   //  • הלוואה + סיוע רפואי — לכולם.
   //  • אלמנות ויתומים — רק אלמן/אלמנה.
-  //
-  // לידה שקטה הוסרה מרשימת הטיוטות לבקשת המשתמש. הטיפוס והטופס עצמם
-  // נשארים בקוד ופועלים (כולל קליטה במייל) — רק הקישור אינו מוצע במייל.
   const types: ReqType[] = married
     ? ['birth', 'loan', 'financial_aid']
     : ['loan', 'financial_aid']
-  const links: { label: string; href: string }[] = []
+  const links: { label: string; href: string; open: boolean }[] = []
   for (const t of types) {
     const ctx = await loadCtx(admin, t, pending)
-    links.push({ label: LABELS[t] ?? SUBJECT_PREFIX[t], href: draftMailto(t, idNumber, ctx) })
+    links.push({ label: LABELS[t] ?? SUBJECT_PREFIX[t], href: draftMailto(t, idNumber, ctx), open: isOpen(t) })
   }
   if (widower) {
     const ctx = await loadCtx(admin, 'widow', pending)
     const prefix = `בקשת סיוע ${maritalStatus}` // "בקשת סיוע אלמן" / "בקשת סיוע אלמנה"
-    links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix) })
+    links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix), open: isOpen('widow') })
   }
   return links
 }

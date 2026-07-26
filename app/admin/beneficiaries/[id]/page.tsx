@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift } from 'lucide-react'
+import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift, AlertTriangle } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
@@ -393,6 +393,24 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       </div>
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
+
+      {/* בדיקה מעמיקה — הסבר המזכיר למה היחוס דורש בדיקה (מוצג למנהל האחראי) */}
+      {beneficiary.eligibility_status === 'deep_review' && (
+        <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-5 py-4 flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={18} className="text-orange-600" />
+          </div>
+          <div>
+            <p className="font-bold text-sm text-orange-900">בדיקת יחוס מעמיקה — ממתין לאישור מנהל</p>
+            <p className="text-sm text-orange-800 mt-1 leading-relaxed">
+              המסמכים והפרטים אושרו ע"י המזכירות. סדר היחוס דורש בדיקה מעמיקה.
+              {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason
+                ? <> <span className="font-semibold">הערת המזכיר:</span> {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason}</>
+                : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs tabs={[
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },
