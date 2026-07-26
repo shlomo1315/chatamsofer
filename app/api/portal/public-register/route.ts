@@ -358,6 +358,9 @@ export async function POST(request: NextRequest) {
       console.error('[public-register] בניית קישורי הטיוטות נכשלה:', e)
     }
 
+    // מצב שערי המחלקות — כדי שהכפתורים העליונים במייל של מחלקה סגורה יופיעו אפורים
+    const { getDepartmentGates } = await import('@/lib/departmentGates')
+    const gates = await getDepartmentGates(admin)
     const reg = registrationReceivedEmail({
       full_name: full_name ? String(full_name) : null,
       family_name: family_name ? String(family_name) : null,
@@ -370,7 +373,7 @@ export async function POST(request: NextRequest) {
       spouse_name: spouse_name ? String(spouse_name) : null,
       spouse_id_number: spouse_id_number ? String(spouse_id_number) : null,
       children_count: cleanChildCount,
-    }, undefined, drafts)
+    }, undefined, drafts, gates)
     deliverMail(String(email), reg.subject, reg.html, undefined, mailFor('igud'))
       .catch(e => console.error('[public-register] confirmation email failed:', e))
   }

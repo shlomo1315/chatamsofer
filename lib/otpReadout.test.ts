@@ -11,15 +11,21 @@ import { spokenCode } from './yemotCall'
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
+const PAUSE_TOKENS_BETWEEN_DIGITS = 3
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
   const tokens: string[] = []
   let buf: string[] = []
+  let lastWasDigit = false
   const flush = () => { if (buf.length) { tokens.push(`t-${buf.join(' ')}`); buf = [] } }
   for (const w of words) {
-    // כל ספרה = הודעה נפרדת + שני פסיקים בסוף הטוקן (האטה חזקה, כמו yemot-maternity)
-    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , , ,`) }
-    else buf.push(w)
+    if (DIGIT_SET.has(w)) {
+      flush()
+      // בין שתי ספרות — טוקני-פסיק נפרדים (הפסקה מובטחת מימות בין טוקנים)
+      if (lastWasDigit) for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
+      tokens.push(`t-${w}`)
+      lastWasDigit = true
+    } else { buf.push(w); lastWasDigit = false }
   }
   flush()
   return tokens.join('.')
@@ -41,8 +47,10 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowTokens(spokenCode('123456'))
     const tokens = out.split('.')
     for (const w of ['אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש']) {
-      expect(tokens).toContain(`t-${w} , , ,`)   // טוקן משלה (עם פסיקי האטה), לא חלק ממשפט
+      expect(tokens).toContain(`t-${w}`)   // כל ספרה טוקן משלה
     }
+    // בין הספרות יש טוקני-פסיק להשהיה
+    expect(tokens.filter(t => t === 't-,').length).toBeGreaterThanOrEqual(6)
   })
 
   it('כל ספרות הקוד מוקראות', () => {
@@ -59,7 +67,9 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowTokens(spokenCode(code))
     const words = code.split('').map(d =>
       ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
-    const seq = words.map(w => `t-${w} , , ,`).join('.')   // כולל פסיקי ההאטה בכל ספרה
+    // הרצף כולל טוקני-פסיק בין הספרות: t-תשע.t-,.t-,.t-,.t-אפס...
+    const pauses = Array(3).fill('t-,').join('.')
+    const seq = words.map(w => `t-${w}`).join('.' + pauses + '.')
     expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
   })
 

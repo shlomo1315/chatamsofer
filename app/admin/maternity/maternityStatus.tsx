@@ -452,6 +452,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 <p className="text-xs text-slate-500">המנהל יוכל לאשר את הלידה גם אם המשפחה טרם אושרה</p>
               </div>
             </div>
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs font-bold text-red-700">
+              חובה לבדוק את כל המסמכים לפני שליחה לבדיקה מעמיקה!
+            </div>
             <label className="mb-1.5 block text-xs font-semibold text-slate-600">הסבר — למה אין ודאות לאשר?</label>
             <textarea autoFocus value={deepReason} onChange={e => setDeepReason(e.target.value)} rows={4}
               placeholder="פרטו מה לא ברור באישור הלידה — ההסבר יוצג למנהל"

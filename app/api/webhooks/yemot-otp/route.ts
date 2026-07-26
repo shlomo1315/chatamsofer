@@ -66,18 +66,28 @@ const hangupMsg = (text: string, callId?: string) =>
 // לכן: כל ספרה היא טוקן t- נפרד (הפסקה מלאה בין ספרה לספרה), ומילות
 // הקישור מקובצות לטוקן אחד רציף כדי לא להאריך את השיחה.
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
+// מספר טוקני-ההשהיה בין ספרה לספרה. כל טוקן = הודעה נפרדת שימות עוצרת לפניה
+// ואחריה, ולכן ההפסקה *מובטחת* (לא תלויה בשאלה אם ה-TTS בולע פסיקים).
+const PAUSE_TOKENS_BETWEEN_DIGITS = 3
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
   const tokens: string[] = []
   let buf: string[] = []
+  let lastWasDigit = false
   const flush = () => { if (buf.length) { tokens.push(`t-${buf.join(' ')}`); buf = [] } }
   for (const w of words) {
-    // ⚠️ כל ספרה = הודעה נפרדת (הפסקה מלאה בין הספרות), ובנוסף שני פסיקים
-    // בסוף הטוקן — שיטת ההאטה המוכחת מ-yemot-maternity: פסיק בתוך טקסט TTS
-    // יוצר הפסקה קצרה, ושני פסיקים מאריכים אותה עוד. כך ההקראה איטית וברורה
-    // יותר בין ספרה לספרה. הפסיק חוקי בתוך טוקן (רק הנקודה אסורה).
-    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , , ,`) }
-    else buf.push(w)
+    if (DIGIT_SET.has(w)) {
+      flush()
+      // ⚠️ בין שתי ספרות עוקבות — מוסיפים טוקני-פסיק *נפרדים*. ימות עוצרת בין
+      // כל טוקן לטוקן, ולכן זו הפסקה מובטחת (בניגוד לפסיקים בתוך טוקן, שה-TTS
+      // עלול לבלוע/לקצר). כך ההקראה ספרה-אחרי-ספרה עם רווח גדול וברור.
+      if (lastWasDigit) for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
+      tokens.push(`t-${w}`)   // הספרה עצמה — הודעה נפרדת
+      lastWasDigit = true
+    } else {
+      buf.push(w)
+      lastWasDigit = false
+    }
   }
   flush()
   return tokens.join('.')   // הנקודה מפרידה בין ההודעות — כאן היא תקינה

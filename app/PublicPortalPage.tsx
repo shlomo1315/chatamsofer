@@ -2422,7 +2422,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             </div>
             <h2 className="text-xl font-extrabold text-slate-900 mb-2">המערכת בפיתוח</h2>
             <p className="text-sm text-slate-600 mb-1 leading-relaxed">
-              הגשת בקשות ל<strong>{closedDeptModal}</strong> אינה זמינה עדיין במערכת הדיגיטלית.
+              הגשת בקשות ל<strong>{closedDeptModal}</strong> אינה זמינה עדיין במערכת האוטומטית.
             </p>
             <p className="text-sm text-amber-700 font-semibold mb-5">אפשרות זו תיפתח בעזרת השם בימים הקרובים.</p>
             <button type="button" onClick={() => setClosedDeptModal(null)}

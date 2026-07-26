@@ -226,6 +226,9 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
               </div>
               <h2 className="text-base font-bold text-slate-900">העברה לבדיקת יחוס מעמיקה</h2>
             </div>
+            <div className="mb-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs font-bold text-red-700">
+              חובה לבדוק את כל המסמכים לפני שליחה לבדיקה מעמיקה!
+            </div>
             <p className="text-sm text-slate-500 mb-3 leading-relaxed">
               המסמכים והפרטים תקינים — רק סדר היחוס דורש בדיקה. פרטו מה לא ברור ביחוס,
               וההסבר יוצג למנהל האחראי על הבדיקה.

@@ -12,6 +12,7 @@ import BeneficiaryActions from './BeneficiaryActions'
 import StatusControl from './StatusControl'
 import ReturnedFixesBanner from './ReturnedFixesBanner'
 import LineageAlertModal from './LineageAlertModal'
+import LineageChainChips from './LineageChainChips'
 import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
@@ -130,6 +131,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const deviatingGens = typedChain.length ? await getDeviatingGenerations(typedChain) : new Set<number>()
   // סטייה בתוך 5 הדורות הראשונים = סדר דורות חשוד → התראה קופצת בכניסה.
   const earlyDeviation = [...deviatingGens].some(g => g <= 5)
+  // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
+  const chainForMarks = Array.isArray(beneficiary?.lineage_chain)
+    ? (beneficiary!.lineage_chain as { generation: number; name: string; relation: string | null }[])
+    : []
+  const manualMarks = ((beneficiary as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | null)?.lineage_manual_marks) ?? {}
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
@@ -291,43 +297,24 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
 
-      {/* breadcrumb of the selected branch — עם בן/חתן לכל דור */}
+      {/* breadcrumb — צביעה אוטומטית (ירוק=תואם עד דור 5 · אדום=שונה · כתום=נוסף)
+          + סימון ידני של המנהל. עץ הדורות המאושר + הדורות הידניים שהוסיף. */}
       {(() => {
-        const chain = Array.isArray(beneficiary.lineage_chain)
-          ? (beneficiary.lineage_chain as { generation: number; name: string; relation: string | null }[])
-          : []
-        const relByGen = new Map(chain.map(c => [c.generation, c.relation]))
-        const relTag = (gen: number) => {
-          const r = relByGen.get(gen)
-          if (r !== 'son' && r !== 'son_in_law') return null
-          return <span className="text-[10px] font-semibold bg-white/70 rounded px-1 mr-1">{r === 'son' ? 'בן' : 'חתן'}</span>
-        }
-        return (
-          <div className="flex items-center gap-1.5 flex-wrap mb-4">
-            {lineagePath.map((name, i) => {
-              // דור שסוטה מהנתיב המאושר (בבדיקה מעמיקה) — אדום בוהק, אחרת סגול רגיל.
-              const deviates = deviatingGens.has(i + 1)
-              return (
-                <span key={`t-${i}`} className="flex items-center gap-1.5">
-                  {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                  <span className={`text-xs px-2.5 py-1 rounded-full border ${deviates
-                    ? 'bg-red-100 text-red-800 border-red-400 font-bold ring-2 ring-red-300'
-                    : 'bg-violet-50 text-violet-700 border-violet-100'}`}
-                    title={deviates ? 'דור זה שונה מהנתיב המאושר במאגר' : undefined}>
-                    <span className={`ml-1 ${deviates ? 'text-red-500' : 'text-violet-400'}`}>דור {i + 1}</span>{name}{relTag(i + 1)}
-                    {deviates && <span className="mr-1">⚠</span>}
-                  </span>
-                </span>
-              )
-            })}
-            {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
-              <span key={`m-${i}`} className="flex items-center gap-1.5">
-                <ChevronLeft size={12} className="text-slate-300" />
-                <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}{relTag(lineagePath.length + 1 + i)}</span>
-              </span>
-            ))}
-          </div>
-        )
+        const relByGen = new Map(chainForMarks.map(c => [c.generation, c.relation]))
+        // בונים את מערך הדורות: השמות מהעץ (lineagePath) בדורות 1..N, ואז
+        // הדורות הידניים (lineage_manual) בהמשך. verified לפי deviatingGens.
+        const gens: import('./LineageChainChips').ChainGen[] = lineagePath.map((name, i) => ({
+          generation: i + 1,
+          name,
+          verified: !deviatingGens.has(i + 1),
+          relation: (relByGen.get(i + 1) as 'son' | 'son_in_law' | null | undefined) ?? null,
+        }))
+        const manual = Array.isArray(beneficiary.lineage_manual) ? (beneficiary.lineage_manual as string[]) : []
+        manual.forEach((name, i) => {
+          const gen = lineagePath.length + 1 + i
+          gens.push({ generation: gen, name, verified: !deviatingGens.has(gen), relation: (relByGen.get(gen) as 'son' | 'son_in_law' | null | undefined) ?? null })
+        })
+        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
       })()}
 
       {/* ציון אמינות יוחסין — ייעוצי, לא מאשר */}
