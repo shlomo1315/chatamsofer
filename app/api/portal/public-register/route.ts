@@ -160,6 +160,28 @@ export async function POST(request: NextRequest) {
     ? (isSpousePassport ? String(spouse_id_number).trim() : String(spouse_id_number).replace(/\D/g, ''))
     : ''
 
+  // ⚠️ אבטחת נתונים: הבעל והאשה חייבים להיות שני אנשים שונים.
+  // הבדיקה הזו התקיימה רק בטופס הפורטל (client-side), אבל טופס נדרים פלוס
+  // (matara.pro) מגיע ישירות ל-API ועקף אותה — וכך נקלטה משפחה שבה הבעל
+  // והאשה זהים (אותה ת"ז, אותו שם). אוכפים בשרת, כך שכל המסלולים מכוסים.
+  if (cleanSpouseId) {
+    if (cleanSpouseId === cleanId) {
+      return NextResponse.json({ error: 'תעודת הזהות של האישה זהה לזו של הבעל. יש להזין תעודות זהות שונות.' }, { status: 409 })
+    }
+    // ת"ז האשה — אימות תקינות (כמו של הבעל). דרכון אינו נבדק בספרת ביקורת.
+    if (!isSpousePassport && !validateIsraeliId(cleanSpouseId)) {
+      return NextResponse.json({ error: 'תעודת הזהות של האישה אינה תקינה' }, { status: 400 })
+    }
+  }
+  // שם זהה + ת"ז זהה = אותו אדם. גם אם ת"ז ריקה, שם בעל=אשה חשוד מאוד.
+  {
+    const hName = String(full_name ?? '').trim().replace(/\s+/g, ' ')
+    const sName = String(spouse_name ?? '').trim().replace(/\s+/g, ' ')
+    if (hName && sName && hName === sName && (!cleanSpouseId || !cleanId || cleanSpouseId === cleanId)) {
+      return NextResponse.json({ error: 'שם הבעל ושם האישה זהים. יש להזין את פרטי שני בני הזוג בנפרד.' }, { status: 409 })
+    }
+  }
+
   // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות
   if (Array.isArray(children) && children.length) {
     const seen = new Set<string>()
