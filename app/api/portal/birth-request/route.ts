@@ -131,18 +131,23 @@ export async function POST(request: NextRequest) {
     // "12345678" מול "012345678"). בדיקה לפי הערך המנורמל בלבד פספסה אותן,
     // ואז המערכת אישרה בקשה כפולה על אותו תינוק. בודקים את שתי הצורות.
     const idVariants = Array.from(new Set([idNorm, idNorm.replace(/^0+/, '')].filter(Boolean)))
-    // ⚠️ בקשת לידה *בתהליך* (status pending/active שטרם הסתיימה) על אותו תינוק —
-    // צריכה לחסום הגשה חוזרת עם התראה ברורה. maternity_aids עם אותו baby_id.
-    const { data: pendingAid } = await admin
+    // ⚠️ מניעת בקשה חוזרת על *אותו תינוק* (לפי ת"ז) — לתמיד. אם כבר הוגשה בקשת
+    // לידה על ת"ז זו, אי אפשר להגיש עליה שוב, בכל סטטוס (כולל אחרי אישור):
+    //   • אושרה (active) → "הבקשה ללידה זו כבר אושרה".
+    //   • בתהליך (pending/deep_review) → "כבר הגשתם בקשה, הבקשה בטיפול".
+    // כך תאומים/לידה חדשה עם ת"ז שונה עדיין מותרים — רק לא כפילות על אותו ילד.
+    const { data: existingAid } = await admin
       .from('maternity_aids')
       .select('id, status')
       .in('baby_id_number', idVariants)
-      .in('status', ['pending', 'active'])
+      .not('status', 'eq', 'cancelled')   // בקשה שנדחתה — לא חוסמת הגשה מחדש
       .limit(1)
-    if (pendingAid?.length) {
-      const st = pendingAid[0].status === 'active' ? 'אושרה' : 'ממתינה לאישור'
+    if (existingAid?.length) {
+      const approved = existingAid[0].status === 'active' || existingAid[0].status === 'completed'
       return NextResponse.json({
-        error: `כבר הוגשה בקשת לידה על ילד/ה זה (ת"ז ${idNorm}) — הבקשה ${st} ובתהליך. לא ניתן להגיש בקשה נוספת על אותו תינוק.`,
+        error: approved
+          ? 'הבקשה ללידה זו כבר אושרה.'
+          : 'כבר הגשתם בקשה ללידה זו, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
         duplicate: 'in_progress',
       }, { status: 409 })
     }

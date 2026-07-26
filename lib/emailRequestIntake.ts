@@ -142,6 +142,29 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     }
   }
 
+  // ⚠️ מניעת בקשה כפולה על *אותו תינוק* (לפי ת"ז) — גם בהגשה במייל, בדיוק כמו
+  // בטופס הציבורי. אם כבר הוגשה בקשה על ת"ז זו — דוחים עם ההודעה המתאימה:
+  // אושרה → "כבר אושרה"; בתהליך → "בטיפול, תקבלו עדכון". (לידה שקטה — אין ת"ז.)
+  if (type === 'birth' && data.baby_id_number) {
+    const idNorm = String(data.baby_id_number).replace(/\D/g, '')
+    const idVariants = Array.from(new Set([idNorm, idNorm.padStart(9, '0'), idNorm.replace(/^0+/, '')].filter(Boolean)))
+    const { data: existingAid } = await admin
+      .from('maternity_aids')
+      .select('id, status')
+      .in('baby_id_number', idVariants)
+      .not('status', 'eq', 'cancelled')
+      .limit(1)
+    if (existingAid?.length) {
+      const approved = existingAid[0].status === 'active' || existingAid[0].status === 'completed'
+      await reject(from, name, type, [
+        approved
+          ? 'הבקשה ללידה זו כבר אושרה.'
+          : 'כבר הגשתם בקשה ללידה זו, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
+      ], idNumber, ctx, ben)
+      return true
+    }
+  }
+
   // הכנסת הבקשה למערכת בסטטוס pending
   let insErr: string | null = null
   try {

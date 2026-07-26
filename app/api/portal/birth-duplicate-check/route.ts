@@ -44,15 +44,17 @@ export async function POST(request: NextRequest) {
     .from('maternity_aids')
     .select('id, status, baby_name')
     .in('baby_id_number', idVariants)
-    .in('status', ['pending', 'active'])
+    .not('status', 'eq', 'cancelled')   // בקשה שנדחתה — לא חוסמת
     .limit(1)
 
   if (data?.length) {
-    const st = data[0].status === 'active' ? 'אושרה' : 'ממתינה לאישור'
+    const approved = data[0].status === 'active' || data[0].status === 'completed'
     return NextResponse.json({
       duplicate: true,
       status: data[0].status,
-      message: `שימו לב: כבר הוגשה בקשת לידה על ילד/ה זה — הבקשה ${st} ובתהליך. לא ניתן להגיש בקשה נוספת על אותו תינוק.`,
+      message: approved
+        ? 'הבקשה ללידה זו כבר אושרה.'
+        : 'כבר הגשתם בקשה ללידה זו, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
     })
   }
   return NextResponse.json({ duplicate: false })
