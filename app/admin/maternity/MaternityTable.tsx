@@ -177,7 +177,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
-                  <th key={h} className="px-4 py-3.5 text-xs font-semibold text-slate-500 align-middle">{h}</th>
+                  <th key={h} className="px-5 py-3.5 text-xs font-semibold text-slate-500 align-middle whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>

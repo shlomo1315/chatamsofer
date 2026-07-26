@@ -12,7 +12,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "backup:trigger": "node scripts/trigger-backup.mjs"
+    "backup:trigger": "node scripts/trigger-backup.mjs",
+    "unload:trigger": "node scripts/trigger-unload.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
