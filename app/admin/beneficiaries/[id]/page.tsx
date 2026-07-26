@@ -137,6 +137,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     : []
   const manualMarks = ((beneficiary as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | null)?.lineage_manual_marks) ?? {}
 
+  // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד ירוק).
+  const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
+  const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
+    [...chainForMarks].sort((a, b) => a.generation - b.generation).map(c => ({
+      generation: c.generation,
+      name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
+      color: c.generation === 1 ? 'green' : (c.generation > 5 ? 'orange' : (deviatingGens.has(c.generation) ? 'red' : 'green')),
+    }))
+
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
   if (!beneficiary) {
@@ -426,7 +435,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       </div>
 
       {/* התראה קופצת בכניסה — סדר דורות לא תקין (סטייה ב-5 הדורות הראשונים) */}
-      {earlyDeviation && <LineageAlertModal generations={[...deviatingGens].filter(g => g <= 5)} />}
+      {earlyDeviation && <LineageAlertModal generations={[...deviatingGens].filter(g => g <= 5)} allGens={alertGens} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 
