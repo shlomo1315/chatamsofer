@@ -259,8 +259,19 @@ function BabyFields({
                 const param = idType === 'id' ? `id=${encodeURIComponent(val)}` : `passport=${encodeURIComponent(val)}`
                 const r = await fetch(`/api/portal/lookup?${param}`)
                 const d = await r.json()
-                if (d.found || d.foundAsChild) setIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב')
-                else setIdError('')
+                if (d.found || d.foundAsChild) { setIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב'); return }
+                setIdError('')
+              } catch { /* תיתפס בעת השליחה */ }
+              // ⚠️ בדיקה נוספת — האם כבר קיימת בקשת לידה *בתהליך* על אותו תינוק.
+              // מתריע מיד בטופס, כדי שלא ימלא הכל ויידחה רק בהגשה. האכיפה עצמה
+              // ב-birth-request; זו רק חוויית משתמש מוקדמת.
+              try {
+                const r = await fetch('/api/portal/birth-duplicate-check', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ id_number: val, id_type: idType }),
+                })
+                const d = await r.json()
+                if (d.duplicate) setIdError(d.message || 'כבר הוגשה בקשת לידה על ילד/ה זה — הבקשה בתהליך.')
               } catch { /* תיתפס בעת השליחה */ }
             }} />
           {idError && <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> {idError}</p>}
@@ -1179,6 +1190,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
   const [babyIdError, setBabyIdError] = useState('')
+  // חלונית "שם חסר" — נפתחת בעת הגשה כשלא מולא שם. לא חוסמת: אפשר להשלים
+  // אחר כך. שומרת את אירוע ה-submit כדי להמשיך בו אם המשתמש בחר "אשלים אחר כך".
+  const [nameReminderOpen, setNameReminderOpen] = useState(false)
+  // תזכורת "רכה" להשלמת שם בבקשות מאגפים אחרים (הלוואה/סיוע): קופצת פעם אחת
+  // כשיש לידה עם שם חסר, אך מאפשרת להמשיך. שומרת את פעולת ההגשה להמשך.
+  const [softNameReminder, setSoftNameReminder] = useState<null | (() => void)>(null)
+  const [softNameAck, setSoftNameAck] = useState(false)
   // לידת תאומים — תינוק שני (baby2) + מצבי שגיאה/שם משלו
   const [isTwins, setIsTwins] = useState(false)
   const [baby2, setBaby2] = useState({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
@@ -1792,9 +1810,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // המסמכים שעדיין חסרים להגשת הבקשה (לא קיימים וגם לא נבחר קובץ)
   const missingRequestIdDocs = () => requiredDocs.filter(d => !existingDocs[d] && !docFiles[d])
 
-  const handleBirthRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBirthRequest = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    // ⚠️ חסימה קשה: אי אפשר לפתוח בקשת לידה *נוספת* כל עוד נשאר שם ריק
+    // מלידה קודמת. חייבים להשלים קודם את השם הקודם (התזכורת בדשבורד).
+    if (pendingNames.length > 0) {
+      const d = pendingNames[0].birth_date ? new Date(pendingNames[0].birth_date).toLocaleDateString('he-IL') : ''
+      setError(`יש להשלים תחילה את שם התינוק מהלידה הקודמת${d ? ` (${d})` : ''} לפני הגשת בקשת לידה נוספת. ניתן להשלים אותו בתזכורת שבראש האזור האישי.`)
+      return
+    }
     if (!birthForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
+    // ⚠️ שם חסר בבקשה הנוכחית — לא חוסם, אבל קופצת חלונית תזכורת. המשתמש
+    // יכול "להשלים אחר כך" (ממשיך) או לחזור למלא. birthConfirmedNoName מדלג
+    // על החלונית אחרי שכבר אישר.
+    if (!isTwins && !birthForm.baby_name.trim() && !noBabyName && !nameReminderOpen) {
+      setNameReminderOpen(true)
+      return
+    }
     // חלון ההגשה: 30 יום מהלידה. (הכרטיס תקף 6 שבועות — ההגשה נסגרת מוקדם
     // יותר בכוונה, כדי שיישאר מרווח בין האישור לבין תום התוקף.)
     {
@@ -1865,9 +1897,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(false)
   }
 
+  // תזכורת רכה להשלמת שם — לבקשות מאגפים אחרים (לא לידה). אם יש לידה עם שם
+  // חסר וטרם אישרו — מציגה חלונית ושומרת את ההמשך; אחרת מחזירה false (לא חוסם).
+  const maybeSoftNameReminder = (proceed: () => void): boolean => {
+    if (pendingNames.length > 0 && !softNameAck) {
+      setSoftNameReminder(() => proceed)
+      return true
+    }
+    return false
+  }
+
   // ── Loan request ──
   const handleLoanRequest = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (maybeSoftNameReminder(() => { void handleLoanRequest(e) })) return
     if (!loanForm.amount || !loanForm.installments || !loanForm.purpose) {
       setError('אנא מלא את כל שדות החובה')
       return
@@ -1921,6 +1964,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   const handleFinancialAidRequest = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (maybeSoftNameReminder(() => { void handleFinancialAidRequest(e) })) return
     if (!aidReason.trim()) { setError('אנא פרט את סיבת הבקשה'); return }
     if (!aidFile) { setError('אנא צרף מסמך'); return }
     if (!beneficiary) return
@@ -2340,6 +2384,63 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               className="w-full bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-600 hover:to-rose-800 disabled:from-rose-300 disabled:to-rose-300 shadow-[0_6px_16px_-6px_rgba(225,29,72,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(225,29,72,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold rounded-xl py-3 transition-all duration-150">
               להמשך הבקשה
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* תזכורת השלמת שם — נפתחת בהגשת לידה כשלא מולא שם. לא חוסמת. */}
+      {nameReminderOpen && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6"
+            style={{ animation: 'pop-in 0.25s ease-out' }}>
+            <div className="w-14 h-14 mx-auto bg-indigo-100 rounded-2xl flex items-center justify-center mb-4">
+              <Baby size={26} className="text-indigo-600" />
+            </div>
+            <h2 className="text-lg font-extrabold text-center text-slate-900 mb-2">עדיין לא מולא שם התינוק</h2>
+            <p className="text-sm text-slate-600 text-center mb-5 leading-relaxed">
+              לא הזנתם את שם התינוק/ת. ניתן להשלים עכשיו, או להמשיך ולהשלים מאוחר יותר
+              מהאזור האישי. <strong>לתשומת לבכם:</strong> כדי להגיש בקשת לידה נוספת בעתיד,
+              יש להשלים תחילה את השם הזה.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button type="button" onClick={() => setNameReminderOpen(false)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl py-2.5 transition-colors">
+                אמלא את השם עכשיו
+              </button>
+              <button type="button"
+                onClick={() => { setNoBabyName(true); setNameReminderOpen(false); void handleBirthRequest() }}
+                className="w-full border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold rounded-xl py-2.5 transition-colors">
+                אשלים את השם אחר כך
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* תזכורת רכה — בבקשה מאגף אחר כשיש לידה עם שם חסר. מאפשרת להמשיך. */}
+      {softNameReminder && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6"
+            style={{ animation: 'pop-in 0.25s ease-out' }}>
+            <div className="w-14 h-14 mx-auto bg-amber-100 rounded-2xl flex items-center justify-center mb-4">
+              <Baby size={26} className="text-amber-600" />
+            </div>
+            <h2 className="text-lg font-extrabold text-center text-slate-900 mb-2">תזכורת — שם תינוק חסר</h2>
+            <p className="text-sm text-slate-600 text-center mb-5 leading-relaxed">
+              נותר להשלים את שם התינוק/ת מלידה קודמת. ניתן להשלים בכל עת מהתזכורת
+              שבראש האזור האישי. תוכלו להמשיך בבקשה הנוכחית כרגיל.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button type="button"
+                onClick={() => { const go = softNameReminder; setSoftNameAck(true); setSoftNameReminder(null); go?.() }}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl py-2.5 transition-colors">
+                הבנתי, המשך בבקשה
+              </button>
+              <button type="button" onClick={() => setSoftNameReminder(null)}
+                className="w-full border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold rounded-xl py-2.5 transition-colors">
+                ביטול
+              </button>
+            </div>
           </div>
         </div>
       )}

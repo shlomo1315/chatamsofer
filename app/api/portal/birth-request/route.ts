@@ -120,11 +120,30 @@ export async function POST(request: NextRequest) {
   // מניעת כפילויות — בודקים כל אחת מתעודות הזהות של הנולדים (בלידה שקטה אין ת.ז)
   for (const b of normBabies) {
     const idNorm = b.id_number as string
+    // ⚠️ בקשות קודמות עשויות היו לשמור את baby_id_number בלי padding (למשל
+    // "12345678" מול "012345678"). בדיקה לפי הערך המנורמל בלבד פספסה אותן,
+    // ואז המערכת אישרה בקשה כפולה על אותו תינוק. בודקים את שתי הצורות.
+    const idVariants = Array.from(new Set([idNorm, idNorm.replace(/^0+/, '')].filter(Boolean)))
+    // ⚠️ בקשת לידה *בתהליך* (status pending/active שטרם הסתיימה) על אותו תינוק —
+    // צריכה לחסום הגשה חוזרת עם התראה ברורה. maternity_aids עם אותו baby_id.
+    const { data: pendingAid } = await admin
+      .from('maternity_aids')
+      .select('id, status')
+      .in('baby_id_number', idVariants)
+      .in('status', ['pending', 'active'])
+      .limit(1)
+    if (pendingAid?.length) {
+      const st = pendingAid[0].status === 'active' ? 'אושרה' : 'ממתינה לאישור'
+      return NextResponse.json({
+        error: `כבר הוגשה בקשת לידה על ילד/ה זה (ת"ז ${idNorm}) — הבקשה ${st} ובתהליך. לא ניתן להגיש בקשה נוספת על אותו תינוק.`,
+        duplicate: 'in_progress',
+      }, { status: 409 })
+    }
     const [byBen, bySpouse, byChild, byMaternity] = await Promise.all([
-      admin.from('beneficiaries').select('id').eq('id_number', idNorm).limit(1),
-      admin.from('beneficiaries').select('id').eq('spouse_id_number', idNorm).limit(1),
+      admin.from('beneficiaries').select('id').in('id_number', idVariants).limit(1),
+      admin.from('beneficiaries').select('id').in('spouse_id_number', idVariants).limit(1),
       admin.from('beneficiaries').select('id').contains('children', [{ id_number: idNorm }]).limit(1),
-      admin.from('maternity_aids').select('id').eq('baby_id_number', idNorm).limit(1),
+      admin.from('maternity_aids').select('id').in('baby_id_number', idVariants).limit(1),
     ])
     if ((byBen.data?.length || bySpouse.data?.length || byChild.data?.length || byMaternity.data?.length)) {
       return NextResponse.json({ error: `הילד/ה כבר רשום/ה במערכת — תעודת זהות ${idNorm} כבר קיימת. לא ניתן להגיש בקשה כפולה.` }, { status: 409 })
