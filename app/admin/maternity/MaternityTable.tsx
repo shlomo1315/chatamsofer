@@ -177,7 +177,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
-                  <th key={h} className="px-5 py-3.5 text-xs font-semibold text-slate-500 align-middle whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-2.5 py-3.5 text-xs font-semibold text-slate-500 align-middle whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -190,22 +190,22 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   <tr key={aid.id}
                     onClick={() => router.push(`/admin/maternity/${aid.id}`)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
-                    <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                    <td className="px-4 py-3 align-middle text-slate-700">
+                    <td className="px-2.5 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
+                    <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
+                    <td className="px-2.5 py-3 align-middle text-slate-700">
                       <span className="inline-flex items-center gap-1.5">
                         {aid.baby_name ?? <span className="text-slate-300">—</span>}
                         {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
-                    <td className="px-4 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
-                    <td className="px-4 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
-                    <td className="px-4 py-3 align-middle">
+                    <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
+                    <td className="px-2.5 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
+                    <td className="px-2.5 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
+                    <td className="px-2.5 py-3 align-middle">
                       <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
                     </td>
                     {showArrived && (
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-2.5 py-3 align-middle">
                         {aid.recovery_arrived === true
                           ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">הגיעה</span>
                           : aid.recovery_arrived === false
@@ -214,7 +214,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                       </td>
                     )}
                     {showArrived && (
-                      <td className="px-4 py-3 align-middle whitespace-nowrap">
+                      <td className="px-2.5 py-3 align-middle whitespace-nowrap">
                         {aid.recovery_amount != null ? (
                           <span className="inline-flex items-center gap-1.5">
                             <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
@@ -225,7 +225,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                         ) : <span className="text-slate-300">—</span>}
                       </td>
                     )}
-                    <td className="px-4 py-3 align-middle">
+                    <td className="px-2.5 py-3 align-middle">
                       {aid.birth_certificate_url ? (
                         <span className="inline-flex items-center gap-1.5">
                           <ViewDocButton url={aid.birth_certificate_url}
@@ -239,7 +239,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                       )}
                     </td>
                     {showCard && (
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-2.5 py-3 align-middle whitespace-nowrap">
                         {(() => {
                           // ⚠️ "נטען" אמיתי = יש card_tlush_id, שהוא ה-ID שנדרים החזיר
                           // בתגובה ל-AddTlush מוצלח (lib/nedarim.ts addTlush). הוא נכתב
@@ -248,18 +248,18 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                           const proven = !!aid.card_tlush_id
                           if (proven) {
                             const amt = Number(aid.card_load_amount ?? 0)
-                            return <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800" title={`מזהה טעינה בנדרים: ${aid.card_tlush_id}`}>
+                            return <span className="inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800" title={`מזהה טעינה בנדרים: ${aid.card_tlush_id}`}>
                               {amt > 0 ? `נטען ₪${amt.toLocaleString('he-IL')}` : 'נטען'}
                             </span>
                           }
                           const cs = aid.card_status ?? 'pending'
                           const pill = CARD_STATUS_PILL[cs] ?? CARD_STATUS_PILL.pending
-                          return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${pill.cls}`}>{pill.label}</span>
+                          return <span className={`inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ${pill.cls}`}>{pill.label}</span>
                         })()}
                       </td>
                     )}
                     {showCard && (
-                      <td className="px-4 py-3 align-middle whitespace-nowrap text-slate-600">
+                      <td className="px-2.5 py-3 align-middle whitespace-nowrap text-slate-600">
                         {/* תאריך ושעת הטעינה בפועל — נכתב יחד עם אישור נדרים (card_loaded_at).
                             מוצג רק כשהטעינה אומתה (card_tlush_id), אחרת "—". */}
                         {aid.card_tlush_id && aid.card_loaded_at
@@ -268,7 +268,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                       </td>
                     )}
                     {showCard && (
-                      <td className="px-4 py-3 align-middle">
+                      <td className="px-2.5 py-3 align-middle">
                         {/* שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at) */}
                         {aid.card_picked_up_at ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">
@@ -281,8 +281,8 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                         )}
                       </td>
                     )}
-                    <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
-                    <td className="px-4 py-3 align-middle" onClick={e => e.stopPropagation()}>
+                    <td className="px-2.5 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
+                    <td className="px-2.5 py-3 align-middle" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <Link href={`/admin/maternity/${aid.id}`}
                           className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
