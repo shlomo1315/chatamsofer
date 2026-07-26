@@ -107,16 +107,26 @@ export async function loadMaternityCardOnApproval(
     await restoreCard()
     const msg = e instanceof Error ? e.message : 'שגיאת נדרים'
     console.error('[maternityCards] הקמת/עדכון המשפחה בנדרים נכשלה:', msg, { zeout, aidId: aid.id })
+    // ⚠️ קודם כשל *בהקמת המשפחה* לא נכתב ל-card_load_error (רק כשלי *הטעינה*
+    // נכתבו) — לכן הכשל "נבלע": האבחון הראה lastLoadError=null והיולדת נשארה
+    // בלי כרטיס ובלי הסבר. עכשיו כל כשל בהקמה מסומן, כדי שהשורש יהיה גלוי.
+    await admin.from('maternity_aids')
+      .update({ card_load_status: 'failed', card_load_error: `הקמת משפחה בנדרים: ${msg}` })
+      .eq('id', aid.id)
+    await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { stage: 'save_client', zeout, error: msg } })
     return { ok: false, error: `נדרים: ${msg}` }
   }
   if (!clientId) {
     await restoreCard()
-    return {
-      ok: false,
-      error: zeout
-        ? 'לא ניתן לאתר או להקים את המשפחה בנדרים'
-        : 'למשפחה אין תעודת זהות במערכת — לא ניתן להקים אותה בנדרים',
-    }
+    const err = zeout
+      ? 'לא ניתן לאתר או להקים את המשפחה בנדרים'
+      : 'למשפחה אין תעודת זהות במערכת — לא ניתן להקים אותה בנדרים'
+    // אותו טיפול — לסמן את הכשל כדי שלא ייעלם מהאבחון
+    await admin.from('maternity_aids')
+      .update({ card_load_status: 'failed', card_load_error: err })
+      .eq('id', aid.id)
+    await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { stage: 'save_client_null', zeout, error: err } })
+    return { ok: false, error: err }
   }
 
   // 2) הטענת הזכאות — משויכת לקבוצת "הגבלת חנויות" של עזר יולדות (LimitedId)

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
-import { sendCardVoucher } from '@/lib/maternityCards'
+import { sendCardVoucher, loadMaternityCardOnApproval } from '@/lib/maternityCards'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,8 +52,19 @@ export async function POST(request: NextRequest) {
       updates.card_status = 'approved'; updates.card_center_id = centerId
     }
   } else if (action === 'load') {
-    if (aid.card_status !== 'approved') return NextResponse.json({ error: 'ניתן לטעון רק כרטיס מאושר' }, { status: 400 })
-    updates.card_status = 'loaded'; updates.card_loaded_at = new Date().toISOString()
+    // ⚠️ קודם 'load' רק סימן card_status='loaded' ב-DB — בלי לגעת בנדרים כלל.
+    // התוצאה: היולדת סומנה "נטען" אבל לא הוקם לה כרטיס ולא הוטענו 600 ₪ בפועל.
+    // עכשיו מבצעים טעינה אמיתית: loadMaternityCardOnApproval מקים את המשפחה
+    // בנדרים (אם לא קיימת), מנכה כרטיס מהמלאי הגלובלי ומטעין את הזכאות — ורק
+    // אם זה הצליח (עם card_tlush_id מנדרים) הכרטיס נחשב טעון.
+    const r = await loadMaternityCardOnApproval(admin, aidId)
+    if (r.notConfigured) return NextResponse.json({ error: 'נדרים קארד אינו מוגדר — לא ניתן לטעון' }, { status: 400 })
+    if (r.awaitingStock) return NextResponse.json({ error: 'אין מלאי כרטיסים כעת — היולדת נכנסה לתור ההמתנה' }, { status: 409 })
+    if (!r.ok) return NextResponse.json({ error: r.error || 'הטעינה בנדרים נכשלה' }, { status: 502 })
+    // loadMaternityCardOnApproval כבר עדכן card_status='loaded' + card_loaded_at + card_tlush_id.
+    // שולחים שובר ליולדת (best-effort) ומחזירים.
+    await sendCardVoucher(admin, aidId, null)
+    return NextResponse.json({ ok: true, loaded: true, clientId: r.clientId })
   }
 
   const { error } = await admin.from('maternity_aids').update(updates).eq('id', aidId)
