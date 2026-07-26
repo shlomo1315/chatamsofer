@@ -14,12 +14,12 @@ function getAdmin() {
 
 const VALID: Record<string, string[]> = {
   loan: ['pending', 'inquiry', 'approved', 'active', 'completed', 'rejected', 'defaulted'],
-  maternity: ['pending', 'active', 'completed', 'cancelled'],
+  maternity: ['pending', 'active', 'completed', 'cancelled', 'deep_review'],
 }
 // שדות נוספים מותרים לעדכון לכל סוג (whitelist — מונע עדכון עמודות לא צפויות)
 const EXTRA_ALLOWED: Record<string, string[]> = {
   loan: ['approved_amount'],
-  maternity: ['rejection_reason'],
+  maternity: ['rejection_reason', 'deep_review_reason'],
 }
 
 // עדכון סטטוס בקשת הלוואה/לידה + תיעוד מי המזכיר שטיפל ומתי.

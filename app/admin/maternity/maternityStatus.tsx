@@ -29,6 +29,7 @@ export const STATUS_PILL: Record<string, { label: string; cls: string; icon: typ
   active:    { label: 'מאושר',        cls: 'bg-green-100 text-green-800 hover:bg-green-200 border-green-200', icon: Check },
   cancelled: { label: 'לא מאושר',     cls: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200', icon: X },
   completed: { label: 'הושלם',        cls: 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200', icon: Check },
+  deep_review: { label: 'בדיקה מעמיקה', cls: 'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300', icon: AlertTriangle },
 }
 
 const isSameBaby = (c: Record<string, unknown>, aid: MaternityAid) =>
@@ -152,6 +153,10 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // אזהרת משפחה שטרם אושרה — נפתחת לפני אישור לידה של משפחה בסטטוס שאינו 'approved',
   // באותה רוח כמו הבאנר בכרטסת (FamilyApprovalGate). המזכיר יכול לאשר בכל זאת.
   const [familyWarnOpen, setFamilyWarnOpen] = useState(false)
+  // חלונית "בדיקה מעמיקה" ללידה — כשהמזכיר אינו בטוח שאפשר לאשר; מעביר למנהל
+  // עם שורת הסבר. המנהל יכול לאשר את הלידה גם אם המשפחה טרם אושרה.
+  const [deepOpen, setDeepOpen] = useState(false)
+  const [deepReason, setDeepReason] = useState('')
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
@@ -171,8 +176,10 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type: 'maternity', id: aid.id, status: next,
-            // סיבת הדחייה נשמרת בתיק (עמודת rejection_reason)
-            ...(reason ? { extra: { rejection_reason: reason } } : {}),
+            // סיבת הדחייה → rejection_reason · הסבר בדיקה מעמיקה → deep_review_reason
+            ...(reason
+              ? { extra: next === 'deep_review' ? { deep_review_reason: reason } : { rejection_reason: reason } }
+              : {}),
           }),
         })
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
@@ -243,6 +250,8 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   const options: { value: MaternityStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'active',    label: 'אשר לידה',     cls: 'text-green-700 hover:bg-green-50', icon: Check },
     { value: 'cancelled', label: 'דחה',          cls: 'text-red-600 hover:bg-red-50', icon: X },
+    // המזכיר אינו בטוח שאפשר לאשר — מעביר למנהל לבדיקה מעמיקה (עם הסבר)
+    { value: 'deep_review', label: 'העבר לבדיקה מעמיקה', cls: 'text-orange-700 hover:bg-orange-50', icon: AlertTriangle },
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 
@@ -269,6 +278,12 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
       setOpen(false)
       setRejectReason('')
       setRejectOpen(true)
+      return
+    }
+    if (value === 'deep_review') {
+      setOpen(false)
+      setDeepReason('')
+      setDeepOpen(true)
       return
     }
     // אישור לידה — קודם מזהירים אם המשפחה טרם אושרה (כמו הבאנר בכרטסת),
@@ -415,6 +430,41 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 <X size={15} /> אישור דחייה
               </button>
               <button type="button" onClick={() => setRejectOpen(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold
+                           text-slate-600 transition hover:bg-slate-50">
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* חלונית "בדיקה מעמיקה" ללידה — הסבר למה אין ודאות לאשר (מוצג למנהל) */}
+      {deepOpen && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+          onClick={() => setDeepOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                <AlertTriangle size={20} className="text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">העברת הלידה לבדיקה מעמיקה</h3>
+                <p className="text-xs text-slate-500">המנהל יוכל לאשר את הלידה גם אם המשפחה טרם אושרה</p>
+              </div>
+            </div>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">הסבר — למה אין ודאות לאשר?</label>
+            <textarea autoFocus value={deepReason} onChange={e => setDeepReason(e.target.value)} rows={4}
+              placeholder="פרטו מה לא ברור באישור הלידה — ההסבר יוצג למנהל"
+              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm
+                         focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100" />
+            <div className="mt-4 flex justify-start gap-2">
+              <button type="button" disabled={!deepReason.trim()}
+                onClick={() => { setDeepOpen(false); void setStatus('deep_review', deepReason.trim()) }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-5 py-2.5 text-sm
+                           font-bold text-white transition hover:bg-orange-700 disabled:opacity-40">
+                <AlertTriangle size={15} /> העבר לבדיקה מעמיקה
+              </button>
+              <button type="button" onClick={() => setDeepOpen(false)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold
                            text-slate-600 transition hover:bg-slate-50">
                 ביטול
