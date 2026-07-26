@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2 } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -25,14 +25,15 @@ const motherName = (m?: MotherRef) => {
 }
 
 // ── Status filter buckets ──────────────────────────────────────────────────────
-// ממתין=pending · מאושר=active · לא מאושר=cancelled
-type Filter = 'all' | 'pending' | 'active' | 'cancelled'
+// ממתין=pending · מאושר=active · לא מאושר=cancelled · בדיקה מעמיקה=deep_review
+type Filter = 'all' | 'pending' | 'active' | 'cancelled' | 'deep_review'
 const matchesFilter = (a: MaternityAid, f: Filter) => f === 'all' ? true : a.status === f
 
 interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Baby, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'deep_review', label: 'בדיקה מעמיקה', icon: AlertTriangle, base: 'border-orange-200 hover:border-orange-300', active: 'border-orange-400 ring-2 ring-orange-200 bg-orange-50', iconCls: 'bg-orange-100 text-orange-700' },
   { key: 'active', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'cancelled', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -114,6 +115,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     pending: data.filter(a => a.status === 'pending').length,
     active: data.filter(a => a.status === 'active').length,
     cancelled: data.filter(a => a.status === 'cancelled').length,
+    deep_review: data.filter(a => a.status === 'deep_review').length,
   }), [data])
 
   const filtered = useMemo(() => {
