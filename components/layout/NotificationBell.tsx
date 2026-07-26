@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Bell, MessageSquare } from 'lucide-react'
+import { Bell, MessageSquare, Check, CheckCheck } from 'lucide-react'
 
 // פעמון ההתראות. כרגע מציג תשובות שהתקבלו בבירורי הלוואות.
 // נטען כל דקה, וגם מיד עם חזרה ללשונית.
@@ -35,6 +35,25 @@ export default function NotificationBell() {
       .then(r => r.json())
       .then(d => setItems(d.notifications ?? []))
       .catch(() => {})
+  }
+
+  // סימון התראה כ"טופל" — מסירה אותה מיד מהרשימה (אופטימי) ומעדכנת בשרת.
+  const dismiss = async (n: Notification) => {
+    setItems(prev => prev.filter(x => x.id !== n.id))
+    try {
+      await fetch('/api/admin/notifications/dismiss', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: n.id, kind: n.kind }),
+      })
+    } catch { load() } // כשל → טוענים מחדש להצגת המצב האמיתי
+  }
+  const dismissAll = async () => {
+    const all = [...items]
+    setItems([])
+    await Promise.all(all.map(n => fetch('/api/admin/notifications/dismiss', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: n.id, kind: n.kind }),
+    }).catch(() => {})))
   }
 
   useEffect(() => {
@@ -71,8 +90,14 @@ export default function NotificationBell() {
 
       {open && (
         <div className="absolute left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50">
-          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+          <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
             <p className="text-sm font-bold text-slate-800">התראות</p>
+            {items.length > 0 && (
+              <button onClick={dismissAll}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">
+                <CheckCheck size={13} /> סמן הכל כטופל
+              </button>
+            )}
           </div>
 
           {items.length === 0 ? (
@@ -80,21 +105,23 @@ export default function NotificationBell() {
           ) : (
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
               {items.map(n => (
-                <Link
-                  key={n.id}
-                  href={n.href}
-                  onClick={() => setOpen(false)}
-                  className="flex items-start gap-2.5 px-4 py-3 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                    <MessageSquare size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-slate-800 leading-snug">{n.title}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-snug">{n.detail}</p>
-                    <p className="text-[11px] text-slate-400 mt-1">{fmt(n.at)}</p>
-                  </div>
-                </Link>
+                <div key={n.id} className="flex items-start gap-2 px-4 py-3 hover:bg-slate-50 transition-colors group">
+                  <Link href={n.href} onClick={() => setOpen(false)} className="flex items-start gap-2.5 min-w-0 flex-1">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                      <MessageSquare size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-slate-800 leading-snug">{n.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 leading-snug">{n.detail}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">{fmt(n.at)}</p>
+                    </div>
+                  </Link>
+                  {/* כפתור "טופל" — מסמן ומסיר את ההתראה */}
+                  <button onClick={() => dismiss(n)} title="סמן כטופל"
+                    className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-emerald-500 border border-slate-200 hover:border-emerald-500 transition-colors">
+                    <Check size={14} />
+                  </button>
+                </div>
               ))}
             </div>
           )}

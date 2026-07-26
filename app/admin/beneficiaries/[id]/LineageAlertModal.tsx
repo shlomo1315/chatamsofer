@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { AlertTriangle, X, ChevronLeft } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 
 // דור להצגה בחלונית — שם, מספר, וצבע (ירוק=תואם · אדום=שונה · כתום=נוסף).
 export interface AlertGen {
@@ -41,17 +41,15 @@ export default function LineageAlertModal({ generations, allGens }: {
           במשפחה זו יש דורות שאינם תואמים לנתיב היחוס המאושר: <span className="font-bold text-red-700">{gensText}</span>
         </p>
 
-        {/* כל הדורות בצבעים — אחד אחרי השני */}
+        {/* כל הדורות בצבעים — דור אחרי דור, שורה אחרי שורה (מלמעלה למטה) */}
         {allGens && allGens.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap justify-center mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3">
-            {[...allGens].sort((a, b) => a.generation - b.generation).map((g, i) => (
-              <span key={g.generation} className="flex items-center gap-1.5">
-                {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                <span className={`text-xs px-2.5 py-1 rounded-full border ${CHIP[g.color]}`}>
-                  <span className={`ml-1 ${GEN_TXT[g.color]}`}>דור {g.generation}</span>{g.name}
-                  {g.color === 'red' && <span className="mr-1">⚠</span>}
-                </span>
-              </span>
+          <div className="flex flex-col gap-1.5 mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3">
+            {[...allGens].sort((a, b) => a.generation - b.generation).map(g => (
+              <div key={g.generation} className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border ${CHIP[g.color]}`}>
+                <span className={`text-xs font-bold ${GEN_TXT[g.color]} shrink-0`}>דור {g.generation}</span>
+                <span className="flex-1 text-right">{g.name}</span>
+                {g.color === 'red' && <AlertTriangle size={14} className="shrink-0" />}
+              </div>
             ))}
           </div>
         )}
