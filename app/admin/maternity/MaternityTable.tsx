@@ -176,14 +176,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס כרטיס', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-4 py-3.5 text-xs font-semibold text-slate-500 align-middle">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={10 + (showCard ? 2 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={10 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -240,7 +240,31 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     </td>
                     {showCard && (
                       <td className="px-4 py-3 align-middle">
-                        {(() => { const cs = aid.card_status ?? 'pending'; const m = CARD_STATUS_PILL[cs]; return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${m.cls}`}>{m.label}</span> })()}
+                        {(() => {
+                          // ⚠️ "נטען" אמיתי = יש card_tlush_id, שהוא ה-ID שנדרים החזיר
+                          // בתגובה ל-AddTlush מוצלח (lib/nedarim.ts addTlush). הוא נכתב
+                          // רק אחרי אישור נדרים, ולכן הוא ההוכחה שהכסף אכן הוטען שם.
+                          // מציגים את הסכום שנטען בפועל (card_load_amount).
+                          const proven = !!aid.card_tlush_id
+                          if (proven) {
+                            const amt = Number(aid.card_load_amount ?? 0)
+                            return <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800" title={`מזהה טעינה בנדרים: ${aid.card_tlush_id}`}>
+                              {amt > 0 ? `נטען ₪${amt.toLocaleString('he-IL')}` : 'נטען'}
+                            </span>
+                          }
+                          const cs = aid.card_status ?? 'pending'
+                          const pill = CARD_STATUS_PILL[cs] ?? CARD_STATUS_PILL.pending
+                          return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${pill.cls}`}>{pill.label}</span>
+                        })()}
+                      </td>
+                    )}
+                    {showCard && (
+                      <td className="px-4 py-3 align-middle whitespace-nowrap text-slate-600">
+                        {/* תאריך ושעת הטעינה בפועל — נכתב יחד עם אישור נדרים (card_loaded_at).
+                            מוצג רק כשהטעינה אומתה (card_tlush_id), אחרת "—". */}
+                        {aid.card_tlush_id && aid.card_loaded_at
+                          ? <span className="ltr-num text-xs">{format(new Date(aid.card_loaded_at), 'dd/MM/yy HH:mm', { locale: he })}</span>
+                          : <span className="text-slate-300">—</span>}
                       </td>
                     )}
                     {showCard && (

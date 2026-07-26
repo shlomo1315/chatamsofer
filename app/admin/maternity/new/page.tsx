@@ -179,74 +179,36 @@ export default function NewMaternityPage() {
     if (Object.keys(errs).length > 0) { setSaveError('יש למלא את כל השדות המסומנים'); return }
     setSaving(true); setSaveError('')
     try {
-      let certUrl: string | undefined
-      if (certFile) {
-        // ניקוי שם הקובץ (עברית/רווחים שוברים מפתח אחסון)
-        const safeName = certFile.name.replace(/[^\w.\-]+/g, '_')
-        const path = `maternity/${mother.id}/${Date.now()}_${safeName}`
-        const { error: upErr } = await supabase.storage.from('documents').upload(path, certFile, { upsert: true })
-        if (upErr) throw new Error(`שגיאה בהעלאת אישור הלידה: ${upErr.message}`)
-        const { data: pub } = supabase.storage.from('documents').getPublicUrl(path)
-        certUrl = pub.publicUrl
-      }
-
-      const sixEnd = addWeeks(new Date(babyBirthDate), 6).toISOString().split('T')[0]
-
       // רשימת התינוקות — תינוק אחד בלידה רגילה, שניים בתאומים
       const babies = [
         { name: babyName.trim() || null, gender: babyGender || null, id_type: babyIdType, id_number: babyIdNumber.trim() || null },
         ...(isTwins ? [{ name: baby2Name.trim() || null, gender: baby2Gender || null, id_type: baby2IdType, id_number: baby2IdNumber.trim() || null }] : []),
       ]
 
-      const { data: inserted, error } = await supabase
-        .from('maternity_aids')
-        .insert({
-          beneficiary_id: mother.id,
-          birth_date: babyBirthDate,
-          baby_name: babyName.trim() || null,
-          baby_id_type: babyIdType,
-          baby_id_number: babyIdNumber || null,
-          baby_gender: babyGender || null,
-          is_twins: isTwins,
-          babies,
-          recovery_eligibility_days: recoveryDaysOverride !== '' ? Number(recoveryDaysOverride) : defaultRecoveryDays(isTwins),
-          birth_certificate_url: certUrl ?? null,
-          recovery_home: recoveryHome || null,
-          notes: notes.trim() || null,
-          six_weeks_end: sixEnd,
-          card_balance: 0, // יתרה בפועל — נצברת רק בהטענה אמיתית מול נדרים
-          // הסכום שהמנהל קבע הוא סכום כולל. הטענת הכרטיס מציגה
-          // weekly_amount × total_weeks, ולכן total_weeks=1 כדי שהמכפלה
-          // תיתן בדיוק את הסכום שהוזן. ריק = התנהגות קיימת (0 × 6).
-          weekly_amount: cardLoadAmount !== '' ? Number(cardLoadAmount) : 0,
-          total_weeks: cardLoadAmount !== '' ? 1 : 6,
-          status: 'pending',
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      // הכנסת התינוק לכרטסת המשפחה (פרטי הילדים) בסטטוס "ממתין לאישור לידה".
-      // עם אישור הלידה בתיק היולדת הסטטוס יתעדכן ל"מאושר".
-      const existingChildren = Array.isArray((mother as { children?: Record<string, unknown>[] }).children)
-        ? ((mother as { children: Record<string, unknown>[] }).children)
-        : []
-      const newChildren = babies.map(b => ({
-        name: (b.name ?? '') as string,
-        id_number: b.id_number || null,
-        doc_type: b.id_type,
-        gender: b.gender || null,
-        birth_date: babyBirthDate || null,
-        marital_status: 'single',
-        maternity_aid_id: inserted.id,
-        birth_status: 'pending' as const,
+      // ⚠️ פתיחת התיק + העלאת הקובץ עוברות דרך API server-side (service-role),
+      // ולא ישירות מהדפדפן. קודם ההעלאה נכשלה ב-"row-level security policy" כי
+      // Supabase Storage כפוף ל-RLS מהדפדפן; ה-API עוקף זאת (כמו הפורטל הציבורי).
+      const fd = new FormData()
+      fd.append('file', certFile as File)
+      fd.append('payload', JSON.stringify({
+        motherId: mother.id,
+        babyName: babyName.trim(),
+        babyIdType,
+        babyIdNumber: babyIdNumber.trim(),
+        babyGender,
+        isTwins,
+        babies,
+        babyBirthDate,
+        recoveryHome,
+        notes: notes.trim(),
+        recoveryDaysOverride,
+        cardLoadAmount,
       }))
-      const updatedChildren = [...existingChildren, ...newChildren]
-      await supabase
-        .from('beneficiaries')
-        .update({ children: updatedChildren, children_count: updatedChildren.length })
-        .eq('id', mother.id)
+
+      const res = await fetch('/api/admin/maternity/create', { method: 'POST', body: fd })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j?.ok) throw new Error(j?.error || 'שגיאה בפתיחת התיק')
+      const inserted = { id: j.id as string }
 
       // חלונית הצלחה עם קונפיטי — מציגה את הפרטים ל-3 שניות ואז נכנסת לכרטסת
       const familyName = mother.spouse_name

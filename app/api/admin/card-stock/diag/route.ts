@@ -33,14 +33,15 @@ export async function GET() {
     }
   }
 
-  // כל הלידות המאושרות שטרם נטענו — לא רק אלו שמסומנות awaiting_stock,
-  // כדי לגלות יולדות שנתקעו בסטטוס אחר ולכן מעולם לא נכנסו לתור.
+  // ⚠️ ללא סינון status — כדי לתפוס גם לידות שנתקעו במצב שאינו 'active'
+  // (למשל כשל בהקמת המשפחה בנדרים שהשאיר את התיק במצב ביניים ולכן לא נכנס
+  // לתור ולא נראה קודם). ממוין לפי created_at יורד: הלידה האחרונה שאושרה
+  // מופיעה ראשונה — זו שהמשתמש בדרך כלל שואל עליה.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, status, birth_type, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
-    .eq('status', 'active')
-    .order('updated_at', { ascending: true })
-    .limit(50)
+    .select('id, status, birth_type, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, created_at, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
+    .order('created_at', { ascending: false })
+    .limit(30)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -49,13 +50,18 @@ export async function GET() {
     const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string | null> | null
     // ⚠️ אותו סינון בדיוק כמו processAwaitingStock — אחרת האבחון מדווח
     // "לא ייטען לעולם" על יולדת שהתור דווקא כן מטפל בה.
-    const inQueue = a.card_load_status !== 'loaded' && !a.card_tlush_id &&
+    // התור דורש status='active' — לידה במצב אחר לא נכנסת אליו לעולם.
+    const isActive = a.status === 'active'
+    const inQueue = isActive && a.card_load_status !== 'loaded' && !a.card_tlush_id &&
       a.card_status !== 'rejected' && a.birth_type !== 'silent'
     const loaded = a.card_load_status === 'loaded' || !!a.card_tlush_id
     return {
       id: a.id,
       name: [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || '—',
       email: ben?.email || '(אין מייל!)',
+      // ⚠️ status התיק — לידה שנתקעה במצב שאינו 'active' מעולם לא נכנסה לתור
+      status: a.status,
+      created_at: a.created_at,
       card_status: a.card_status,
       card_voucher_status: a.card_voucher_status,
       card_load_status: a.card_load_status,

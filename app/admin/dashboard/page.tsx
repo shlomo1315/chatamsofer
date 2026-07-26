@@ -56,7 +56,7 @@ const getStats = unstable_cache(
       maternityActive, maternityPending, cardsLoaded, cardsPending,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
-      activeLoanAmounts, cardCenters, dismissedTasks,
+      activeLoanAmounts, cardStockBalance, dismissedTasks,
     ] = await Promise.all([
       supabase.from('beneficiaries').select('id', headCount),
       supabase.from('beneficiaries').select('id', headCount).gte('created_at', weekAgo),
@@ -77,7 +77,11 @@ const getStats = unstable_cache(
       supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'awaiting_decision'),
       supabase.from('financial_aid_requests').select('id', headCount).eq('status', 'approved'),
       supabase.from('loans').select('amount').eq('status', 'active'),
-      supabase.from('card_centers').select('stock'),
+      // ⚠️ מלאי הכרטיסים = המלאי הגלובלי מ-card_stock_balance (מקור האמת היחיד,
+      // אותו שמסך הכרטיסים מציג). קודם הדשבורד חישב סכום card_centers.stock ישן
+      // פחות כרטיסים שנטענו — שיטה שפרשה מהמודל הגלובלי והראתה מספר שגוי (23
+      // במקום 299). המלאי כבר לא יושב במוקדים אלא במאזן גלובלי אחד.
+      supabase.from('card_stock_balance').select('balance').maybeSingle(),
       // בקשות שהוסתרו מלוח "ממתינים לטיפול" — מנוכות מהמונה כדי שיתאים לרשימה בפאנל
       supabase.from('dismissed_pending_tasks').select('entity_type', { count: 'exact', head: true }),
     ])
@@ -97,7 +101,7 @@ const getStats = unstable_cache(
       maternityPending: maternityPending.count ?? 0,
       cardsLoaded: loadedCount,
       cardsPending: cardsPending.count ?? 0,
-      cardsRemaining: ((cardCenters.data ?? []).reduce((sum, c) => sum + (Number(c.stock) || 0), 0)) - loadedCount,
+      cardsRemaining: Number(cardStockBalance.data?.balance ?? 0),
       widowPending: widowPending.count ?? 0,
       widowInProgress: widowInProgress.count ?? 0,
       distributionsPlanned: distributionsPlanned.count ?? 0,
