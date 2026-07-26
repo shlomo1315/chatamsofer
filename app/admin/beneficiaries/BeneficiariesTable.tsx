@@ -215,9 +215,9 @@ interface CardDef {
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Users, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לאישור ראשוני', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'deep_review', label: 'בדיקה מעמיקה', icon: ShieldAlert, base: 'border-orange-200 hover:border-orange-300', active: 'border-orange-400 ring-2 ring-orange-200 bg-orange-50', iconCls: 'bg-orange-100 text-orange-700' },
   { key: 'docs_pending', label: 'השלמת מסמכים', icon: FileText, base: 'border-blue-200 hover:border-blue-300', active: 'border-blue-400 ring-2 ring-blue-200 bg-blue-50', iconCls: 'bg-blue-100 text-blue-700' },
   { key: 'docs_returned', label: 'הוחזרו תיקונים', icon: ClipboardCheck, base: 'border-teal-200 hover:border-teal-300', active: 'border-teal-400 ring-2 ring-teal-200 bg-teal-50', iconCls: 'bg-teal-100 text-teal-700' },
-  { key: 'deep_review', label: 'בדיקה מעמיקה', icon: ShieldAlert, base: 'border-orange-200 hover:border-orange-300', active: 'border-orange-400 ring-2 ring-orange-200 bg-orange-50', iconCls: 'bg-orange-100 text-orange-700' },
   { key: 'approved', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -246,22 +246,23 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
   return (
     <div className="flex flex-col gap-5">
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
         {CARD_DEFS.map((c) => {
           const Icon = c.icon
           const isActive = activeFilter === c.key
           return (
             <button
               key={c.key}
+              title={c.label}
               onClick={() => setStatus(isActive && c.key !== 'all' ? 'all' : c.key)}
-              className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}
+              className={`flex items-center gap-2 rounded-xl border bg-white p-2.5 text-right transition-all ${isActive ? c.active : c.base}`}
             >
-              <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
-                <Icon size={18} />
+              <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.iconCls}`}>
+                <Icon size={16} />
               </span>
               <span className="flex flex-col min-w-0">
-                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
-                <span className="text-xs text-slate-500 mt-1 truncate">{c.label}</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums leading-none">{(counts[c.key] ?? 0).toLocaleString('he-IL')}</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 truncate">{c.label}</span>
               </span>
             </button>
           )
