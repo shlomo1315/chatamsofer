@@ -30,40 +30,40 @@ async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   return data
 }
 
-// Walk the lineage tree from the selected node up to the root → ordered path of names
-async function getLineagePath(nodeId?: string): Promise<string[]> {
-  if (!nodeId || !isSupabaseConfigured()) return []
+
+// ⚠️ ביצועים: שאילתה אחת של lineage_nodes → גם מסלול הדורות (path) וגם מפת
+// הסטיות. קודם היו שתי שאילתות *רצופות* על אותה טבלה (getLineagePath +
+// getDeviatingGenerations), כל אחת מושכת את כל העץ — 2 סבבי רשת מיותרים
+// שהאיטו את פתיחת הכרטסת. עכשיו סבב אחד.
+type LineageNode = { id: string; name: string; parent_id: string | null; generation: number; status: string }
+
+// שליפת כל צמתי עץ הדורות — נקראת *במקביל* לשאר השאילתות (אינה תלויה ב-beneficiary).
+async function getAllLineageNodes(): Promise<LineageNode[]> {
+  if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
-  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
-  if (error) throw error
-  if (!data) return []
-  const map = new Map(data.map(n => [n.id, n]))
-  const path: string[] = []
-  let cur = map.get(nodeId)
-  let guard = 0
-  while (cur && guard < 50) {
-    path.unshift(cur.name)
-    cur = cur.parent_id ? map.get(cur.parent_id) : undefined
-    guard++
-  }
-  return path
+  const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id, generation, status')
+  return (data ?? []) as LineageNode[]
 }
 
-// ⚠️ הדורות שסוטים מהנתיב המאושר — לצביעה אדומה בבדיקה מעמיקה.
-// לכל דור בשרשרת שהנרשם בחר (lineage_chain), בודקים אם קיים צומת *מאומת*
-// (status='verified') באותו דור עם שם תואם (namesMatch מטפל בהבדלי כתיב/תארים).
-// אם אין — הדור סוטה מהמאגר. אותו היגיון בדיוק כמו buildClaimedPath ב-
-// lib/lineageReliability. מחזיר Set של מספרי דור (1-based) שסוטים.
-async function getDeviatingGenerations(chain: { generation: number; name: string }[]): Promise<Set<number>> {
-  const out = new Set<number>()
-  if (!chain.length || !isSupabaseConfigured()) return out
-  const { namesMatch } = await import('@/lib/hebrewName')
-  const supabase = await createClient()
-  const { data } = await supabase.from('lineage_nodes').select('name, generation, status').eq('status', 'verified')
-  const verified = data ?? []
-  for (const e of chain) {
-    const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
-    if (!ok) out.add(e.generation)
+// עיבוד סינכרוני מהצמתים שכבר נשלפו → מסלול הדורות + מפת הסטיות. ללא רשת נוספת.
+async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, chain: { generation: number; name: string }[] = []): Promise<{
+  path: string[]
+  deviating: Set<number>
+}> {
+  const out = { path: [] as string[], deviating: new Set<number>() }
+  if (nodeId) {
+    const map = new Map(nodes.map(n => [n.id, n]))
+    let cur = map.get(nodeId)
+    let guard = 0
+    while (cur && guard < 50) { out.path.unshift(cur.name); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+  }
+  if (chain.length) {
+    const { namesMatch } = await import('@/lib/hebrewName')
+    const verified = nodes.filter(n => n.status === 'verified')
+    for (const e of chain) {
+      const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
+      if (!ok) out.deviating.add(e.generation)
+    }
   }
   return out
 }
@@ -116,19 +116,21 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // הרצה מקבילית: getBeneficiary/getBirthCertificates/getActivity תלויים רק ב-id.
   // רק getLineagePath תלוי בצומת היחוס של המוטב, לכן נשלף אחרי שיש beneficiary.
   // (בעבר כל ה-queries רצו בסדרה = 4 סבבי רשת רצופים; זו הייתה סיבת האיטיות בטעינת הכרטסת.)
-  const [beneficiary, birthCerts, activity] = await Promise.all([
+  // ⚠️ ביצועים: כל השאילתות במקביל, כולל עץ הדורות (lineage_nodes אינו תלוי
+  // ב-beneficiary — רק העיבוד שלו). קודם עץ הדורות נשלף *אחרי* ה-Promise.all
+  // = סבב רשת נוסף שהאיט את פתיחת הכרטסת. עכשיו הכל בסבב אחד.
+  const [beneficiary, birthCerts, activity, allNodes] = await Promise.all([
     getBeneficiary(id),
     getBirthCertificates(id),
     getActivity(id),
+    getAllLineageNodes(),
   ])
-  const lineagePath = await getLineagePath(beneficiary?.lineage_node_id)
-
-  // דורות שסוטים מהנתיב המאושר — לצביעה אדומה ולהתראה. מחושב כשיש שרשרת
-  // שהוקלדה (lineage_chain), כדי לזהות מיד סדר דורות לא תקין — בכל סטטוס.
   const typedChain = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string }[])
     : []
-  const deviatingGens = typedChain.length ? await getDeviatingGenerations(typedChain) : new Set<number>()
+  const lineageData = await computeLineageData(allNodes, beneficiary?.lineage_node_id, typedChain)
+  const lineagePath = lineageData.path
+  const deviatingGens = lineageData.deviating
   // סטייה בתוך 5 הדורות הראשונים = סדר דורות חשוד → התראה קופצת בכניסה.
   const earlyDeviation = [...deviatingGens].some(g => g <= 5)
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
