@@ -48,43 +48,46 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
     setOpen(true)
   }
 
-  // חלק האישור/דחייה המשותף — מקבל אילו שדות לעדכן
-  const applyStatus = async (next: LoanStatus, extra: Record<string, unknown> = {}) => {
-    setSaving(true)
-    try {
-      // עדכון סטטוס — דרך השרת, כדי לתעד מי המזכיר שטיפל ומתי
-      const res = await fetch('/api/admin/request-status', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'loan', id: loan.id, status: next, extra }),
-      })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
+  // חלק האישור/דחייה המשותף — מקבל אילו שדות לעדכן.
+  // ⚠️ UI אופטימי מלא (כמו באישור לידה): הכפתור מתעדכן *מיד* בלחיצה, וכל
+  // הרשת רצה ברקע. קודם ה-setLocalStatus חיכה ל-await fetch של request-status,
+  // ולכן האישור "נתקע" עד שהשרת ענה — וזה מה שהרגיש איטי. עכשיו התגובה מיידית.
+  const applyStatus = (next: LoanStatus, extra: Record<string, unknown> = {}) => {
+    // 1) משוב ויזואלי מיידי — לפני כל קריאת רשת
+    setLocalStatus(next)
+    setOpen(false)
+    setApproveOpen(false)
 
-      // עדכון אופטימי מיידי — הכפתור משתקף כבר עכשיו.
-      setLocalStatus(next)
-      setOpen(false)
-      setApproveOpen(false)
-      setSaving(false)
-
-      // באישור הבקשה — מייל "בקשתך אושרה" + הפיכת המשפחה ל"מאושר" — רץ ברקע (לא חוסם UI)
-      if (next === 'approved') {
-        void fetch('/api/admin/request-approved', {
+    // 2) כל הרשת ברקע — לא חוסמת את ה-UI. כשל → גלגול אחורה + הודעה.
+    void (async () => {
+      try {
+        const res = await fetch('/api/admin/request-status', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'loan', id: loan.id }),
-        }).catch(() => {})
+          body: JSON.stringify({ type: 'loan', id: loan.id, status: next, extra }),
+        })
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
+
+        // באישור — מייל "בקשתך אושרה" + הפיכת המשפחה ל"מאושר" — גם ברקע
+        if (next === 'approved') {
+          void fetch('/api/admin/request-approved', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'loan', id: loan.id }),
+          }).catch(() => {})
+        }
+        // רק כשלא בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
+        if (!(advance && next !== 'pending')) router.refresh()
+      } catch (err: unknown) {
+        setLocalStatus(loan.status) // גלגול אחורה במקרה כשל
+        toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
       }
-      // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
-      if (advance && next !== 'pending') {
-        setShowSuccess(true)
-        setTimeout(() => {
-          goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
-        }, 1500)
-        return
-      }
-      router.refresh() // רענון שאר הדף ברקע — לא חוסם את המשוב הויזואלי
-    } catch (err: unknown) {
-      setLocalStatus(loan.status) // גלגול אחורה במקרה כשל
-      toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
-      setSaving(false)
+    })()
+
+    // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הבאה
+    if (advance && next !== 'pending') {
+      setShowSuccess(true)
+      setTimeout(() => {
+        goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
+      }, 1500)
     }
   }
 
