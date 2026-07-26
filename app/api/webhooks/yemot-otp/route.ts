@@ -72,7 +72,11 @@ function slowTokens(text: string): string {
   let buf: string[] = []
   const flush = () => { if (buf.length) { tokens.push(`t-${buf.join(' ')}`); buf = [] } }
   for (const w of words) {
-    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w}`) }   // ספרה = הודעה נפרדת
+    // ⚠️ כל ספרה = הודעה נפרדת (הפסקה מלאה בין הספרות), ובנוסף שני פסיקים
+    // בסוף הטוקן — שיטת ההאטה המוכחת מ-yemot-maternity: פסיק בתוך טקסט TTS
+    // יוצר הפסקה קצרה, ושני פסיקים מאריכים אותה עוד. כך ההקראה איטית וברורה
+    // יותר בין ספרה לספרה. הפסיק חוקי בתוך טוקן (רק הנקודה אסורה).
+    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , ,`) }
     else buf.push(w)
   }
   flush()
