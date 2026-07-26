@@ -47,6 +47,25 @@ async function getLineagePath(nodeId?: string): Promise<string[]> {
   return path
 }
 
+// ⚠️ הדורות שסוטים מהנתיב המאושר — לצביעה אדומה בבדיקה מעמיקה.
+// לכל דור בשרשרת שהנרשם בחר (lineage_chain), בודקים אם קיים צומת *מאומת*
+// (status='verified') באותו דור עם שם תואם (namesMatch מטפל בהבדלי כתיב/תארים).
+// אם אין — הדור סוטה מהמאגר. אותו היגיון בדיוק כמו buildClaimedPath ב-
+// lib/lineageReliability. מחזיר Set של מספרי דור (1-based) שסוטים.
+async function getDeviatingGenerations(chain: { generation: number; name: string }[]): Promise<Set<number>> {
+  const out = new Set<number>()
+  if (!chain.length || !isSupabaseConfigured()) return out
+  const { namesMatch } = await import('@/lib/hebrewName')
+  const supabase = await createClient()
+  const { data } = await supabase.from('lineage_nodes').select('name, generation, status').eq('status', 'verified')
+  const verified = data ?? []
+  for (const e of chain) {
+    const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
+    if (!ok) out.add(e.generation)
+  }
+  return out
+}
+
 async function getBirthCertificates(beneficiaryId: string): Promise<Record<string, string>> {
   if (!isSupabaseConfigured()) return {}
   const supabase = await createClient()
@@ -101,6 +120,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     getActivity(id),
   ])
   const lineagePath = await getLineagePath(beneficiary?.lineage_node_id)
+
+  // דורות שסוטים מהנתיב המאושר — מחושב רק בבדיקה מעמיקה (אחרת מיותר), לצביעה אדומה.
+  const deviatingGens = beneficiary?.eligibility_status === 'deep_review'
+    ? await getDeviatingGenerations(
+        (Array.isArray(beneficiary.lineage_chain)
+          ? (beneficiary.lineage_chain as { generation: number; name: string }[])
+          : []),
+      )
+    : new Set<number>()
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
 
@@ -275,12 +303,22 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         }
         return (
           <div className="flex items-center gap-1.5 flex-wrap mb-4">
-            {lineagePath.map((name, i) => (
-              <span key={`t-${i}`} className="flex items-center gap-1.5">
-                {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}{relTag(i + 1)}</span>
-              </span>
-            ))}
+            {lineagePath.map((name, i) => {
+              // דור שסוטה מהנתיב המאושר (בבדיקה מעמיקה) — אדום בוהק, אחרת סגול רגיל.
+              const deviates = deviatingGens.has(i + 1)
+              return (
+                <span key={`t-${i}`} className="flex items-center gap-1.5">
+                  {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                  <span className={`text-xs px-2.5 py-1 rounded-full border ${deviates
+                    ? 'bg-red-100 text-red-800 border-red-400 font-bold ring-2 ring-red-300'
+                    : 'bg-violet-50 text-violet-700 border-violet-100'}`}
+                    title={deviates ? 'דור זה שונה מהנתיב המאושר במאגר' : undefined}>
+                    <span className={`ml-1 ${deviates ? 'text-red-500' : 'text-violet-400'}`}>דור {i + 1}</span>{name}{relTag(i + 1)}
+                    {deviates && <span className="mr-1">⚠</span>}
+                  </span>
+                </span>
+              )
+            })}
             {Array.isArray(beneficiary.lineage_manual) && (beneficiary.lineage_manual as string[]).map((name, i) => (
               <span key={`m-${i}`} className="flex items-center gap-1.5">
                 <ChevronLeft size={12} className="text-slate-300" />
@@ -408,6 +446,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
                 ? <> <span className="font-semibold">הערת המזכיר:</span> {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason}</>
                 : ''}
             </p>
+            {/* פירוט הדורות שסוטים מהנתיב המאושר — מסומנים גם באדום בעץ הדורות */}
+            {deviatingGens.size > 0 && (
+              <p className="text-sm text-red-800 mt-2 font-semibold flex items-center gap-1.5">
+                <AlertTriangle size={14} className="flex-shrink-0" />
+                דורות שאינם תואמים לנתיב המאושר: {[...deviatingGens].sort((a, b) => a - b).map(g => `דור ${g}`).join(', ')}
+                <span className="font-normal text-red-600">(מסומנים באדום בעץ הדורות)</span>
+              </p>
+            )}
           </div>
         </div>
       )}
