@@ -18,6 +18,7 @@ const STYLES: Record<string, string> = {
   docs_pending: 'bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200',
   docs_returned: 'bg-teal-100 text-teal-800 hover:bg-teal-200 border-teal-200',
   review:       'bg-violet-100 text-violet-800 hover:bg-violet-200 border-violet-200',
+  deep_review:  'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300',
 }
 
 export default function StatusControl({ id, status, advance }: { id: string; status: EligibilityStatus; advance?: boolean }) {

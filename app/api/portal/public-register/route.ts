@@ -207,6 +207,26 @@ export async function POST(request: NextRequest) {
   const isMarried = String(marital_status) === 'נשואים'
   const cleanChildCount = Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10))
   const childrenJson = Array.isArray(children) && children.length > 0 ? children : null
+
+  // ── קביעת רמת הבדיקה לפי סדר הדורות ─────────────────────────────────────────
+  // בדיקה מעמיקה (deep_review) כשהנרשם *סטה מהנתיב המאומת בתוך 5 הדורות
+  // הראשונים* — כלומר הוסיף צמתים חדשים שאינם במאגר בדור רדוד (≤5).
+  //   • הצומת המאומת שנבחר (lineage_node_id) נמצא בדור N.
+  //   • צמתים חדשים (lineage_new_nodes) נוספים מתחתיו — בדורות N+1, N+2…
+  //   • אם N ≥ 5 → החדשים בדור 6+ בלבד → בדיקה רגילה (הוסיף *מעבר* ל-5).
+  //   • אם N < 5 והוסיף חדשים → חלקם נופלים *בתוך* 5 הדורות → בדיקה מעמיקה.
+  // ללא צמתים חדשים כלל → בדיקה רגילה (בחר נתיב קיים במלואו).
+  const NORMAL_DEPTH = 5
+  let eligibilityStatus = 'pending'
+  try {
+    const hasNewNodes = Array.isArray(lineage_new_nodes) && lineage_new_nodes.length > 0
+    if (hasNewNodes && lineage_node_id) {
+      const { data: sel } = await admin.from('lineage_nodes').select('generation').eq('id', String(lineage_node_id)).maybeSingle()
+      const gen = sel?.generation != null ? Number(sel.generation) : null
+      // הצומת שנבחר רדוד (בתוך 5 הדורות) והנרשם הוסיף עליו צמתים חדשים → סטייה
+      if (gen != null && gen < NORMAL_DEPTH) eligibilityStatus = 'deep_review'
+    }
+  } catch { /* כשל בזיהוי — נשאר pending (בדיקה רגילה), לא חוסם רישום */ }
   const sharedFields = {
     // טלפון ראשי — של הבעל אם הוזן, אחרת המספר הראשון שהוזן (בעל אינו חובה יותר)
     phone: phone ? String(phone).trim() : (phoneList[0] ?? null),
@@ -226,7 +246,8 @@ export async function POST(request: NextRequest) {
     past_benefits: past_benefits && typeof past_benefits === 'object' ? past_benefits : null,
     // חתימה דיגיטלית (data URL של PNG) — נלכדה בעת סימון ההצהרה
     signature: typeof signature === 'string' && signature.startsWith('data:image') ? signature : null,
-    eligibility_status: 'pending',
+    // 'pending' (בדיקה רגילה) או 'deep_review' (סטייה ביחוס בתוך 5 הדורות)
+    eligibility_status: eligibilityStatus,
     is_active: true,
   }
 

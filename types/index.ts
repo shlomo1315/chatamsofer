@@ -3,7 +3,7 @@ export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid' | 'newsletter'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
-export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending' | 'docs_returned'
+export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending' | 'docs_returned' | 'deep_review'
 export type Gender = 'male' | 'female'
 export type LoanStatus = 'pending' | 'inquiry' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled'
@@ -413,6 +413,7 @@ export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
   review: 'ממתין לאישור מסמכים',
   docs_pending: 'השלמת מסמכים',
   docs_returned: 'הוחזר תיקון — לבדיקה',
+  deep_review: 'בדיקה מעמיקה — סטייה ביחוס',
 }
 
 export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
