@@ -298,22 +298,29 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       </div>
 
       {/* breadcrumb — צביעה אוטומטית (ירוק=תואם עד דור 5 · אדום=שונה · כתום=נוסף)
-          + סימון ידני של המנהל. עץ הדורות המאושר + הדורות הידניים שהוסיף. */}
+          + סימון ידני של המנהל. */}
       {(() => {
-        const relByGen = new Map(chainForMarks.map(c => [c.generation, c.relation]))
-        // בונים את מערך הדורות: השמות מהעץ (lineagePath) בדורות 1..N, ואז
-        // הדורות הידניים (lineage_manual) בהמשך. verified לפי deviatingGens.
-        const gens: import('./LineageChainChips').ChainGen[] = lineagePath.map((name, i) => ({
-          generation: i + 1,
-          name,
-          verified: !deviatingGens.has(i + 1),
-          relation: (relByGen.get(i + 1) as 'son' | 'son_in_law' | null | undefined) ?? null,
-        }))
-        const manual = Array.isArray(beneficiary.lineage_manual) ? (beneficiary.lineage_manual as string[]) : []
-        manual.forEach((name, i) => {
-          const gen = lineagePath.length + 1 + i
-          gens.push({ generation: gen, name, verified: !deviatingGens.has(gen), relation: (relByGen.get(gen) as 'son' | 'son_in_law' | null | undefined) ?? null })
+        // ⚠️ החתם סופר הוא *תמיד* דור 1 — קבוע, לא משתנה לעולם. אם ב-lineage_chain
+        // נשמר שם אחר בדור 1 (טעות/עקיפה), כופים כאן את השם הקבוע וירוק. הבחירה
+        // של הנרשם מתחילה מדור 2. בונים מהשרשרת הממוינת לפי דור.
+        const chainSorted = [...chainForMarks].sort((a, b) => a.generation - b.generation)
+        const CHATAM_SOFER = 'מרן החתם סופר זי"ע'
+        const source = chainSorted.length
+          ? chainSorted
+          : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null }))
+        const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
+          const isRoot = c.generation === 1
+          return {
+            generation: c.generation,
+            name: isRoot ? CHATAM_SOFER : c.name,   // דור 1 תמיד החתם סופר
+            verified: isRoot ? true : !deviatingGens.has(c.generation),
+            relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
+          }
         })
+        // אם משום מה אין דור 1 כלל בשרשרת — מוסיפים אותו בראש (החתם סופר קבוע).
+        if (!gens.some(g => g.generation === 1)) {
+          gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
+        }
         return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
       })()}
 

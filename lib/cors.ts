@@ -6,8 +6,10 @@
 // ההגנה האמיתית היא שהנקודות אינן חושפות נתונים + rate-limiting + אימות טלפון.
 import { NextResponse } from 'next/server'
 
-// origins מותרים. ניתן להרחיב במידת הצורך (למשל סביבת staging של נדרים).
-export const ALLOWED_ORIGINS = ['https://matara.pro'] as const
+// origins מותרים. נדרים פלוס מגישים את הטופס גם מ-matara.pro וגם מ-www.matara.pro
+// (הדפדפן מתייחס אליהם כ-origins שונים לגמרי) — שניהם חייבים להיות ברשימה,
+// אחרת הדפדפן חוסם ב-CORS והטופס מציג "שגיאה בבדיקת הנתונים".
+export const ALLOWED_ORIGINS = ['https://matara.pro', 'https://www.matara.pro'] as const
 
 // בוחר את ה-origin שיוחזר בכותרת: אם הבקשה הגיעה מ-origin מותר — מחזירים אותו
 // (מדויק, תומך ב-credentials עתידי); אחרת נופלים ל-origin הראשי כברירת מחדל.

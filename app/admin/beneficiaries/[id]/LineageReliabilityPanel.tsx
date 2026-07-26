@@ -24,7 +24,7 @@ export default function LineageReliabilityPanel({ beneficiaryId }: { beneficiary
       </div>
 
       {err && <p className="mt-3 text-sm text-rose-600">{err}</p>}
-      {res && <div className="mt-3"><ReliabilityView res={res} /></div>}
+      {res && <div className="mt-3"><ReliabilityView res={res} beneficiaryId={beneficiaryId} /></div>}
     </div>
   )
 }

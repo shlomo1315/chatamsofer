@@ -1,12 +1,14 @@
 'use client'
 import { useState, useCallback } from 'react'
 import { AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react'
+import ChainChipsInline from './LineageChainChips'
 
 export type Band = 'high' | 'medium' | 'low'
 export interface Result {
   registrant?: { name: string; status: string }
   anchor?: { name: string; generation: number } | null
   claimedLine?: string | null
+  claimedPath?: { name: string; generation: number; verified: boolean }[]
   trunkFamilies?: number
   lineFamilies?: number
   siblingLines?: { name: string; count: number }[]
@@ -42,9 +44,23 @@ export function useReliability(beneficiaryId: string) {
   return { loading, err, res, run }
 }
 
-/** תצוגת תוצאת הסקירה — עובדתית, ללא המלצה לאשר/לא לאשר. */
-export default function ReliabilityView({ res }: { res: Result }) {
+/** תצוגת תוצאת הסקירה — עובדתית, ללא המלצה לאשר/לא לאשר.
+ *  beneficiaryId (אופציונלי) — כשמועבר, מוצגים כל הדורות אחד-אחרי-השני בצבעים
+ *  עם אפשרות לסימון ידני. */
+export default function ReliabilityView({ res, beneficiaryId, manualMarks }: {
+  res: Result
+  beneficiaryId?: string
+  manualMarks?: Record<string, 'red' | 'green'>
+}) {
   const band = res.band ? BANDS[res.band] : BANDS.medium
+  // הדורות אחד-אחרי-השני לצ'יפים הצבעוניים. דור 1 = החתם סופר, תמיד ירוק.
+  const CHATAM_SOFER = 'מרן החתם סופר זי"ע'
+  const chainGens = (res.claimedPath ?? []).map(c => ({
+    generation: c.generation,
+    name: c.generation === 1 ? CHATAM_SOFER : c.name,
+    verified: c.generation === 1 ? true : c.verified,
+    relation: null,
+  }))
   return (
     <div className="space-y-3">
       <div className={`flex items-center gap-3 rounded-xl border ${band.ring} ${band.bg} px-4 py-3`}>
@@ -56,6 +72,11 @@ export default function ReliabilityView({ res }: { res: Result }) {
             : <p className="text-xs text-slate-500 mt-0.5">אין עוגן מאומת בעץ</p>}
         </div>
       </div>
+
+      {/* כל הדורות אחד-אחרי-השני בצבעים + סימון ידני (רק כשיש beneficiaryId) */}
+      {beneficiaryId && chainGens.length > 0 && (
+        <ChainChipsInline beneficiaryId={beneficiaryId} gens={chainGens} initialMarks={manualMarks ?? {}} />
+      )}
 
       <div className="grid grid-cols-3 gap-2 text-center">
         <div className="rounded-lg bg-white border border-slate-200 py-2">
