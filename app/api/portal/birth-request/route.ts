@@ -10,6 +10,7 @@ import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
 import { rateLimit } from '@/lib/rateLimit'
 import { MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
+import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,12 @@ export async function POST(request: NextRequest) {
 
   if (!beneficiary_id || !birth_date) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // ⚠️ שער המחלקה — אם עזר יולדות סגור כרגע, לא מקבלים בקשות חדשות.
+  // נבדק לפני כל עיבוד, כדי שגם בקשה שנשלחת ישירות ל-API (עוקפת את הטופס) תיחסם.
+  if (!(await isDepartmentOpen('maternity'))) {
+    return NextResponse.json({ error: departmentClosedMessage('maternity'), departmentClosed: true }, { status: 403 })
   }
 
   // ── חלון ההגשה: 30 יום מהלידה (המימוש הוא 6 שבועות — ראה MATERNITY_SUBMIT_DAYS) ──

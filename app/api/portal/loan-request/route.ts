@@ -8,6 +8,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
+import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,10 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  // שער המחלקה — גמ"ח הלוואות סגור → לא מקבלים בקשות (נחסם גם בקריאה ישירה ל-API)
+  if (!(await isDepartmentOpen('gemach'))) {
+    return NextResponse.json({ error: departmentClosedMessage('gemach'), departmentClosed: true }, { status: 403 })
+  }
   let body: Record<string, unknown>
   try {
     body = await request.json()

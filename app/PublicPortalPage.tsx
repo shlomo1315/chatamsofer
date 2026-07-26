@@ -959,6 +959,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     [texts],
   )
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
+  // שערי המחלקות (פתוח/סגור) — נטענים פעם אחת; חוסמים כפתורי בקשה של מחלקות סגורות.
+  const [deptGates, setDeptGates] = useState<Record<string, boolean>>({ maternity: true, gemach: true, financial_aid: true, widows: true })
+  useEffect(() => {
+    fetch('/api/portal/department-gates').then(r => r.json())
+      .then(d => { if (d.gates) setDeptGates(d.gates) }).catch(() => {})
+  }, [])
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   // רישום כילד רשום — השיוך נקבע אוטומטית מההורה
   const [childParentLineage, setChildParentLineage] = useState<ParentLineage | null>(null)
@@ -2031,6 +2037,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const canRequestBirth = !!beneficiary?.marital_status && MARRIED_STATUSES.includes(beneficiary.marital_status)
 
   const goToBirthForm = () => {
+    if (!deptGates.maternity) { setError('הגשת בקשות לעזר יולדות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
     if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setBabyIdError(''); setNoBabyName(false)
@@ -2041,6 +2048,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setStep('new-birth')
   }
   const goToSilentBirthForm = () => {
+    if (!deptGates.maternity) { setError('הגשת בקשות לעזר יולדות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
     if (!canRequestBirth) { setError('בקשה זו זמינה לרשומים במצב נשואים בלבד.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError(''); setShowSilentInfo(false)
@@ -2079,11 +2087,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(false)
   }
   const goToLoanForm = () => {
+    if (!deptGates.gemach) { setError('הגשת בקשות לגמ"ח ההלוואות אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
     if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setDocFiles({})
     setLoanModalOpen(true)
+  }
+  // פתיחת מודל בקשת הסיוע — חסום אם המחלקה סגורה
+  const goToAidForm = () => {
+    if (!deptGates.financial_aid) { setError('הגשת בקשות לסיוע רפואי אינה זמינה כעת. לפרטים ניתן לפנות למזכירות.'); return }
+    setError(''); setAidModalOpen(true)
   }
 
   // Read the intended action from the URL once on mount (from the email buttons)
@@ -2099,7 +2113,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     intendedAction.current = null
     if (a === 'birth') goToBirthForm()
     else if (a === 'loan') goToLoanForm()
-    else if (a === 'aid') { setError(''); setAidModalOpen(true) }
+    else if (a === 'aid') goToAidForm()
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, beneficiary])

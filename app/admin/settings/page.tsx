@@ -20,6 +20,7 @@ import YemotMaternitySettings from './YemotMaternitySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
+import DepartmentGatesSettings from './DepartmentGatesSettings'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
 import MaintenanceReplySettings from './MaintenanceReplySettings'
@@ -214,6 +215,11 @@ export default async function SettingsPage() {
         {/* Public registration gate */}
         <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-indigo-500" />}>
           <RegistrationGate />
+        </Collapsible>
+
+        {/* Department gates — פתיחה/סגירה לפי מחלקה (עליית אוויר הדרגתית) */}
+        <Collapsible title="הגדרות בקשות — פתיחה/סגירה לפי מחלקה" icon={<UserPlus size={16} className="text-emerald-500" />} defaultOpen>
+          <DepartmentGatesSettings />
         </Collapsible>
 
         {/* Notifications */}

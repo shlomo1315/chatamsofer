@@ -7,6 +7,7 @@ import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
+import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +29,10 @@ function getAdminClient() {
 
 // בקשת סיוע רפואי מהטופס הציבורי: נימוק + מסמך מצורף.
 export async function POST(request: NextRequest) {
+  // שער המחלקה — סיוע רפואי סגור → לא מקבלים בקשות
+  if (!(await isDepartmentOpen('financial_aid'))) {
+    return NextResponse.json({ error: departmentClosedMessage('financial_aid'), departmentClosed: true }, { status: 403 })
+  }
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
