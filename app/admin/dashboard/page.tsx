@@ -31,6 +31,7 @@ interface DashData {
   aidAwaiting: number
   aidApproved: number
   dismissedTasks: number
+  deepReview: number
 }
 
 const EMPTY: DashData = {
@@ -38,7 +39,7 @@ const EMPTY: DashData = {
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
   maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
-  aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedTasks: 0,
+  aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedTasks: 0, deepReview: 0,
 }
 
 // ספירות הדשבורד ארגון-רחבות (count/head — ללא העברת שורות) ואינן דורשות דיוק של שנייה.
@@ -56,7 +57,7 @@ const getStats = unstable_cache(
       maternityActive, maternityPending, cardsLoaded, cardsPending,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
-      activeLoanAmounts, cardStockBalance, dismissedTasks,
+      activeLoanAmounts, cardStockBalance, dismissedTasks, deepReview,
     ] = await Promise.all([
       supabase.from('beneficiaries').select('id', headCount),
       supabase.from('beneficiaries').select('id', headCount).gte('created_at', weekAgo),
@@ -84,6 +85,8 @@ const getStats = unstable_cache(
       supabase.from('card_stock_balance').select('balance').maybeSingle(),
       // בקשות שהוסתרו מלוח "ממתינים לטיפול" — מנוכות מהמונה כדי שיתאים לרשימה בפאנל
       supabase.from('dismissed_pending_tasks').select('entity_type', { count: 'exact', head: true }),
+      // משפחות בבדיקת יחוס מעמיקה — דורשות תשומת לב של המנהל
+      supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'deep_review'),
     ])
 
     const loadedCount = cardsLoaded.count ?? 0
@@ -109,6 +112,7 @@ const getStats = unstable_cache(
       aidAwaiting: aidAwaiting.count ?? 0,
       aidApproved: aidApproved.count ?? 0,
       dismissedTasks: dismissedTasks.count ?? 0,
+      deepReview: deepReview.count ?? 0,
     }
     } catch {
       return EMPTY
@@ -206,6 +210,7 @@ export default async function DashboardPage() {
             rows={[
               { label: 'רשומות מאושרות', value: fmt(s.approved), tone: 'success' },
               { label: 'ממתינות לאישור', value: fmt(s.pending), tone: s.pending > 0 ? 'warning' : 'neutral' },
+              { label: 'בבדיקה מעמיקה', value: fmt(s.deepReview), tone: s.deepReview > 0 ? 'danger' : 'neutral' },
               { label: 'נרשמו השבוע', value: fmt(s.newBeneficiariesWeek), tone: 'info' },
             ]}
           />

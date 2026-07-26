@@ -18,7 +18,7 @@ function slowTokens(text: string): string {
   const flush = () => { if (buf.length) { tokens.push(`t-${buf.join(' ')}`); buf = [] } }
   for (const w of words) {
     // כל ספרה = הודעה נפרדת + שני פסיקים בסוף הטוקן (האטה חזקה, כמו yemot-maternity)
-    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , ,`) }
+    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , , ,`) }
     else buf.push(w)
   }
   flush()
@@ -41,7 +41,7 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowTokens(spokenCode('123456'))
     const tokens = out.split('.')
     for (const w of ['אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש']) {
-      expect(tokens).toContain(`t-${w} , ,`)   // טוקן משלה (עם פסיקי האטה), לא חלק ממשפט
+      expect(tokens).toContain(`t-${w} , , ,`)   // טוקן משלה (עם פסיקי האטה), לא חלק ממשפט
     }
   })
 
@@ -59,7 +59,7 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowTokens(spokenCode(code))
     const words = code.split('').map(d =>
       ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
-    const seq = words.map(w => `t-${w} , ,`).join('.')   // כולל פסיקי ההאטה בכל ספרה
+    const seq = words.map(w => `t-${w} , , ,`).join('.')   // כולל פסיקי ההאטה בכל ספרה
     expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
   })
 

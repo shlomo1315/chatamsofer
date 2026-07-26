@@ -76,7 +76,7 @@ function slowTokens(text: string): string {
     // בסוף הטוקן — שיטת ההאטה המוכחת מ-yemot-maternity: פסיק בתוך טקסט TTS
     // יוצר הפסקה קצרה, ושני פסיקים מאריכים אותה עוד. כך ההקראה איטית וברורה
     // יותר בין ספרה לספרה. הפסיק חוקי בתוך טוקן (רק הנקודה אסורה).
-    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , ,`) }
+    if (DIGIT_SET.has(w)) { flush(); tokens.push(`t-${w} , , ,`) }
     else buf.push(w)
   }
   flush()
