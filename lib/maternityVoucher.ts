@@ -212,11 +212,11 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   const titleH = 22
   const items = centers.filter(cn => cn.name)
   // ⚠️ כל מוקד תופס שתי שורות: שם ב-ry ופרטים ב-ry-12.5 (פונט 9).
-  // ב-perH=20 השורה השנייה נגעה בשם של המוקד הבא; 24 משאיר מרווח נקי
-  // ובו-זמנית חוסך 12 נק' על 6 מוקדים — מקום שנדרש לחתימה בתחתית.
-  const perH = 24
+  // perH=21 משאיר ~8 נק' מרווח נקי בין מוקד למוקד, ובו-זמנית חוסך 18 נק'
+  // על 6 מוקדים — מקום קריטי כדי שבלוק ההערות+חתימה בתחתית לא ייחתך.
+  const perH = 21
   const contentH = items.length ? items.length * perH : 22
-  const boxH = titleH + contentH + 6
+  const boxH = titleH + contentH + 4
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
   c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: NAVY })
   rightText(c, title, x + w - 14, y - titleH + 6, 12, rgb(1, 1, 1))
@@ -310,14 +310,14 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   const amH = 28
   c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
   rightText(c, 'סכום טעינת הכרטיס: 600 ש"ח', W - MX - 14, y - 19, 14, NAVY)
-  y = y - amH - 8
+  y = y - amH - 4
 
   // אזהרה אדומה
   const warnH = 34
   c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
   let wy = y - 13
   wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 11, RED, 3)
-  y = y - warnH - 8
+  y = y - warnH - 4
 
   // פרטי היולדת
   y = detailsBox(c, input.silent ? 'פרטי המבקשת' : 'פרטי היולדת', y, [
@@ -355,10 +355,10 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     const wA = wrapText(lineA, innerW, measure)
     const wB = wrapText(lineB, innerW, measure)
     const titleH = 20
-    const lineH = 13.5
+    const lineH = 12
     // ⚠️ ריפוד תחתון 20 (ולא 12): שורת המספרים נגעה בגבול המסגרת ונראתה
     // כאילו היא חופפת לטקסט שמתחתיה.
-    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 20
+    const boxH = titleH + (wA.length + 1 /*שורת המוקד*/ + wB.length + (uniqPhones.length ? 1 : 0)) * lineH + 14
 
     c.page.drawRectangle({ x: MX, y: y - boxH, width: W - MX * 2, height: boxH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1.2 })
     c.page.drawRectangle({ x: MX, y: y - titleH, width: W - MX * 2, height: titleH, color: NAVY })
@@ -380,22 +380,25 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
       ay -= lineH
     }
 
-    y = y - boxH - 14
+    y = y - boxH - 8
   }
 
-  // הערות בתחתית
-  y = paragraph(c,
+  // ── בלוק הסיום (הערות + ברכה + חתימה) מעוגן לתחתית העמוד ──
+  // ⚠️ קודם השורות האלה זרמו מ-y של התוכן שמעליהן. עם רשימת מוקדים מלאה
+  // התוכן ירד עד y≈9, החתימה יצאה ל-y≈-5 (מתחת לעמוד) ונחתכה, והשורות
+  // נראו מעורבבות. עכשיו הן מתחילות מגובה קבוע מהתחתית — תמיד מסודרות,
+  // בלי חפיפה ובלי חיתוך, ללא תלות בכמות המוקדים. הרווח שמעל פשוט משתנה.
+  // ההערות מעוגנות לגובה קבוע מהתחתית — לא זורמות מ-y של התוכן, כדי שלא
+  // ייחתכו/יחפפו. בלוק ההפעלה מעליהן מצטמצם מספיק כדי שלא ידרוך עליהן.
+  const NOTES_TOP = 62
+  const notesY = NOTES_TOP
+  paragraph(c,
     input.silent
       ? 'הכרטיס בתוקף עד 6 שבועות, ורק לרכישת מזון מוכן למשפחה. השובר אישי ואינו ניתן להעברה.'
       : 'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
-    W - MX, y, W - MX * 2, 9.5, SUB, 2)
-  y -= 8
+    W - MX, notesY, W - MX * 2, 9.5, SUB, 2)
 
-  // ⚠️ ברכה וחתימה — יורדות תמיד מתחת לתוכן. קודם היה Math.max(y, 46),
-  // שדחף אותן *בחזרה למעלה* כשהמקום נגמר — היישר לתוך בלוק ההפעלה,
-  // וכל השורות התחתונות נראו חופפות. הרצפה 30 היא רק הגנה מפני גלישה
-  // מחוץ לעמוד, ונמוכה מספיק כדי שלא תיצור חפיפה בפריסה המלאה.
-  const blessY = Math.max(y, 30)
+  const blessY = 34   // ברכה — גובה קבוע מהתחתית
   centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
   centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
 
