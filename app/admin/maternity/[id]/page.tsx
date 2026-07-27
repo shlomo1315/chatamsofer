@@ -82,19 +82,35 @@ async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   return map
 }
 
-// סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר
-async function getLineagePath(nodeId?: string | null): Promise<string[]> {
-  if (!nodeId || !isSupabaseConfigured()) return []
-  const map = await getLineageMap()
-  const path: string[] = []
-  let cur = map.get(nodeId)
-  let guard = 0
-  while (cur && guard < 50) {
-    path.unshift(cur.name)
-    cur = cur.parent_id ? map.get(cur.parent_id) : undefined
-    guard++
+// סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר.
+// ⚠️ אם ליולדת אין lineage_node_id (שיוך לעץ המאושר) אלא רק lineage_chain
+// (שרשרת שהוקלדה בטופס) — משתמשים ב-chain המלא, כדי שיוצג *כל* סדר הדורות
+// (חתם סופר דור 1 והלאה) ולא רק חלק. בדיוק כמו כרטיס הצאצאים.
+async function getLineagePath(
+  nodeId?: string | null,
+  chain?: { generation: number; name: string }[] | null,
+): Promise<string[]> {
+  // (1) נתיב מהעץ המאושר — המקור המדויק ביותר
+  if (nodeId && isSupabaseConfigured()) {
+    const map = await getLineageMap()
+    const path: string[] = []
+    let cur = map.get(nodeId)
+    let guard = 0
+    while (cur && guard < 50) {
+      path.unshift(cur.name)
+      cur = cur.parent_id ? map.get(cur.parent_id) : undefined
+      guard++
+    }
+    if (path.length) return path
   }
-  return path
+  // (2) נפילה-לאחור: השרשרת שהוקלדה בטופס, ממוינת לפי דור (1..N)
+  if (Array.isArray(chain) && chain.length) {
+    return [...chain]
+      .filter(e => e && typeof e.name === 'string' && e.name.trim())
+      .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
+      .map(e => e.name.trim())
+  }
+  return []
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
@@ -105,8 +121,11 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const aid = await getAid(id)
   const _tAid = Date.now()
   const ben = aid?.beneficiary as Beneficiary | undefined
+  const typedChain = Array.isArray(ben?.lineage_chain)
+    ? (ben.lineage_chain as { generation: number; name: string }[])
+    : []
   const [lineagePath, idDocs] = await Promise.all([
-    getLineagePath(ben?.lineage_node_id),
+    getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
