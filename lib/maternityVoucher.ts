@@ -7,6 +7,7 @@ import { join } from 'path'
 import { HEEBO_TTF_B64 } from './assets/heeboFont'
 import { wrapText } from './rtlText'
 import { toVisual } from './pdfBidi'
+import { loadVoucherTexts, vtext } from './voucherTextsStore'
 import type { MailAttachment } from './sendMail'
 
 // מיוצאים לשימוש חוזר בשוברים נוספים (lib/gratitudeVoucher.ts) — אותו עיצוב בדיוק.
@@ -274,6 +275,7 @@ export function drawIssueDate(c: Ctx, y: number) {
 }
 
 async function renderFoodCard(input: VoucherInput): Promise<string> {
+  await loadVoucherTexts()
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
@@ -291,7 +293,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   y -= 22
 
   // כותרת ראשית
-  centerText(c, 'שובר לקבלת כרטיס לרכישת אוכל מוכן', W / 2, y, 19, NAVY)
+  centerText(c, vtext('card.title', 'שובר לקבלת כרטיס לרכישת אוכל מוכן'), W / 2, y, 19, NAVY)
   y -= 10
   goldDivider(c, W / 2, y); y -= 18
 
@@ -302,21 +304,21 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   y = paragraph(c,
     input.silent
       ? 'הנהלת "היכל החתם סופר" אישרה את בקשתכם לקבלת כרטיס לרכישת מזון מוכן, כמפורט להלן.'
-      : 'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.',
+      : vtext('card.intro', 'הננו שמחים לבשר לכם כי הנהלת "היכל החתם סופר" — אגף עזר ליולדות, אישרה את בקשתכם לקבלת כרטיס מזון טעון לרכישת מזון מוכן ליולדת, כמפורט להלן.'),
     W - MX, y, W - MX * 2, 11, SUB, 4)
   y -= 3
 
   // סכום הכרטיס — תיבת הדגשה. מחרוזת אחת (toVisual מטפל בהיפוך "600").
   const amH = 28
   c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
-  rightText(c, 'סכום טעינת הכרטיס: 600 ש"ח', W - MX - 14, y - 19, 14, NAVY)
+  rightText(c, vtext('card.amount', 'סכום טעינת הכרטיס: 600 ש"ח'), W - MX - 14, y - 19, 14, NAVY)
   y = y - amH - 4
 
   // אזהרה אדומה
   const warnH = 34
   c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
   let wy = y - 13
-  wy = paragraph(c, 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!', W - MX - 12, wy, W - MX * 2 - 24, 11, RED, 3)
+  wy = paragraph(c, vtext('card.warning', 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!'), W - MX - 12, wy, W - MX * 2 - 24, 11, RED, 3)
   y = y - warnH - 4
 
   // פרטי היולדת
@@ -406,6 +408,7 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
 }
 
 async function renderRecovery(input: VoucherInput): Promise<string> {
+  await loadVoucherTexts()
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })
@@ -421,19 +424,19 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
   serialLine(c, input.serial, y)
   y -= 24
 
-  centerText(c, input.silent ? 'שובר הבראה' : 'שובר הבראה ליולדת', W / 2, y, 24, NAVY)
+  centerText(c, input.silent ? 'שובר הבראה' : vtext('recovery.title', 'שובר הבראה ליולדת'), W / 2, y, 24, NAVY)
   y -= 12
   goldDivider(c, W / 2, y); y -= 26
 
   rightText(c, `לכבוד משפחת ${input.motherName} הנכבדה`, W - MX, y, 13, INK); y -= 22
   // ⚠️ בלידה שקטה אין ברכות — לא "מזל טוב" ולא "לרגל השמחה".
-  if (!input.silent) { centerText(c, 'מזל טוב לרגל השמחה!', W / 2, y, 13, GOLD); y -= 26 }
+  if (!input.silent) { centerText(c, vtext('recovery.mazaltov', 'מזל טוב לרגל השמחה!'), W / 2, y, 13, GOLD); y -= 26 }
   else y -= 6
 
   y = paragraph(c,
     input.silent
       ? 'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.'
-      : 'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה לבית ההחלמה לצורך השלמת הרישום ותיאום הפרטים.',
+      : vtext('recovery.body', 'שובר זה מאשר את זכאותכם לשהות הבראה בבית ההחלמה לאחר הלידה. נא להציג שובר זה בעת ההגעה.'),
     W - MX, y, W - MX * 2, 12.5, SUB, 6)
   y -= 12
 
@@ -448,12 +451,12 @@ async function renderRecovery(input: VoucherInput): Promise<string> {
 
   y -= 4
   y = paragraph(c,
-    'לתשומת לבכם: יש לתאם מראש את מועד ההגעה מול בית ההחלמה. השובר אישי ואינו ניתן להעברה. לבירורים ניתן לפנות למזכירות היכל החתם סופר.',
+    vtext('recovery.note', 'לתשומת לבכם: יש לתאם מראש את מועד ההגעה מול בית ההחלמה. השובר אישי ואינו ניתן להעברה. לבירורים ניתן לפנות למזכירות היכל החתם סופר.'),
     W - MX, y, W - MX * 2, 10.5, SUB, 4)
   y -= 12
 
-  centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, y, 12, NAVY); y -= 18
-  centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, y, 11, SUB)
+  centerText(c, input.silent ? 'בברכה' : vtext('recovery.blessing', 'בברכת מזל טוב ורוב נחת'), W / 2, y, 12, NAVY); y -= 18
+  centerText(c, input.silent ? 'היכל החתם סופר' : vtext('recovery.signature', 'אגף עזר ליולדות · היכל החתם סופר'), W / 2, y, 11, SUB)
 
   return Buffer.from(await doc.save()).toString('base64')
 }

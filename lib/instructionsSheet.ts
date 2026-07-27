@@ -9,6 +9,7 @@ import {
   type Ctx, loadLogo, drawHeader, centerText, rightText, paragraph, goldDivider,
   paragraphWithBoldPrefix, hebrewDate,
 } from './maternityVoucher'
+import { loadVoucherTexts, vtext } from './voucherTextsStore'
 import type { MailAttachment } from './sendMail'
 
 const MATERNITY_EMAIL = 'y@chasamsofer.info'
@@ -35,12 +36,12 @@ function buildClauses(recoveryDays?: number): string[] {
     ? `מימון של ${recoveryDays} ימי הבראה מלאים בחדר בסיסי בבית ההחלמה שנבחר.`
     : 'מימון ימי הבראה מלאים בחדר בסיסי בבית ההחלמה שנבחר.'
   return [
-    'אישור: בקשתכם אושרה וניתן להתקדם להזמנת המקום.',
+    vtext('instructions.clause1', 'אישור: בקשתכם אושרה וניתן להתקדם להזמנת המקום.'),
     `פרטי הזכאות: ${daysText}`,
     'כרטיס מזון: במידה והוגשה בקשה לכרטיס מזון (600 ש"ח), תישלח הודעה נפרדת בהמשך.',
-    'ביצוע ההזמנה: מיוזמתכם, יש ליצור קשר ישיר מול בית ההחלמה המוזכר בטופס ולהזמין מקום.',
-    'תוקף הבראה: את ימי ההבראה יש לנצל בתוך 5 שבועות מיום הלידה.',
-    'חובת דיווח: בעת ההגעה לבית ההחלמה יש לדווח מיד בקבלה על הגעה דרך "היכל החתם סופר" ולמסור שם ומספר זהות/דרכון.',
+    vtext('instructions.clause4', 'ביצוע ההזמנה: מיוזמתכם, יש ליצור קשר ישיר מול בית ההחלמה המוזכר בטופס ולהזמין מקום.'),
+    vtext('instructions.clause5', 'תוקף הבראה: את ימי ההבראה יש לנצל בתוך 5 שבועות מיום הלידה.'),
+    vtext('instructions.clause6', 'חובת דיווח: בעת ההגעה לבית ההחלמה יש לדווח מיד בקבלה על הגעה דרך "היכל החתם סופר" ולמסור שם ומספר זהות/דרכון.'),
     'אין החזר על תשלום שכבר שילמתם: התשלום שלנו מועבר ישירות לבית ההחלמה; אין לשלם באופן עצמאי ולא ניתן לקבל החזר רטרואקטיבי על תשלום אישי.',
     'מניעת כפל תמיכה: הסיוע תקף ללילות שאינם ממומנים במקביל מגורם אחר (כמו בית החולים), למעט החזר מקופות החולים שזה אפשרי.',
     'שדרוגים והוספת ימים: מימון מקביל או פרטי יכול לשמש לשדרוג תנאי החדר או להוספת לילות, אך לא ככפל תשלום על אותם ימים.',
@@ -49,6 +50,7 @@ function buildClauses(recoveryDays?: number): string[] {
 
 /** בונה את דף ההנחיות כצרופת PDF. */
 export async function buildInstructionsSheet(input: InstructionsSheetInput): Promise<MailAttachment> {
+  await loadVoucherTexts()
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   const font = await doc.embedFont(Buffer.from(HEEBO_TTF_B64, 'base64'), { subset: true })

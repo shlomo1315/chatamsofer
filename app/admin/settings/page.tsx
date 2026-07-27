@@ -13,6 +13,7 @@ import EmailTextsManager from './EmailTextsManager'
 import AssistantLearning from './AssistantLearning'
 import MailCleanup from './MailCleanup'
 import RebuildRoutingButton from './RebuildRoutingButton'
+import VoucherTextsManager from './VoucherTextsManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
@@ -157,6 +158,11 @@ export default async function SettingsPage() {
         {/* תיקון ניתוב מיילים ישנים (שנתקעו במשרד ראשי) */}
         <Collapsible title="תיקון ניתוב מיילים ישנים" icon={<Wrench size={16} className="text-indigo-500" />}>
           <RebuildRoutingButton />
+        </Collapsible>
+
+        {/* עריכת טקסטי שוברי היולדות + תצוגת PDF חיה */}
+        <Collapsible title="שוברי יולדות — טקסט ותצוגה" icon={<FileText size={16} className="text-pink-500" />}>
+          <VoucherTextsManager />
         </Collapsible>
 
         {/* למידת העוזר החכם */}
