@@ -44,7 +44,7 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
       <div className={`flex items-center justify-between gap-3 px-4 py-3 bg-amber-100/70 flex-wrap ${compact ? 'rounded-[14px]' : 'rounded-t-[14px]'}`}>
         <div className="flex items-center gap-2 text-amber-900">
           <AlertTriangle size={18} className="flex-shrink-0" />
-          <span className="font-bold text-sm">המשפחה טרם אושרה — יש לאשר אותה לפני אישור הבקשה</span>
+          <span className="font-bold text-sm">שים לב, משפחה זו עדיין לא אישרו את הייחוס שלה. במידה ותרצה לאשר את הייחוס של משפחה זו — תוכל לעשות זאת כאן.</span>
         </div>
         {/* אישור המשפחה ישירות מכאן */}
         <StatusControl id={beneficiary.id} status={(beneficiary.eligibility_status ?? 'pending') as EligibilityStatus} />

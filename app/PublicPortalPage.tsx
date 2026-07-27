@@ -161,18 +161,27 @@ function BenefitChoices({
   onToggleFoodCard: () => void; onToggleRecovery: () => void
 }) {
   const opt = (checked: boolean, label: string, desc: string, onToggle: () => void) => (
-    <button type="button" onClick={onToggle}
-      className={`flex items-start gap-3 p-3.5 rounded-xl border text-right transition-all duration-150 ${
-        checked ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'
+    <button type="button" onClick={onToggle} aria-pressed={checked}
+      className={`group relative flex items-start gap-3 p-4 rounded-2xl border-2 text-right transition-all duration-200 ${
+        checked
+          ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-white shadow-[0_4px_16px_-6px_rgba(79,70,229,0.4)]'
+          : 'border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30 hover:-translate-y-0.5'
       }`}>
-      <span className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150 ${
-        checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'
+      {/* תיבת סימון מעוצבת — V מונפש */}
+      <span className={`mt-0.5 w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+        checked
+          ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 border-indigo-600 scale-100 shadow-sm'
+          : 'border-slate-300 bg-white group-hover:border-indigo-400'
       }`}>
-        {checked && <CheckCircle2 size={14} className="text-white" />}
+        <Check
+          size={15}
+          strokeWidth={3.5}
+          className={`text-white transition-all duration-200 ${checked ? 'scale-100 opacity-100' : 'scale-50 opacity-0'}`}
+        />
       </span>
       <span className="flex-1">
-        <span className="block text-sm font-semibold text-slate-800">{label}</span>
-        <span className="block text-xs text-slate-500 mt-0.5">{desc}</span>
+        <span className={`block text-sm font-bold transition-colors ${checked ? 'text-indigo-900' : 'text-slate-800'}`}>{label}</span>
+        <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</span>
       </span>
     </button>
   )
@@ -1257,10 +1266,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
   const [showSilentInfo, setShowSilentInfo] = useState(false)
-  // בחירת ההטבות: כרטיס מזון ו/או בית החלמה. ברירת מחדל — שתיהן מסומנות
-  // (ההתנהגות המוכרת). רשימת בתי ההחלמה נפתחת רק כש"בית החלמה" מסומן.
-  const [wantsFoodCard, setWantsFoodCard] = useState(true)
-  const [wantsRecovery, setWantsRecovery] = useState(true)
+  // בחירת ההטבות: כרטיס מזון ו/או בית החלמה. ברירת מחדל — לא מסומן,
+  // היולדת בוחרת בעצמה מה היא רוצה. רשימת בתי ההחלמה נפתחת רק כש"בית החלמה" מסומן.
+  const [wantsFoodCard, setWantsFoodCard] = useState(false)
+  const [wantsRecovery, setWantsRecovery] = useState(false)
   useEffect(() => {
     fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {
       if (Array.isArray(d.regular) && d.regular.length) setRecoveryHomes(d.regular)
