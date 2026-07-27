@@ -98,15 +98,35 @@ export default function LineageChainChips({
     setSaving(false)
   }
 
-  // צמתים מאומתים באותו דור — עבור הבורר
+  // נרמול שם להשוואה (הסרת רווחים כפולים, גרשיים/מקפים) — לזיהוי צומת הדור הקודם
+  const norm = (s: string) => String(s ?? '').replace(/["'`׳״]/g, '').replace(/\s+/g, ' ').trim()
+
+  // צומת הדור הקודם (pickerGen-1) בשרשרת הנוכחית — לפי השם+דור בצ'יפים.
+  // הבורר יציג *רק* את ילדיו (parent_id תואם), כדי שהבחירה תישאר ברצף היוחסין.
+  const prevGenNodeIds = useMemo(() => {
+    if (pickerGen == null || pickerGen <= 1) return null   // דור 1 (שורש) — אין הורה
+    const prevGen = pickerGen - 1
+    const prevChip = gens.find(g => g.generation === prevGen)
+    if (!prevChip) return null
+    // כל הצמתים בעץ שתואמים לשם+דור של הדור הקודם (בד"כ אחד, אך ייתכנו כפילויות)
+    const ids = allNodes
+      .filter(n => n.generation === prevGen && norm(n.name) === norm(prevChip.name))
+      .map(n => n.id)
+    return ids.length ? new Set(ids) : null
+  }, [pickerGen, gens, allNodes])
+
+  // צמתים מאומתים באותו דור — עבור הבורר. מסוננים לפי הדור הקודם ברצף:
+  // רק צמתים שההורה שלהם הוא הצומת של הדור הקודם בשרשרת. אם לא זוהה הדור
+  // הקודם (למשל דור 1) — מציגים את כל צמתי הדור (fallback).
   const pickerOptions = useMemo(() => {
     if (pickerGen == null) return []
     const term = q.trim()
     return allNodes
       .filter(n => n.generation === pickerGen && (n.status === 'verified' || !n.status))
+      .filter(n => !prevGenNodeIds || (n.parent_id != null && prevGenNodeIds.has(n.parent_id)))
       .filter(n => !term || n.name.includes(term))
       .slice(0, 60)
-  }, [pickerGen, q, allNodes])
+  }, [pickerGen, q, allNodes, prevGenNodeIds])
 
   // שיוך הצאצא לצומת שנבחר לדור מסוים — מחליף את הדור הזה ומעלה, ושומר את
   // הדורות שמתחת (atGeneration). השרשרת ממוזגת ונגזרת מחדש בשרת.

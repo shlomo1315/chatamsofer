@@ -165,15 +165,11 @@ export async function POST(request: NextRequest) {
         duplicate: 'in_progress',
       }, { status: 409 })
     }
-    const [byBen, bySpouse, byChild, byMaternity] = await Promise.all([
-      admin.from('beneficiaries').select('id').in('id_number', idVariants).limit(1),
-      admin.from('beneficiaries').select('id').in('spouse_id_number', idVariants).limit(1),
-      admin.from('beneficiaries').select('id').contains('children', [{ id_number: idNorm }]).limit(1),
-      admin.from('maternity_aids').select('id').in('baby_id_number', idVariants).limit(1),
-    ])
-    if ((byBen.data?.length || bySpouse.data?.length || byChild.data?.length || byMaternity.data?.length)) {
-      return NextResponse.json({ error: `הילד/ה כבר רשום/ה במערכת — תעודת זהות ${idNorm} כבר קיימת. לא ניתן להגיש בקשה כפולה.` }, { status: 409 })
-    }
+    // ⚠️ החסימה היחידה כאן היא על *בקשת לידה כפולה* (נבדקה למעלה מול maternity_aids).
+    // בעבר חסמנו גם אם הת"ז קיימת כ"ילד רשום" (children) או כמוטב — וזה חסם
+    // בטעות יולדות שרשמו את ילדיהן ברישום (כולל התינוק החדש) ואז ניסו להגיש
+    // בקשת לידה עליו. חלון ההגשה (30 יום מהלידה) ממילא מגן מפני שימוש לרעה,
+    // ולכן ילד רשום שאין עליו בקשת לידה — מותר להגיש עליו.
   }
 
   const { error } = await admin.from('maternity_aids').insert({
