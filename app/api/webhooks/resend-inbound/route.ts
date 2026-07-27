@@ -405,11 +405,20 @@ export async function POST(request: NextRequest) {
   const envelopeRecipients = (Array.isArray(data.to) ? data.to : [data.to])
     .map((t: unknown) => parseAddress(String(t ?? '')).email)
     .filter(Boolean)
+  // ⚠️ קריטי: Resend Inbound *לא* שולח headers ב-webhook (אין 'to'/'delivered-to'
+  // בכותרות). הנמענים האמיתיים — כולל תיבת המחלקה — נמצאים ב-data.received_for
+  // (רשימת ה-envelope recipients בפועל). בלי זה הכול נופל ל-to של ה-envelope
+  // שהוא כתובת ה-copy של ה-subdomain (copy@in.chasamsofer.info) → הכול לוֹפֵת ל-office.
+  // לכן received_for הוא מקור הנמענים הראשון בעדיפות.
+  const receivedForRecipients = (Array.isArray(data.received_for) ? data.received_for : [data.received_for])
+    .map((t: unknown) => parseAddress(String(t ?? '')).email)
+    .filter(Boolean)
   // ⚠️ הסדר כאן קובע לאיזו תיבה המייל משויך — knownDept לוקח את ההתאמה
   // הראשונה. מייל שנשלח לתיבה 10 ובו office ב-Cc (או בשרשור תגובות) היה
   // מגיע ל-office במקום לתיבה 10. לכן: נמענים *ישירים* קודם, ו-Cc אחרון.
   const directRecipients = [
-    ...extractEmails(getHeader(data.headers, 'delivered-to')),   // הנמען בפועל — הכי אמין
+    ...receivedForRecipients,                                    // ← הנמענים האמיתיים מ-Resend (envelope)
+    ...extractEmails(getHeader(data.headers, 'delivered-to')),   // הנמען בפועל — הכי אמין (אם headers כן נשלחו)
     ...extractEmails(getHeader(data.headers, 'x-original-to')),
     ...extractEmails(getHeader(data.headers, 'x-gm-original-to')),
     ...extractEmails(getHeader(data.headers, 'x-forwarded-to')),
