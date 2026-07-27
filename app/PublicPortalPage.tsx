@@ -295,13 +295,22 @@ function BabyFields({
                 if (digits.length < 9) return
                 if (!validateIsraeliId(digits)) { setIdError(''); return }
               }
-              // בדיקה מיידית — האם כבר רשום במערכת (כצאצא או כילד אצל מישהו)
+              // בדיקה מיידית — האם כבר רשום במערכת.
+              // ⚠️ ילד שכבר רשום (foundAsChild) — לא חוסמים! להיפך: ההורים כבר
+              // מילאו את פרטיו ברישום, ולכן ממלאים אוטומטית את המין והשם (חוויה
+              // חלקה). רק ת"ז של *מוטב רשום* (found) — חוסמים (תינוק עם ת"ז מבוגר).
               try {
                 const param = idType === 'id' ? `id=${encodeURIComponent(val)}` : `passport=${encodeURIComponent(val)}`
                 const r = await fetch(`/api/portal/lookup?${param}`)
                 const d = await r.json()
-                if (d.found || d.foundAsChild) { setIdError('תעודת זהות זו כבר רשומה במערכת — לא ניתן לרשום אותה שוב'); return }
+                if (d.found) { setIdError('תעודת זהות זו רשומה במערכת כמוטב — נא לבדוק את המספר'); return }
                 setIdError('')
+                // מילוי אוטומטי מפרטי הילד הקיים (מין + שם), אם עדיין ריקים
+                if (d.foundAsChild && d.childData) {
+                  const cd = d.childData
+                  if (cd.gender && !gender) onChange('baby_gender', cd.gender)
+                  if (cd.name && !name) onChange('baby_name', cd.name)
+                }
               } catch { /* תיתפס בעת השליחה */ }
               // ⚠️ בדיקה נוספת — האם כבר קיימת בקשת לידה *בתהליך* על אותו תינוק.
               // מתריע מיד בטופס, כדי שלא ימלא הכל ויידחה רק בהגשה. האכיפה עצמה
