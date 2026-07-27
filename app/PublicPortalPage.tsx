@@ -1611,6 +1611,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       if (!streetPart) { setError('אנא הזן שם רחוב'); return }
       if (!housePart) { setError('אנא הזן מספר בית'); return }
     }
+    // השתייכות קהילתית — שדה חובה
+    if (!regForm.community_affiliation.trim()) { setError('אנא הזן השתייכות קהילתית'); return }
     // ברישום כילד רשום — השיוך אוטומטי מההורה. אחרת — דרך בורר הדורות.
     if (!childParentLineage) {
       if (!lineageDeclared) {
@@ -3043,8 +3045,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </Field>
                   </div>
                   <div className="col-span-2">
-                    <Field label={<EditableText k="reg.community" />} hint={<EditableText k="reg.community.hint" />}>
-                      <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" />
+                    <Field label={<EditableText k="reg.community" />} required hint={<EditableText k="reg.community.hint" />}>
+                      <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" required />
                     </Field>
                   </div>
                 </div>

@@ -61,6 +61,12 @@ export async function POST(request: NextRequest) {
   if (!city || !String(city).trim()) {
     return NextResponse.json({ error: 'יש להזין עיר מגורים' }, { status: 400 })
   }
+
+  // ⚠️ השתייכות קהילתית — שדה חובה. נאכף בשרת כדי לכסות גם את טופס הנדרים
+  // (matara.pro) שמגיע ישירות ל-API ולא עובר את בדיקת הטופס הציבורי.
+  if (!community_affiliation || !String(community_affiliation).trim()) {
+    return NextResponse.json({ error: 'יש להזין השתייכות קהילתית' }, { status: 400 })
+  }
   {
     const addr = String(address ?? '').trim()
     const m = addr.match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/)
