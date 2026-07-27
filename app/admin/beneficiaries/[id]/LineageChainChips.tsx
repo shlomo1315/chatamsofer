@@ -117,9 +117,11 @@ export default function LineageChainChips({
     finally { setAssigning(false) }
   }
 
+  // תגית בן/חתן — רקע לבן מלא וטקסט כהה, כדי שתבלוט ברור על הצ'יפ הצבעוני
+  // (כחול/כתום/אדום). בן=כחול כהה · חתן=ענבר כהה.
   const relTag = (r?: 'son' | 'son_in_law' | null) =>
     (r === 'son' || r === 'son_in_law')
-      ? <span className="text-[10px] font-semibold bg-white/70 rounded px-1 mr-1">{r === 'son' ? 'בן' : 'חתן'}</span>
+      ? <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 mr-1 bg-white ${r === 'son' ? 'text-blue-700' : 'text-amber-700'}`}>{r === 'son' ? 'בן' : 'חתן'}</span>
       : null
 
   return (
