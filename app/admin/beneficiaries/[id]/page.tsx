@@ -4,6 +4,7 @@ import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, Fil
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import DocsFixHistoryBanner from './DocsFixHistoryBanner'
+import LineageAssignEditor from './LineageAssignEditor'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
@@ -374,6 +375,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
       {/* ציון אמינות יוחסין — ייעוצי, לא מאשר */}
       <LineageReliabilityPanel beneficiaryId={id} />
+
+      {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית) */}
+      <div className="flex justify-end">
+        <LineageAssignEditor beneficiaryId={id} currentNodeId={beneficiary.lineage_node_id ?? null} />
+      </div>
 
       {/* visual tree with this beneficiary's branch highlighted */}
       <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />
