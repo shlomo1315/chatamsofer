@@ -58,7 +58,8 @@ export default function ReliabilityView({ res, beneficiaryId, manualMarks }: {
   const chainGens = (res.claimedPath ?? []).map(c => ({
     generation: c.generation,
     name: c.generation === 1 ? CHATAM_SOFER : c.name,
-    verified: c.generation === 1 ? true : c.verified,
+    // צבע לפי אימות: מאושר=כחול, אחרת ממתין=כתום (פאנל ייעוצי). דור 1 תמיד מאושר.
+    status: (c.generation === 1 || c.verified ? 'verified' : 'pending') as 'verified' | 'pending',
     relation: null,
   }))
   return (

@@ -86,19 +86,24 @@ async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   return map
 }
 
-// מחשב אילו דורות ב-lineage_chain *סוטים* מהמאושר — דור שאין לו צומת מאומת
-// (verified) באותו דור עם שם תואם. זהה ללוגיקה בכרטסת הצאצא.
-async function computeDeviatingGens(
+type GenStatus = 'verified' | 'pending' | 'rejected' | null
+// מחשב את סטטוס הצומת התואם בעץ לכל דור ב-lineage_chain (verified=כחול /
+// pending/אין=כתום / rejected=אדום). זהה ללוגיקה בכרטסת הצאצא.
+async function computeGenStatus(
   chain: { generation: number; name: string }[],
-): Promise<Set<number>> {
-  const out = new Set<number>()
+): Promise<Map<number, GenStatus>> {
+  const out = new Map<number, GenStatus>()
   if (!chain.length || !isSupabaseConfigured()) return out
   const map = await getLineageMap()
-  const verified = [...map.values()].filter(n => n.status === 'verified')
+  const nodes = [...map.values()]
   const { namesMatch } = await import('@/lib/hebrewName')
   for (const e of chain) {
-    const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
-    if (!ok) out.add(e.generation)
+    const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
+    const status: GenStatus = matches.find(n => n.status === 'verified') ? 'verified'
+      : matches.find(n => n.status === 'rejected') ? 'rejected'
+      : matches.length ? 'pending'
+      : null
+    out.set(e.generation, status)
   }
   return out
 }
@@ -145,10 +150,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const typedChain = Array.isArray(ben?.lineage_chain)
     ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
     : []
-  const [lineagePath, idDocs, deviatingGens] = await Promise.all([
+  const [lineagePath, idDocs, genStatus] = await Promise.all([
     getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
-    computeDeviatingGens(typedChain),
+    computeGenStatus(typedChain),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
@@ -286,12 +291,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                       return {
                         generation: c.generation,
                         name: isRoot ? CHATAM_SOFER : c.name,
-                        verified: isRoot ? true : !deviatingGens.has(c.generation),
+                        // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה)
+                        status: isRoot ? 'verified' : (genStatus.get(c.generation) ?? null),
                         relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
                       }
                     })
                     if (!gens.some(g => g.generation === 1)) {
-                      gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
+                      gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
                     }
                     return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} allNodes={lineageNodesArr} />
                   })()}

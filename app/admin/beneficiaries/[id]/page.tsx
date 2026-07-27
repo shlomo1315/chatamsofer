@@ -55,12 +55,17 @@ async function getAllLineageNodes(): Promise<LineageNode[]> {
   return (data ?? []) as LineageNode[]
 }
 
-// עיבוד סינכרוני מהצמתים שכבר נשלפו → מסלול הדורות + מפת הסטיות. ללא רשת נוספת.
+// סטטוס דור לצביעה: verified=כחול (מאושר) · pending=כתום (ממתין) · rejected=אדום (נדחה).
+// null = אין צומת תואם במאגר כלל (נחשב "ממתין" — כתום).
+export type GenStatus = 'verified' | 'pending' | 'rejected' | null
+
+// עיבוד סינכרוני מהצמתים שכבר נשלפו → מסלול הדורות + מפת סטטוס לכל דור. ללא רשת נוספת.
 async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, chain: { generation: number; name: string }[] = []): Promise<{
   path: string[]
   deviating: Set<number>
+  genStatus: Map<number, GenStatus>
 }> {
-  const out = { path: [] as string[], deviating: new Set<number>() }
+  const out = { path: [] as string[], deviating: new Set<number>(), genStatus: new Map<number, GenStatus>() }
   if (nodeId) {
     const map = new Map(nodes.map(n => [n.id, n]))
     let cur = map.get(nodeId)
@@ -71,6 +76,17 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
     const { namesMatch } = await import('@/lib/hebrewName')
     const verified = nodes.filter(n => n.status === 'verified')
     for (const e of chain) {
+      // הסטטוס האמיתי של הדור: הצומת התואם (לפי דור+שם) והסטטוס שלו בעץ.
+      // מעדיפים צומת verified; אם אין — לוקחים כל צומת תואם (pending/rejected);
+      // אם אין כלל — null (אין במאגר → נחשב ממתין).
+      const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
+      const vNode = matches.find(n => n.status === 'verified')
+      const status: GenStatus = vNode ? 'verified'
+        : matches.find(n => n.status === 'rejected') ? 'rejected'
+        : matches.length ? 'pending'
+        : null
+      out.genStatus.set(e.generation, status)
+      // deviating נשמר לתאימות: דור ≤5 שאינו verified = חשוד (להתראה הקופצת)
       const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
       if (!ok) out.deviating.add(e.generation)
     }
@@ -169,6 +185,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineageData = await computeLineageData(allNodes, beneficiary?.lineage_node_id, typedChain)
   const lineagePath = lineageData.path
   const deviatingGens = lineageData.deviating
+  const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
   // סטייה בתוך 5 הדורות הראשונים = סדר דורות חשוד → התראה קופצת בכניסה.
   const earlyDeviation = [...deviatingGens].some(g => g <= 5)
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
@@ -179,11 +196,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד ירוק).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
-  const alertGens: { generation: number; name: string; color: 'green' | 'red' | 'orange' }[] =
+  const alertColor = (s: 'verified' | 'pending' | 'rejected' | null): 'blue' | 'orange' | 'red' =>
+    s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : 'orange'
+  const alertGens: { generation: number; name: string; color: 'blue' | 'red' | 'orange' }[] =
     [...chainForMarks].sort((a, b) => a.generation - b.generation).map(c => ({
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
-      color: c.generation === 1 ? 'green' : (c.generation > 5 ? 'orange' : (deviatingGens.has(c.generation) ? 'red' : 'green')),
+      // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה). דור 1 תמיד מאושר.
+      color: c.generation === 1 ? 'blue' : alertColor(genStatus.get(c.generation) ?? null),
     }))
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
@@ -365,13 +385,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           return {
             generation: c.generation,
             name: isRoot ? CHATAM_SOFER : c.name,   // דור 1 תמיד החתם סופר
-            verified: isRoot ? true : !deviatingGens.has(c.generation),
+            // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה). דור 1 תמיד מאושר.
+            status: isRoot ? 'verified' : (genStatus.get(c.generation) ?? null),
             relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
           }
         })
         // אם משום מה אין דור 1 כלל בשרשרת — מוסיפים אותו בראש (החתם סופר קבוע).
         if (!gens.some(g => g.generation === 1)) {
-          gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
+          gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
         }
         return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} allNodes={allNodes} />
       })()}

@@ -2,22 +2,22 @@
 import { useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 
-// דור להצגה בחלונית — שם, מספר, וצבע (ירוק=תואם · אדום=שונה · כתום=נוסף).
+// דור להצגה בחלונית — שם, מספר, וצבע (כחול=מאושר · כתום=ממתין · אדום=נדחה).
 export interface AlertGen {
   generation: number
   name: string
-  color: 'green' | 'red' | 'orange'
+  color: 'blue' | 'red' | 'orange'
 }
 
 // חלונית התראה שקופצת בכניסה לכרטסת משפחה שסדר הדורות שלה אינו תקין —
 // יש דורות (בתוך 5 הראשונים) שאינם תואמים לנתיב המאושר במאגר. מציגה את *כל*
 // הדורות בצבעים כדי שהמנהל יראה מיד מה חורג. נסגרת בלחיצה, אינה חוסמת.
 const CHIP: Record<AlertGen['color'], string> = {
-  green:  'bg-green-100 text-green-800 border-green-400',
-  red:    'bg-red-100 text-red-800 border-red-400 font-bold',
-  orange: 'bg-orange-100 text-orange-800 border-orange-300',
+  blue:   'bg-blue-600 text-white border-blue-700 font-semibold',
+  red:    'bg-red-600 text-white border-red-700 font-bold',
+  orange: 'bg-orange-500 text-white border-orange-600 font-semibold',
 }
-const GEN_TXT: Record<AlertGen['color'], string> = { green: 'text-green-600', red: 'text-red-500', orange: 'text-orange-500' }
+const GEN_TXT: Record<AlertGen['color'], string> = { blue: 'text-blue-100', red: 'text-red-100', orange: 'text-orange-100' }
 
 export default function LineageAlertModal({ generations, allGens }: {
   generations: number[]            // הדורות החורגים (לטקסט)

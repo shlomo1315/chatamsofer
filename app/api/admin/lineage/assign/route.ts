@@ -31,10 +31,10 @@ export async function POST(request: NextRequest) {
   // כל צמתי העץ — לבניית השרשרת מהצומת הנבחר עד השורש
   const { data: allNodes, error: nErr } = await db
     .from('lineage_nodes')
-    .select('id, name, parent_id, generation, relation')
+    .select('id, name, parent_id, generation, relation, status')
   if (nErr) return NextResponse.json({ error: 'טעינת עץ הדורות נכשלה' }, { status: 500 })
 
-  type Node = { id: string; name: string; parent_id: string | null; generation: number; relation: string | null }
+  type Node = { id: string; name: string; parent_id: string | null; generation: number; relation: string | null; status: string }
   type ChainEntry = { generation: number; name: string; relation: string | null }
   const map = new Map<string, Node>((allNodes ?? []).map(n => [n.id, n as Node]))
   const chosen = map.get(nodeId)
@@ -68,11 +68,29 @@ export async function POST(request: NextRequest) {
   const update: Record<string, unknown> = { lineage_chain: chain }
   if (!hasBelow) update.lineage_node_id = nodeId
 
+  // ── החזרת סטטוס מ-deep_review ל-pending כשתוקנו 5 הדורות הראשונים ──
+  // צאצא נכנס ל-deep_review כי נגע ב-5 הדורות הראשונים. ברגע שכל דור ≤5
+  // בשרשרת החדשה תואם לצומת מאומת בעץ (verified) — הסטייה תוקנה, ולכן הסטטוס
+  // חוזר אוטומטית ל-pending (ממתין לאישור ראשוני). לא נוגעים בסטטוסים אחרים.
+  try {
+    const { data: ben } = await db.from('beneficiaries').select('eligibility_status').eq('id', String(beneficiaryId)).maybeSingle()
+    if (ben?.eligibility_status === 'deep_review') {
+      const { namesMatch } = await import('@/lib/hebrewName')
+      const nodesArr = (allNodes ?? []) as Node[]
+      // כל דור ≤5 (למעט דור 1 = החתם סופר, תמיד מאושר) חייב צומת verified תואם
+      const early = chain.filter(e => e.generation > 1 && e.generation <= 5)
+      const allEarlyVerified = early.every(e =>
+        nodesArr.some(n => n.status === 'verified' && n.generation === e.generation && namesMatch(n.name, e.name)),
+      )
+      if (allEarlyVerified) update.eligibility_status = 'pending'
+    }
+  } catch { /* בדיקת deep_review best-effort — לא חוסמת את השיוך */ }
+
   const { error: uErr } = await db
     .from('beneficiaries')
     .update(update)
     .eq('id', String(beneficiaryId))
   if (uErr) return NextResponse.json({ error: 'עדכון השיוך נכשל' }, { status: 500 })
 
-  return NextResponse.json({ ok: true, chain })
+  return NextResponse.json({ ok: true, chain, statusReverted: update.eligibility_status === 'pending' })
 }

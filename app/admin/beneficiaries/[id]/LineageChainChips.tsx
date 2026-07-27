@@ -3,11 +3,13 @@ import { useState, useMemo } from 'react'
 import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-// דור בשרשרת: שם, מספר דור, האם תואם לנתיב המאושר, ותגית בן/חתן.
+// דור בשרשרת: שם, מספר דור, סטטוס הצומת בעץ, ותגית בן/חתן.
 export interface ChainGen {
   generation: number
   name: string
-  verified: boolean          // תואם לצומת מאומת במאגר (רק רלוונטי עד דור 5)
+  // סטטוס הצומת המאושר התואם בעץ: 'verified'=כחול (מאושר) · 'pending'=כתום
+  // (ממתין) · 'rejected'=אדום (נדחה) · null=אין צומת תואם (נחשב ממתין).
+  status?: 'verified' | 'pending' | 'rejected' | null
   relation?: 'son' | 'son_in_law' | null
 }
 
@@ -21,23 +23,26 @@ export interface TreeNode {
   relation?: 'son' | 'son_in_law' | null
 }
 
-type Color = 'green' | 'red' | 'orange'
+// blue=מאושר · orange=ממתין לאימות · red=נדחה. צבעים חזקים ובולטים.
+type Color = 'blue' | 'orange' | 'red'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשרת הדורות. לחיצה על דור פותחת תפריט קטן:
 //   • "בחר צומת אחר" — בורר צמתים מאומתים מאותו דור; בחירה משייכת את הצאצא
 //     לצומת (lineage_node_id) והשרשרת נגזרת מחדש בשרת (/api/admin/lineage/assign).
-//   • "סמן ידנית" — צביעה ידנית ירוק/אדום (override), נשמר ב-/api/admin/lineage-marks.
-// צביעה אוטומטית: דור ≤5 שתואם למאושר → ירוק · דור ≤5 ששונה → אדום · דור >5 → כתום.
+//   • "סמן ידנית" — צביעה ידנית (override), נשמר ב-/api/admin/lineage-marks.
+// צביעה אוטומטית לפי *סטטוס הצומת בעץ* (בכל דור, כולל מעל 5):
+//   verified=כחול · pending/אין=כתום · rejected=אדום.
 // ─────────────────────────────────────────────────────────────────────────────
-const AUTO_DEPTH = 5
-
 const STYLE: Record<Color, string> = {
-  green:  'bg-green-100 text-green-800 border-green-400',
-  red:    'bg-red-100 text-red-800 border-red-400 font-bold',
-  orange: 'bg-orange-100 text-orange-800 border-orange-300',
+  blue:   'bg-blue-600 text-white border-blue-700 font-semibold',
+  orange: 'bg-orange-500 text-white border-orange-600 font-semibold',
+  red:    'bg-red-600 text-white border-red-700 font-bold',
 }
-const GEN_TXT: Record<Color, string> = { green: 'text-green-600', red: 'text-red-500', orange: 'text-orange-500' }
+const GEN_TXT: Record<Color, string> = { blue: 'text-blue-100', orange: 'text-orange-100', red: 'text-red-100' }
+// מיפוי סטטוס הצומת → צבע
+const statusColor = (s: ChainGen['status']): Color =>
+  s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : 'orange'
 
 export default function LineageChainChips({
   beneficiaryId, gens, initialMarks, allNodes = [],
@@ -56,13 +61,17 @@ export default function LineageChainChips({
   const [assigning, setAssigning] = useState(false)
   const [err, setErr] = useState('')
 
-  const autoColor = (g: ChainGen): Color => {
-    if (g.generation > AUTO_DEPTH) return 'orange'
-    return g.verified ? 'green' : 'red'
+  // צבע אוטומטי לפי סטטוס הצומת בעץ — בכל דור (כולל מעל 5). דור 1 (חתם סופר)
+  // תמיד מאושר. override ידני ('green'→כחול, 'red'→אדום) גובר.
+  const autoColor = (g: ChainGen): Color => statusColor(g.status)
+  const colorOf = (g: ChainGen): Color => {
+    const m = marks[String(g.generation)]
+    if (m === 'green') return 'blue'
+    if (m === 'red') return 'red'
+    return autoColor(g)
   }
-  const colorOf = (g: ChainGen): Color => marks[String(g.generation)] ?? autoColor(g)
 
-  // צביעה ידנית — מחזור אוטומטי → ירוק → אדום → אוטומטי
+  // צביעה ידנית — מחזור אוטומטי → מאושר(כחול) → נדחה(אדום) → אוטומטי
   const cycle = async (g: ChainGen) => {
     setMenuGen(null)
     const cur = marks[String(g.generation)]
@@ -139,7 +148,7 @@ export default function LineageChainChips({
                   </button>
                   <button type="button" onClick={() => cycle(g)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition-colors">
-                    <Palette size={13} className="text-slate-400" /> סמן ידנית (ירוק/אדום)
+                    <Palette size={13} className="text-slate-400" /> סמן ידנית (מאושר/נדחה)
                   </button>
                 </div>
               )}
@@ -148,9 +157,11 @@ export default function LineageChainChips({
         })}
         {saving && <Loader2 size={13} className="animate-spin text-slate-400" />}
       </div>
-      <p className="text-[11px] text-slate-400 mt-1.5">
-        ירוק = תואם למאושר (עד דור 5) · אדום = שונה מהמאושר · כתום = דורות נוספים.
-        לחצו על דור לבחירת צומת אחר או לסימון ידני.
+      <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> מאושר</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> ממתין לאימות</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> נדחה</span>
+        <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
       </p>
 
       {/* בורר צמתים — מודל */}
