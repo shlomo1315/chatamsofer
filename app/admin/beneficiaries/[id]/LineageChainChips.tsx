@@ -101,32 +101,36 @@ export default function LineageChainChips({
   // נרמול שם להשוואה (הסרת רווחים כפולים, גרשיים/מקפים) — לזיהוי צומת הדור הקודם
   const norm = (s: string) => String(s ?? '').replace(/["'`׳״]/g, '').replace(/\s+/g, ' ').trim()
 
-  // צומת הדור הקודם (pickerGen-1) בשרשרת הנוכחית — לפי השם+דור בצ'יפים.
-  // הבורר יציג *רק* את ילדיו (parent_id תואם), כדי שהבחירה תישאר ברצף היוחסין.
+  // צומת הדור הקודם (pickerGen-1) בשרשרת הנוכחית — הצמתים ה*מאושרים* (verified)
+  // שתואמים לשם+דור בצ'יפים. הבורר יציג *רק* את ילדיהם (parent_id תואם), כדי
+  // שהבחירה תישאר ברצף היוחסין. דור 2 — ההורה הוא חתם סופר (דור 1), תמיד מזוהה.
   const prevGenNodeIds = useMemo(() => {
     if (pickerGen == null || pickerGen <= 1) return null   // דור 1 (שורש) — אין הורה
     const prevGen = pickerGen - 1
     const prevChip = gens.find(g => g.generation === prevGen)
     if (!prevChip) return null
-    // כל הצמתים בעץ שתואמים לשם+דור של הדור הקודם (בד"כ אחד, אך ייתכנו כפילויות)
     const ids = allNodes
-      .filter(n => n.generation === prevGen && norm(n.name) === norm(prevChip.name))
+      .filter(n => n.generation === prevGen && n.status === 'verified' && norm(n.name) === norm(prevChip.name))
       .map(n => n.id)
     return ids.length ? new Set(ids) : null
   }, [pickerGen, gens, allNodes])
 
-  // צמתים מאומתים באותו דור — עבור הבורר. מסוננים לפי הדור הקודם ברצף:
-  // רק צמתים שההורה שלהם הוא הצומת של הדור הקודם בשרשרת. אם לא זוהה הדור
-  // הקודם (למשל דור 1) — מציגים את כל צמתי הדור (fallback).
+  // ⚠️ הדור הקודם אינו מסודר: קיים בשרשרת אך הצומת שלו אינו מאושר בעץ.
+  // במקרה כזה אי אפשר לסנן את הדור הנוכחי לפי ההורה — ולכן חוסמים את הבורר
+  // ומורים לתקן קודם את הדור הקודם. חייבים לסדר דור-אחר-דור לפי הרצף.
+  // (דור 2 פטור — ההורה שלו הוא חתם סופר, תמיד מזוהה.)
+  const prevGenUnresolved = pickerGen != null && pickerGen > 2 && prevGenNodeIds == null
+
+  // צמתים מאומתים באותו דור — מסוננים לפי הורה (הדור הקודם ברצף).
   const pickerOptions = useMemo(() => {
-    if (pickerGen == null) return []
+    if (pickerGen == null || prevGenUnresolved) return []
     const term = q.trim()
     return allNodes
       .filter(n => n.generation === pickerGen && (n.status === 'verified' || !n.status))
       .filter(n => !prevGenNodeIds || (n.parent_id != null && prevGenNodeIds.has(n.parent_id)))
       .filter(n => !term || n.name.includes(term))
       .slice(0, 60)
-  }, [pickerGen, q, allNodes, prevGenNodeIds])
+  }, [pickerGen, q, allNodes, prevGenNodeIds, prevGenUnresolved])
 
   // שיוך הצאצא לצומת שנבחר לדור מסוים — מחליף את הדור הזה ומעלה, ושומר את
   // הדורות שמתחת (atGeneration). השרשרת ממוזגת ונגזרת מחדש בשרת.
@@ -207,6 +211,19 @@ export default function LineageChainChips({
             </h2>
             <p className="text-xs text-slate-500 mb-3">בחרו צומת מאומת מדור {pickerGen}. השרשרת המלאה תיגזר אוטומטית מהצומת עד השורש.</p>
 
+            {/* ⚠️ חסימה — הדור הקודם עדיין לא מסודר. חייבים דור-אחר-דור. */}
+            {prevGenUnresolved ? (
+              <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-4 text-center">
+                <p className="text-sm font-bold text-amber-900 leading-relaxed">
+                  יש לתקן קודם את דור {(pickerGen ?? 0) - 1}.
+                </p>
+                <p className="text-xs text-amber-800 mt-1.5 leading-relaxed">
+                  לא ניתן לבחור צומת לדור {pickerGen} כל עוד הדור הקודם אינו מסודר לפי העץ המאושר.
+                  סדרו את הדורות לפי הסדר — דור אחר דור.
+                </p>
+              </div>
+            ) : (
+            <>
             <div className="relative mb-3">
               <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש לפי שם…" autoFocus
@@ -228,6 +245,8 @@ export default function LineageChainChips({
                 </button>
               ))}
             </div>
+            </>
+            )}
           </div>
         </div>
       )}

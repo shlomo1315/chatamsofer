@@ -688,6 +688,13 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
         )
       })}
 
+      {/* הנחיה מודגשת — מיד אחרי דור החתם סופר, לפני בחירת דור 2 */}
+      <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 px-4 py-3 mb-3">
+        <p className="text-sm font-bold text-indigo-900 leading-relaxed">
+          שימו לב! יש לבחור מתוך הרשימה הקיימת בכל דור, בדקו היטב ורק במידה ולא מצאתם את הדור המבוקש ניתן להזין אותו ידנית, אין להוסיף דור ידני במידה והוא קיים במערכת!
+        </p>
+      </div>
+
       {/* שורת הנרשם — אחרי שלחץ "הוסף אותי" */}
       {selfAdded && (
         <div className="flex items-stretch gap-3">
@@ -2427,12 +2434,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </p>
               <p className="text-[15px] font-semibold text-red-800 leading-8 bg-white/80 border-r-4 border-red-400 rounded-lg px-4 py-3" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
                 גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
-              </p>
-            </div>
-            {/* הנחיה מודגשת — לבחור מהרשימה הקיימת, ורק אם אין למצוא להזין ידנית */}
-            <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 px-4 py-3 mb-5">
-              <p className="text-sm font-bold text-indigo-900 leading-relaxed">
-                שימו לב! יש לבחור מתוך הרשימה הקיימת בכל דור. בדקו היטב, ורק במידה ולא מצאתם את הדור המבוקש — ניתן להזין אותו ידנית. אין להוסיף דור ידני במידה וזה קיים במערכת.
               </p>
             </div>
             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-all duration-150">
