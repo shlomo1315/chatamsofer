@@ -57,6 +57,23 @@ export async function GET() {
     if (!row.beneficiary_id) byDept[d].unmatched += 1
   }
 
+  // זמן הסנכרון האחרון בפועל לכל תיבה — מתוך היסטוריית ההרצות (gmail_sync_runs),
+  // מקור אמת אמין יותר מ-last_sync_at (שלעיתים נשאר ריק). לוקחים את ה-finished_at
+  // האחרון פר-account_id.
+  const lastRunByAccount: Record<string, string> = {}
+  {
+    const { data: allRuns } = await db
+      .from('gmail_sync_runs')
+      .select('account_id, finished_at')
+      .not('finished_at', 'is', null)
+      .order('finished_at', { ascending: false })
+      .limit(200)
+    for (const r of (allRuns ?? []) as { account_id?: string | null; finished_at?: string }[]) {
+      const aid = r.account_id ?? ''
+      if (aid && r.finished_at && !lastRunByAccount[aid]) lastRunByAccount[aid] = r.finished_at
+    }
+  }
+
   // ── תיבות מטבלת gmail_accounts (ריבוי תיבות) ──
   const { data: accounts, error: accErr } = await db
     .from('gmail_accounts')
@@ -74,7 +91,8 @@ export async function GET() {
         department: dept,
         departmentLabel: deptLabel(dept),
         connected: Boolean(a.is_active),
-        lastSyncAt: (a.last_sync_at as string) ?? null,
+        // עדיפות לזמן מהיסטוריית ההרצות; נפילה ל-last_sync_at
+        lastSyncAt: lastRunByAccount[String(a.id)] ?? (a.last_sync_at as string) ?? null,
         totalSynced: stats.total,
         lastSyncCount: Number(a.last_sync_count ?? 0),
         unmatched: stats.unmatched,
