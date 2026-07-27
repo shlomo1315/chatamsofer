@@ -37,6 +37,22 @@ export async function GET() {
     cc: hdrOf(m.headers, 'cc'),
   }))
 
+  // ⚠️ הפיילוד הגולמי של המייל האחרון — לראות *מה בדיוק* Resend שולח:
+  // האם headers ריקים? מה שמות הכותרות שכן קיימות? זה מכריע אם הבעיה
+  // בפורמט ה-headers או שהנמענים בכלל לא מגיעים מ-Resend.
+  const latest = (data ?? [])[0]
+  const rawHeaders = latest?.headers
+  const headerNames = Array.isArray(rawHeaders)
+    ? rawHeaders.map((h) => String((h as { name?: string })?.name ?? ''))
+    : (rawHeaders && typeof rawHeaders === 'object' ? Object.keys(rawHeaders as object) : [])
+  const rawHeadersSample = {
+    type: Array.isArray(rawHeaders) ? 'array' : typeof rawHeaders,
+    count: Array.isArray(rawHeaders) ? rawHeaders.length : headerNames.length,
+    headerNames: headerNames.slice(0, 40),
+    // הערכים של כותרות הנמענים שכן קיימות
+    toRelated: headerNames.filter(n => /^(to|delivered-to|x-original-to|cc|x-forwarded-to|received)$/i.test(n)),
+  }
+
   const rows = (data ?? []).map(m => {
     // מה המחלקה *צריכה* להיות לפי כתובת הנמען שנשמרה
     const expectedDept = m.to_email ? departmentByEmail(String(m.to_email))?.key ?? null : null
@@ -60,6 +76,7 @@ export async function GET() {
     emptyToEmail: rows.filter(r => r.to_email === '(ריק!)').length,
     note: 'mismatch=true → המייל נשמר במחלקה שאינה תואמת לכתובת הנמען. to_email ריק → הניתוב לא זיהה נמען.',
     recipientHeaders,
+    rawHeadersSample,
     rows,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
