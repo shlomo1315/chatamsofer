@@ -247,10 +247,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                           <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
                         </span>
                       ))}
-                      {lineageManual.map((name, i) => (
+                      {/* ⚠️ lineage_manual מוצג *רק* כשאין נתיב מהעץ (lineagePath ריק).
+                          כשיש lineage_node_id, lineagePath כבר מכיל את השרשרת המלאה,
+                          ו-lineage_manual מכיל את אותם שמות — שרשורם גרם להכפלת דורות. */}
+                      {lineagePath.length === 0 && lineageManual.map((name, i) => (
                         <span key={`m-${i}`} className="flex items-center gap-1.5">
-                          <ChevronLeft size={12} className="text-slate-300" />
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {lineagePath.length + 1 + i}</span>{name}</span>
+                          {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {i + 1}</span>{name}</span>
                         </span>
                       ))}
                     </div>
