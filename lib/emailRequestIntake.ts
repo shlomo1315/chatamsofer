@@ -316,5 +316,7 @@ export async function buildDraftLinks(
     const prefix = `בקשת סיוע ${maritalStatus}` // "בקשת סיוע אלמן" / "בקשת סיוע אלמנה"
     links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix), open: isOpen('widow') })
   }
-  return links
+  // ⚠️ מחלקה סגורה (שער סגור בהגדרות) — לא מוצגת כלל, לא מאפור. המשתמש ביקש
+  // שכפתור של מחלקה שאינה פעילה לא יופיע בכלל, גם במייל וגם בטופס הציבורי.
+  return links.filter(l => l.open)
 }
