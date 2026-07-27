@@ -381,20 +381,23 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // ── Tab: הטבות בעבר (מה שסומן בעת ההרשמה) ──
   const pb = beneficiary.past_benefits
-  // אילו חגים סומנו — מוצג בסוגריים ליד "מענק לקראת החגים" כדי שיהיה ברור *איזה* חג התקבל
+  // אילו חגים סומנו — מוצגים כרשימה אנכית (כל חג בשורה) מתחת ל"מענק לקראת החגים"
   const holidayNames = pb ? ([
     pb.tishrei_5786 && 'תשרי תשפ"ו',
     pb.pesach_5786 && 'פסח תשפ"ו',
     pb.shavuot_5786 && 'שבועות תשפ"ו',
   ].filter(Boolean) as string[]) : []
+  // פריטי ההטבות הפשוטים (מחרוזת אחת לכל פריט). מענק החגים מטופל בנפרד ברינדור
+  // כי הוא מציג רשימת חגים אנכית ולא מחרוזת בודדת.
   const pastBenefitItems = pb ? ([
     pb.recovery_home && 'בית החלמה ליולדות',
     pb.food_card && 'כרטיס מזון ליולדות',
-    pb.holiday_grant && `מענק לקראת החגים${holidayNames.length ? ` (${holidayNames.join(', ')})` : ''}`,
     pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
     pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
     pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
   ].filter(Boolean) as string[]) : []
+  // האם יש הטבה כלשהי להצגה (כולל מענק חגים שמטופל בנפרד)
+  const hasAnyPastBenefit = pastBenefitItems.length > 0 || !!(pb && pb.holiday_grant)
   const pastBenefitsTab = (
     <Card>
       <div className="flex items-center gap-2 mb-4">
@@ -405,22 +408,33 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <p className="text-center text-slate-400 text-sm py-6">לא מולא מידע על הטבות בעבר בעת ההרשמה</p>
       ) : (
         <>
-          {pastBenefitItems.length > 0 ? (
+          {hasAnyPastBenefit ? (
             <ul className="flex flex-col gap-2">
               {pastBenefitItems.map((it, i) => (
                 <li key={i} className="flex items-center gap-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
                   <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" /> {it}
                 </li>
               ))}
+              {/* מענק החגים — כותרת ואז כל חג בשורה נפרדת מתחתיה */}
+              {pb.holiday_grant && (
+                <li className="text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" /> מענק לקראת החגים
+                  </div>
+                  {holidayNames.length > 0 && (
+                    <ul className="mt-1.5 mr-4.5 flex flex-col gap-1">
+                      {holidayNames.map((h, i) => (
+                        <li key={i} className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-300 flex-shrink-0" /> {h}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )}
             </ul>
           ) : (
             <p className="text-sm text-slate-400 py-2">המבקש סימן שלא קיבל הטבות בעבר מאיגוד הצאצאים.</p>
-          )}
-          {pb.notes && (
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <h3 className="text-xs font-semibold text-slate-500 mb-1">הערות המבקש</h3>
-              <p className="text-sm text-slate-700 whitespace-pre-wrap">{pb.notes}</p>
-            </div>
           )}
           {pb.update_topics && pb.update_topics.length > 0 && (
             <div className="mt-4 pt-3 border-t border-slate-100">
@@ -431,6 +445,20 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             </div>
           )}
         </>
+      )}
+    </Card>
+  )
+  // ── Tab: הערות המבקש (past_benefits.notes) — הופרד מטאב "הטבות בעבר" ──
+  const requestNotesTab = (
+    <Card>
+      <div className="flex items-center gap-2 mb-4">
+        <FileText size={16} className="text-amber-500" />
+        <h2 className="text-xs font-semibold text-slate-500 uppercase">הערות המבקש</h2>
+      </div>
+      {pb?.notes ? (
+        <p className="text-sm text-slate-700 whitespace-pre-wrap">{pb.notes}</p>
+      ) : (
+        <p className="text-center text-slate-400 text-sm py-6">לא נכתבו הערות על ידי המבקש</p>
       )}
     </Card>
   )
@@ -487,6 +515,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },
         { key: 'children', label: `ילדים (${kids.length})`, accent: 'emerald', icon: <Users size={15} />, content: childrenTab },
         { key: 'past_benefits', label: 'הטבות בעבר', accent: 'rose', icon: <Gift size={15} />, content: pastBenefitsTab },
+        { key: 'request_notes', label: 'הערות המבקש', accent: 'amber', icon: <FileText size={15} />, content: requestNotesTab },
         { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },

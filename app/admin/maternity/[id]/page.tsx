@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ChevronLeft, ExternalLink, Mail, Download, Heart, Star } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -20,6 +20,7 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
+import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -68,18 +69,37 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
 
 // מטמון קצר-מועד למפת צמתי השושלת — נמנע מסריקת כל הטבלה בכל טעינת כרטסת.
 // השושלת כמעט ואינה משתנה, ולכן TTL של 5 דקות מזרז מאוד טעינות חוזרות.
-type LineageNodeLite = { id: string; name: string; parent_id: string | null }
+// generation + status נדרשים לצביעת הצ'יפים (ירוק=מאומת / אדום=סוטה / כתום=נוסף),
+// בדיוק כמו בכרטסת הצאצא.
+type LineageNodeLite = { id: string; name: string; parent_id: string | null; generation: number; status: string }
 let _lineageCache: { at: number; map: Map<string, LineageNodeLite> } | null = null
 const LINEAGE_TTL_MS = 5 * 60_000
 async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   const now = Date.now()
   if (_lineageCache && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
   const supabase = await createClient()
-  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id')
+  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id, generation, status')
   if (error) throw error
   const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
   _lineageCache = { at: now, map }
   return map
+}
+
+// מחשב אילו דורות ב-lineage_chain *סוטים* מהמאושר — דור שאין לו צומת מאומת
+// (verified) באותו דור עם שם תואם. זהה ללוגיקה בכרטסת הצאצא.
+async function computeDeviatingGens(
+  chain: { generation: number; name: string }[],
+): Promise<Set<number>> {
+  const out = new Set<number>()
+  if (!chain.length || !isSupabaseConfigured()) return out
+  const map = await getLineageMap()
+  const verified = [...map.values()].filter(n => n.status === 'verified')
+  const { namesMatch } = await import('@/lib/hebrewName')
+  for (const e of chain) {
+    const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
+    if (!ok) out.add(e.generation)
+  }
+  return out
 }
 
 // סדר הדורות — נתיב משויך השושלת מהשורש ועד הצומת הנבחר.
@@ -122,15 +142,18 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const _tAid = Date.now()
   const ben = aid?.beneficiary as Beneficiary | undefined
   const typedChain = Array.isArray(ben?.lineage_chain)
-    ? (ben.lineage_chain as { generation: number; name: string }[])
+    ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
     : []
-  const [lineagePath, idDocs] = await Promise.all([
+  const [lineagePath, idDocs, deviatingGens] = await Promise.all([
     getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
+    computeDeviatingGens(typedChain),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
+  // סימונים ידניים (override צבע) — כמו בכרטסת הצאצא
+  const manualMarks = ((ben as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | undefined)?.lineage_manual_marks) ?? {}
 
   if (!aid && isSupabaseConfigured()) notFound()
 
@@ -239,25 +262,36 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     <GitBranch size={14} className="text-violet-500" />
                     <span className="text-xs font-semibold text-slate-500 uppercase">סדר הדורות</span>
                   </div>
-                  {(lineagePath.length > 0 || lineageManual.length > 0) && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {lineagePath.map((name, i) => (
-                        <span key={`l-${i}`} className="flex items-center gap-1.5">
-                          {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-100"><span className="text-violet-400 ml-1">דור {i + 1}</span>{name}</span>
-                        </span>
-                      ))}
-                      {/* ⚠️ lineage_manual מוצג *רק* כשאין נתיב מהעץ (lineagePath ריק).
-                          כשיש lineage_node_id, lineagePath כבר מכיל את השרשרת המלאה,
-                          ו-lineage_manual מכיל את אותם שמות — שרשורם גרם להכפלת דורות. */}
-                      {lineagePath.length === 0 && lineageManual.map((name, i) => (
-                        <span key={`m-${i}`} className="flex items-center gap-1.5">
-                          {i > 0 && <ChevronLeft size={12} className="text-slate-300" />}
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100"><span className="text-amber-400 ml-1">דור {i + 1}</span>{name}</span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {/* צ'יפים צבועים לפי סטטוס (ירוק=מאומת / אדום=סוטה / כתום=נוסף)
+                      + סימון ידני — זהה לכרטסת הצאצא. מקור אחד בלבד (chain או path),
+                      כדי שלא תחזור ההכפלה בין lineagePath ל-lineage_manual. */}
+                  {(() => {
+                    const CHATAM_SOFER = 'מרן החתם סופר זי"ע'
+                    const chainSorted = [...typedChain]
+                      .filter(e => e && typeof e.name === 'string' && e.name.trim())
+                      .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
+                    const source: { generation: number; name: string; relation?: string | null }[] =
+                      chainSorted.length
+                        ? chainSorted
+                        : [
+                            ...lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null })),
+                            ...lineageManual.map((name, i) => ({ generation: lineagePath.length + 1 + i, name, relation: null })),
+                          ]
+                    if (!source.length) return null
+                    const gens: ChainGen[] = source.map(c => {
+                      const isRoot = c.generation === 1
+                      return {
+                        generation: c.generation,
+                        name: isRoot ? CHATAM_SOFER : c.name,
+                        verified: isRoot ? true : !deviatingGens.has(c.generation),
+                        relation: isRoot ? null : ((c.relation as 'son' | 'son_in_law' | null | undefined) ?? null),
+                      }
+                    })
+                    if (!gens.some(g => g.generation === 1)) {
+                      gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
+                    }
+                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} />
+                  })()}
                   {ben.lineage_node_id && (
                     <div className="mt-3">
                       <LineageTreeToggle nodeId={ben.lineage_node_id} />
