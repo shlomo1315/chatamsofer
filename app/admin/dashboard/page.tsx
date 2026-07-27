@@ -6,6 +6,7 @@ import {
 import Link from 'next/link'
 import { unstable_cache } from 'next/cache'
 import { getServiceClient } from '@/lib/apiAuth'
+import { getPendingTasks } from '@/lib/pendingTasks'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 import PendingTasksPanel from './PendingTasksPanel'
 
@@ -149,17 +150,11 @@ function getGreeting() {
 
 export default async function DashboardPage() {
   const s = await getStats()
-  // מנכים את הבקשות שהוסתרו מהלוח כדי שהמונה יתאים לרשימה בפאנל (שגם היא מסננת אותן).
-  // ⚠️ ניכוי *פר-סוג*: הסתרת משימה מסוג אחד לא מנכה ממונה של סוג אחר. ניכוי גלובלי
-  // גרם ל"ממתינים לטיפול=0" בעוד "עזר יולדות → בקשות לאישור=2" (חוסר עקביות בדשבורד).
-  const d = s.dismissedByType
-  const net = (count: number, type: string) => Math.max(0, count - (d[type] ?? 0))
-  const pendingTotal =
-    net(s.pending, 'beneficiary') +
-    net(s.pendingLoans, 'loan') +
-    net(s.maternityPending, 'maternity') +
-    net(s.widowPending, 'widow') +
-    net(s.aidPending, 'financial_aid')
+  // "ממתינים לטיפול" — נספר מאותו מקור אמת שהפאנל משתמש בו (getPendingTasks),
+  // כדי שהכרטיס והרשימה יראו *בדיוק* אותו מספר. הניכוי-ספירה הקודם נתן פער
+  // (כרטיס 1, רשימה 4) כשהיו שורות dismissed יתומות שכבר לא ממתינות.
+  const svc = getServiceClient()
+  const pendingTotal = svc ? (await getPendingTasks(svc)).length : 0
 
   return (
     <div className="flex flex-col gap-8 pb-10">
