@@ -142,6 +142,28 @@ export async function register() {
     console.log('[legacy-sync] hourly scheduler started')
   }
 
+  // ── גיבוי יומי מלא ל-Google Drive — מדי יום בחצות שעון ישראל ──
+  // ⚠️ החליף את שירות ה-curl החיצוני שנשבר בשקט (curl parse error) ולא גיבה
+  // 6 ימים בלי שאיש ידע. worker פנימי עמיד + התראת מייל אם עבר יום בלי גיבוי.
+  // ה-worker אידמפוטנטי (גיבוי אחד ליום). להשבתה: DAILY_BACKUP_DISABLED=1.
+  if (process.env.DAILY_BACKUP_DISABLED !== '1') {
+    let lastBackupCheckDate = ''
+    const checkBackup = async () => {
+      const { date, hour } = israelParts()
+      if (hour !== 0 || date === lastBackupCheckDate) return
+      lastBackupCheckDate = date
+      try {
+        const { runDailyBackup, checkBackupFreshness } = await import('@/lib/dailyBackup')
+        const res = await runDailyBackup()
+        console.log(`[daily-backup] daily run · ok=${res.ok}` + (res.skipped ? ' (skipped)' : '') + (res.filename ? ` file=${res.filename} ${res.sizeMB}MB` : '') + (res.error ? ` error=${res.error}` : ''))
+        // שומר סף — מתריע אם משום מה הגיבוי לא התעדכן
+        await checkBackupFreshness()
+      } catch (err) { console.error('[daily-backup] daily run failed', err) }
+    }
+    setTimeout(() => { void checkBackup(); setInterval(() => { void checkBackup() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[daily-backup] daily midnight (Israel) scheduler started')
+  }
+
   // ── מנוע הדיוור (ניוזלטר) — כל דקה ──
   // שולח קמפיינים שבסטטוס 'sending' במנות של 100 (Resend Batch API),
   // עם throttle של 2 בקשות/שנייה. חסין לקריסות: ממשיך מהשורות שנשארו pending.
