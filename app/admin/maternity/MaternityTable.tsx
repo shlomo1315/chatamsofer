@@ -135,7 +135,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
       {!hideFilters && (
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
           const isActive = filter === c.key

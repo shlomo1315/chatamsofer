@@ -21,6 +21,13 @@ import BeneficiaryMailThread from './BeneficiaryMailThread'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 
+// ⏱️ עזר מדידה זמני — מודד כמה כל שאילתה לוקחת ומדפיס ללוג השרת.
+async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const t = performance.now()
+  try { return await fn() }
+  finally { console.log(`[perf][beneficiary] ${label}: ${Math.round(performance.now() - t)}ms`) }
+}
+
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
@@ -119,12 +126,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // ⚠️ ביצועים: כל השאילתות במקביל, כולל עץ הדורות (lineage_nodes אינו תלוי
   // ב-beneficiary — רק העיבוד שלו). קודם עץ הדורות נשלף *אחרי* ה-Promise.all
   // = סבב רשת נוסף שהאיט את פתיחת הכרטסת. עכשיו הכל בסבב אחד.
+  // ⏱️ מדידת ביצועים זמנית — לאבחון האיטיות בטעינת הכרטסת (מופיע בלוגי השרת).
+  const _t0 = performance.now()
   const [beneficiary, birthCerts, activity, allNodes] = await Promise.all([
-    getBeneficiary(id),
-    getBirthCertificates(id),
-    getActivity(id),
-    getAllLineageNodes(),
+    timed('getBeneficiary', () => getBeneficiary(id)),
+    timed('getBirthCertificates', () => getBirthCertificates(id)),
+    timed('getActivity', () => getActivity(id)),
+    timed('getAllLineageNodes', () => getAllLineageNodes()),
   ])
+  console.log(`[perf][beneficiary/${id}] all queries: ${Math.round(performance.now() - _t0)}ms · nodes=${allNodes.length}`)
   const typedChain = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string }[])
     : []
