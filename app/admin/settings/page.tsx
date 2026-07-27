@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -12,6 +12,7 @@ import DocTypesManager from './DocTypesManager'
 import EmailTextsManager from './EmailTextsManager'
 import AssistantLearning from './AssistantLearning'
 import MailCleanup from './MailCleanup'
+import RebuildRoutingButton from './RebuildRoutingButton'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
@@ -151,6 +152,11 @@ export default async function SettingsPage() {
         {/* ניקוי תיבת המייל */}
         <Collapsible title="ניקוי תיבת המייל" icon={<MailWarning size={16} className="text-rose-500" />}>
           <MailCleanup />
+        </Collapsible>
+
+        {/* תיקון ניתוב מיילים ישנים (שנתקעו במשרד ראשי) */}
+        <Collapsible title="תיקון ניתוב מיילים ישנים" icon={<Wrench size={16} className="text-indigo-500" />}>
+          <RebuildRoutingButton />
         </Collapsible>
 
         {/* למידת העוזר החכם */}
