@@ -111,6 +111,7 @@ async function analyze(db: ReturnType<typeof getServiceClient>) {
   const changes: { id: string; from: string; to: string; subject: string }[] = []
   let noMatch = 0, unchanged = 0
 
+  let skippedSafe = 0
   for (const r of (data ?? []) as Row[]) {
     const mid = String(r.message_id ?? '').trim()
     const rf = mid ? map.get(mid) : undefined
@@ -118,6 +119,17 @@ async function analyze(db: ReturnType<typeof getServiceClient>) {
 
     const correct = correctFromReceivedFor(rf, r)
     if (!correct || correct === r.to_email) { unchanged++; continue }
+
+    // ⚠️ בטיחות: אם המייל *כבר* מנותב לתיבת מחלקה מוכרת שאינה office —
+    // אל תזיז אותו, אלא אם received_for מכיל תיבה מוכרת *אחרת* שאינה office.
+    // מונע קלקול מיילים שכבר נכונים (למשל טסט ל-r@ שה-received_for שלו כולל רק
+    // copy@+office@ כי r@ נכנס בנתיב Google נפרד) — שם resolveMailbox היה
+    // "מתקן" אותם בטעות בחזרה ל-office.
+    const currentDept = r.to_email ? departmentByEmail(r.to_email) : null
+    const currentIsKnownNonOffice = !!currentDept && currentDept.key !== 'main'
+    const targetIsOffice = correct === 'office@chasamsofer.info'
+    if (currentIsKnownNonOffice && targetIsOffice) { skippedSafe++; continue }
+
     changes.push({
       id: r.id,
       from: r.to_email ?? '(ריק)',
@@ -126,7 +138,7 @@ async function analyze(db: ReturnType<typeof getServiceClient>) {
     })
   }
 
-  return { resendFetched: fetched, scanned: data?.length ?? 0, noMatch, unchanged, changes }
+  return { resendFetched: fetched, scanned: data?.length ?? 0, noMatch, unchanged, skippedSafe, changes }
 }
 
 export async function GET() {
@@ -136,7 +148,7 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   try {
-    const { resendFetched, scanned, noMatch, unchanged, changes } = await analyze(db)
+    const { resendFetched, scanned, noMatch, unchanged, skippedSafe, changes } = await analyze(db)
     const moves: Record<string, number> = {}
     for (const c of changes) {
       const k = `${c.from} → ${c.to}`
@@ -148,6 +160,7 @@ export async function GET() {
       נסרקו: scanned,
       ללא_התאמה: noMatch,
       ללא_שינוי: unchanged,
+      דולגו_בבטחה: skippedSafe,
       ישונו: changes.length,
       פילוח: Object.fromEntries(Object.entries(moves).sort((a, b) => b[1] - a[1])),
       דוגמאות: changes.slice(0, 30),
