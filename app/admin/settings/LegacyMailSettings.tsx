@@ -2,7 +2,7 @@
 
 // סנכרון תיבות מייל: דיווח מפולח לכל תיבה — מחלקה, סנכרון אחרון, וכמות מיילים.
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, Link2, CheckCircle2, AlertTriangle, Inbox, Building2, Clock } from 'lucide-react'
+import { Loader2, RefreshCw, Link2, CheckCircle2, AlertTriangle, Inbox, Building2, Clock, ArrowLeftRight } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -138,6 +138,7 @@ export default function LegacyMailSettings() {
       return
     }
     let total = 0
+    let lastNote: string | null = null
     try {
       for (let guard = 0; guard < 1000; guard++) {
         const res = await fetch('/api/admin/legacy-mail/import-to-gmail', {
@@ -147,10 +148,16 @@ export default function LegacyMailSettings() {
         const d = await res.json()
         if (!res.ok) throw new Error(d.detail ? `${d.error}\n${d.detail}` : (d.error || 'שגיאה בייבוא'))
         total += d.imported ?? 0
+        lastNote = d.note ?? null
         if (d.done || (d.imported === 0)) break
         toast.success(`יובאו ${total} מיילים... (נותרו ${d.remaining})`)
       }
-      toast.success(total > 0 ? `הושלם — ${total} מיילים יובאו לתיבת ה-Gmail של המחלקה` : 'אין מיילים חדשים לייבוא')
+      // הודעת סיום מדויקת: אם השרת החזיר note (למשל "לא הורץ סנכרון") — מציגים אותו,
+      // במקום "אין מיילים חדשים" גנרי שהסתיר את הסיבה האמיתית לכך שכלום לא יובא.
+      if (total > 0) toast.success(`הושלם — ${total} מיילים יובאו לתיבת ה-Gmail (${box.importTargetEmail || box.departmentLabel})`)
+      else if (lastNote) toast.error(lastNote)
+      else toast.success('אין מיילים חדשים לייבוא')
+      load()  // רענון כדי לשקף יעד/מונים מעודכנים
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'שגיאה')
     } finally {
@@ -273,6 +280,20 @@ export default function LegacyMailSettings() {
                     >
                       ייבא ל-Gmail
                     </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* יעד הייבוא — לאיזו כתובת Gmail המיילים מוזרקים. עד כה השדה נשמר
+                  אך לא הוצג, והמשתמש לא ידע לאן הוגדר הייבוא. */}
+              <div className="mb-3 flex items-center gap-2 rounded-lg bg-indigo-50/60 border border-indigo-100 px-3 py-2">
+                <ArrowLeftRight size={14} className="text-indigo-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-xs text-slate-500">יעד ייבוא ל-Gmail: </span>
+                  {box.importTargetEmail ? (
+                    <span className="text-xs font-mono font-semibold text-indigo-700 ltr-num" dir="ltr">{box.importTargetEmail}</span>
+                  ) : (
+                    <span className="text-xs text-slate-400">כתובת המחלקה (ברירת מחדל)</span>
                   )}
                 </div>
               </div>

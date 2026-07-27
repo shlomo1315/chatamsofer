@@ -71,7 +71,23 @@ export async function POST(request: NextRequest) {
     .is('imported_to_gmail_at', null)
     .limit(BATCH)
   const pending = rows ?? []
-  if (!pending.length) return NextResponse.json({ ok: true, imported: 0, remaining: 0, done: true })
+  if (!pending.length) {
+    // אין מיילים לייבוא — אבל *למה*? צריך להבחין בין "אין מקור בכלל" (לא הורץ
+    // סנכרון) לבין "הכול כבר יובא". בלי ההבחנה הזו ה-UI הציג "אין מיילים חדשים"
+    // גם כשהבעיה האמיתית היא שלא נמשך שום מייל למחלקה הזו.
+    const { count: totalLegacy } = await db
+      .from('inbound_emails')
+      .select('id', { count: 'exact', head: true })
+      .eq('source', 'legacy')
+      .eq('department', acc.department)
+    return NextResponse.json({
+      ok: true, imported: 0, remaining: 0, done: true, target: targetEmail,
+      totalLegacy: totalLegacy ?? 0,
+      note: (totalLegacy ?? 0) === 0
+        ? 'לא נמצאו מיילים ישנים למחלקה זו במערכת. יש להריץ קודם "סנכרון" כדי למשוך את המיילים מהתיבה, ורק אז לייבא ל-Gmail.'
+        : 'כל המיילים של מחלקה זו כבר יובאו ל-Gmail.',
+    })
+  }
 
   let deptGmail, labelId: string
   try {
@@ -86,21 +102,26 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceGmail = getGmailClientForToken(acc.refresh_token)
-  let imported = 0, failed = 0
+  let imported = 0, failed = 0, notFound = 0
+  // ⚠️ סיבת הכשל הראשונה בהזרקה — נבלעה עד כה ב-console בלבד. אם delegation/scope
+  // חסר עבור targetEmail, ensureArchiveLabel מצליח (יוצר תווית ריקה) אך importRawMessage
+  // נכשל פר-מייל, וכל המיילים "נעלמו" בשקט. עכשיו הסיבה מוחזרת ל-UI.
+  let firstImportError: string | null = null
 
   for (const row of pending) {
     try {
       // מושכים raw מתיבת המקור לפי gmail_message_id (מזהה ה-RFC822 המקורי).
       const search = await sourceGmail.users.messages.list({ userId: 'me', q: `rfc822msgid:${row.gmail_message_id}`, maxResults: 1 })
       const msgId = search.data.messages?.[0]?.id
-      if (!msgId) { failed++; continue }
+      if (!msgId) { failed++; notFound++; continue }
       const full = await sourceGmail.users.messages.get({ userId: 'me', id: msgId, format: 'raw' })
-      if (!full.data.raw) { failed++; continue }
+      if (!full.data.raw) { failed++; notFound++; continue }
       await importRawMessage(deptGmail, full.data.raw, labelId)
       await db.from('inbound_emails').update({ imported_to_gmail_at: new Date().toISOString() }).eq('id', row.id)
       imported++
     } catch (e) {
       console.error(`[import-to-gmail] failed for ${row.gmail_message_id}:`, e)
+      if (!firstImportError) firstImportError = describeWorkspaceError(e)
       failed++
     }
   }
@@ -113,5 +134,20 @@ export async function POST(request: NextRequest) {
     .eq('department', acc.department)
     .is('imported_to_gmail_at', null)
 
-  return NextResponse.json({ ok: true, imported, failed, remaining: count ?? 0, done: (count ?? 0) === 0 })
+  // אם *כל* הבאץ' נכשל בהזרקה (imported=0 אך היו מיילים), זו כמעט תמיד בעיית
+  // delegation/scope עבור כתובת היעד — אותה תופעה של "תווית ריקה". מחזירים שגיאה
+  // מפורשת במקום "0 יובאו" שקט, כדי שהמשתמש יבין שצריך לאשר delegation ל-targetEmail.
+  if (imported === 0 && firstImportError) {
+    return NextResponse.json({
+      error: `הייבוא נכשל לכל ${pending.length} המיילים — נוצרה תווית ריקה בגלל שההזרקה לתיבת היעד (${targetEmail}) נכשלה. סביר שחסר אישור Domain-wide delegation או הרשאת gmail.insert עבור כתובת זו.`,
+      detail: firstImportError,
+      target: targetEmail, failed, imported: 0,
+    }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    ok: true, imported, failed, notFound, target: targetEmail,
+    remaining: count ?? 0, done: (count ?? 0) === 0,
+    ...(firstImportError ? { warning: firstImportError } : {}),
+  })
 }
