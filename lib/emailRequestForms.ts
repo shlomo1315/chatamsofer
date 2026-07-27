@@ -104,13 +104,17 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
         { key: 'baby_gender', label: 'מין הנולד/ת', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['בן', 'בת'] },
         { key: 'baby_name', label: 'שם הנולד/ת', hint: 'אם אין עדיין שם — השאירו ריק', required: false },
         { key: 'baby_id_number', label: 'תעודת זהות של הנולד/ת', hint: '9 ספרות כולל ספרת ביקורת', required: true },
-        { key: 'recovery_home', label: 'בית החלמה', hint: 'השאירו רק אחד, מחקו את השאר', required: true, options: ctx.recoveryHomes },
+        { key: 'wants_food_card', label: 'מעוניין בכרטיס מזון', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
+        { key: 'wants_recovery', label: 'מעוניין בבית החלמה', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
+        { key: 'recovery_home', label: 'בית החלמה', hint: 'רק אם ביקשתם בית החלמה — השאירו אחד, מחקו את השאר', required: false, options: ctx.recoveryHomes },
         { key: 'notes', label: 'הערות', required: false },
       ]
     case 'silent_birth':
       return [
         { key: 'birth_date', label: 'תאריך לידה', hint: 'בפורמט DD/MM/YYYY', required: true },
-        { key: 'recovery_home', label: 'בית החלמה', hint: 'השאירו רק אחד, מחקו את השאר', required: true, options: ctx.recoveryHomes },
+        { key: 'wants_food_card', label: 'מעוניין בכרטיס מזון', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
+        { key: 'wants_recovery', label: 'מעוניין בבית החלמה', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
+        { key: 'recovery_home', label: 'בית החלמה', hint: 'רק אם ביקשתם בית החלמה — השאירו אחד, מחקו את השאר', required: false, options: ctx.recoveryHomes },
         { key: 'notes', label: 'הערות', required: false },
       ]
     case 'loan':
@@ -337,10 +341,33 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
         errors.push(`תאריך הלידה (${fmtDate(birth)}) הוא בעתיד — בדקו את התאריך שהוזן`)
       }
     }
+    // בחירת ההטבות: "כן"/"לא" (המשתמש מוחק את המיותר). פרסור סלחני:
+    // מכיל "כן" בלי "לא" → רוצה · מכיל "לא" בלי "כן" → לא רוצה · לא חד-משמעי → רוצה
+    // (ברירת מחדל בטוחה — לא חוסמת בקשה על בסיס שדה מעורפל).
+    const parseYesNo = (raw: string, def: boolean): boolean => {
+      const v = cleanLine(raw)
+      const hasYes = v.includes('כן')
+      const hasNo = v.includes('לא')
+      if (hasYes && !hasNo) return true
+      if (hasNo && !hasYes) return false
+      return def
+    }
+    const wantsFoodCard = parseYesNo(values.wants_food_card ?? '', true)
+    const wantsRecovery = parseYesNo(values.wants_recovery ?? '', true)
+    if (!wantsFoodCard && !wantsRecovery) {
+      errors.push('יש לבחור לפחות אחת מההטבות: כרטיס מזון או בית החלמה (השאירו "כן" באחת מהן)')
+    }
+    data.wants_food_card = wantsFoodCard
+    data.wants_recovery = wantsRecovery
+    // בית החלמה נדרש רק אם ביקשו בית החלמה
     const rh = (values.recovery_home ?? '').trim()
-    if (!rh) errors.push('חסר בית החלמה')
-    else if (!ctx.recoveryHomes.includes(rh)) errors.push(`בית החלמה "${rh}" אינו ברשימה`)
-    else data.recovery_home = rh
+    if (wantsRecovery) {
+      if (!rh) errors.push('ביקשתם בית החלמה — אנא ציינו איזה בית החלמה')
+      else if (!ctx.recoveryHomes.includes(rh)) errors.push(`בית החלמה "${rh}" אינו ברשימה`)
+      else data.recovery_home = rh
+    } else {
+      data.recovery_home = null
+    }
     data.notes = (values.notes ?? '').trim() || null
   }
 

@@ -152,6 +152,38 @@ function Field({ label, required, children, hint }: {
   )
 }
 
+// בחירת ההטבות שהיולדת מעוניינת בהן — כרטיס מזון ו/או בית החלמה.
+// שני צ'ק-בוקסים גדולים ונוחים ללחיצה. אפשר לסמן אחד, את השני, או את שניהם.
+function BenefitChoices({
+  wantsFoodCard, wantsRecovery, onToggleFoodCard, onToggleRecovery,
+}: {
+  wantsFoodCard: boolean; wantsRecovery: boolean
+  onToggleFoodCard: () => void; onToggleRecovery: () => void
+}) {
+  const opt = (checked: boolean, label: string, desc: string, onToggle: () => void) => (
+    <button type="button" onClick={onToggle}
+      className={`flex items-start gap-3 p-3.5 rounded-xl border text-right transition-all duration-150 ${
+        checked ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-white hover:border-slate-300'
+      }`}>
+      <span className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-150 ${
+        checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'
+      }`}>
+        {checked && <CheckCircle2 size={14} className="text-white" />}
+      </span>
+      <span className="flex-1">
+        <span className="block text-sm font-semibold text-slate-800">{label}</span>
+        <span className="block text-xs text-slate-500 mt-0.5">{desc}</span>
+      </span>
+    </button>
+  )
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {opt(wantsFoodCard, 'כרטיס מזון ליולדת', 'כרטיס טעון לרכישת מזון מוכן', onToggleFoodCard)}
+      {opt(wantsRecovery, 'בית החלמה', 'שהייה והבראה בבית החלמה', onToggleRecovery)}
+    </div>
+  )
+}
+
 function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
@@ -1225,6 +1257,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
   const [showSilentInfo, setShowSilentInfo] = useState(false)
+  // בחירת ההטבות: כרטיס מזון ו/או בית החלמה. ברירת מחדל — שתיהן מסומנות
+  // (ההתנהגות המוכרת). רשימת בתי ההחלמה נפתחת רק כש"בית החלמה" מסומן.
+  const [wantsFoodCard, setWantsFoodCard] = useState(true)
+  const [wantsRecovery, setWantsRecovery] = useState(true)
   useEffect(() => {
     fetch('/api/portal/recovery-homes').then(r => r.json()).then(d => {
       if (Array.isArray(d.regular) && d.regular.length) setRecoveryHomes(d.regular)
@@ -1873,7 +1909,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       const id2 = baby2.baby_id_number.replace(/\D/g, '') || baby2.baby_id_number.trim()
       if (id1 && id1 === id2) { setError('שני התאומים חייבים להיות עם תעודות זהות שונות'); return }
     }
-    if (!birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
+    if (!wantsFoodCard && !wantsRecovery) { setError('אנא בחרו לפחות אחת מההטבות: כרטיס מזון או בית החלמה'); return }
+    if (wantsRecovery && !birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
     if (needsIdWithRequest) {
@@ -1905,7 +1942,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       const res = await fetch('/api/portal/birth-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, is_twins: isTwins, babies, birth_certificate_url: certUrl }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, is_twins: isTwins, babies, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -2074,7 +2111,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     e.preventDefault()
     if (!beneficiary) return
     if (!silentForm.birth_date) { setError('אנא הזן תאריך לידה'); return }
-    if (!silentForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
+    if (!wantsFoodCard && !wantsRecovery) { setError('אנא בחרו לפחות אחת מההטבות: כרטיס מזון או בית החלמה'); return }
+    if (wantsRecovery && !silentForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף מסמך אישור'); return }
     setError(''); setLoading(true)
     try {
@@ -2089,7 +2127,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
       const res = await fetch('/api/portal/birth-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, notes: silentForm.notes, birth_certificate_url: certUrl }),
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
@@ -4196,22 +4234,35 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
                   />
                 )}
+                {/* בחירת ההטבות — כרטיס מזון ו/או בית החלמה. רשימת בתי ההחלמה
+                    נפתחת רק כש"בית החלמה" מסומן. */}
                 <div className="col-span-2">
-                  <Field label={<EditableText k="birth.home.label" />} required>
-                    <div className="flex flex-wrap gap-2">
-                      {recoveryHomes.map(h => (
-                        <button key={h} type="button"
-                          onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
-                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
-                            birthForm.recovery_home === h
-                              ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                              : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
-                          }`}
-                        >{h}</button>
-                      ))}
-                    </div>
+                  <Field label="במה תרצו להיעזר?" required>
+                    <BenefitChoices
+                      wantsFoodCard={wantsFoodCard} wantsRecovery={wantsRecovery}
+                      onToggleFoodCard={() => setWantsFoodCard(v => !v)}
+                      onToggleRecovery={() => setWantsRecovery(v => { const nv = !v; if (!nv) setBirthForm(f => ({ ...f, recovery_home: '' })); return nv })}
+                    />
                   </Field>
                 </div>
+                {wantsRecovery && (
+                  <div className="col-span-2">
+                    <Field label={<EditableText k="birth.home.label" />} required>
+                      <div className="flex flex-wrap gap-2">
+                        {recoveryHomes.map(h => (
+                          <button key={h} type="button"
+                            onClick={() => setBirthForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
+                              birthForm.recovery_home === h
+                                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50'
+                            }`}
+                          >{h}</button>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Field label="הערות">
                     <textarea value={birthForm.notes} onChange={setBirth('notes')} rows={3}
@@ -4295,25 +4346,37 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     />
                   </Field>
                 </div>
+                {/* בחירת ההטבות — כרטיס מזון ו/או בית החלמה */}
                 <div className="col-span-2">
-                  <Field label={<EditableText k="birth.home.label" />} required>
-                    <div className="flex flex-wrap gap-2">
-                      {recoveryHomesSilent.map(h => (
-                        <button key={h} type="button"
-                          onClick={() => setSilentForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
-                          className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
-                            silentForm.recovery_home === h
-                              ? 'bg-rose-100 text-rose-800 border-rose-300'
-                              : 'bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:bg-rose-50'
-                          }`}
-                        >{h}</button>
-                      ))}
-                    </div>
-                    {recoveryHomesSilent.length === 0 && (
-                      <p className="text-xs text-slate-400 mt-1">לא הוגדרו בתי החלמה ללידה שקטה. אנא פנו למזכירות.</p>
-                    )}
+                  <Field label="במה תרצו להיעזר?" required>
+                    <BenefitChoices
+                      wantsFoodCard={wantsFoodCard} wantsRecovery={wantsRecovery}
+                      onToggleFoodCard={() => setWantsFoodCard(v => !v)}
+                      onToggleRecovery={() => setWantsRecovery(v => { const nv = !v; if (!nv) setSilentForm(f => ({ ...f, recovery_home: '' })); return nv })}
+                    />
                   </Field>
                 </div>
+                {wantsRecovery && (
+                  <div className="col-span-2">
+                    <Field label={<EditableText k="birth.home.label" />} required>
+                      <div className="flex flex-wrap gap-2">
+                        {recoveryHomesSilent.map(h => (
+                          <button key={h} type="button"
+                            onClick={() => setSilentForm(f => ({ ...f, recovery_home: f.recovery_home === h ? '' : h }))}
+                            className={`px-4 py-2 rounded-xl border text-sm font-medium transition-all duration-150 ${
+                              silentForm.recovery_home === h
+                                ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                : 'bg-white text-slate-600 border-slate-200 hover:border-rose-300 hover:bg-rose-50'
+                            }`}
+                          >{h}</button>
+                        ))}
+                      </div>
+                      {recoveryHomesSilent.length === 0 && (
+                        <p className="text-xs text-slate-400 mt-1">לא הוגדרו בתי החלמה ללידה שקטה. אנא פנו למזכירות.</p>
+                      )}
+                    </Field>
+                  </div>
+                )}
                 <div className="col-span-2">
                   <Field label="הערות">
                     <textarea value={silentForm.notes} onChange={e => setSilentForm(f => ({ ...f, notes: e.target.value }))} rows={3}

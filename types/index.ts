@@ -165,6 +165,10 @@ export interface MaternityAid {
   recovery_home?: string
   recovery_from?: string
   recovery_to?: string
+  // בחירת ההטבות של היולדת — כרטיס מזון ו/או בית החלמה. ברירת מחדל true
+  // (בקשות ישנות = שתיהן). משפיע על השוברים הנשלחים באישור.
+  wants_food_card?: boolean
+  wants_recovery?: boolean
   recovery_arrived?: boolean | null
   recovery_arrived_at?: string
   recovery_arrived_by?: string

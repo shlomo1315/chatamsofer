@@ -21,6 +21,7 @@ import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
+import WantsChoiceEditor from './WantsChoiceEditor'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -340,6 +341,15 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   ))
                 })()}
                 <p className="text-sm mt-3 pt-3 border-t border-slate-100"><span className="text-slate-500">תאריך לידה: </span><span className="ltr-num font-medium text-slate-800">{fmtDate(aid.birth_date)}</span></p>
+                {/* בחירת ההטבות של היולדת — לחיץ לעריכת אדמין */}
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 mb-1.5">הטבות שהיולדת ביקשה (לחצו לעריכה):</p>
+                  <WantsChoiceEditor
+                    aidId={aid.id}
+                    initialFoodCard={aid.wants_food_card !== false}
+                    initialRecovery={aid.wants_recovery !== false}
+                  />
+                </div>
                 {aid.six_weeks_end && (
                   <p className="text-sm">
                     <span className="text-slate-500">{aid.eligibility_extended ? 'סיום זכאות: ' : '6 שבועות לאחר הלידה: '}</span>

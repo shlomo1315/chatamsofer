@@ -195,9 +195,17 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     <td className="px-2.5 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-700">
-                      <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 flex-wrap">
                         {aid.baby_name ?? <span className="text-slate-300">—</span>}
                         {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
+                        {/* תגית הטבות — מוצגת רק כשהיולדת לא ביקשה את שתיהן (ברירת המחדל שקופה) */}
+                        {(() => {
+                          const wc = aid.wants_food_card !== false
+                          const wr = aid.wants_recovery !== false
+                          if (wc && wr) return null
+                          const label = wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : '—'
+                          return <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700" title="הטבות שהיולדת ביקשה">{label}</span>
+                        })()}
                       </span>
                     </td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>

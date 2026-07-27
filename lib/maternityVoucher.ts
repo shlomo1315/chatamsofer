@@ -465,13 +465,15 @@ export type { VoucherInput }
 
 export async function buildMaternityVouchers(
   input: VoucherInput,
-  opts: { includeCard?: boolean } = {},
+  opts: { includeCard?: boolean; includeRecovery?: boolean } = {},
 ): Promise<MailAttachment[]> {
-  const includeCard = opts.includeCard !== false // ברירת מחדל: כולל את שובר הכרטיס
-  const recovery = await renderRecovery(input)
-  const out: MailAttachment[] = [
-    { filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recovery },
-  ]
+  const includeCard = opts.includeCard !== false     // ברירת מחדל: כולל את שובר הכרטיס
+  const includeRecovery = opts.includeRecovery !== false // ברירת מחדל: כולל את שובר ההבראה
+  const out: MailAttachment[] = []
+  if (includeRecovery) {
+    const recovery = await renderRecovery(input)
+    out.push({ filename: 'שובר-הבראה-ליולדת.pdf', mimeType: 'application/pdf', contentB64: recovery })
+  }
   if (includeCard) {
     const card = await renderFoodCard(input)
     out.push({ filename: 'שובר-כרטיס-מזון.pdf', mimeType: 'application/pdf', contentB64: card })

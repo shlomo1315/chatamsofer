@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
   const reqSelect = type === 'loan'
     ? `amount, approved_amount, installments, monthly_payment, purpose, beneficiary:beneficiaries(${benSelect})`
-    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, is_twins, recovery_eligibility_days, card_center_id, voucher_serial, beneficiary:beneficiaries(${benSelect})`
+    : `baby_name, baby_gender, birth_date, recovery_home, birth_type, is_twins, recovery_eligibility_days, wants_food_card, wants_recovery, card_center_id, voucher_serial, beneficiary:beneficiaries(${benSelect})`
 
   const { data: req, error } = await admin.from(table).select(reqSelect).eq('id', id).maybeSingle()
   if (error || !req) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   // ── אישור לידה: כל המוקדים הפעילים מוצגים בשובר (אין יותר מלאי/שריון/בחירת מוקד) ──
   // המודל החדש: היולדת מקבלת כרטיס תמיד, ויכולה לגשת לכל אחד מהמוקדים לקבלתו.
-  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null }
+  const birth = req as unknown as { birth_date?: string; recovery_home?: string; birth_type?: string; is_twins?: boolean; recovery_eligibility_days?: number | null; voucher_serial?: string | null; wants_food_card?: boolean; wants_recovery?: boolean }
   let centers: { name: string; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[] = []
   let serial = birth.voucher_serial ?? null
   if (type === 'maternity') {
@@ -133,11 +133,19 @@ export async function POST(request: NextRequest) {
               // לידה שקטה — בלי ברכות ובלי המילה "יולדת" בשוברים
               silent: (birth.birth_type ?? 'live') === 'silent',
             }
-            // שובר הבראה תמיד; שובר כרטיס מזון רק אם יש מלאי כרטיסים. אם אין מלאי —
-            // היולדת בתור המתנה, ותקבל את שובר הכרטיס אוטומטית ברגע שיתחדש המלאי.
-            attachments = await buildMaternityVouchers(voucherInput, { includeCard: cardInStock })
-            // דף הנחיות — רק בלידה רגילה (הטקסט מברך על הולדת התינוק ומדבר על ימי הבראה)
-            if ((birth.birth_type ?? 'live') !== 'silent') {
+            // בחירת ההטבות של היולדת. undefined (בקשות ישנות) = רוצה — תאימות לאחור.
+            const wantsCard = birth.wants_food_card !== false
+            const wantsRecovery = birth.wants_recovery !== false
+            // שובר הבראה רק אם ביקשה בית החלמה; שובר כרטיס מזון רק אם ביקשה כרטיס
+            // *וגם* יש מלאי כרטיסים. אם אין מלאי — היולדת בתור המתנה, ותקבל את שובר
+            // הכרטיס אוטומטית ברגע שיתחדש המלאי.
+            attachments = await buildMaternityVouchers(voucherInput, {
+              includeCard: wantsCard && cardInStock,
+              includeRecovery: wantsRecovery,
+            })
+            // דף הנחיות — שייך לחבילת כרטיס המזון, ולכן רק אם ביקשה כרטיס.
+            // ורק בלידה רגילה (הטקסט מברך על הולדת התינוק ומדבר על ימי הבראה).
+            if (wantsCard && (birth.birth_type ?? 'live') !== 'silent') {
               const b2 = birth as { baby_name?: string | null; baby_gender?: string | null }
               const sheet = await buildInstructionsSheet({
                 familyName: ben.family_name ?? undefined,

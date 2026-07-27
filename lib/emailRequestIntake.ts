@@ -177,6 +177,8 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
         baby_id_number: (data.baby_id_number as string) ?? null,
         baby_id_type: data.baby_id_number ? 'id' : null,
         recovery_home: data.recovery_home,
+        wants_food_card: data.wants_food_card !== false,
+        wants_recovery: data.wants_recovery !== false,
         birth_certificate_url: matched['אישור-לידה'] ?? null,
         notes: data.notes ?? null,
         birth_type: type === 'silent_birth' ? 'silent' : 'live',
@@ -230,6 +232,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
       ['מין', genderLbl(data.baby_gender)],
       ['ת.ז הנולד/ת', s(data.baby_id_number)],
       ['תאריך לידה', s(data.birth_date)],
+      ['הטבות שנבחרו', [data.wants_food_card !== false && 'כרטיס מזון', data.wants_recovery !== false && 'בית החלמה'].filter(Boolean).join(' · ')],
       ['בית החלמה', s(data.recovery_home)],
       ['הערות', s(data.notes)],
     ].filter(([, v]) => v !== '') as [string, string][]

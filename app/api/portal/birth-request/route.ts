@@ -35,6 +35,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
+  // ── בחירת ההטבות: כרטיס מזון ו/או בית החלמה ──
+  // undefined = לא נשלח (לקוח ישן) → נחשב true, כדי לשמור על התנהגות "שתיהן".
+  const wantsFoodCard = body.wants_food_card !== false
+  const wantsRecovery = body.wants_recovery !== false
+  // חובה לבחור לפחות אחת
+  if (!wantsFoodCard && !wantsRecovery) {
+    return NextResponse.json({ error: 'יש לבחור לפחות אחת מההטבות: כרטיס מזון או בית החלמה.' }, { status: 400 })
+  }
+  // בית החלמה נדרש רק אם נבחר. אם לא נבחר — מתעלמים מהערך שנשלח.
+  const recoveryHomeVal = wantsRecovery ? (recovery_home ? String(recovery_home).trim() : '') : ''
+  if (wantsRecovery && !recoveryHomeVal) {
+    return NextResponse.json({ error: 'יש לבחור בית החלמה.' }, { status: 400 })
+  }
+
   // ⚠️ שער המחלקה — אם עזר יולדות סגור כרגע, לא מקבלים בקשות חדשות.
   // נבדק לפני כל עיבוד, כדי שגם בקשה שנשלחת ישירות ל-API (עוקפת את הטופס) תיחסם.
   if (!(await isDepartmentOpen('maternity'))) {
@@ -173,7 +187,9 @@ export async function POST(request: NextRequest) {
     babies: (!isSilent && normBabies.length) ? normBabies : null,
     recovery_eligibility_days: defaultRecoveryDays(twins),
     birth_certificate_url: birth_certificate_url ? String(birth_certificate_url) : null,
-    recovery_home: recovery_home ? String(recovery_home).trim() : null,
+    recovery_home: recoveryHomeVal || null,
+    wants_food_card: wantsFoodCard,
+    wants_recovery: wantsRecovery,
     notes: notes ? String(notes).trim() : null,
     birth_type: isSilent ? 'silent' : 'live',
     status: 'pending',
