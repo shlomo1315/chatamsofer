@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { defaultRecoveryDays } from '@/lib/maternity'
+import { validateIsraeliId } from '@/lib/validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,7 +83,45 @@ export async function POST(request: NextRequest) {
   const cardLoadAmount = payload.cardLoadAmount
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const babies = (payload.babies as any[]) ?? []
+  const rawBabies = ((payload.babies as any[]) ?? []).slice(0, isTwins ? 2 : 1)
+
+  // ── אימות ת"ז + מניעת כפילות (היה חסר לגמרי במסלול המנהל!) ──
+  // בלי זה נשמרו לידות עם ת"ז לא תקינה (000000000) ולידות כפולות על אותו תינוק.
+  // מנרמלים כל תינוק, מאמתים, ובודקים כפילות — בדיוק כמו במסלול הציבורי.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const babies: any[] = []
+  for (const b of rawBabies) {
+    const idRaw = b?.id_number ? String(b.id_number).trim() : ''
+    const isPass = b?.id_type === 'passport'
+    if (!idRaw) return NextResponse.json({ error: 'יש להזין תעודת זהות או דרכון של הנולד/ת' }, { status: 400 })
+    if (!isPass && !validateIsraeliId(idRaw)) {
+      return NextResponse.json({ error: `תעודת הזהות של הנולד/ת (${idRaw}) אינה תקינה` }, { status: 400 })
+    }
+    const idNorm = isPass ? idRaw : idRaw.replace(/\D/g, '').padStart(9, '0')
+    babies.push({ ...b, id_number: idNorm, id_type: isPass ? 'passport' : 'id' })
+  }
+  // תאומים — שתי ת"ז שונות
+  if (isTwins && babies.length === 2 && babies[0].id_number === babies[1].id_number) {
+    return NextResponse.json({ error: 'שני התאומים חייבים להיות עם תעודות זהות שונות' }, { status: 400 })
+  }
+  // מניעת בקשה כפולה על אותו תינוק (לפי ת"ז, בכל סטטוס פרט ל-cancelled)
+  for (const b of babies) {
+    const idNorm = b.id_number as string
+    const idVariants = Array.from(new Set([idNorm, idNorm.replace(/^0+/, '')].filter(Boolean)))
+    const { data: existing } = await admin
+      .from('maternity_aids')
+      .select('id, status')
+      .in('baby_id_number', idVariants)
+      .not('status', 'eq', 'cancelled')
+      .limit(1)
+    if (existing?.length) {
+      return NextResponse.json({
+        error: `כבר קיימת בקשת לידה על תעודת זהות ${idNorm}. לא ניתן לפתוח תיק כפול על אותו תינוק.`,
+      }, { status: 409 })
+    }
+  }
+  // ה-baby הראשי לשדות ה-top-level (baby_id_number וכו')
+  const primaryBaby = babies[0]
 
   // ── insert לתיק היולדת (זהה לשדות המקוריים) ──
   const { data: inserted, error: insErr } = await admin
@@ -91,8 +130,8 @@ export async function POST(request: NextRequest) {
       beneficiary_id: motherId,
       birth_date: babyBirthDate,
       baby_name: (payload.babyName as string) || null,
-      baby_id_type: payload.babyIdType,
-      baby_id_number: (payload.babyIdNumber as string) || null,
+      baby_id_type: primaryBaby.id_type,
+      baby_id_number: primaryBaby.id_number,
       baby_gender: (payload.babyGender as string) || null,
       is_twins: isTwins,
       babies,
