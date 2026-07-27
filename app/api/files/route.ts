@@ -45,12 +45,28 @@ export async function GET(request: NextRequest) {
       safeName = safeName + pathExt
     }
   }
-  const options = wantsDownload ? { download: safeName || true } : undefined
+  // ⚠️ במקום redirect ל-signed URL של Supabase (דומיין חיצוני שנטפרי מיירט
+  // ומעכב), מורידים את הקובץ *בשרת* ומחזירים את הבייטים דרך הדומיין של האתר.
+  // כך התמונה מגיעה מ-chasamsofer.co.il — נטפרי רואה אותה כחלק מהאתר המאושר,
+  // בלי שליחה לבדיקה, והתצוגה מיידית.
+  const { data: blob, error } = await admin.storage.from('documents').download(path)
+  if (error || !blob) return NextResponse.json({ error: 'הקובץ לא נמצא' }, { status: 404 })
 
-  const { data, error } = await admin.storage.from('documents').createSignedUrl(path, 300, options)
-  if (error || !data?.signedUrl) return NextResponse.json({ error: 'הקובץ לא נמצא' }, { status: 404 })
+  const buf = Buffer.from(await blob.arrayBuffer())
+  // סוג התוכן — מ-Supabase (blob.type) ובנפילה לפי הסיומת
+  const extType: Record<string, string> = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
+    '.gif': 'image/gif', '.heic': 'image/heic', '.pdf': 'application/pdf',
+  }
+  const contentType = blob.type || extType[pathExt.toLowerCase()] || 'application/octet-stream'
 
-  const res = NextResponse.redirect(data.signedUrl)
-  res.headers.set('Cache-Control', 'private, no-store')
-  return res
+  const headers = new Headers()
+  headers.set('Content-Type', contentType)
+  headers.set('Content-Length', String(buf.length))
+  // מטמון פרטי קצר — מזרז תצוגות חוזרות בלי לחשוף בין משתמשים
+  headers.set('Cache-Control', 'private, max-age=300')
+  if (wantsDownload) {
+    headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName || 'file')}"`)
+  }
+  return new NextResponse(buf, { status: 200, headers })
 }
