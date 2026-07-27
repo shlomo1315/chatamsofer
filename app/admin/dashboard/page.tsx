@@ -31,7 +31,7 @@ interface DashData {
   aidPending: number
   aidAwaiting: number
   aidApproved: number
-  dismissedTasks: number
+  dismissedByType: Record<string, number>
   deepReview: number
 }
 
@@ -40,7 +40,7 @@ const EMPTY: DashData = {
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
   maternityActive: 0, maternityPending: 0, maternityDeepReview: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
-  aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedTasks: 0, deepReview: 0,
+  aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedByType: {}, deepReview: 0,
 }
 
 // ספירות הדשבורד ארגון-רחבות (count/head — ללא העברת שורות) ואינן דורשות דיוק של שנייה.
@@ -85,8 +85,10 @@ const getStats = unstable_cache(
       // פחות כרטיסים שנטענו — שיטה שפרשה מהמודל הגלובלי והראתה מספר שגוי (23
       // במקום 299). המלאי כבר לא יושב במוקדים אלא במאזן גלובלי אחד.
       supabase.from('card_stock_balance').select('balance').maybeSingle(),
-      // בקשות שהוסתרו מלוח "ממתינים לטיפול" — מנוכות מהמונה כדי שיתאים לרשימה בפאנל
-      supabase.from('dismissed_pending_tasks').select('entity_type', { count: 'exact', head: true }),
+      // בקשות שהוסתרו מלוח "ממתינים לטיפול" — מנוכות מהמונה כדי שיתאים לרשימה בפאנל.
+      // ⚠️ חייבים את entity_type כדי לנכות *פר-סוג*: הסתרת משימת הלוואה לא יכולה
+      // לנכות ממונה היולדות. ניכוי גלובלי גרם ל"ממתינים=0" בעוד היולדות עדיין 2.
+      supabase.from('dismissed_pending_tasks').select('entity_type'),
       // משפחות בבדיקת יחוס מעמיקה — דורשות תשומת לב של המנהל
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'deep_review'),
     ])
@@ -114,7 +116,13 @@ const getStats = unstable_cache(
       aidPending: aidPending.count ?? 0,
       aidAwaiting: aidAwaiting.count ?? 0,
       aidApproved: aidApproved.count ?? 0,
-      dismissedTasks: dismissedTasks.count ?? 0,
+      // ניכוי מפולח לפי סוג — כדי שכל מונה ינכה רק את מה שהוסתר *ממנו*
+      dismissedByType: (() => {
+        const rows = (dismissedTasks.data ?? []) as { entity_type?: string }[]
+        const c: Record<string, number> = {}
+        for (const r of rows) { const t = String(r.entity_type ?? ''); if (t) c[t] = (c[t] ?? 0) + 1 }
+        return c
+      })(),
       deepReview: deepReview.count ?? 0,
     }
     } catch {
@@ -122,7 +130,7 @@ const getStats = unstable_cache(
     }
   },
   ['dashboard-stats'],
-  { revalidate: 15 },
+  { revalidate: 5 },
 )
 
 // "20,000 ₪" — סימן המטבע אחרי המספר. Intl עם style:'currency' שם אותו לפני
@@ -142,7 +150,16 @@ function getGreeting() {
 export default async function DashboardPage() {
   const s = await getStats()
   // מנכים את הבקשות שהוסתרו מהלוח כדי שהמונה יתאים לרשימה בפאנל (שגם היא מסננת אותן).
-  const pendingTotal = Math.max(0, s.pending + s.pendingLoans + s.maternityPending + s.widowPending + s.aidPending - s.dismissedTasks)
+  // ⚠️ ניכוי *פר-סוג*: הסתרת משימה מסוג אחד לא מנכה ממונה של סוג אחר. ניכוי גלובלי
+  // גרם ל"ממתינים לטיפול=0" בעוד "עזר יולדות → בקשות לאישור=2" (חוסר עקביות בדשבורד).
+  const d = s.dismissedByType
+  const net = (count: number, type: string) => Math.max(0, count - (d[type] ?? 0))
+  const pendingTotal =
+    net(s.pending, 'beneficiary') +
+    net(s.pendingLoans, 'loan') +
+    net(s.maternityPending, 'maternity') +
+    net(s.widowPending, 'widow') +
+    net(s.aidPending, 'financial_aid')
 
   return (
     <div className="flex flex-col gap-8 pb-10">
