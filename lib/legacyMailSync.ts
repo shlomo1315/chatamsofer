@@ -330,6 +330,50 @@ export async function syncLegacyMail(
   }
 }
 
+// ── סנכרון אוטומטי של *כל* התיבות הפעילות ──
+// נקרא מהמתזמן הפנימי (instrumentation.ts) כל שעה, כדי שמיילים חדשים שמגיעים
+// לתיבות ה-Gmail הישנות ייקלטו אוטומטית בלי לחיצה ידנית. מסנכרן כל תיבה בנפרד,
+// רושם gmail_sync_runs ומעדכן gmail_accounts — בדיוק כמו ה-route הידני.
+export async function runLegacySyncAll(
+  admin: SupabaseClient,
+): Promise<{ boxes: number; imported: number; failed: number }> {
+  const { data: accounts } = await admin
+    .from('gmail_accounts')
+    .select('id, refresh_token, department, label_id, last_sync_epoch, import_target_email, is_active')
+    .eq('is_active', true)
+
+  let totalImported = 0, totalFailed = 0, boxes = 0
+  for (const acc of (accounts ?? []) as (GmailAccount & { is_active?: boolean })[]) {
+    boxes++
+    const startedAt = new Date().toISOString()
+    try {
+      const result = await syncLegacyMail(admin, acc.department, { account: acc })
+      totalImported += result.imported
+      totalFailed += result.failed
+      await admin.from('gmail_sync_runs').insert({
+        account_id: acc.id, started_at: startedAt, finished_at: new Date().toISOString(),
+        scanned: result.fetched, imported: result.imported, matched: result.matched,
+        failed: result.failed, error: result.error ?? null,
+      })
+      await admin.from('gmail_accounts').update({
+        last_sync_at: new Date().toISOString(),
+        last_sync_count: result.imported,
+        last_error: result.error ?? null,
+      }).eq('id', acc.id)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      totalFailed++
+      await admin.from('gmail_sync_runs').insert({
+        account_id: acc.id, started_at: startedAt, finished_at: new Date().toISOString(),
+        error: msg.slice(0, 500),
+      })
+      await admin.from('gmail_accounts').update({ last_error: msg.slice(0, 500) }).eq('id', acc.id)
+      console.error(`[legacy-sync-all] תיבה ${acc.id} נכשלה:`, msg)
+    }
+  }
+  return { boxes, imported: totalImported, failed: totalFailed }
+}
+
 // שיוך בדיעבד: מחיל את תווית התיבה על מיילים ישנים שכבר נקלטו (source='legacy',
 // מחלקה תואמת). מחזיר כמה סומנו.
 export async function applyLabelToExistingMail(

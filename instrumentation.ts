@@ -118,6 +118,30 @@ export async function register() {
     console.log('[scheduled-mail] hourly scheduler started')
   }
 
+  // ── סנכרון תיבות Gmail הישנות — כל שעה ──
+  // זמני: כל עוד התיבות הישנות עדיין מקבלות מיילים חדשים (עד סגירת המעבר).
+  // מושך אוטומטית את המיילים החדשים לכל תיבה פעילה, כדי שלא יצטברו בלי סנכרון
+  // ידני. להשבתה: LEGACY_SYNC_DISABLED=1 (למשל אחרי סגירת התיבות הישנות).
+  if (process.env.LEGACY_SYNC_DISABLED !== '1') {
+    const tickLegacySync = async () => {
+      try {
+        const { createClient } = await import('@supabase/supabase-js')
+        const db = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { auth: { autoRefreshToken: false, persistSession: false } },
+        )
+        const { runLegacySyncAll } = await import('@/lib/legacyMailSync')
+        const res = await runLegacySyncAll(db)
+        if (res.imported || res.failed) {
+          console.log(`[legacy-sync] hourly · boxes=${res.boxes} imported=${res.imported} failed=${res.failed}`)
+        }
+      } catch (err) { console.error('[legacy-sync] hourly tick failed', err) }
+    }
+    setTimeout(() => { void tickLegacySync(); setInterval(() => { void tickLegacySync() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[legacy-sync] hourly scheduler started')
+  }
+
   // ── מנוע הדיוור (ניוזלטר) — כל דקה ──
   // שולח קמפיינים שבסטטוס 'sending' במנות של 100 (Resend Batch API),
   // עם throttle של 2 בקשות/שנייה. חסין לקריסות: ממשיך מהשורות שנשארו pending.
