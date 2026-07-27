@@ -29,6 +29,23 @@ const motherName = (m?: MotherRef) => {
 type Filter = 'all' | 'pending' | 'active' | 'cancelled' | 'deep_review'
 const matchesFilter = (a: MaternityAid, f: Filter) => f === 'all' ? true : a.status === f
 
+// סינון לפי ההטבה שהיולדת ביקשה. undefined (בקשות ישנות) = ביקשה — תאימות לאחור.
+type BenefitFilter = 'all' | 'card' | 'recovery' | 'both'
+const matchesBenefit = (a: MaternityAid, f: BenefitFilter) => {
+  if (f === 'all') return true
+  const wc = (a as { wants_food_card?: boolean }).wants_food_card !== false
+  const wr = (a as { wants_recovery?: boolean }).wants_recovery !== false
+  if (f === 'card') return wc && !wr        // כרטיס בלבד
+  if (f === 'recovery') return wr && !wc    // בית החלמה בלבד
+  return wc && wr                            // שתיהן
+}
+const BENEFIT_OPTS: { key: BenefitFilter; label: string }[] = [
+  { key: 'all', label: 'כל ההטבות' },
+  { key: 'both', label: 'כרטיס + הבראה' },
+  { key: 'card', label: 'כרטיס בלבד' },
+  { key: 'recovery', label: 'בית החלמה בלבד' },
+]
+
 interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Baby, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
@@ -98,6 +115,8 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
+  // סינון לפי ההטבה שהיולדת ביקשה (כרטיס / הבראה / שתיהן)
+  const [benefit, setBenefit] = useState<BenefitFilter>('all')
 
   // רענון תקופתי — פולינג בלבד. Supabase Realtime (WebSocket) הוסר: בתכנית החינמית הוא
   // נכשל שוב ושוב (retry loop), חוסם את ה-main thread ומאט כל לחיצה. פולינג כל 90 שניות
@@ -121,9 +140,9 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return data.filter(a =>
-      matchesFilter(a, filter) && (q === '' || searchHaystack(a).includes(q))
+      matchesFilter(a, filter) && matchesBenefit(a, benefit) && (q === '' || searchHaystack(a).includes(q))
     )
-  }, [data, filter, query])
+  }, [data, filter, benefit, query])
 
   const visible = useMemo(() =>
     applySortMode(filtered, sort,
@@ -162,6 +181,22 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <h2 className="text-sm font-semibold text-slate-700">רשימת לידות</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <SortButtons value={sort} onChange={setSort} />
+            {/* סינון לפי ההטבה שהיולדת ביקשה — אותו עיצוב כמו כפתורי המיון */}
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5 flex-shrink-0">
+              {BENEFIT_OPTS.map(o => (
+                <button
+                  key={o.key}
+                  onClick={() => setBenefit(o.key)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
+                    benefit === o.key
+                      ? 'bg-white text-slate-800 shadow-sm shadow-slate-200'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
             <div className="relative w-full sm:w-64">
               <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
               <input
