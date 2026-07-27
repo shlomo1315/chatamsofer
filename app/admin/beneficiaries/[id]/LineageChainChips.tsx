@@ -91,13 +91,14 @@ export default function LineageChainChips({
       .slice(0, 60)
   }, [pickerGen, q, allNodes])
 
-  // שיוך הצאצא לצומת שנבחר — השרשרת נגזרת מחדש בשרת
+  // שיוך הצאצא לצומת שנבחר לדור מסוים — מחליף את הדור הזה ומעלה, ושומר את
+  // הדורות שמתחת (atGeneration). השרשרת ממוזגת ונגזרת מחדש בשרת.
   const assign = async (nodeId: string) => {
     setAssigning(true); setErr('')
     try {
       const res = await fetch('/api/admin/lineage/assign', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiaryId, nodeId }),
+        body: JSON.stringify({ beneficiaryId, nodeId, atGeneration: pickerGen ?? undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error ?? 'השיוך נכשל'); return }

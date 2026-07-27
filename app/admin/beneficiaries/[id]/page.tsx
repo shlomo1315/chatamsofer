@@ -535,16 +535,20 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <div>
             <p className="font-bold text-sm text-orange-900">בדיקת יחוס מעמיקה — ממתין לאישור מנהל</p>
             <p className="text-sm text-orange-800 mt-1 leading-relaxed">
-              המסמכים והפרטים אושרו ע"י המזכירות. סדר היחוס דורש בדיקה מעמיקה.
+              {/* "אושרו ע"י המזכירות" מוצג רק כשהמזכירות העבירה ידנית לבדיקה מעמיקה
+                  (יש deep_review_reason). בכניסה אוטומטית ל-deep_review (סטייה ב-5
+                  הדורות הראשונים בעת הרישום) המזכירות לא אישרה דבר — לכן לא מוצג. */}
               {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason
-                ? <> <span className="font-semibold">הערת המזכיר:</span> {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason}</>
-                : ''}
+                ? <>המסמכים והפרטים אושרו ע"י המזכירות. סדר היחוס דורש בדיקה מעמיקה. <span className="font-semibold">הערת המזכיר:</span> {(beneficiary as { deep_review_reason?: string | null }).deep_review_reason}</>
+                : 'סדר היחוס דורש בדיקה מעמיקה (סטייה בסדר הדורות זוהתה אוטומטית בעת הרישום).'}
             </p>
-            {/* פירוט הדורות שסוטים מהנתיב המאושר — מסומנים גם באדום בעץ הדורות */}
-            {deviatingGens.size > 0 && (
+            {/* פירוט הדורות הבעייתיים — רק עד דור 5. דורות 6+ הם דורות חדשים
+                (מעבר לעץ המאושר, מסומנים כתום), ואינם "לא תואמים" — אין טעם
+                להציגם כאן. רק סטיות בדורות 1-5 (שאמורים להיות מאושרים) בעייתיות. */}
+            {[...deviatingGens].some(g => g <= 5) && (
               <p className="text-sm text-red-800 mt-2 font-semibold flex items-center gap-1.5">
                 <AlertTriangle size={14} className="flex-shrink-0" />
-                דורות שאינם תואמים לנתיב המאושר: {[...deviatingGens].sort((a, b) => a - b).map(g => `דור ${g}`).join(', ')}
+                דורות שאינם תואמים לנתיב המאושר: {[...deviatingGens].filter(g => g <= 5).sort((a, b) => a - b).map(g => `דור ${g}`).join(', ')}
                 <span className="font-normal text-red-600">(מסומנים באדום בעץ הדורות)</span>
               </p>
             )}
