@@ -186,7 +186,10 @@ async function maybeAutoReplyIgud(
   const draftLinks = ben.id_number
     ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved', ben.marital_status)
     : []
-  const mail = benefitsLinkEmail(name, undefined, details, draftLinks, ben.marital_status)
+  // מצב המחלקות — לא מציגים כפתור בקשה למחלקה סגורה
+  const { getDepartmentGates } = await import('@/lib/departmentGates')
+  const gates = await getDepartmentGates(admin)
+  const mail = benefitsLinkEmail(name, undefined, details, draftLinks, ben.marital_status, gates)
   // מייל חדש (לא reply), עם הת"ז בשורת הנושא
   const subject = ben.id_number ? `${mail.subject} · ת.ז ${ben.id_number}` : mail.subject
   await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })

@@ -1491,8 +1491,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   // אימות קוד המייל הזמני → כניסה (סשן), ללא סיסמה קבועה
-  const handleVerifyEmailCode = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleVerifyEmailCode = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!pendingAuth) return
     if (!authCode) { setError('אנא הזן את הקוד שנשלח למייל'); return }
     setError(''); setLoading(true)
@@ -1559,8 +1559,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLoading(false)
   }
 
-  const handleVerifyPhoneCode = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleVerifyPhoneCode = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!pendingAuth) return
     if (!authCode) { setError('אנא הזן את הקוד שהוקרא בשיחה'); return }
     setError(''); setLoading(true)
@@ -1575,6 +1575,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
   }
+
+  // אימות אוטומטי כשמזינים קוד מלא (6 ספרות) — מייל או טלפון — בלי ללחוץ "כניסה".
+  // ה-ref מונע הפעלה חוזרת על אותו קוד (מחיקה+הקלדה מחדש).
+  const autoSubmittedCode = useRef('')
+  useEffect(() => {
+    const inCodeScreen = emailStep === 'code' || phoneStep === 'code'
+    if (!inCodeScreen || loading) return
+    if (authCode.length !== 6) { autoSubmittedCode.current = ''; return }
+    if (autoSubmittedCode.current === authCode) return
+    autoSubmittedCode.current = authCode
+    if (emailStep === 'code') handleVerifyEmailCode()
+    else handleVerifyPhoneCode()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authCode, emailStep, phoneStep, loading])
 
   // ── סדר הדורות המלא: דור 1 (החתם סופר, נעול) → נתיב מהעץ → דורות ידניים → הנרשם עצמו ──
   // לכל דור אחרי הראשון יש סימון בן/חתן (relKey). השם של הנרשם נכנס אוטומטית כדור האחרון.
@@ -2863,11 +2877,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
               )}
 
-              <button type="button"
-                onClick={() => { setError(''); setStep('id-lookup'); setPendingAuth(null); setAuthPassword(''); setAuthPassword2(''); setAuthCode(''); setAuthCodeSent(false); setPhoneStep(''); setAuthPhones([]); setAuthPhoneHint('') }}
-                className="text-sm text-slate-400 hover:text-slate-600 mx-auto mt-3 block">
-                חזרה
-              </button>
+              {/* כפתור "חזרה" גלובלי — מוסתר במסך קוד המייל, ששם כבר יש "חזרה"
+                  פנימי (חזרה לבחירת שיטת קבלת הקוד) — אחרת מופיעים שני "חזרה". */}
+              {emailStep !== 'code' && (
+                <button type="button"
+                  onClick={() => { setError(''); setStep('id-lookup'); setPendingAuth(null); setAuthPassword(''); setAuthPassword2(''); setAuthCode(''); setAuthCodeSent(false); setPhoneStep(''); setAuthPhones([]); setAuthPhoneHint('') }}
+                  className="text-sm text-slate-400 hover:text-slate-600 mx-auto mt-3 block">
+                  חזרה
+                </button>
+              )}
             </Card>
           </div>
         )}

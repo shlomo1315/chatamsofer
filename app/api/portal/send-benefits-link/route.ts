@@ -69,7 +69,10 @@ export async function POST(request: NextRequest) {
   const draftLinks = ben.id_number
     ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved', ben.marital_status)
     : []
-  const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks, ben.marital_status)
+  // מצב פתיחת/סגירת המחלקות — כדי לא להציג כפתורי בקשה למחלקה סגורה
+  const { getDepartmentGates } = await import('@/lib/departmentGates')
+  const gates = await getDepartmentGates(admin)
+  const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks, ben.marital_status, gates)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
   if (!result.ok) {
     console.error('[send-benefits-link] deliverMail failed:', result.error)

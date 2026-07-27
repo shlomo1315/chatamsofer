@@ -209,6 +209,7 @@ export function benefitsLinkEmail(
   details?: [string, string | number | null | undefined][],
   draftLinks?: { label: string; href: string; open?: boolean }[],
   maritalStatus?: string | null,
+  gates?: { maternity?: boolean; gemach?: boolean; financial_aid?: boolean; widows?: boolean },
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
@@ -219,12 +220,15 @@ export function benefitsLinkEmail(
   // התאמת הכפתורים לפי סטטוס: לידה — רק נשואים; אלמנות — רק אלמן/אלמנה; הלוואה+סיוע — לכולם.
   const married = maritalStatus === 'נשואים'
   const widower = maritalStatus === 'אלמן' || maritalStatus === 'אלמנה'
+  // ⚠️ מחלקה סגורה (בהגדרות) לא מציגה כפתור בקשה כלל. אם gates לא הועבר —
+  // מציגים הכל (תאימות לאחור). מחלקה שאינה מוגדרת נחשבת פתוחה.
+  const deptOpen = (d: 'maternity' | 'gemach' | 'financial_aid' | 'widows') => !gates || gates[d] !== false
   const gap = '<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>'
   const buttons = [
-    married ? btn(`${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
-    btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
-    btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
-    widower ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
+    (married && deptOpen('maternity')) ? btn(`${base}/?action=birth`, t('btn_birth'), '#fce7f3', '#9d174d') : '',
+    deptOpen('gemach') ? btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985') : '',
+    deptOpen('financial_aid') ? btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534') : '',
+    (widower && deptOpen('widows')) ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
   ].filter(Boolean).join(gap)
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
