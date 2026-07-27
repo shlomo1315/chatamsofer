@@ -785,11 +785,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ⚠️ שומרים את מפתח המחלקה (department) לצד to_email — קודם לא נשמר כלל
+  // (ריק בכל השורות), מה שהשפיע על סינון ההרשאות (canAccessInboundMail בודק
+  // department או to_email). נגזר מכתובת הנמען שנפתרה.
+  const resolvedDept = departmentByEmail(resolvedToEmail)?.key ?? null
   const { data: insertedRows, error } = await admin.from('inbound_emails').upsert({
     message_id: messageId,
     from_email: from.email,
     from_name: from.name,
     to_email: resolvedToEmail,
+    department: resolvedDept,
     subject,
     html: html ?? null,
     plain_text: plain ?? null,
