@@ -155,6 +155,8 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const lineageManual = Array.isArray(ben?.lineage_manual) ? (ben.lineage_manual as string[]) : []
   // סימונים ידניים (override צבע) — כמו בכרטסת הצאצא
   const manualMarks = ((ben as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | undefined)?.lineage_manual_marks) ?? {}
+  // כל צמתי העץ — לבורר "בחר צומת אחר לדור" (מה-Map הממוטמן, ללא רשת נוספת)
+  const lineageNodesArr = isSupabaseConfigured() ? [...(await getLineageMap()).values()] : []
 
   if (!aid && isSupabaseConfigured()) notFound()
 
@@ -291,7 +293,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     if (!gens.some(g => g.generation === 1)) {
                       gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
                     }
-                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} />
+                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} allNodes={lineageNodesArr} />
                   })()}
                   {ben.lineage_node_id && (
                     <div className="mt-3">

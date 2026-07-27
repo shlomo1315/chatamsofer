@@ -346,6 +346,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <h2 className="text-xs font-semibold text-slate-500 uppercase">שיוך שושלת — עץ הדורות</h2>
       </div>
 
+      {/* ציון אמינות יוחסין — ייעוצי, לא מאשר. ממוקם למעלה וניתן לכיווץ. */}
+      <LineageReliabilityPanel beneficiaryId={id} />
+
       {/* breadcrumb — צביעה אוטומטית (ירוק=תואם עד דור 5 · אדום=שונה · כתום=נוסף)
           + סימון ידני של המנהל. */}
       {(() => {
@@ -370,13 +373,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         if (!gens.some(g => g.generation === 1)) {
           gens.unshift({ generation: 1, name: CHATAM_SOFER, verified: true, relation: null })
         }
-        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
+        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} allNodes={allNodes} />
       })()}
 
-      {/* ציון אמינות יוחסין — ייעוצי, לא מאשר */}
-      <LineageReliabilityPanel beneficiaryId={id} />
-
-      {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית) */}
+      {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית).
+          כלי משלים לבורר הדור-לפי-דור שבצ'יפים. */}
       <div className="flex justify-end">
         <LineageAssignEditor beneficiaryId={id} currentNodeId={beneficiary.lineage_node_id ?? null} />
       </div>
