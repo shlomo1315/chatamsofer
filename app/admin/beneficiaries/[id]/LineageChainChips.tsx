@@ -40,9 +40,17 @@ const STYLE: Record<Color, string> = {
   red:    'bg-red-600 text-white border-red-700 font-bold',
 }
 const GEN_TXT: Record<Color, string> = { blue: 'text-blue-100', orange: 'text-orange-100', red: 'text-red-100' }
-// מיפוי סטטוס הצומת → צבע
-const statusColor = (s: ChainGen['status']): Color =>
-  s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : 'orange'
+// מיפוי סטטוס+דור → צבע:
+//   • verified → כחול (מאושר) בכל דור.
+//   • rejected → אדום (חריג — בדיקה מעמיקה) בכל דור.
+//   • שאר (pending/אין): דור ≤5 → אדום (חריג! 5 הדורות הראשונים קריטיים),
+//     דור >5 → כתום (ממתין לאימות, מצב תקין-בהמתנה).
+const EARLY_DEPTH = 5
+const statusColor = (s: ChainGen['status'], generation: number): Color =>
+  s === 'verified' ? 'blue'
+  : s === 'rejected' ? 'red'
+  : generation <= EARLY_DEPTH ? 'red'
+  : 'orange'
 
 export default function LineageChainChips({
   beneficiaryId, gens, initialMarks, allNodes = [],
@@ -63,7 +71,7 @@ export default function LineageChainChips({
 
   // צבע אוטומטי לפי סטטוס הצומת בעץ — בכל דור (כולל מעל 5). דור 1 (חתם סופר)
   // תמיד מאושר. override ידני ('green'→כחול, 'red'→אדום) גובר.
-  const autoColor = (g: ChainGen): Color => statusColor(g.status)
+  const autoColor = (g: ChainGen): Color => statusColor(g.status, g.generation)
   const colorOf = (g: ChainGen): Color => {
     const m = marks[String(g.generation)]
     if (m === 'green') return 'blue'
@@ -162,7 +170,7 @@ export default function LineageChainChips({
       <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
         <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> מאושר</span>
         <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> ממתין לאימות</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> נדחה</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> חריג — בדיקה מעמיקה</span>
         <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
       </p>
 

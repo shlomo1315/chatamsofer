@@ -186,24 +186,29 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineagePath = lineageData.path
   const deviatingGens = lineageData.deviating
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
-  // סטייה בתוך 5 הדורות הראשונים = סדר דורות חשוד → התראה קופצת בכניסה.
-  const earlyDeviation = [...deviatingGens].some(g => g <= 5)
+  // חריג (אדום) = דור ≤5 שאינו מאושר (verified), או צומת rejected בכל דור.
+  // כלל הצבע (זהה ל-statusColor ב-LineageChainChips):
+  //   verified→כחול · rejected→אדום · אחר: דור ≤5→אדום (חריג!) · דור >5→כתום.
+  const genColor = (s: 'verified' | 'pending' | 'rejected' | null, generation: number): 'blue' | 'orange' | 'red' =>
+    s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : generation <= 5 ? 'red' : 'orange'
+  // הדורות החריגים (אדומים) בתוך 5 הראשונים → מקפיצים את חלונית ההתראה.
+  const earlyRedGens = [...genStatus.entries()]
+    .filter(([g, s]) => g <= 5 && g > 1 && genColor(s, g) === 'red')
+    .map(([g]) => g)
+  const earlyDeviation = earlyRedGens.length > 0
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
   const chainForMarks = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string; relation: string | null }[])
     : []
   const manualMarks = ((beneficiary as { lineage_manual_marks?: Record<string, 'red' | 'green'> } | null)?.lineage_manual_marks) ?? {}
 
-  // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד ירוק).
+  // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
-  const alertColor = (s: 'verified' | 'pending' | 'rejected' | null): 'blue' | 'orange' | 'red' =>
-    s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : 'orange'
   const alertGens: { generation: number; name: string; color: 'blue' | 'red' | 'orange' }[] =
     [...chainForMarks].sort((a, b) => a.generation - b.generation).map(c => ({
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
-      // צבע לפי סטטוס הצומת בעץ (כחול=מאושר / כתום=ממתין / אדום=נדחה). דור 1 תמיד מאושר.
-      color: c.generation === 1 ? 'blue' : alertColor(genStatus.get(c.generation) ?? null),
+      color: c.generation === 1 ? 'blue' : genColor(genStatus.get(c.generation) ?? null, c.generation),
     }))
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
@@ -535,8 +540,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         </div>
       </div>
 
-      {/* התראה קופצת בכניסה — סדר דורות לא תקין (סטייה ב-5 הדורות הראשונים) */}
-      {earlyDeviation && <LineageAlertModal generations={[...deviatingGens].filter(g => g <= 5)} allGens={alertGens} />}
+      {/* התראה קופצת בכניסה — יש דור חריג (אדום) בתוך 5 הדורות הראשונים */}
+      {earlyDeviation && <LineageAlertModal generations={earlyRedGens} allGens={alertGens} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 
