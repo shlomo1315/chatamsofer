@@ -105,6 +105,19 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: next, reason: extra?.rejection_reason, docsNotes: extra?.docs_notes }),
       }).catch(() => {})
+      // שמירת רשומת היסטוריה של בקשת התיקון — כדי שתמיד נדע מה ביקשנו מהצאצא.
+      if (next === 'docs_pending') {
+        void fetch('/api/admin/docs-fix-request', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            beneficiaryId: id,
+            required_docs: extra?.required_docs,
+            docs_notes: extra?.docs_notes,
+            lineage_fix_required: extra?.lineage_fix_required,
+            lineage_fix_note: extra?.lineage_fix_note,
+          }),
+        }).catch(() => {})
+      }
       void fetch(next === 'approved' ? '/api/nedarim/save-client' : '/api/nedarim/delete-client', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beneficiaryId: id }),
       }).catch(() => {})

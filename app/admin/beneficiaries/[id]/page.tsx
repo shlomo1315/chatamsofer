@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift, AlertTriangle } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { getDocTypes } from '@/lib/serverDocTypes'
+import DocsFixHistoryBanner from './DocsFixHistoryBanner'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
@@ -88,6 +90,27 @@ async function getBirthCertificates(beneficiaryId: string): Promise<Record<strin
 interface ActivityItem { kind: 'loan' | 'maternity'; id: string; title: string; date: string; status: string }
 
 // היסטוריית פעילות — כל מה שהמשפחה הגישה (הלוואות + לידות) עם תאריך וסטטוס
+// היסטוריית בקשות תיקון/השלמת מסמכים — כל בקשה שנשלחה לצאצא (החדשה ראשונה).
+interface DocsFixRequest {
+  id: string
+  required_docs: string | null
+  docs_notes: string | null
+  lineage_fix_required: boolean
+  lineage_fix_note: string | null
+  requested_by_name: string | null
+  created_at: string
+}
+async function getDocsFixHistory(id: string): Promise<DocsFixRequest[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('docs_fix_requests')
+    .select('id, required_docs, docs_notes, lineage_fix_required, lineage_fix_note, requested_by_name, created_at')
+    .eq('beneficiary_id', id)
+    .order('created_at', { ascending: false })
+  return (data ?? []) as DocsFixRequest[]
+}
+
 async function getActivity(id: string): Promise<ActivityItem[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
@@ -128,12 +151,16 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // = סבב רשת נוסף שהאיט את פתיחת הכרטסת. עכשיו הכל בסבב אחד.
   // ⏱️ מדידת ביצועים זמנית — לאבחון האיטיות בטעינת הכרטסת (מופיע בלוגי השרת).
   const _t0 = performance.now()
-  const [beneficiary, birthCerts, activity, allNodes] = await Promise.all([
+  const [beneficiary, birthCerts, activity, allNodes, docsFixHistory, docTypeOpts] = await Promise.all([
     timed('getBeneficiary', () => getBeneficiary(id)),
     timed('getBirthCertificates', () => getBirthCertificates(id)),
     timed('getActivity', () => getActivity(id)),
     timed('getAllLineageNodes', () => getAllLineageNodes()),
+    timed('getDocsFixHistory', () => getDocsFixHistory(id)),
+    timed('getDocTypes', () => getDocTypes()),
   ])
+  // מפת מפתח→תווית להמרת required_docs לשמות קריאים בבאנר
+  const docLabelMap: Record<string, string> = Object.fromEntries(docTypeOpts.map(o => [o.value, o.label]))
   console.log(`[perf][beneficiary/${id}] all queries: ${Math.round(performance.now() - _t0)}ms · nodes=${allNodes.length}`)
   const typedChain = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string }[])
@@ -484,6 +511,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       {earlyDeviation && <LineageAlertModal generations={[...deviatingGens].filter(g => g <= 5)} allGens={alertGens} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
+
+      {/* מה ביקשנו מהצאצא — היסטוריית בקשות התיקון/השלמת מסמכים (מודגש כשעדיין ממתין) */}
+      <DocsFixHistoryBanner
+        history={docsFixHistory}
+        docLabelMap={docLabelMap}
+        active={beneficiary.eligibility_status === 'docs_pending'}
+      />
 
       {/* בדיקה מעמיקה — הסבר המזכיר למה היחוס דורש בדיקה (מוצג למנהל האחראי) */}
       {beneficiary.eligibility_status === 'deep_review' && (
