@@ -988,21 +988,17 @@ export async function POST(request: NextRequest) {
   // ייעודי (אישור קליטה או פירוט מה חסר), ומענה גנרי היה מסתיר אותו.
   try {
     const isRequest = isRequestSubject(subject)
-    const isOfficeMailbox = departmentByEmail(resolvedToEmail)?.key === 'main'
+    // ⚠️ מענה אוטומטי per-mailbox — לכל תיבה שהמענה שלה מופעל (לא רק המשרד).
+    // התיבה נקבעת לפי הנמען (resolvedToEmail). נשלח *תמיד* כשמופעל — גם למוטב
+    // רשום — ולכן אין יותר בדיקת beneficiaryId. עדיין לא על בקשות (מקבלות מענה
+    // ייעודי) ולא על replies/בירורי הלוואה (מונע לולאה).
+    const dept = departmentByEmail(resolvedToEmail)?.key ?? null
 
-    if (!isRequest && isOfficeMailbox) {
+    if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry) {
       const { maybeSendMaintenanceReply } = await import('@/lib/maintenanceReply')
-
-      // מזוהה במערכת? (לפי כתובת המייל)
-      const { data: known } = await admin
-        .from('beneficiaries')
-        .select('id')
-        .ilike('email', from.email)
-        .maybeSingle()
-
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeSendMaintenanceReply(admin, {
+      await maybeSendMaintenanceReply(admin, {
         fromEmail: from.email,
-        beneficiaryId: known?.id ?? null,
+        department: dept,
         headers: data.headers,
       })
     }

@@ -31,8 +31,12 @@ export async function register() {
 
   if (process.env.NODE_ENV !== 'production') return
 
-  // ── מענה אוטומטי לתיבת המשרד (ניתן לכבות עם AUTO_REPLY_DISABLED=1) ──
-  if (process.env.AUTO_REPLY_DISABLED !== '1') {
+  // ── סורק ה-Gmail הישן (autoReply) — מכובה כברירת מחדל ──
+  // ⚠️ המענה האוטומטי עבר למנגנון per-mailbox ב-webhook הנכנס (resend-inbound +
+  // maintenanceReply per-תיבה). הסורק הישן רץ במקביל וענה על אותו דואר משרד —
+  // מה שגרם לשני מענים על אותה פנייה. מכובה כברירת מחדל; להפעלה מפורשת בלבד
+  // עם AUTO_REPLY_LEGACY=1 (למקרה חירום).
+  if (process.env.AUTO_REPLY_LEGACY === '1') {
     const { runAutoReply } = await import('@/lib/autoReply')
     const tick = async () => {
       try {
@@ -43,7 +47,7 @@ export async function register() {
       } catch (err) { console.error('[auto-reply] scheduler tick failed', err) }
     }
     setTimeout(() => { void tick(); setInterval(() => { void tick() }, AUTOREPLY_INTERVAL_MS) }, INITIAL_DELAY_MS)
-    console.log('[auto-reply] in-process scheduler started (every 15m)')
+    console.log('[auto-reply] LEGACY Gmail scheduler started (every 15m)')
   }
 
   // ── פריקה אוטומטית בתום 6 שבועות — מדי יום בחצות שעון ישראל ──
