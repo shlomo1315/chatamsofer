@@ -381,10 +381,16 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // ── Tab: הטבות בעבר (מה שסומן בעת ההרשמה) ──
   const pb = beneficiary.past_benefits
+  // אילו חגים סומנו — מוצג בסוגריים ליד "מענק לקראת החגים" כדי שיהיה ברור *איזה* חג התקבל
+  const holidayNames = pb ? ([
+    pb.tishrei_5786 && 'תשרי תשפ"ו',
+    pb.pesach_5786 && 'פסח תשפ"ו',
+    pb.shavuot_5786 && 'שבועות תשפ"ו',
+  ].filter(Boolean) as string[]) : []
   const pastBenefitItems = pb ? ([
     pb.recovery_home && 'בית החלמה ליולדות',
     pb.food_card && 'כרטיס מזון ליולדות',
-    pb.holiday_grant && 'מענק לקראת החגים',
+    pb.holiday_grant && `מענק לקראת החגים${holidayNames.length ? ` (${holidayNames.join(', ')})` : ''}`,
     pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
     pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
     pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,

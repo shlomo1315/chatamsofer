@@ -3047,6 +3047,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="col-span-2">
                     <Field label={<EditableText k="reg.community" />} required>
                       <TextInput value={regForm.community_affiliation} onChange={setReg('community_affiliation')} placeholder="לדוגמה: קהילה / חסידות / בית כנסת" required />
+                      <p className="mt-1 text-xs text-slate-500">נחוץ לצורך היערכות להטבות שונות בהמשך</p>
                     </Field>
                   </div>
                 </div>

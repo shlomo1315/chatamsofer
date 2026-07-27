@@ -69,6 +69,8 @@ export interface Beneficiary {
   monthly_support?: number
   past_benefits?: {
     recovery_home?: boolean; food_card?: boolean; holiday_grant?: boolean; catering?: boolean
+    // אילו חגים סומנו במענק לקראת החגים (כשholiday_grant=true)
+    tishrei_5786?: boolean; pesach_5786?: boolean; shavuot_5786?: boolean
     loan?: boolean; loan_amount?: string; other?: boolean; other_details?: string; notes?: string
     update_topics?: string[]  // נושאים שהמבקש ביקש לקבל עליהם עדכונים שוטפים
   }
