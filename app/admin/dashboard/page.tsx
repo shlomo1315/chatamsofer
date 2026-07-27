@@ -21,6 +21,7 @@ interface DashData {
   totalLoanAmount: number
   maternityActive: number
   maternityPending: number
+  maternityDeepReview: number
   cardsLoaded: number
   cardsPending: number
   cardsRemaining: number
@@ -37,7 +38,7 @@ interface DashData {
 const EMPTY: DashData = {
   totalBeneficiaries: 0, newBeneficiariesWeek: 0, approved: 0, pending: 0,
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
-  maternityActive: 0, maternityPending: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
+  maternityActive: 0, maternityPending: 0, maternityDeepReview: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
   aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedTasks: 0, deepReview: 0,
 }
@@ -54,7 +55,7 @@ const getStats = unstable_cache(
     const [
       totalBeneficiaries, newBeneficiariesWeek, approved, pending,
       activeLoans, pendingLoans, defaultedLoans, loansApprovedWeek,
-      maternityActive, maternityPending, cardsLoaded, cardsPending,
+      maternityActive, maternityPending, maternityDeepReview, cardsLoaded, cardsPending,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
       activeLoanAmounts, cardStockBalance, dismissedTasks, deepReview,
@@ -69,6 +70,7 @@ const getStats = unstable_cache(
       supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']).gte('created_at', weekAgo),
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'active'),
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'pending'),
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'deep_review'),
       supabase.from('maternity_aids').select('id', headCount).eq('card_status', 'loaded'),
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('card_status.is.null,card_status.eq.pending'),
       supabase.from('widow_requests').select('id', headCount).eq('status', 'pending'),
@@ -102,6 +104,7 @@ const getStats = unstable_cache(
       totalLoanAmount: (activeLoanAmounts.data ?? []).reduce((s, x) => s + (Number(x.amount) || 0), 0),
       maternityActive: maternityActive.count ?? 0,
       maternityPending: maternityPending.count ?? 0,
+      maternityDeepReview: maternityDeepReview.count ?? 0,
       cardsLoaded: loadedCount,
       cardsPending: cardsPending.count ?? 0,
       cardsRemaining: Number(cardStockBalance.data?.balance ?? 0),
@@ -234,6 +237,7 @@ export default async function DashboardPage() {
             accent="#ec4899"
             rows={[
               { label: 'בקשות לאישור', value: fmt(s.maternityPending), tone: s.maternityPending > 0 ? 'warning' : 'neutral' },
+              { label: 'בבדיקה מעמיקה', value: fmt(s.maternityDeepReview), tone: s.maternityDeepReview > 0 ? 'danger' : 'neutral' },
               { label: 'תיקים פעילים', value: fmt(s.maternityActive), tone: 'success' },
             ]}
           />
