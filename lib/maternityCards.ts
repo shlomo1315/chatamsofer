@@ -276,18 +276,21 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // גם אחרי חידוש מלאי. נסרקות כאן כל הלידות המאושרות שטרם נטענו בפועל.
   const { data: candidates } = await admin
     .from('maternity_aids')
-    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type')
+    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type, wants_food_card')
     .eq('status', 'active')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
 
   // ⚠️ לידה מאושרת (status='active') שטרם נטענה — היא ממתינה לכרטיס, נקודה.
   // סינון לפי card_status פספס יולדות שנתקעו ב-'pending' ומעולם לא סומנו
   // awaiting_stock, ולכן לא קיבלו כרטיס ולא שובר גם אחרי חידוש מלאי.
-  // החריגים היחידים: לידה שקטה (אין לה כרטיס) ומי שנדחתה ידנית.
+  // החריגים: לידה שקטה (אין לה כרטיס), מי שנדחתה ידנית, ומי שלא ביקשה
+  // כרטיס מזון כלל (wants_food_card=false) — לא נטעין לה כרטיס. undefined
+  // (בקשות ישנות) = ביקשה, לתאימות לאחור.
   const waiting = (candidates ?? []).filter(a =>
     a.card_load_status !== 'loaded' && !a.card_tlush_id &&
     a.card_status !== 'rejected' &&
-    a.birth_type !== 'silent',
+    a.birth_type !== 'silent' &&
+    (a as { wants_food_card?: boolean }).wants_food_card !== false,
   )
   if (!waiting.length) return out
 

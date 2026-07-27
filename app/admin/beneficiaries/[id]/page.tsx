@@ -426,7 +426,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     pb.recovery_home && 'בית החלמה ליולדות',
     pb.food_card && 'כרטיס מזון ליולדות',
     pb.catering && 'קייטרינג מוזל "ויגילו בשמחה"',
-    pb.loan && `הלוואה${pb.loan_amount ? ` — ₪${pb.loan_amount}` : ''}`,
+    pb.loan && `הלוואה${pb.loan_amount ? ` — $${pb.loan_amount}` : ''}`,
     pb.other && `עזרה אחרת${pb.other_details ? ` — ${pb.other_details}` : ''}`,
   ].filter(Boolean) as string[]) : []
   // האם יש הטבה כלשהי להצגה (כולל מענק חגים שמטופל בנפרד)

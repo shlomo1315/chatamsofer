@@ -27,11 +27,14 @@ export async function notifyCenterStockReplenished(admin: SupabaseClient, center
 
     const { data: aids } = await admin
       .from('maternity_aids')
-      .select('id, birth_date, voucher_serial, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, phone, spouse_phone, address, city, email)')
+      .select('id, birth_date, voucher_serial, wants_food_card, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, phone, spouse_phone, address, city, email)')
       .eq('card_center_id', centerId)
       .eq('card_voucher_status', 'awaiting_stock')
       .eq('status', 'active')
       .neq('birth_type', 'silent')
+      // מי שלא ביקשה כרטיס מזון — לא מקבלת שובר כרטיס גם כשהמלאי מתחדש.
+      // הפילטר סובלני ל-null (בקשות ישנות = ביקשו): רק false נחסם במפורש.
+      .not('wants_food_card', 'is', false)
 
     let sent = 0
     for (const aid of (aids ?? []) as Aid[]) {

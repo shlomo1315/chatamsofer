@@ -101,11 +101,27 @@ export function centerText(c: Ctx, text: string, cx: number, y: number, size: nu
   const w = c.font.widthOfTextAtSize(t, size)
   c.page.drawText(t, { x: cx - w / 2, y, size, font: c.font, color })
 }
+// טקסט בשורה אחת שחייב להיכנס לרוחב נתון (למשל סכום בתוך תיבה): אם רחב מדי,
+// מקטין את הפונט אוטומטית עד שהוא נכנס — כך לעולם לא נחתך/גולש מהתיבה.
+export function fitRightText(c: Ctx, text: string, xRight: number, y: number, maxSize: number, maxWidth: number, color: RGB) {
+  const t = isoNum(text)
+  let size = maxSize
+  while (size > 6 && c.font.widthOfTextAtSize(t, size) > maxWidth) size -= 0.5
+  const w = c.font.widthOfTextAtSize(t, size)
+  c.page.drawText(t, { x: xRight - w, y, size, font: c.font, color })
+}
 // פסקה עטופה, יישור לימין; מחזיר את ה-y שאחרי הפסקה.
 // העטיפה נעשית על הטקסט הלוגי (לפי מילים); ההמרה ל-visual קורית בתוך rightText לכל שורה.
 export function paragraph(c: Ctx, text: string, xRight: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
   const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(toVisual(s), size))
   for (const ln of lines) { rightText(c, ln, xRight, y, size, color); y -= size + lineGap }
+  return y
+}
+// פסקה עטופה וממורכזת — לכותרות/סכומים שהמשתמש עורך: אם הטקסט ארוך מ-maxWidth
+// הוא נשבר לשורות במקום לגלוש מהעמוד. מחזיר את ה-y שאחרי הפסקה.
+export function centerParagraph(c: Ctx, text: string, cx: number, y: number, maxWidth: number, size: number, color: RGB, lineGap = 6): number {
+  const lines = wrapText(text, maxWidth, s => c.font.widthOfTextAtSize(toVisual(s), size))
+  for (const ln of lines) { centerText(c, ln, cx, y, size, color); y -= size + lineGap }
   return y
 }
 // טקסט מודגש (faux-bold) — אין פונט bold נפרד, לכן מציירים פעמיים בהיסט זעיר.
@@ -292,9 +308,10 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   serialLine(c, input.serial, y)
   y -= 22
 
-  // כותרת ראשית
-  centerText(c, vtext('card.title', 'שובר לקבלת כרטיס לרכישת אוכל מוכן'), W / 2, y, 19, NAVY)
-  y -= 10
+  // כותרת ראשית — עטיפה אוטומטית כדי שכותרת ארוכה (בעריכת המשתמש) לא תיחתך.
+  // הריווח נשמר זהה למקור (~10 מתחת לשורה האחרונה): centerParagraph מוריד
+  // 23 לשורה, ומוסיפים חזרה 13 כדי שהתוצאה בשורה בודדת תהיה כמו y-=10 המקורי.
+  y = centerParagraph(c, vtext('card.title', 'שובר לקבלת כרטיס לרכישת אוכל מוכן'), W / 2, y, W - MX * 2, 19, NAVY, 4) + 13
   goldDivider(c, W / 2, y); y -= 18
 
   // לכבוד
@@ -308,10 +325,11 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
     W - MX, y, W - MX * 2, 11, SUB, 4)
   y -= 3
 
-  // סכום הכרטיס — תיבת הדגשה. מחרוזת אחת (toVisual מטפל בהיפוך "600").
+  // סכום הכרטיס — תיבת הדגשה. שורה אחת שמתכווצת אוטומטית אם המשתמש עורך
+  // לטקסט ארוך, כדי שלעולם לא תגלוש מהתיבה. (toVisual מטפל בהיפוך "600".)
   const amH = 28
   c.page.drawRectangle({ x: MX, y: y - amH, width: W - MX * 2, height: amH, color: GOLD_SOFT, borderColor: GOLD, borderWidth: 1 })
-  rightText(c, vtext('card.amount', 'סכום טעינת הכרטיס: 600 ש"ח'), W - MX - 14, y - 19, 14, NAVY)
+  fitRightText(c, vtext('card.amount', 'סכום טעינת הכרטיס: 600 ש"ח'), W - MX - 14, y - 19, 14, W - MX * 2 - 28, NAVY)
   y = y - amH - 4
 
   // אזהרה אדומה
