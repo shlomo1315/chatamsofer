@@ -206,7 +206,7 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
 // משמש גם ללידה רגילה (תינוק אחד) וגם ללידת תאומים (שני מופעים).
 function BabyFields({
   title, accent = 'indigo', gender, name, idType, idNumber, noName, idError,
-  onChange, setNoName, setIdError,
+  onChange, setNoName, setIdError, onExistingChild, existingChildBirthDate = '',
 }: {
   title?: string
   accent?: 'indigo' | 'violet'
@@ -219,7 +219,21 @@ function BabyFields({
   onChange: (field: 'baby_gender' | 'baby_name' | 'baby_id_type' | 'baby_id_number', value: string) => void
   setNoName: (v: boolean) => void
   setIdError: (msg: string) => void
+  // מזוהה ילד שכבר רשום במשפחה — מדווח להורה את פרטיו (בעיקר תאריך הלידה,
+  // ששמור ב-birthForm ולא כאן) ואת סטטוס "קיים". null = איפוס הזיהוי.
+  onExistingChild?: (child: { birth_date: string; name: string; gender: string } | null) => void
+  // תאריך הלידה של הילד הקיים שזוהה (מקור-האמת מוחזק בהורה). כשקיים —
+  // מוצגת הודעת "כבר רשום במשפחה", ואם עברו 30 יום — אזהרה אדומה חוסמת.
+  existingChildBirthDate?: string
 }) {
+  // חלון ההגשה חלף? (30 יום מהלידה) — נגזר מתאריך הילד הקיים שזוהה.
+  const birthWindowClosed = (() => {
+    if (!existingChildBirthDate) return false
+    const bd = new Date(existingChildBirthDate); bd.setHours(0, 0, 0, 0)
+    if (isNaN(bd.getTime())) return false
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return today.getTime() > bd.getTime() + MATERNITY_SUBMIT_DAYS * 86400000
+  })()
   // בתאומים (title קיים) עוטפים כל תינוק במסגרת תוחמת עם כותרת בולטת בצבע משלו,
   // כדי שיהיה ברור לחלוטין איזה שדה שייך לאיזה ילד.
   const framed = !!title
@@ -282,7 +296,7 @@ function BabyFields({
           </div>
           <TextInput value={idNumber}
             className={idError ? 'border-red-400 focus:ring-red-400' : ''}
-            onChange={e => { const v = idType === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; onChange('baby_id_number', v); setIdError('') }}
+            onChange={e => { const v = idType === 'id' ? e.target.value.replace(/\D/g, '').slice(0, 9) : e.target.value; onChange('baby_id_number', v); setIdError(''); onExistingChild?.(null) }}
             dir="ltr" inputMode={idType === 'id' ? 'numeric' : 'text'}
             maxLength={idType === 'id' ? 9 : undefined}
             placeholder={idType === 'id' ? 'מספר תעודת זהות (9 ספרות)' : 'מספר דרכון'} required
@@ -305,11 +319,14 @@ function BabyFields({
                 const d = await r.json()
                 if (d.found) { setIdError('תעודת זהות זו רשומה במערכת כמוטב — נא לבדוק את המספר'); return }
                 setIdError('')
-                // מילוי אוטומטי מפרטי הילד הקיים (מין + שם), אם עדיין ריקים
+                // מילוי אוטומטי מפרטי הילד הקיים (מין + שם), אם עדיין ריקים.
+                // תאריך הלידה נשמר ב-birthForm (ברמת ההורה) ולכן מדווח דרך
+                // onExistingChild — שם גם ננעל התאריך ותוצג הודעת "כבר רשום".
                 if (d.foundAsChild && d.childData) {
                   const cd = d.childData
                   if (cd.gender && !gender) onChange('baby_gender', cd.gender)
                   if (cd.name && !name) onChange('baby_name', cd.name)
+                  onExistingChild?.({ birth_date: cd.birth_date ?? '', name: cd.name ?? '', gender: cd.gender ?? '' })
                 }
               } catch { /* תיתפס בעת השליחה */ }
               // ⚠️ בדיקה נוספת — האם כבר קיימת בקשת לידה *בתהליך* על אותו תינוק.
@@ -328,7 +345,21 @@ function BabyFields({
           {!idError && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && !validateIsraeliId(idNumber) && (
             <p className="flex items-center gap-1 text-xs text-red-600 mt-1.5"><AlertCircle size={13} /> תעודת הזהות אינה תקינה</p>
           )}
-          {!idError && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && validateIsraeliId(idNumber) && (
+          {/* ילד שכבר רשום במשפחה — פרטיו מולאו אוטומטית. אם חלף חלון ה-30 יום,
+              אזהרה אדומה חוסמת; אחרת הודעת מידע כחולה. גובר על "ת"ז תקינה". */}
+          {!idError && existingChildBirthDate && birthWindowClosed && (
+            <p className="flex items-start gap-1.5 text-xs text-red-600 mt-1.5 font-medium">
+              <AlertCircle size={14} className="mt-px flex-shrink-0" />
+              <span>שימו לב — הילד כבר רשום במשפחה ונולד לפני יותר מ־{MATERNITY_SUBMIT_DAYS} יום. לא ניתן להגיש בקשת לידה לאחר {MATERNITY_SUBMIT_DAYS} יום מהלידה.</span>
+            </p>
+          )}
+          {!idError && existingChildBirthDate && !birthWindowClosed && (
+            <p className="flex items-start gap-1.5 text-xs text-blue-700 mt-1.5">
+              <CheckCircle2 size={14} className="mt-px flex-shrink-0" />
+              <span>הילד כבר רשום במשפחה — פרטיו (שם, מין ותאריך לידה) מולאו אוטומטית.</span>
+            </p>
+          )}
+          {!idError && !existingChildBirthDate && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && validateIsraeliId(idNumber) && (
             <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
           )}
         </Field>
@@ -1265,6 +1296,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [birthCertFile, setBirthCertFile] = useState<File | null>(null)
   const [noBabyName, setNoBabyName] = useState(false)   // סימון "עדיין אין שם" — להשלמה בכניסה הבאה
   const [babyIdError, setBabyIdError] = useState('')
+  // תאריך הלידה של ילד קיים שזוהה לפי ת"ז (תינוק ראשון / תאום שני). כשקיים —
+  // תאריך הלידה בטופס ננעל, ומוצגת הודעת "כבר רשום". משמש גם לחסימת 30 יום.
+  const [existingBabyBirthDate, setExistingBabyBirthDate] = useState('')
+  const [existingBaby2BirthDate, setExistingBaby2BirthDate] = useState('')
   // חלונית "שם חסר" — נפתחת בעת הגשה כשלא מולא שם. לא חוסמת: אפשר להשלים
   // אחר כך. שומרת את אירוע ה-submit כדי להמשיך בו אם המשתמש בחר "אשלים אחר כך".
   const [nameReminderOpen, setNameReminderOpen] = useState(false)
@@ -1396,6 +1431,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const setBirth = (k: keyof typeof birthForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setBirthForm(f => ({ ...f, [k]: e.target.value }))
+
+  // האם חלף חלון ההגשה (30 יום) עבור ילד קיים שזוהה. נגזר מתאריכי הלידה
+  // שנמסרו מ-lookup (תינוק ראשון / תאום שני) — חוסם את ההגשה מבעוד מועד.
+  const birthWindowClosedForExisting = [existingBabyBirthDate, existingBaby2BirthDate].some(iso => {
+    if (!iso) return false
+    const bd = new Date(iso); bd.setHours(0, 0, 0, 0)
+    if (isNaN(bd.getTime())) return false
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return today.getTime() > bd.getTime() + MATERNITY_SUBMIT_DAYS * 86400000
+  })
 
   const setLoan = (k: keyof typeof loanForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
@@ -2133,6 +2178,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setError(''); setBabyIdError(''); setNoBabyName(false)
     setIsTwins(false); setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' }); setNoBaby2Name(false); setBaby2IdError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
+    setExistingBabyBirthDate(''); setExistingBaby2BirthDate('')
     setBirthCertFile(null)
     setDocFiles({})
     setStep('new-birth')
@@ -4245,7 +4291,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <div className="flex gap-2">
                       {[{ v: false, l: 'לידה רגילה' }, { v: true, l: 'לידת תאומים' }].map(({ v, l }) => (
                         <button key={String(v)} type="button"
-                          onClick={() => setIsTwins(v)}
+                          onClick={() => {
+                            setIsTwins(v)
+                            // חזרה ל"לידה רגילה" — לנקות את פרטי התאום השני כדי
+                            // שזיהוי ילד קיים/אזהרה לא יישארו תקועים.
+                            if (!v) {
+                              setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' })
+                              setNoBaby2Name(false); setBaby2IdError(''); setExistingBaby2BirthDate('')
+                            }
+                          }}
                           className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
                             isTwins === v ? 'bg-indigo-100 text-indigo-800 border-indigo-400' : GENDER_BTN_UNSEL
                           }`}
@@ -4264,9 +4318,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   noName={noBabyName} idError={babyIdError}
                   onChange={(field, value) => setBirthForm(f => ({ ...f, [field]: value }))}
                   setNoName={setNoBabyName} setIdError={setBabyIdError}
+                  existingChildBirthDate={existingBabyBirthDate}
+                  onExistingChild={child => {
+                    setExistingBabyBirthDate(child?.birth_date ?? '')
+                    // מילוי אוטומטי של תאריך הלידה מהילד הקיים (אם קיים תאריך תקין)
+                    if (child?.birth_date) setBirthForm(f => ({ ...f, birth_date: child.birth_date }))
+                  }}
                 />
 
-                {/* תינוק שני — רק בלידת תאומים */}
+                {/* תינוק שני — רק בלידת תאומים. תאומים חולקים תאריך לידה אחד,
+                    לכן זיהוי תאום שני קיים ממלא גם הוא את birthForm.birth_date. */}
                 {isTwins && (
                   <BabyFields
                     title="תינוק שני" accent="violet"
@@ -4275,6 +4336,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     noName={noBaby2Name} idError={baby2IdError}
                     onChange={(field, value) => setBaby2(b => ({ ...b, [field]: value }))}
                     setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
+                    existingChildBirthDate={existingBaby2BirthDate}
+                    onExistingChild={child => {
+                      setExistingBaby2BirthDate(child?.birth_date ?? '')
+                      if (child?.birth_date) setBirthForm(f => ({ ...f, birth_date: child.birth_date }))
+                    }}
                   />
                 )}
                 {/* בחירת ההטבות — כרטיס מזון ו/או בית החלמה. רשימת בתי ההחלמה
@@ -4347,8 +4413,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <Heart size={13} /> עברת לידה שקטה? להגשת בקשה מותאמת — לחצי כאן
             </button>
 
-            <button type="submit" disabled={loading}
-              className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
+            {/* חלף חלון ה-30 יום עבור ילד קיים שזוהה — אזהרה חוסמת מעל הכפתור */}
+            {birthWindowClosedForExisting && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-sm text-red-700">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <span>שימו לב — לא ניתן להגיש בקשת לידה לאחר {MATERNITY_SUBMIT_DAYS} יום מהלידה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.</span>
+              </div>
+            )}
+            <button type="submit" disabled={loading || birthWindowClosedForExisting}
+              className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base"
             >
               {loading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />}
               {loading ? 'שולח...' : 'שלח בקשה'}
