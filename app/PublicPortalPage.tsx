@@ -247,45 +247,9 @@ function BabyFields({
           <Baby size={16} /> {title}
         </div>
       )}
-      <Field label="מין הנולד/ת" required>
-        <div className="flex gap-2">
-          {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
-            <button key={v} type="button"
-              onClick={() => onChange('baby_gender', v)}
-              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
-                gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
-              }`}
-            >{l}</button>
-          ))}
-        </div>
-      </Field>
-      {/* שם — אופציונלי. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
-      {gender && (
-        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
-          <TextInput value={name}
-            disabled={noName}
-            className={noName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
-            onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
-            placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
-          <div className="mt-2">
-            <button type="button"
-              onClick={() => { const next = !noName; setNoName(next); if (next) onChange('baby_name', '') }}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
-                noName
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                  : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
-              }`}>
-              {noName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
-              {noName ? 'יושלם בהמשך' : 'עדיין אין שם'}
-            </button>
-            {noName && (
-              <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
-            )}
-          </div>
-        </Field>
-      )}
-      {gender && (
-        <Field label={gender === 'female' ? 'תעודת זהות של הנולדת' : 'תעודת זהות של הנולד'} required hint="עבור תושב חוץ יש לבחור דרכון">
+      {/* תעודת הזהות ראשונה — הזנתה מזהה ילד קיים וממלאת אוטומטית מין/שם/תאריך.
+          אינה מותנית ב-gender (בניגוד למין/שם) כדי שתהיה השדה הפותח. */}
+      <Field label="תעודת זהות של הנולד/ת" required hint="עבור תושב חוץ יש לבחור דרכון">
           <div className="flex gap-2 mb-2">
             {[{ v: 'id', l: 'ת.ז ישראלית' }, { v: 'passport', l: 'דרכון' }].map(({ v, l }) => (
               <button key={v} type="button" onClick={() => onChange('baby_id_type', v)}
@@ -362,6 +326,43 @@ function BabyFields({
           {!idError && !existingChildBirthDate && idType === 'id' && idNumber.replace(/\D/g, '').length >= 9 && validateIsraeliId(idNumber) && (
             <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
           )}
+      </Field>
+      {/* מין הנולד/ת — אחרי הת"ז. מתמלא אוטומטית כשמזוהה ילד קיים. */}
+      <Field label="מין הנולד/ת" required>
+        <div className="flex gap-2">
+          {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
+            <button key={v} type="button"
+              onClick={() => onChange('baby_gender', v)}
+              className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
+                gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
+              }`}
+            >{l}</button>
+          ))}
+        </div>
+      </Field>
+      {/* שם — אופציונלי. מוצג אחרי בחירת/מילוי המין. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
+      {gender && (
+        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
+          <TextInput value={name}
+            disabled={noName}
+            className={noName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
+            onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
+            placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+          <div className="mt-2">
+            <button type="button"
+              onClick={() => { const next = !noName; setNoName(next); if (next) onChange('baby_name', '') }}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 ${
+                noName
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                  : 'bg-white border-indigo-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-300'
+              }`}>
+              {noName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+              {noName ? 'יושלם בהמשך' : 'עדיין אין שם'}
+            </button>
+            {noName && (
+              <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
+            )}
+          </div>
         </Field>
       )}
     </div>
