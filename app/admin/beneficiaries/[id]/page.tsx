@@ -148,6 +148,34 @@ async function getActivity(id: string): Promise<ActivityItem[]> {
   return items
 }
 
+// ילדים מבקשות הלידה של הצאצא — כולל בקשות שעדיין ממתינות לאישור. מוחזרים
+// לצורך מיזוג לרשימת הילדים (children) כדי שתינוק מלידה יוצג מיד, גם לפני אישור.
+interface BirthChild { name: string; id_number?: string; gender?: string; birth_date?: string; status?: string; maternity_aid_id?: string; pending?: boolean }
+async function getBirthRequestChildren(id: string): Promise<BirthChild[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('maternity_aids')
+    .select('id, baby_name, baby_gender, baby_id_number, birth_date, babies, status, is_twins')
+    .eq('beneficiary_id', id)
+    .neq('status', 'cancelled')
+  const out: BirthChild[] = []
+  for (const m of (data ?? []) as { id: string; baby_name?: string | null; baby_gender?: string | null; baby_id_number?: string | null; birth_date?: string | null; babies?: unknown; status?: string }[]) {
+    // תאומים — מ-babies; אחרת התינוק הבודד מהשדות baby_*
+    const babies = Array.isArray(m.babies) && m.babies.length
+      ? (m.babies as { name?: string | null; gender?: string | null; id_number?: string | null }[])
+      : [{ name: m.baby_name, gender: m.baby_gender, id_number: m.baby_id_number }]
+    for (const b of babies) {
+      out.push({
+        name: b.name ?? '', id_number: b.id_number ?? undefined, gender: b.gender ?? undefined,
+        birth_date: m.birth_date ?? undefined, status: m.status, maternity_aid_id: m.id,
+        pending: m.status !== 'active' && m.status !== 'completed',
+      })
+    }
+  }
+  return out
+}
+
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pending: { label: 'ממתין לאישור', cls: 'bg-amber-100 text-amber-800' },
   active: { label: 'מאושר', cls: 'bg-green-100 text-green-800' },
@@ -168,13 +196,14 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // = סבב רשת נוסף שהאיט את פתיחת הכרטסת. עכשיו הכל בסבב אחד.
   // ⏱️ מדידת ביצועים זמנית — לאבחון האיטיות בטעינת הכרטסת (מופיע בלוגי השרת).
   const _t0 = performance.now()
-  const [beneficiary, birthCerts, activity, allNodes, docsFixHistory, docTypeOpts] = await Promise.all([
+  const [beneficiary, birthCerts, activity, allNodes, docsFixHistory, docTypeOpts, birthKids] = await Promise.all([
     timed('getBeneficiary', () => getBeneficiary(id)),
     timed('getBirthCertificates', () => getBirthCertificates(id)),
     timed('getActivity', () => getActivity(id)),
     timed('getAllLineageNodes', () => getAllLineageNodes()),
     timed('getDocsFixHistory', () => getDocsFixHistory(id)),
     timed('getDocTypes', () => getDocTypes()),
+    timed('getBirthRequestChildren', () => getBirthRequestChildren(id)),
   ])
   // מפת מפתח→תווית להמרת required_docs לשמות קריאים בבאנר
   const docLabelMap: Record<string, string> = Object.fromEntries(docTypeOpts.map(o => [o.value, o.label]))
@@ -230,9 +259,21 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
   const formatDateTime = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: he }) : '—'
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
-  const kids = Array.isArray(beneficiary.children)
+  const registeredKids = Array.isArray(beneficiary.children)
     ? (beneficiary.children as { name: string; id_number?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[])
     : []
+  // מיזוג ילדים מבקשות הלידה (כולל ממתינות לאישור) — כדי שתינוק מלידה יוצג
+  // מיד בטאב "ילדים", גם לפני אישור. לא מכפילים ילד שכבר קיים ב-children (לפי ת"ז).
+  const existingIds = new Set(registeredKids.map(k => (k.id_number ?? '').replace(/\D/g, '')).filter(Boolean))
+  const extraFromBirths = birthKids
+    .filter(b => { const n = (b.id_number ?? '').replace(/\D/g, ''); return n && !existingIds.has(n) })
+    .map(b => ({
+      name: b.name, id_number: b.id_number, gender: b.gender, birth_date: b.birth_date,
+      marital_status: undefined as string | undefined,
+      birth_status: (b.pending ? 'pending' : 'approved') as 'pending' | 'approved',
+      maternity_aid_id: b.maternity_aid_id,
+    }))
+  const kids = [...registeredKids, ...extraFromBirths]
   const maritalLabel = (c: { gender?: string; marital_status?: string }) => {
     if (c.marital_status === 'married') return c.gender === 'female' ? 'נשואה' : 'נשוי'
     if (c.marital_status === 'single') return c.gender === 'female' ? 'לא נשואה' : 'לא נשוי'
