@@ -213,14 +213,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'הטבה', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-2.5 py-3.5 text-xs font-semibold text-slate-500 align-middle whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={10 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={11 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -233,15 +233,17 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                       <span className="inline-flex items-center gap-1.5 flex-wrap">
                         {aid.baby_name ?? <span className="text-slate-300">—</span>}
                         {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
-                        {/* תגית הטבות — מציגה תמיד מה היולדת ביקשה */}
-                        {(() => {
-                          const wc = aid.wants_food_card !== false
-                          const wr = aid.wants_recovery !== false
-                          const label = wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : '—'
-                          const cls = wc && wr ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`} title="הטבות שהיולדת ביקשה">{label}</span>
-                        })()}
                       </span>
+                    </td>
+                    {/* עמודת ההטבה — נפרדת משם התינוק. מציגה תמיד מה היולדת ביקשה. */}
+                    <td className="px-2.5 py-3 align-middle">
+                      {(() => {
+                        const wc = aid.wants_food_card !== false
+                        const wr = aid.wants_recovery !== false
+                        const label = wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : '—'
+                        const cls = wc && wr ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`} title="הטבות שהיולדת ביקשה">{label}</span>
+                      })()}
                     </td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
