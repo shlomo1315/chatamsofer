@@ -228,12 +228,8 @@ function DetailModal({ aid, onClose }: { aid: Aid; onClose: () => void }) {
             </div>
           )}
 
-          {aid.notes && (
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xs text-slate-400 mb-1">הערות</p>
-              <p className="text-sm text-slate-700">{aid.notes}</p>
-            </div>
-          )}
+          {/* הערות (aid.notes) — פנימיות למשרד/ליולדת בלבד. הוסתרו מפורטל בית
+              ההחלמה: הן אינן מיועדות לעיני בית ההחלמה. */}
         </div>
       </div>
     </div>
