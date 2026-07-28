@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
             found: false,
             foundAsChild: true,
             parentName,
+            // מזהה המשפחה שהילד רשום אצלה — לבדיקה אם זו המשפחה המחוברת או אחרת
+            parentBeneficiaryId: row.id,
             childData: {
               name: match.name ?? '',
               id_number: idParam,

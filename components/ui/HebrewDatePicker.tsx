@@ -24,10 +24,12 @@ const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.g
 
 type Cell = { date: Date; label: string } | null
 
-export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack, minDaysBack, minDateMessage }: {
+export default function HebrewDatePicker({ value, onChange, maxToday = true, yearFirst = false, birthYearRange, minMonthsBack, minDaysBack, minDateMessage, disabled = false }: {
   value: string
   onChange: (iso: string) => void
   maxToday?: boolean
+  // נעילה מלאה — הכפתור אינו נפתח (התאריך מגיע ממקור חיצוני ואין לשנותו)
+  disabled?: boolean
   // yearFirst — פתיחה ישר לרשימת השנים (מתאים לתאריך לידה של מבוגר). ברירת מחדל: תצוגת ימים.
   yearFirst?: boolean
   // birthYearRange — רשימת השנים תתחיל בגיל minAge (למשל 18), כך שטווח הגילאים הרלוונטי
@@ -146,8 +148,8 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
 
   return (
     <div className="relative" ref={ref} dir="rtl">
-      <button type="button" onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-right transition-colors ${open ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-300'} ${selected ? 'text-slate-800' : 'text-slate-400'}`}>
+      <button type="button" disabled={disabled} onClick={() => { if (!disabled) setOpen(o => !o) }}
+        className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-right transition-colors ${open ? 'border-indigo-400 ring-2 ring-indigo-100' : 'border-slate-300'} ${selected ? 'text-slate-800' : 'text-slate-400'} ${disabled ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`}>
         <Calendar size={16} className="text-slate-400 flex-shrink-0" />
         <span className="flex-1 truncate">{triggerLabel}</span>
       </button>

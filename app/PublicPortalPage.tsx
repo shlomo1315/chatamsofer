@@ -206,7 +206,7 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
 // משמש גם ללידה רגילה (תינוק אחד) וגם ללידת תאומים (שני מופעים).
 function BabyFields({
   title, accent = 'indigo', gender, name, idType, idNumber, noName, idError,
-  onChange, setNoName, setIdError, onExistingChild, existingChildBirthDate = '',
+  onChange, setNoName, setIdError, onExistingChild, existingChildBirthDate = '', currentBeneficiaryId,
 }: {
   title?: string
   accent?: 'indigo' | 'violet'
@@ -216,6 +216,8 @@ function BabyFields({
   idNumber: string
   noName: boolean
   idError: string
+  // מזהה המשפחה המחוברת — לחסימת ת"ז של ילד הרשום *במשפחה אחרת*
+  currentBeneficiaryId?: string
   onChange: (field: 'baby_gender' | 'baby_name' | 'baby_id_type' | 'baby_id_number', value: string) => void
   setNoName: (v: boolean) => void
   setIdError: (msg: string) => void
@@ -226,6 +228,9 @@ function BabyFields({
   // מוצגת הודעת "כבר רשום במשפחה", ואם עברו 30 יום — אזהרה אדומה חוסמת.
   existingChildBirthDate?: string
 }) {
+  // ילד קיים זוהה במשפחה המחוברת → פרטיו (מין/שם/תאריך) נעולים לעריכה,
+  // כי הם מגיעים מרישום המשפחה ואין לשנותם ידנית בבקשת הלידה.
+  const lockedFromExisting = !!existingChildBirthDate
   // חלון ההגשה חלף? (30 יום מהלידה) — נגזר מתאריך הילד הקיים שזוהה.
   const birthWindowClosed = (() => {
     if (!existingChildBirthDate) return false
@@ -282,6 +287,14 @@ function BabyFields({
                 const r = await fetch(`/api/portal/lookup?${param}`)
                 const d = await r.json()
                 if (d.found) { setIdError('תעודת זהות זו רשומה במערכת כמוטב — נא לבדוק את המספר'); return }
+                // ⚠️ ת"ז של ילד הרשום ב*משפחה אחרת* (לא המחוברת) — חוסמים.
+                // אי אפשר להגיש בקשת לידה על ילד ששייך למשפחה אחרת.
+                if (d.foundAsChild && d.parentBeneficiaryId && currentBeneficiaryId
+                    && d.parentBeneficiaryId !== currentBeneficiaryId) {
+                  onExistingChild?.(null)
+                  setIdError('תעודת הזהות כבר רשומה במשפחה אחרת')
+                  return
+                }
                 setIdError('')
                 // מילוי אוטומטי מפרטי הילד הקיים (מין + שם), אם עדיין ריקים.
                 // תאריך הלידה נשמר ב-birthForm (ברמת ההורה) ולכן מדווח דרך
@@ -327,27 +340,30 @@ function BabyFields({
             <p className="flex items-center gap-1 text-xs text-green-600 mt-1.5"><CheckCircle2 size={13} /> תעודת זהות תקינה</p>
           )}
       </Field>
-      {/* מין הנולד/ת — אחרי הת"ז. מתמלא אוטומטית כשמזוהה ילד קיים. */}
+      {/* מין הנולד/ת — אחרי הת"ז. מתמלא אוטומטית ו*ננעל* כשמזוהה ילד קיים
+          (הפרטים באים מרישום המשפחה — אין לשנותם). */}
       <Field label="מין הנולד/ת" required>
         <div className="flex gap-2">
           {[{ v: 'male', l: 'בן' }, { v: 'female', l: 'בת' }].map(({ v, l }) => (
-            <button key={v} type="button"
-              onClick={() => onChange('baby_gender', v)}
+            <button key={v} type="button" disabled={lockedFromExisting}
+              onClick={() => { if (!lockedFromExisting) onChange('baby_gender', v) }}
               className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150 ${
                 gender === v ? GENDER_BTN_SEL[v] : GENDER_BTN_UNSEL
-              }`}
+              } ${lockedFromExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
             >{l}</button>
           ))}
         </div>
       </Field>
       {/* שם — אופציונלי. מוצג אחרי בחירת/מילוי המין. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
       {gender && (
-        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint="לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה">
+        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint={lockedFromExisting ? undefined : 'לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה'}>
           <TextInput value={name}
-            disabled={noName}
-            className={noName ? 'opacity-50 cursor-not-allowed bg-slate-50' : ''}
+            disabled={noName || lockedFromExisting}
+            className={noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}
             onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
             placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+          {/* כפתור "עדיין אין שם" מוסתר כשהשם נעול (מגיע מרישום המשפחה) */}
+          {!lockedFromExisting && (
           <div className="mt-2">
             <button type="button"
               onClick={() => { const next = !noName; setNoName(next); if (next) onChange('baby_name', '') }}
@@ -363,6 +379,7 @@ function BabyFields({
               <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
             )}
           </div>
+          )}
         </Field>
       )}
     </div>
@@ -4312,6 +4329,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   noName={noBabyName} idError={babyIdError}
                   onChange={(field, value) => setBirthForm(f => ({ ...f, [field]: value }))}
                   setNoName={setNoBabyName} setIdError={setBabyIdError}
+                  currentBeneficiaryId={beneficiary?.id}
                   existingChildBirthDate={existingBabyBirthDate}
                   onExistingChild={child => {
                     setExistingBabyBirthDate(child?.birth_date ?? '')
@@ -4330,6 +4348,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     noName={noBaby2Name} idError={baby2IdError}
                     onChange={(field, value) => setBaby2(b => ({ ...b, [field]: value }))}
                     setNoName={setNoBaby2Name} setIdError={setBaby2IdError}
+                    currentBeneficiaryId={beneficiary?.id}
                     existingChildBirthDate={existingBaby2BirthDate}
                     onExistingChild={child => {
                       setExistingBaby2BirthDate(child?.birth_date ?? '')
@@ -4338,7 +4357,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   />
                 )}
                 {/* תאריך הלידה — אחרי פרטי התינוקות. כשמזוהה ילד קיים לפי ת"ז
-                    התאריך מולא אוטומטית ומוצג כאן; אחרת המשתמש בוחר ידנית. */}
+                    התאריך מולא אוטומטית ו*ננעל* (מגיע מרישום המשפחה); אחרת בחירה ידנית. */}
                 <div className="col-span-2 sm:col-span-1">
                   <Field label={<EditableText k="birth.date.label" />} required>
                     {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
@@ -4348,6 +4367,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       maxToday
                       minDaysBack={MATERNITY_SUBMIT_DAYS}
                       minDateMessage="שימו לב: ניתן להגיש בקשה עד 30 יום מתאריך הלידה. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
+                      disabled={!!(existingBabyBirthDate || existingBaby2BirthDate)}
                     />
                   </Field>
                 </div>
