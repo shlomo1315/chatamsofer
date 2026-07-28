@@ -594,8 +594,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         active={beneficiary.eligibility_status === 'docs_pending'}
       />
 
-      {/* בדיקה מעמיקה — הסבר המזכיר למה היחוס דורש בדיקה (מוצג למנהל האחראי) */}
-      {beneficiary.eligibility_status === 'deep_review' && (
+      {/* בדיקה מעמיקה — הסבר המזכיר למה היחוס דורש בדיקה (מוצג למנהל האחראי).
+          ⚠️ הדגל deep_review "נדבק" ברישום ומתעדכן רק בנתיב assign — לכן משפחה
+          שדורותיה כבר אושרו (בכל דרך אחרת) נותרה עם הדגל, והבאנר הופיע בטעות.
+          לכן מציגים את הבאנר רק כשהסטייה עדיין *אמיתית*: או שהמזכיר העביר ידנית
+          (deep_review_reason), או שבפועל יש דור חריג (earlyDeviation). */}
+      {beneficiary.eligibility_status === 'deep_review'
+        && (!!(beneficiary as { deep_review_reason?: string | null }).deep_review_reason || earlyDeviation) && (
         <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-5 py-4 flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={18} className="text-orange-600" />
