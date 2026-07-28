@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Button from '@/components/ui/Button'
 import EmailInput from '@/components/ui/EmailInput'
-import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check } from 'lucide-react'
+import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check, ShieldAlert } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
@@ -615,6 +615,7 @@ interface FormState {
   notes: string
   lineage_node_id: string
   eligibility_status: string
+  is_special: boolean   // אדם חריג (אינו צאצא) — מדלגים על סדר הדורות
 }
 
 interface Props {
@@ -652,6 +653,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     notes: defaultValues?.notes ?? '',
     lineage_node_id: defaultValues?.lineage_node_id ?? '',
     eligibility_status: defaultValues?.eligibility_status ?? 'pending',
+    is_special: defaultValues?.is_special ?? false,
   })
   const [lineagePath, setLineagePath] = useState<string[]>([])
   const [manualLineage, setManualLineage] = useState<string[]>(
@@ -776,7 +778,8 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     if (!form.address.trim()) errs.address = 'שדה חובה'
     if (!form.city.trim()) errs.city = 'שדה חובה'
 
-    if (!form.lineage_node_id) errs.lineage_node_id = 'יש לבחור שיוך שושלת'
+    // אדם חריג אינו צאצא — אין לו שיוך שושלת, ולכן מדלגים על בדיקה זו.
+    if (!form.is_special && !form.lineage_node_id) errs.lineage_node_id = 'יש לבחור שיוך שושלת'
 
     const childErrs: Partial<Record<keyof ChildEntry, string>>[] = children.map(c => {
       const ce: Partial<Record<keyof ChildEntry, string>> = {}
@@ -871,9 +874,13 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           ...(c.maternity_aid_id ? { maternity_aid_id: c.maternity_aid_id } : {}),
         })),
         notes: form.notes || null,
-        lineage_node_id: form.lineage_node_id || null,
-        lineage_manual: manualLineage.map(s => s.trim()).filter(Boolean),
+        // אדם חריג — אין לו ייחוס: מאפסים את שדות הדורות במפורש.
+        lineage_node_id: form.is_special ? null : (form.lineage_node_id || null),
+        lineage_manual: form.is_special ? [] : manualLineage.map(s => s.trim()).filter(Boolean),
         eligibility_status: form.eligibility_status || 'pending',
+        // is_special נכלל רק כשהוא true (רשומה חריגה) — כדי שרשומות רגילות
+        // יישמרו גם אם מיגרציית העמודה טרם רצה. חריג דורש שהמיגרציה תרוץ.
+        ...(form.is_special ? { is_special: true } : {}),
         updated_at: new Date().toISOString(),
       }
 
@@ -1237,7 +1244,21 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
         />
       </Section>
 
-      {/* ── Lineage ── */}
+      {/* ── אדם חריג ── מסמן is_special ומסתיר את שיוך השושלת (חריג אינו צאצא) */}
+      <Section title="סוג הרשומה" icon={ShieldAlert}>
+        <label className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition-colors ${form.is_special ? 'border-orange-300 bg-orange-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+          <input type="checkbox" checked={form.is_special}
+            onChange={e => setForm(f => ({ ...f, is_special: e.target.checked }))}
+            className="mt-0.5 w-4 h-4 accent-orange-600" />
+          <span className="flex flex-col">
+            <span className={`text-sm font-semibold ${form.is_special ? 'text-orange-800' : 'text-slate-700'}`}>אדם חריג (אינו צאצא)</span>
+            <span className="text-xs text-slate-500 mt-0.5">אדם שאושר ידנית להגיש בקשות אך אינו נכד/צאצא. אין צורך בשיוך שושלת — הרשומה תופיע ב&quot;אישורים חריגים&quot;.</span>
+          </span>
+        </label>
+      </Section>
+
+      {/* ── Lineage ── מוסתר לאדם חריג (אין לו ייחוס) */}
+      {!form.is_special && (
       <Section title="שיוך שושלת *" icon={GitBranch}>
         <p className="text-xs text-slate-500 mb-3">
           בחר את הענף שהצאצא שייך אליו. לחץ על שם ואז המשך לבחור את הדור הבא.
@@ -1387,6 +1408,7 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
           </div>
         )}
       </Section>
+      )}
 
       {/* ── Notes ── */}
       <Section title="הערות" icon={FileText}>

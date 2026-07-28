@@ -46,10 +46,21 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
   const from = Math.max(0, (p.page - 1) * p.size)
   const to = from + p.size - 1
 
+  // ⚠️ העמודה is_special נוספת במיגרציה שמורצת ידנית. עד שהיא רצה — סינון
+  // עליה מפיל את כל הרשימה (עמודה לא קיימת = שגיאת PostgREST). לכן בודקים
+  // תחילה אם העמודה קיימת, ורק אז מסננים; אם לא — מדלגים על הסינון בבטחה.
+  const hasSpecialCol = await (async () => {
+    const { error } = await supabase.from('beneficiaries').select('is_special').limit(1)
+    return !error
+  })()
+
   // סינון החריגים: הרשימה הראשית מציגה רק לא-חריגים; דף החריגים רק חריגים.
-  // בהרשמה הראשית תופסים גם null (תאימות לפני שהעמודה קיבלה ערך).
-  const applySpecial = <T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }>(q: T): T =>
-    special ? q.eq('is_special', true) : q.or('is_special.is.null,is_special.eq.false')
+  // בהרשמה הראשית תופסים גם null (תאימות לפני שהעמודה קיבלה ערך). אם העמודה
+  // עדיין לא קיימת — לא מסננים כלל (הרשימה הראשית תציג הכל עד שהמיגרציה תרוץ).
+  const applySpecial = <T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }>(q: T): T => {
+    if (!hasSpecialCol) return q
+    return special ? q.eq('is_special', true) : q.or('is_special.is.null,is_special.eq.false')
+  }
 
   // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
