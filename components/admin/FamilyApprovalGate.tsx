@@ -18,13 +18,15 @@ interface GateBeneficiary {
   children_count?: number | null
   eligibility_status?: string | null
   lineage_chain?: { generation: number; name: string; relation?: 'son' | 'son_in_law' | null }[] | null
+  is_special?: boolean | null
 }
 
 // שער אישור משפחה — מוצג בכרטיס בקשה (הלוואה/לידה/וכו').
 // אם המשפחה טרם אושרה: מציג את פרטי המשפחה והייחוס + אפשרות לאשר אותה ישירות,
-// ומונע אישור הבקשה לפני שהמשפחה מאושרת.
+// ומונע אישור הבקשה לפני שהמשפחה מאושרת. לאדם חריג אין ייחוס — הטקסט מותאם.
 export default function FamilyApprovalGate({ beneficiary, compact }: { beneficiary: GateBeneficiary; compact?: boolean }) {
   const approved = beneficiary.eligibility_status === 'approved'
+  const isSpecial = beneficiary.is_special === true
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || (beneficiary.full_name ?? '')
   const married = (beneficiary.marital_status ?? '').startsWith('נשו')
 
@@ -44,7 +46,11 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
       <div className={`flex items-center justify-between gap-3 px-4 py-3 bg-amber-100/70 flex-wrap ${compact ? 'rounded-[14px]' : 'rounded-t-[14px]'}`}>
         <div className="flex items-center gap-2 text-amber-900">
           <AlertTriangle size={18} className="flex-shrink-0" />
-          <span className="font-bold text-sm">שים לב, משפחה זו עדיין לא אישרו את הייחוס שלה. במידה ותרצה לאשר את הייחוס של משפחה זו — תוכל לעשות זאת כאן.</span>
+          <span className="font-bold text-sm">
+            {isSpecial
+              ? 'שים לב, רשומה זו (אישור חריג) עדיין לא אושרה. ניתן לאשר אותה כאן.'
+              : 'שים לב, משפחה זו עדיין לא אישרו את הייחוס שלה. במידה ותרצה לאשר את הייחוס של משפחה זו — תוכל לעשות זאת כאן.'}
+          </span>
         </div>
         {/* אישור המשפחה ישירות מכאן */}
         <StatusControl id={beneficiary.id} status={(beneficiary.eligibility_status ?? 'pending') as EligibilityStatus} />

@@ -281,6 +281,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     return null
   }
   const hasLineage = lineagePath.length > 0 || (Array.isArray(beneficiary.lineage_manual) && beneficiary.lineage_manual.length > 0)
+  // אדם חריג (אינו צאצא) — אין לו ייחוס. מסתירים טאב עץ הדורות ואת באנר
+  // הבדיקה המעמיקה. (undefined לפני שהעמודה קיימת → falsy → התנהגות רגילה.)
+  const isSpecial = (beneficiary as { is_special?: boolean }).is_special === true
 
   // ── Tab: פרטים אישיים ──
   const personalTab = (
@@ -583,7 +586,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       </div>
 
       {/* התראה קופצת בכניסה — יש דור חריג (אדום) בתוך 5 הדורות הראשונים */}
-      {earlyDeviation && <LineageAlertModal generations={earlyRedGens} allGens={alertGens} />}
+      {!isSpecial && earlyDeviation && <LineageAlertModal generations={earlyRedGens} allGens={alertGens} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 
@@ -599,7 +602,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           שדורותיה כבר אושרו (בכל דרך אחרת) נותרה עם הדגל, והבאנר הופיע בטעות.
           לכן מציגים את הבאנר רק כשהסטייה עדיין *אמיתית*: או שהמזכיר העביר ידנית
           (deep_review_reason), או שבפועל יש דור חריג (earlyDeviation). */}
-      {beneficiary.eligibility_status === 'deep_review'
+      {!isSpecial && beneficiary.eligibility_status === 'deep_review'
         && (!!(beneficiary as { deep_review_reason?: string | null }).deep_review_reason || earlyDeviation) && (
         <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 px-5 py-4 flex items-start gap-3">
           <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
@@ -634,7 +637,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         { key: 'children', label: `ילדים (${kids.length})`, accent: 'emerald', icon: <Users size={15} />, content: childrenTab },
         { key: 'past_benefits', label: 'הטבות בעבר', accent: 'rose', icon: <Gift size={15} />, content: pastBenefitsTab },
         { key: 'request_notes', label: 'הערות המבקש', accent: 'amber', icon: <FileText size={15} />, content: requestNotesTab },
-        { key: 'lineage', label: 'עץ הדורות', accent: 'violet', icon: <GitBranch size={15} />, content: lineageTab },
+        // עץ הדורות — מוסתר לאדם חריג (אינו צאצא, אין לו ייחוס)
+        ...(isSpecial ? [] : [{ key: 'lineage', label: 'עץ הדורות', accent: 'violet' as const, icon: <GitBranch size={15} />, content: lineageTab }]),
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
         { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
