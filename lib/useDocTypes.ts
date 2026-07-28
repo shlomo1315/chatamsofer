@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { DEFAULT_DOC_TYPES, type DocTypeOption } from './docTypes'
+import { DEFAULT_DOC_TYPES, SYSTEM_DOC_LABELS, type DocTypeOption } from './docTypes'
 
 // הוק לקריאת סוגי המסמכים בצד הלקוח, עם נפילה לברירת המחדל בזמן טעינה.
 export function useDocTypes() {
@@ -16,7 +16,7 @@ export function useDocTypes() {
   useEffect(() => { reload() }, [reload])
 
   const label = useCallback(
-    (v: string) => docTypes.find(t => t.value === v)?.label ?? v,
+    (v: string) => docTypes.find(t => t.value === v)?.label ?? SYSTEM_DOC_LABELS[v] ?? v,
     [docTypes],
   )
 

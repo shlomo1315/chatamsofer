@@ -24,8 +24,15 @@ export const DOC_TYPES = DEFAULT_DOC_TYPES
 export const DOC_LABELS: Record<string, string> =
   Object.fromEntries(DEFAULT_DOC_TYPES.map(t => [t.value, t.label]))
 
+// תוויות למסמכי-מערכת שאינם בתפריט ההעלאה הידנית (נוצרים אוטומטית מזרימות
+// אחרות), אך צריכים שם עברי בתצוגה במקום המפתח הגולמי. למשל אישור לידה
+// (birth_cert) שנוצר מבקשת הלידה — הוצג עד כה כ-"birth_cert" באנגלית.
+export const SYSTEM_DOC_LABELS: Record<string, string> = {
+  birth_cert: 'אישור לידה',
+}
+
 export const docTypeLabel = (v: string, types: DocTypeOption[] = DEFAULT_DOC_TYPES) =>
-  types.find(t => t.value === v)?.label ?? DOC_LABELS[v] ?? v
+  types.find(t => t.value === v)?.label ?? DOC_LABELS[v] ?? SYSTEM_DOC_LABELS[v] ?? v
 
 // מפתח חדש ייחודי לסוג מסמך שנוסף ידנית (תוויות בעברית אינן תקפות כ-slug)
 export const newDocTypeValue = () => `doc_${Math.random().toString(36).slice(2, 8)}`

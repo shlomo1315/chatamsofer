@@ -65,8 +65,17 @@ export async function GET(request: NextRequest) {
   headers.set('Content-Length', String(buf.length))
   // מטמון פרטי קצר — מזרז תצוגות חוזרות בלי לחשוף בין משתמשים
   headers.set('Cache-Control', 'private, max-age=300')
+  // ⚠️ נטפרי מכשיל טעינת PDF בתוך <iframe> כשהתגובה אינה מסומנת במפורש
+  // כתוכן inline: ה-PDF viewer של הדפדפן ("מוצג בתוך האתר") נחסם ומוצג דף
+  // NETFREE. הוספת Content-Disposition: inline + Accept-Ranges מסמנת את
+  // התגובה כמסמך תצוגה תקין, וה-PDF נטען דרך הדומיין של האתר ללא חסימה.
   if (wantsDownload) {
     headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName || 'file')}"`)
+  } else {
+    // תצוגה (iframe/תמונה) — inline. הסימון המפורש הזה הוא שמונע את חסימת
+    // הנטפרי: בלעדיו טעינת PDF ב-iframe מזוהה כניווט לתוכן חיצוני ומוצג דף
+    // NETFREE. שם הקובץ נשמר לנוחות שמירה ידנית מה-viewer.
+    headers.set('Content-Disposition', `inline${safeName ? `; filename="${encodeURIComponent(safeName)}"` : ''}`)
   }
   return new NextResponse(buf, { status: 200, headers })
 }
