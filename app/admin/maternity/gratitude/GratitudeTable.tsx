@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2 } from 'lucide-react'
+import { docViewUrl } from '@/lib/docUrl'
 
 export interface GratitudeRow {
   id: string
@@ -311,13 +312,13 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
 
               {open.scan_url && (
                 <a
-                  href={open.scan_url}
+                  href={docViewUrl(open.scan_url)}
                   target="_blank"
                   rel="noreferrer"
                   className="block rounded-xl border border-slate-200 overflow-hidden mb-4 hover:border-slate-300"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={open.scan_url} alt="שובר סרוק" className="w-full" />
+                  <img src={docViewUrl(open.scan_url)} alt="שובר סרוק" className="w-full" />
                 </a>
               )}
 

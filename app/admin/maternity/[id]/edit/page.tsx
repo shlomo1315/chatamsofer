@@ -8,6 +8,7 @@ import { validateIsraeliId } from '@/lib/validation'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
+import { docViewUrl } from '@/lib/docUrl'
 import { format, addWeeks } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -266,7 +267,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           ) : (
             <div className="flex items-center gap-3">
               {certUrl && (
-                <a href={certUrl} target="_blank" rel="noopener noreferrer"
+                <a href={docViewUrl(certUrl)} target="_blank" rel="noopener noreferrer"
                   className="text-xs text-indigo-600 hover:underline">צפייה בקובץ הנוכחי</a>
               )}
               {certUrl && <DownloadDocButton url={certUrl} docType="אישור לידה" name={certUrl} variant="button" />}

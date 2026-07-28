@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Heart, Send, Loader2, Globe, Mail, FileImage, Clock, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { docViewUrl } from '@/lib/docUrl'
 
 interface Letter {
   id: string
@@ -119,10 +120,10 @@ export default function GratitudeTab({ aidId }: { aidId: string }) {
           )}
 
           {letter.scan_url && (
-            <a href={letter.scan_url} target="_blank" rel="noreferrer"
+            <a href={docViewUrl(letter.scan_url)} target="_blank" rel="noreferrer"
                className="block rounded-xl overflow-hidden border border-amber-100 mt-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={letter.scan_url} alt="שובר סרוק" className="w-full" />
+              <img src={docViewUrl(letter.scan_url)} alt="שובר סרוק" className="w-full" />
             </a>
           )}
 

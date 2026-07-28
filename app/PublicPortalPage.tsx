@@ -1997,9 +1997,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (wantsRecovery && !birthForm.recovery_home) { setError('אנא בחר בית החלמה'); return }
     if (!birthCertFile) { setError('אנא צרף אישור לידה'); return }
     if (!beneficiary) return
+    // ⚠️ חובה: צילומי תעודות הזהות (הבעל והאשה) הם תנאי להגשת הבקשה למשפחה
+    // שטרם אושרה. לא ניתן להתקדם בלעדיהם — לא קיימים במערכת וגם לא הועלו כעת.
     if (needsIdWithRequest) {
       const miss = missingRequestIdDocs()
-      if (miss.length) { setError(`לאישור ראשוני אנא צרף גם: ${miss.map(docLabel).join(', ')}`); return }
+      if (miss.length) { setError(`חובה לצרף את צילומי תעודות הזהות כדי להגיש את הבקשה: ${miss.map(docLabel).join(', ')}`); return }
     }
     setError('')
     setLoading(true)
