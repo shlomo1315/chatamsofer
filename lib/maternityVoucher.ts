@@ -231,29 +231,36 @@ function centersBox(c: Ctx, title: string, y: number, centers: Center[]): number
   // ⚠️ כל מוקד תופס שתי שורות: שם ב-ry ופרטים ב-ry-12.5 (פונט 9).
   // perH=21 משאיר ~8 נק' מרווח נקי בין מוקד למוקד, ובו-זמנית חוסך 18 נק'
   // על 6 מוקדים — מקום קריטי כדי שבלוק ההערות+חתימה בתחתית לא ייחתך.
-  const perH = 21
+  // מרווח גדול יותר בין מוקדים (26 במקום 21) — כל מוקד "נושם", וקו מפריד דק
+  // מבהיר את הגבול. שורת השם ב-ry, הפרטים ב-ry-12.5.
+  const perH = 26
   const contentH = items.length ? items.length * perH : 22
-  const boxH = titleH + contentH + 4
+  const boxH = titleH + contentH + 6
   roundedBox(c, x, y - boxH, w, boxH, GOLD, rgb(1, 1, 1))
   c.page.drawRectangle({ x, y: y - titleH, width: w, height: titleH, color: NAVY })
   rightText(c, title, x + w - 14, y - titleH + 6, 12, rgb(1, 1, 1))
 
-  let ry = y - titleH - 14
+  let ry = y - titleH - 16
   if (!items.length) {
     rightText(c, 'רשימת המוקדים תימסר לכם על ידי המזכירות', x + w - 16, ry, 11, SUB)
   } else {
-    for (const cn of items) {
+    items.forEach((cn, i) => {
+      // קו מפריד דק בין מוקד למוקד (לא לפני הראשון)
+      if (i > 0) {
+        c.page.drawLine({
+          start: { x: x + 14, y: ry + 13 }, end: { x: x + w - 14, y: ry + 13 },
+          thickness: 0.5, color: rgb(0.85, 0.8, 0.68),
+        })
+      }
       // שורה 1: נקודת זהב + שם המוקד
       c.page.drawSvgPath('M 0 -2.2 L 2.2 0 L 0 2.2 L -2.2 0 Z', { x: x + w - 9, y: ry + 4, color: GOLD, borderWidth: 0 })
       rightText(c, cn.name, x + w - 18, ry, 11, NAVY)
       // שורה 2: כתובת · ימים · שעות — כמחרוזת אחת (toVisual מטפל בהיפוך טווח השעות).
-      // ⚠️ רווח ולא פסיק: הפסיק מוסר ב-toVisual (הוא שובר את סדר ה-bidi),
-      // ולכן הופיע במקום שגוי אחרי שם הרחוב.
       const addr = [cn.address, cn.city].filter(Boolean).join(' ')
       const line2 = [addr, cn.pickup_days, (cn.pickup_hours || '').trim()].filter(Boolean).join('  ·  ')
       if (line2) rightText(c, line2, x + w - 18, ry - 12.5, 9, SUB)
       ry -= perH
-    }
+    })
   }
   return y - boxH - 14
 }
@@ -332,11 +339,11 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
   fitRightText(c, vtext('card.amount', 'סכום טעינת הכרטיס: 600 ש"ח'), W - MX - 14, y - 19, 14, W - MX * 2 - 28, NAVY)
   y = y - amH - 4
 
-  // אזהרה אדומה
-  const warnH = 34
+  // אזהרה אדומה — צומצמה (גובה ופונט קטנים יותר) כדי לפנות מקום למוקדים.
+  const warnH = 26
   c.page.drawRectangle({ x: MX, y: y - warnH, width: W - MX * 2, height: warnH, color: rgb(0.996, 0.953, 0.953), borderColor: RED, borderWidth: 1 })
-  let wy = y - 13
-  wy = paragraph(c, vtext('card.warning', 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!'), W - MX - 12, wy, W - MX * 2 - 24, 11, RED, 3)
+  let wy = y - 11
+  wy = paragraph(c, vtext('card.warning', 'חובה להדפיס שובר זה ולהביאו למוקד החלוקה לצורך קבלת הכרטיס — לא נוכל להעניק כרטיס בלי אישור זה!'), W - MX - 12, wy, W - MX * 2 - 24, 10, RED, 3)
   y = y - warnH - 4
 
   // פרטי היולדת
@@ -418,7 +425,10 @@ async function renderFoodCard(input: VoucherInput): Promise<string> {
       : 'הכרטיס בתוקף עד 6 שבועות מהלידה, ורק לרכישת מזון מוכן ליולדת ובני ביתה. השובר אישי ואינו ניתן להעברה.',
     W - MX, notesY, W - MX * 2, 9.5, SUB, 2)
 
-  const blessY = 34   // ברכה — גובה קבוע מהתחתית
+  // ⚠️ החתימה חייבת לשבת מעל המסגרת הפנימית (הקו הנייבי ב-y=24). קודם
+  // blessY=34 → השורה התחתונה (blessY-14=20) נחתכה על הקו. הועלה ל-46
+  // כדי שהשורה התחתונה (32) תישאר בבטחה מעל הקו, עם אוויר.
+  const blessY = 46   // ברכה — גובה קבוע מהתחתית, מעל המסגרת הפנימית
   centerText(c, input.silent ? 'בברכה' : 'בברכת מזל טוב ורוב נחת', W / 2, blessY, 11, NAVY)
   centerText(c, input.silent ? 'היכל החתם סופר' : 'אגף עזר ליולדות · היכל החתם סופר', W / 2, blessY - 14, 10, SUB)
 
