@@ -231,6 +231,10 @@ interface Props {
   status: string
   sort: string
   marital: string
+  // אילו כרטיסי סינון סטטוס להציג (ברירת מחדל: כולם). דף החריגים מצמצם ל-3.
+  cardKeys?: Filter[]
+  // כפתור פעולה בראש הטבלה (למשל "רישום אדם חריג חדש" בדף החריגים)
+  headerAction?: React.ReactNode
 }
 
 // אפשרויות סינון מצב משפחתי — 'all' = הכל (ברירת מחדל). הערכים תואמים
@@ -244,7 +248,7 @@ const MARITAL_OPTIONS: { value: string; label: string }[] = [
   { value: 'גרושה', label: 'גרושה' },
 ]
 
-export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital }: Props) {
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, cardKeys, headerAction }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
   const { qInput, setSearch, setStatus, setSort, setMarital, setSize, setPage } = useListParams()
 
@@ -254,12 +258,16 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
   )
 
   const activeFilter = (status || 'all') as Filter
+  // כרטיסי הסינון להצגה — כברירת מחדל כולם; דף החריגים מעביר קבוצה מצומצמת.
+  const cards = cardKeys ? CARD_DEFS.filter(c => cardKeys.includes(c.key)) : CARD_DEFS
 
   return (
     <div className="flex flex-col gap-5">
+      {/* כפתור פעולה (למשל רישום אדם חריג) — בראש הטבלה, מיושר לסוף */}
+      {headerAction && <div className="flex justify-end">{headerAction}</div>}
       {/* Status filter cards — ה-counts מגיעים מ-DB (מדויקים על כל הרשומות) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-        {CARD_DEFS.map((c) => {
+      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2.5 ${cards.length > 4 ? 'lg:grid-cols-7' : 'lg:grid-cols-4'}`}>
+        {cards.map((c) => {
           const Icon = c.icon
           const isActive = activeFilter === c.key
           return (

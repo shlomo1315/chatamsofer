@@ -1,6 +1,9 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { Plus } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import PageHeader from '@/components/ui/PageHeader'
+import Button from '@/components/ui/Button'
 import BeneficiariesTable from '@/app/admin/beneficiaries/BeneficiariesTable'
 import { readListParams } from '@/lib/listParams'
 import { getBeneficiaries } from '@/lib/beneficiariesList'
@@ -41,6 +44,15 @@ export default async function SpecialApprovalsPage({ searchParams }: { searchPar
         status={p.status}
         sort={p.sort}
         marital={p.marital}
+        cardKeys={['all', 'pending', 'approved']}
+        headerAction={
+          <Link href="/admin/beneficiaries/new?special=1">
+            <Button>
+              <Plus size={16} />
+              רישום אדם חריג חדש
+            </Button>
+          </Link>
+        }
       />
     </div>
   )
