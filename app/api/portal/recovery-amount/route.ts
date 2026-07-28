@@ -18,8 +18,11 @@ function getAdminClient() {
 
 // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
 export async function POST(request: NextRequest) {
-  const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo } = await request.json()
+  const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo, receiptUrl } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
+  // קישור ישיר לקבלה (חלופה להעלאת קובץ) — נשמר רק אם http/https תקין.
+  const linkUrl = typeof receiptUrl === 'string' && /^https?:\/\/\S+$/i.test(receiptUrl.trim())
+    ? receiptUrl.trim() : null
   const amt = Number(amount)
   if (!Number.isFinite(amt) || amt < 0) return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   const nightsNum = Number(nights)
@@ -71,8 +74,10 @@ export async function POST(request: NextRequest) {
   if (aid.recovery_arrived !== true) {
     return NextResponse.json({ error: 'יש לסמן "הגיעה" לפני הזנת הסכום' }, { status: 400 })
   }
-  if (!aid.recovery_receipt_url) {
-    return NextResponse.json({ error: 'יש להעלות קובץ קבלה' }, { status: 400 })
+  // קבלה חובה — או קובץ שהועלה (recovery_receipt_url ב-DB) או קישור ישיר שנשלח כעת.
+  const finalReceiptUrl = aid.recovery_receipt_url || linkUrl
+  if (!finalReceiptUrl) {
+    return NextResponse.json({ error: 'יש לצרף קובץ קבלה (העלאה או קישור ישיר)' }, { status: 400 })
   }
 
   const { error } = await admin.from('maternity_aids').update({
@@ -81,6 +86,8 @@ export async function POST(request: NextRequest) {
     recovery_stay_from: from,
     recovery_stay_to: to,
     recovery_receipt_number: receipt,
+    // שמירת הקישור הישיר אם הוזן (כשלא הועלה קובץ פיזי)
+    recovery_receipt_url: finalReceiptUrl,
     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
     recovery_amount_at: new Date().toISOString(),
     recovery_locked: true, // נעילה מיידית — עריכה חוזרת רק לאחר פתיחת המשרד

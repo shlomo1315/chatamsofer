@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import {
   Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
-  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut
+  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut, Clock
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
@@ -289,6 +289,8 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
   // קובץ הקבלה + מצב נעילה של הרשומה
   const [receiptFile, setReceiptFile] = useState<Record<string, File | null>>({})
+  // קישור ישיר לקובץ הקבלה — חלופה להעלאה פיזית (די באחד מהם)
+  const [receiptLinkInput, setReceiptLinkInput] = useState<Record<string, string>>({})
   const [receiptUrl, setReceiptUrl] = useState<Record<string, string | null>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_url ?? null])),
   )
@@ -355,6 +357,8 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
           stayFrom: stayFrom[aidId] ?? null,
           stayTo: stayTo[aidId] ?? null,
           receiptNumber: (receiptInput[aidId] ?? '').trim(),
+          // קישור ישיר לקבלה (אם הוזן במקום העלאת קובץ) — ה-backend ישמור אותו
+          receiptUrl: receiptUrl[aidId] ?? null,
         }),
       })
       if (r.ok) {
@@ -403,9 +407,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const matchArrived = (id: string) => {
     if (arrivedFilter === 'all') return true
     const a = arrived[id] ?? null
-    if (arrivedFilter === 'arrived') return a === true
+    const completed = (amountStatus[id] ?? null) === 'executed'
+    if (arrivedFilter === 'arrived') return completed          // "הגיעו" = הושלמו ואושרו
     if (arrivedFilter === 'not') return a === false
-    return a === null // pending
+    return !completed && a !== false                            // ממתין = טרם הושלם (כולל שסומן "הגיעה" אך לא מולא)
   }
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -419,13 +424,16 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       ].filter(Boolean).join(' ').toLowerCase().includes(q)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aids, query, arrivedFilter, arrived])
+  }, [aids, query, arrivedFilter, arrived, amountStatus])
 
+  // "הגיעה" נספרת ומסומנת כגמורה רק אחרי השלמת הפרטים ואישור (executed).
+  // סימון "הגיעה" לבדו, בלי מילוי, אינו נחשב עדיין — הוא במצב ממתין.
+  const isCompleted = (id: string) => (amountStatus[id] ?? null) === 'executed'
   const counts = {
     all: aids.length,
-    arrived: aids.filter(a => (arrived[a.id] ?? null) === true).length,
+    arrived: aids.filter(a => isCompleted(a.id)).length,
     not: aids.filter(a => (arrived[a.id] ?? null) === false).length,
-    pending: aids.filter(a => (arrived[a.id] ?? null) === null).length,
+    pending: aids.filter(a => !isCompleted(a.id) && (arrived[a.id] ?? null) !== false).length,
   }
 
   return (
@@ -642,15 +650,27 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                               </div>
                             </div>
                           ) : (
-                            <div className={`flex items-center justify-center gap-2 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <div className={`flex flex-col items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+                             <div className="flex items-center justify-center gap-2">
+                              {/* "הגיעה" — כשמסומן אך טרם הושלם המילוי, הכפתור בצבע
+                                  אמבר ("ממתין להשלמה"), לא ירוק. הירוק המלא ("בוצע ✓")
+                                  מופיע רק אחרי מילוי כל הפרטים ואישור השליחה. */}
                               <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
-                                <Check size={15} /> הגיעה
+                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+                                {a === true ? <Clock size={15} /> : <Check size={15} />} הגיעה
                               </button>
                               <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
                                 className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
                                 <X size={15} /> לא הגיעה
                               </button>
+                             </div>
+                             {/* כל עוד סומן "הגיעה" אך טרם הושלמו הפרטים — חיווי ברור
+                                 שהרישום עדיין לא נגמר (מונע בלבול "כבר סומן ירוק"). */}
+                             {a === true && (
+                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                                 <AlertCircle size={12} /> ממתין להשלמת הפרטים ואישור
+                               </span>
+                             )}
                             </div>
                           )}
                         </td>
@@ -712,10 +732,34 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 />
                                 {uploadingReceipt === aid.id
                                   ? <span className="text-xs text-slate-400">מעלה…</span>
-                                  : receiptUrl[aid.id] && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> קובץ הועלה</span>}
+                                  : receiptUrl[aid.id] && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><Check size={13} /> קובץ צורף</span>}
                                 {uploadErr[aid.id] && (
                                   <span className="inline-flex items-center gap-1 text-xs text-rose-600"><AlertCircle size={13} /> {uploadErr[aid.id]}</span>
                                 )}
+                                {/* אפשרות חלופית — קישור ישיר לקובץ, במקום העלאה פיזית.
+                                    די באחד מהשניים (העלאה או קישור) כדי להתקדם. */}
+                                <div className="flex items-center gap-2 my-0.5">
+                                  <span className="h-px flex-1 bg-slate-200" />
+                                  <span className="text-[11px] text-slate-400">או הדביקו קישור ישיר לקובץ</span>
+                                  <span className="h-px flex-1 bg-slate-200" />
+                                </div>
+                                <input
+                                  type="url" dir="ltr" inputMode="url"
+                                  value={receiptLinkInput[aid.id] ?? ''}
+                                  onChange={e => setReceiptLinkInput(mm => ({ ...mm, [aid.id]: e.target.value }))}
+                                  onBlur={() => {
+                                    const link = (receiptLinkInput[aid.id] ?? '').trim()
+                                    // קישור תקין (http/https) → נחשב כקובץ שצורף (ממלא receiptUrl).
+                                    if (/^https?:\/\/\S+$/i.test(link)) {
+                                      setReceiptUrl(m => ({ ...m, [aid.id]: link }))
+                                      setUploadErr(m => ({ ...m, [aid.id]: '' }))
+                                    } else if (link) {
+                                      setUploadErr(m => ({ ...m, [aid.id]: 'הקישור אינו תקין — עליו להתחיל ב-http/https' }))
+                                    }
+                                  }}
+                                  placeholder="https://…"
+                                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                />
                               </label>
                               <button type="button"
                                 onClick={() => {
