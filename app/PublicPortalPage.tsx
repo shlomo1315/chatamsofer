@@ -1742,15 +1742,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       setError('אנא מלא את כל שדות החובה: שם פרטי, שם משפחה וטלפון')
       return
     }
-    // כתובת מלאה חובה — עיר, רחוב ומספר בית (הכתובת נשמרת כמחרוזת "רחוב מספר")
+    // כתובת מלאה חובה — עיר, רחוב, מספר בית ומספר דירה.
+    // הכתובת נשמרת כמחרוזת "רחוב בית/דירה" (למשל "הרצל 12/3").
     if (!regForm.city.trim()) { setError('אנא בחר עיר מגורים'); return }
     {
       const addr = (regForm.address || '').trim()
-      const m = addr.match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/) // רחוב + מספר בית בסוף
+      // רחוב + מספר בית (+ "/דירה" אופציונלי בסוף)
+      const m = addr.match(/^(.*?)\s*(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
       const streetPart = (m ? m[1] : addr).trim()
       const housePart = (m ? m[2] : '').trim()
+      const aptPart = (m?.[3] ?? '').trim()
       if (!streetPart) { setError('אנא הזן שם רחוב'); return }
       if (!housePart) { setError('אנא הזן מספר בית'); return }
+      if (!aptPart) { setError('אנא הזן מספר דירה'); return }
     }
     // השתייכות קהילתית — שדה חובה
     if (!regForm.community_affiliation.trim()) { setError('אנא הזן השתייכות קהילתית'); return }
@@ -3358,6 +3362,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   cityRequired
                   addressRequired
                   houseRequired
+                  apartmentRequired
                 />
               </Card>
             )}

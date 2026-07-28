@@ -15,10 +15,12 @@ const DIS = 'disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-al
 let _citiesCache: string[] | null = null
 const _streetsCache = new Map<string, string[]>()
 
-// Split "רחוב הרצל 12" → { street: "רחוב הרצל", houseNumber: "12" }
-function splitAddr(addr: string): { street: string; houseNumber: string } {
-  const m = addr.trim().match(/^(.*?)\s*(\d[\d/א-ת\s]*)$/)
-  return m ? { street: m[1].trim(), houseNumber: m[2].trim() } : { street: addr.trim(), houseNumber: '' }
+// Split "רחוב הרצל 12/3" → { street: "רחוב הרצל", houseNumber: "12", apartment: "3" }
+// מספר הדירה (אם קיים) מגיע אחרי "/" בסוף מספר הבית: "12/3".
+function splitAddr(addr: string): { street: string; houseNumber: string; apartment: string } {
+  const m = addr.trim().match(/^(.*?)\s*(\d[\d\-א-ת\s]*)(?:\/([^/]+))?$/)
+  if (!m) return { street: addr.trim(), houseNumber: '', apartment: '' }
+  return { street: m[1].trim(), houseNumber: m[2].trim(), apartment: (m[3] ?? '').trim() }
 }
 
 interface Props {
@@ -32,14 +34,16 @@ interface Props {
   cityRequired?: boolean
   addressRequired?: boolean
   houseRequired?: boolean
+  apartmentRequired?: boolean
+  apartmentError?: string
   labelSize?: 'xs' | 'sm'
 }
 
 export default function CityStreetPicker({
   city, address,
   onCityChange, onAddressChange,
-  cityError, addressError, houseError,
-  cityRequired, addressRequired, houseRequired,
+  cityError, addressError, houseError, apartmentError,
+  cityRequired, addressRequired, houseRequired, apartmentRequired,
   labelSize = 'sm',
 }: Props) {
   const [allCities, setAllCities] = useState<string[]>([])
@@ -48,9 +52,10 @@ export default function CityStreetPicker({
 
   const [streets, setStreets] = useState<string[]>([])
   const [loadingStreets, setLoadingStreets] = useState(false)
-  const { street: initStreet, houseNumber: initNum } = splitAddr(address)
+  const { street: initStreet, houseNumber: initNum, apartment: initApt } = splitAddr(address)
   const [streetInput, setStreetInput] = useState(initStreet)
   const [houseNum, setHouseNum] = useState(initNum)
+  const [apartment, setApartment] = useState(initApt)
   const [showStreet, setShowStreet] = useState(false)
 
   const cityRef = useRef<HTMLDivElement>(null)
@@ -68,9 +73,10 @@ export default function CityStreetPicker({
   // Sync parent → internal when editing existing record
   useEffect(() => { setCityInput(city) }, [city])
   useEffect(() => {
-    const { street, houseNumber } = splitAddr(address)
+    const { street, houseNumber, apartment: apt } = splitAddr(address)
     setStreetInput(street)
     setHouseNum(houseNumber)
+    setApartment(apt)
   }, [address])
 
   // Fetch streets when city is confirmed — עם מטמון (בחירה חוזרת של עיר = מיידי)
@@ -101,10 +107,12 @@ export default function CityStreetPicker({
 
   // הרחוב "נתפס" רק אם הוא קיים ברשימת הרחובות של העיר — כמו שהעיר עובדת.
   // מלל חופשי שאינו ברשימה משדר כתובת ריקה, כך שוולידציית "רחוב חובה" תעצור.
-  function emitAddress(street: string, num: string) {
+  function emitAddress(street: string, num: string, apt: string = apartment) {
     const isValid = streets.some(s => norm(s) === norm(street))
     if (!isValid) { onAddressChange(''); return }
-    const combined = num.trim() ? `${street.trim()} ${num.trim()}` : street.trim()
+    // מספר הדירה נספח למספר הבית עם "/": "הרצל 12/3". בלי מספר בית אין דירה.
+    const houseWithApt = num.trim() ? (apt.trim() ? `${num.trim()}/${apt.trim()}` : num.trim()) : ''
+    const combined = houseWithApt ? `${street.trim()} ${houseWithApt}` : street.trim()
     onAddressChange(combined)
   }
 
@@ -118,7 +126,7 @@ export default function CityStreetPicker({
     streetInput.trim() !== '' && !streets.some(s => norm(s) === norm(streetInput))
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
 
       {/* ── City ── */}
       <div className="flex flex-col gap-1 sm:col-span-1">
@@ -238,7 +246,7 @@ export default function CityStreetPicker({
           onChange={e => {
             const v = e.target.value
             setHouseNum(v)
-            emitAddress(streetInput, v)
+            emitAddress(streetInput, v, apartment)
           }}
           placeholder="12"
           disabled={!city}
@@ -246,6 +254,25 @@ export default function CityStreetPicker({
           className={`${BASE} ${DIS} ${houseError ? ERR : ''}`}
         />
         {houseError && <p className="text-xs text-red-500">{houseError}</p>}
+      </div>
+
+      {/* ── Apartment Number ── נספח לכתובת עם "/" ליד מספר הבית */}
+      <div className="flex flex-col gap-1 sm:col-span-1">
+        <label className={lbl}>מספר דירה{apartmentRequired && <span className="text-red-500 mr-1">*</span>}</label>
+        <input
+          type="text"
+          value={apartment}
+          onChange={e => {
+            const v = e.target.value
+            setApartment(v)
+            emitAddress(streetInput, houseNum, v)
+          }}
+          placeholder="3"
+          disabled={!city}
+          required={apartmentRequired}
+          className={`${BASE} ${DIS} ${apartmentError ? ERR : ''}`}
+        />
+        {apartmentError && <p className="text-xs text-red-500">{apartmentError}</p>}
       </div>
 
     </div>
