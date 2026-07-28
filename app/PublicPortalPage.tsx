@@ -4275,19 +4275,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <EditableText k="birth.details.title" as="h3" className="font-semibold text-slate-900" />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <Field label={<EditableText k="birth.date.label" />} required>
-                    {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
-                    <HebrewDatePicker
-                      value={birthForm.birth_date}
-                      onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
-                      maxToday
-                      minDaysBack={MATERNITY_SUBMIT_DAYS}
-                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 30 יום מתאריך הלידה. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
-                    />
-                  </Field>
-                </div>
-                {/* בורר לידת תאומים — לפני פרטי התינוקות */}
+                {/* בורר לידת תאומים — ראשון: קובע כמה תינוקות מציגים.
+                    תעודת הזהות היא השדה הראשון בכל תינוק (BabyFields), ותאריך
+                    הלידה מוצג אחרי פרטי התינוקות — כדי שיתמלא אוטומטית מזיהוי
+                    ילד קיים לפי ת"ז, במקום שהמשתמש ימלא ידנית ואז יידרס. */}
                 <div className="col-span-2">
                   <Field label={<EditableText k="birth.type.label" />} required>
                     <div className="flex gap-2">
@@ -4345,6 +4336,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     }}
                   />
                 )}
+                {/* תאריך הלידה — אחרי פרטי התינוקות. כשמזוהה ילד קיים לפי ת"ז
+                    התאריך מולא אוטומטית ומוצג כאן; אחרת המשתמש בוחר ידנית. */}
+                <div className="col-span-2 sm:col-span-1">
+                  <Field label={<EditableText k="birth.date.label" />} required>
+                    {/* ההגשה נסגרת ב-30 יום — לפני תום 6 שבועות המימוש. */}
+                    <HebrewDatePicker
+                      value={birthForm.birth_date}
+                      onChange={iso => setBirthForm(f => ({ ...f, birth_date: iso }))}
+                      maxToday
+                      minDaysBack={MATERNITY_SUBMIT_DAYS}
+                      minDateMessage="שימו לב: ניתן להגיש בקשה עד 30 יום מתאריך הלידה. התאריך שנבחר מוקדם מכך, ולכן אינו זמין לבחירה. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד."
+                    />
+                  </Field>
+                </div>
                 {/* בחירת ההטבות — כרטיס מזון ו/או בית החלמה. רשימת בתי ההחלמה
                     נפתחת רק כש"בית החלמה" מסומן. */}
                 <div className="col-span-2">
