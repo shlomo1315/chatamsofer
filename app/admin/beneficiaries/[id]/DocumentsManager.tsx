@@ -164,25 +164,32 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {docs.map((doc) => (
             <div key={doc.id} className="group relative border border-slate-200 rounded-xl overflow-hidden bg-white">
-              <ViewDocButton url={doc.file_url} className="block">
-                {doc.file_url && isImage(doc.file_name) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={docViewUrl(doc.file_url)} alt={doc.file_name ?? ''} className="w-full h-28 object-cover" />
-                ) : doc.file_url && isPdf(doc.file_name) ? (
-                  <iframe src={`${docViewUrl(doc.file_url)}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
-                    title={doc.file_name ?? 'PDF'} tabIndex={-1}
-                    className="border-0 bg-white pointer-events-none w-full h-28" />
-                ) : (
+              {/* תמונות — תצוגה מקדימה בלחיצה (מודל). PDF — לא מוטמע ב-iframe
+                  (נטפרי חוסם PDF ב-iframe/viewer ומציג NETFREE); במקום זה אייקון
+                  ופתיחה בכרטיסייה חדשה = ניווט מלא לדומיין שלנו, שנטפרי לא חוסם. */}
+              {doc.file_url && isImage(doc.file_name) ? (
+                <ViewDocButton url={doc.file_url} className="block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={docViewUrl(doc.file_url)} alt="" className="w-full h-28 object-cover" />
+                </ViewDocButton>
+              ) : doc.file_url && isPdf(doc.file_name) ? (
+                <a href={docViewUrl(doc.file_url)} target="_blank" rel="noopener noreferrer"
+                  className="w-full h-28 flex flex-col items-center justify-center gap-1.5 bg-rose-50/50 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                  <FileText size={28} /> <span className="text-[11px] font-medium">פתח PDF</span>
+                </a>
+              ) : (
+                <ViewDocButton url={doc.file_url} className="block">
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
                     {isImage(doc.file_name) ? <ImageIcon size={28} /> : <FileText size={28} />}
                   </div>
-                )}
-              </ViewDocButton>
+                </ViewDocButton>
+              )}
               <div className="p-2">
                 <p className="text-[11px] font-medium text-indigo-700 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
                   {typeLabel(doc.doc_type)}
                 </p>
-                <p className="text-xs text-slate-600 truncate mt-1" title={doc.file_name ?? ''}>{doc.file_name}</p>
+                {/* שם הקובץ הגולמי (כפי שהמשתמש קרא לו) לא מוצג — אינו מעניין
+                    ולעתים מבלבל. מזהים את המסמך לפי הסוג (התווית) בלבד. */}
                 {doc.uploaded_at && (
                   <p className="text-[10px] text-slate-400 mt-0.5">🕒 {formatUploaded(doc.uploaded_at)}</p>
                 )}

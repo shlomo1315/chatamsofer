@@ -61,7 +61,26 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={view} alt={doc.name || 'מסמך'} className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl bg-white" />
             ) : isPdf ? (
-              <iframe src={view} title={doc.name || 'מסמך'} className="w-full h-[90vh] rounded-xl shadow-2xl bg-white border-0" />
+              // PDF אינו מוטמע ב-iframe: נטפרי חוסם את ה-PDF viewer בתוך iframe
+              // ומציג דף NETFREE. במקום זה — פתיחה בכרטיסייה חדשה (ניווט מלא
+              // לדומיין שלנו, שאינו נחסם) + הורדה.
+              <div className="bg-white rounded-2xl p-10 text-center shadow-2xl max-w-sm">
+                <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FileText size={30} className="text-rose-400" />
+                </div>
+                <p className="text-slate-700 font-semibold mb-1">מסמך PDF</p>
+                <p className="text-slate-400 text-sm mb-5">{doc.name || 'קובץ PDF'}</p>
+                <div className="flex flex-col gap-2">
+                  <a href={view} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                    <FileText size={17} /> פתח בכרטיסייה חדשה
+                  </a>
+                  <a href={docDownloadUrl(doc.url, doc.name)} download={doc.name || true}
+                    className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                    <Download size={17} /> הורדת הקובץ
+                  </a>
+                </div>
+              </div>
             ) : (
               // סוג לא נתמך לתצוגה — הצעת הורדה
               <div className="bg-white rounded-2xl p-10 text-center shadow-2xl max-w-sm">

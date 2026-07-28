@@ -77,7 +77,11 @@ export default function BirthCertificatePreview({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={view} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
       ) : isPdf(url) ? (
-        <iframe src={`${view}#toolbar=0&navpanes=0`} title="אישור לידה" className="w-full h-80 bg-white" />
+        // PDF — לא מוטמע ב-iframe (נטפרי חוסם ומציג NETFREE); פתיחה בכרטיסייה חדשה.
+        <a href={view} target="_blank" rel="noopener noreferrer"
+          className="w-full h-80 flex flex-col items-center justify-center gap-2 bg-rose-50/40 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
+          <FileText size={34} /> <span className="text-sm font-medium">פתח את אישור הלידה (PDF)</span>
+        </a>
       ) : (
         <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>
