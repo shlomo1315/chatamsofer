@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Users, GitBranch, Baby, CreditCard, Gift,
   BarChart3, Settings, Menu, X, Building2, Trees, HeartHandshake,
-  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star,
+  Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey } from '@/types'
@@ -160,6 +160,8 @@ export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMai
         {/* Section: ניווט ראשי */}
         <p className="px-3 pt-1 pb-2 text-[11px] font-semibold uppercase tracking-widest text-slate-500">ראשי</p>
         {topVisible.map(renderLink)}
+        {/* אישורים חריגים — admin-only. אנשים שאושרו ידנית (אינם צאצאים). */}
+        {isAdmin && renderLink({ href: '/admin/special-approvals', label: 'אישורים חריגים', icon: ShieldAlert })}
 
         {/* Maternity accordion */}
         {maternityVisible.length > 0 && (
