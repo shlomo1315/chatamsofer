@@ -301,18 +301,42 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
             className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
           />
         </div>
-        {/* סינון לפי מצב משפחתי — ברירת מחדל "כל המצבים" */}
-        <div className="flex items-center gap-2">
+        {/* סינון מצב משפחתי — בחירה מרובה (צ'יפס). אפשר לסמן כמה יחד;
+            בלי סימון כלל = כל המצבים. הערך נשמר כרשימה מופרדת בפסיקים. */}
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-slate-500">מצב משפחתי:</span>
-          <select
-            value={marital}
-            onChange={(e) => setMarital(e.target.value)}
-            className="text-sm rounded-xl border border-slate-200 bg-white shadow-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
-          >
-            {MARITAL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          {(() => {
+            const selected = marital && marital !== 'all' ? marital.split(',').filter(Boolean) : []
+            const toggle = (v: string) => {
+              const next = selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]
+              setMarital(next.length ? next.join(',') : 'all')
+            }
+            return (
+              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                {/* "הכל" — פעיל כשאין שום סימון */}
+                <button type="button" onClick={() => setMarital('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    selected.length === 0
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}>הכל</button>
+                {MARITAL_OPTIONS.map((o) => {
+                  const active = selected.includes(o.value)
+                  return (
+                    <button key={o.value} type="button" onClick={() => toggle(o.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        active
+                          ? 'bg-indigo-100 border-indigo-300 text-indigo-700 shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}>
+                      {active && <Check size={11} className="inline -mt-0.5 ml-1" />}
+                      {o.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">מיון:</span>

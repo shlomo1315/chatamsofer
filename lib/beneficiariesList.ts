@@ -46,6 +46,12 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
   const from = Math.max(0, (p.page - 1) * p.size)
   const to = from + p.size - 1
 
+  // מצב משפחתי — רב-ברירה: p.marital מגיע כרשימה מופרדת בפסיקים ('אלמן,אלמנה').
+  // 'all' או ריק → אין סינון. מסננים ב-.in().
+  const maritalValues = p.marital && p.marital !== 'all'
+    ? p.marital.split(',').map(s => s.trim()).filter(Boolean)
+    : []
+
   // ⚠️ העמודה is_special נוספת במיגרציה שמורצת ידנית. עד שהיא רצה — סינון
   // עליה מפיל את כל הרשימה (עמודה לא קיימת = שגיאת PostgREST). לכן בודקים
   // תחילה אם העמודה קיימת, ורק אז מסננים; אם לא — מדלגים על הסינון בבטחה.
@@ -66,7 +72,7 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   dataQ = applySpecial(dataQ)
   if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
-  if (p.marital !== 'all') dataQ = dataQ.eq('marital_status', p.marital)
+  if (maritalValues.length) dataQ = dataQ.in('marital_status', maritalValues)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
   const { data, error } = await dataQ
     .order(orderCol, { ascending, nullsFirst: false })
@@ -83,7 +89,7 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
       let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
       q = applySpecial(q)
       if (status !== 'all') q = q.eq('eligibility_status', status)
-      if (p.marital !== 'all') q = q.eq('marital_status', p.marital)
+      if (maritalValues.length) q = q.in('marital_status', maritalValues)
       if (p.q) q = q.or(searchOr(p.q))
       const { count: c, error: cErr } = await q
       if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }

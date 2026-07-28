@@ -354,9 +354,10 @@ function BabyFields({
           ))}
         </div>
       </Field>
-      {/* שם — אופציונלי. מוצג אחרי בחירת/מילוי המין. אם עדיין אין שם ניתן לסמן ולהשלים בכניסה הבאה */}
+      {/* שם — מוצג אחרי בחירת/מילוי המין. אם אין עדיין שם — חובה לסמן את
+          הכפתור "עדיין אין שם" (ולא לכתוב זאת בתוך השדה). */}
       {gender && (
-        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'} hint={lockedFromExisting ? undefined : 'לא חובה — אם עדיין אין שם, ניתן לסמן ולהשלים בכניסה הבאה'}>
+        <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'}>
           <TextInput value={name}
             disabled={noName || lockedFromExisting}
             className={noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}
@@ -375,8 +376,14 @@ function BabyFields({
               {noName ? <CheckCircle2 size={14} /> : <Clock size={14} />}
               {noName ? 'יושלם בהמשך' : 'עדיין אין שם'}
             </button>
-            {noName && (
+            {noName ? (
               <p className="mt-1.5 text-xs text-indigo-600">סומן — נזכיר לך להשלים את השם בכניסה הבאה לאזור האישי.</p>
+            ) : (
+              /* הנחיה מודגשת: אם אין שם — לסמן את הכפתור, לא לכתוב בשדה */
+              <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-2 text-xs text-amber-800">
+                <AlertCircle size={14} className="mt-px flex-shrink-0 text-amber-600" />
+                <span>אם עדיין אין שם לתינוק — <strong>חובה ללחוץ על הכפתור «עדיין אין שם»</strong>. אין לכתוב «אין שם» או כל טקסט אחר בתוך השדה.</span>
+              </div>
             )}
           </div>
           )}
@@ -3027,7 +3034,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
                 <EditableText k="child.title" as="h2" className="text-xl font-bold text-slate-900 mb-3" />
                 <p className="text-slate-600 text-sm leading-relaxed mb-1">
-                  אתה רשום אצלינו במערכת בתור ילד של
+                  אתה רשום אצלינו במערכת בתור בן של
                 </p>
                 <p className="text-lg font-bold text-indigo-700 mb-4">{childMatch.parentName}</p>
                 {/* פרטי הילד הרשום */}
