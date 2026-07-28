@@ -230,11 +230,23 @@ interface Props {
   size: number
   status: string
   sort: string
+  marital: string
 }
 
-export default function BeneficiariesTable({ data, counts, total, page, size, status, sort }: Props) {
+// אפשרויות סינון מצב משפחתי — 'all' = הכל (ברירת מחדל). הערכים תואמים
+// למה שנשמר בפועל בעמודה marital_status.
+const MARITAL_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'כל המצבים' },
+  { value: 'נשואים', label: 'נשואים' },
+  { value: 'אלמן', label: 'אלמן' },
+  { value: 'אלמנה', label: 'אלמנה' },
+  { value: 'גרוש', label: 'גרוש' },
+  { value: 'גרושה', label: 'גרושה' },
+]
+
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
-  const { qInput, setSearch, setStatus, setSort, setSize, setPage } = useListParams()
+  const { qInput, setSearch, setStatus, setSort, setMarital, setSize, setPage } = useListParams()
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
@@ -280,6 +292,19 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
             placeholder="חיפוש חופשי בכל הרשומות..."
             className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
           />
+        </div>
+        {/* סינון לפי מצב משפחתי — ברירת מחדל "כל המצבים" */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">מצב משפחתי:</span>
+          <select
+            value={marital}
+            onChange={(e) => setMarital(e.target.value)}
+            className="text-sm rounded-xl border border-slate-200 bg-white shadow-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all"
+          >
+            {MARITAL_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">מיון:</span>

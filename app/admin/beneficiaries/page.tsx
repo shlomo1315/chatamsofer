@@ -50,6 +50,7 @@ async function getBeneficiaries(p: ReturnType<typeof readListParams>): Promise<L
   // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
+  if (p.marital !== 'all') dataQ = dataQ.eq('marital_status', p.marital)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
   const { data, error } = await dataQ
     .order(orderCol, { ascending, nullsFirst: false })
@@ -65,6 +66,7 @@ async function getBeneficiaries(p: ReturnType<typeof readListParams>): Promise<L
     try {
       let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
       if (status !== 'all') q = q.eq('eligibility_status', status)
+      if (p.marital !== 'all') q = q.eq('marital_status', p.marital)
       if (p.q) q = q.or(searchOr(p.q))
       const { count: c, error: cErr } = await q
       if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }
@@ -107,6 +109,7 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         size={p.size}
         status={p.status}
         sort={p.sort}
+        marital={p.marital}
       />
     </div>
   )

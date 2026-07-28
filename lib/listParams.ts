@@ -10,6 +10,7 @@ export interface ListParams {
   q: string
   status: string
   sort: string
+  marital: string   // סינון לפי מצב משפחתי ('all' = הכל)
 }
 
 export function readListParams(
@@ -26,5 +27,6 @@ export function readListParams(
     q: (sp.get('q') ?? '').trim(),
     status: sp.get('status') ?? opts?.defaultStatus ?? 'all',
     sort: sp.get('sort') ?? opts?.defaultSort ?? 'newest',
+    marital: (sp.get('marital') ?? 'all').trim() || 'all',
   }
 }
