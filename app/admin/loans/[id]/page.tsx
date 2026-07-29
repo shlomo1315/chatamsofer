@@ -6,6 +6,7 @@ import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
+import DocPreview from '@/components/ui/DocPreview'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
@@ -203,24 +204,12 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
 function LoanDocCard({ label, url, person }: { label: string; url?: string; person?: string }) {
   if (!url) return null
-  const href = docViewUrl(url)
-  const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
-  const isPdf = /\.pdf(\?|$)/i.test(url)
   return (
     <div className="flex flex-col gap-1.5">
     <ViewDocButton url={url}
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
-      {isImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={label} className="w-full h-72 object-contain rounded-lg bg-slate-50" />
-      ) : isPdf ? (
-        <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
-          className="w-full h-72 rounded-lg bg-white border-0 pointer-events-none" />
-      ) : (
-        <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
-          <FileText size={28} className="text-slate-400" />
-        </div>
-      )}
+      {/* תצוגה כתמונה (גם ל-PDF, שמרונדר בשרת) — iframe היה מוחלף בדף החסימה של נטפרי */}
+      <DocPreview url={url} alt={label} width={900} fit="contain" className="w-full h-72 rounded-lg bg-slate-50" />
       <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
         {label} <ExternalLink size={11} />
       </span>

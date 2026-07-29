@@ -1,6 +1,7 @@
 'use client'
 import { FileText } from 'lucide-react'
 import { useDocViewer } from './DocViewer'
+import DocPreview from './DocPreview'
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
 const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
@@ -20,6 +21,9 @@ export default function DocThumb({
   const ref = rawUrl ?? name ?? href
   const isImg = isImageRef(ref) || (mimeType?.startsWith('image/') ?? false)
   const isPdf = isPdfRef(ref) || mimeType === 'application/pdf'
+  // מקור לתצוגה המקדימה — נתיב האחסון הגולמי כשקיים; אחרת כתובת הפרוקסי,
+  // ש-storagePath יודע לחלץ ממנה את הנתיב.
+  const previewSrc = rawUrl ?? href
 
   return (
     <button
@@ -29,17 +33,10 @@ export default function DocThumb({
       className="group relative block flex-shrink-0 rounded-lg border border-slate-200 overflow-hidden bg-slate-100 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer"
       style={{ width: size, height: size }}
     >
-      {isImg ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={name || 'מסמך'} loading="lazy" className="w-full h-full object-cover" />
-      ) : isPdf ? (
-        <iframe
-          src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
-          title={name || 'PDF'}
-          tabIndex={-1}
-          className="border-0 bg-white pointer-events-none absolute top-0 left-0"
-          style={{ width: size / 0.45, height: size / 0.45, transform: 'scale(0.45)', transformOrigin: 'top left' }}
-        />
+      {isImg || isPdf ? (
+        // תצוגה כתמונה גם ל-PDF (מרונדר בשרת). ה-iframe הקודם הוחלף בדף
+        // החסימה של נטפרי, שמיירט כל תגובת application/pdf.
+        <DocPreview url={previewSrc} alt={name || 'מסמך'} width={Math.max(240, size * 3)} className="w-full h-full" />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
           <FileText size={Math.round(size * 0.32)} />

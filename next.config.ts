@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns', 'recharts'],
   },
+  // רינדור PDF לתמונה (/api/files/thumb) רץ ב-Node ומשתמש במודול נייטיב.
+  // בלי ההחרגה הזו webpack מנסה לארוז את קובץ ה-.node ואת ה-worker של pdfjs
+  // וה-build נשבר.
+  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
   async headers() {
     const noStore = [
       { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },

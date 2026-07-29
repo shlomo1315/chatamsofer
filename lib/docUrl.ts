@@ -6,6 +6,13 @@
 // חילוץ נתיב האחסון מתוך URL (ציבורי/חתום) של Supabase, או החזרת הקלט אם הוא כבר נתיב.
 export function storagePath(urlOrPath: string): string {
   if (!urlOrPath) return ''
+  // כתובת פרוקסי שכבר נבנתה (/api/files?p=...) — חילוץ הנתיב מתוך הפרמטר,
+  // כדי שאפשר יהיה להעביר אותה הלאה (למשל לתצוגה המקדימה) בלי לשבור.
+  const proxied = urlOrPath.match(/^\/api\/files(?:\/thumb)?\?(.*)$/)
+  if (proxied) {
+    const p = new URLSearchParams(proxied[1]).get('p')
+    if (p) return storagePath(p)
+  }
   for (const marker of [
     '/object/public/documents/',
     '/object/sign/documents/',
@@ -23,6 +30,18 @@ export function storagePath(urlOrPath: string): string {
 export function docViewUrl(urlOrPath: string | null | undefined): string {
   if (!urlOrPath) return ''
   return `/api/files?p=${encodeURIComponent(urlOrPath)}`
+}
+
+// כתובת *תצוגה מקדימה כתמונה* — תמיד מחזירה PNG/תמונה, לעולם לא PDF.
+// נטפרי מיירט תגובות application/pdf ומציג את דף החסימה שלו במקום המסמך (גם
+// מהדומיין שלנו), ולכן תצוגות מקדימות חייבות לעבור דרך הנתיב הזה, שמרנדר את
+// עמוד ה-PDF לתמונה בשרת. page = מספר העמוד, width = רוחב היעד בפיקסלים.
+export function docThumbUrl(
+  urlOrPath: string | null | undefined,
+  { page = 1, width = 900 }: { page?: number; width?: number } = {},
+): string {
+  if (!urlOrPath) return ''
+  return `/api/files/thumb?p=${encodeURIComponent(urlOrPath)}&page=${page}&w=${width}`
 }
 
 // בניית שם הורדה משמעותי למסמך מוטב: "סוג המסמך + שם ומשפחת המוטב" עם הסיומת
