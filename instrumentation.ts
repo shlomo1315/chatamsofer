@@ -118,6 +118,31 @@ export async function register() {
     console.log('[scheduled-mail] hourly scheduler started')
   }
 
+  // ── כרטיסי יולדות שלא נטענו — ניסיון חוזר שעתי ──
+  // הטענת הכרטיס באישור הלידה רצה כמשימת רקע אחרי שהתגובה כבר נשלחה. אם היא
+  // נכשלה (נדרים לא זמין) או לא הספיקה לרוץ (פריסה מחדש באמצע), הלידה נשארה
+  // מאושרת בלי כרטיס — ואיש לא ידע, כי שום דבר לא ניסה שוב.
+  // עד היום processAwaitingStock רץ רק כשמוסיפים מלאי או משנים מוקד; לידה
+  // שנתקעה בלי קשר למלאי יכלה להישאר תקועה לנצח. כאן היא נסרקת כל שעה.
+  if (process.env.MATERNITY_CARD_RETRY_DISABLED !== '1') {
+    const tickCards = async () => {
+      try {
+        const { getServiceClient } = await import('@/lib/apiAuth')
+        const admin = getServiceClient()
+        if (!admin) return
+        const { processAwaitingStock } = await import('@/lib/maternityCards')
+        const res = await processAwaitingStock(admin)
+        if (res.processed || res.failed || res.notConfigured) {
+          console.log(`[maternity-cards] retry · processed=${res.processed} failed=${res.failed}` +
+            (res.notConfigured ? ' · נדרים אינו מוגדר' : '') +
+            (res.errors.length ? ` · ${res.errors.join(' | ')}` : ''))
+        }
+      } catch (err) { console.error('[maternity-cards] retry tick failed', err) }
+    }
+    setTimeout(() => { void tickCards(); setInterval(() => { void tickCards() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[maternity-cards] hourly retry scheduler started')
+  }
+
   // ── סנכרון תיבות Gmail הישנות — כל שעה ──
   // זמני: כל עוד התיבות הישנות עדיין מקבלות מיילים חדשים (עד סגירת המעבר).
   // מושך אוטומטית את המיילים החדשים לכל תיבה פעילה, כדי שלא יצטברו בלי סנכרון
