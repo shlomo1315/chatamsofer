@@ -115,9 +115,13 @@ export async function loadMaternityCardOnApproval(
     // ⚠️ החיפוש (GetClient_Table) עלול להיכשל מצד נדרים. זה אינו סיבה
     // לוותר: אם ההקמה/עדכון (SaveClientCard) מצליחה — המשפחה קיימת
     // ומקבלת ClientId. קודם כשל החיפוש הפיל את כל התהליך.
-    if (!clientId && zeout) {
+    // ⚠️ מחפשים לפי שתי הת"ז (בעל ואשה) ולא לפי אחת: המשפחה בנדרים עשויה
+    // להיות רשומה על שם בן/בת הזוג. חיפוש לפי ת"ז אחת בלבד החזיר null, המערכת
+    // ניסתה להקים משפחה קיימת, ונדרים דחו ב"מספר זהות זה כבר רשום אצל X".
+    for (const candidate of [b.id_number, b.spouse_id_number].filter(Boolean)) {
+      if (clientId) break
       try {
-        clientId = await findClientByZeout(creds, String(zeout))
+        clientId = await findClientByZeout(creds, String(candidate))
       } catch (e) {
         console.error('[maternityCards] חיפוש המשפחה בנדרים נכשל — ממשיכים להקמה:',
           e instanceof Error ? e.message : e)
@@ -133,23 +137,36 @@ export async function loadMaternityCardOnApproval(
     // יש שם לקוח עם אותה ת"ז. עד כה החיפוש נכשל, ההקמה נדחתה, וההטענה נעצרה —
     // והיולדת נשארה בלי כרטיס למרות שיש מלאי. מנסים לאתר אותו ולהשתמש בו.
     const raw = e instanceof Error ? e.message : String(e)
-    if (/כבר רשום|already (exists|registered)/i.test(raw) && zeout) {
-      try {
-        const existing = await findClientByZeout(creds, String(zeout))
-        if (existing) {
-          clientId = existing
-          if (existing !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: existing }).eq('id', b.id)
-          console.warn(`[maternityCards] ת"ז ${zeout} כבר רשומה בנדרים — שויכה ללקוח ${existing}`)
+    if (/כבר רשום|already (exists|registered)/i.test(raw)) {
+      // ⚠️ מנסים את שתי הת"ז — הבעל והאשה. המשפחה בנדרים עשויה להיות רשומה
+      // על שם בן/בת הזוג ("כבר רשום אצל <שם הבעל>"), ואז חיפוש לפי ת"ז אחת
+      // בלבד מחמיץ אותה בדיוק במקרה שבו אנחנו יודעים בוודאות שהיא קיימת.
+      for (const candidate of [b.id_number, b.spouse_id_number].filter(Boolean)) {
+        try {
+          const existing = await findClientByZeout(creds, String(candidate))
+          if (existing) {
+            clientId = existing
+            if (existing !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: existing }).eq('id', b.id)
+            console.warn(`[maternityCards] ת"ז ${candidate} כבר רשומה בנדרים — שויכה ללקוח ${existing}`)
+            break
+          }
+        } catch (e2) {
+          console.error('[maternityCards] איתור הלקוח הקיים בנדרים נכשל:', e2 instanceof Error ? e2.message : e2)
         }
-      } catch (e2) {
-        console.error('[maternityCards] איתור הלקוח הקיים בנדרים נכשל:', e2 instanceof Error ? e2.message : e2)
       }
     }
     if (clientId) {
       // אותר לקוח קיים — ממשיכים להטענה כרגיל
     } else {
     await restoreCard()
-    const msg = e instanceof Error ? e.message : 'שגיאת נדרים'
+    const base = e instanceof Error ? e.message : 'שגיאת נדרים'
+    // ⚠️ "כבר רשום אצל X" נקרא כמו הצלחה ("אז מצוין, תטעין לו!") ולכן חייב
+    // הסבר: הגענו לכאן רק אחרי שחיפשנו את X לפי שתי הת"ז ולא מצאנו אותו
+    // ברשימת המשפחות. כלומר הת"ז תפוסה בנדרים אצל רשומה שאיננו מזהים —
+    // בדרך כלל ת"ז שגויה באחד הצדדים. בלי המשפט הזה אין מה לעשות עם השגיאה.
+    const msg = /כבר רשום|already (exists|registered)/i.test(base)
+      ? `${base} — חיפשנו את הלקוח הזה בנדרים לפי ת"ז הבעל והאשה ולא מצאנו אותו. יש לבדוק בנדרים אצל מי הת"ז רשומה, ולתקן את הת"ז בכרטסת או לשייך ידנית.`
+      : base
     console.error('[maternityCards] הקמת/עדכון המשפחה בנדרים נכשלה:', msg, { zeout, aidId: aid.id })
     // ⚠️ קודם כשל *בהקמת המשפחה* לא נכתב ל-card_load_error (רק כשלי *הטעינה*
     // נכתבו) — לכן הכשל "נבלע": האבחון הראה lastLoadError=null והיולדת נשארה

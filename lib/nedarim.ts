@@ -142,11 +142,36 @@ export async function getClientsTable(creds: NedarimCreds) {
   return { total: r.Total ?? null, families: rows, meta }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// נרמול ת"ז להשוואה — ספרות בלבד, מרופד ל-9.
+//
+// ⚠️ במערכת שלנו ת"ז נשמרת לעיתים בלי האפס המוביל ("12345678"), ובנדרים היא
+// שמורה מלאה ("012345678"). השוואת מחרוזות מדויקת נכשלה, החיפוש החזיר null,
+// המערכת ניסתה *להקים* משפחה שכבר קיימת — ונדרים דחו ב"מספר זהות זה כבר רשום
+// אצל X". התוצאה: יולדת נשארה בלי כרטיס למרות שהמשפחה קיימת ויש מלאי.
+//
+// דרכון/מסמך זר אינו ת"ז ישראלית ואין לרפד אותו באפסים — הוא מושווה כמות
+// שהוא (ללא רווחים/מקפים), אחרת "AB123456" היה נחתך ל-"000123456" ועלול
+// להתאים בטעות לת"ז אמיתית.
+// ─────────────────────────────────────────────────────────────────────────────
+export function normalizeZeout(v: unknown): string {
+  const s = String(v ?? '').trim()
+  if (!s) return ''
+  if (/[^\d\s-]/.test(s)) return s.replace(/[\s-]/g, '').toUpperCase()
+  const d = s.replace(/\D/g, '')
+  return d ? d.padStart(9, '0') : ''
+}
+
 // חיפוש משפחה בנדרים לפי ת.ז. → מחזיר ClientId אם קיימת, אחרת null
 export async function findClientByZeout(creds: NedarimCreds, zeout: string): Promise<string | null> {
+  const want = normalizeZeout(zeout)
+  if (!want) return null
   const { families } = await getClientsTable(creds)
-  const want = zeout.trim()
-  const match = families.find((row) => String(row.Zeout ?? '').trim() === want)
+  // ⚠️ לא רק שדה Zeout: בנדרים ת"ז בן/בת הזוג יושבת בשדה נפרד, ומשפחה
+  // שהוקמה על שם הבעל לא נמצאה כשחיפשנו לפי ת"ז האשה (ולהפך).
+  const match = families.find(row =>
+    Object.entries(row).some(([k, v]) => /zeout|tz\b|teudat/i.test(k) && normalizeZeout(v) === want),
+  )
   return match ? String(match.ClientId) : null
 }
 
