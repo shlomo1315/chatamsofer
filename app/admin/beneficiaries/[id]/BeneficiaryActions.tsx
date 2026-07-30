@@ -5,13 +5,15 @@ import Link from 'next/link'
 import { Edit, Trash2, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { useCan } from '@/components/StaffPermissions'
+import { useCan, useIsAdmin } from '@/components/StaffPermissions'
 
 export default function BeneficiaryActions({ id, name }: { id: string; name: string }) {
   const router = useRouter()
   const toast = useToast()
   const { confirm, confirmDialog } = useConfirm()
-  const canDelete = useCan('beneficiaries', 'delete')
+  // מחיקה — מנהל בלבד. מזכירות מקבלת עריכה (רצפת התפקיד) אך לא מחיקה,
+  // בהתאמה לאכיפה בשרת (requireAdmin ב-/api/admin/beneficiaries/delete).
+  const canDelete = useIsAdmin()
   const canEdit = useCan('beneficiaries', 'edit')
   const [deleting, setDeleting] = useState(false)
 
