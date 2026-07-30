@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
 import { createClient } from '@/lib/supabase/client'
 import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import DocThumb from '@/components/ui/DocThumb'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
@@ -729,14 +730,31 @@ function AttachmentBar({ attachments, messageId, senderEmail }: { attachments: A
                 {att.size > 0 && <span className="text-slate-400 flex-shrink-0">{formatBytes(att.size)}</span>}
               </div>
               <div className="flex items-center gap-1.5">
-                <a href={href} target="_blank" rel="noopener noreferrer"
-                  className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
-                  <ExternalLink size={13} />
-                </a>
-                <a href={downloadHref} download={att.filename}
-                  className="p-0.5 text-slate-400 hover:text-emerald-600 transition-colors" title="הורדה למחשב">
-                  <Download size={13} />
-                </a>
+                {/* צרופה שנשמרה בדלי 'documents' עוברת בערוץ הנתונים (blob מקומי)
+                    ולכן אינה נשלחת לבדיקת מסנן תוכן. צרופת Gmail נטענת דרך
+                    endpoint אחר ונשארת בקישור רגיל. */}
+                {att.url ? (
+                  <button type="button" onClick={() => { openDocInNewTab(att.url!, att.filename).catch(() => {}) }}
+                    className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                    <ExternalLink size={13} />
+                  </button>
+                ) : (
+                  <a href={href} target="_blank" rel="noopener noreferrer"
+                    className="p-0.5 text-slate-400 hover:text-indigo-600 transition-colors" title="צפה">
+                    <ExternalLink size={13} />
+                  </a>
+                )}
+                {att.url ? (
+                  <button type="button" onClick={() => { downloadDocViaData(att.url!, att.filename).catch(() => {}) }}
+                    className="p-0.5 text-slate-400 hover:text-emerald-600 transition-colors" title="הורדה למחשב">
+                    <Download size={13} />
+                  </button>
+                ) : (
+                  <a href={downloadHref} download={att.filename}
+                    className="p-0.5 text-slate-400 hover:text-emerald-600 transition-colors" title="הורדה למחשב">
+                    <Download size={13} />
+                  </a>
+                )}
                 <button onClick={() => setAssigning(att)}
                   className="p-0.5 text-slate-400 hover:text-green-600 transition-colors" title="שייך לצאצא">
                   <FolderOpen size={13} />

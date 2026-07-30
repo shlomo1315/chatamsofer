@@ -2,6 +2,7 @@
 import { FileText } from 'lucide-react'
 import { useDocViewer } from './DocViewer'
 import PdfPreviewBox from './PdfPreviewBox'
+import SafeDocImage from './SafeDocImage'
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
 const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
@@ -31,8 +32,8 @@ export default function DocThumb({
       style={{ width: size, height: size }}
     >
       {isImg ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={href} alt={name || 'מסמך'} loading="lazy" className="w-full h-full object-cover" />
+        // דרך ערוץ הנתונים — לא בקשת רשת לקובץ
+        <SafeDocImage path={rawUrl ?? href} name={name} alt={name || 'מסמך'} className="w-full h-full object-cover" />
       ) : isPdf ? (
         // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
         <PdfPreviewBox className="w-full h-full" iconSize={Math.round(size * 0.32)} label="PDF" />

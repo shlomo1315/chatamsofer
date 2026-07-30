@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { X, Download, FileText, Loader2, ExternalLink } from 'lucide-react'
-import { docDownloadUrl } from '@/lib/docUrl'
 import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import SafeDocImage from './SafeDocImage'
 
@@ -147,13 +146,13 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
                 </div>
                 <p className="text-slate-700 font-semibold mb-1">לא ניתן להציג את הקובץ כאן</p>
                 <p className="text-slate-400 text-sm mb-5">{doc.name || 'קובץ מצורף'}</p>
-                <a
-                  href={docDownloadUrl(doc.url, doc.name)}
-                  download={doc.name || true}
+                <button
+                  type="button"
+                  onClick={() => { downloadDocViaData(doc.url, doc.name).catch(() => {}) }}
                   className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors"
                 >
                   <Download size={17} /> הורדת הקובץ
-                </a>
+                </button>
               </div>
             )}
           </div>
@@ -191,18 +190,9 @@ export function ViewDocButton({
   )
 }
 
-// הורדה ישירה למחשב דרך fetch+blob — מבטיח הורדה בלי פתיחת לשונית/ניווט, בפורמט המקורי.
+// הורדה ישירה למחשב — עוברת דרך ערוץ הנתונים (JSON+base64) ולא מושכת קובץ
+// מהרשת, ולכן אינה נכנסת לבדיקת מסנן התוכן. נקודת הכניסה של *כל* ההורדות
+// במערכת (DownloadDocButton, הפורטל, חלונית הצפייה), ולכן די בשינוי כאן.
 export async function downloadDocDirect(url: string, name?: string | null): Promise<void> {
-  const res = await fetch(docDownloadUrl(url, name), { credentials: 'same-origin' })
-  if (!res.ok) throw new Error('download failed')
-  const blob = await res.blob()
-  const objectUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = objectUrl
-  if (name) a.download = name
-  else a.download = ''
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 4000)
+  await downloadDocViaData(url, name)
 }

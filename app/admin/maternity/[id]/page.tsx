@@ -18,6 +18,8 @@ import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import PdfPreviewBox from '@/components/ui/PdfPreviewBox'
+import SafeDocImage from '@/components/ui/SafeDocImage'
+import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -73,14 +75,14 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
 // השושלת כמעט ואינה משתנה, ולכן TTL של 5 דקות מזרז מאוד טעינות חוזרות.
 // generation + status נדרשים לצביעת הצ'יפים (ירוק=מאומת / אדום=סוטה / כתום=נוסף),
 // בדיוק כמו בכרטסת הצאצא.
-type LineageNodeLite = { id: string; name: string; parent_id: string | null; generation: number; status: string }
+type LineageNodeLite = { id: string; name: string; parent_id: string | null; generation: number; status: string; relation?: string | null }
 let _lineageCache: { at: number; map: Map<string, LineageNodeLite> } | null = null
 const LINEAGE_TTL_MS = 5 * 60_000
 async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   const now = Date.now()
   if (_lineageCache && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
   const supabase = await createClient()
-  const { data, error } = await supabase.from('lineage_nodes').select('id, name, parent_id, generation, status')
+  const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT)
   if (error) throw error
   const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
   _lineageCache = { at: now, map }
@@ -92,10 +94,24 @@ type GenStatus = 'verified' | 'pending' | 'rejected' | null
 // pending/אין=כתום / rejected=אדום). זהה ללוגיקה בכרטסת הצאצא.
 async function computeGenStatus(
   chain: { generation: number; name: string }[],
+  nodeId?: string | null,
 ): Promise<Map<number, GenStatus>> {
   const out = new Map<number, GenStatus>()
-  if (!chain.length || !isSupabaseConfigured()) return out
+  if (!isSupabaseConfigured()) return out
   const map = await getLineageMap()
+
+  // ✅ מקור האמת: כשיש שיוך לצומת בעץ, הסטטוס נגזר מהמסלול לפי מזהי צמתים.
+  // התאמת שמות (למטה) נשארת רק לשרשרת ידנית בלי שיוך — אחרת הבדל ניסוח בשם
+  // ("רבי נתן יהודה סופר" מול "רבי נתן יהודה (נטע)") צובע דור מאושר באדום.
+  const path = pathToRoot(map as unknown as Map<string, TreeNodeRow>, nodeId)
+  if (path.length) {
+    for (const n of path) {
+      out.set(n.generation, n.status === 'verified' ? 'verified' : n.status === 'rejected' ? 'rejected' : 'pending')
+    }
+    return out
+  }
+
+  if (!chain.length) return out
   const nodes = [...map.values()]
   const { namesMatch } = await import('@/lib/hebrewName')
   for (const e of chain) {
@@ -154,7 +170,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const [lineagePath, idDocs, genStatus] = await Promise.all([
     getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
-    computeGenStatus(typedChain),
+    computeGenStatus(typedChain, ben?.lineage_node_id),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
@@ -279,8 +295,14 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     const chainSorted = [...typedChain]
                       .filter(e => e && typeof e.name === 'string' && e.name.trim())
                       .sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0))
+                    // המסלול בעץ קודם לעותק השמור — כמו בכרטסת הצאצא. השם מגיע
+                    // מהעץ העדכני; תגית בן/חתן נלקחת מהעותק לפי מספר הדור.
+                    const fromTree = !!ben?.lineage_node_id && lineagePath.length > 0
+                    const relOf = (g: number) => chainSorted.find(c => c.generation === g)?.relation ?? null
                     const source: { generation: number; name: string; relation?: string | null }[] =
-                      chainSorted.length
+                      fromTree
+                        ? lineagePath.map((name, i) => ({ generation: i + 1, name, relation: relOf(i + 1) }))
+                        : chainSorted.length
                         ? chainSorted
                         : [
                             ...lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null })),
@@ -300,7 +322,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     if (!gens.some(g => g.generation === 1)) {
                       gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
                     }
-                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} allNodes={lineageNodesArr} />
+                    // relation מגיע כטקסט חופשי מהמסד — מצמצמים לערכים שהרכיב מכיר
+                    const pickerNodes: import('@/app/admin/beneficiaries/[id]/LineageChainChips').TreeNode[] =
+                      lineageNodesArr.map(n => ({
+                        id: n.id, name: n.name, generation: n.generation, parent_id: n.parent_id, status: n.status,
+                        relation: n.relation === 'son' || n.relation === 'son_in_law' ? n.relation : null,
+                      }))
+                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} allNodes={pickerNodes} />
                   })()}
                   {ben.lineage_node_id && (
                     <div className="mt-3">
@@ -575,14 +603,12 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
   )
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
   const isPdf = /\.pdf(\?|$)/i.test(url)
-  const href = docViewUrl(url)
   return (
     <div className="flex flex-col gap-1.5">
       <ViewDocButton url={url}
          className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group text-center">
         {isImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
+          <SafeDocImage path={url} name={label} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
         ) : isPdf ? (
           // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
           <PdfPreviewBox className="w-full h-28 rounded-lg" iconSize={24} label="PDF" />
@@ -595,10 +621,7 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
           {label} <ExternalLink size={10} />
         </span>
       </ViewDocButton>
-      <a href={docDownloadUrl(url, docDownloadName(label, person, url))} download={docDownloadName(label, person, url)}
-         className="inline-flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700 hover:text-white hover:bg-emerald-600 px-2 py-1 rounded-lg border border-emerald-200 hover:border-emerald-600 transition-colors">
-        <Download size={11} /> הורדה
-      </a>
+      <DownloadDocButton url={url} docType={label} person={person} variant="button" className="justify-center" />
     </div>
   )
 }

@@ -24,6 +24,7 @@ import LineageReliabilityPanel from './LineageReliabilityPanel'
 import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 
@@ -424,8 +425,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
                     {c.birth_status === 'pending' && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">ממתין לאישור לידה</span>}
                     {c.birth_status === 'approved' && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">לידה מאושרת</span>}
                     {c.maternity_aid_id && birthCerts[c.maternity_aid_id] && (
-                      <a href={docViewUrl(birthCerts[c.maternity_aid_id])} target="_blank" rel="noopener noreferrer" title="צפייה באישור הלידה"
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors"><FileText size={13} /></a>
+                      <ViewDocButton url={birthCerts[c.maternity_aid_id]} name="אישור לידה"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-full text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors"><FileText size={13} /></ViewDocButton>
                     )}
                     {maritalLabel(c) ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${c.marital_status === 'married' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{maritalLabel(c)}</span> : (!c.birth_status && <span className="text-slate-300">—</span>)}
                   </div>

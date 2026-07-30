@@ -5,7 +5,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Heart, Send, Loader2, Globe, Mail, FileImage, Clock, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
-import { docViewUrl } from '@/lib/docUrl'
+import SafeDocImage from '@/components/ui/SafeDocImage'
+import { openDocInNewTab } from '@/lib/docBlob'
 
 interface Letter {
   id: string
@@ -120,11 +121,10 @@ export default function GratitudeTab({ aidId }: { aidId: string }) {
           )}
 
           {letter.scan_url && (
-            <a href={docViewUrl(letter.scan_url)} target="_blank" rel="noreferrer"
-               className="block rounded-xl overflow-hidden border border-amber-100 mt-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={docViewUrl(letter.scan_url)} alt="שובר סרוק" className="w-full" />
-            </a>
+            <button type="button" onClick={() => { openDocInNewTab(letter.scan_url!).catch(() => {}) }}
+               className="block w-full rounded-xl overflow-hidden border border-amber-100 mt-2">
+              <SafeDocImage path={letter.scan_url} alt="שובר סרוק" className="w-full" />
+            </button>
           )}
 
           <a href="/admin/maternity/gratitude"

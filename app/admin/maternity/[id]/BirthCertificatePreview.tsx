@@ -3,7 +3,8 @@ import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { docViewUrl } from '@/lib/docUrl'
+import SafeDocImage from '@/components/ui/SafeDocImage'
+import { openDocInNewTab } from '@/lib/docBlob'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -68,20 +69,18 @@ export default function BirthCertificatePreview({
   }
 
   const btn = 'inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/95 shadow-sm border border-slate-200 hover:bg-white transition-colors'
-  const view = docViewUrl(url)
 
   return (
     <div className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
       {/* תצוגה מקדימה */}
       {isImage(url) ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={view} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
+        <SafeDocImage path={url} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
       ) : isPdf(url) ? (
         // PDF — לא מוטמע ב-iframe (נטפרי חוסם ומציג NETFREE); פתיחה בכרטיסייה חדשה.
-        <a href={view} target="_blank" rel="noopener noreferrer"
+        <button type="button" onClick={() => { openDocInNewTab(url, 'אישור לידה').catch(() => {}) }}
           className="w-full h-80 flex flex-col items-center justify-center gap-2 bg-rose-50/40 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
           <FileText size={34} /> <span className="text-sm font-medium">פתח את אישור הלידה (PDF)</span>
-        </a>
+        </button>
       ) : (
         <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>

@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2 } from 'lucide-react'
-import { docViewUrl } from '@/lib/docUrl'
+import SafeDocImage from '@/components/ui/SafeDocImage'
+import { openDocInNewTab } from '@/lib/docBlob'
 
 export interface GratitudeRow {
   id: string
@@ -311,15 +312,13 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
               )}
 
               {open.scan_url && (
-                <a
-                  href={docViewUrl(open.scan_url)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-xl border border-slate-200 overflow-hidden mb-4 hover:border-slate-300"
+                <button
+                  type="button"
+                  onClick={() => { openDocInNewTab(open.scan_url!).catch(() => {}) }}
+                  className="block w-full rounded-xl border border-slate-200 overflow-hidden mb-4 hover:border-slate-300"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={docViewUrl(open.scan_url)} alt="שובר סרוק" className="w-full" />
-                </a>
+                  <SafeDocImage path={open.scan_url} alt="שובר סרוק" className="w-full" />
+                </button>
               )}
 
               {pdf && (
