@@ -231,6 +231,11 @@ function BabyFields({
   // מוצגת הודעת "כבר רשום במשפחה", ואם עברו 30 יום — אזהרה אדומה חוסמת.
   existingChildBirthDate?: string
 }) {
+  // שער ההנחיה לשדה השם: nameGate = החלונית פתוחה · nameAck = המשתמש אישר
+  // שיש שם וניתן להקליד. עד האישור השדה לקריאה בלבד.
+  const [nameGate, setNameGate] = useState(false)
+  const [nameAck, setNameAck] = useState(false)
+
   // ילד קיים זוהה במשפחה המחוברת → פרטיו (מין/שם/תאריך) נעולים לעריכה,
   // כי הם מגיעים מרישום המשפחה ואין לשנותם ידנית בבקשת הלידה.
   const lockedFromExisting = !!existingChildBirthDate
@@ -361,11 +366,22 @@ function BabyFields({
           הכפתור "עדיין אין שם" (ולא לכתוב זאת בתוך השדה). */}
       {gender && (
         <Field label={gender === 'female' ? 'שם הנולדת' : 'שם הנולד'}>
-          <TextInput value={name}
-            disabled={noName || lockedFromExisting}
-            className={noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}
-            onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
-            placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+          {/* ⚠️ שדה השם נעול עד שהמשתמש מאשר שקרא את ההנחיה. הסיבה: אנשים
+              הקלידו "אין שם"/"עדיין לא" בתוך השדה במקום לסמן את הכפתור, והשם
+              הזה נשמר כשם התינוק בכל המסמכים והמיילים. חלונית חוסמת לפני
+              ההקלדה מונעת את זה מראש. */}
+          <div className="relative">
+            <TextInput value={name}
+              disabled={noName || lockedFromExisting}
+              readOnly={!nameAck && !noName && !lockedFromExisting}
+              onFocus={() => { if (!nameAck && !noName && !lockedFromExisting) setNameGate(true) }}
+              onMouseDown={e => { if (!nameAck && !noName && !lockedFromExisting) { e.preventDefault(); setNameGate(true) } }}
+              className={`${noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''} ${
+                !nameAck && !noName && !lockedFromExisting ? 'cursor-pointer bg-slate-50' : ''
+              }`}
+              onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
+              placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
+          </div>
           {/* כפתור "עדיין אין שם" מוסתר כשהשם נעול (מגיע מרישום המשפחה) */}
           {!lockedFromExisting && (
           <div className="mt-2">
@@ -389,6 +405,53 @@ function BabyFields({
               </div>
             )}
           </div>
+          )}
+
+          {/* חלונית חוסמת — נפתחת בלחיצה על שדה השם, לפני שניתן להקליד */}
+          {nameGate && (
+            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+              onClick={() => setNameGate(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 w-full max-w-md overflow-hidden"
+                onClick={e => e.stopPropagation()}>
+                <div className="bg-red-50 border-b-2 border-red-200 px-6 py-5 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center mx-auto mb-3">
+                    <AlertCircle size={26} className="text-red-600" />
+                  </div>
+                  <h2 className="text-lg font-extrabold text-red-800">לפני מילוי שם {gender === 'female' ? 'הנולדת' : 'הנולד'}</h2>
+                </div>
+                <div className="p-6 flex flex-col gap-4">
+                  <ul className="text-sm text-slate-700 leading-relaxed space-y-2.5">
+                    <li className="flex gap-2">
+                      <span className="font-bold text-red-700 flex-shrink-0">1.</span>
+                      <span>יש למלא כאן את <span className="font-bold">שם {gender === 'female' ? 'הנולדת' : 'הנולד'} בלבד</span>.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="font-bold text-red-700 flex-shrink-0">2.</span>
+                      <span>
+                        אם טרם נערכה הברית ו/או טרם ניתן שם — <span className="font-bold">חובה לסמן את הכפתור «עדיין אין שם»</span>,
+                        ואין למלא <span className="font-bold">דבר</span> בתוך השדה.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="font-bold text-red-700 flex-shrink-0">3.</span>
+                      <span className="font-extrabold text-red-800">
+                        כתיבת «עדיין אין שם», «יושלם בהמשך» או כל טקסט דומה בתוך השדה — בקשת הלידה תידחה לאלתר.
+                      </span>
+                    </li>
+                  </ul>
+                  <button type="button"
+                    onClick={() => { setNoName(true); onChange('baby_name', ''); setNameGate(false) }}
+                    className="w-full flex items-center justify-center gap-2 border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                    <Clock size={17} /> עדיין אין שם — סמן עבורי
+                  </button>
+                  <button type="button"
+                    onClick={() => { setNameAck(true); setNameGate(false) }}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-bold rounded-xl px-4 py-3.5 transition-all duration-150 text-base">
+                    <CheckCircle2 size={18} /> הבנתי — יש שם, לחץ כאן למילוי
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </Field>
       )}
@@ -759,11 +822,29 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
         )
       })}
 
-      {/* הנחיה מודגשת — מיד אחרי דור החתם סופר, לפני בחירת דור 2 */}
-      <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 px-4 py-3 mb-3">
-        <p className="text-sm font-bold text-indigo-900 leading-relaxed">
-          שימו לב! יש לבחור מתוך הרשימה הקיימת בכל דור, בדקו היטב ורק במידה ולא מצאתם את הדור המבוקש ניתן להזין אותו ידנית, אין להוסיף דור ידני במידה והוא קיים במערכת!
+      {/* ⚠️ אזהרה מודגשת באדום — מיד אחרי דור החתם סופר, לפני בחירת דור 2.
+          הוספה ידנית של דור שכבר קיים מייצרת כפילות בעץ הדורות ומחייבת
+          תיקון ידני, ולכן הניסוח חד וחד-משמעי. */}
+      <div className="rounded-xl border-2 border-red-400 bg-red-50 px-4 py-3.5 mb-3">
+        <p className="text-sm font-extrabold text-red-800 leading-relaxed mb-2">
+          ⚠️ חובה לבדוק בכל דור אם הוא כבר קיים ברשימה — לפני הוספה ידנית!
         </p>
+        <ul className="text-sm text-red-800 leading-relaxed space-y-1.5 pr-1">
+          <li className="flex gap-2">
+            <span className="font-bold flex-shrink-0">1.</span>
+            <span>בכל דור — <span className="font-bold">חפשו תחילה ברשימה הקיימת ובחרו משם</span>.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-bold flex-shrink-0">2.</span>
+            <span><span className="font-bold">רק אם הדור המבוקש אינו מופיע ברשימה כלל</span> — מותר להוסיף אותו ידנית.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="font-bold flex-shrink-0">3.</span>
+            <span className="font-extrabold">
+              הוספה ידנית של דור שכבר קיים במערכת — הרישום יידחה לאלתר.
+            </span>
+          </li>
+        </ul>
       </div>
 
       {/* שורת הנרשם — אחרי שלחץ "הוסף אותי" */}
