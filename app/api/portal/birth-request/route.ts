@@ -14,6 +14,11 @@ import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates
 
 export const dynamic = 'force-dynamic'
 
+// לידה שקטה — מרווח מינימלי בין בקשות של אותה יולדת (חודשים).
+// כלומר עד שתי בקשות בשנה. אין לנולד ת"ז, ולכן זו המגבלה היחידה שמונעת
+// הגשות חוזרות באותו יום.
+const SILENT_BIRTH_COOLDOWN_MONTHS = 6
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -136,6 +141,35 @@ export async function POST(request: NextRequest) {
   if (ben.eligibility_status === 'rejected') {
     notifyRejectedRequest(ben)
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
+  }
+
+  // ── לידה שקטה: הגשה אחת ל-6 חודשים ──
+  // ⚠️ בלידה שקטה אין ת"ז לנולד, ולכן בדיקת הכפילות שלמטה (לפי baby_id_number)
+  // אינה רצה עליה כלל — ולא הייתה שום מגבלה. בפועל אותה יולדת הגישה כמה
+  // בקשות באותו יום. מגבילים להגשה אחת כל 6 חודשים (עד פעמיים בשנה).
+  // בקשה שנדחתה (cancelled) אינה נספרת, בעקביות עם בדיקת הכפילות.
+  if (isSilent) {
+    const since = new Date()
+    since.setMonth(since.getMonth() - SILENT_BIRTH_COOLDOWN_MONTHS)
+    const { data: recent } = await admin
+      .from('maternity_aids')
+      .select('id, created_at')
+      .eq('beneficiary_id', String(beneficiary_id))
+      .eq('birth_type', 'silent')
+      .not('status', 'eq', 'cancelled')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (recent?.length) {
+      const last = new Date(recent[0].created_at as string)
+      const next = new Date(last)
+      next.setMonth(next.getMonth() + SILENT_BIRTH_COOLDOWN_MONTHS)
+      const fmtDate = (d: Date) => d.toLocaleDateString('he-IL')
+      return NextResponse.json({
+        error: `כבר הוגשה בקשה מסוג זה בתאריך ${fmtDate(last)}. ניתן להגיש בקשה נוספת החל מ-${fmtDate(next)}. אם קיימות נסיבות מיוחדות, נשמח לסייע — אנא פנו למשרד.`,
+        duplicate: 'cooldown',
+      }, { status: 409 })
+    }
   }
 
   // מניעת כפילויות — בודקים כל אחת מתעודות הזהות של הנולדים (בלידה שקטה אין ת.ז)

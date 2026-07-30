@@ -35,6 +35,7 @@ export default function PdfCanvasView({
   className = '',
   maxPages,
   cover = false,
+  direct = false,
 }: {
   url: string
   name?: string | null
@@ -43,6 +44,9 @@ export default function PdfCanvasView({
   maxPages?: number
   /** תצוגה מקדימה: העמוד ממלא את המסגרת וגלישה נחתכת (כמו object-cover בתמונה) */
   cover?: boolean
+  /** משיכה ישירה מהכתובת במקום דרך ערוץ הנתונים — לפורטלים שאין להם סשן צוות
+      (פורטל בית ההחלמה), שבהם הקובץ ממילא נגיש בכתובת ציבורית. */
+  direct?: boolean
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<{ key: string; pages: number; error: string; loading: boolean }>(
@@ -58,10 +62,13 @@ export default function PdfCanvasView({
 
     ;(async () => {
       try {
-        const [{ objectUrl }, pdfjs] = await Promise.all([loadDocBlob(url, name), getPdfjs()])
+        const [src, pdfjs] = await Promise.all([
+          direct ? Promise.resolve(url) : loadDocBlob(url, name).then(d => d.objectUrl),
+          getPdfjs(),
+        ])
         if (!alive) return
-        // ה-blob כבר בזיכרון הדפדפן — pdf.js קורא ממנו, בלי בקשת רשת נוספת
-        const bytes = new Uint8Array(await (await fetch(objectUrl)).arrayBuffer())
+        // בערוץ הנתונים ה-blob כבר בזיכרון; ב-direct זו משיכה רגילה מהכתובת
+        const bytes = new Uint8Array(await (await fetch(src)).arrayBuffer())
         if (!alive) return
         const doc = await pdfjs.getDocument({ data: bytes }).promise
         if (!alive) return
@@ -104,7 +111,7 @@ export default function PdfCanvasView({
     })()
 
     return () => { alive = false }
-  }, [url, name, maxPages, cover])
+  }, [url, name, maxPages, cover, direct])
 
   const current = state.key === url ? state : { pages: 0, error: '', loading: true }
 

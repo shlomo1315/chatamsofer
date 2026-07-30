@@ -7,6 +7,7 @@ import {
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
 import RecoveryDatePicker from './RecoveryDatePicker'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { he } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -328,6 +329,30 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     }
   }
 
+  // ייבוא קבלה מקישור: השרת מוריד את הקובץ ושומר אותו אצלנו, ומחזיר את
+  // הכתובת הפנימית. כך הקבלה נמצאת בכרטסת הלידה ולא תלויה בשרת חיצוני.
+  const importReceiptLink = async (aidId: string, link: string): Promise<string | null> => {
+    setUploadingReceipt(aidId)
+    setUploadErr(m => ({ ...m, [aidId]: '' }))
+    try {
+      const fd = new FormData()
+      fd.append('home', home); fd.append('aidId', aidId); fd.append('link', link)
+      const r = await fetch('/api/portal/recovery-receipt', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.url) {
+        setReceiptUrl(m => ({ ...m, [aidId]: d.url }))
+        return d.url as string
+      }
+      setUploadErr(m => ({ ...m, [aidId]: d.error || 'לא ניתן להוריד את הקובץ מהקישור' }))
+      return null
+    } catch {
+      setUploadErr(m => ({ ...m, [aidId]: 'שגיאת רשת בהורדת הקובץ מהקישור' }))
+      return null
+    } finally {
+      setUploadingReceipt(null)
+    }
+  }
+
   // רשימת השדות החסרים — להצגה בחלונית התראה כשלוחצים "אישור ושליחה" והטופס לא מלא
   const missingFields = (aidId: string) => {
     const missing: string[] = []
@@ -335,7 +360,13 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     if (!(Number.isFinite(amt) && amt > 0)) missing.push('סכום שמומש')
     if (!stayFrom[aidId] || !stayTo[aidId]) missing.push('תאריכי השהייה בלוח')
     if ((receiptInput[aidId] ?? '').trim() === '') missing.push('מספר קבלה')
-    if (!receiptUrl[aidId]) missing.push('קובץ קבלה')
+    // ⚠️ קישור שהוקלד ועדיין לא יובא נחשב תקין. קודם נבדק receiptUrl בלבד,
+    // והוא מתעדכן ב-onBlur של שדה הקישור — אך React מחיל את העדכון *אחרי*
+    // שמטפל הלחיצה כבר רץ. לכן נציג שהדביק קישור ולחץ מיד "אישור ושליחה"
+    // קיבל "חסרים פרטים: קובץ קבלה" למרות שמילא הכל, ולא יכול היה להתקדם.
+    const typedLink = (receiptLinkInput[aidId] ?? '').trim()
+    const hasReceipt = !!receiptUrl[aidId] || /^https?:\/\/\S+$/i.test(typedLink)
+    if (!hasReceipt) missing.push('קובץ קבלה')
     return missing
   }
   // כל השדות חובה: סכום חיובי, לילות, מספר קבלה, וקובץ קבלה שהועלה
@@ -747,27 +778,50 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   type="url" dir="ltr" inputMode="url"
                                   value={receiptLinkInput[aid.id] ?? ''}
                                   onChange={e => setReceiptLinkInput(mm => ({ ...mm, [aid.id]: e.target.value }))}
-                                  onBlur={() => {
-                                    const link = (receiptLinkInput[aid.id] ?? '').trim()
-                                    // קישור תקין (http/https) → נחשב כקובץ שצורף (ממלא receiptUrl).
-                                    if (/^https?:\/\/\S+$/i.test(link)) {
-                                      setReceiptUrl(m => ({ ...m, [aid.id]: link }))
-                                      setUploadErr(m => ({ ...m, [aid.id]: '' }))
-                                    } else if (link) {
-                                      setUploadErr(m => ({ ...m, [aid.id]: 'הקישור אינו תקין — עליו להתחיל ב-http/https' }))
-                                    }
-                                  }}
                                   placeholder="https://…"
                                   className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
                                 />
+                                {/* כפתור מפורש: מוריד את הקובץ מהקישור, שומר אותו אצלנו,
+                                    ומציג תצוגה מקדימה כדי שהנציג יראה מה בדיוק צורף. */}
+                                {(receiptLinkInput[aid.id] ?? '').trim() && (
+                                  <button type="button"
+                                    onClick={() => { void importReceiptLink(aid.id, (receiptLinkInput[aid.id] ?? '').trim()) }}
+                                    disabled={uploadingReceipt === aid.id}
+                                    className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded-xl py-2.5 mt-2">
+                                    {uploadingReceipt === aid.id ? 'מוריד את הקובץ…' : 'עדכן קבלה'}
+                                  </button>
+                                )}
+                                {/* תצוגה מקדימה של הקבלה ששמורה אצלנו */}
+                                {receiptUrl[aid.id] && (
+                                  <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
+                                    <p className="text-[11px] font-semibold text-emerald-700 px-3 py-1.5 flex items-center gap-1">
+                                      <Check size={13} /> הקבלה נשמרה במערכת
+                                    </p>
+                                    {/\.pdf(\?|#|$)/i.test(receiptUrl[aid.id] as string) ? (
+                                      <PdfCanvasView url={receiptUrl[aid.id] as string} direct maxPages={1}
+                                        className="w-full max-h-64 overflow-hidden bg-white" />
+                                    ) : (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={receiptUrl[aid.id] as string} alt="קבלה"
+                                        className="w-full max-h-64 object-contain bg-white" />
+                                    )}
+                                  </div>
+                                )}
                               </label>
                               <button type="button"
-                                onClick={() => {
+                                onClick={async () => {
+                                  // קישור שהוקלד וטרם יובא — מייבאים אותו עכשיו (הורדה ושמירה
+                                  // אצלנו) לפני הבדיקה, כדי שהקבלה תגיע לכרטסת ולא תישאר חיצונית.
+                                  const typedLink = (receiptLinkInput[aid.id] ?? '').trim()
+                                  if (!receiptUrl[aid.id] && /^https?:\/\/\S+$/i.test(typedLink)) {
+                                    const stored = await importReceiptLink(aid.id, typedLink)
+                                    if (!stored) return   // השגיאה כבר מוצגת ליד השדה
+                                  }
                                   const missing = missingFields(aid.id)
                                   if (missing.length) setMissingModal({ id: aid.id, fields: missing })
                                   else setConfirmAid(aid.id)
                                 }}
-                                disabled={savingAmt === aid.id}
+                                disabled={savingAmt === aid.id || uploadingReceipt === aid.id}
                                 className="w-full flex items-center justify-center gap-1.5 text-base font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 rounded-xl py-3 mt-1">
                                 אישור ושליחה
                               </button>
