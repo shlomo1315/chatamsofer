@@ -2893,6 +2893,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </>
                   )}
 
+                  {/* ─────────────────────────────────────────────────────────
+                      🔴 כניסה לאזור האישי.
+                      ⚠️ הכפתור הזה חסר היה לחלוטין: authView מאותחל ל-'intro'
+                      ולא היה בקוד *שום* setAuthView('login'). כלומר מסך הכניסה
+                      (בחירת אופן קבלת הקוד) היה קוד מת שאי אפשר להגיע אליו,
+                      וכל מי שהגיע לכאן — למשל מקישור ?action=birth שבמייל —
+                      נתקע במסך הזה בלי שום דרך להיכנס ולהגיש בקשה.
+                      ───────────────────────────────────────────────────────── */}
+                  <button type="button" onClick={() => { setError(''); setAuthView('login') }}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 shadow-[0_6px_16px_-6px_rgba(16,185,129,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(16,185,129,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base">
+                    <Shield size={18} /> כניסה לאזור האישי והגשת בקשה
+                  </button>
+
                 </div>
                 ) : emailStep === 'code' ? (
                 <form onSubmit={handleVerifyEmailCode} className="flex flex-col gap-4">
