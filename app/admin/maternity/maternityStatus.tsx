@@ -534,11 +534,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 </button>
               )
             })}
-            {/* אישור יחוס — פעולה נפרדת מאישור הבקשה */}
-            <button onClick={familyApprove}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-right text-emerald-700 hover:bg-emerald-50 border-t border-slate-100">
-              <Check size={15} /> אישור יחוס (משפחה)
-            </button>
+            {/* ⚠️ "אישור יחוס (משפחה)" הוסר מכאן בכוונה. אישור המשפחה הוא פעולה
+                על הצאצא ולא על הלידה, והוא נעשה בכרטסת הצאצא בלבד — כדי שלא
+                ישונה בטעות מתוך מסך הלידה. הפעולה עצמה קיימת שם ללא שינוי. */}
           </div>
         </>
       )}
