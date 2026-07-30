@@ -8,6 +8,7 @@ import { EligibilityStatus, ELIGIBILITY_LABELS } from '@/types'
 import { approvalEmail, docsPendingEmail } from '@/lib/emailTemplates'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { useToast } from '@/components/ui/Toast'
+import { NOTES_CHANGED_EVENT } from './BeneficiaryNotesChat'
 
 const PENDING_SET: EligibilityStatus[] = ['pending']
 
@@ -123,7 +124,24 @@ export default function StatusControl({ id, status, advance, readOnly }: {
             lineage_fix_required: extra?.lineage_fix_required,
             lineage_fix_note: extra?.lineage_fix_note,
           }),
-        }).catch(() => {})
+        })
+          // הבקשה כותבת גם לתיעוד המשפחה — מרעננים את התיבה כדי שההערה
+          // תופיע מיד ולא רק אחרי רענון ידני של הדף.
+          .then(() => window.dispatchEvent(new CustomEvent(NOTES_CHANGED_EVENT)))
+          .catch(() => {})
+      }
+      // ⚠️ אותו היגיון גם בדחייה: הסיבה נשלחה במייל לצאצא ונשמרה בעמודה,
+      // אך לא הופיעה בתיעוד — ולכן "למה דחינו אותו" לא היה ניתן לאחזור.
+      if (next === 'rejected' && extra?.rejection_reason?.trim()) {
+        void fetch('/api/admin/beneficiary-notes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            beneficiaryId: id,
+            body: `❌ הבקשה נדחתה\nהסיבה שנשלחה לצאצא: ${extra.rejection_reason.trim()}`,
+          }),
+        })
+          .then(() => window.dispatchEvent(new CustomEvent(NOTES_CHANGED_EVENT)))
+          .catch(() => {})
       }
       void fetch(next === 'approved' ? '/api/nedarim/save-client' : '/api/nedarim/delete-client', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beneficiaryId: id }),

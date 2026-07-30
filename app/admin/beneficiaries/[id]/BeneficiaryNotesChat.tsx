@@ -7,6 +7,9 @@ import { MessageSquare, Send, Loader2, User } from 'lucide-react'
 // ותאריך ליד כל הודעה. כל חבר צוות יכול להוסיף הערה; ההערות נשמרות לצמיתות.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// אירוע גלובלי לרענון התיעוד — נורה אחרי פעולה שכותבת תיעוד בשרת
+export const NOTES_CHANGED_EVENT = 'beneficiary-notes-changed'
+
 interface Note {
   id: string
   body: string
@@ -43,6 +46,15 @@ export default function BeneficiaryNotesChat({ beneficiaryId }: { beneficiaryId:
   }, [beneficiaryId])
 
   useEffect(() => { load() }, [load])
+
+  // ⚠️ תיעוד שנכתב ע"י המערכת (השלמת מסמכים, דחייה) נוצר בשרת, ו-router.refresh
+  // אינו מריץ מחדש אפקטים של רכיבי לקוח — כלומר ההערה נשמרה אך לא הופיעה עד
+  // רענון ידני, וזה נראה בדיוק כמו "התיעוד לא נכנס". מאזינים לאירוע ומרעננים.
+  useEffect(() => {
+    const onChanged = () => { void load() }
+    window.addEventListener(NOTES_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(NOTES_CHANGED_EVENT, onChanged)
+  }, [load])
 
   // גלילה לתחתית (ההודעה החדשה) כשמתווספת הודעה
   useEffect(() => {
