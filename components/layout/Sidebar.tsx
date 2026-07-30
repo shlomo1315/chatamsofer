@@ -7,7 +7,8 @@ import {
   Mail, ChevronDown, ChevronUp, UtensilsCrossed, HandCoins, Heart, Send, Star, ShieldAlert,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { UserPermissions, SectionKey } from '@/types'
+import type { UserPermissions, SectionKey, UserRole } from '@/types'
+import { effectiveLevel } from '@/lib/permissions'
 import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
@@ -64,8 +65,8 @@ const bottomItems: { href: string; label: string; icon: React.ElementType }[] = 
 
 // שדות הפרופיל (mail_only/allowed_mailboxes/department) מגיעים כ-props מה-Layout שכבר טען
 // את הפרופיל המלא — כדי לחסוך fetch('/api/admin/me') + getUser + שאילתת profiles נוספים בכל עמוד.
-export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMailboxes, department }: {
-  isAdmin?: boolean; permissions?: UserPermissions
+export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allowedMailboxes, department }: {
+  isAdmin?: boolean; role?: UserRole; permissions?: UserPermissions
   mailOnlyFlag?: boolean; allowedMailboxes?: string[] | null; department?: string | null
 }) {
   const pathname = usePathname()
@@ -110,7 +111,11 @@ export default function Sidebar({ isAdmin, permissions, mailOnlyFlag, allowedMai
   const canSee = (section?: SectionKey) => {
     if (!section) return true
     if (isAdmin) return true
-    return (permissions?.[section] ?? 'view') !== 'none'
+    // ברירת המחדל ההיסטורית נשמרת: מסך ללא סימון כלל — גלוי.
+    if ((permissions?.[section] ?? 'view') !== 'none') return true
+    // ובנוסף — רצפת התפקיד גוברת על סימון 'none', כדי שמסך שהמשתמש מורשה
+    // לערוך (מזכירות → צאצאים) לא ייעלם מהתפריט.
+    return effectiveLevel(role, permissions, section) !== 'none'
   }
   const topVisible = navTop.filter(i => canSee(i.section))
   const bottomVisible = navBottom.filter(i => canSee(i.section))

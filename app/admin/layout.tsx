@@ -41,6 +41,7 @@ export default async function DashboardLayout({
       <WelcomeModal />
       <Sidebar
         isAdmin={profile?.role === 'admin'}
+        role={profile?.role}
         permissions={profile?.permissions}
         mailOnlyFlag={profile?.mail_only}
         allowedMailboxes={profile?.allowed_mailboxes}
@@ -50,7 +51,7 @@ export default async function DashboardLayout({
         <Header user={profile} />
         <main className="flex-1 overflow-y-auto">
           <div className="p-5 lg:p-6 pb-16 max-w-screen-2xl mx-auto">
-            <StaffPermissionsProvider isAdmin={profile?.role === 'admin'} permissions={profile?.permissions}>
+            <StaffPermissionsProvider isAdmin={profile?.role === 'admin'} role={profile?.role} permissions={profile?.permissions}>
               {children}
             </StaffPermissionsProvider>
           </div>

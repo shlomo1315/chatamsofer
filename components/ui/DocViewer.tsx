@@ -1,8 +1,10 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { X, Download, FileText } from 'lucide-react'
-import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
+import { X, Download, FileText, Loader2, ExternalLink } from 'lucide-react'
+import { docDownloadUrl } from '@/lib/docUrl'
+import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
+import SafeDocImage from './SafeDocImage'
 
 // צפייה במסמך מצורף בחלונית קופצת (מודל) במקום פתיחה בלשונית חדשה.
 // לחיצה מחוץ לקובץ סוגרת · X בפינה השמאלית העליונה סוגר · Esc סוגר.
@@ -12,6 +14,77 @@ const DocViewerContext = createContext<(doc: DocInfo) => void>(() => {})
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
 const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תצוגת PDF ישירות בחלונית.
+//
+// הקובץ נטען דרך ערוץ הנתונים (JSON+base64) ומורכב ל-blob: מקומי, וה-iframe
+// מצביע על ה-blob. זו הנקודה: נטפרי חוסם PDF ב-iframe כי הוא מיירט את בקשת
+// הרשת לקובץ — אבל blob: הוא כתובת מקומית בדפדפן ואין עליה בקשת רשת כלל,
+// ולכן ה-PDF viewer של הדפדפן פשוט מציג אותו. לכן אפשר להחזיר כאן תצוגה
+// ישירה במקום כרטיס "פתח בכרטיסייה חדשה".
+// ─────────────────────────────────────────────────────────────────────────────
+function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
+  const [state, setState] = useState({ key: '', src: '', failed: false })
+
+  useEffect(() => {
+    let alive = true
+    loadDocBlob(url, name)
+      .then(d => { if (alive) setState({ key: url, src: d.objectUrl, failed: false }) })
+      .catch(() => { if (alive) setState({ key: url, src: '', failed: true }) })
+    return () => { alive = false }
+  }, [url, name])
+
+  const { src, failed } = state.key === url ? state : { src: '', failed: false }
+
+  // נפילה-לאחור: אם הטעינה נכשלה, הכרטיס הישן עם פתיחה בכרטיסייה והורדה
+  if (failed) {
+    return (
+      <div className="bg-white rounded-2xl p-10 text-center shadow-2xl max-w-sm">
+        <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <FileText size={30} className="text-rose-400" />
+        </div>
+        <p className="text-slate-700 font-semibold mb-1">מסמך PDF</p>
+        <p className="text-slate-400 text-sm mb-5">{name || 'קובץ PDF'}</p>
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={() => { openDocInNewTab(url, name).catch(() => {}) }}
+            className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
+            <FileText size={17} /> פתח בכרטיסייה חדשה
+          </button>
+          <button type="button" onClick={() => { downloadDocViaData(url, name).catch(() => {}) }}
+            className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
+            <Download size={17} /> הורדת הקובץ
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!src) {
+    return (
+      <div className="bg-white rounded-2xl px-10 py-12 text-center shadow-2xl flex flex-col items-center gap-3">
+        <Loader2 size={28} className="animate-spin text-indigo-500" />
+        <p className="text-sm text-slate-500">טוען את המסמך...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col w-full h-[90vh] gap-2">
+      <iframe src={src} title={name || 'PDF'} className="flex-1 w-full rounded-xl border-0 bg-white shadow-2xl" />
+      <div className="flex items-center justify-center gap-2 flex-shrink-0">
+        <button type="button" onClick={() => { openDocInNewTab(url, name).catch(() => {}) }}
+          className="inline-flex items-center gap-1.5 bg-white/95 hover:bg-white text-slate-700 text-sm font-medium px-4 py-2 rounded-xl shadow-lg transition-colors">
+          <ExternalLink size={15} /> פתח בכרטיסייה חדשה
+        </button>
+        <button type="button" onClick={() => { downloadDocViaData(url, name).catch(() => {}) }}
+          className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg transition-colors">
+          <Download size={15} /> הורדה
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function DocViewerProvider({ children }: { children: React.ReactNode }) {
   const [doc, setDoc] = useState<DocInfo | null>(null)
@@ -28,11 +101,13 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
   }, [doc, close])
 
-  const ref = doc ? (doc.name || doc.url) : ''
-  const isImg = isImageRef(ref)
-  const isPdf = isPdfRef(ref)
-  // אם כבר הועברה כתובת פרוקסי (/api/files) — לא לעטוף שוב; אחרת לעטוף בכתובת צפייה מאומתת
-  const view = doc ? (/^\/api\/files\b/.test(doc.url) ? doc.url : docViewUrl(doc.url)) : ''
+  // זיהוי סוג הקובץ — לפי השם *וגם* לפי הכתובת. חלק מהקוראים מעבירים תווית
+  // בעברית ללא סיומת ("מסמך מצורף", "מסמך 1"), ואז רק הכתובת מעידה על הסוג;
+  // בדיקה של השם בלבד גרמה לתמונות ו-PDF תקינים להיפסל כ"לא ניתן להציג".
+  const isImg = isImageRef(doc?.name) || isImageRef(doc?.url)
+  const isPdf = !isImg && (isPdfRef(doc?.name) || isPdfRef(doc?.url))
+  // התצוגה עצמה נעשית דרך ערוץ הנתונים (loadDocBlob), שיודע לקבל גם נתיב
+  // אחסון וגם כתובת פרוקסי קיימת — ולכן אין צורך לבנות כאן כתובת צפייה.
 
   return (
     <DocViewerContext.Provider value={open}>
@@ -58,29 +133,12 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
           {/* הקובץ עצמו — עצירת בועה כדי שלחיצה עליו לא תסגור */}
           <div onClick={e => e.stopPropagation()} className="relative flex items-center justify-center w-full max-w-5xl max-h-[90vh]">
             {isImg ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={view} alt={doc.name || 'מסמך'} className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl bg-white" />
+              // התמונה נטענת דרך ערוץ הנתונים (blob מקומי) ולא כקובץ ברשת
+              <SafeDocImage path={doc.url} name={doc.name} alt={doc.name || 'מסמך'}
+                className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl bg-white" />
             ) : isPdf ? (
-              // PDF אינו מוטמע ב-iframe: נטפרי חוסם את ה-PDF viewer בתוך iframe
-              // ומציג דף NETFREE. במקום זה — פתיחה בכרטיסייה חדשה (ניווט מלא
-              // לדומיין שלנו, שאינו נחסם) + הורדה.
-              <div className="bg-white rounded-2xl p-10 text-center shadow-2xl max-w-sm">
-                <div className="w-16 h-16 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FileText size={30} className="text-rose-400" />
-                </div>
-                <p className="text-slate-700 font-semibold mb-1">מסמך PDF</p>
-                <p className="text-slate-400 text-sm mb-5">{doc.name || 'קובץ PDF'}</p>
-                <div className="flex flex-col gap-2">
-                  <a href={view} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
-                    <FileText size={17} /> פתח בכרטיסייה חדשה
-                  </a>
-                  <a href={docDownloadUrl(doc.url, doc.name)} download={doc.name || true}
-                    className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
-                    <Download size={17} /> הורדת הקובץ
-                  </a>
-                </div>
-              </div>
+              // תצוגה ישירה של ה-PDF מתוך blob: מקומי — ראו PdfInlineView
+              <PdfInlineView url={doc.url} name={doc.name} />
             ) : (
               // סוג לא נתמך לתצוגה — הצעת הורדה
               <div className="bg-white rounded-2xl p-10 text-center shadow-2xl max-w-sm">

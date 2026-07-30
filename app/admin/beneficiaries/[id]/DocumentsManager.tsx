@@ -2,7 +2,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Paperclip, Upload, Trash2, Loader2, FileText, ExternalLink, Image as ImageIcon, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
+import { docDownloadName } from '@/lib/docUrl'
+import { openDocInNewTab, downloadDocViaData, releaseDoc } from '@/lib/docBlob'
+import SafeDocImage from '@/components/ui/SafeDocImage'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -107,6 +109,9 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
         }
       }
       await supabase.from('documents').delete().eq('id', doc.id)
+      // שחרור העותק המקומי מהמטמון — אחרת קובץ שהועלה מחדש לאותו נתיב
+      // ימשיך להציג את התמונה הישנה עד רענון הדף.
+      if (doc.file_url) releaseDoc(doc.file_url)
       await load()
     } catch (err: unknown) {
       toast.error(`שגיאה במחיקה: ${err instanceof Error ? err.message : String(err)}`)
@@ -169,14 +174,14 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                   ופתיחה בכרטיסייה חדשה = ניווט מלא לדומיין שלנו, שנטפרי לא חוסם. */}
               {doc.file_url && isImage(doc.file_name) ? (
                 <ViewDocButton url={doc.file_url} className="block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={docViewUrl(doc.file_url)} alt="" className="w-full h-28 object-cover" />
+                  <SafeDocImage path={doc.file_url} name={doc.file_name} className="w-full h-28 object-cover" />
                 </ViewDocButton>
               ) : doc.file_url && isPdf(doc.file_name) ? (
-                <a href={docViewUrl(doc.file_url)} target="_blank" rel="noopener noreferrer"
+                <button type="button"
+                  onClick={() => { openDocInNewTab(doc.file_url!, doc.file_name).catch(e => toast.error(e?.message || 'שגיאה בפתיחת הקובץ')) }}
                   className="w-full h-28 flex flex-col items-center justify-center gap-1.5 bg-rose-50/50 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
                   <FileText size={28} /> <span className="text-[11px] font-medium">פתח PDF</span>
-                </a>
+                </button>
               ) : (
                 <ViewDocButton url={doc.file_url} className="block">
                   <div className="w-full h-28 flex items-center justify-center bg-slate-50 text-slate-300">
@@ -202,14 +207,14 @@ export default function DocumentsManager({ beneficiaryId, beneficiaryName }: { b
                   <ExternalLink size={13} />
                 </ViewDocButton>
                 {doc.file_url && (
-                  <a
-                    href={docDownloadUrl(doc.file_url, downloadName(doc))}
-                    download={downloadName(doc)}
+                  <button
+                    type="button"
+                    onClick={() => { downloadDocViaData(doc.file_url!, downloadName(doc)).catch(e => toast.error(e?.message || 'שגיאה בהורדה')) }}
                     className="p-1.5 rounded-lg bg-white/90 text-slate-600 hover:text-emerald-600 shadow-sm"
                     title="הורדה למחשב"
                   >
                     <Download size={13} />
-                  </a>
+                  </button>
                 )}
                 <button
                   onClick={() => handleDelete(doc)}

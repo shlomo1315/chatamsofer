@@ -34,7 +34,7 @@ const SAMPLES: { title: string; recipient: string; trigger: string; build: () =>
   { title: 'הזמנה להרשמה', recipient: 'פונה לא רשום', trigger: 'פנייה במייל שלא נמצאה בכרטסת',
     build: () => registrationInviteEmail(PORTAL) },
   { title: 'השלמת מסמכים', recipient: 'נתמך', trigger: 'בקשה עם מסמכים חסרים',
-    build: () => docsPendingEmail('ישראל כהן', PORTAL, 'נשואים', ['תעודת זהות של הבעל (כולל ספח)', 'תעודת זהות של האשה (כולל ספח)'], 'נא לצרף צילום ברור וקריא של המסמכים.', 'נמצא אי-דיוק: שם הסבא צריך להיות "אברהם" ולא "יצחק".') },
+    build: () => docsPendingEmail('ישראל כהן', PORTAL, 'נשואים', ['תעודת זהות של הבעל', 'ספח תעודת הזהות של הבעל', 'תעודת זהות של האשה', 'ספח תעודת הזהות של האשה'], 'נא לצרף צילום ברור וקריא של המסמכים.', 'נמצא אי-דיוק: שם הסבא צריך להיות "אברהם" ולא "יצחק".') },
   { title: 'אישור קבלת בקשה', recipient: 'מגיש בקשה', trigger: 'קבלת בקשה חדשה',
     build: () => requestReceivedEmail({ type: 'loan', firstTime: true, beneficiary: { full_name: 'ישראל כהן', family_name: 'כהן', id_number: '123456789', phone: '050-1234567', email: 'cohen@example.com', address: 'רחוב הרב קוק 10', city: 'בני ברק', marital_status: 'נשואים', spouse_name: 'שרה כהן', spouse_id_number: '987654321', children_count: 4 }, requestRows: [['סכום מבוקש', '₪1,500'], ['מספר תשלומים', 12], ['מטרת ההלוואה', 'הוצאות חתונה']], documents: [{ name: 'תעודת זהות.pdf', url: 'https://example.com/id.pdf' }, { name: 'אישור הכנסות.pdf' }] }) },
   { title: 'אישור קבלת רישום', recipient: 'נרשם', trigger: 'סיום רישום בפורטל',

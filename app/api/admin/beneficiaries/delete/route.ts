@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // מחיקת נתמך (משפחה) + סנכרון עם עץ הדורות: מוחק גם את צומת העץ המקושר,
 // אך רק אם הוא "עלה" (אין לו צאצאים בעץ) — כדי לא ליתם ענפים שלמים.
+//
+// 🔒 מנהל בלבד. המחיקה בלתי-הפיכה ומוחקת גם מסמכים, לידות, הלוואות וסיוע,
+// ולכן היא אינה נגזרת מהרשאת "עריכה" — מזכירות עורכת כרטסת אך אינה מוחקת.
 export async function POST(request: NextRequest) {
-  if (!(await requirePermission('beneficiaries', 'delete'))) return forbidden()
+  if (!(await requireAdmin())) return forbidden('מחיקת צאצא שמורה למנהל המערכת בלבד')
   const { id } = await request.json().catch(() => ({}))
   if (!id) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
