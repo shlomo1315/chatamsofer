@@ -28,9 +28,11 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
   }, [doc, close])
 
-  const ref = doc ? (doc.name || doc.url) : ''
-  const isImg = isImageRef(ref)
-  const isPdf = isPdfRef(ref)
+  // זיהוי סוג הקובץ — לפי השם *וגם* לפי הכתובת. חלק מהקוראים מעבירים תווית
+  // בעברית ללא סיומת ("מסמך מצורף", "מסמך 1"), ואז רק הכתובת מעידה על הסוג;
+  // בדיקה של השם בלבד גרמה לתמונות ו-PDF תקינים להיפסל כ"לא ניתן להציג".
+  const isImg = isImageRef(doc?.name) || isImageRef(doc?.url)
+  const isPdf = !isImg && (isPdfRef(doc?.name) || isPdfRef(doc?.url))
   // אם כבר הועברה כתובת פרוקסי (/api/files) — לא לעטוף שוב; אחרת לעטוף בכתובת צפייה מאומתת
   const view = doc ? (/^\/api\/files\b/.test(doc.url) ? doc.url : docViewUrl(doc.url)) : ''
 

@@ -6,6 +6,7 @@ import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
+import PdfPreviewBox from '@/components/ui/PdfPreviewBox'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
@@ -214,8 +215,8 @@ function LoanDocCard({ label, url, person }: { label: string; url?: string; pers
         // eslint-disable-next-line @next/next/no-img-element
         <img src={href} alt={label} className="w-full h-72 object-contain rounded-lg bg-slate-50" />
       ) : isPdf ? (
-        <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
-          className="w-full h-72 rounded-lg bg-white border-0 pointer-events-none" />
+        // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
+        <PdfPreviewBox className="w-full h-72 rounded-lg" iconSize={34} />
       ) : (
         <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={28} className="text-slate-400" />

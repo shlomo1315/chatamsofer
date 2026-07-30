@@ -1,6 +1,7 @@
 'use client'
 import { FileText } from 'lucide-react'
 import { useDocViewer } from './DocViewer'
+import PdfPreviewBox from './PdfPreviewBox'
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
 const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
@@ -33,13 +34,8 @@ export default function DocThumb({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={href} alt={name || 'מסמך'} loading="lazy" className="w-full h-full object-cover" />
       ) : isPdf ? (
-        <iframe
-          src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
-          title={name || 'PDF'}
-          tabIndex={-1}
-          className="border-0 bg-white pointer-events-none absolute top-0 left-0"
-          style={{ width: size / 0.45, height: size / 0.45, transform: 'scale(0.45)', transformOrigin: 'top left' }}
-        />
+        // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
+        <PdfPreviewBox className="w-full h-full" iconSize={Math.round(size * 0.32)} label="PDF" />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
           <FileText size={Math.round(size * 0.32)} />

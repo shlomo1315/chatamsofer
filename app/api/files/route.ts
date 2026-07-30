@@ -65,17 +65,16 @@ export async function GET(request: NextRequest) {
   headers.set('Content-Length', String(buf.length))
   // מטמון פרטי קצר — מזרז תצוגות חוזרות בלי לחשוף בין משתמשים
   headers.set('Cache-Control', 'private, max-age=300')
-  // ⚠️ נטפרי מכשיל טעינת PDF בתוך <iframe> כשהתגובה אינה מסומנת במפורש
-  // כתוכן inline: ה-PDF viewer של הדפדפן ("מוצג בתוך האתר") נחסם ומוצג דף
-  // NETFREE. הוספת Content-Disposition: inline + Accept-Ranges מסמנת את
-  // התגובה כמסמך תצוגה תקין, וה-PDF נטען דרך הדומיין של האתר ללא חסימה.
-  if (wantsDownload) {
-    headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName || 'file')}"`)
-  } else {
-    // תצוגה (iframe/תמונה) — inline. הסימון המפורש הזה הוא שמונע את חסימת
-    // הנטפרי: בלעדיו טעינת PDF ב-iframe מזוהה כניווט לתוכן חיצוני ומוצג דף
-    // NETFREE. שם הקובץ נשמר לנוחות שמירה ידנית מה-viewer.
-    headers.set('Content-Disposition', `inline${safeName ? `; filename="${encodeURIComponent(safeName)}"` : ''}`)
-  }
+  // שם הקובץ בכותרת — לפי RFC 5987 (filename* ), לא percent-encoding בתוך
+  // filename="...". דפדפנים אינם מפענחים אחוזים בתוך filename הרגיל, ולכן
+  // שם עברי ירד כ-"%D7%AA%D7%A2..." במקום "תעודת זהות משה כהן.pdf".
+  // filename="..." נשאר כגיבוי ASCII לדפדפנים ישנים.
+  const asciiName = (safeName || 'file').replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '') || 'file'
+  const utf8Name = encodeURIComponent(safeName || 'file')
+  // תצוגה (תמונה/כרטיסייה חדשה) — inline; הורדה — attachment.
+  // ⚠️ תצוגת PDF נעשית בניווט מלא בלבד ולא ב-<iframe>: נטפרי חוסם את ה-PDF
+  // viewer בתוך iframe ומציג דף NETFREE (ראו components/ui/PdfPreviewBox).
+  const disposition = wantsDownload ? 'attachment' : 'inline'
+  headers.set('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${utf8Name}`)
   return new NextResponse(buf, { status: 200, headers })
 }

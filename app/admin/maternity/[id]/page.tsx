@@ -17,6 +17,7 @@ import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
+import PdfPreviewBox from '@/components/ui/PdfPreviewBox'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -583,8 +584,8 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
           // eslint-disable-next-line @next/next/no-img-element
           <img src={href} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
         ) : isPdf ? (
-          <iframe src={`${href}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`} title={label} tabIndex={-1}
-            className="w-full h-28 rounded-lg bg-white border-0 pointer-events-none" />
+          // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
+          <PdfPreviewBox className="w-full h-28 rounded-lg" iconSize={24} label="PDF" />
         ) : (
           <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
             <FileText size={24} className="text-slate-400" />
