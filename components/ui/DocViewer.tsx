@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { X, Download, FileText, Loader2, ExternalLink } from 'lucide-react'
 import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import SafeDocImage from './SafeDocImage'
+import PdfCanvasView from './PdfCanvasView'
 
 // צפייה במסמך מצורף בחלונית קופצת (מודל) במקום פתיחה בלשונית חדשה.
 // לחיצה מחוץ לקובץ סוגרת · X בפינה השמאלית העליונה סוגר · Esc סוגר.
@@ -70,7 +71,11 @@ function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
 
   return (
     <div className="flex flex-col w-full h-[90vh] gap-2">
-      <iframe src={src} title={name || 'PDF'} className="flex-1 w-full rounded-xl border-0 bg-white shadow-2xl" />
+      {/* ⚠️ לא <iframe>: החסימה של נטפרי היא על מציג ה-PDF של הדפדפן, לא על
+          הקובץ. מציירים את העמודים בעצמנו על canvas — ראו PdfCanvasView. */}
+      <div className="flex-1 w-full overflow-y-auto rounded-xl bg-white shadow-2xl p-3">
+        <PdfCanvasView url={url} name={name} />
+      </div>
       <div className="flex items-center justify-center gap-2 flex-shrink-0">
         <button type="button" onClick={() => { openDocInNewTab(url, name).catch(() => {}) }}
           className="inline-flex items-center gap-1.5 bg-white/95 hover:bg-white text-slate-700 text-sm font-medium px-4 py-2 rounded-xl shadow-lg transition-colors">

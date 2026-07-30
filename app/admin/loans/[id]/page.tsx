@@ -7,7 +7,7 @@ import { docViewUrl } from '@/lib/docUrl'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import SafeDocImage from '@/components/ui/SafeDocImage'
-import PdfPreviewBox from '@/components/ui/PdfPreviewBox'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
@@ -215,8 +215,8 @@ function LoanDocCard({ label, url, person }: { label: string; url?: string; pers
       {isImage ? (
         <SafeDocImage path={url} name={label} alt={label} className="w-full h-72 object-contain rounded-lg bg-slate-50" />
       ) : isPdf ? (
-        // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
-        <PdfPreviewBox className="w-full h-72 rounded-lg" iconSize={34} />
+        // תצוגה מקדימה אמיתית — העמוד הראשון מצויר על canvas
+        <PdfCanvasView url={url} name={label} maxPages={1} cover className="w-full h-72 rounded-lg overflow-hidden bg-white" />
       ) : (
         <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
           <FileText size={28} className="text-slate-400" />

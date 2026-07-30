@@ -1,7 +1,7 @@
 'use client'
 import { FileText } from 'lucide-react'
 import { useDocViewer } from './DocViewer'
-import PdfPreviewBox from './PdfPreviewBox'
+import PdfCanvasView from './PdfCanvasView'
 import SafeDocImage from './SafeDocImage'
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
@@ -35,8 +35,8 @@ export default function DocThumb({
         // דרך ערוץ הנתונים — לא בקשת רשת לקובץ
         <SafeDocImage path={rawUrl ?? href} name={name} alt={name || 'מסמך'} className="w-full h-full object-cover" />
       ) : isPdf ? (
-        // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
-        <PdfPreviewBox className="w-full h-full" iconSize={Math.round(size * 0.32)} label="PDF" />
+        // תצוגה מקדימה אמיתית — העמוד הראשון מצויר על canvas (ולא מציג PDF של הדפדפן)
+        <PdfCanvasView url={rawUrl ?? href} name={name} maxPages={1} cover className="w-full h-full" />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
           <FileText size={Math.round(size * 0.32)} />

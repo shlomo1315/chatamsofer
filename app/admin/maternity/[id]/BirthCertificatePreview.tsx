@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { ExternalLink, Upload, Trash2, Loader2, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import SafeDocImage from '@/components/ui/SafeDocImage'
-import { openDocInNewTab } from '@/lib/docBlob'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -77,10 +77,8 @@ export default function BirthCertificatePreview({
         <SafeDocImage path={url} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
       ) : isPdf(url) ? (
         // PDF — לא מוטמע ב-iframe (נטפרי חוסם ומציג NETFREE); פתיחה בכרטיסייה חדשה.
-        <button type="button" onClick={() => { openDocInNewTab(url, 'אישור לידה').catch(() => {}) }}
-          className="w-full h-80 flex flex-col items-center justify-center gap-2 bg-rose-50/40 text-rose-400 hover:bg-rose-50 hover:text-rose-500 transition-colors">
-          <FileText size={34} /> <span className="text-sm font-medium">פתח את אישור הלידה (PDF)</span>
-        </button>
+        <PdfCanvasView url={url} name="אישור לידה" maxPages={1} cover
+          className="w-full h-80 overflow-hidden bg-white" />
       ) : (
         <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>

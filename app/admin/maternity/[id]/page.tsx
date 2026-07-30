@@ -17,7 +17,7 @@ import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
-import PdfPreviewBox from '@/components/ui/PdfPreviewBox'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import BirthCertificatePreview from './BirthCertificatePreview'
@@ -610,8 +610,8 @@ function DocCard({ label, url, person }: { label: string; url?: string; person?:
         {isImage ? (
           <SafeDocImage path={url} name={label} alt={label} className="w-full h-28 object-cover rounded-lg bg-slate-100" />
         ) : isPdf ? (
-          // ללא iframe — נטפרי חוסם PDF viewer בתוך iframe ומציג דף NETFREE
-          <PdfPreviewBox className="w-full h-28 rounded-lg" iconSize={24} label="PDF" />
+          // תצוגה מקדימה אמיתית — העמוד הראשון מצויר על canvas
+          <PdfCanvasView url={url} name={label} maxPages={1} cover className="w-full h-28 rounded-lg overflow-hidden bg-white" />
         ) : (
           <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
             <FileText size={24} className="text-slate-400" />
