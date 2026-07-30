@@ -23,6 +23,7 @@ import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
 import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
+import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 
@@ -47,13 +48,13 @@ async function getBeneficiary(id: string): Promise<Beneficiary | null> {
 // הסטיות. קודם היו שתי שאילתות *רצופות* על אותה טבלה (getLineagePath +
 // getDeviatingGenerations), כל אחת מושכת את כל העץ — 2 סבבי רשת מיותרים
 // שהאיטו את פתיחת הכרטסת. עכשיו סבב אחד.
-type LineageNode = { id: string; name: string; parent_id: string | null; generation: number; status: string }
+type LineageNode = { id: string; name: string; parent_id: string | null; generation: number; status: string; relation?: string | null }
 
 // שליפת כל צמתי עץ הדורות — נקראת *במקביל* לשאר השאילתות (אינה תלויה ב-beneficiary).
 async function getAllLineageNodes(): Promise<LineageNode[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
-  const { data } = await supabase.from('lineage_nodes').select('id, name, parent_id, generation, status')
+  const { data } = await supabase.from('lineage_nodes').select(NODE_SELECT)
   return (data ?? []) as LineageNode[]
 }
 
@@ -64,16 +65,42 @@ export type GenStatus = 'verified' | 'pending' | 'rejected' | null
 // עיבוד סינכרוני מהצמתים שכבר נשלפו → מסלול הדורות + מפת סטטוס לכל דור. ללא רשת נוספת.
 async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, chain: { generation: number; name: string }[] = []): Promise<{
   path: string[]
+  /** צמתי המסלול בעץ (שורש→עלה). כשקיים — הוא מקור האמת לשרשרת ולסטטוסים. */
+  pathNodes: LineageNode[]
   deviating: Set<number>
   genStatus: Map<number, GenStatus>
 }> {
-  const out = { path: [] as string[], deviating: new Set<number>(), genStatus: new Map<number, GenStatus>() }
-  if (nodeId) {
-    const map = new Map(nodes.map(n => [n.id, n]))
-    let cur = map.get(nodeId)
-    let guard = 0
-    while (cur && guard < 50) { out.path.unshift(cur.name); cur = cur.parent_id ? map.get(cur.parent_id) : undefined; guard++ }
+  const out = {
+    path: [] as string[],
+    pathNodes: [] as LineageNode[],
+    deviating: new Set<number>(),
+    genStatus: new Map<number, GenStatus>(),
   }
+
+  // ── המסלול בעץ לפי מזהי צמתים ──
+  out.pathNodes = pathToRoot(nodes as TreeNodeRow[], nodeId) as LineageNode[]
+  out.path = out.pathNodes.map(n => n.name)
+
+  // ✅ מקור האמת: כשהצאצא משויך לצומת בעץ, הסטטוס של כל דור הוא הסטטוס של
+  // הצומת *במסלול שלו* — לפי מזהה, לא לפי שם. כך שינוי בעץ (אישור צומת, שינוי
+  // שם, העברת ענף) משתקף בכרטסת מיד, בלי להישען על עותק שמור שמתיישן.
+  //
+  // ⚠️ קודם הסטטוס חושב בהתאמת שמות מול העץ, ולכן צומת מאושר שנוסח שמו שונה
+  // במעט מהעותק השמור אצל הצאצא (למשל "רבי נתן יהודה סופר" מול "רבי נתן יהודה
+  // (נטע)") לא נמצא — והדור הוצג כחריג אדום למרות שבעץ הוא ירוק ומאושר.
+  if (out.pathNodes.length) {
+    for (const n of out.pathNodes) {
+      const status: GenStatus =
+        n.status === 'verified' ? 'verified'
+        : n.status === 'rejected' ? 'rejected'
+        : 'pending'
+      out.genStatus.set(n.generation, status)
+      if (status !== 'verified') out.deviating.add(n.generation)
+    }
+    return out
+  }
+
+  // ── נפילה-לאחור: אין שיוך לצומת (שרשרת ידנית בלבד) → התאמת שמות ──
   if (chain.length) {
     const { namesMatch } = await import('@/lib/hebrewName')
     const verified = nodes.filter(n => n.status === 'verified')
@@ -215,6 +242,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     : []
   const lineageData = await computeLineageData(allNodes, beneficiary?.lineage_node_id, typedChain)
   const lineagePath = lineageData.path
+  const pathNodes = lineageData.pathNodes   // מסלול הצמתים בעץ — מקור האמת כשקיים
   const deviatingGens = lineageData.deviating
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
   // חריג (אדום) = דור ≤5 שאינו מאושר (verified), או צומת rejected בכל דור.
@@ -235,8 +263,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
   // כל הדורות בצבעים לחלונית ההתראה (דור 1 = החתם סופר תמיד כחול/מאושר).
   const CHATAM_SOFER_ROOT = 'מרן החתם סופר זי"ע'
+  // גם כאן המסלול בעץ קודם לעותק השמור — אחרת ההתראה מפרטת דורות לפי שמות
+  // ישנים בעוד הצ'יפים כבר מציגים את העץ המעודכן.
+  const alertSource: { generation: number; name: string }[] = pathNodes.length
+    ? pathNodes.map(n => ({ generation: n.generation, name: n.name }))
+    : [...chainForMarks].sort((a, b) => a.generation - b.generation)
   const alertGens: { generation: number; name: string; color: 'blue' | 'red' | 'orange' }[] =
-    [...chainForMarks].sort((a, b) => a.generation - b.generation).map(c => ({
+    alertSource.map(c => ({
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
       color: c.generation === 1 ? 'blue' : genColor(genStatus.get(c.generation) ?? null, c.generation),
@@ -428,9 +461,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // של הנרשם מתחילה מדור 2. בונים מהשרשרת הממוינת לפי דור.
         const chainSorted = [...chainForMarks].sort((a, b) => a.generation - b.generation)
         const CHATAM_SOFER = 'מרן החתם סופר זי"ע'
-        const source = chainSorted.length
-          ? chainSorted
-          : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null }))
+        // ✅ המסלול בעץ קודם לעותק השמור — כך הצ'יפים מציגים את מה שבעץ *עכשיו*
+        // (שם וסטטוס), ותיקון בעץ משתקף מיד. העותק השמור משמש רק כשאין שיוך
+        // לצומת (שרשרת ידנית), ואז אין ממה לגזור.
+        const source: { generation: number; name: string; relation: string | null }[] =
+          pathNodes.length
+            ? pathNodes.map(n => ({ generation: n.generation, name: n.name, relation: n.relation ?? null }))
+            : chainSorted.length
+              ? chainSorted
+              : lineagePath.map((name, i) => ({ generation: i + 1, name, relation: null as string | null }))
         const gens: import('./LineageChainChips').ChainGen[] = source.map(c => {
           const isRoot = c.generation === 1
           return {
@@ -445,7 +484,12 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         if (!gens.some(g => g.generation === 1)) {
           gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
         }
-        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} allNodes={allNodes} />
+        // relation מגיע מהמסד כטקסט חופשי — מצמצמים לערכים שהרכיב מכיר
+        const pickerNodes: import('./LineageChainChips').TreeNode[] = allNodes.map(n => ({
+          id: n.id, name: n.name, generation: n.generation, parent_id: n.parent_id, status: n.status,
+          relation: n.relation === 'son' || n.relation === 'son_in_law' ? n.relation : null,
+        }))
+        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} allNodes={pickerNodes} />
       })()}
 
       {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית).
