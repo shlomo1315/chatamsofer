@@ -90,8 +90,11 @@ type Ctx = { recoveryHomes: string[]; pending: boolean }
 function idAttachments(pending: boolean): AttachmentSpec[] {
   return pending
     ? [
-        { name: 'תעודת-זהות-בעל', label: 'תעודת זהות של הבעל (כולל ספח)', required: true },
-        { name: 'תעודת-זהות-אשה', label: 'תעודת זהות של האשה (כולל ספח)', required: true },
+        // ת"ז והספח כשני צירופים נפרדים לכל בן זוג
+        { name: 'תעודת-זהות-בעל',      label: 'תעודת זהות של הבעל', required: true },
+        { name: 'ספח-תעודת-זהות-בעל', label: 'ספח תעודת הזהות של הבעל', required: true },
+        { name: 'תעודת-זהות-אשה',      label: 'תעודת זהות של האשה', required: true },
+        { name: 'ספח-תעודת-זהות-אשה', label: 'ספח תעודת הזהות של האשה', required: true },
       ]
     : []
 }

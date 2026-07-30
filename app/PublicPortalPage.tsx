@@ -126,9 +126,12 @@ const RECOVERY_HOMES_DEFAULT = ['אם וילד', 'טלזסטון', 'ביכורי
 
 // תוויות סוגי מסמכים (לפי המפתחות שהמזכירות מסמנת בצ'קליסט) — מקור אמת אחד
 const DOC_LABELS: Record<string, string> = {
-  id_husband:    'תעודת זהות — הבעל (כולל ספח)',
-  id_wife:       'תעודת זהות — האשה (כולל ספח)',
-  id_child:      'תעודת זהות — ילד (כולל ספח)',
+  // ת"ז והספח נדרשים כשני קבצים נפרדים — לא כצילום אחד משולב.
+  id_husband:      'תעודת זהות — הבעל',
+  id_husband_appx: 'ספח תעודת הזהות — הבעל',
+  id_wife:         'תעודת זהות — האשה',
+  id_wife_appx:    'ספח תעודת הזהות — האשה',
+  id_child:        'תעודת זהות — ילד (כולל ספח)',
   marriage_cert: 'תעודת נישואין',
   birth_cert:    'אישור לידה',
   address_proof: 'אישור כתובת מגורים',
@@ -2030,7 +2033,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // שטרם אושרה. לא ניתן להתקדם בלעדיהם — לא קיימים במערכת וגם לא הועלו כעת.
     if (needsIdWithRequest) {
       const miss = missingRequestIdDocs()
-      if (miss.length) { setError(`חובה לצרף את צילומי תעודות הזהות כדי להגיש את הבקשה: ${miss.map(docLabel).join(', ')}`); return }
+      if (miss.length) { setError(`חובה לצרף את כל צילומי תעודות הזהות והספחים כדי להגיש את הבקשה: ${miss.map(docLabel).join(', ')}`); return }
     }
     setError('')
     setLoading(true)
@@ -2181,11 +2184,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const requiredDocs: string[] = (() => {
     const rd = (beneficiary?.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean)
     if (rd.length) return rd
+    // ת"ז + ספח כשני קבצים נפרדים לכל בן זוג — הספח (הדף הנלווה, שבו מופיעים
+    // הילדים) נדרש לאימות הזהות ולא ניתן להסתפק בצילום התעודה בלבד.
     const ms = beneficiary?.marital_status ?? ''
-    if (ms === 'נשואים') return ['id_husband', 'id_wife']
-    if (['גרוש', 'אלמן'].includes(ms)) return ['id_husband']
-    if (['גרושה', 'אלמנה'].includes(ms)) return ['id_wife']
-    return ['id_husband']
+    if (ms === 'נשואים') return ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx']
+    if (['גרוש', 'אלמן'].includes(ms)) return ['id_husband', 'id_husband_appx']
+    if (['גרושה', 'אלמנה'].includes(ms)) return ['id_wife', 'id_wife_appx']
+    return ['id_husband', 'id_husband_appx']
   })()
   const displayName = beneficiary
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
@@ -2399,7 +2404,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     return (
       <div className="border border-slate-200 rounded-xl p-4">
         <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
-        <p className="text-xs font-bold text-red-600 mb-3">חובה לצרף גם את הספח (הדף הנלווה לתעודת הזהות)</p>
+        {/* ת"ז והספח הם שני קבצים נפרדים — ההנחיה משתנה לפי המשבצת */}
+        <p className="text-xs font-bold text-red-600 mb-3">
+          {docType.endsWith('_appx')
+            ? 'צילום הספח — הדף הנלווה לתעודת הזהות, שבו מופיעים הילדים'
+            : 'צילום ברור של תעודת הזהות עצמה'}
+        </p>
         {file ? (
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
             <span className="text-sm text-green-700 flex items-center gap-2">
@@ -2448,10 +2458,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   // קטע העלאת צילומי ת"ז — מוצג בראש כל טופס בקשה כשהמשפחה טרם אושרה (לפני הבקשה עצמה).
-  const idDocLabel = (d: string) =>
-    d === 'id_husband' ? (beneficiary?.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך')
-      : d === 'id_wife' ? 'תעודת זהות — האשה'
-      : docLabel(d)
+  const idDocLabel = (d: string) => {
+    const married = beneficiary?.marital_status === 'נשואים'
+    if (d === 'id_husband') return married ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך'
+    if (d === 'id_husband_appx') return married ? 'ספח תעודת הזהות — הבעל' : 'ספח תעודת הזהות שלך'
+    if (d === 'id_wife') return 'תעודת זהות — האשה'
+    if (d === 'id_wife_appx') return 'ספח תעודת הזהות — האשה'
+    return docLabel(d)
+  }
   const renderIdDocsSection = () => {
     // מוצג כל עוד המשפחה לא אושרה (ממתינה לאישור ראשוני). מאושרת → לא מוצג (הגשה מיידית).
     if (!beneficiary || isApproved) return null
@@ -4194,12 +4208,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="flex flex-col gap-4">
                 {requiredDocs.map(d => (
                   <div key={d}>
-                    {renderIdDocSlot(
-                      d,
-                      d === 'id_husband'
-                        ? (beneficiary.marital_status === 'נשואים' ? 'תעודת זהות — הבעל' : 'תעודת זהות שלך')
-                        : (docLabel(d)),
-                    )}
+                    {renderIdDocSlot(d, idDocLabel(d))}
                   </div>
                 ))}
               </div>
@@ -4770,7 +4779,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
                     <p className="font-semibold text-slate-900 text-sm mb-1">אימות זהות — חובה</p>
                     <p className="text-xs text-slate-600 leading-relaxed mb-3">
-                      המשפחה טרם אושרה. חובה לצרף צילומי תעודת זהות (כולל ספח) — הבקשה והמסמכים יישלחו יחד לגורם המאשר.
+                      המשפחה טרם אושרה. חובה לצרף צילומי תעודת זהות וספח — הבקשה והמסמכים יישלחו יחד לגורם המאשר.
                     </p>
                     <div className="flex flex-col gap-3">
                       {requiredDocs.map(d => (
