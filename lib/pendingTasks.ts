@@ -47,12 +47,39 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
     supabase.from('dismissed_pending_tasks').select('entity_type, entity_id'),
   ])
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // משפחות שכבר טופלו — יורדות מהרשימה.
+  //
+  // ⚠️ משפחה נכנסת לכאן כשהיא ב-eligibility_status='pending', והיא יוצאת רק
+  // אם מישהו נגע בכרטסת שלה במפורש. אבל בפועל מטפלים בה דרך המחלקה: מאשרים
+  // לה בקשת לידה במסך היולדות, מטפלים בהלוואה וכו' — ואישור בקשה אינו מקדם
+  // את המשפחה (הופרד בכוונה). התוצאה: הרשימה רק גדלה ולעולם לא מתרוקנת.
+  //
+  // לכן: משפחה שיש לה *ולו בקשה אחת שכבר הוכרעה* (סטטוס שאינו 'pending')
+  // נחשבת מטופלת ואינה מוצגת. הנתונים שלה לא משתנים — רק התצוגה.
+  // ─────────────────────────────────────────────────────────────────────────
+  const pendingBenIds = (beneficiaries.data ?? []).map((b: { id: string }) => b.id)
+  const handledBenIds = new Set<string>()
+  if (pendingBenIds.length) {
+    const decided = await Promise.all([
+      supabase.from('loans').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
+      supabase.from('maternity_aids').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
+      supabase.from('financial_aid_requests').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
+      supabase.from('widow_requests').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
+    ])
+    for (const r of decided) {
+      for (const row of (r.data ?? []) as { beneficiary_id: string | null }[]) {
+        if (row.beneficiary_id) handledBenIds.add(row.beneficiary_id)
+      }
+    }
+  }
+
   const dismissedSet = new Set(
     (dismissed?.data ?? []).map((d: { entity_type: string; entity_id: string }) => `${d.entity_type}:${d.entity_id}`),
   )
 
   const tasks: PendingTask[] = [
-    ...(beneficiaries.data ?? []).map((b): PendingTask => ({
+    ...(beneficiaries.data ?? []).filter(b => !handledBenIds.has(b.id)).map((b): PendingTask => ({
       id: b.id, type: 'beneficiary', name: benName({ full_name: b.full_name, family_name: b.family_name }),
       detail: 'בקשת הצטרפות', href: `/admin/beneficiaries/${b.id}`, createdAt: b.created_at,
     })),
