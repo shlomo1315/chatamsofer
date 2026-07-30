@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
+import { resyncSubtree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -174,6 +175,17 @@ export async function PATCH(request: NextRequest) {
       await admin.from('lineage_nodes').update({ status: 'verified' }).eq('id', cur).then(undefined, () => {})
       cur = (anc.parent_id as string | null) ?? null
     }
+  }
+
+  // ── סנכרון לכרטסות הצאצאים ──
+  // שינוי שם / הורה / סטטוס משפיע על שרשרת הדורות של כל צאצא שמסלולו עובר דרך
+  // הצומת הזה. מרעננים להם את lineage_chain כדי שהמסכים והמיילים שקוראים את
+  // העותק השמור לא יישארו עם השם או המבנה הישן.
+  // (הצ'יפים בכרטסת נגזרים מהעץ בזמן אמת וממילא מעודכנים — זה עבור שאר הצרכנים.)
+  const { data: freshNodes } = await admin.from('lineage_nodes').select(NODE_SELECT)
+  if (freshNodes) {
+    const synced = await resyncSubtree(admin, freshNodes as TreeNodeRow[], id)
+    if (synced) console.log(`[lineage] node ${id} updated → synced ${synced} beneficiary chain(s)`)
   }
 
   return NextResponse.json({ node: data })
