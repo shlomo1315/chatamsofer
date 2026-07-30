@@ -18,3 +18,14 @@ export function validatePhone(p: string): boolean {
   const d = p.replace(/\D/g, '')
   return d.length === 10 && d.startsWith('05')
 }
+
+// הצגת תעודת זהות ב-9 ספרות מלאות, עם אפסים מובילים.
+// ⚠️ במסד נשמרות ת"ז גם בלי האפסים המובילים (למשל "1486819"), ואז התצוגה
+// הראתה 7 ספרות — מספר שנראה שגוי ואי אפשר להשוות אותו למסמך. דרכון או ערך
+// שאינו ספרתי בלבד מוחזר כפי שהוא.
+export function formatIsraeliId(raw?: string | null): string {
+  const v = String(raw ?? '').trim()
+  if (!v) return ''
+  if (!/^\d+$/.test(v)) return v          // דרכון / ערך לא ספרתי
+  return v.length >= 9 ? v : v.padStart(9, '0')
+}

@@ -13,6 +13,7 @@ import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
+import { formatIsraeliId } from '@/lib/validation'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -215,7 +216,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <BackButton fallback="/admin/maternity" />
           <div>
             <h1 className="text-xl font-bold text-slate-900">{motherName}</h1>
-            {motherId && <p className="text-sm text-slate-500 ltr-num">ת.ז. {motherId}</p>}
+            {motherId && <p className="text-sm text-slate-500 ltr-num">ת.ז. {formatIsraeliId(motherId)}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -242,7 +243,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-slate-400">פרטי הבעל</p>
                   <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
-                  <DetailRow label="ת.ז." value={ben.id_number ?? '—'} ltr />
+                  <DetailRow label="ת.ז." value={formatIsraeliId(ben.id_number) || '—'} ltr />
                   <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
                   <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
                 </div>
@@ -257,7 +258,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-slate-400">פרטי האישה</p>
                     <DetailRow label="שם" value={ben.spouse_name} />
-                    {ben.spouse_id_number && <DetailRow label="ת.ז." value={ben.spouse_id_number} ltr />}
+                    {ben.spouse_id_number && <DetailRow label="ת.ז." value={formatIsraeliId(ben.spouse_id_number)} ltr />}
                     {ben.spouse_birth_date && <DetailRow label="תאריך לידה" value={fmtDate(ben.spouse_birth_date)} />}
                   </div>
                 )}

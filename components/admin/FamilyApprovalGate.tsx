@@ -53,7 +53,9 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
           </span>
         </div>
         {/* אישור המשפחה ישירות מכאן */}
-        <StatusControl id={beneficiary.id} status={(beneficiary.eligibility_status ?? 'pending') as EligibilityStatus} />
+        {/* ⚠️ תצוגה בלבד. סטטוס המשפחה נערך אך ורק מכרטסת הצאצא — עריכה משני
+            מסכים שונים הובילה לשינויים לא מכוונים מתוך כרטסת הלידה. */}
+        <StatusControl id={beneficiary.id} status={(beneficiary.eligibility_status ?? 'pending') as EligibilityStatus} readOnly />
       </div>
 
       {!compact && (

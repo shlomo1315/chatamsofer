@@ -251,7 +251,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     { value: 'active',    label: 'אשר לידה',     cls: 'text-green-700 hover:bg-green-50', icon: Check },
     { value: 'cancelled', label: 'דחה',          cls: 'text-red-600 hover:bg-red-50', icon: X },
     // המזכיר אינו בטוח שאפשר לאשר — מעביר למנהל לבדיקה מעמיקה (עם הסבר)
-    { value: 'deep_review', label: 'העבר לבדיקה מעמיקה', cls: 'text-orange-700 hover:bg-orange-50', icon: AlertTriangle },
+    { value: 'deep_review', label: 'העבר את הלידה לאישור המנהל', cls: 'text-orange-700 hover:bg-orange-50', icon: AlertTriangle },
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 

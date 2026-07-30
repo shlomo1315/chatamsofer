@@ -127,6 +127,26 @@ export async function loadMaternityCardOnApproval(
     if (!clientId) clientId = await saveClientCard(creds, { ...b, id_number: zeout })
     if (clientId && clientId !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: clientId }).eq('id', b.id)
   } catch (e) {
+    // ⚠️ "מספר זהות זה כבר רשום אצל X" — המשפחה כבר קיימת בנדרים תחת רשומה
+    // אחרת (בדרך כלל הבעל). זו אינה שגיאה אמיתית אלא בדיוק המצב שאנחנו רוצים:
+    // יש שם לקוח עם אותה ת"ז. עד כה החיפוש נכשל, ההקמה נדחתה, וההטענה נעצרה —
+    // והיולדת נשארה בלי כרטיס למרות שיש מלאי. מנסים לאתר אותו ולהשתמש בו.
+    const raw = e instanceof Error ? e.message : String(e)
+    if (/כבר רשום|already (exists|registered)/i.test(raw) && zeout) {
+      try {
+        const existing = await findClientByZeout(creds, String(zeout))
+        if (existing) {
+          clientId = existing
+          if (existing !== b.nedarim_id) await admin.from('beneficiaries').update({ nedarim_id: existing }).eq('id', b.id)
+          console.warn(`[maternityCards] ת"ז ${zeout} כבר רשומה בנדרים — שויכה ללקוח ${existing}`)
+        }
+      } catch (e2) {
+        console.error('[maternityCards] איתור הלקוח הקיים בנדרים נכשל:', e2 instanceof Error ? e2.message : e2)
+      }
+    }
+    if (clientId) {
+      // אותר לקוח קיים — ממשיכים להטענה כרגיל
+    } else {
     await restoreCard()
     const msg = e instanceof Error ? e.message : 'שגיאת נדרים'
     console.error('[maternityCards] הקמת/עדכון המשפחה בנדרים נכשלה:', msg, { zeout, aidId: aid.id })
@@ -138,6 +158,7 @@ export async function loadMaternityCardOnApproval(
       .eq('id', aid.id)
     await logActivity(admin, { action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id, details: { stage: 'save_client', zeout, error: msg } })
     return { ok: false, error: `נדרים: ${msg}` }
+    }
   }
   if (!clientId) {
     await restoreCard()

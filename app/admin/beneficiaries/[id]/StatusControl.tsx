@@ -21,7 +21,14 @@ const STYLES: Record<string, string> = {
   deep_review:  'bg-orange-100 text-orange-800 hover:bg-orange-200 border-orange-300',
 }
 
-export default function StatusControl({ id, status, advance }: { id: string; status: EligibilityStatus; advance?: boolean }) {
+export default function StatusControl({ id, status, advance, readOnly }: {
+  id: string
+  status: EligibilityStatus
+  advance?: boolean
+  /** תצוגה בלבד — מציג את הסטטוס בלי אפשרות לשנות אותו.
+      משמש בכרטסת הלידה: הסטטוס של המשפחה נערך רק מכרטסת הצאצא. */
+  readOnly?: boolean
+}) {
   const router  = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -161,13 +168,16 @@ export default function StatusControl({ id, status, advance }: { id: string; sta
     <>
       <div className="relative" ref={ref}>
         <button
-          onClick={() => setOpen((o) => !o)}
-          disabled={saving}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${STYLES[styleKey]}`}
+          onClick={() => { if (!readOnly) setOpen((o) => !o) }}
+          disabled={saving || readOnly}
+          title={readOnly ? 'סטטוס המשפחה — ניתן לשינוי מכרטסת הצאצא בלבד' : undefined}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+            readOnly ? 'cursor-default disabled:opacity-100' : 'disabled:opacity-60'
+          } ${STYLES[styleKey]}`}
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
           {label}
-          <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          {!readOnly && <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />}
         </button>
 
         {open && (
