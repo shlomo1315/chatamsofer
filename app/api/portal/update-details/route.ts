@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, phone, email, verified_phones')
+    .select('id, eligibility_status, phone, email, verified_phones, marital_status, children, required_docs')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
@@ -67,7 +67,17 @@ export async function POST(request: NextRequest) {
   if (spouse_phone !== undefined) update.spouse_phone = spouse_phone ? String(spouse_phone).trim() : null
   if (address !== undefined) update.address = address ? String(address).trim() : null
   if (city !== undefined) update.city = city ? String(city).trim() : null
-  if (marital_status !== undefined) update.marital_status = marital_status ? String(marital_status) : null
+  if (marital_status !== undefined) {
+    const newMarital = marital_status ? String(marital_status) : null
+    update.marital_status = newMarital
+    // שינוי מצב משפחתי משנה אילו מסמכים נדרשים (נשואים → ת"ז+ספח לשניהם;
+    // גרוש/אלמנה → לאחד). אם המזכירות סימנה בעבר צ'קליסט ידני, הוא גובר על
+    // הגזירה לפי הסטטוס — ולכן היה נשאר תקוע על דרישות הסטטוס הישן.
+    // מאפסים אותו כדי שהדרישות ייגזרו מחדש מהמצב החדש.
+    if (newMarital !== (ben as { marital_status?: string | null }).marital_status) {
+      update.required_docs = null
+    }
+  }
 
   // איחוד טלפונים שאומתו כעת אל רשימת המספרים המאומתים (מאפשר קבלת קוד בעתיד)
   const existingVerified = Array.isArray((ben as { verified_phones?: string[] }).verified_phones)
@@ -89,13 +99,25 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(children)) {
       return NextResponse.json({ error: 'רשימת הילדים אינה תקינה' }, { status: 400 })
     }
+    // ת"ז של ילד שכבר רשום — נעולה. ילד שה-ת"ז שלו כבר קיימת אצל המשפחה
+    // עובר כפי שהוא (שם/תאריך/מין ניתנים לעדכון); ת"ז שאינה מוכרת נחשבת
+    // ילד חדש ועוברת אימות מלא. כך שינוי ת"ז של ילד קיים אינו אפשרי —
+    // הוא ייבדק כילד חדש וייחסם אם הת"ז כבר קיימת במערכת.
+    const existingChildIds = new Set(
+      (Array.isArray((ben as { children?: unknown }).children)
+        ? ((ben as { children: { id_number?: string }[] }).children)
+        : []
+      ).map(c => (c?.id_number ?? '').replace(/\D/g, '')).filter(Boolean),
+    )
     const seen = new Set<string>()
     for (const c of children as { name?: string; id_number?: string }[]) {
       const name = (c?.name ?? '').trim()
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       const childLabel = name || 'הילד/ה'
-      if (!name || !cid) {
-        return NextResponse.json({ error: `יש להזין שם ותעודת זהות עבור ${childLabel}` }, { status: 400 })
+      // ⚠️ שם אינו חובה — ילד מבקשת לידה שטרם נקרא בשם הוא רשומה תקינה
+      // שממתינה להשלמה, ואין למחוק אותה או לחסום בגללה את השמירה.
+      if (!cid) {
+        return NextResponse.json({ error: `יש להזין תעודת זהות עבור ${childLabel}` }, { status: 400 })
       }
       if (!validateIsraeliId(cid)) {
         return NextResponse.json({ error: `תעודת הזהות של ${childLabel} אינה תקינה` }, { status: 400 })
@@ -104,6 +126,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `תעודת הזהות של ${childLabel} מופיעה פעמיים ברשימת הילדים.` }, { status: 400 })
       }
       seen.add(cid)
+      if (existingChildIds.has(cid)) continue   // ילד קיים — ת"ז לא השתנתה, אין מה לבדוק
       // כבר קיים במערכת על רשומה אחרת (כמוטב, כבן/בת זוג, או כילד) — לא כולל המשפחה הנוכחית
       const { data: asBen } = await admin.from('beneficiaries').select('id')
         .or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).neq('id', String(beneficiary_id)).limit(1)

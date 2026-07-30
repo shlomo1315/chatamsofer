@@ -430,6 +430,9 @@ interface LineageNode { id: string; name: string; generation: number; parent_id:
 
 interface ChildEntry {
   name: string; id_number: string; gender: string; birth_date: string; marital_status: string
+  // ילד שכבר רשום במערכת — ת"ז נעולה. שינוי ת"ז מנתק את הילד מבקשות הלידה
+  // שלו, ולכן היא נקבעת פעם אחת בלבד בעת ההוספה.
+  existing?: boolean
 }
 function emptyChild(): ChildEntry { return { name: '', id_number: '', gender: '', birth_date: '', marital_status: '' } }
 function maritalFor(g: string) {
@@ -1395,6 +1398,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setEditChildren((beneficiary.children ?? []).map(c => ({
       name: c.name ?? '', id_number: c.id_number ?? '', gender: c.gender ?? '',
       birth_date: c.birth_date ?? '', marital_status: c.marital_status ?? '',
+      existing: true,   // ת"ז נעולה — נקבעה בעת ההוספה
     })))
     setEditChildIdErrors({})
     setEditEmailToken(null); setEditPhoneToken(null); setEditSpousePhoneToken(null); setEditPhone2Token(null)
@@ -1421,8 +1425,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     for (let i = 0; i < editChildren.length; i++) {
       const c = editChildren[i]
       const cid = (c.id_number || '').replace(/\D/g, '')
-      if (!c.name && !cid) continue   // שורה ריקה — תסונן מהמשלוח
-      if (!c.name || !cid) { setError(`יש להשלים שם ותעודת זהות עבור ילד ${i + 1}`); return }
+      // ⚠️ שם *אינו* חובה: ילד שנפתח מבקשת לידה וטרם נקרא בשם הוא מצב תקין,
+      // וזו בדיוק הרשומה שהמשפחה נכנסת להשלים. קודם נדרש שם, ורשומה בלי שם
+      // סוננה מהמשלוח — כלומר עדכון טלפון בלבד מחק ילד מהרשימה.
+      if (!c.name && !cid) continue   // שורה ריקה לגמרי — תסונן מהמשלוח
+      if (!cid) { setError(`יש להזין תעודת זהות עבור ילד ${i + 1}`); return }
       if (!validateIsraeliId(cid)) {
         setEditChildIdErrors(er => ({ ...er, [i]: 'תעודת הזהות שהזנתם אינה תקינה' }))
         setError(`תעודת הזהות של ילד ${i + 1} אינה תקינה`); return
@@ -1436,7 +1443,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         { value: editForm.spouse_phone, token: editSpousePhoneToken },
         { value: editForm.phone2, token: editPhone2Token },
       ].filter(p => p.value && p.value.trim() && p.token)
-      const childrenPayload = editChildren.filter(c => c.name && c.id_number).map(c => ({
+      // מסננים רק שורות ריקות. ילד בלי שם *נשמר* — הוא רשומה אמיתית שממתינה
+      // להשלמת שם, לא רשומה פגומה שיש למחוק.
+      const childrenPayload = editChildren.filter(c => c.id_number).map(c => ({
         name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status,
       }))
       const res = await fetch('/api/portal/update-details', {
@@ -4112,7 +4121,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
             {/* אזור אישי: השלמת מסמכים (לא מאושר) + עדכון פרטים אישיים. הגשת בקשות נעשית
                 דרך הקישורים שבמיילים (?action=...), לא מהדשבורד. */}
-            {!isRejected && !isDocsPending && (
+            {/* ⚠️ קודם היה כאן גם !isDocsPending, כך שמשפחה בהשלמת מסמכים לא ראתה
+                כלל את "עדכון פרטים אישיים" — דווקא היא שצריכה לתקן טלפון או מייל.
+                השרת ממילא חוסם רק משפחה שנדחתה, אז הממשק החמיר ממנו ללא סיבה. */}
+            {!isRejected && (
               <div className="flex flex-col gap-3">
                 {/* תזכורת השלמת מסמכים — למי שעדיין לא אושר */}
                 {!isApproved && (
@@ -4887,7 +4899,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     {editChildren.map((child, idx) => (
                       <div key={idx} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-semibold text-slate-700">ילד {idx + 1}</span>
+                          <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            ילד {idx + 1}
+                            {child.existing && !child.name.trim() && (
+                              <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">
+                                חסר שם — נא להשלים
+                              </span>
+                            )}
+                          </span>
                           <button type="button"
                             onClick={() => {
                               setEditChildren(cs => cs.filter((_, i) => i !== idx))
@@ -4899,12 +4918,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="שם הילד/ה" required>
-                              <TextInput value={child.name} placeholder="שם מלא" required
+                            <Field label="שם הילד/ה">
+                              <TextInput value={child.name} placeholder="שם מלא"
                                 onChange={e => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
+                            {/* ת"ז של ילד קיים — לקריאה בלבד. שינויה מנתק את הילד
+                                מבקשות הלידה שלו; נקבעת פעם אחת בעת ההוספה. */}
+                            {child.existing ? (
+                            <Field label="תעודת זהות (לא ניתן לשינוי)">
+                              <div className="rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 ltr-num text-left">
+                                {child.id_number || '—'}
+                              </div>
+                            </Field>
+                            ) : (
                             <Field label="תעודת זהות" required>
                               <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
                                 className={editChildIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
@@ -4930,6 +4958,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                                 }} />
                               {editChildIdErrors[idx] && <p className="text-xs text-red-600 mt-1">{editChildIdErrors[idx]}</p>}
                             </Field>
+                            )}
                           </div>
                           <div className="col-span-2 sm:col-span-1">
                             <Field label={<EditableText k="reg.birthDate" />} required>
