@@ -24,6 +24,21 @@ export async function loadMaternityCardOnApproval(
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
   if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
 
+  // ⚠️ כל יציאה בכישלון חייבת להשאיר עקבות על התיק. קודם היו כאן ארבעה
+  // מסלולי יציאה שלא כתבו כלום — כשל בניכוי המלאי, נדרים לא מוגדר, והמשפחה
+  // לא נמצאה. במקרים האלה card_status נשאר 'pending', המסך הציג "ממתין"
+  // כאילו משהו עוד עתיד לקרות, ובפועל שום דבר לא היה ממתין: היולדת נשארה
+  // בלי כרטיס, בלי הודעת שגיאה ובלי דרך לדעת שמשהו נכשל.
+  const markFailed = async (err: string, stage: string) => {
+    await admin.from('maternity_aids')
+      .update({ card_load_status: 'failed', card_load_error: err, updated_at: new Date().toISOString() })
+      .eq('id', aid.id)
+    await logActivity(admin, {
+      action: 'maternity_card_load_failed', entityType: 'maternity_aid', entityId: aid.id,
+      details: { stage, error: err },
+    })
+  }
+
   // ⚠️ המלאי נבדק לפני הכל — לפני נדרים ולפני כל פנייה חיצונית.
   // אין מלאי → היולדת נכנסת לתור ההמתנה ולא נוגעים בנדרים בכלל.
   // ה-600 ₪ ייטענו רק כשיתחדש המלאי, דרך processAwaitingStock.
@@ -43,7 +58,9 @@ export async function loadMaternityCardOnApproval(
   try {
     remaining = await consumeOneCard(admin, { reason: 'birth_approval', aidId: aid.id })
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'שגיאת מלאי' }
+    const msg = e instanceof Error ? e.message : 'שגיאת מלאי'
+    await markFailed(msg, 'consume_stock')
+    return { ok: false, error: msg }
   }
   if (remaining === null) {
     // אין מלאי כרטיסים — לתור "ממתין למלאי", ללא טעינה בנדרים.
@@ -62,6 +79,7 @@ export async function loadMaternityCardOnApproval(
         note: 'החזרה אוטומטית — נדרים אינו מוגדר',
       })
     } catch { /* החזרה best-effort */ }
+    await markFailed('נדרים אינו מוגדר — לא ניתן להטעין את הכרטיס', 'nedarim_not_configured')
     return { ok: false, notConfigured: true }
   }
 
@@ -72,7 +90,12 @@ export async function loadMaternityCardOnApproval(
     .from('beneficiaries')
     .select('id, full_name, family_name, id_number, spouse_id_number, address, city, phone, phone2, email, nedarim_id')
     .eq('id', aid.beneficiary_id).maybeSingle()
-  if (!b) return { ok: false, error: 'המשפחה לא נמצאה' }
+  if (!b) {
+    // הכרטיס כבר נוכה מהמלאי — מחזירים אותו כדי שלא ייבלע
+    try { await admin.from('card_stock_ledger').insert({ delta: 1, reason: 'adjust', aid_id: aid.id, note: 'החזרה אוטומטית — המשפחה לא נמצאה' }) } catch { /* best-effort */ }
+    await markFailed('המשפחה לא נמצאה במערכת', 'beneficiary_missing')
+    return { ok: false, error: 'המשפחה לא נמצאה' }
+  }
 
   // אם הטעינה בנדרים תיכשל אחרי שכבר ניכינו כרטיס — מחזירים אותו למלאי (delta +1),
   // כדי שכרטיס לא "יבלע" בלי שהיולדת קיבלה בפועל.

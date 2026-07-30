@@ -103,8 +103,21 @@ export async function POST(request: NextRequest) {
     if (type === 'maternity') {
       try {
         const r = await loadMaternityCardOnApproval(admin, id)
-        if (r.awaitingStock) cardInStock = false
-      } catch (e) { console.error('[request-approved] maternity nedarim load failed:', e) }
+        // ⚠️ גם כישלון וגם חוסר-מלאי משמעם: לא נטען כרטיס. קודם נבדק כאן
+        // awaitingStock בלבד, וכל כישלון אחר (נדרים לא מוגדר, הטעינה נדחתה)
+        // נבלע — cardInStock נשאר true, וליולדת נשלח שובר כרטיס מזון עבור
+        // כרטיס שמעולם לא הוטען. היא הגיעה למוקד עם שובר חסר כיסוי.
+        if (r.awaitingStock || !r.ok) cardInStock = false
+        if (!r.ok) {
+          console.error('[request-approved] maternity card load failed:', {
+            aidId: id, error: r.error, notConfigured: r.notConfigured,
+          })
+        }
+      } catch (e) {
+        // חריגה לא צפויה — גם כאן אין כרטיס, ואין לצרף שובר
+        cardInStock = false
+        console.error('[request-approved] maternity nedarim load failed:', e)
+      }
     }
 
     // 1. מייל אישור הבקשה (+ שוברים ללידה)
