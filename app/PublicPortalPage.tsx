@@ -18,7 +18,7 @@ import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
-  Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail,
+  Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
   AlertTriangle,
 } from 'lucide-react'
@@ -4151,6 +4151,62 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <ChevronLeft size={18} className="text-slate-300 group-hover:text-amber-400" />
                     </button>
                   </>
+                )}
+
+                {/* ─────────────────────────────────────────────────────────────
+                    הגשת בקשות — ישירות מהאזור האישי.
+                    ⚠️ עד כה הכפתורים האלה *לא היו כאן*: הכניסה לטופס נעשתה רק
+                    בקפיצה אוטומטית מקישור ?action= שבמייל. ברגע שהקפיצה לא
+                    התרחשה (מחלקה סגורה, מצב משפחתי, השלמת מסמכים, או פשוט
+                    כניסה ישירה לקישור) — המשתמש נחת כאן בלי שום דרך להמשיך.
+                    עכשיו האפשרות תמיד גלויה.
+                    ───────────────────────────────────────────────────────── */}
+                {canRequestBirth && deptGates.maternity && (
+                  <button
+                    onClick={goToBirthForm}
+                    className="flex items-center gap-4 bg-pink-50 rounded-2xl border-2 border-pink-200 p-5 hover:border-pink-400 transition-all duration-150 text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-all duration-150">
+                      <Baby size={22} className="text-pink-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
+                      <p className="text-xs text-slate-500 mt-0.5">ימי החלמה וכרטיס מזון לאחר לידה</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-pink-400" />
+                  </button>
+                )}
+
+                {deptGates.gemach && (
+                  <button
+                    onClick={goToLoanForm}
+                    className="flex items-center gap-4 bg-sky-50 rounded-2xl border-2 border-sky-200 p-5 hover:border-sky-400 transition-all duration-150 text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-sky-200 transition-all duration-150">
+                      <Landmark size={22} className="text-sky-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">בקשת הלוואה</p>
+                      <p className="text-xs text-slate-500 mt-0.5">גמ״ח חתם סופר</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-sky-400" />
+                  </button>
+                )}
+
+                {deptGates.financial_aid && (
+                  <button
+                    onClick={goToAidForm}
+                    className="flex items-center gap-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-400 transition-all duration-150 text-right shadow-sm group"
+                  >
+                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-all duration-150">
+                      <HandCoins size={22} className="text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-900">בקשת סיוע רפואי</p>
+                      <p className="text-xs text-slate-500 mt-0.5">סיוע רפואי או כספי</p>
+                    </div>
+                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-emerald-400" />
+                  </button>
                 )}
 
                 {/* עדכון פרטים אישיים — זמין לכל הסטטוסים */}
