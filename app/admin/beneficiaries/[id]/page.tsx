@@ -4,7 +4,7 @@ import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, Fil
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getDocTypes } from '@/lib/serverDocTypes'
 import { docViewUrl } from '@/lib/docUrl'
-import DocsFixHistoryBanner from './DocsFixHistoryBanner'
+import BeneficiaryTimeline from './BeneficiaryTimeline'
 import LineageAssignEditor from './LineageAssignEditor'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
@@ -18,7 +18,6 @@ import ReturnedFixesBanner from './ReturnedFixesBanner'
 import LineageAlertModal from './LineageAlertModal'
 import LineageChainChips from './LineageChainChips'
 import DocumentsManager from './DocumentsManager'
-import BeneficiaryNotesChat from './BeneficiaryNotesChat'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
 import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
@@ -636,8 +635,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
 
-      {/* מה ביקשנו מהצאצא — היסטוריית בקשות התיקון/השלמת מסמכים (מודגש כשעדיין ממתין) */}
-      <DocsFixHistoryBanner
+      {/* תיעוד — ציר זמן אחד: בקשות השלמת המסמכים + הערות הצוות, עם שם הכותב
+          ליד כל פריט. מחליף את הבאנר הנפרד ואת לשונית "יומן הערות". */}
+      <BeneficiaryTimeline
+        beneficiaryId={id}
         history={docsFixHistory}
         docLabelMap={docLabelMap}
         active={beneficiary.eligibility_status === 'docs_pending'}
@@ -686,7 +687,6 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // עץ הדורות — מוסתר לאדם חריג (אינו צאצא, אין לו ייחוס)
         ...(isSpecial ? [] : [{ key: 'lineage', label: 'עץ הדורות', accent: 'violet' as const, icon: <GitBranch size={15} />, content: lineageTab }]),
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
-        { key: 'notes_chat', label: 'יומן הערות', accent: 'indigo', icon: <MessageSquare size={15} />, content: <BeneficiaryNotesChat beneficiaryId={id} /> },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
         { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
         ...(beneficiary.email ? [{
