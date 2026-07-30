@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { addBeneficiaryNote } from '@/lib/beneficiaryNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 
-  let body: { type?: string; id?: string; status?: string; extra?: Record<string, unknown> }
+  // note = תיעוד פנימי שאינו נשלח ליולדת; נכתב לתיעוד המשפחה לצד הסיבה שנשלחה
+  let body: { type?: string; id?: string; status?: string; extra?: Record<string, unknown>; note?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const type = String(body.type ?? '')
@@ -44,9 +46,10 @@ export async function POST(request: NextRequest) {
 
   const table = type === 'loan' ? 'loans' : 'maternity_aids'
 
-  // הסטטוס הקודם — לתיעוד המעבר
-  const { data: prev } = await admin.from(table).select('status').eq('id', id).maybeSingle()
-  const fromStatus = (prev as { status?: string } | null)?.status ?? null
+  // הסטטוס הקודם — לתיעוד המעבר. beneficiary_id נדרש כדי לכתוב לתיעוד המשפחה.
+  const { data: prev } = await admin.from(table).select('status, beneficiary_id').eq('id', id).maybeSingle()
+  const prevRow = prev as { status?: string; beneficiary_id?: string } | null
+  const fromStatus = prevRow?.status ?? null
 
   // בניית העדכון: סטטוס + מי טיפל (approved_by) + שדות extra מותרים בלבד
   const update: Record<string, unknown> = {
@@ -61,6 +64,31 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from(table).update(update).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // תיעוד המשפחה — הסיבה שנשלחה ליולדת נשמרת גם ב"צ'אט" התיעוד שבראש הכרטסת.
+  //
+  // ⚠️ עד כה היא נשמרה רק ב-rejection_reason של אותו תיק לידה: הטקסט יצא
+  // במייל ליולדת ונעלם מהתיעוד. חודשים אחר כך לא היה אפשר לענות על "למה
+  // דחינו לה את הלידה" בלי לפתוח את התיק הספציפי ולחפש בו.
+  // ─────────────────────────────────────────────────────────────────────────
+  const reason = String((body.extra ?? {}).rejection_reason ?? (body.extra ?? {}).deep_review_reason ?? '').trim()
+  const internalNote = String(body.note ?? '').trim()
+  if (type === 'maternity' && prevRow?.beneficiary_id && (reason || internalNote)) {
+    const heading = status === 'cancelled' ? '❌ בקשת לידה נדחתה'
+      : status === 'deep_review' ? '🔍 הלידה הועברה לאישור המנהל'
+      : 'עדכון סטטוס בקשת לידה'
+    const lines = [heading]
+    // ⚠️ מסומן במפורש מה נשלח ליולדת ומה פנימי — אחרת אי אפשר לדעת בדיעבד
+    // מה היא ראתה, וזה בדיוק מה שנדרש כשמתקשרים אליה בחזרה.
+    if (reason) lines.push(`הסיבה שנשלחה ליולדת: ${reason}`)
+    if (internalNote) lines.push(`תיעוד פנימי (לא נשלח): ${internalNote}`)
+    void addBeneficiaryNote(admin, {
+      beneficiaryId: prevRow.beneficiary_id,
+      body: lines.join('\n'),
+      authorId: staff.userId,
+    }).catch(() => {})
+  }
 
   // תיעוד הפעולה ברקע — לא מעכב את התגובה (כדי שהאישור יגיב מיידית)
   void logActivity(admin, {

@@ -177,8 +177,10 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-slate-700">רשימת לידות</h2>
+        {/* ⚠️ הכותרת "רשימת לידות" הוסרה: היא חזרה על כותרת העמוד ורק דחקה את
+            החיפוש שמאלה. בלעדיה החיפוש יושב בקצה הימני — אותו מקום שבו הוא
+            נמצא בשאר המחלקות ובמסך הצאצאים. */}
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             {/* חיפוש חופשי — ראשון, כלומר בצד ימין ב-RTL. אותו מיקום כמו
                 בשאר המחלקות ובמסך הצאצאים, כדי שלא יבלבל. */}

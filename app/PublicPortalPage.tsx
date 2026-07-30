@@ -205,6 +205,21 @@ function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLI
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// שם התינוק — אותיות עבריות בלבד.
+//
+// ⚠️ הוקלדו כאן ספרות וטקסט לועזי ("בן 2", "TBD", "בקרוב"), והערך הזה נשמר
+// כשם התינוק בכל המסמכים, השוברים והמיילים היוצאים. הסינון נעשה בהקלדה
+// עצמה ולא כאזהרה אחרי המעשה — כך פשוט אי אפשר להזין ספרה.
+//
+// מותרים בנוסף לאותיות: רווח, מקף, גרש וגרשיים — שכיחים בשמות אמיתיים
+// ("בת-שבע", "שרה'לה"). האותיות הסופיות (ך ם ן ף ץ) כלולות בטווח.
+// ─────────────────────────────────────────────────────────────────────────────
+const NON_HEBREW_NAME_CHARS = /[^א-ת ׳״'"-]/g
+function hebrewNameOnly(v: string): string {
+  return v.replace(NON_HEBREW_NAME_CHARS, '')
+}
+
 // שדות תינוק בטופס הלידה (מין · שם אופציונלי · ת.ז/דרכון + אימות וכפילות).
 // משמש גם ללידה רגילה (תינוק אחד) וגם ללידת תאומים (שני מופעים).
 function BabyFields({
@@ -235,6 +250,8 @@ function BabyFields({
   // שיש שם וניתן להקליד. עד האישור השדה לקריאה בלבד.
   const [nameGate, setNameGate] = useState(false)
   const [nameAck, setNameAck] = useState(false)
+  // נדלק כשההקלדה כללה תו שאינו עברי — כדי שהסינון לא ייראה כמו מקלדת תקולה
+  const [nameBadChar, setNameBadChar] = useState(false)
 
   // ילד קיים זוהה במשפחה המחוברת → פרטיו (מין/שם/תאריך) נעולים לעריכה,
   // כי הם מגיעים מרישום המשפחה ואין לשנותם ידנית בבקשת הלידה.
@@ -379,9 +396,23 @@ function BabyFields({
               className={`${noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''} ${
                 !nameAck && !noName && !lockedFromExisting ? 'cursor-pointer bg-slate-50' : ''
               }`}
-              onChange={e => { onChange('baby_name', e.target.value); if (noName) setNoName(false) }}
+              inputMode="text"
+              onChange={e => {
+                // סינון בהקלדה: ספרות ותווים לועזיים כלל לא נכנסים לשדה
+                const raw = e.target.value
+                const clean = hebrewNameOnly(raw)
+                setNameBadChar(clean !== raw)
+                onChange('baby_name', clean)
+                if (noName) setNoName(false)
+              }}
               placeholder={noName ? 'יושלם בהמשך' : (gender === 'female' ? 'שם הנולדת' : 'שם הנולד')} />
           </div>
+          {nameBadChar && !noName && !lockedFromExisting && (
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold text-red-600">
+              <AlertCircle size={14} className="mt-px flex-shrink-0" />
+              <span>בשם התינוק ניתן להקליד אותיות בעברית בלבד — ללא ספרות ואותיות לועזיות.</span>
+            </p>
+          )}
           {/* כפתור "עדיין אין שם" מוסתר כשהשם נעול (מגיע מרישום המשפחה) */}
           {!lockedFromExisting && (
           <div className="mt-2">
@@ -434,6 +465,10 @@ function BabyFields({
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold text-red-700 flex-shrink-0">3.</span>
+                      <span>יש להקליד <span className="font-bold">אותיות בעברית בלבד</span> — ספרות ואותיות לועזיות אינן מתקבלות בשדה.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="font-bold text-red-700 flex-shrink-0">4.</span>
                       <span className="font-extrabold text-red-800">
                         כתיבת «עדיין אין שם», «יושלם בהמשך» או כל טקסט דומה בתוך השדה — בקשת הלידה תידחה לאלתר.
                       </span>

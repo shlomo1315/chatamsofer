@@ -4,7 +4,7 @@
 // הכבד כולו. כך ההידרציה של הדף מהירה ותפריט הסטטוס נפתח מיד.
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle, Mail } from 'lucide-react'
+import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle, Mail, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
@@ -146,6 +146,8 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // בין אם מבקשה ממתינה ובין אם מבטלים לידה שכבר אושרה.
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  // תיעוד פנימי בדחייה — נשמר בתיעוד המשפחה ואינו נשלח ליולדת
+  const [rejectNote, setRejectNote] = useState('')
   // אזהרת מלאי — נפתחת לפני אישור לידה כשאין כרטיסים במלאי. המזכיר מאשר במודע
   // שהיולדת תיכנס לרשימת המתנה ותקבל שובר כרטיס אוטומטית כשיתחדש המלאי.
   const [stockWarnOpen, setStockWarnOpen] = useState(false)
@@ -161,7 +163,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
 
-  const setStatus = async (next: MaternityStatus, reason?: string) => {
+  const setStatus = async (next: MaternityStatus, reason?: string, note?: string) => {
     // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר לידה גם אם היחוס
     // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד בכפתור "אישור יחוס".
     // ── UI אופטימי: סוגרים מיד ומראים הצלחה, וכל העבודה מול השרת רצה ברקע ──
@@ -180,6 +182,8 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
             ...(reason
               ? { extra: next === 'deep_review' ? { deep_review_reason: reason } : { rejection_reason: reason } }
               : {}),
+            // תיעוד פנימי — נכתב לתיעוד המשפחה בשרת, לא נשלח ליולדת
+            ...(note ? { note } : {}),
           }),
         })
         if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'שגיאה בעדכון הסטטוס') }
@@ -277,6 +281,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     if (value === 'cancelled') {
       setOpen(false)
       setRejectReason('')
+      setRejectNote('')
       setRejectOpen(true)
       return
     }
@@ -306,7 +311,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     const reason = rejectReason.trim()
     if (!reason) return
     setRejectOpen(false)
-    void setStatus('cancelled', reason)
+    void setStatus('cancelled', reason, rejectNote.trim())
   }
 
   return (
@@ -413,7 +418,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 <p className="text-xs text-slate-500">הסיבה תופיע במייל שיישלח ליולדת</p>
               </div>
             </div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-600">סיבת הדחייה</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-600">
+              סיבת הדחייה <span className="font-normal text-red-600">· נשלחת ליולדת במייל</span>
+            </label>
             <textarea
               autoFocus
               value={rejectReason}
@@ -423,6 +430,25 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
               className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm
                          focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100"
             />
+
+            {/* ⚠️ תיעוד פנימי — נפרד מהסיבה שנשלחת ליולדת. לא כל מה שצריך לזכור
+                ראוי להישלח אליה, ובלי שדה נפרד המזכיר נאלץ לבחור בין השניים. */}
+            <label className="mb-1.5 mt-4 block text-xs font-semibold text-slate-600">
+              תיעוד פנימי <span className="font-normal text-slate-400">· לא נשלח ליולדת (אופציונלי)</span>
+            </label>
+            <textarea
+              value={rejectNote}
+              onChange={e => setRejectNote(e.target.value)}
+              rows={3}
+              placeholder="הערה פנימית לצוות — למה באמת נדחתה, מה נבדק, עם מי דוברה"
+              className="w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm
+                         focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-100"
+            />
+            <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-500">
+              <FileText size={13} className="mt-px flex-shrink-0" />
+              <span>שני השדות נשמרים בתיעוד המשפחה שבראש הכרטסת, עם שמך ותאריך — כדי שתמיד יהיה אפשר לראות למה הלידה נדחתה.</span>
+            </p>
+
             <div className="mt-4 flex justify-start gap-2">
               <button type="button" onClick={confirmReject} disabled={!rejectReason.trim()}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-5 py-2.5 text-sm

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -224,6 +224,30 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           <MaternityActions aid={aid} />
         </div>
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          סיבת הדחייה — גלויה על כרטסת הלידה עצמה.
+          ⚠️ עד כה הסיבה נשמרה בעמודה rejection_reason ונשלחה במייל ליולדת,
+          אך לא הוצגה בשום מקום בממשק: חודשיים אחר כך אי אפשר היה לענות על
+          "למה דחינו לה את הלידה" בלי לפתוח את ה-DB. התיעוד המלא (עם שם
+          המזכיר, התאריך וההערה הפנימית) נמצא בתיעוד המשפחה בכרטסת המלאה.
+          ───────────────────────────────────────────────────────────────────── */}
+      {aid.status === 'cancelled' && (aid as { rejection_reason?: string | null }).rejection_reason && (
+        <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-xs font-bold text-red-800 mb-1">
+            <XCircle size={14} /> סיבת דחיית הלידה (נשלחה ליולדת במייל)
+          </p>
+          <p className="text-sm text-red-900 whitespace-pre-wrap leading-relaxed">
+            {(aid as { rejection_reason?: string | null }).rejection_reason}
+          </p>
+          {ben && (
+            <Link href={`/admin/beneficiaries/${ben.id}`}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-700 hover:text-red-900 underline">
+              לתיעוד המלא בכרטסת המשפחה <ExternalLink size={12} />
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* שער אישור המשפחה — חוסם אישור לידה לפני אישור המשפחה ומאפשר אישור ישיר (פרטי המשפחה מוצגים בכרטיס למטה) */}
       {ben && <FamilyApprovalGate beneficiary={ben as Parameters<typeof FamilyApprovalGate>[0]['beneficiary']} compact />}

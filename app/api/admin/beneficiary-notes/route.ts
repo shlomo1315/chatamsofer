@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { resolveAuthorName } from '@/lib/beneficiaryNotes'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,10 +45,7 @@ export async function POST(request: NextRequest) {
   if (!text) return NextResponse.json({ error: 'ההערה ריקה' }, { status: 400 })
 
   // שם הכותב — לנוחות תצוגה בלי join
-  let authorName: string | null = null
-  const { data: prof } = await db.from('profiles').select('full_name, name, email').eq('id', staff.userId).maybeSingle()
-  if (prof) authorName = (prof as { full_name?: string; name?: string; email?: string }).full_name
-    ?? (prof as { name?: string }).name ?? (prof as { email?: string }).email ?? null
+  const authorName = await resolveAuthorName(db, staff.userId)
 
   const { data, error } = await db.from('beneficiary_notes').insert({
     beneficiary_id: String(beneficiaryId),
