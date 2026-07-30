@@ -1109,6 +1109,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [authMode, setAuthMode] = useState<'login' | 'reset'>('login')
   // מסך פתיחה לאחר זיהוי ת"ז: 'intro' = "כבר נרשמתם" + אפשרויות מייל; 'login' = הזנת סיסמה/קוד להגשת בקשה
   const [authView, setAuthView] = useState<'intro' | 'login'>('intro')
+  // חלונית "נדרשת השלמת מסמכים" — קופצת מיד בכניסה למשפחה בסטטוס docs_pending.
+  // ⚠️ עד כה החסימה הוצגה כשורת שגיאה קטנה בלבד, והמשתמש לא הבין למה
+  // "ההגשה לא עובדת". החלונית מסבירה ומפנה ישירות להעלאת המסמכים.
+  // מאיזו מחלקה הגיע הקישור (?action=). נשמר לכל אורך הכניסה כדי שבאזור
+  // האישי תוצג *רק* הבקשה של אותה מחלקה — לכל מחלקה יש קישור משלה, ואין
+  // סיבה להציג למי שהגיע לבקשת לידה גם הלוואה וסיוע.
+  const [arrivedFor, setArrivedFor] = useState<'birth' | 'loan' | 'aid' | 'docs' | 'details' | null>(null)
+  const [docsGateModal, setDocsGateModal] = useState(false)
+  const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
   const [authCode, setAuthCode] = useState('')
@@ -2216,10 +2225,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // בקשת הבראה ליולדת — זמינה רק לרשומים במצב נשואים
   const canRequestBirth = !!beneficiary?.marital_status && MARRIED_STATUSES.includes(beneficiary.marital_status)
 
-  const goToBirthForm = () => {
-    if (!gateAllows('maternity', 'עזר יולדות')) return
-    if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return }
-    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
+  // מחזירה true רק אם הטופס אכן נפתח — הקפיצה האוטומטית מסתמכת על זה
+  // כדי לא לאבד את הכוונה כשהנתונים עדיין לא נטענו.
+  const goToBirthForm = (): boolean => {
+    if (!gateAllows('maternity', 'עזר יולדות')) return false
+    if (!canRequestBirth) { setError('בקשת הבראה ליולדת זמינה לרשומים במצב נשואים בלבד.'); return false }
+    if (isDocsPending) { setDocsGateModal(true); return false }
     setError(''); setBabyIdError(''); setNoBabyName(false)
     setIsTwins(false); setBaby2({ baby_gender: '', baby_name: '', baby_id_number: '', baby_id_type: 'id' }); setNoBaby2Name(false); setBaby2IdError('')
     setBirthForm({ birth_date: '', baby_name: '', baby_gender: '', recovery_home: '', notes: '', baby_id_number: '', baby_id_type: 'id' })
@@ -2227,11 +2238,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setBirthCertFile(null)
     setDocFiles({})
     setStep('new-birth')
+    return true
   }
   const goToSilentBirthForm = () => {
     if (!gateAllows('maternity', 'עזר יולדות')) return
     if (!canRequestBirth) { setError('בקשה זו זמינה לרשומים במצב נשואים בלבד.'); return }
-    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
+    if (isDocsPending) { setDocsGateModal(true); return }
     setError(''); setShowSilentInfo(false)
     setSilentForm({ birth_date: '', recovery_home: '', notes: '' })
     setBirthCertFile(null)
@@ -2270,7 +2282,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
   const goToLoanForm = () => {
     if (!gateAllows('gemach', 'גמ"ח ההלוואות')) return
-    if (isDocsPending) { setError('נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.'); return }
+    if (isDocsPending) { setDocsGateModal(true); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setDocFiles({})
@@ -2285,22 +2297,38 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // Read the intended action from the URL once on mount (from the email buttons)
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('action')
-    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details') intendedAction.current = a
+    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details') {
+      intendedAction.current = a
+      setArrivedFor(a)
+    }
   }, [])
 
   // Once the beneficiary reaches their dashboard, jump straight to the intended form
   useEffect(() => {
     if (!intendedAction.current || !beneficiary || step !== 'dashboard') return
     const a = intendedAction.current
-    intendedAction.current = null
-    if (a === 'birth') goToBirthForm()
+    // ⚠️ מנקים את הכוונה *רק אחרי* שהפעולה אכן נפתחה. קודם היא נוקתה מיד,
+    // ולכן אם הפתיחה נחסמה (נתונים שטרם נטענו, שער מחלקה) — הכוונה אבדה
+    // לתמיד והמשתמש נשאר באזור האישי בלי שהטופס ייפתח, בלי הסבר ובלי ניסיון
+    // חוזר. עכשיו ה-effect רץ שוב כששערי המחלקות נטענים ומנסה שנית.
+    let opened = true
+    if (a === 'birth') opened = goToBirthForm()
     else if (a === 'loan') goToLoanForm()
     else if (a === 'aid') goToAidForm()
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // קישור "עדכון פרטים אישיים" מהמייל — פותח ישירות את מסך העריכה
     else if (a === 'details') openEditDetails()
+    if (opened) intendedAction.current = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, beneficiary])
+  }, [step, beneficiary, deptGates])
+
+  // משפחה בהשלמת מסמכים — התראה מיידית בכניסה לאזור האישי, פעם אחת.
+  useEffect(() => {
+    if (step !== 'dashboard' || !beneficiary || !isDocsPending || docsGateShown.current) return
+    docsGateShown.current = true
+    setDocsGateModal(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, beneficiary, isDocsPending])
 
   const handleDocsUpload = async () => {
     if (!beneficiary) return
@@ -4177,7 +4205,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 {/* ⚠️ הכפתור מוצג *תמיד*, וכשאי אפשר להגיש — מוצגת הסיבה על הכפתור
                     עצמו. הסתרה שקטה היא בדיוק מה שהשאיר את המשתמש בלי מושג למה
                     "ההגשה לא עובדת": הקישור מהמייל נחסם בשקט ולא היה שום רמז. */}
-                {(() => {
+                {arrivedFor === 'birth' && (() => {
                   const blocked =
                     !deptGates.maternity ? 'המחלקה סגורה כעת — ההגשה תיפתח בקרוב'
                     : !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
@@ -4207,7 +4235,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   )
                 })()}
 
-                {deptGates.gemach && (
+                {arrivedFor === 'loan' && deptGates.gemach && (
                   <button
                     onClick={goToLoanForm}
                     className="flex items-center gap-4 bg-sky-50 rounded-2xl border-2 border-sky-200 p-5 hover:border-sky-400 transition-all duration-150 text-right shadow-sm group"
@@ -4223,7 +4251,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </button>
                 )}
 
-                {deptGates.financial_aid && (
+                {arrivedFor === 'aid' && deptGates.financial_aid && (
                   <button
                     onClick={goToAidForm}
                     className="flex items-center gap-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-400 transition-all duration-150 text-right shadow-sm group"
@@ -4898,7 +4926,38 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
         )}
 
-        {/* ─── עדכון פרטים (משפחה מאושרת) ─── */}
+        {/* ─── נדרשת השלמת מסמכים — חוסמת הגשת בקשות ─── */}
+      {docsGateModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => setDocsGateModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-amber-200 w-full max-w-md overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="bg-amber-50 border-b border-amber-200 px-6 py-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-3">
+                <FileText size={26} className="text-amber-600" />
+              </div>
+              <h2 className="text-lg font-bold text-amber-900">נדרשת השלמת מסמכים</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm text-slate-600 leading-relaxed text-center">
+                לא ניתן להגיש בקשות חדשות עד להשלמת המסמכים שהתבקשו על ידי המזכירות.
+                לאחר העלאתם ובדיקתם תיפתח האפשרות להגיש בקשות.
+              </p>
+              <button type="button"
+                onClick={() => { setDocsGateModal(false); setError(''); setDocsPendingReason(null); setStep('docs-needed') }}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(245,158,11,0.55)]">
+                <Upload size={18} /> להעלאת המסמכים הנדרשים
+              </button>
+              <button type="button" onClick={() => setDocsGateModal(false)}
+                className="text-sm text-slate-500 hover:text-slate-700 underline self-center">
+                סגירה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── עדכון פרטים (משפחה מאושרת) ─── */}
         {editOpen && beneficiary && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto">
