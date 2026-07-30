@@ -13,6 +13,9 @@ type LedgerRow = {
   aid?: { id?: string; beneficiary?: { family_name?: string; spouse_name?: string; full_name?: string; id_number?: string; spouse_id_number?: string } } | null
 }
 
+// יולדת שממתינה לכרטיס — עם שם וסיבה, כדי שהמונה יהיה בר-בירור ולא מספר סתום
+type AwaitingRow = { id: string; name: string; failed: boolean; reason: string }
+
 const REASON_LABEL: Record<LedgerRow['reason'], string> = {
   restock: 'הוספת מלאי',
   birth_approval: 'אישור לידה',
@@ -49,6 +52,9 @@ export default function StockManager() {
   const canEdit = isAdmin
   const [balance, setBalance] = useState<number | null>(null)
   const [awaiting, setAwaiting] = useState(0)
+  const [awaitingDetails, setAwaitingDetails] = useState<AwaitingRow[]>([])
+  const [showAwaiting, setShowAwaiting] = useState(false)
+  const [running, setRunning] = useState(false)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<'add' | 'remove' | null>(null)
@@ -61,10 +67,30 @@ export default function StockManager() {
       const d = await r.json()
       setBalance(typeof d.balance === 'number' ? d.balance : 0)
       setAwaiting(typeof d.awaiting === 'number' ? d.awaiting : 0)
+      setAwaitingDetails(Array.isArray(d.awaitingDetails) ? d.awaitingDetails : [])
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
+
+  // הרצת התור ידנית — משחררת יולדת שנתקעה בלי להוסיף מלאי.
+  const runQueue = useCallback(async () => {
+    setRunning(true)
+    try {
+      const r = await fetch('/api/admin/card-stock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runQueue: true }),
+      })
+      const d = await r.json()
+      // ⚠️ גם כשל מדווח למסך: "0 טופלו" בלי סיבה נראה כמו באג ולא ככשל אמיתי.
+      if (d.notConfigured) setFlash('נדרים אינו מוגדר — לא ניתן להטעין כרטיסים')
+      else if (d.failed > 0) setFlash(`${d.processed} טופלו · ${d.failed} נכשלו — ${(d.errors ?? []).join(' · ') || 'ראה פירוט בכרטסת'}`)
+      else if (d.processed > 0) setFlash(`${d.processed} יולדות טופלו וקיבלו שובר`)
+      else setFlash('אין יולדות לטיפול כרגע')
+      await load()
+    } catch { setFlash('שגיאה בהרצת התור') }
+    setRunning(false)
+  }, [load])
   useEffect(() => { const t = setTimeout(() => { void load() }, 0); return () => clearTimeout(t) }, [load])
 
   const low = balance != null && balance <= 5
@@ -100,10 +126,37 @@ export default function StockManager() {
               <AlertTriangle size={13} /> מלאי נמוך — מומלץ להוסיף כרטיסים
             </p>
           )}
+          {/* ⚠️ המונה לחיץ: "1 יולדת ממתינה" מול מלאי מלא הוא לא מידע — הוא
+              שאלה. הפירוט אומר מי ולמה, ומאפשר לפתוח את הכרטסת או להריץ שוב. */}
           {!loading && awaiting > 0 && (
-            <p className="flex items-center gap-1.5 text-xs text-amber-700 font-medium mt-1.5">
-              <Clock size={13} /> {awaiting} יולדות ממתינות למלאי
-            </p>
+            <div className="mt-1.5">
+              <button type="button" onClick={() => setShowAwaiting(s => !s)}
+                className="flex items-center gap-1.5 text-xs text-amber-700 font-semibold hover:text-amber-900 underline decoration-dotted underline-offset-2">
+                <Clock size={13} /> {awaiting} יולדות ממתינות למלאי — {showAwaiting ? 'הסתר' : 'למה?'}
+              </button>
+              {showAwaiting && (
+                <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/70 p-2 flex flex-col gap-1.5 max-w-md">
+                  {awaitingDetails.length === 0 ? (
+                    <p className="text-xs text-slate-500 px-1 py-1">אין פירוט זמין</p>
+                  ) : awaitingDetails.map(a => (
+                    <button key={a.id} type="button" onClick={() => router.push(`/admin/maternity/${a.id}`)}
+                      className="text-right rounded-lg bg-white border border-amber-200 px-3 py-2 hover:border-amber-400 hover:bg-amber-50 transition-colors">
+                      <span className="block text-xs font-bold text-slate-800">{a.name}</span>
+                      <span className={`block text-[11px] mt-0.5 ${a.failed ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
+                        {a.failed ? '⚠️ ' : ''}{a.reason}
+                      </span>
+                    </button>
+                  ))}
+                  {canEdit && (
+                    <button type="button" onClick={() => void runQueue()} disabled={running}
+                      className="mt-0.5 inline-flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 rounded-lg px-3 py-2 transition-colors">
+                      {running ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      {running ? 'מריץ…' : 'נסה להטעין עכשיו'}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
         {canEdit && (

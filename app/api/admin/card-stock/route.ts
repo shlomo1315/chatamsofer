@@ -3,6 +3,7 @@ import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/a
 import { getStockBalance, addStockMovement } from '@/lib/cardStock'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
+import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -55,18 +56,38 @@ export async function GET() {
   // ⚠️ אותו סינון בדיוק כמו processAwaitingStock — אחרת המונה מציג מספר
   // אחד והתור מטפל באחר. קודם נספרו רק awaiting_stock, ולכן יולדות
   // בסטטוס approved שהתור כן מטפל בהן לא הופיעו כלל.
+  // ⚠️ הסינון מיובא מ-isAwaitingCard ואינו משוכפל כאן: כשהיה עותק מקומי הוא
+  // נשאר בלי wants_food_card, ספר יולדת שהתור מדלג עליה, והציג "1 ממתינה"
+  // שלא ירדה לעולם מול מלאי מלא.
   const { data: awaitingRows, error: awaitingErr } = await admin
     .from('maternity_aids')
-    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type')
+    .select(`id, ${AWAITING_SELECT}, card_load_error, created_at, beneficiary:beneficiaries(family_name, spouse_name, full_name)`)
     .eq('status', 'active')
   if (awaitingErr) console.error('[card-stock] awaiting query failed:', awaitingErr.message)
-  const awaiting = (awaitingRows ?? []).filter(a =>
-    a.card_load_status !== 'loaded' && !a.card_tlush_id &&
-    a.card_status !== 'rejected' &&
-    a.birth_type !== 'silent',
-  ).length
+  const awaitingList = (awaitingRows ?? []).filter(isAwaitingCard)
 
-  return NextResponse.json({ balance, ledger: ledger ?? [], awaiting: awaiting ?? 0 }, { headers: NO_STORE })
+  // ⚠️ מספר יבש ("1 יולדת ממתינה") אינו ניתן לבירור: אי אפשר לדעת מי ולמה,
+  // ואם ההטענה נכשלה — המונה נראה כמו תקלה במקום כמו כשל אמיתי שדורש טיפול.
+  // לכן מוחזרים גם השמות וגם סיבת ההמתנה.
+  const awaitingDetails = awaitingList.map(a => {
+    const benRaw = (a as Record<string, unknown>).beneficiary
+    const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
+    const name = [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || 'לא ידוע'
+    const failed = a.card_load_status === 'failed'
+    return {
+      id: a.id as string,
+      name,
+      failed,
+      reason: failed
+        ? (a.card_load_error || 'ההטענה נכשלה')
+        : (balance > 0 ? 'בתור — תיטען בסבב הקרוב' : 'אין מלאי כרטיסים'),
+    }
+  })
+
+  return NextResponse.json(
+    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails },
+    { headers: NO_STORE },
+  )
 }
 
 // POST: תנועת מלאי ידנית — { delta, note?, aidId? }.

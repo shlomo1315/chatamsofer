@@ -6,6 +6,7 @@ import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClient
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
+import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
 
 // סכום הטעינה הקבוע ליולדת בעת אישור הלידה
 export const MATERNITY_LOAD_AMOUNT = 600
@@ -320,7 +321,7 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // גם אחרי חידוש מלאי. נסרקות כאן כל הלידות המאושרות שטרם נטענו בפועל.
   const { data: candidates } = await admin
     .from('maternity_aids')
-    .select('id, card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type, wants_food_card')
+    .select(`id, ${AWAITING_SELECT}`)
     .eq('status', 'active')
     .order('updated_at', { ascending: true }) // ותיקות קודם (FIFO)
 
@@ -330,12 +331,7 @@ export async function processAwaitingStock(admin: SupabaseClient): Promise<Await
   // החריגים: לידה שקטה (אין לה כרטיס), מי שנדחתה ידנית, ומי שלא ביקשה
   // כרטיס מזון כלל (wants_food_card=false) — לא נטעין לה כרטיס. undefined
   // (בקשות ישנות) = ביקשה, לתאימות לאחור.
-  const waiting = (candidates ?? []).filter(a =>
-    a.card_load_status !== 'loaded' && !a.card_tlush_id &&
-    a.card_status !== 'rejected' &&
-    a.birth_type !== 'silent' &&
-    (a as { wants_food_card?: boolean }).wants_food_card !== false,
-  )
+  const waiting = (candidates ?? []).filter(isAwaitingCard)
   if (!waiting.length) return out
 
   for (const w of waiting) {

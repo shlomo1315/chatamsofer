@@ -739,6 +739,9 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   const [newErr, setNewErr] = useState('')
   const [selfAdded, setSelfAdded] = useState(false)
   const [selfRel, setSelfRel] = useState<'son' | 'son_in_law' | null>(null)
+  // חלונית אזהרה לפני הוספה ידנית — נפתחת מחדש בכל דור ובכל לחיצה (ללא זיכרון),
+  // כי כל דור הוא בדיקה נפרדת וכפילות באחד מהם פוסלת את הרישום כולו.
+  const [manualGate, setManualGate] = useState(false)
 
   const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
@@ -836,7 +839,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
           </li>
           <li className="flex gap-2">
             <span className="font-bold flex-shrink-0">2.</span>
-            <span><span className="font-bold">רק אם הדור המבוקש אינו מופיע ברשימה כלל</span> — מותר להוסיף אותו ידנית.</span>
+            <span><span className="font-bold">רק אם הדור המבוקש אינו מופיע ברשימה כלל</span> — ניתן להוסיף אותו ידנית.</span>
           </li>
           <li className="flex gap-2">
             <span className="font-bold flex-shrink-0">3.</span>
@@ -883,7 +886,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                 </>
               )}
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => { setAddOpen(true); setNewErr('') }}
+                <button type="button" onClick={() => { setManualGate(true); setNewErr('') }}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition-all duration-150">
                   <Plus size={13} /> {lastIsNew || options.length === 0 ? 'הוסף את הדור הבא' : 'הדור הבא לא ברשימה — הוסף "אחר"'}
                 </button>
@@ -915,6 +918,51 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ⚠️ חלונית אזהרה חוסמת — נפתחת בכל לחיצה על "הוספה ידנית", בכל דור מחדש.
+          אין כאן "אישור שנשמר": כל דור הוא בדיקה נפרדת, ודור כפול אחד פוסל
+          את הרישום כולו. לכן אין דרך לעקוף את החלונית ואין זיכרון בין הדורות. */}
+      {manualGate && (
+        <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-red-300">
+            <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
+              <AlertTriangle size={22} className="text-white flex-shrink-0" />
+              <h3 className="text-base font-extrabold text-white">עצור — בדקת שהדור הזה באמת לא ברשימה?</h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-800 font-bold leading-relaxed mb-3">
+                אתה עומד להוסיף את <span className="text-red-700">דור {chain.length + 2}</span> באופן ידני.
+                הוספה ידנית מיועדת <span className="underline">אך ורק</span> לדור שאינו קיים כלל במערכת.
+              </p>
+              <ul className="text-sm text-slate-700 leading-relaxed space-y-2 mb-3">
+                <li className="flex gap-2">
+                  <span className="text-red-600 font-bold flex-shrink-0">•</span>
+                  <span>חזור לרשימה שמעל וּודא <span className="font-bold">בוודאות מלאה</span> שהשם שאתה רוצה להוסיף אינו מופיע בה.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-red-600 font-bold flex-shrink-0">•</span>
+                  <span>שים לב גם לשינויי כתיב קלים בשם (למשל: יצחק / איצק, ה״א בסוף השם וכדומה).</span>
+                </li>
+              </ul>
+              <div className="rounded-xl bg-red-50 border-2 border-red-300 px-4 py-3">
+                <p className="text-sm font-extrabold text-red-800 leading-relaxed">
+                  אם תוסיף ידנית דור שכבר קיים במערכת — הרישום שלך יידחה.
+                </p>
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex flex-col gap-2">
+              <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
+                className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
+                <Check size={16} /> כן, בדקתי — הדור הזה אינו ברשימה, המשך להוספה ידנית
+              </button>
+              <button type="button" onClick={() => setManualGate(false)}
+                className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-slate-700 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl px-4 py-3 transition-all duration-150">
+                <X size={16} /> אני אבדוק שוב ברשימה
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

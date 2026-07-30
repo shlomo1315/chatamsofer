@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance } from '@/lib/cardStock'
 import { getNedarimCreds } from '@/lib/nedarim'
+import { isAwaitingCard } from '@/lib/awaitingFilter'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // אבחון מלאי הכרטיסים — למה יולדת לא קיבלה כרטיס/שובר.
@@ -39,7 +40,7 @@ export async function GET() {
   // מופיעה ראשונה — זו שהמשתמש בדרך כלל שואל עליה.
   const { data: aids, error } = await admin
     .from('maternity_aids')
-    .select('id, status, birth_type, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, created_at, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
+    .select('id, status, birth_type, card_status, card_voucher_status, card_load_status, card_load_error, card_tlush_id, card_center_id, wants_food_card, created_at, updated_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, email, id_number, spouse_id_number, nedarim_id)')
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -52,8 +53,7 @@ export async function GET() {
     // "לא ייטען לעולם" על יולדת שהתור דווקא כן מטפל בה.
     // התור דורש status='active' — לידה במצב אחר לא נכנסת אליו לעולם.
     const isActive = a.status === 'active'
-    const inQueue = isActive && a.card_load_status !== 'loaded' && !a.card_tlush_id &&
-      a.card_status !== 'rejected' && a.birth_type !== 'silent'
+    const inQueue = isActive && isAwaitingCard(a)
     const loaded = a.card_load_status === 'loaded' || !!a.card_tlush_id
     return {
       id: a.id,
@@ -73,8 +73,11 @@ export async function GET() {
       inQueue,
       loaded,
       // ההסבר המעשי — למה היולדת לא מקבלת כרטיס
+      // ⚠️ "לא ביקשה כרטיס מזון" הופרד מ"נתקעה": זו החלטה של היולדת ולא תקלה,
+      // ואין מה להתערב בה. כשהשניים היו מאוחדים היא נראתה כמו כשל שדורש טיפול.
       diagnosis: loaded ? 'נטען — תקין'
         : inQueue ? (balance > 0 ? 'בתור ויש מלאי — אמור להיטען בהוספה הבאה' : 'בתור, אין מלאי')
+        : (a as { wants_food_card?: boolean }).wants_food_card === false ? 'לא ביקשה כרטיס מזון — לא אמורה לקבל'
         : 'לא בתור ולא נטען — לא ייטען לעולם ללא התערבות',
     }
   })
