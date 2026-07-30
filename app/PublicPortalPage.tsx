@@ -196,7 +196,9 @@ function BenefitChoices({
   )
 }
 
-function TextInput({ className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+// ComponentPropsWithRef ולא InputHTMLAttributes — כדי שאפשר יהיה להעביר ref
+// (ב-React 19 ref הוא prop רגיל לרכיב פונקציה ועובר דרך ה-spread).
+function TextInput({ className = '', ...props }: React.ComponentPropsWithRef<'input'>) {
   return (
     <input
       className={`rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 bg-white shadow-[inset_0_1px_2px_rgba(15,23,42,0.04)] focus:outline-none focus:ring-2 focus:ring-indigo-500/80 focus:border-indigo-400 focus:shadow-[0_0_0_4px_rgba(99,102,241,0.12)] placeholder:text-slate-400 transition-all duration-150 ${className}`}
@@ -252,6 +254,11 @@ function BabyFields({
   const [nameAck, setNameAck] = useState(false)
   // נדלק כשההקלדה כללה תו שאינו עברי — כדי שהסינון לא ייראה כמו מקלדת תקולה
   const [nameBadChar, setNameBadChar] = useState(false)
+  // אישור השם שהוקלד. ⚠️ נשמר *הערך* שאושר ולא דגל בוליאני: שינוי השם אחרי
+  // האישור מחייב אישור מחדש, אחרת אפשר לאשר "משה" ולשלוח בפועל "מ".
+  const [confirmedName, setConfirmedName] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // ילד קיים זוהה במשפחה המחוברת → פרטיו (מין/שם/תאריך) נעולים לעריכה,
   // כי הם מגיעים מרישום המשפחה ואין לשנותם ידנית בבקשת הלידה.
@@ -389,8 +396,15 @@ function BabyFields({
               ההקלדה מונעת את זה מראש. */}
           <div className="relative">
             <TextInput value={name}
+              ref={nameInputRef}
               disabled={noName || lockedFromExisting}
               readOnly={!nameAck && !noName && !lockedFromExisting}
+              // ⚠️ האישור נדרש בסיום ההקלדה (blur) ולא בכל הקלדה — אחרת החלונית
+              // הייתה קופצת על כל אות. שם שכבר אושר ולא שונה לא שואל שוב.
+              onBlur={() => {
+                const t = name.trim()
+                if (t && t !== confirmedName && !noName && !lockedFromExisting && !nameGate) setConfirmOpen(true)
+              }}
               onFocus={() => { if (!nameAck && !noName && !lockedFromExisting) setNameGate(true) }}
               onMouseDown={e => { if (!nameAck && !noName && !lockedFromExisting) { e.preventDefault(); setNameGate(true) } }}
               className={`${noName || lockedFromExisting ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''} ${
@@ -436,6 +450,46 @@ function BabyFields({
               </div>
             )}
           </div>
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────────
+              אישור השם שהוקלד — נפתחת בסיום ההקלדה ומציגה את השם כפי שנשמר.
+              ⚠️ שגיאות כתיב בשם התינוק התגלו רק אחרי שהשובר והמסמכים כבר יצאו,
+              ואז התיקון דורש הנפקה מחדש. הצגת השם בגדול, לפני ההגשה, היא
+              ההזדמנות היחידה של ההורה לראות בדיוק מה נשמר.
+              ───────────────────────────────────────────────────────────────── */}
+          {confirmOpen && (
+            <div className="fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+              <div className="bg-white rounded-2xl shadow-2xl border-2 border-indigo-200 w-full max-w-md overflow-hidden">
+                <div className="bg-indigo-50 border-b-2 border-indigo-100 px-6 py-5 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center mx-auto mb-3">
+                    <Baby size={26} className="text-indigo-600" />
+                  </div>
+                  <h2 className="text-lg font-extrabold text-indigo-900">אישור שם {gender === 'female' ? 'הנולדת' : 'הנולד'}</h2>
+                </div>
+                <div className="p-6 flex flex-col gap-4">
+                  <p className="text-center text-sm font-semibold text-slate-600">
+                    האם שם {gender === 'female' ? 'התינוקת' : 'התינוק'} הוא:
+                  </p>
+                  <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 px-4 py-5 text-center">
+                    <span className="text-2xl font-extrabold text-indigo-900 break-words">{name.trim()}</span>
+                  </div>
+                  <p className="text-center text-xs text-slate-500 leading-relaxed">
+                    השם יופיע כך בדיוק בכל המסמכים והשוברים. יש לוודא שאין שגיאת כתיב.
+                  </p>
+                  <button type="button"
+                    onClick={() => { setConfirmedName(name.trim()); setConfirmOpen(false) }}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold rounded-xl px-4 py-3.5 transition-all duration-150 text-base">
+                    <CheckCircle2 size={18} /> כן, זה השם — לאישור לחץ כאן
+                  </button>
+                  <button type="button"
+                    onClick={() => { setConfirmOpen(false); setTimeout(() => nameInputRef.current?.focus(), 0) }}
+                    className="w-full flex items-center justify-center gap-2 border-2 border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl px-4 py-3 transition-colors text-sm">
+                    <X size={16} /> לא — אני רוצה לתקן את השם
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* חלונית חוסמת — נפתחת בלחיצה על שדה השם, לפני שניתן להקליד */}

@@ -52,8 +52,24 @@ export function useStaffPermissions(): StaffPerms {
 }
 
 // עוטף תוכן שיוצג רק למנהל ראשי (admin) — מזכירות לא תראה אותו.
-// כפתורי "הוספה חדשה" (צאצא/לידה/הלוואה/סיוע/משפחה) שמורים למנהל בלבד.
+// לפעולות ששמורות למנהל מעצם טיבן (ניהול מלאי, מחיקה לצמיתות).
 export function AdminOnly({ children }: { children: React.ReactNode }) {
   const { isAdmin } = useContext(StaffPermissionsContext)
   return isAdmin ? <>{children}</> : null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// עוטף תוכן שיוצג רק למי שיש לו הרשאה לפעולה במסך מסוים.
+//
+// ⚠️ להעדיף על AdminOnly בכל מקום שבו השרת אוכף הרשאה ולא תפקיד. כשה-UI
+// הסתיר לפי isAdmin בעוד ה-API בדק requirePermission, נוצר פער: למזכירות
+// *הייתה* ההרשאה בפועל, אך הכפתור לא הוצג לה כלל ולא היה שום רמז למה.
+//
+// חובה שהזוג (section, action) יהיה זהה ל-requirePermission של אותו מסלול —
+// אחרת הכפתור מוצג ומחזיר 403, וזה גרוע מלהסתיר אותו.
+// ─────────────────────────────────────────────────────────────────────────────
+export function Can({
+  section, action, children,
+}: { section: SectionKey; action: PermAction; children: React.ReactNode }) {
+  return useCan(section, action) ? <>{children}</> : null
 }
