@@ -4161,21 +4161,38 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     כניסה ישירה לקישור) — המשתמש נחת כאן בלי שום דרך להמשיך.
                     עכשיו האפשרות תמיד גלויה.
                     ───────────────────────────────────────────────────────── */}
-                {canRequestBirth && deptGates.maternity && (
-                  <button
-                    onClick={goToBirthForm}
-                    className="flex items-center gap-4 bg-pink-50 rounded-2xl border-2 border-pink-200 p-5 hover:border-pink-400 transition-all duration-150 text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-pink-200 transition-all duration-150">
-                      <Baby size={22} className="text-pink-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">בקשת הבראה ליולדת</p>
-                      <p className="text-xs text-slate-500 mt-0.5">ימי החלמה וכרטיס מזון לאחר לידה</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-pink-400" />
-                  </button>
-                )}
+                {/* ⚠️ הכפתור מוצג *תמיד*, וכשאי אפשר להגיש — מוצגת הסיבה על הכפתור
+                    עצמו. הסתרה שקטה היא בדיוק מה שהשאיר את המשתמש בלי מושג למה
+                    "ההגשה לא עובדת": הקישור מהמייל נחסם בשקט ולא היה שום רמז. */}
+                {(() => {
+                  const blocked =
+                    !deptGates.maternity ? 'המחלקה סגורה כעת — ההגשה תיפתח בקרוב'
+                    : !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
+                    : isDocsPending ? 'יש להשלים תחילה את המסמכים הנדרשים'
+                    : ''
+                  return (
+                    <button
+                      onClick={goToBirthForm}
+                      disabled={!!blocked}
+                      className={`flex items-center gap-4 rounded-2xl border-2 p-5 text-right shadow-sm group transition-all duration-150 ${
+                        blocked
+                          ? 'bg-slate-50 border-slate-200 opacity-70 cursor-not-allowed'
+                          : 'bg-pink-50 border-pink-200 hover:border-pink-400'
+                      }`}
+                    >
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${blocked ? 'bg-slate-100' : 'bg-pink-100 group-hover:bg-pink-200'}`}>
+                        <Baby size={22} className={blocked ? 'text-slate-400' : 'text-pink-600'} />
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-semibold ${blocked ? 'text-slate-500' : 'text-slate-900'}`}>בקשת הבראה ליולדת</p>
+                        <p className={`text-xs mt-0.5 ${blocked ? 'text-amber-700 font-medium' : 'text-slate-500'}`}>
+                          {blocked || 'ימי החלמה וכרטיס מזון לאחר לידה'}
+                        </p>
+                      </div>
+                      {!blocked && <ChevronLeft size={18} className="text-slate-300 group-hover:text-pink-400" />}
+                    </button>
+                  )
+                })()}
 
                 {deptGates.gemach && (
                   <button
