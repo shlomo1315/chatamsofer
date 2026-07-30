@@ -1303,7 +1303,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [showOtherMarital, setShowOtherMarital] = useState(false)
 
   // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
-  const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | null>(null)
+  const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | 'details' | null>(null)
 
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
@@ -2285,7 +2285,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // Read the intended action from the URL once on mount (from the email buttons)
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('action')
-    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid') intendedAction.current = a
+    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details') intendedAction.current = a
   }, [])
 
   // Once the beneficiary reaches their dashboard, jump straight to the intended form
@@ -2297,6 +2297,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     else if (a === 'loan') goToLoanForm()
     else if (a === 'aid') goToAidForm()
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
+    // קישור "עדכון פרטים אישיים" מהמייל — פותח ישירות את מסך העריכה
+    else if (a === 'details') openEditDetails()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, beneficiary])
 

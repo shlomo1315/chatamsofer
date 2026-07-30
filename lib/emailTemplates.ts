@@ -229,6 +229,9 @@ export function benefitsLinkEmail(
     deptOpen('gemach') ? btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985') : '',
     deptOpen('financial_aid') ? btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534') : '',
     (widower && deptOpen('widows')) ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
+    // עדכון פרטים אישיים — זמין תמיד, ללא תלות בשערי המחלקות: אינו בקשה
+    // להטבה אלא תיקון הפרטים של המשפחה עצמה.
+    btn(`${base}/?action=details`, t('btn_details'), '#f1f5f9', '#334155'),
   ].filter(Boolean).join(gap)
   const draftBlock = (draftLinks && draftLinks.length) ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
@@ -851,6 +854,8 @@ export function registrationReceivedEmail(
         gatedBtn(gates?.gemach, `${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985'),
         gatedBtn(gates?.financial_aid, `${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534'),
         widowerBen ? gatedBtn(gates?.widows, `${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
+        // עדכון פרטים אישיים — תמיד פעיל, אינו כפוף לשערי המחלקות
+        btn(`${base}/?action=details`, t('btn_details'), '#f1f5f9', '#334155'),
       ].filter(Boolean).join('<div style="height:10px;font-size:0;line-height:0;">&nbsp;</div>')
     })()}
     ${draftBlock}

@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status, phone, email, verified_phones, marital_status, children, required_docs')
+    .select('id, eligibility_status, phone, phone2, spouse_phone, email, verified_phones, marital_status, children, required_docs')
     .eq('id', String(beneficiary_id))
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
@@ -63,8 +63,33 @@ export async function POST(request: NextRequest) {
     }
     update.phone = newPhone || null
   }
-  if (phone2 !== undefined) update.phone2 = phone2 ? String(phone2).trim() : null
-  if (spouse_phone !== undefined) update.spouse_phone = spouse_phone ? String(spouse_phone).trim() : null
+  // ⚠️ גם טלפון האישה וטלפון נוסף דורשים אימות כשהם משתנים. קודם רק הטלפון
+  // הראשי והמייל נאכפו, ולכן אפשר היה להחליף את מספר האישה למספר זר בלי שום
+  // אימות — והמספר הזה משמש גם לקבלת קוד כניסה לפורטל.
+  // האסימון מגיע ברשימת phone_tokens (זוגות ערך+אסימון) שהלקוח כבר שולח.
+  const tokenFor = (val: string): boolean => {
+    const list = Array.isArray(phone_tokens) ? (phone_tokens as { value?: unknown; token?: unknown }[]) : []
+    return list.some(t => t?.value && t?.token &&
+      normalizeVerifyValue('phone', String(t.value)) === normalizeVerifyValue('phone', val) &&
+      verifyVerifyToken(String(t.token), 'phone', String(t.value)))
+  }
+  const secondaryPhone = (
+    field: 'phone2' | 'spouse_phone', value: unknown, current: string | null | undefined, label: string,
+  ): NextResponse | null => {
+    if (value === undefined) return null
+    const next = value ? String(value).trim() : ''
+    const changed = normalizeVerifyValue('phone', next) !== normalizeVerifyValue('phone', String(current ?? ''))
+    if (changed && next && !tokenFor(next)) {
+      return NextResponse.json({ error: `יש לאמת את ${label} בקוד שיוקרא בשיחה.` }, { status: 400 })
+    }
+    update[field] = next || null
+    return null
+  }
+  const benExtra = ben as { phone2?: string | null; spouse_phone?: string | null }
+  const err2 = secondaryPhone('phone2', phone2, benExtra.phone2, 'הטלפון הנוסף')
+  if (err2) return err2
+  const errSpouse = secondaryPhone('spouse_phone', spouse_phone, benExtra.spouse_phone, 'טלפון האישה')
+  if (errSpouse) return errSpouse
   if (address !== undefined) update.address = address ? String(address).trim() : null
   if (city !== undefined) update.city = city ? String(city).trim() : null
   if (marital_status !== undefined) {
