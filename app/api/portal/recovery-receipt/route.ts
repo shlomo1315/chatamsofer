@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
+import { extractUrl } from '@/lib/extractUrl'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,39 +32,151 @@ const PRIVATE_HOST = /^(localhost$|127\.|10\.|192\.168\.|169\.254\.|0\.|\[?::1\]
 
 type FetchedFile = { bytes: ArrayBuffer; ext: string; contentType: string }
 
-async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: string }> {
+// ⚠️ תקרת קפיצות אחת לכל המסלול — הפניות (redirect) *וגם* מעבר מעמוד נחיתה
+// לקובץ. בלעדיה שרשרת הפניות מעגלית תתקע את הבקשה עד ה-timeout.
+const MAX_HOPS = 5
+
+function validateTarget(link: string): { url: URL } | { error: string } {
   let u: URL
   try { u = new URL(link) } catch { return { error: 'הקישור אינו תקין' } }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') {
     return { error: 'הקישור חייב להתחיל ב-http או https' }
   }
   if (PRIVATE_HOST.test(u.hostname)) return { error: 'הקישור אינו נתמך' }
+  return { url: u }
+}
 
-  let res: Response
-  try {
-    res = await fetch(u.toString(), {
-      redirect: 'follow',
-      signal: AbortSignal.timeout(20_000),
-      headers: { 'User-Agent': 'chasamsofer-portal/1.0' },
-    })
-  } catch {
-    return { error: 'לא ניתן להוריד את הקובץ מהקישור — ודאו שהוא ציבורי ונגיש' }
+// ─────────────────────────────────────────────────────────────────────────────
+// זיהוי סוג הקובץ לפי חתימת הבייטים (magic bytes).
+//
+// ⚠️ הכרחי, ולא רק "נחמד שיהיה": שרתי קבלות מחזירים לעיתים קרובות
+// application/octet-stream, והקישור עצמו הוא קוד קצר בלי סיומת
+// (secure.ezgo.co.il/I?1xV.eG6T). במצב הזה גם הכותרת וגם הסיומת חסרות
+// תועלת, והזיהוי היחיד שנשאר הוא תוכן הקובץ עצמו.
+// ─────────────────────────────────────────────────────────────────────────────
+function sniffType(buf: ArrayBuffer): { ext: string; contentType: string } | null {
+  const b = new Uint8Array(buf.slice(0, 16))
+  const at = (i: number) => b[i] ?? -1
+  const ascii = (start: number, len: number) =>
+    Array.from(b.slice(start, start + len)).map(c => String.fromCharCode(c)).join('')
+
+  if (ascii(0, 4) === '%PDF') return { ext: 'pdf', contentType: 'application/pdf' }
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return { ext: 'jpg', contentType: 'image/jpeg' }
+  if (at(0) === 0x89 && ascii(1, 3) === 'PNG') return { ext: 'png', contentType: 'image/png' }
+  if (ascii(0, 3) === 'GIF') return { ext: 'gif', contentType: 'image/gif' }
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP') return { ext: 'webp', contentType: 'image/webp' }
+  // HEIC/HEIF — 'ftyp' בהיסט 4, ואחריו מזהה המשפחה
+  if (ascii(4, 4) === 'ftyp' && /^(heic|heix|hevc|mif1|msf1)/.test(ascii(8, 4))) {
+    return { ext: 'heic', contentType: 'image/heic' }
   }
-  if (!res.ok) return { error: `הקישור החזיר שגיאה (${res.status}) — ודאו שהוא ציבורי` }
+  return null
+}
 
-  const declared = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-  const bytes = await res.arrayBuffer()
-  if (bytes.byteLength === 0) return { error: 'הקובץ בקישור ריק' }
-  if (bytes.byteLength > MAX_SIZE) return { error: 'הקובץ גדול מדי (מקסימום 10MB)' }
+const looksLikeHtml = (buf: ArrayBuffer) =>
+  /^\s*(<!doctype html|<html|<head|<meta|<script)/i.test(
+    new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 512)),
+  )
 
-  // סוג הקובץ — לפי הכותרת, ובנפילה לפי הסיומת שבקישור
-  let ext = Object.entries(ALLOWED).find(([, ct]) => ct === declared)?.[0] ?? ''
-  if (!ext) ext = (u.pathname.split('.').pop() ?? '').toLowerCase()
-  const contentType = ALLOWED[ext]
-  if (!contentType) {
+// ─────────────────────────────────────────────────────────────────────────────
+// איתור הקובץ בתוך עמוד נחיתה.
+//
+// ⚠️ קישורי הקבלות שנשלחים לבתי ההחלמה הם קודים מקוצרים שמובילים לעמוד צפייה,
+// לא לקובץ עצמו. בלי השלב הזה הנציג מקבל "סוג הקובץ אינו נתמך" על קישור
+// שלגמרי עובד בדפדפן שלו — וזה נראה כמו תקלה שרירותית.
+// ─────────────────────────────────────────────────────────────────────────────
+function findFileInHtml(html: string, base: URL): string | null {
+  const abs = (v: string): string | null => {
+    try { return new URL(v.replace(/&amp;/g, '&').trim(), base).toString() } catch { return null }
+  }
+  const isFile = (v: string) => /\.(pdf|jpe?g|png|webp|gif|heic)(\?|#|$)/i.test(v)
+
+  // 1) קישור/מקור שנראה כמו קובץ — העדיפות הראשונה
+  for (const m of html.matchAll(/(?:href|src|data|content)\s*=\s*["']([^"']+)["']/gi)) {
+    if (isFile(m[1])) { const a = abs(m[1]); if (a) return a }
+  }
+  // 2) כתובת מלאה שנראית כמו קובץ, גם מחוץ לתגית (למשל בתוך JS)
+  const raw = html.match(/https?:\/\/[^\s"'<>]+\.(?:pdf|jpe?g|png|webp|gif|heic)(?:\?[^\s"'<>]*)?/i)
+  if (raw) return raw[0]
+  // 3) הפניה אוטומטית / מסגרת — העמוד עצמו רק עוטף את הקובץ
+  const meta = html.match(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*url=([^"';]+)/i)
+  if (meta) return abs(meta[1])
+  const frame = html.match(/<(?:iframe|embed)[^>]+src\s*=\s*["']([^"']+)["']/i)
+    ?? html.match(/<object[^>]+data\s*=\s*["']([^"']+)["']/i)
+  if (frame) return abs(frame[1])
+  return null
+}
+
+async function fetchLinkedFile(link: string): Promise<FetchedFile | { error: string }> {
+  // הנציג מדביק את כל ההודעה — שולפים ממנה את הקישור לפני כל דבר אחר
+  let current = extractUrl(link)
+  const seen = new Set<string>()
+
+  for (let hop = 0; hop < MAX_HOPS; hop++) {
+    const target = validateTarget(current)
+    if ('error' in target) return target
+    const u = target.url
+    const key = u.toString()
+    if (seen.has(key)) return { error: 'הקישור מפנה במעגל — ודאו שהוא קישור ישיר לקובץ' }
+    seen.add(key)
+
+    let res: Response
+    try {
+      res = await fetch(key, {
+        // ⚠️ manual ולא follow: כל הפניה נבדקת מחדש מול PRIVATE_HOST. עם follow
+        // כתובת ציבורית יכולה להפנות לכתובת פנימית והבדיקה נעקפת לגמרי (SSRF).
+        redirect: 'manual',
+        signal: AbortSignal.timeout(20_000),
+        headers: { 'User-Agent': 'chasamsofer-portal/1.0', Accept: '*/*' },
+      })
+    } catch {
+      return { error: 'לא ניתן להוריד את הקובץ מהקישור — ודאו שהוא ציבורי ונגיש' }
+    }
+
+    // הפניה — ממשיכים ליעד החדש דרך אותה בדיקה בדיוק
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location')
+      if (!loc) return { error: 'הקישור מפנה ליעד לא ידוע' }
+      try { current = new URL(loc, u).toString() } catch { return { error: 'הקישור אינו תקין' } }
+      continue
+    }
+    if (!res.ok) return { error: `הקישור החזיר שגיאה (${res.status}) — ודאו שהוא ציבורי` }
+
+    // תקרת גודל לפני הקריאה, כשהשרת מצהיר עליה — לא למשוך 500MB לזיכרון
+    const declaredLen = Number(res.headers.get('content-length') ?? '')
+    if (Number.isFinite(declaredLen) && declaredLen > MAX_SIZE) {
+      return { error: 'הקובץ גדול מדי (מקסימום 10MB)' }
+    }
+
+    const bytes = await res.arrayBuffer()
+    if (bytes.byteLength === 0) return { error: 'הקובץ בקישור ריק' }
+    if (bytes.byteLength > MAX_SIZE) return { error: 'הקובץ גדול מדי (מקסימום 10MB)' }
+
+    // 1) חתימת הבייטים — הזיהוי האמין ביותר, ועובד גם ב-octet-stream
+    const sniffed = sniffType(bytes)
+    if (sniffed) return { bytes, ...sniffed }
+
+    const declared = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+
+    // 2) עמוד נחיתה — מחפשים בתוכו את הקובץ וממשיכים אליו
+    if (declared.includes('html') || looksLikeHtml(bytes)) {
+      const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes.slice(0, 512 * 1024))
+      const next = findFileInHtml(html, u)
+      if (!next) {
+        return { error: 'הקישור מוביל לעמוד אינטרנט ולא לקובץ. פתחו את הקישור, הורידו את הקובץ, וצרפו אותו כאן בהעלאה.' }
+      }
+      current = next
+      continue
+    }
+
+    // 3) לפי הכותרת, ולבסוף לפי הסיומת שבכתובת
+    const byCt = Object.entries(ALLOWED).find(([, ct]) => ct === declared)
+    if (byCt) return { bytes, ext: byCt[0], contentType: byCt[1] }
+    const ext = (u.pathname.split('.').pop() ?? '').toLowerCase()
+    if (ALLOWED[ext]) return { bytes, ext, contentType: ALLOWED[ext] }
+
     return { error: 'סוג הקובץ בקישור אינו נתמך — נדרשת תמונה או PDF' }
   }
-  return { bytes, ext, contentType }
+  return { error: 'הקישור מפנה יותר מדי פעמים — ודאו שהוא קישור ישיר לקובץ' }
 }
 
 // העלאת קובץ הקבלה של בית ההחלמה (קובץ או קישור). מאומת דרך עוגיית הפורטל + בעלות על הרשומה.

@@ -8,6 +8,7 @@ import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
 import RecoveryDatePicker from './RecoveryDatePicker'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
+import { extractUrl } from '@/lib/extractUrl'
 import { he } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -364,8 +365,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     // והוא מתעדכן ב-onBlur של שדה הקישור — אך React מחיל את העדכון *אחרי*
     // שמטפל הלחיצה כבר רץ. לכן נציג שהדביק קישור ולחץ מיד "אישור ושליחה"
     // קיבל "חסרים פרטים: קובץ קבלה" למרות שמילא הכל, ולא יכול היה להתקדם.
-    const typedLink = (receiptLinkInput[aidId] ?? '').trim()
-    const hasReceipt = !!receiptUrl[aidId] || /^https?:\/\/\S+$/i.test(typedLink)
+    // ⚠️ דרך extractUrl ולא בדיקת "כל המחרוזת היא כתובת": הנציג מדביק את
+    // ההודעה המלאה, ובדיקה נוקשה סימנה "חסר קובץ קבלה" למרות שהקישור בפנים.
+    const typedLink = extractUrl(receiptLinkInput[aidId] ?? '')
+    const hasReceipt = !!receiptUrl[aidId] || /^https?:\/\//i.test(typedLink)
     if (!hasReceipt) missing.push('קובץ קבלה')
     return missing
   }
@@ -771,26 +774,47 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                     די באחד מהשניים (העלאה או קישור) כדי להתקדם. */}
                                 <div className="flex items-center gap-2 my-0.5">
                                   <span className="h-px flex-1 bg-slate-200" />
-                                  <span className="text-[11px] text-slate-400">או הדביקו קישור ישיר לקובץ</span>
+                                  <span className="text-[11px] text-slate-400">או הדביקו כאן את ההודעה עם הקישור</span>
                                   <span className="h-px flex-1 bg-slate-200" />
                                 </div>
-                                <input
-                                  type="url" dir="ltr" inputMode="url"
+                                {/* ⚠️ textarea ו-type טקסט, לא input[type=url]: הנציגים מדביקים את
+                                    ההודעה המלאה שקיבלו ("...מצורפת חשבונית מס קבלה בקישור https://…"),
+                                    ושדה url דחה את זה כלא-תקין. הקישור נשלף מהטקסט. */}
+                                <textarea
+                                  rows={2}
                                   value={receiptLinkInput[aid.id] ?? ''}
                                   onChange={e => setReceiptLinkInput(mm => ({ ...mm, [aid.id]: e.target.value }))}
-                                  placeholder="https://…"
-                                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                                  placeholder="הדביקו את ההודעה כולה — נשלוף ממנה את הקישור אוטומטית"
+                                  className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
                                 />
-                                {/* כפתור מפורש: מוריד את הקובץ מהקישור, שומר אותו אצלנו,
-                                    ומציג תצוגה מקדימה כדי שהנציג יראה מה בדיוק צורף. */}
-                                {(receiptLinkInput[aid.id] ?? '').trim() && (
-                                  <button type="button"
-                                    onClick={() => { void importReceiptLink(aid.id, (receiptLinkInput[aid.id] ?? '').trim()) }}
-                                    disabled={uploadingReceipt === aid.id}
-                                    className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded-xl py-2.5 mt-2">
-                                    {uploadingReceipt === aid.id ? 'מוריד את הקובץ…' : 'עדכן קבלה'}
-                                  </button>
-                                )}
+                                {/* מה בדיוק יימשך — כדי שלא יהיה צריך לנחש אם הזיהוי הצליח */}
+                                {(() => {
+                                  const pasted = receiptLinkInput[aid.id] ?? ''
+                                  const found = extractUrl(pasted)
+                                  const isLink = /^https?:\/\//i.test(found)
+                                  if (!pasted.trim()) return null
+                                  return (
+                                    <>
+                                      {isLink ? (
+                                        <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5 mt-1.5 break-all" dir="ltr">
+                                          <span dir="rtl" className="font-semibold">הקישור שזוהה: </span>{found}
+                                        </p>
+                                      ) : (
+                                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
+                                          לא זוהה קישור בטקסט שהודבק — ודאו שההודעה כוללת כתובת שמתחילה ב-http
+                                        </p>
+                                      )}
+                                      {/* כפתור מפורש: מוריד את הקובץ מהקישור, שומר אותו אצלנו,
+                                          ומציג תצוגה מקדימה כדי שהנציג יראה מה בדיוק צורף. */}
+                                      <button type="button"
+                                        onClick={() => { void importReceiptLink(aid.id, found) }}
+                                        disabled={uploadingReceipt === aid.id || !isLink}
+                                        className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 disabled:opacity-40 rounded-xl py-2.5 mt-2">
+                                        {uploadingReceipt === aid.id ? 'מוריד את הקובץ…' : 'עדכן קבלה'}
+                                      </button>
+                                    </>
+                                  )
+                                })()}
                                 {/* תצוגה מקדימה של הקבלה ששמורה אצלנו */}
                                 {receiptUrl[aid.id] && (
                                   <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
@@ -812,8 +836,8 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                 onClick={async () => {
                                   // קישור שהוקלד וטרם יובא — מייבאים אותו עכשיו (הורדה ושמירה
                                   // אצלנו) לפני הבדיקה, כדי שהקבלה תגיע לכרטסת ולא תישאר חיצונית.
-                                  const typedLink = (receiptLinkInput[aid.id] ?? '').trim()
-                                  if (!receiptUrl[aid.id] && /^https?:\/\/\S+$/i.test(typedLink)) {
+                                  const typedLink = extractUrl(receiptLinkInput[aid.id] ?? '')
+                                  if (!receiptUrl[aid.id] && /^https?:\/\//i.test(typedLink)) {
                                     const stored = await importReceiptLink(aid.id, typedLink)
                                     if (!stored) return   // השגיאה כבר מוצגת ליד השדה
                                   }
