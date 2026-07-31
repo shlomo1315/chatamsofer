@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -52,6 +52,107 @@ function buildTree(flat: LineageNode[]): TreeNode[] {
     else roots.push(node)
   })
   return roots
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// הדפסה / PDF של אילן צאצאים.
+//
+// מודפס כרשימה היררכית מוזחת ולא כתרשים גרפי — בכוונה. תרשים העץ רחב מאוד
+// (עשרות צמתים לרוחב דור), ובהדפסה הוא מוקטן עד שאי אפשר לקרוא שם. רשימה
+// מוזחת נשארת קריאה בכל גודל משפחה, נשפכת יפה על כמה עמודים, ומשאירה מקום
+// לסמן ליד כל שם — וזו בדיוק המטרה: לשלוח לנכד שיעבור ויסמן מה לא נכון.
+//
+// ההדפסה נפתחת בחלון נפרד עם HTML עצמאי, ולא דרך @media print על העמוד:
+// כך אין התנגשות עם עיצוב המערכת, ומה שנראה בתצוגה המקדימה הוא מה שיצא.
+// ─────────────────────────────────────────────────────────────────────────────
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+
+function buildSubtreePrintHtml(all: LineageNode[], rootId: string): string | null {
+  const root = all.find(n => n.id === rootId)
+  if (!root) return null
+
+  const childrenBy = new Map<string, LineageNode[]>()
+  all.forEach(n => {
+    if (!n.parent_id) return
+    const a = childrenBy.get(n.parent_id) ?? []
+    a.push(n)
+    childrenBy.set(n.parent_id, a)
+  })
+  for (const arr of childrenBy.values()) arr.sort((a, b) => a.name.localeCompare(b.name, 'he'))
+
+  let total = 0
+  // ⚠️ מעבר איטרטיבי ולא רקורסיבי, ועם seen: נתוני עץ אמיתיים מכילים לעיתים
+  // מעגל (אב שהוא גם צאצא) אחרי עריכה שגויה. רקורסיה הייתה תולה את הדפדפן.
+  const seen = new Set<string>()
+  const render = (n: LineageNode, depth: number): string => {
+    if (seen.has(n.id)) return ''
+    seen.add(n.id)
+    total++
+    const kids = childrenBy.get(n.id) ?? []
+    const rel = n.relation === 'son' ? 'בן' : n.relation === 'son_in_law' ? 'חתן' : ''
+    const relCls = n.relation === 'son_in_law' ? 'rel law' : 'rel'
+    return `<li class="d${Math.min(depth, 9)}">
+      <div class="row">
+        <span class="mark"></span>
+        <span class="gen">דור ${n.generation}</span>
+        <span class="name">${escapeHtml(n.name)}</span>
+        ${rel ? `<span class="${relCls}">${rel}</span>` : ''}
+      </div>
+      ${kids.length ? `<ul>${kids.map(k => render(k, depth + 1)).join('')}</ul>` : ''}
+    </li>`
+  }
+
+  const body = render(root, 0)
+  const today = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
+<title>אילן היוחסין — ${escapeHtml(root.name)}</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; direction: rtl; color: #0F172A; margin: 0; }
+  header { border-bottom: 3px solid #7C3AED; padding-bottom: 10px; margin-bottom: 16px; }
+  h1 { font-size: 21px; margin: 0 0 4px; color: #5B21B6; }
+  .sub { font-size: 12px; color: #64748B; }
+  .note { background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 8px;
+          padding: 9px 12px; font-size: 12px; margin-bottom: 16px; color: #78350F; }
+  ul { list-style: none; margin: 0; padding: 0 18px 0 0; }
+  body > ul { padding-right: 0; }
+  li { position: relative; padding-top: 3px; break-inside: avoid; }
+  /* קווי חיבור — נשארים גם בהדפסה בשחור-לבן */
+  li::before { content: ""; position: absolute; top: 0; bottom: 0; right: -10px; border-right: 1px solid #CBD5E1; }
+  li:last-child::before { bottom: auto; height: 15px; }
+  li::after { content: ""; position: absolute; top: 15px; right: -10px; width: 9px; border-top: 1px solid #CBD5E1; }
+  body > ul > li::before, body > ul > li::after { display: none; }
+  .row { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
+  .mark { width: 13px; height: 13px; border: 1.2px solid #94A3B8; border-radius: 3px; flex: 0 0 auto; }
+  .gen { font-size: 9.5px; font-weight: 700; color: #7C3AED; background: #F5F3FF;
+         border: 1px solid #DDD6FE; border-radius: 20px; padding: 1px 6px; white-space: nowrap; }
+  .name { font-size: 13.5px; font-weight: 600; }
+  .rel { font-size: 9.5px; font-weight: 700; color: #1E40AF; background: #EFF6FF;
+         border: 1px solid #BFDBFE; border-radius: 20px; padding: 1px 6px; }
+  .rel.law { color: #92400E; background: #FFFBEB; border-color: #FDE68A; }
+  .d0 > .row .name { font-size: 16px; font-weight: 800; color: #5B21B6; }
+  footer { margin-top: 18px; border-top: 1px solid #E2E8F0; padding-top: 8px;
+           font-size: 10.5px; color: #94A3B8; }
+  @media print { .noprint { display: none !important; } }
+  .noprint { text-align: center; margin: 0 0 16px; }
+  .noprint button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #7C3AED;
+                    border: none; border-radius: 10px; padding: 10px 22px; cursor: pointer; }
+</style></head><body>
+<div class="noprint"><button onclick="window.print()">הדפסה / שמירה כ-PDF</button></div>
+<header>
+  <h1>אילן היוחסין — ${escapeHtml(root.name)}</h1>
+  <div class="sub">היכל החתם סופר · ${total - 1} צאצאים · הופק בתאריך ${today}</div>
+</header>
+<div class="note">
+  <strong>בקשה:</strong> נא לעבור על הרשימה ולסמן ✗ במשבצת שליד כל שם שאינו נכון,
+  או להוסיף בכתב יד שם שחסר. לאחר מכן להחזיר אלינו את הדף. תודה רבה!
+</div>
+<ul>${body}</ul>
+<footer>הופק ממערכת הניהול של היכל החתם סופר · ${today}</footer>
+</body></html>`
 }
 
 function subtreeW(n: TreeNode): number {
@@ -148,7 +249,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null }) {
   const toast = useToast()
   const canAdd = useCan('lineage', 'add')
   const canEdit = useCan('lineage', 'edit')
@@ -274,6 +375,21 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
       if (scrollTo > 0) c.scrollLeft = scrollTo
     })
   }, [positions.length, w, zoom])
+
+  // ── מרכוז המבט על צומת מבוקש (למשל הצומת שנשאר אחרי מיזוג) ──
+  // ⚠️ נשמר המונה שכבר טופל: positions נמצא ב-deps כדי שהמרכוז יקרה *אחרי*
+  // שהפריסה החדשה מוכנה, אך בלי המונה כל שינוי פריסה היה מקפיץ את המבט חזרה
+  // לעוגן הישן — כולל גרירה של המשתמש עצמו.
+  const lastAnchor = useRef(-1)
+  useEffect(() => {
+    if (!anchor || anchor.n === lastAnchor.current) return
+    const el = canvasRef.current
+    const p = positions.find(pp => pp.node.id === anchor.id)
+    if (!el || !p) return
+    lastAnchor.current = anchor.n
+    el.scrollLeft = p.cx * zoom - el.clientWidth / 2
+    el.scrollTop = Math.max(0, p.cy * zoom - el.clientHeight / 2)
+  }, [anchor, positions, zoom])
 
   function close() { setModal(null); setSaveErr(''); setFormRelation(null) }
 
@@ -683,6 +799,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         ⚯ מזג כפילים
                       </button>
                     )}
+                    {/* מיקוד בענף — רק לצומת שיש לו צאצאים, ורק כשאינו כבר במוקד */}
+                    {pos.node.children.length > 0 && focusId !== pos.node.id && (
+                      <button onClick={() => onFocusNode(pos.node.id)}
+                        title="הצג רק את הענף הזה — הצומת וכל צאצאיו, למסך עבודה נקי"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        🌳 הצג אילן צאצאים של דור זה
+                      </button>
+                    )}
                     {/* שורת אייקונים */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[
@@ -983,6 +1107,15 @@ export default function LineagePage() {
 
   const dupNameCount = dupGroups.size
 
+  // ── מצב "אילן צאצאים" — עבודה על ענף אחד בלבד ──
+  // ⚠️ העץ המלא רחב מכדי לעבוד עליו: כדי לסדר משפחה אחת צריך לגלול הלוך ושוב
+  // ולאבד את ההקשר בכל פעם. כאן בוחרים צומת ורואים רק אותו ואת צאצאיו —
+  // התמונה כולה מול העיניים, ואפשר לתקן אחד אחרי השני.
+  const [focusId, setFocusId] = useState<string | null>(null)
+  // עוגן גלילה — { id, n }. ה-n הוא מונה: בלעדיו אותו מזהה פעמיים ברצף לא
+  // היה מפעיל את המרכוז מחדש (המיזוג השני על אותו צומת לא היה מזיז את המבט).
+  const [anchor, setAnchor] = useState<{ id: string; n: number } | null>(null)
+
   function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
   function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
 
@@ -1028,8 +1161,15 @@ export default function LineagePage() {
       if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
       toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
       const keepName = nodes.find(n => n.id === effectiveKeepId)?.name ?? ''
-      await loadAll()
+      // ⚠️ softRefresh ולא loadAll: loadAll מדליק loading=true, והמסך מחליף את
+      // העץ בספינר — כלומר TreeView מתפרק, וכל מצבו הפנימי (זום, גלילה, בחירה)
+      // נמחק. אחרי המיזוג הוא נבנה מחדש וממורכז על דור 1, והמשתמש איבד את
+      // המקום שבו עבד. עם softRefresh הרכיב חי, והנתונים מתעדכנים תחתיו.
+      await softRefresh()
       exitMerge()
+      // הצומת שנשאר — מרכזים עליו את המבט. הפריסה משתנה אחרי המיזוג (צומת ירד),
+      // ולכן שמירת הגלילה בפיקסלים לבדה עדיין הייתה מזיזה את התמונה.
+      setAnchor(a => ({ id: effectiveKeepId, n: (a?.n ?? 0) + 1 }))
       // לאחר מיזוג — להציע לאשר את הייחוס של הצומת שנשאר
       setApprovePrompt({ keepId: effectiveKeepId, keepName })
       setApproveDesc(true)
@@ -1050,6 +1190,30 @@ export default function LineagePage() {
     }
     return out
   }, [nodes])
+
+  // הצומת שבמוקד + כל צאצאיו. buildTree מזהה שורש לפי "האב אינו ברשימה",
+  // ולכן די בסינון — הצומת שבמוקד הופך לשורש התצוגה מעצמו.
+  const focusNode = useMemo(() => nodes.find(n => n.id === focusId) ?? null, [nodes, focusId])
+  // ⚠️ הנפילה-לאחור היא על focusNode ולא על focusId: צומת המוקד עלול להיעלם
+  // (נמחק, או מוזג לתוך אחר וה-id שלו כבר לא קיים). סינון לפי id שנעלם היה
+  // מחזיר רשימה ריקה — מסך לבן בלי הסבר, בדיוק אחרי מיזוג. כאן זה פשוט חוזר
+  // לעץ המלא, והבאנר נעלם מעצמו כי גם הוא נגזר מ-focusNode.
+  const visibleNodes = useMemo(() => {
+    if (!focusNode) return nodes
+    const keep = new Set([focusNode.id, ...descendantsOf(focusNode.id)])
+    return nodes.filter(n => keep.has(n.id))
+  }, [nodes, focusNode, descendantsOf])
+
+  // פתיחת תצוגת ההדפסה של הענף שבמוקד
+  const printFocus = useCallback(() => {
+    if (!focusId) return
+    const html = buildSubtreePrintHtml(nodes, focusId)
+    if (!html) { toast.error('לא נמצא הענף להדפסה'); return }
+    const win = window.open('', '_blank')
+    if (!win) { toast.error('הדפדפן חסם את חלון ההדפסה — יש לאשר חלונות קופצים לאתר'); return }
+    win.document.write(html)
+    win.document.close()
+  }, [nodes, focusId, toast])
 
   async function handleApproveLineage(includeDescendants: boolean) {
     if (!approvePrompt) return
@@ -1092,7 +1256,9 @@ export default function LineagePage() {
     } catch {}
   }, [])
 
-  useEffect(() => { loadAll() }, [loadAll])
+  // טעינה ראשונית — נדחית בטיק אחד כדי לא לקרוא ל-setState סינכרונית בתוך
+  // אפקט (אותו דפוס שנעשה בו שימוש בשאר המסכים במערכת).
+  useEffect(() => { const t = setTimeout(() => { void loadAll() }, 0); return () => clearTimeout(t) }, [loadAll])
 
   const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
@@ -1120,7 +1286,8 @@ export default function LineagePage() {
       } else if (modal?.type === 'add') {
         await fetch('/api/admin/lineage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: formName, parent_id: addParentId, relation: formRelation }) })
       }
-      await loadAll(); close()
+      // softRefresh — כדי לא לפרק את העץ ולאבד מיקום (ראו הערה ב-handleMerge)
+      await softRefresh(); close()
     } catch { setSaveErr('שגיאה') }
     setSaving(false)
   }
@@ -1130,7 +1297,7 @@ export default function LineagePage() {
     setSaving(true)
     try {
       await fetch(`/api/admin/lineage?id=${modal.node.id}`, { method: 'DELETE' })
-      await loadAll(); close()
+      await softRefresh(); close()
     } catch { setSaveErr('שגיאה') }
     setSaving(false)
   }
@@ -1202,8 +1369,35 @@ export default function LineagePage() {
         </div>
       </div>
 
+      {/* ── באנר מצב "אילן צאצאים" — מה במוקד, יציאה, והדפסה ── */}
+      {focusNode && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          background: 'linear-gradient(90deg,#F5F3FF,#FFF)', border: '2px solid #DDD6FE',
+          borderRadius: 14, padding: '11px 16px', marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 20 }}>🌳</span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 14, fontWeight: 800, color: '#5B21B6' }}>
+              אילן הצאצאים של {focusNode.name}
+            </div>
+            <div style={{ fontSize: 11.5, color: '#7C3AED' }}>
+              דור {focusNode.generation} · {visibleNodes.length - 1} צאצאים · מוצג הענף הזה בלבד
+            </div>
+          </div>
+          <button onClick={() => printFocus()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <Printer size={14} /> הדפסה / PDF
+          </button>
+          <button onClick={() => setFocusId(null)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <X size={14} /> חזרה לעץ המלא
+          </button>
+        </div>
+      )}
+
       {/* generation legend — clickable filters */}
-      {nodes.length > 0 && !loading && (
+      {nodes.length > 0 && !loading && !focusNode && (
         <div className="flex gap-2 flex-wrap mb-4">
           {Array.from({ length: maxGen }, (_, i) => i + 1).map(g => (
             <button key={g} onClick={() => { setStatusFilter(null); setGenerationFilter(f => f === g ? null : g) }}
@@ -1228,11 +1422,13 @@ export default function LineagePage() {
           <span style={{ fontSize: 15, fontWeight: 600 }}>טוען נתונים…</span>
         </div>
       ) : view === 'tree' ? (
-        <TreeView nodes={nodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} />
+        /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
+           וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} />
       ) : (
         <TableView
-          nodes={nodes}
-          onRefresh={loadAll}
+          nodes={visibleNodes}
+          onRefresh={softRefresh}
           statusFilter={statusFilter}
           generationFilter={generationFilter}
           mergeMode={mergeMode}
