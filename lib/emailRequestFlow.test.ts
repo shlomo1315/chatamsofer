@@ -60,10 +60,22 @@ function fill(draft: string, label: string, value: string): string {
     .join('\n')
 }
 
+// ⚠️ תאריך יחסי ל"היום" ולא תאריך קבוע. קודם היה כאן 01/07/2026 קשיח, וחלון
+// ההגשה (30 יום מהלידה) פג ב-31/07 — כלומר הבדיקה עברה בירוק במשך חודש ואז
+// נשברה מעצמה בחצות, בלי שאיש נגע בקוד. בדיקה שנשברת מהתקדמות הלוח בודקת את
+// התאריך, לא את הלוגיקה.
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  const p = (v: number) => String(v).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+const RECENT_BIRTH = daysAgo(3)
+
 describe('טופס מלא כהלכה עובר ולידציה', () => {
   it('birth', () => {
     let d = buildDraftBody('birth', '318344884', ctx)
-    d = fill(d, 'תאריך לידה', '01/07/2026')
+    d = fill(d, 'תאריך לידה', RECENT_BIRTH)
     d = fill(d, 'מין הנולד/ת', 'בן')
     d = fill(d, 'שם הנולד/ת', 'יעקב')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456782')  // ת"ז תקינה
@@ -75,7 +87,7 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
 
   it('silent_birth', () => {
     let d = buildDraftBody('silent_birth', '318344884', ctx)
-    d = fill(d, 'תאריך לידה', '01/07/2026')
+    d = fill(d, 'תאריך לידה', RECENT_BIRTH)
     d = fill(d, 'בית החלמה', 'אם וילד')
 
     const r = validateRequest('silent_birth', parseDraft('silent_birth', d, ctx), ctx)
@@ -131,7 +143,7 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
 describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט בשקט)', () => {
   it('birth — ת"ז לא תקינה של הנולד', () => {
     let d = buildDraftBody('birth', '318344884', ctx)
-    d = fill(d, 'תאריך לידה', '01/07/2026')
+    d = fill(d, 'תאריך לידה', RECENT_BIRTH)
     d = fill(d, 'מין הנולד/ת', 'בן')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456789')  // ספרת ביקורת שגויה (התקינה: 2)
     d = fill(d, 'בית החלמה', 'טלזסטון')
@@ -142,7 +154,7 @@ describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט 
 
   it('birth — בית החלמה שלא ברשימה', () => {
     let d = buildDraftBody('birth', '318344884', ctx)
-    d = fill(d, 'תאריך לידה', '01/07/2026')
+    d = fill(d, 'תאריך לידה', RECENT_BIRTH)
     d = fill(d, 'מין הנולד/ת', 'בן')
     d = fill(d, 'תעודת זהות של הנולד/ת', '123456782')
     d = fill(d, 'בית החלמה', 'בית שלא קיים')
