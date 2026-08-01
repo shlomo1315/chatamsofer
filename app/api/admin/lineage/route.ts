@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -183,12 +184,28 @@ export async function PATCH(request: NextRequest) {
   // העותק השמור לא יישארו עם השם או המבנה הישן.
   // (הצ'יפים בכרטסת נגזרים מהעץ בזמן אמת וממילא מעודכנים — זה עבור שאר הצרכנים.)
   const { data: freshNodes } = await admin.from('lineage_nodes').select(NODE_SELECT)
+  let approved = 0
   if (freshNodes) {
     const synced = await resyncSubtree(admin, freshNodes as TreeNodeRow[], id)
     if (synced) console.log(`[lineage] node ${id} updated → synced ${synced} beneficiary chain(s)`)
+
+    // ⚠️ אישור בעץ → אישור המשפחה בצאצאים. עד כה הסנכרון היה חד-כיווני
+    // (משפחה → עץ בלבד), ולכן צומת ירוק בעץ נשאר "ממתין לאישור" בצאצאים.
+    if (updates.status === 'verified') {
+      approved = await approveVerifiedBeneficiaries(admin, freshNodes as TreeNodeRow[], id)
+      if (approved) {
+        console.log(`[lineage] node ${id} verified → approved ${approved} beneficiary/ies`)
+        await logActivity(admin, {
+          userId: staff.userId,
+          action: 'beneficiaries_auto_approved_from_lineage',
+          entityType: 'lineage_node', entityId: id,
+          details: { count: approved },
+        }).catch(() => {})
+      }
+    }
   }
 
-  return NextResponse.json({ node: data })
+  return NextResponse.json({ node: data, approvedBeneficiaries: approved })
 }
 
 export async function DELETE(request: NextRequest) {

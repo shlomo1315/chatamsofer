@@ -126,3 +126,60 @@ export async function resyncSubtree(
 ): Promise<number> {
   return resyncBeneficiaryChains(db, nodes, subtreeNodeIds(nodes, changedNodeId))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// אישור בעץ הדורות → אישור המשפחה בצאצאים.
+//
+// ⚠️ עד כה הסנכרון היה חד-כיווני בלבד: אישור משפחה בכרטסת צבע את הצומת בעץ
+// (approve-lineage), אבל אישור בעץ לא נגע ב-eligibility_status. התוצאה —
+// צומת ירוק בעץ ומשפחה שנשארת "ממתינה לאישור" בצאצאים, בלי שום דבר שיסגור
+// את הפער. זה בדיוק המקרה של יחיאל חיים טוביאס.
+//
+// "מאושר לגמרי" = הצומת עצמו וכל שרשרת האבות שמעליו עד השורש מאומתים. די
+// בחוליה אחת שאינה מאומתת כדי שהיחוס לא יהיה מוכח, ולכן הבדיקה היא על כל
+// המסלול ולא על הצומת בלבד.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** האם כל המסלול מהצומת עד השורש מאומת. */
+function chainFullyVerified(byId: Map<string, TreeNodeRow>, nodeId: string): boolean {
+  const path = pathToRoot(byId, nodeId)
+  if (!path.length) return false
+  return path.every(n => (n.status ?? 'verified') === 'verified')
+}
+
+/**
+ * מאשר משפחות שהיחוס שלהן הושלם — הצומת שאושר וכל צאצאיו.
+ *
+ * ⚠️ מקודמות רק משפחות במצב 'pending'. משפחה ב-'docs_pending' ממתינה
+ * למסמכים, וקידום אוטומטי שלה היה מדלג על דרישת המסמכים בלי שאיש שם לב;
+ * ו-'rejected' נדחתה בהחלטה מפורשת ואין לבטלה מהעץ. שתיהן נשארות כפי שהן.
+ *
+ * ⚠️ אינו שולח מייל: אישור בעץ הוא פעולה פנימית של הצוות, ואישור של עשרות
+ * צמתים ברצף היה מפיץ עשרות מיילים למשפחות בלי כוונה. המייל נשלח באישור
+ * הידני מהכרטסת, שם הוא מכוון.
+ *
+ * מחזיר את מספר המשפחות שקודמו.
+ */
+export async function approveVerifiedBeneficiaries(
+  db: SupabaseClient,
+  nodes: TreeNodeRow[],
+  changedNodeId: string,
+): Promise<number> {
+  const byId = new Map(nodes.map(n => [n.id, n]))
+  // הצומת שאושר וכל צאצאיו: אישור של אב עשוי להשלים את השרשרת גם לצאצאים
+  // שכבר היו מאומתים בעצמם וחיכו דווקא לחוליה הזו.
+  const candidates = [...subtreeNodeIds(nodes, changedNodeId)].filter(id => chainFullyVerified(byId, id))
+  if (!candidates.length) return 0
+
+  const { data, error } = await db
+    .from('beneficiaries')
+    .update({ eligibility_status: 'approved', updated_at: new Date().toISOString() })
+    .in('lineage_node_id', candidates)
+    .eq('eligibility_status', 'pending')
+    .select('id')
+  if (error) {
+    console.error('[lineageSync] approveVerifiedBeneficiaries:', error.message)
+    return 0
+  }
+  return (data ?? []).length
+}
