@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 import { NextResponse } from 'next/server'
 import type { SectionKey } from '@/types'
 import { roleAllows, type PermAction } from '@/lib/permissions'
@@ -38,7 +39,15 @@ export function getServiceClient(): SupabaseClient | null {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-async function getSessionUser() {
+// ⚠️ ממוזג ל-cache: נתיב API בודד קורא ל-requirePermission/requireStaff יותר
+// מפעם אחת, ודף ניהול יורה עשרות קריאות API במקביל. כל לקוח חדש מנסה לרענן
+// את האסימון בעצמו, והרענון של Supabase חד-פעמי — כך שרק הראשון מצליח והשאר
+// נכשלים ב-"Refresh Token Not Found". מופע אחד לכל בקשה מבטל את המרוץ.
+//
+// ⚠️ getUser עטוף ב-try: כשל רענון מחזיר "אין משתמש" (401 מסודר) במקום לזרוק
+// שגיאה שמפילה את הבקשה. משתמש שאיבד סשן צריך לראות מסך התחברות, לא מסך
+// שגיאה אדום.
+const getSessionUser = cache(async () => {
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -50,9 +59,14 @@ async function getSessionUser() {
       },
     }
   )
-  const { data: { user } } = await supabase.auth.getUser()
-  return user
-}
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  } catch (e) {
+    console.error('[apiAuth] getUser נכשל:', e instanceof Error ? e.message : e)
+    return null
+  }
+})
 
 // מאמת שהקורא הוא איש צוות פעיל (פרופיל קיים עם תפקיד מוכר). מחזיר null אם לא.
 export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffContext | null> {

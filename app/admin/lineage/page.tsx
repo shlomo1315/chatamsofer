@@ -55,20 +55,25 @@ function buildTree(flat: LineageNode[]): TreeNode[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// הדפסה / PDF של אילן צאצאים.
+// הדפסה / PDF של אילן צאצאים — בשני מצבים.
 //
-// מודפס כרשימה היררכית מוזחת ולא כתרשים גרפי — בכוונה. תרשים העץ רחב מאוד
-// (עשרות צמתים לרוחב דור), ובהדפסה הוא מוקטן עד שאי אפשר לקרוא שם. רשימה
-// מוזחת נשארת קריאה בכל גודל משפחה, נשפכת יפה על כמה עמודים, ומשאירה מקום
-// לסמן ליד כל שם — וזו בדיוק המטרה: לשלוח לנכד שיעבור ויסמן מה לא נכון.
+// 'list'  — רשימה היררכית מוזחת. נשארת קריאה בכל גודל משפחה, נשפכת יפה על כמה
+//           עמודים לאורך, ויש משבצת לסמן ליד כל שם. מתאים למשפחה גדולה.
+// 'tree'  — תרשים עץ מלמעלה למטה, לרוחב הדף. קליל וברור לעין למשפחה קטנה או
+//           בינונית, אך רוחבו גדל עם הדור הרחב ביותר ולכן הוא מוקטן אוטומטית
+//           כדי להיכנס לדף — ובמשפחה גדולה מאוד הכיתוב יהיה קטן.
 //
 // ההדפסה נפתחת בחלון נפרד עם HTML עצמאי, ולא דרך @media print על העמוד:
 // כך אין התנגשות עם עיצוב המערכת, ומה שנראה בתצוגה המקדימה הוא מה שיצא.
 // ─────────────────────────────────────────────────────────────────────────────
+export type PrintMode = 'list' | 'tree'
+
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 
-function buildSubtreePrintHtml(all: LineageNode[], rootId: string): string | null {
+const relLabel = (r: LineageNode['relation']) => r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : ''
+
+function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMode = 'list'): string | null {
   const root = all.find(n => n.id === rootId)
   if (!root) return null
 
@@ -82,41 +87,57 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string): string | nul
   for (const arr of childrenBy.values()) arr.sort((a, b) => a.name.localeCompare(b.name, 'he'))
 
   let total = 0
-  // ⚠️ מעבר איטרטיבי ולא רקורסיבי, ועם seen: נתוני עץ אמיתיים מכילים לעיתים
-  // מעגל (אב שהוא גם צאצא) אחרי עריכה שגויה. רקורסיה הייתה תולה את הדפדפן.
+  // ⚠️ seen משותף לשני המצבים: נתוני עץ אמיתיים מכילים לעיתים מעגל (אב שהוא
+  // גם צאצא) אחרי עריכה שגויה, ובלי ההגנה הזו הרקורסיה תולה את הדפדפן.
   const seen = new Set<string>()
-  const render = (n: LineageNode, depth: number): string => {
+  // ⚠️ הרוחב הגדול ביותר בכל עומק — קובע את הקטנת התרשים כדי שייכנס לדף.
+  const perDepth: number[] = []
+
+  const renderList = (n: LineageNode, depth: number): string => {
     if (seen.has(n.id)) return ''
     seen.add(n.id)
     total++
+    perDepth[depth] = (perDepth[depth] ?? 0) + 1
     const kids = childrenBy.get(n.id) ?? []
-    const rel = n.relation === 'son' ? 'בן' : n.relation === 'son_in_law' ? 'חתן' : ''
-    const relCls = n.relation === 'son_in_law' ? 'rel law' : 'rel'
+    const rel = relLabel(n.relation)
     return `<li class="d${Math.min(depth, 9)}">
       <div class="row">
         <span class="mark"></span>
         <span class="gen">דור ${n.generation}</span>
         <span class="name">${escapeHtml(n.name)}</span>
-        ${rel ? `<span class="${relCls}">${rel}</span>` : ''}
+        ${rel ? `<span class="${n.relation === 'son_in_law' ? 'rel law' : 'rel'}">${rel}</span>` : ''}
       </div>
-      ${kids.length ? `<ul>${kids.map(k => render(k, depth + 1)).join('')}</ul>` : ''}
+      ${kids.length ? `<ul>${kids.map(k => renderList(k, depth + 1)).join('')}</ul>` : ''}
     </li>`
   }
 
-  const body = render(root, 0)
+  const renderTree = (n: LineageNode, depth: number): string => {
+    if (seen.has(n.id)) return ''
+    seen.add(n.id)
+    total++
+    perDepth[depth] = (perDepth[depth] ?? 0) + 1
+    const kids = childrenBy.get(n.id) ?? []
+    const rel = relLabel(n.relation)
+    return `<li>
+      <div class="nd${depth === 0 ? ' root' : ''}${n.relation === 'son_in_law' ? ' law' : ''}">
+        <div class="nm">${escapeHtml(n.name)}</div>
+        <div class="mt">דור ${n.generation}${rel ? ` · ${rel}` : ''}</div>
+      </div>
+      ${kids.length ? `<ul>${kids.map(k => renderTree(k, depth + 1)).join('')}</ul>` : ''}
+    </li>`
+  }
+
+  const body = mode === 'tree' ? renderTree(root, 0) : renderList(root, 0)
   const today = new Date().toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
-  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
-<title>אילן היוחסין — ${escapeHtml(root.name)}</title>
-<style>
-  @page { size: A4; margin: 14mm 12mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Segoe UI", Arial, sans-serif; direction: rtl; color: #0F172A; margin: 0; }
-  header { border-bottom: 3px solid #7C3AED; padding-bottom: 10px; margin-bottom: 16px; }
-  h1 { font-size: 21px; margin: 0 0 4px; color: #5B21B6; }
-  .sub { font-size: 12px; color: #64748B; }
-  .note { background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 8px;
-          padding: 9px 12px; font-size: 12px; margin-bottom: 16px; color: #78350F; }
+  // רוחב התרשים נקבע לפי הדור הרחב ביותר. הקטנה אוטומטית כדי שייכנס לרוחב
+  // הדף לרוחב (A4 landscape פחות שוליים ≈ 1040px), עם רצפה של 35% כדי שלא
+  // יגיע לגודל שאי אפשר לקרוא — אם צריך פחות מזה, עדיף מלכתחילה מצב רשימה.
+  const widest = perDepth.length ? Math.max(...perDepth) : 1
+  const scale = mode === 'tree' ? Math.max(0.35, Math.min(1, 1040 / (widest * 132))) : 1
+  const tooWide = mode === 'tree' && 1040 / (widest * 132) < 0.35
+
+  const listCss = `
   ul { list-style: none; margin: 0; padding: 0 18px 0 0; }
   body > ul { padding-right: 0; }
   li { position: relative; padding-top: 3px; break-inside: avoid; }
@@ -133,24 +154,81 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string): string | nul
   .rel { font-size: 9.5px; font-weight: 700; color: #1E40AF; background: #EFF6FF;
          border: 1px solid #BFDBFE; border-radius: 20px; padding: 1px 6px; }
   .rel.law { color: #92400E; background: #FFFBEB; border-color: #FDE68A; }
-  .d0 > .row .name { font-size: 16px; font-weight: 800; color: #5B21B6; }
+  .d0 > .row .name { font-size: 16px; font-weight: 800; color: #5B21B6; }`
+
+  // ⚠️ הקו האופקי נמתח מ-66px מכל צד ולא בשיטת ::before/::after על הילד
+  // הראשון/האחרון. השיטה ההיא תלויה בכך שהילד הראשון הוא הימני — נכון ב-RTL
+  // אך הפוך ל-LTR — וכל טעות בהיפוך מייצרת "שפם" שחורג משני צדי התרשים.
+  // כאן הגאומטריה סימטרית ולכן חסינה לכיוון: רוחב צומת קבוע 120px ועוד 6px
+  // ריפוד מכל צד = 132px, כלומר מרכז הילד הקיצוני הוא בדיוק 66px מהקצה.
+  // לילד יחיד המרווח מתאפס מעצמו (132−66−66=0) והקו נעלם בלי טיפול מיוחד.
+  const treeCss = `
+  .tree { text-align: center; }
+  .tree ul { position: relative; display: flex; justify-content: center;
+             margin: 0; padding: 48px 0 0; list-style: none; }
+  .tree > ul { padding-top: 0; }
+  .tree li { position: relative; padding: 0 6px; list-style: none; break-inside: avoid; }
+  /* קו אנכי מהצומת אל הקו האופקי של ילדיו */
+  .tree ul::before {
+    content: ""; position: absolute; top: 0; left: 50%; height: 24px; border-left: 1.5px solid #C4B5FD;
+  }
+  /* הקו האופקי — ממרכז הילד הראשון עד מרכז האחרון */
+  .tree ul::after {
+    content: ""; position: absolute; top: 24px; left: 66px; right: 66px; border-top: 1.5px solid #C4B5FD;
+  }
+  .tree > ul::before, .tree > ul::after { display: none; }
+  /* קו אנכי מהקו האופקי אל הצומת */
+  .tree li::before {
+    content: ""; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1.5px solid #C4B5FD;
+  }
+  .tree > ul > li::before { display: none; }
+  .tree .nd { position: relative; display: inline-block; width: 120px; vertical-align: top;
+              border: 1.5px solid #DDD6FE; border-radius: 10px; background: #FAF5FF;
+              padding: 7px 6px; }
+  .tree .nd.law { background: #FFFBEB; border-color: #FDE68A; }
+  .tree .nd.root { background: #7C3AED; border-color: #6D28D9; }
+  .tree .nd.root .nm { color: #fff; }
+  .tree .nd.root .mt { color: #DDD6FE; }
+  .tree .nm { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
+  .tree .mt { font-size: 8.5px; font-weight: 600; color: #7C3AED; margin-top: 2px; }
+  .tree .nd.law .mt { color: #92400E; }`
+
+  const noteHtml = mode === 'tree'
+    ? `<strong>בקשה:</strong> נא לעבור על התרשים ולסמן את מי שאינו נכון, או להוסיף בכתב יד שם שחסר.
+       לאחר מכן להחזיר אלינו את הדף. תודה רבה!`
+    : `<strong>בקשה:</strong> נא לעבור על הרשימה ולסמן ✗ במשבצת שליד כל שם שאינו נכון,
+       או להוסיף בכתב יד שם שחסר. לאחר מכן להחזיר אלינו את הדף. תודה רבה!`
+
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8">
+<title>אילן היוחסין — ${escapeHtml(root.name)}</title>
+<style>
+  @page { size: A4 ${mode === 'tree' ? 'landscape' : 'portrait'}; margin: 12mm 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; direction: rtl; color: #0F172A; margin: 0; }
+  header { border-bottom: 3px solid #7C3AED; padding-bottom: 10px; margin-bottom: 14px; }
+  h1 { font-size: 21px; margin: 0 0 4px; color: #5B21B6; }
+  .sub { font-size: 12px; color: #64748B; }
+  .note { background: #FEF3C7; border: 1px solid #FCD34D; border-radius: 8px;
+          padding: 9px 12px; font-size: 12px; margin-bottom: 16px; color: #78350F; }
+  .warn { background: #FEE2E2; border: 1px solid #FCA5A5; border-radius: 8px;
+          padding: 9px 12px; font-size: 12px; margin-bottom: 14px; color: #991B1B; }
   footer { margin-top: 18px; border-top: 1px solid #E2E8F0; padding-top: 8px;
            font-size: 10.5px; color: #94A3B8; }
+  .canvas { zoom: ${scale}; }
   @media print { .noprint { display: none !important; } }
-  .noprint { text-align: center; margin: 0 0 16px; }
+  .noprint { text-align: center; margin: 0 0 14px; }
   .noprint button { font: inherit; font-size: 14px; font-weight: 700; color: #fff; background: #7C3AED;
                     border: none; border-radius: 10px; padding: 10px 22px; cursor: pointer; }
+${mode === 'tree' ? treeCss : listCss}
 </style></head><body>
 <div class="noprint"><button onclick="window.print()">הדפסה / שמירה כ-PDF</button></div>
 <header>
   <h1>אילן היוחסין — ${escapeHtml(root.name)}</h1>
   <div class="sub">היכל החתם סופר · ${total - 1} צאצאים · הופק בתאריך ${today}</div>
 </header>
-<div class="note">
-  <strong>בקשה:</strong> נא לעבור על הרשימה ולסמן ✗ במשבצת שליד כל שם שאינו נכון,
-  או להוסיף בכתב יד שם שחסר. לאחר מכן להחזיר אלינו את הדף. תודה רבה!
-</div>
-<ul>${body}</ul>
+${tooWide ? `<div class="warn"><strong>שימו לב:</strong> המשפחה רחבה מכדי להיכנס לדף בגודל קריא. הכיתוב הוקטן למינימום — לתוצאה קריאה יותר מומלץ להדפיס במצב <strong>רשימה</strong>.</div>` : ''}
+<div class="note">${noteHtml}</div>
+${mode === 'tree' ? `<div class="canvas"><div class="tree"><ul>${body}</ul></div></div>` : `<ul>${body}</ul>`}
 <footer>הופק ממערכת הניהול של היכל החתם סופר · ${today}</footer>
 </body></html>`
 }
@@ -1115,6 +1193,8 @@ export default function LineagePage() {
   // עוגן גלילה — { id, n }. ה-n הוא מונה: בלעדיו אותו מזהה פעמיים ברצף לא
   // היה מפעיל את המרכוז מחדש (המיזוג השני על אותו צומת לא היה מזיז את המבט).
   const [anchor, setAnchor] = useState<{ id: string; n: number } | null>(null)
+  // בחירת סגנון ההדפסה — רשימה או תרשים עץ
+  const [printPick, setPrintPick] = useState(false)
 
   function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
   function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
@@ -1204,10 +1284,11 @@ export default function LineagePage() {
     return nodes.filter(n => keep.has(n.id))
   }, [nodes, focusNode, descendantsOf])
 
-  // פתיחת תצוגת ההדפסה של הענף שבמוקד
-  const printFocus = useCallback(() => {
+  // פתיחת תצוגת ההדפסה של הענף שבמוקד — לפי המצב שנבחר (רשימה / עץ מעוצב)
+  const printFocus = useCallback((mode: PrintMode) => {
     if (!focusId) return
-    const html = buildSubtreePrintHtml(nodes, focusId)
+    setPrintPick(false)
+    const html = buildSubtreePrintHtml(nodes, focusId, mode)
     if (!html) { toast.error('לא נמצא הענף להדפסה'); return }
     const win = window.open('', '_blank')
     if (!win) { toast.error('הדפדפן חסם את חלון ההדפסה — יש לאשר חלונות קופצים לאתר'); return }
@@ -1385,7 +1466,7 @@ export default function LineagePage() {
               דור {focusNode.generation} · {visibleNodes.length - 1} צאצאים · מוצג הענף הזה בלבד
             </div>
           </div>
-          <button onClick={() => printFocus()}
+          <button onClick={() => setPrintPick(true)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <Printer size={14} /> הדפסה / PDF
           </button>
@@ -1393,6 +1474,39 @@ export default function LineagePage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <X size={14} /> חזרה לעץ המלא
           </button>
+        </div>
+      )}
+
+      {/* ── בחירת סגנון הדפסה ── */}
+      {printPick && focusNode && (
+        <div onClick={() => setPrintPick(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 18, padding: 22, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>איך להדפיס את האילן?</div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>
+              {focusNode.name} · {visibleNodes.length - 1} צאצאים
+            </div>
+            {([
+              { m: 'tree' as const, icon: '🌳', t: 'תרשים עץ מעוצב', d: 'דורות זה מתחת לזה, לרוחב הדף. קליל וברור לעין — מתאים למשפחה קטנה או בינונית.' },
+              { m: 'list' as const, icon: '📋', t: 'רשימה מוזחת', d: 'שורה לכל שם עם משבצת לסימון. נשאר קריא בכל גודל משפחה ונשפך על כמה עמודים.' },
+            ]).map(o => (
+              <button key={o.m} onClick={() => printFocus(o.m)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', textAlign: 'right', background: '#fff', border: '2px solid #E2E8F0', borderRadius: 14, padding: '13px 15px', marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#A78BFA'; e.currentTarget.style.background = '#FAF5FF' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff' }}>
+                <span style={{ fontSize: 24, lineHeight: 1 }}>{o.icon}</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{o.t}</span>
+                  <span style={{ display: 'block', fontSize: 11.5, color: '#64748B', lineHeight: 1.5, marginTop: 2 }}>{o.d}</span>
+                </span>
+              </button>
+            ))}
+            <button onClick={() => setPrintPick(false)}
+              style={{ width: '100%', background: 'none', border: 'none', color: '#64748B', fontSize: 13, fontWeight: 700, padding: '8px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
+              ביטול
+            </button>
+          </div>
         </div>
       )}
 

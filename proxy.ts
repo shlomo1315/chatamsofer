@@ -44,7 +44,16 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // ⚠️ עטוף ב-try: אם רענון האסימון נכשל (למשל אסימון רענון שכבר נוצל), getUser
+  // זורק — וללא התפיסה הזו כל הבקשה נופלת ל-500 והמשתמש רואה מסך שגיאה במקום
+  // מסך התחברות. כשל אימות פירושו "אין משתמש", והטיפול בזה כבר קיים למטה.
+  let user = null
+  try {
+    const res = await supabase.auth.getUser()
+    user = res.data.user
+  } catch (e) {
+    console.error('[proxy] getUser נכשל:', e instanceof Error ? e.message : e)
+  }
 
   if (isAdminRoute && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
