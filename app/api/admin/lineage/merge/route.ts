@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js'
+import { randomUUID } from 'crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
+import { mergeWithCascade } from '@/lib/lineageMerge'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +20,8 @@ export async function POST(request: NextRequest) {
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 
-  let body: { keepId?: string; mergeIds?: string[] }
+  // cascade — ברירת המחדל דלוקה: זה הלב של הפתרון (ראו lib/lineageMerge).
+  let body: { keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const keepId = body.keepId
   const mergeIds = Array.from(new Set((body.mergeIds ?? []).filter(Boolean)))
@@ -49,44 +53,33 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let reassignedChildren = 0
-  let reassignedBeneficiaries = 0
-
-  for (const mid of mergeIds) {
-    // 1) העברת ילדי הכפיל אל keep
-    const { data: kids } = await admin.from('lineage_nodes').update({ parent_id: keepId }).eq('parent_id', mid).select('id')
-    reassignedChildren += kids?.length ?? 0
-    // 2) העברת נרשמים המשויכים לכפיל אל keep
-    const { data: bens } = await admin.from('beneficiaries').update({ lineage_node_id: keepId }).eq('lineage_node_id', mid).select('id')
-    reassignedBeneficiaries += bens?.length ?? 0
-    // 3) מחיקת הכפיל
-    await admin.from('lineage_nodes').delete().eq('id', mid)
+  // ⚠️ batchId מקבץ את המיזוג *וכל מה שנגרר ממנו במפל*, כדי שביטול יחזיר את
+  // כל השרשרת ולא חוליה בודדת שתשאיר את העץ במצב ביניים.
+  const batchId = randomUUID()
+  let result
+  try {
+    result = await mergeWithCascade(admin, {
+      keepId, mergeIds, batchId,
+      userId: staff.userId,
+      cascadeDown: body.cascadeDown !== false,
+      cascadeUp: body.cascadeUp !== false,
+    })
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : 'שגיאה במיזוג' },
+      { status: 500 },
+    )
   }
 
-  // חישוב-מחדש דורות לכל תת-העץ של keep (אחרי שהילדים עברו)
-  const { data: fresh } = await admin.from('lineage_nodes').select('id, parent_id')
-  const childrenOf = new Map<string | null, string[]>()
-  for (const n of fresh ?? []) {
-    const arr = childrenOf.get(n.parent_id) ?? []
-    arr.push(n.id)
-    childrenOf.set(n.parent_id, arr)
-  }
-  // חישוב דורות בזיכרון, ואז כתיבה מקובצת לפי דור (update ... in) במקום round-trip לכל צומת.
-  const genOf = new Map<number, string[]>()
-  const queue: { id: string; gen: number }[] = []
-  for (const c of childrenOf.get(keepId) ?? []) queue.push({ id: c, gen: (keep.generation ?? 1) + 1 })
-  let g = 0
-  while (queue.length && g < 100000) {
-    const item = queue.shift()!
-    const arr = genOf.get(item.gen) ?? []
-    arr.push(item.id)
-    genOf.set(item.gen, arr)
-    for (const c of childrenOf.get(item.id) ?? []) queue.push({ id: c, gen: item.gen + 1 })
-    g++
-  }
-  for (const [gen, ids] of genOf) {
-    await admin.from('lineage_nodes').update({ generation: gen }).in('id', ids)
-  }
+  await logActivity(admin, {
+    userId: staff.userId,
+    action: 'lineage_nodes_merged',
+    entityType: 'lineage_node', entityId: keepId,
+    details: {
+      batchId, requested: mergeIds.length, cascaded: result.cascadedCount,
+      children: result.reassignedChildren, beneficiaries: result.reassignedBeneficiaries,
+    },
+  }).catch(() => {})
 
-  return NextResponse.json({ ok: true, mergedCount: mergeIds.length, reassignedChildren, reassignedBeneficiaries })
+  return NextResponse.json({ ok: true, ...result })
 }
