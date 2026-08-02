@@ -27,6 +27,7 @@ import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
 import MaintenanceReplySettings from './MaintenanceReplySettings'
 import CardStockAlertSettings from './CardStockAlertSettings'
+import CardReminderSettings from './CardReminderSettings'
 
 async function getProfiles(): Promise<Profile[]> {
   if (!isSupabaseConfigured()) return []
@@ -197,6 +198,11 @@ export default async function SettingsPage() {
         {/* Card stock low-balance alert (threshold + recipient emails) */}
         <Collapsible title="התראת מלאי כרטיסי מזון" icon={<Package size={16} className="text-emerald-500" />}>
           <CardStockAlertSettings />
+        </Collapsible>
+
+        {/* תזכורת שיוך/איסוף כרטיס — מתי לשלוח ליולדת שלא שייכה כרטיס */}
+        <Collapsible title="תזכורת איסוף כרטיס מזון" icon={<Bell size={16} className="text-emerald-500" />}>
+          <CardReminderSettings />
         </Collapsible>
 
         {/* Loans portal */}

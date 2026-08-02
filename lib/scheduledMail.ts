@@ -114,16 +114,28 @@ export async function cancelGratitudeReminder(aidId: string): Promise<void> {
 }
 
 // ─── תזכורות איסוף/שיוך כרטיס מזון ───────────────────────────────────────────
-// נקבעות ברגע שהכרטיס נטען (card_status='loaded'), ומבוטלות ברגע שהכרטיס שויך
-// (card_picked_up_at נקבע). שתי תזכורות: יומיים מהטענה, ושבוע נוסף (9 ימים) אם
-// עדיין לא שויך. כל אחת בודקת בעצמה לפני השליחה (defense-in-depth).
-const CARD_REMINDER_1_DAYS = 2
-const CARD_REMINDER_2_DAYS = 9
+// נקבעות ברגע שהכרטיס נטען (רק ללידה מאושרת), ומבוטלות ברגע שהכרטיס שויך
+// (card_picked_up_at). התזמון מבוסס על *תאריך הלידה* + מספר ימים מההגדרות
+// (ברירת מחדל: 14 = שבועיים · תזכורת שנייה 21). ניתן לעריכה במסך ההגדרות.
+// כל תזכורת בודקת בעצמה לפני השליחה שהכרטיס עדיין לא שויך (defense-in-depth).
+export async function scheduleCardPickupReminders(
+  aidId: string,
+  toEmail: string | null | undefined,
+  birthDate: Date | string | null | undefined,
+): Promise<void> {
+  const base = birthDate ? new Date(birthDate) : null
+  if (!base || isNaN(base.getTime())) return
 
-export async function scheduleCardPickupReminders(aidId: string, toEmail: string | null | undefined, loadedAt: Date): Promise<void> {
-  const at = (days: number) => new Date(loadedAt.getTime() + days * 86400000)
-  await scheduleEmail({ kind: 'card_pickup_reminder_1', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(CARD_REMINDER_1_DAYS) })
-  await scheduleEmail({ kind: 'card_pickup_reminder_2', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(CARD_REMINDER_2_DAYS) })
+  const { getCardReminderSettings } = await import('./cardReminderSettings')
+  const cfg = await getCardReminderSettings()
+  if (!cfg.enabled) return
+
+  const at = (days: number) => new Date(base.getTime() + days * 86400000)
+  // אם המועד כבר עבר (הלידה הייתה מזמן) — scheduleEmail יתזמן לזמן המותר הקרוב.
+  await scheduleEmail({ kind: 'card_pickup_reminder_1', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(cfg.firstDays) })
+  if (cfg.secondDays != null) {
+    await scheduleEmail({ kind: 'card_pickup_reminder_2', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(cfg.secondDays) })
+  }
 }
 
 /** מבטל את שתי תזכורות הכרטיס — נקרא ברגע שהכרטיס שויך (card_picked_up_at). */

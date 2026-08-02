@@ -20,7 +20,7 @@ export async function loadMaternityCardOnApproval(
 ): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; error?: string; clientId?: string | null }> {
   const { data: aid } = await admin
     .from('maternity_aids')
-    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id')
+    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date')
     .eq('id', aidId).maybeSingle()
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
   if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
@@ -250,11 +250,12 @@ export async function loadMaternityCardOnApproval(
 
   await logActivity(admin, { action: 'maternity_card_loaded', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, tlushId: result.tlushId, trigger: 'auto_on_approval' } })
 
-  // תזכורות איסוף/שיוך כרטיס — יומיים ושבוע נוסף אחרי ההטענה, אם היולדת לא תשייך
-  // את הכרטיס (card_picked_up_at). כל תזכורת בודקת בעצמה לפני השליחה ומתבטלת אם שויך.
+  // תזכורות איסוף/שיוך כרטיס — שבועיים אחרי הלידה (וניתן לתזכורת שנייה), אם היולדת
+  // לא תשייך את הכרטיס (card_picked_up_at). המועד והתצורה נשלטים ממסך ההגדרות.
+  // כל תזכורת בודקת בעצמה לפני השליחה שהכרטיס עדיין לא שויך ומתבטלת אם כן.
   try {
     const { scheduleCardPickupReminders } = await import('./scheduledMail')
-    await scheduleCardPickupReminders(aid.id, b.email, new Date())
+    await scheduleCardPickupReminders(aid.id, b.email, aid.birth_date)
   } catch (e) {
     console.error('[maternity-card] תזמון תזכורות איסוף נכשל:', e)
   }
