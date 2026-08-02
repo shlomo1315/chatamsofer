@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer } from 'lucide-react'
+import DuplicatesPanel from './DuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -1238,6 +1239,7 @@ export default function LineagePage() {
   const [anchor, setAnchor] = useState<{ id: string; n: number } | null>(null)
   // בחירת סגנון ההדפסה — רשימה או תרשים עץ
   const [printPick, setPrintPick] = useState(false)
+  const [showDups, setShowDups] = useState(false)
 
   function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
   function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
@@ -1478,10 +1480,17 @@ export default function LineagePage() {
             className="w-9 h-9 rounded-xl bg-white border border-gray-200 text-violet-600 flex items-center justify-center hover:bg-violet-50 transition-colors disabled:opacity-50">
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
+          {/* מרכז המיזוגים — סריקה של כל העץ. זה הכלי לעבודה בהיקף; המיזוג
+              הידני שלצידו נשאר למקרה נקודתי שרואים בעין. */}
+          <button onClick={() => { setShowDups(s => !s); if (mergeMode) exitMerge() }}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showDups ? '#7C3AED' : '#fff', color: showDups ? '#fff' : '#5B21B6', border: '1px solid #DDD6FE' }}>
+            <Users size={14} /> {showDups ? 'סגור מרכז מיזוגים' : 'מרכז מיזוגים'}
+          </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
-            {mergeMode ? 'סיום מיזוג' : '⚯ מזג כפולים'}
+            {mergeMode ? 'סיום מיזוג' : '⚯ מזג ידנית'}
           </button>
           {canAdd && (
             <button
@@ -1492,6 +1501,8 @@ export default function LineagePage() {
           )}
         </div>
       </div>
+
+      {showDups && <DuplicatesPanel onDone={() => { void softRefresh() }} />}
 
       {/* ── באנר מצב "אילן צאצאים" — מה במוקד, יציאה, והדפסה ── */}
       {focusNode && (
