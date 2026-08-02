@@ -21,7 +21,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} h-full`}>
+    // translate="no" + notranslate: חוסמים תרגום אוטומטי של הדפדפן (Google Translate).
+    // התרגום מחליף צמתי טקסט ב-DOM מאחורי הגב של React, וכש-React מנסה אז לעדכן
+    // (החלפת טאב / router.refresh) הוא נופל על "removeChild ... not a child of this node".
+    // האפליקציה כולה בעברית — אין שום סיבה לתרגם, וזה הפתרון הרשמי לבאג הזה.
+    <html lang="he" dir="rtl" translate="no" className={`${heebo.variable} h-full notranslate`}>
+      <head>
+        <meta name="google" content="notranslate" />
+      </head>
       <body className="min-h-full bg-slate-50">
         <DocViewerProvider>{children}</DocViewerProvider>
       </body>
