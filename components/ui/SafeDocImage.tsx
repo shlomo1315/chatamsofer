@@ -30,6 +30,7 @@ export default function SafeDocImage({
   path: string
   alt?: string
   name?: string | null
+  /** מוחל ישירות על הקנבס — בדיוק כמו על <img> */
   className?: string
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -72,9 +73,13 @@ export default function SafeDocImage({
         const canvas = document.createElement('canvas')
         canvas.width = bitmap.width
         canvas.height = bitmap.height
-        canvas.style.width = '100%'
-        canvas.style.height = '100%'
-        canvas.style.objectFit = 'inherit'
+        // ⚠️ ה-className מוחל על הקנבס עצמו, בדיוק כמו על <img> בנפילה-לאחור.
+        // קודם הוא הוחל על עוטף, והקנבס קיבל width/height: 100% — וכשלעוטף אין
+        // גובה מפורש (המציג המלא, שיש לו רק max-h) האחוזים אינם נפתרים והקנבס
+        // נופל לגודל הפיקסלים הטבעי של התמונה: 2000px בתוך מסגרת של 112px.
+        // מה שנראה כמו קובץ "חתוך בחצי" או פיסה מטושטשת היה בעצם פינה אחת של
+        // תמונה ענקית. כך הקנבס מתנהג בדיוק כמו תמונה, בכל שימוש.
+        canvas.className = className
         canvas.style.display = 'block'
         const ctx = canvas.getContext('2d')
         if (!ctx) { bitmap.close(); throw new Error('canvas unavailable') }
@@ -91,7 +96,7 @@ export default function SafeDocImage({
       alive = false
       try { mount.remove() } catch { /* כבר הוסר */ }
     }
-  }, [path, name])
+  }, [path, name, className])
 
   const cur = state.key === path ? state : { done: false, failed: false, fallback: '' }
 
@@ -111,9 +116,14 @@ export default function SafeDocImage({
   // ⚠️ ה-host (שאליו מצורף ה-canvas ידנית) חייב להישאר ריק מבחינת React — אחרת
   // React ינהל צאצא (Loader) באותו צומת שבו אנחנו מוסיפים canvas, וזה מקור התנגשות
   // ה-removeChild. לכן ה-Loader מרונדר כ-overlay אחות (sibling) ולא כילד של ה-host.
+  // ⚠️ בזמן הטעינה העוטף נושא את ה-className כדי לשמור מקום ולמנוע קפיצה
+  // בפריסה; ברגע שהקנבס נכנס, הוא זה שנושא אותו והעוטף מתכווץ סביבו.
+  // ⚠️ display:contents אחרי הטעינה — כך הקנבס יושב בפריסה כאילו הוא ילד ישיר
+  // של האב, בדיוק כמו <img>. עוטף רגיל היה מוסיף תיבה שמשנה גבהים ומרווחים.
+  // בזמן הטעינה העוטף כן נושא את ה-className, כדי לשמור מקום ולמנוע קפיצה.
   return (
-    <div className={`relative ${className}`}>
-      <div ref={hostRef} className="w-full h-full" title={name ?? undefined} aria-label={alt} role="img" />
+    <div className={cur.done ? 'contents' : `relative ${className}`}>
+      <div ref={hostRef} className="contents" title={name ?? undefined} aria-label={alt} role="img" />
       {!cur.done && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
           <Loader2 size={18} className="animate-spin text-slate-300" />
