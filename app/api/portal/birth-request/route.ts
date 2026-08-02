@@ -40,6 +40,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
   }
 
+  // ⚠️ אישור לידה חובה — נבדק בשרת ולא רק בקליינט. בלי זה, בקשה שנשלחה ישירות
+  // ל-API (בעקיפת הטופס) הצליחה להיקלט ללא אישור לידה כלל.
+  if (!birth_certificate_url || !String(birth_certificate_url).trim()) {
+    return NextResponse.json({ error: 'חובה לצרף אישור לידה' }, { status: 400 })
+  }
+
   // ── בחירת ההטבות: כרטיס מזון ו/או בית החלמה ──
   // undefined = לא נשלח (לקוח ישן) → נחשב true, כדי לשמור על התנהגות "שתיהן".
   const wantsFoodCard = body.wants_food_card !== false
