@@ -50,13 +50,16 @@ export async function POST(request: NextRequest) {
   // Verify beneficiary exists
   const { data: ben, error: benErr } = await admin
     .from('beneficiaries')
-    .select('id, eligibility_status')
+    .select('id, eligibility_status, required_docs')
     .eq('id', beneficiaryId)
     .maybeSingle()
   if (benErr || !ben) return NextResponse.json({ error: 'צאצא לא נמצא' }, { status: 404 })
 
   const uploaded: string[] = []
   let lastUrl = ''
+  // כתובת הקובץ לפי סוג — נדרש כשמעלים כמה מסמכים יחד ורוצים דווקא אחד מהם
+  // (lastUrl הוא האחרון שהועלה, ולא בהכרח הסוג שמחפשים).
+  const urlByType: Record<string, string> = {}
 
   // איסוף כל הקבצים שנשלחו: כל שדה File שאינו 'beneficiary_id'. שם השדה = סוג המסמך.
   // תמיכה לאחור: השדה הגנרי 'file' נשמר כ-'birth_cert' (זרימת אישור לידה).
@@ -88,6 +91,7 @@ export async function POST(request: NextRequest) {
 
     const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path)
     lastUrl = urlData.publicUrl
+    urlByType[docType] = urlData.publicUrl
 
     // ── החלפה, לא הוספה ──
     // קודם המערכת רק הוסיפה: מי שהעלה ת"ז שוב, נשארו לו שתיים, ואי אפשר
@@ -136,6 +140,28 @@ export async function POST(request: NextRequest) {
 
   if (uploaded.length === 0) {
     return NextResponse.json({ error: 'לא הועלו קבצים' }, { status: 400 })
+  }
+
+  // ── אישור לידה שהושלם במעגל התיקונים → חוזר גם לתיק הלידה ──
+  // ⚠️ בלי זה, יולדת שהמזכירות ביקשה ממנה אישור לידה מתוקן העלתה אותו לפורטל,
+  // הקובץ נשמר ב-documents — וכרטסת הלידה המשיכה להציג את הקובץ הפגום (או כלום).
+  //
+  // התנאי צר בכוונה: רק כשהמשפחה במעגל תיקונים *ו*המזכירות סימנה במפורש
+  // "אישור לידה" ברשימת המסמכים הנדרשים. כך העלאה שהיא חלק מהגשת בקשה חדשה
+  // (שגם היא נשמרת כ-birth_cert) אינה יכולה להידבק בטעות לתיק אחר.
+  const askedForCert = (ben.required_docs ?? '').split(',').map((s: string) => s.trim()).includes('birth_cert')
+  if (uploaded.includes('birth_cert') && ben.eligibility_status === 'docs_pending' && askedForCert) {
+    const { data: aids } = await admin
+      .from('maternity_aids')
+      .select('id')
+      .eq('beneficiary_id', beneficiaryId)
+      .not('status', 'eq', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (aids?.[0]) {
+      await admin.from('maternity_aids').update({ birth_certificate_url: urlByType.birth_cert }).eq('id', aids[0].id)
+        .then(undefined, () => {})
+    }
   }
 
   // מעגל תיקונים: בסטטוס "השלמת מסמכים" — רק כשהצאצא השלים את *כל* הנדרש

@@ -10,6 +10,7 @@ import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
+import MaternityDocsFixDialog from './MaternityDocsFixDialog'
 
 export type MotherRef = {
   id: string
@@ -159,6 +160,9 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // עם שורת הסבר. המנהל יכול לאשר את הלידה גם אם המשפחה טרם אושרה.
   const [deepOpen, setDeepOpen] = useState(false)
   const [deepReason, setDeepReason] = useState('')
+  // חלונית "השלמת מסמכים" — תקלה במסמכי התיק; היולדת מתבקשת לצרף שוב במקום
+  // שהבקשה תידחה. אינה משנה את סטטוס הלידה (ראו MaternityDocsFixDialog).
+  const [docsFixOpen, setDocsFixOpen] = useState(false)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
@@ -502,6 +506,13 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
           </div>
         </div>
       )}
+      {docsFixOpen && (
+        <MaternityDocsFixDialog
+          aidId={aid.id}
+          familyApproved={((aid.beneficiary as MotherRef | undefined)?.eligibility_status ?? 'pending') === 'approved'}
+          onClose={() => setDocsFixOpen(false)}
+        />
+      )}
       {showSuccess && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-7 flex flex-col items-center gap-3 max-w-xs text-center">
@@ -520,7 +531,8 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
             // מיקום התפריט מחושב מהכפתור, כי הוא מרונדר כ-fixed מחוץ לטבלה.
             const r = btnRef.current?.getBoundingClientRect()
             if (r) {
-              const MENU_W = 176, MENU_H = 190, GAP = 6
+              // גובה משוער של התפריט — כולל "השלמת מסמכים" והמפריד שמעליה
+              const MENU_W = 176, MENU_H = 235, GAP = 6
               // נפתח מתחת לכפתור; אם אין מקום — מעליו. אותו היגיון אופקית.
               const top = r.bottom + MENU_H + GAP > window.innerHeight
                 ? Math.max(GAP, r.top - MENU_H - GAP)
@@ -560,6 +572,13 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
                 </button>
               )
             })}
+            {/* ⚠️ אינה סטטוס אלא פעולה: תקלה במסמכים אינה סיבה לדחות את הלידה.
+                הבקשה נשארת ממתינה והיולדת מתבקשת להשלים — ראו MaternityDocsFixDialog. */}
+            <div className="my-1 border-t border-slate-100" />
+            <button onClick={() => { setOpen(false); setDocsFixOpen(true) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-right text-blue-600 transition-colors hover:bg-blue-50">
+              <FileText size={15} /> השלמת מסמכים
+            </button>
             {/* ⚠️ "אישור יחוס (משפחה)" הוסר מכאן בכוונה. אישור המשפחה הוא פעולה
                 על הצאצא ולא על הלידה, והוא נעשה בכרטסת הצאצא בלבד — כדי שלא
                 ישונה בטעות מתוך מסך הלידה. הפעולה עצמה קיימת שם ללא שינוי. */}

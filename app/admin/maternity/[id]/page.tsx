@@ -15,6 +15,8 @@ import RecoveryDaysEditor from '../RecoveryDaysEditor'
 import RecoveryHomeEditor from './RecoveryHomeEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
+import { getDocTypes } from '@/lib/serverDocTypes'
+import { docTypeLabel } from '@/lib/docTypes'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -170,10 +172,12 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const typedChain = Array.isArray(ben?.lineage_chain)
     ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
     : []
-  const [lineagePath, idDocs, genStatus] = await Promise.all([
+  const [lineagePath, idDocs, genStatus, docTypeList] = await Promise.all([
     getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
     computeGenStatus(typedChain, ben?.lineage_node_id),
+    // לתוויות בבאנר "השלמת מסמכים" — כולל סוגים שנוספו בהגדרות
+    getDocTypes(),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
@@ -248,6 +252,39 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
               לתיעוד המלא בכרטסת המשפחה <ExternalLink size={12} />
             </Link>
           )}
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────
+          בקשת השלמת מסמכים פתוחה — גלויה על כרטסת הלידה.
+          ⚠️ הבקשה נשלחת מכאן ("השלמת מסמכים" בתפריט הסטטוס), אבל היא משנה את
+          סטטוס *המשפחה* ולא את סטטוס הלידה. בלי הבאנר הזה המזכיר שפותח את
+          התיק שוב רואה בקשה "ממתינה" בלי שום רמז שכבר ביקשנו מסמכים וממתינים
+          להם — והבקשה הייתה נשלחת פעם אחר פעם.
+          ───────────────────────────────────────────────────────────────────── */}
+      {ben && (ben.eligibility_status === 'docs_pending' || ben.eligibility_status === 'docs_returned') && (
+        <div className={`rounded-xl border-2 px-4 py-3 ${
+          ben.eligibility_status === 'docs_pending' ? 'border-blue-200 bg-blue-50' : 'border-teal-200 bg-teal-50'
+        }`}>
+          <p className={`flex items-center gap-1.5 text-xs font-bold mb-1 ${
+            ben.eligibility_status === 'docs_pending' ? 'text-blue-800' : 'text-teal-800'
+          }`}>
+            <FileText size={14} />
+            {ben.eligibility_status === 'docs_pending'
+              ? 'נשלחה ליולדת בקשת השלמת מסמכים — ממתינים לקבצים'
+              : 'היולדת השלימה את המסמכים — ממתין לבדיקה'}
+          </p>
+          {ben.eligibility_status === 'docs_pending' && (ben.required_docs ?? '').trim() && (
+            <p className="text-sm text-blue-900 leading-relaxed">
+              נדרשו: {(ben.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean).map(k => docTypeLabel(k, docTypeList)).join(' · ')}
+            </p>
+          )}
+          <Link href={`/admin/beneficiaries/${ben.id}`}
+            className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold underline ${
+              ben.eligibility_status === 'docs_pending' ? 'text-blue-700 hover:text-blue-900' : 'text-teal-700 hover:text-teal-900'
+            }`}>
+            לתיעוד המלא בכרטסת המשפחה <ExternalLink size={12} />
+          </Link>
         </div>
       )}
 

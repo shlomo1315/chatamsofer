@@ -2428,14 +2428,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         setError('שגיאה בהעלאת תעודת הזהות. אנא נסה שוב.'); setLoading(false); return
       }
       // Upload birth certificate first
-      let certUrl = ''
+      // ⚠️ כשל בהעלאה עוצר את ההגשה. קודם התעלמנו ממנו בשקט (`if (upRes.ok)`)
+      // והבקשה נשלחה עם כתובת ריקה — כך נקלטו בקשות לידה בלי אישור לידה כלל,
+      // והיולדת הייתה משוכנעת שצירפה. ההודעה מציגה את סיבת הכשל האמיתית
+      // (קובץ גדול מדי / סוג לא נתמך), ולא "צרפו אישור לידה" על קובץ שכן צורף.
       const fd = new FormData()
       fd.append('file', birthCertFile)
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('doc_type', 'birth_cert')
       const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
-      const upData = await upRes.json()
-      if (upRes.ok) certUrl = upData.url ?? ''
+      const upData = await upRes.json().catch(() => ({}))
+      const certUrl = upRes.ok ? (upData.url ?? '') : ''
+      if (!certUrl) {
+        setError(upData.error || 'שגיאה בהעלאת אישור הלידה. אנא נסו שוב או צרפו קובץ אחר.')
+        setLoading(false); return
+      }
 
       // רשימת התינוקות — תינוק אחד בלידה רגילה, שניים בתאומים
       const babies = [
@@ -2627,14 +2634,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (!birthCertFile) { setError('אנא צרף מסמך אישור'); return }
     setError(''); setLoading(true)
     try {
-      let certUrl = ''
+      // ⚠️ כמו בלידה רגילה — כשל בהעלאה עוצר, ולא נשלח בשקט בלי מסמך
       const fd = new FormData()
       fd.append('file', birthCertFile)
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('doc_type', 'birth_cert')
       const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
-      const upData = await upRes.json()
-      if (upRes.ok) certUrl = upData.url ?? ''
+      const upData = await upRes.json().catch(() => ({}))
+      const certUrl = upRes.ok ? (upData.url ?? '') : ''
+      if (!certUrl) {
+        setError(upData.error || 'שגיאה בהעלאת המסמך. אנא נסו שוב או צרפו קובץ אחר.')
+        setLoading(false); return
+      }
 
       const res = await fetch('/api/portal/birth-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
