@@ -87,3 +87,35 @@ export function composeLineageName(parts: LineageNameParts): string {
 export function alreadyFormatted(name: string): boolean {
   return new RegExp(`^\\s*${HUSBAND_TITLE}\\s`).test(String(name ?? ''))
 }
+
+/**
+ * נרמול שם דור שהתקבל מהרשת — לרישום הציבורי ולטופס נדרים פלוס כאחד.
+ *
+ * מקבל או שדות מופרדים (husband/wife/family) או שם מוכן (name), ומחזיר תמיד
+ * את הניסוח האחיד. שם שכבר בפורמט מוחזר כמות שהוא, כדי לא להוסיף תואר פעמיים.
+ *
+ * ⚠️ קיים בשרת ולא רק בטופס: טופס נדרים פלוס הוא חיצוני, ואי אפשר לסמוך שם
+ * על ולידציה בצד הלקוח.
+ */
+export function normalizeLineageNodeName(
+  n: { name?: string | null; husband?: string | null; wife?: string | null; family?: string | null } | null | undefined,
+): string {
+  if (!n) return ''
+  if (n.husband || n.family) {
+    return composeLineageName({ husband: n.husband ?? '', wife: n.wife ?? '', family: n.family ?? '' })
+  }
+  const raw = String(n.name ?? '').replace(/\s+/g, ' ').trim()
+  if (!raw || alreadyFormatted(raw)) return raw
+
+  // שם חופשי שהגיע בלי פירוק: מסירים תארים בקצוות ומרכיבים מחדש. המילה
+  // האחרונה היא שם המשפחה, והחלק שאחרי ו' החיבור הוא שם האישה.
+  const cleaned = stripTitles(raw)
+  const words = cleaned.split(' ').filter(Boolean)
+  if (words.length < 2) return cleaned || raw
+  const family = words[words.length - 1]
+  const rest = words.slice(0, -1)
+  const wIdx = rest.findIndex((w, i) => i > 0 && w.startsWith('ו') && w.length > 2)
+  const husband = (wIdx >= 0 ? rest.slice(0, wIdx) : rest).join(' ')
+  const wife = wIdx >= 0 ? stripTitles(rest.slice(wIdx).join(' ').replace(/^ו/, '')) : ''
+  return composeLineageName({ husband, wife, family })
+}

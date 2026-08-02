@@ -10,6 +10,7 @@ import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
+import { normalizeLineageNodeName } from '@/lib/lineageNameFormat'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets } from '@/lib/govData'
@@ -316,8 +317,12 @@ export async function POST(request: NextRequest) {
         let gen: number = sel.generation as number
         let lastId: string = sel.id
         const newPendingNames: string[] = []
-        for (const n of lineage_new_nodes as { name?: string; relation?: string }[]) {
-          const nm = (n?.name ?? '').toString().trim().replace(/\s+/g, ' ')
+        // ⚠️ הניסוח נאכף בשרת ולא רק בטופס. אותו נתיב משרת גם את טופס נדרים
+        // פלוס החיצוני, ושם אין שליטה על צד הלקוח — בלי הנרמול כאן היו נכנסים
+        // לעץ שמות עם תארים ("רבי משה שליט\"א") לצד אותו אדם בלי תואר, וזו
+        // בדיוק הכפילות שהפורמט האחיד נועד למנוע.
+        for (const n of lineage_new_nodes as { name?: string; relation?: string; husband?: string; wife?: string; family?: string }[]) {
+          const nm = normalizeLineageNodeName(n)
           if (!nm) continue
           gen += 1
           const rel = n?.relation === 'son' || n?.relation === 'son_in_law' ? n.relation : null

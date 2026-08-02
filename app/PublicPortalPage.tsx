@@ -15,6 +15,7 @@ import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
+import { composeLineageName, findTitles } from '@/lib/lineageNameFormat'
 import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
@@ -824,7 +825,12 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   const [options, setOptions] = useState<LineageNode[]>([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
-  const [newName, setNewName] = useState('')
+  // ⚠️ שלושה שדות ולא שדה שם אחד: כשהיה שדה חופשי, כל נרשם כתב אחרת ("רבי",
+  // "ר'", "הרב", ועם "שליט\"א" בסוף) — ואותו אדם נכנס לעץ בכמה ניסוחים שנראים
+  // כמו אנשים שונים. כאן מזינים רק את השמות, והמערכת מרכיבה את הניסוח האחיד.
+  const [newHusband, setNewHusband] = useState('')
+  const [newWife, setNewWife] = useState('')
+  const [newFamily, setNewFamily] = useState('')
   const [newRel, setNewRel] = useState<'son' | 'son_in_law' | null>(null)
   const [newErr, setNewErr] = useState('')
   const [selfAdded, setSelfAdded] = useState(false)
@@ -859,13 +865,25 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
     setChain(c => [...c, { id: node.id, name: node.name, relation: node.relation ?? null, isNew: false }])
     setOptions(await fetchChildren(node.id))
   }
+  // תצוגה חיה של הניסוח שייווצר — כדי שהנרשם יראה מה ייכנס לעץ, ולא ינחש
+  const newPreview = composeLineageName({ husband: newHusband, wife: newWife, family: newFamily })
+
   const confirmNew = () => {
-    const nm = newName.trim()
-    if (nm.split(/\s+/).filter(Boolean).length < 2) { setNewErr('יש להזין שם פרטי מלא ושם משפחה מלא (לדוגמה: "משה כהן")'); return }
+    const h = newHusband.trim(), w = newWife.trim(), f = newFamily.trim()
+    if (!h) { setNewErr('יש להזין את שמו הפרטי של הבעל'); return }
+    if (!f) { setNewErr('יש להזין שם משפחה'); return }
+    // ⚠️ תואר שהוזן בטעות נחסם *לפני* השמירה ולא מנוקה בשקט: אם נשתוק, הנרשם
+    // לא ילמד את הכלל וימשיך להזין תארים בכל דור.
+    const bad = [...findTitles(h), ...findTitles(w), ...findTitles(f)]
+    if (bad.length) {
+      setNewErr(`אין להזין תארים — הסירו «${bad.join('», «')}». המערכת מוסיפה "רבי" ו"הרבנית" לבד.`)
+      return
+    }
     if (!newRel) { setNewErr('יש לסמן בן או חתן'); return }
     setSelfAdded(false)
-    setChain(c => [...c, { id: null, name: nm, relation: newRel, isNew: true }])
-    setOptions([]); setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('')
+    setChain(c => [...c, { id: null, name: newPreview, relation: newRel, isNew: true }])
+    setOptions([]); setAddOpen(false)
+    setNewHusband(''); setNewWife(''); setNewFamily(''); setNewRel(null); setNewErr('')
   }
   // מחיקת שם מהשרשרת לפי מיקומו — מסירה אותו ואת כל מה שאחריו (הדורות תלויים זה בזה),
   // ומחזירה את רשימת הבחירה לדור שנותר האחרון.
@@ -993,7 +1011,45 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
           ) : (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col gap-2">
               <p className="text-xs font-semibold text-amber-800">הוספת דור {chain.length + 2} (ייכנס לאישור הצוות)</p>
-              <TextInput value={newName} onChange={e => { setNewName(e.target.value); setNewErr('') }} placeholder="שם פרטי מלא ושם משפחה מלא" />
+
+              {/* ⚠️ ההנחיה מפורשת ובאדום: כשהיה שדה חופשי, כל אחד כתב אחרת
+                  ואותו אדם נכנס לעץ בכמה ניסוחים. כאן מזינים שמות בלבד. */}
+              <div className="rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2.5">
+                <p className="text-xs font-extrabold text-red-800 mb-1.5">
+                  ⚠️ יש להזין <span className="underline">שמות פרטיים בלבד</span> — בלי תארים!
+                </p>
+                <ul className="text-[11px] text-red-800 leading-relaxed space-y-0.5 pr-1">
+                  <li>✗ לא לכתוב לפני השם: <span className="font-bold">רבי · ר׳ · הרב · מוהר״ר · הרבנית · מרת</span></li>
+                  <li>✗ לא לכתוב אחרי השם: <span className="font-bold">שליט״א · הי״ו · ז״ל · זצ״ל · ע״ה</span></li>
+                  <li>✓ לדוגמה: לכתוב רק <span className="font-bold">משה</span> ורק <span className="font-bold">חיה</span></li>
+                </ul>
+                <p className="text-[11px] font-bold text-red-900 mt-1.5">
+                  המערכת מוסיפה «רבי» ו«הרבנית» אוטומטית.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-bold text-slate-600">שם הבעל (פרטי בלבד) *</span>
+                  <TextInput value={newHusband} onChange={e => { setNewHusband(e.target.value); setNewErr('') }} placeholder="משה" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-bold text-slate-600">שם האישה (פרטי בלבד)</span>
+                  <TextInput value={newWife} onChange={e => { setNewWife(e.target.value); setNewErr('') }} placeholder="חיה" />
+                </label>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-bold text-slate-600">שם משפחה *</span>
+                <TextInput value={newFamily} onChange={e => { setNewFamily(e.target.value); setNewErr('') }} placeholder="כהן" />
+              </label>
+
+              {/* מה ייכנס בפועל — כדי שלא יצטרך לנחש */}
+              {newPreview && (
+                <div className="rounded-lg bg-white border border-amber-300 px-3 py-2">
+                  <span className="text-[11px] font-semibold text-slate-500">ייכנס לעץ כך: </span>
+                  <span className="text-sm font-extrabold text-amber-900">{newPreview}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-slate-700">בן/חתן של הדור הקודם:</span>
                 {(['son', 'son_in_law'] as const).map(r => (
@@ -1004,7 +1060,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               {newErr && <p className="text-xs text-red-600">{newErr}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={confirmNew} className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-[0_6px_16px_-6px_rgba(217,119,6,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(217,119,6,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] rounded-lg px-4 py-2"><Check size={12} /> הוסף</button>
-                <button type="button" onClick={() => { setAddOpen(false); setNewName(''); setNewRel(null); setNewErr('') }} className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">ביטול</button>
+                <button type="button" onClick={() => { setAddOpen(false); setNewHusband(''); setNewWife(''); setNewFamily(''); setNewRel(null); setNewErr('') }} className="text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-3 py-2">ביטול</button>
               </div>
             </div>
           )}
@@ -1930,12 +1986,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const anyPhoneVerified = Boolean(regPhoneToken || regSpousePhoneToken || regPhone2Token)
   const phoneOptionalHint = 'אימות מספר זה אינו חובה — אימתם כבר מספר טלפון אחד, ודי בכך להשלמת הרישום. אמתו מספר זה רק אם תרצו שגם באמצעותו ניתן יהיה לקבל בעתיד קוד כניסה למערכת.'
 
-  const selfDisplayName = (() => {
-    const given = (showSpouseFields && regForm.spouse_name)
-      ? `${regForm.full_name} ו${regForm.spouse_name}`.trim()
-      : (regForm.full_name || '')
-    return [given, regForm.family_name].filter(Boolean).join(' ').trim()
-  })()
+  // ⚠️ אותו ניסוח אחיד כמו בהוספה ידנית: «רבי משה והרבנית חיה כהן». בלי זה
+  // הנרשם עצמו היה נכנס לעץ בפורמט אחר מכל שאר הדורות, ונראה כמו חריג.
+  const selfDisplayName = composeLineageName({
+    husband: regForm.full_name || '',
+    wife: (showSpouseFields && regForm.spouse_name) ? regForm.spouse_name : '',
+    family: regForm.family_name || '',
+  })
   const buildLineageChain = () => {
     const chain: { generation: number; name: string; relKey: string | null; relation: 'son' | 'son_in_law' | null }[] = []
     lineagePath.forEach((name, i) => {
