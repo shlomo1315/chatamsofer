@@ -25,6 +25,24 @@ interface DupGroup {
 }
 interface UndoBatch { batchId: string; at: string; count: number; names: string[] }
 
+interface PlanStep {
+  keepId: string; generation: number; direction: 'requested' | 'up' | 'down'
+  count: number; names: string[]; needsNameChoice: boolean
+  candidates: { id: string; name: string; status: string | null; relation: string | null; children: number }[]
+}
+interface PlanResp {
+  steps: PlanStep[]
+  stopped: { generation: number; keepId: string; keepName: string; otherId: string; otherName: string }[]
+  totalMerged: number
+  generations: number[]
+}
+
+const DIR_LABEL: Record<PlanStep['direction'], string> = {
+  requested: 'הדור שבחרת',
+  up: 'דור למעלה',
+  down: 'דור למטה',
+}
+
 const LEVEL_UI: Record<Level, { label: string; hint: string; bg: string; fg: string; border: string }> = {
   exact:    { label: 'זהים', hint: 'שם זהה אחרי הסרת תארים — בטוח למיזוג מרוכז', bg: '#F0FDF4', fg: '#166534', border: '#BBF7D0' },
   strong:   { label: 'קרובים מאוד', hint: 'דורש הכרעה שלך — עברו אחד-אחד', bg: '#FFFBEB', fg: '#92400E', border: '#FDE68A' },
@@ -51,8 +69,9 @@ export default function DuplicatesPanel({
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [undoList, setUndoList] = useState<UndoBatch[]>([])
-  // חלונית בחירת השם שיישאר אחרי המיזוג
-  const [nameDlg, setNameDlg] = useState<{ group: DupGroup; chosen: string; custom: string } | null>(null)
+  // תצוגה מקדימה של המפל + בחירת שם לכל דור שבו הניסוחים שונים
+  const [plan, setPlan] = useState<{ group: DupGroup; data: PlanResp; names: Record<string, string> } | null>(null)
+  const [planning, setPlanning] = useState<string | null>(null)
 
   const scan = useCallback(async () => {
     setLoading(true)
@@ -103,7 +122,33 @@ export default function DuplicatesPanel({
 
   type MergeOutcome = 'ok' | 'gone' | 'error'
 
-  const mergeGroup = async (g: DupGroup, quiet = false, finalName?: string): Promise<MergeOutcome> => {
+  // פתיחת תצוגה מקדימה: מחשבת את כל המפל ואוספת הכרעת שם לכל דור שנדרש
+  const openPlan = async (g: DupGroup) => {
+    const key = groupKey(g)
+    setPlanning(key)
+    try {
+      const keep = chooseKeep(g.nodes)
+      const r = await fetch('/api/admin/lineage/merge/plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keepId: keep.id, mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id) }),
+      })
+      const d: PlanResp = await r.json()
+      if (!r.ok) { toast.error((d as unknown as { error?: string }).error || 'שגיאה בחישוב המיזוג'); setPlanning(null); return }
+      // ברירת מחדל לכל דור — הנוסח המלא ביותר מבין המשתתפים
+      const names: Record<string, string> = {}
+      for (const s of d.steps) {
+        if (!s.needsNameChoice) continue
+        names[s.keepId] = [...s.names].sort((a, b) => {
+          const aw = a.trim().split(/\s+/).length, bw = b.trim().split(/\s+/).length
+          return aw !== bw ? bw - aw : b.trim().length - a.trim().length
+        })[0]
+      }
+      setPlan({ group: g, data: d, names })
+    } catch { toast.error('שגיאת רשת') }
+    setPlanning(null)
+  }
+
+  const mergeGroup = async (g: DupGroup, quiet = false, names?: Record<string, string>): Promise<MergeOutcome> => {
     try {
       const keep = chooseKeep(g.nodes)
       const r = await fetch('/api/admin/lineage/merge', {
@@ -111,7 +156,7 @@ export default function DuplicatesPanel({
         body: JSON.stringify({
           keepId: keep.id,
           mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id),
-          finalName: finalName ?? fullestName(g.nodes),
+          names: names ?? { [keep.id]: fullestName(g.nodes) },
         }),
       })
       const d = await r.json()
@@ -297,8 +342,8 @@ export default function DuplicatesPanel({
                 </div>
 
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  <button onClick={() => setNameDlg({ group: g, chosen: fullestName(g.nodes), custom: '' })}
-                    disabled={busy === key}
+                  <button onClick={() => void openPlan(g)}
+                    disabled={busy === key || planning === key}
                     style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {busy === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />}
                     מזג — אותו אדם
@@ -320,67 +365,99 @@ export default function DuplicatesPanel({
         </div>
       )}
 
-      {/* ── בחירת השם שיישאר ──
-          ⚠️ הכפילים נכתבו בניסוחים שונים, והמערכת אינה יכולה לדעת איזה נוסח
-          נכון. היא מציעה את המלא ביותר — וההכרעה של המשתמש. */}
-      {nameDlg && (
-        <div onClick={() => setNameDlg(null)}
+      {/* ── תצוגה מקדימה של המפל + בחירת שם לכל דור ──
+          ⚠️ המפל מיזג עד כה דורות נוספים ובחר להם שם *בשקט*: "ר' יוסף יהודה"
+          ו-"יוסף יהודה" הם אותו מפתח, ולכן המיזוג נכון — אבל איזה נוסח יישאר
+          אינה החלטה של המערכת. כאן כל דור שבו הניסוחים שונים מגיע להכרעה,
+          והכל מוצג לפני שנוגעים במשהו. */}
+      {plan && (
+        <div onClick={() => setPlan(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+            style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 620, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
             <div style={{ background: '#F5F3FF', borderBottom: '2px solid #DDD6FE', padding: '14px 18px' }}>
-              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#5B21B6' }}>איזה שם יישאר אחרי המיזוג?</div>
-              <div style={{ fontSize: 11.5, color: '#7C3AED', marginTop: 2 }}>
-                {nameDlg.group.nodes.length} רשומות ימוזגו לאחת · דור {nameDlg.group.generation}
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#5B21B6' }}>אישור מיזוג — כך זה ייראה</div>
+              <div style={{ fontSize: 12, color: '#7C3AED', marginTop: 3 }}>
+                {plan.data.totalMerged} צמתים ימוזגו · {plan.data.generations.length} דורות
+                {plan.data.generations.length > 0 && ` (${Math.min(...plan.data.generations)}–${Math.max(...plan.data.generations)})`}
               </div>
             </div>
-            <div style={{ padding: 16, maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7 }}>
-              {nameDlg.group.nodes.map(n => {
-                const on = nameDlg.chosen === n.name && !nameDlg.custom.trim()
-                return (
-                  <button key={n.id} type="button"
-                    onClick={() => setNameDlg(d => d && ({ ...d, chosen: n.name, custom: '' }))}
-                    style={{ display: 'flex', alignItems: 'center', gap: 9, textAlign: 'right', background: on ? '#FAF5FF' : '#fff', border: `2px solid ${on ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 11, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    <span style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${on ? '#7C3AED' : '#CBD5E1'}`, background: on ? '#7C3AED' : '#fff', flexShrink: 0 }} />
-                    <span style={{ flex: 1 }}>
-                      <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{n.name}</span>
-                      <span style={{ display: 'block', fontSize: 10.5, color: '#64748B', marginTop: 1 }}>
-                        {relTxt(n.relation)} · {statusTxt(n.status)} · {n.children} ילדים
-                        {n.families > 0 ? ` · ${n.families} משפחות` : ''}
-                      </span>
-                    </span>
-                    {n.name === fullestName(nameDlg.group.nodes) && (
-                      <span style={{ fontSize: 9.5, fontWeight: 800, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 20, padding: '2px 7px', whiteSpace: 'nowrap' }}>הנוסח המלא ביותר</span>
-                    )}
-                  </button>
-                )
-              })}
 
-              <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 5, paddingTop: 11 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#334155', marginBottom: 6 }}>או הזן שם אחר:</div>
-                <input
-                  value={nameDlg.custom}
-                  onChange={e => setNameDlg(d => d && ({ ...d, custom: e.target.value }))}
-                  placeholder="לדוגמה: רבי ישראל ומרת רחל לבל"
-                  style={{ width: '100%', padding: '10px 12px', fontSize: 13.5, borderRadius: 11, border: `2px solid ${nameDlg.custom.trim() ? '#7C3AED' : '#E2E8F0'}`, outline: 'none', fontFamily: 'inherit', direction: 'rtl' }}
-                />
-              </div>
+            <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {plan.data.steps.map(s => (
+                <div key={s.keepId}
+                  style={{ border: `1.5px solid ${s.direction === 'requested' ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 12, padding: '11px 13px', background: s.direction === 'requested' ? '#FAF5FF' : '#fff' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: s.needsNameChoice ? 8 : 0, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px' }}>דור {s.generation}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B' }}>{DIR_LABEL[s.direction]}</span>
+                    <span style={{ fontSize: 11.5, color: '#475569' }}>· {s.count} צמתים → 1</span>
+                    {!s.needsNameChoice && (
+                      <span style={{ fontSize: 11, color: '#166534', fontWeight: 700 }}>· השם זהה בכולם</span>
+                    )}
+                  </div>
+
+                  {s.needsNameChoice && (
+                    <>
+                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#92400E', marginBottom: 6 }}>
+                        הניסוחים שונים — איזה שם יישאר?
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {s.names.map(nm => {
+                          const on = plan.names[s.keepId] === nm
+                          return (
+                            <button key={nm} type="button"
+                              onClick={() => setPlan(p => p && ({ ...p, names: { ...p.names, [s.keepId]: nm } }))}
+                              style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'right', background: on ? '#FAF5FF' : '#fff', border: `2px solid ${on ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 9, padding: '7px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                              <span style={{ width: 13, height: 13, borderRadius: '50%', border: `2px solid ${on ? '#7C3AED' : '#CBD5E1'}`, background: on ? '#7C3AED' : '#fff', flexShrink: 0 }} />
+                              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{nm}</span>
+                            </button>
+                          )
+                        })}
+                        <input
+                          value={s.names.includes(plan.names[s.keepId]) ? '' : (plan.names[s.keepId] ?? '')}
+                          onChange={e => setPlan(p => p && ({ ...p, names: { ...p.names, [s.keepId]: e.target.value } }))}
+                          placeholder="או הזן שם אחר…"
+                          style={{ width: '100%', padding: '7px 10px', fontSize: 12.5, borderRadius: 9, border: '2px solid #E2E8F0', outline: 'none', fontFamily: 'inherit', direction: 'rtl' }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+
+              {/* דורות שהמפל נעצר בהם — שם מקורב, לא ממוזג אוטומטית */}
+              {plan.data.stopped.length > 0 && (
+                <div style={{ background: '#FFFBEB', border: '1.5px solid #FDE68A', borderRadius: 12, padding: '11px 13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: '#92400E', marginBottom: 7 }}>
+                    <AlertTriangle size={14} /> המפל נעצר כאן — נדרשת הכרעה שלך
+                  </div>
+                  {plan.data.stopped.map((st, i) => (
+                    <div key={i} style={{ fontSize: 11.5, color: '#78350F', lineHeight: 1.7 }}>
+                      דור {st.generation}: «{st.keepName}» מול «{st.otherName}» — שמות שונים, לא מוזגו.
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 6 }}>
+                    אפשר למזג אותם בנפרד אחרי שתחליט — הם יופיעו בסריקה הבאה.
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 8, padding: '0 16px 16px' }}>
-              <button type="button" disabled={busy === 'name'}
+
+            <div style={{ display: 'flex', gap: 8, padding: 16, borderTop: '1px solid #E2E8F0' }}>
+              <button type="button" disabled={busy === 'plan'}
                 onClick={async () => {
-                  const g = nameDlg.group
-                  const finalName = nameDlg.custom.trim() || nameDlg.chosen
-                  setBusy('name')
-                  const out = await mergeGroup(g, false, finalName)
-                  setBusy(null); setNameDlg(null)
+                  const g = plan.group
+                  const names = plan.names
+                  setBusy('plan')
+                  const out = await mergeGroup(g, false, names)
+                  setBusy(null); setPlan(null)
                   if (out !== 'error') { await scan(); await loadUndo(); onDone() }
                 }}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '11px 0', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
-                {busy === 'name' ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
-                מזג — והשאר שם זה
+                {busy === 'plan' ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
+                בצע מיזוג
               </button>
-              <button type="button" onClick={() => setNameDlg(null)}
+              <button type="button" onClick={() => setPlan(null)}
                 style={{ background: '#fff', color: '#475569', border: '2px solid #CBD5E1', borderRadius: 11, padding: '11px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
                 ביטול
               </button>

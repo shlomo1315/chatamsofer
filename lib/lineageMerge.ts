@@ -83,6 +83,156 @@ export function groupForAutoMerge(nodes: MergeNodeRow[]): MergeNodeRow[][] {
   return [...byKey.values()].filter(g => g.length > 1)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// תכנון המפל — לוגיקה טהורה, בלי מסד נתונים.
+//
+// ⚠️ הופרד מהביצוע בכוונה. המפל נוגע בעשרות צמתים בבת אחת, ומיזוג שגוי הוא
+// הרסני; לוגיקה שרצה על מפות בזיכרון אפשר לבדוק במלואה מראש, ולהציג למשתמש
+// תצוגה מקדימה מדויקת של מה שעומד לקרות — לפני שנוגעים במשהו.
+//
+// ⚠️ הכלל כלפי מעלה תוקן: קודם הוא חיפש "אח של ההורה באותו שם", וזה פשוט לא
+// נכון בשרשרת שהתפצלה — שם ההורים הכפולים אינם אחים אלא יושבים תחת סבים
+// כפולים בעצמם:
+//
+//        ROOT            מיזוג C2→C1 בדק אם ל-B1 יש אח באותו שם.
+//       ╱     ╲          התשובה לא (B1 תחת A1, B2 תחת A2), המפל נעצר,
+//     A1       A2        ו-B2/A2 נשארו תלויים באוויר.
+//     │        │
+//     B1       B2        הכלל הנכון: ללכת אחרי *ההורים של מה שמוזג*.
+//     │        │         C1 בא מ-B1 ו-C2 בא מ-B2 → B1 ו-B2 הם אותו אדם.
+//     C1       C2        וכך הלאה עד השורש.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MergeStep {
+  keepId: string
+  mergeIds: string[]
+  generation: number
+  direction: 'requested' | 'up' | 'down'
+}
+
+export interface CascadePlan {
+  steps: MergeStep[]
+  /** התאמות מקורבות שהמפל נעצר בהן — דורשות הכרעת אדם ולא מבוצעות לבד */
+  stopped: { generation: number; keepId: string; keepName: string; otherId: string; otherName: string }[]
+  /** הצומת העליון ביותר שנגעו בו — ממנו מחשבים מחדש דורות */
+  topId: string
+  /** סך הצמתים שייעלמו (לא כולל הצמתים שנשארים) */
+  totalMerged: number
+}
+
+export function planCascade(
+  nodes: MergeNodeRow[],
+  keepId: string,
+  mergeIds: string[],
+  opts: { up?: boolean; down?: boolean } = {},
+): CascadePlan {
+  const doUp = opts.up !== false
+  const doDown = opts.down !== false
+
+  const byId = new Map(nodes.map(n => [n.id, { ...n }]))
+  const kids = new Map<string, string[]>()
+  for (const n of nodes) {
+    if (!n.parent_id) continue
+    const a = kids.get(n.parent_id) ?? []
+    a.push(n.id)
+    kids.set(n.parent_id, a)
+  }
+  const dead = new Set<string>()
+  const steps: MergeStep[] = []
+  const stopped: CascadePlan['stopped'] = []
+
+  // type-guard ולא boolean — כדי ש-TypeScript יצמצם את הטיפוס אחרי הבדיקה
+  const alive = (id: string | null | undefined): id is string => !!id && byId.has(id) && !dead.has(id)
+  const parentOf = (id: string) => byId.get(id)?.parent_id ?? null
+  const nameOf = (id: string) => byId.get(id)?.name ?? ''
+  const genOf = (id: string) => byId.get(id)?.generation ?? 0
+
+  /** מדמה מיזוג בזיכרון: הילדים עוברים ל-keep והכפילים מסומנים כמחוקים. */
+  const apply = (keep: string, ids: string[], direction: MergeStep['direction']) => {
+    const real = ids.filter(id => alive(id) && id !== keep)
+    if (!real.length) return
+    for (const m of real) {
+      for (const c of kids.get(m) ?? []) {
+        const node = byId.get(c)
+        if (node) node.parent_id = keep
+        const arr = kids.get(keep) ?? []
+        if (!arr.includes(c)) arr.push(c)
+        kids.set(keep, arr)
+      }
+      kids.delete(m)
+      dead.add(m)
+    }
+    steps.push({ keepId: keep, mergeIds: real, generation: genOf(keep), direction })
+  }
+
+  if (!alive(keepId)) return { steps, stopped, topId: keepId, totalMerged: 0 }
+
+  // ── 1) המיזוג שהמשתמש ביקש. ההורים נשמרים *לפני* הביצוע — הם המפתח למעלה.
+  const requestedParents = mergeIds.filter(alive).map(parentOf)
+  apply(keepId, mergeIds, 'requested')
+
+  // ── 2) כלפי מעלה: אחרי ההורים של מה שמוזג, לא אחרי אחים.
+  let curKeep = keepId
+  let curParents = requestedParents
+  let guard = 0
+  while (doUp && guard++ < 200) {
+    const kp = parentOf(curKeep)
+    if (!alive(kp)) break
+    const cands = [...new Set(curParents.filter(p => alive(p) && p !== kp))] as string[]
+    if (!cands.length) break
+
+    const key = autoMergeKey(nameOf(kp))
+    const same: string[] = []
+    for (const c of cands) {
+      if ((byId.get(c)?.status ?? '') === 'rejected') continue
+      if (autoMergeKey(nameOf(c)) === key) same.push(c)
+      else {
+        // ⚠️ התאמה מקורבת — נעצרים ומדווחים. מיזוג של שני אנשים שאינם אותו
+        // אדם הוא הרסני, ולכן ההכרעה הזו לעולם אינה נעשית אוטומטית.
+        stopped.push({
+          generation: genOf(kp), keepId: kp as string, keepName: nameOf(kp),
+          otherId: c, otherName: nameOf(c),
+        })
+      }
+    }
+    if (!same.length) break
+
+    const nextParents = same.map(parentOf)
+    apply(kp as string, same, 'up')
+    curKeep = kp as string
+    curParents = nextParents
+  }
+  const topId = curKeep
+
+  // ── 3) כלפי מטה מהצומת העליון: מיזוג ההורים הפך ילדים לאחים, וייתכן
+  //      שגם הם כפילים — כולל ענפים שלא היו חלק מהשרשרת המקורית.
+  if (doDown) {
+    const queue = [topId]
+    const seen = new Set<string>()
+    let g2 = 0
+    while (queue.length && g2++ < 20_000) {
+      const pid = queue.shift() as string
+      if (seen.has(pid) || !alive(pid)) continue
+      seen.add(pid)
+      const list = (kids.get(pid) ?? []).filter(alive).map(id => byId.get(id) as MergeNodeRow)
+      if (!list.length) continue
+      const groups = groupForAutoMerge(list)
+      const counts = new Map(list.map(n => [n.id, (kids.get(n.id) ?? []).filter(alive).length]))
+      const handled = new Set<string>()
+      for (const group of groups) {
+        const keep = pickKeepId(group, counts)
+        const ids = group.map(x => x.id).filter(id => id !== keep)
+        apply(keep, ids, 'down')
+        ids.forEach(id => handled.add(id))
+        queue.push(keep)
+      }
+      for (const n of list) if (!handled.has(n.id)) queue.push(n.id)
+    }
+  }
+
+  return { steps, stopped, topId, totalMerged: dead.size }
+}
+
 // ─── פעולות מול המסד ──────────────────────────────────────────────────────────
 
 /** מיזוג יחיד: mergeIds נבלעים לתוך keepId, עם רישום מלא לביטול. */
@@ -133,113 +283,6 @@ async function mergeOne(
   return { children, beneficiaries }
 }
 
-/**
- * המפל כלפי מטה: אחרי מיזוג, ילדי הצומת שנשאר עשויים להיות כפילים זה של זה.
- * ממזג אותם ויורד הלאה, עד שאין יותר כפילויות בענף.
- */
-async function cascadeDown(
-  db: SupabaseClient,
-  startId: string,
-  ctx: { batchId: string; userId?: string | null },
-): Promise<{ merged: number; children: number; beneficiaries: number }> {
-  let merged = 0, children = 0, beneficiaries = 0
-  const queue: string[] = [startId]
-  const seen = new Set<string>()
-  // ⚠️ תקרה קשיחה: נתוני עץ פגומים (מעגל אחרי עריכה שגויה) היו מסובבים
-  // את הלולאה עד ל-timeout של הבקשה.
-  let guard = 0
-
-  while (queue.length && guard++ < 20_000) {
-    const parentId = queue.shift() as string
-    if (seen.has(parentId)) continue
-    seen.add(parentId)
-
-    const { data: kids } = await db.from('lineage_nodes')
-      .select('id, name, parent_id, generation, status, relation')
-      .eq('parent_id', parentId)
-    const list = (kids ?? []) as MergeNodeRow[]
-    if (!list.length) continue
-
-    // מספר הילדים של כל מועמד — לבחירת מי נשאר
-    const counts = new Map<string, number>()
-    if (list.length > 1) {
-      const { data: grand } = await db.from('lineage_nodes')
-        .select('parent_id').in('parent_id', list.map(k => k.id))
-      for (const g of grand ?? []) {
-        const pid = (g as { parent_id: string }).parent_id
-        counts.set(pid, (counts.get(pid) ?? 0) + 1)
-      }
-    }
-
-    const groups = groupForAutoMerge(list)
-    const mergedAway = new Set<string>()
-
-    for (const group of groups) {
-      const keepId = pickKeepId(group, counts)
-      const ids = group.map(g => g.id).filter(id => id !== keepId)
-      const r = await mergeOne(db, keepId, ids, { ...ctx, source: 'cascade' })
-      merged += ids.length
-      children += r.children
-      beneficiaries += r.beneficiaries
-      ids.forEach(id => mergedAway.add(id))
-      // הצומת שנשאר נבדק שוב — הילדים שהצטרפו אליו עשויים להיות כפילים בעצמם
-      queue.push(keepId)
-    }
-
-    for (const k of list) if (!mergedAway.has(k.id)) queue.push(k.id)
-  }
-
-  return { merged, children, beneficiaries }
-}
-
-/**
- * המפל כלפי מעלה: אם ההורה של הצומת שנשאר הוא כפיל של אח שלו (אותו סב,
- * אותו שם) — ממזגים גם אותו, וממשיכים למעלה.
- * מחזיר את המזהה של הצומת העליון ביותר שנגענו בו.
- */
-async function cascadeUp(
-  db: SupabaseClient,
-  fromId: string,
-  ctx: { batchId: string; userId?: string | null },
-): Promise<{ merged: number; children: number; beneficiaries: number; topId: string }> {
-  let merged = 0, children = 0, beneficiaries = 0
-  let cur = fromId
-  let guard = 0
-
-  while (guard++ < 100) {
-    const { data: node } = await db.from('lineage_nodes')
-      .select('id, parent_id').eq('id', cur).maybeSingle()
-    const parentId = (node as { parent_id: string | null } | null)?.parent_id
-    if (!parentId) break
-
-    const { data: parent } = await db.from('lineage_nodes')
-      .select('id, name, parent_id, generation, status, relation').eq('id', parentId).maybeSingle()
-    if (!parent) break
-    const grandId = (parent as MergeNodeRow).parent_id
-    if (!grandId) break
-
-    // האחים של ההורה — מי מהם נושא את אותו שם
-    const { data: siblings } = await db.from('lineage_nodes')
-      .select('id, name, parent_id, generation, status, relation')
-      .eq('parent_id', grandId)
-    const list = (siblings ?? []) as MergeNodeRow[]
-    const key = autoMergeKey((parent as MergeNodeRow).name)
-    const group = list.filter(s => (s.status ?? '') !== 'rejected' && autoMergeKey(s.name) === key)
-    if (group.length < 2) { cur = parentId; continue }
-
-    // ⚠️ ההורה של הענף שאנחנו בתוכו הוא שנשאר — אחרת הצומת שהמשתמש עמד עליו
-    // היה עובר לצומת אחר, והמבט שלו היה קופץ למקום לא צפוי.
-    const ids = group.map(g => g.id).filter(id => id !== parentId)
-    const r = await mergeOne(db, parentId, ids, { ...ctx, source: 'cascade' })
-    merged += ids.length
-    children += r.children
-    beneficiaries += r.beneficiaries
-    cur = parentId
-  }
-
-  return { merged, children, beneficiaries, topId: cur }
-}
-
 /** חישוב-מחדש של מספרי הדורות בכל תת-העץ, אחרי שילדים הועברו. */
 export async function recalcGenerations(db: SupabaseClient, rootId: string): Promise<void> {
   const { data: root } = await db.from('lineage_nodes').select('generation').eq('id', rootId).maybeSingle()
@@ -271,8 +314,28 @@ export async function recalcGenerations(db: SupabaseClient, rootId: string): Pro
   }
 }
 
+export const MERGE_NODE_SELECT = 'id, name, parent_id, generation, status, relation'
+
+/** טוען את העץ ומחשב את תוכנית המפל — בלי לגעת בנתונים. */
+export async function loadCascadePlan(
+  db: SupabaseClient,
+  keepId: string,
+  mergeIds: string[],
+  opts: { up?: boolean; down?: boolean } = {},
+): Promise<{ plan: CascadePlan; nodes: MergeNodeRow[] }> {
+  const { data } = await db.from('lineage_nodes').select(MERGE_NODE_SELECT)
+  const nodes = (data ?? []) as MergeNodeRow[]
+  return { plan: planCascade(nodes, keepId, mergeIds, opts), nodes }
+}
+
 /**
- * מיזוג מלא: המיזוג שהמשתמש ביקש, ואחריו המפל (למטה ולמעלה, לפי הבחירה).
+ * ביצוע תוכנית המפל.
+ *
+ * ⚠️ names ממפה צומת-שנשאר → השם שייקבע לו. בלי זה המפל היה בוחר שם בשקט:
+ * "ר' יוסף יהודה קראוס" ו-"יוסף יהודה קראוס" הם אותו מפתח (התואר מוסר), ולכן
+ * המיזוג נכון — אבל *איזה נוסח יישאר* היא החלטה שאין למערכת דרך להכריע בה,
+ * והיא נעשתה בלי לשאול. עכשיו כל דור שבו הניסוחים אינם זהים מגיע להכרעת
+ * המשתמש מראש, ונשלח לכאן מוכן.
  */
 export async function mergeWithCascade(
   db: SupabaseClient,
@@ -281,33 +344,42 @@ export async function mergeWithCascade(
     mergeIds: string[]
     batchId: string
     userId?: string | null
+    /** צומת-שנשאר → שם סופי. מוחל אחרי המיזוג של אותו שלב. */
+    names?: Record<string, string>
     cascadeDown?: boolean
     cascadeUp?: boolean
   },
 ): Promise<MergeResult> {
   const ctx = { batchId: opts.batchId, userId: opts.userId }
-  const base = await mergeOne(db, opts.keepId, opts.mergeIds, { ...ctx, source: 'manual' })
+  const { plan } = await loadCascadePlan(db, opts.keepId, opts.mergeIds, {
+    up: opts.cascadeUp, down: opts.cascadeDown,
+  })
 
-  let cascaded = 0
-  let children = base.children
-  let beneficiaries = base.beneficiaries
-  let top = opts.keepId
+  let children = 0, beneficiaries = 0, cascaded = 0, requested = 0
 
-  if (opts.cascadeUp !== false) {
-    const up = await cascadeUp(db, opts.keepId, ctx)
-    cascaded += up.merged; children += up.children; beneficiaries += up.beneficiaries
-    top = up.topId
+  for (const step of plan.steps) {
+    const r = await mergeOne(db, step.keepId, step.mergeIds, {
+      ...ctx, source: step.direction === 'requested' ? 'manual' : 'cascade',
+    })
+    children += r.children
+    beneficiaries += r.beneficiaries
+    if (step.direction === 'requested') requested += step.mergeIds.length
+    else cascaded += step.mergeIds.length
+
+    // ⚠️ השם נכתב אחרי המיזוג של אותו שלב ולא לפניו: אם השלב נכשל, לא נשאר
+    // צומת שקיבל שם חדש אך לא בלע דבר.
+    const nm = opts.names?.[step.keepId]?.trim()
+    if (nm) {
+      const { error } = await db.from('lineage_nodes').update({ name: nm }).eq('id', step.keepId)
+      if (error) console.error('[lineageMerge] עדכון שם נכשל:', error.message)
+    }
   }
-  if (opts.cascadeDown !== false) {
-    const down = await cascadeDown(db, opts.keepId, ctx)
-    cascaded += down.merged; children += down.children; beneficiaries += down.beneficiaries
-  }
 
-  await recalcGenerations(db, top)
+  await recalcGenerations(db, plan.topId)
 
   return {
     batchId: opts.batchId,
-    mergedCount: opts.mergeIds.length + cascaded,
+    mergedCount: requested + cascaded,
     cascadedCount: cascaded,
     reassignedChildren: children,
     reassignedBeneficiaries: beneficiaries,

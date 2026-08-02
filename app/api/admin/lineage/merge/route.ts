@@ -24,7 +24,11 @@ export async function POST(request: NextRequest) {
   // finalName — השם שיישא הצומת שנשאר. הכפילים נכתבים בניסוחים שונים
   // ("רבי ישראל ורחל לבל" / "ישראל ורחל לבל" / "רבי ישראל ומרת רחל לבל"),
   // והבחירה איזה ניסוח נכון היא של המשתמש ולא של המערכת.
-  let body: { keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean; finalName?: string }
+  // names — צומת-שנשאר → שם סופי, לכל דור במפל. נאסף מראש בתצוגה המקדימה.
+  let body: {
+    keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean
+    finalName?: string; names?: Record<string, string>
+  }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const keepId = body.keepId
   const mergeIds = Array.from(new Set((body.mergeIds ?? []).filter(Boolean)))
@@ -61,8 +65,14 @@ export async function POST(request: NextRequest) {
   const batchId = randomUUID()
   let result
   try {
+    // finalName נשמר לתאימות לאחור (מיזוג בודד בלי תצוגה מקדימה) וממופה
+    // לצומת שנשאר, כך שיש מסלול אחד בלבד לקביעת שמות.
+    const names = { ...(body.names ?? {}) }
+    const single = String(body.finalName ?? '').trim()
+    if (single && !names[keepId]) names[keepId] = single
+
     result = await mergeWithCascade(admin, {
-      keepId, mergeIds, batchId,
+      keepId, mergeIds, batchId, names,
       userId: staff.userId,
       cascadeDown: body.cascadeDown !== false,
       cascadeUp: body.cascadeUp !== false,
@@ -74,13 +84,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // ⚠️ שם היעד נכתב אחרי המיזוג ולא לפניו: אם המיזוג נכשל באמצע, לא נשארנו
-  // עם צומת שקיבל שם חדש אך לא בלע דבר — מצב שקשה לזהות בדיעבד.
-  const finalName = String(body.finalName ?? '').trim()
-  if (finalName) {
-    const { error: nameErr } = await admin.from('lineage_nodes').update({ name: finalName }).eq('id', keepId)
-    if (nameErr) console.error('[merge] עדכון שם היעד נכשל:', nameErr.message)
-  }
+  // (השמות נכתבים בתוך mergeWithCascade — אחרי כל שלב במפל בנפרד)
 
   await logActivity(admin, {
     userId: staff.userId,
