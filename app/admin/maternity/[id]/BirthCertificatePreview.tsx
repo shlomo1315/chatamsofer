@@ -74,11 +74,13 @@ export default function BirthCertificatePreview({
     <div className="group relative rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
       {/* תצוגה מקדימה */}
       {isImage(url) ? (
-        <SafeDocImage path={url} alt="אישור לידה" className="w-full max-h-80 object-contain bg-white" />
+        <SafeDocImage path={url} alt="אישור לידה" className="w-full max-h-96 object-contain bg-white" />
       ) : isPdf(url) ? (
-        // PDF — לא מוטמע ב-iframe (נטפרי חוסם ומציג NETFREE); פתיחה בכרטיסייה חדשה.
-        <PdfCanvasView url={url} name="אישור לידה" maxPages={1} cover
-          className="w-full h-80 overflow-hidden bg-white" />
+        // PDF — מצויר על canvas (נטפרי חוסם iframe). מציגים את העמוד המלא (בלי cover
+        // שחותך) עם גלילה, כדי שרואים את כל אישור הלידה ולא רק את חלקו העליון.
+        <div className="w-full max-h-96 overflow-y-auto bg-white">
+          <PdfCanvasView url={url} name="אישור לידה" maxPages={1} className="w-full" />
+        </div>
       ) : (
         <ViewDocButton url={url} className="h-40 flex flex-col items-center justify-center text-slate-400 gap-2 hover:text-indigo-500">
           <FileText size={28} /> <span className="text-xs">פתח את הקובץ</span>

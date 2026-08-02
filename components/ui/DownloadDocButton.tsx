@@ -29,32 +29,34 @@ export default function DownloadDocButton({
   if (!url) return null
   // שם ההורדה בפועל: אם סופק סוג/שם מוטב — שם משמעותי; אחרת השם המקורי.
   const saveName = (docType || person) ? docDownloadName(docType, person, name ?? url) : name
-  const href = docDownloadUrl(url, saveName)
 
+  // ⚠️ ההורדה עוברת *תמיד* דרך ערוץ הנתונים (blob) ולעולם לא דרך href ישיר ל-
+  // /api/files: קישור ישיר מזוהה ע"י נטפרי כקובץ ונשלח לבדיקה ("NETFREE"). לכן
+  // אין כאן href אמיתי — רק button שמוריד דרך fetch+blob (downloadDocDirect).
+  // נפילה-לאחור: אם ה-blob נכשל, מורידים דרך docDownloadUrl (עדיין ללא לשונית).
   const handle = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     try {
       await downloadDocDirect(url, saveName)
     } catch {
-      // נפילה-לאחור: ניווט ישיר לקישור ההורדה (Content-Disposition: attachment) — עדיין ללא לשונית חדשה
-      window.location.href = href
+      window.location.href = docDownloadUrl(url, saveName)
     }
   }
 
   if (variant === 'icon') {
     return (
-      <a href={href} download={saveName || true} title="הורדה למחשב" onClick={handle}
+      <button type="button" title="הורדה למחשב" onClick={handle}
         className={`inline-flex items-center justify-center p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 transition-colors ${className}`}>
         <Download size={14} />
-      </a>
+      </button>
     )
   }
 
   return (
-    <a href={href} download={saveName || true} onClick={handle}
+    <button type="button" onClick={handle}
       className={`inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-white hover:bg-emerald-600 px-2.5 py-1.5 rounded-lg border border-emerald-200 hover:border-emerald-600 transition-colors ${className}`}>
       <Download size={14} /> {label}
-    </a>
+    </button>
   )
 }
