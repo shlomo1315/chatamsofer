@@ -1045,11 +1045,18 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                 <>
                   {/* כותרת הבורר: הכיתוב מסביר *מה עושים* (בוחרים מהרשימה שלמטה),
                       ותג קטן בצד ימין אומר *באיזה דור* מדובר — כך מספר הדור אינו
-                      בולע את ההוראה עצמה. */}
+                      בולע את ההוראה עצמה.
+                      ⚠️ התנאי להוספה ידנית נאמר כאן, בנקודה שבה מחליטים — ולא רק
+                      בבאנר שלמעלה: הוספה ידנית של דור שכבר קיים בעץ היא המקור
+                      המרכזי לכפילויות, ולכן ההשלכה נכתבת מפורשות. */}
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">דור {chain.length + 2}</span>
-                    <p className="text-xs font-medium text-slate-500">בחרו את הדור הבא מתוך הרשימה כדלהלן:</p>
+                    <p className="text-xs font-semibold text-slate-600">בחרו את הדור הבא מתוך הרשימה שלהלן:</p>
                   </div>
+                  <p className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 mb-2">
+                    הוספה ידנית של דור אפשרית <strong>רק</strong> כאשר הדור המבוקש אינו מופיע ברשימה כלל.
+                    יש לוודא זאת לפני ההוספה — הוספה ידנית של דור הקיים כבר בעץ הדורות תגרום ל<strong>דחיית הרישום</strong>.
+                  </p>
                   {/* ⚠️ ליד כל שם — "זה אני". בלי זה נרשם שכבר קיים בעץ נאלץ
                       ללחוץ "הוסף אותי" ונוצר עותק שני שלו, וזה בדיוק מקור
                       הכפילויות שאנחנו ממזגים ידנית אחר כך.
