@@ -71,7 +71,7 @@ interface FoundBeneficiary {
   marital_status?: string
   children_count?: number
   required_docs?: string
-  children?: Array<{ name?: string; birth_date?: string; gender?: string; id_number?: string; marital_status?: string }>
+  children?: Array<{ name?: string; birth_date?: string; gender?: string; id_number?: string; marital_status?: string; id_doc_type?: 'id' | 'passport' }>
   lineage_node_id?: string
   lineage_manual?: string[]
   lineage_chain?: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[]
@@ -589,11 +589,24 @@ interface LineageNode { id: string; name: string; generation: number; parent_id:
 
 interface ChildEntry {
   name: string; id_number: string; gender: string; birth_date: string; marital_status: string
+  // ת"ז או דרכון — בדיוק כמו בפרטי הנרשם ובן/בת הזוג. ילד שנולד בחו"ל או
+  // שטרם הוצאה לו ת"ז ישראלית לא היה ניתן לרישום כלל בלי זה.
+  id_doc_type?: 'id' | 'passport'
   // ילד שכבר רשום במערכת — ת"ז נעולה. שינוי ת"ז מנתק את הילד מבקשות הלידה
   // שלו, ולכן היא נקבעת פעם אחת בלבד בעת ההוספה.
   existing?: boolean
 }
-function emptyChild(): ChildEntry { return { name: '', id_number: '', gender: '', birth_date: '', marital_status: '' } }
+function emptyChild(): ChildEntry { return { name: '', id_number: '', gender: '', birth_date: '', marital_status: '', id_doc_type: 'id' } }
+/** תווית שם הילד לפי המין שנבחר — "שם הילד" / "שם הילדה", ובלי בחירה "שם הילד/ה". */
+function childNameLabel(gender: string) {
+  return gender === 'male' ? 'שם הילד' : gender === 'female' ? 'שם הילדה' : 'שם הילד/ה'
+}
+/** האם התיעוד שהוזן לילד תקין — ת"ז ישראלית תקינה, או דרכון באורך סביר. */
+function childIdValid(child: ChildEntry) {
+  const raw = (child.id_number ?? '').trim()
+  if (child.id_doc_type === 'passport') return raw.length >= 4
+  return validateIsraeliId(raw.replace(/\D/g, ''))
+}
 function maritalFor(g: string) {
   if (g === 'male')   return [{ v: 'נשוי', l: 'נשוי' }, { v: 'לא נשוי', l: 'לא נשוי' }]
   if (g === 'female') return [{ v: 'נשואה', l: 'נשואה' }, { v: 'לא נשואה', l: 'לא נשואה' }]
@@ -1013,7 +1026,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
           <div className="flex-1 mb-2 rounded-xl border-2 border-green-300 bg-green-600 px-3 py-2 flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-green-100 flex-shrink-0">דור {chain.length + 2}</span>
             <span className="text-sm font-semibold text-white flex-1 truncate">{selfName || '(שמך)'}</span>
-            <span className={`text-xs font-bold text-white ${selfRel === null ? 'animate-pulse' : ''}`}>{selfRel === null ? '← בחר/י בן/חתן (חובה):' : 'בן/חתן:'}</span>
+            <span className={`text-xs font-bold text-white ${selfRel === null ? 'animate-pulse' : ''}`}>{selfRel === null ? '← בחרו בן/חתן (חובה):' : 'בן/חתן:'}</span>
             {(['son', 'son_in_law'] as const).map(r => (
               <button key={r} type="button" onClick={() => setSelfRel(r)}
                 className={`text-sm font-bold rounded-lg px-4 py-1.5 border-2 transition-all duration-150 ${selfRel === r ? 'bg-white text-green-800 border-white shadow-md ring-2 ring-white/60' : selfRel === null ? 'bg-white/90 text-green-800 border-white animate-pulse ring-2 ring-yellow-300 shadow-lg' : 'bg-green-800/60 text-white border-white/80 hover:bg-green-800'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
@@ -1760,6 +1773,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setEditChildren((beneficiary.children ?? []).map(c => ({
       name: c.name ?? '', id_number: c.id_number ?? '', gender: c.gender ?? '',
       birth_date: c.birth_date ?? '', marital_status: c.marital_status ?? '',
+      id_doc_type: c.id_doc_type === 'passport' ? 'passport' as const : 'id' as const,
       existing: true,   // ת"ז נעולה — נקבעה בעת ההוספה
     })))
     setEditChildIdErrors({})
@@ -1786,15 +1800,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // אימות פרטי הילדים — כל ילד שמולא חייב שם + תעודת זהות תקינה
     for (let i = 0; i < editChildren.length; i++) {
       const c = editChildren[i]
-      const cid = (c.id_number || '').replace(/\D/g, '')
+      const passport = c.id_doc_type === 'passport'
+      const cid = passport ? (c.id_number || '').trim() : (c.id_number || '').replace(/\D/g, '')
       // ⚠️ שם *אינו* חובה: ילד שנפתח מבקשת לידה וטרם נקרא בשם הוא מצב תקין,
       // וזו בדיוק הרשומה שהמשפחה נכנסת להשלים. קודם נדרש שם, ורשומה בלי שם
       // סוננה מהמשלוח — כלומר עדכון טלפון בלבד מחק ילד מהרשימה.
       if (!c.name && !cid) continue   // שורה ריקה לגמרי — תסונן מהמשלוח
-      if (!cid) { setError(`יש להזין תעודת זהות עבור ילד ${i + 1}`); return }
-      if (!validateIsraeliId(cid)) {
-        setEditChildIdErrors(er => ({ ...er, [i]: 'תעודת הזהות שהזנתם אינה תקינה' }))
-        setError(`תעודת הזהות של ילד ${i + 1} אינה תקינה`); return
+      if (!cid) { setError(`יש להזין ${passport ? 'מספר דרכון' : 'תעודת זהות'} עבור ילד ${i + 1}`); return }
+      if (!childIdValid(c)) {
+        setEditChildIdErrors(er => ({ ...er, [i]: passport ? 'מספר הדרכון שהזנתם אינו תקין' : 'תעודת הזהות שהזנתם אינה תקינה' }))
+        setError(`${passport ? 'מספר הדרכון' : 'תעודת הזהות'} של ילד ${i + 1} אינו תקין`); return
       }
     }
     setEditSaving(true); setError('')
@@ -1809,6 +1824,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       // להשלמת שם, לא רשומה פגומה שיש למחוק.
       const childrenPayload = editChildren.filter(c => c.id_number).map(c => ({
         name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status,
+        id_doc_type: c.id_doc_type ?? 'id',
       }))
       const res = await fetch('/api/portal/update-details', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2286,7 +2302,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           ].filter(p => p.value && p.value.trim() && p.token),
           id_doc_type: regDocType,
           children_count: children.length,
-          children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status })),
+          children: children.map(c => ({ name: c.name, id_number: c.id_number, gender: c.gender, birth_date: c.birth_date, marital_status: c.marital_status, id_doc_type: c.id_doc_type ?? 'id' })),
           ...lineageData,
           past_benefits: pastBenefits,
           spouse_name: showSpouseFields ? regForm.spouse_name : null,
@@ -3390,7 +3406,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 ) : (
                 <div className="flex flex-col gap-4">
                   <p className="text-sm text-slate-600 leading-relaxed text-center">
-                    לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני</span>. בחר/י כיצד לקבל אותו:
+                    לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני</span>. בחרו כיצד לקבל אותו:
                   </p>
                   {error && <ErrorBox message={error} />}
                   <button type="button" onClick={handleSendCode} disabled={loading}
@@ -3981,26 +3997,40 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="שם הילד/ה" required>
+                            <Field label={childNameLabel(child.gender)} required>
                               <TextInput value={child.name} placeholder="שם מלא" required
                                 onChange={e => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
                             </Field>
                           </div>
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="תעודת זהות" required>
-                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                            <Field label={child.id_doc_type === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
+                              {/* ת"ז או דרכון — כמו בפרטי הנרשם ובן/בת הזוג */}
+                              <div className="flex rounded-lg border border-slate-200 overflow-hidden mb-2">
+                                {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                                  <button key={v} type="button"
+                                    onClick={() => { setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_doc_type: v, id_number: '' } : c)); setChildIdErrors(e => ({ ...e, [idx]: '' })) }}
+                                    className={`flex-1 py-1.5 text-xs font-medium transition-all duration-150 ${(child.id_doc_type ?? 'id') === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                              <TextInput value={child.id_number}
+                                placeholder={child.id_doc_type === 'passport' ? 'AA000000' : '000000000'}
+                                inputMode={child.id_doc_type === 'passport' ? 'text' : 'numeric'}
+                                maxLength={child.id_doc_type === 'passport' ? 20 : 9} dir="ltr" required
                                 className={childIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
-                                onChange={e => { setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value.replace(/\D/g,'') } : c)); setChildIdErrors(e => ({ ...e, [idx]: '' })) }}
+                                onChange={e => { const raw = child.id_doc_type === 'passport' ? e.target.value : e.target.value.replace(/\D/g,''); setChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: raw } : c)); setChildIdErrors(er => ({ ...er, [idx]: '' })) }}
                                 onBlur={async () => {
-                                  const digits = (child.id_number || '').replace(/\D/g, '')
-                                  if (digits && !validateIsraeliId(digits)) {
+                                  const passport = child.id_doc_type === 'passport'
+                                  const val = passport ? (child.id_number || '').trim() : (child.id_number || '').replace(/\D/g, '')
+                                  if (!passport && val && !validateIsraeliId(val)) {
                                     setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
                                   }
                                   setChildIdErrors(e => ({ ...e, [idx]: '' }))
                                   // בדיקה מיידית — האם הילד כבר רשום במערכת (כצאצא או כילד אצל מישהו)
-                                  if (digits.length === 9) {
+                                  if (passport ? val.length >= 4 : val.length === 9) {
                                     try {
-                                      const r = await fetch(`/api/portal/lookup?id=${digits}`)
+                                      const param = passport ? `passport=${encodeURIComponent(val)}` : `id=${val}`
+                                      const r = await fetch(`/api/portal/lookup?${param}`)
                                       const d = await r.json()
                                       if (d.found || d.foundAsChild) {
                                         setChildIdErrors(e => ({ ...e, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))
@@ -5529,7 +5559,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="col-span-2 sm:col-span-1">
-                            <Field label="שם הילד/ה">
+                            <Field label={childNameLabel(child.gender)}>
                               <TextInput value={child.name} placeholder="שם מלא"
                                 onChange={e => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, name: e.target.value } : c))} />
                             </Field>
@@ -5544,22 +5574,37 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               </div>
                             </Field>
                             ) : (
-                            <Field label="תעודת זהות" required>
-                              <TextInput value={child.id_number} placeholder="000000000" inputMode="numeric" maxLength={9} dir="ltr" required
+                            <Field label={child.id_doc_type === 'passport' ? 'מספר דרכון' : 'תעודת זהות'} required>
+                              {/* ת"ז או דרכון — כמו בפרטי הנרשם. ילד שנולד בחו"ל
+                                  או שטרם הוצאה לו ת"ז לא היה ניתן לרישום בלי זה. */}
+                              <div className="flex rounded-lg border border-slate-200 overflow-hidden mb-2">
+                                {([['id', 'תעודת זהות'], ['passport', 'דרכון']] as const).map(([v, l]) => (
+                                  <button key={v} type="button"
+                                    onClick={() => { setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_doc_type: v, id_number: '' } : c)); setEditChildIdErrors(er => ({ ...er, [idx]: '' })) }}
+                                    className={`flex-1 py-1.5 text-xs font-medium transition-all duration-150 ${(child.id_doc_type ?? 'id') === v ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 hover:bg-indigo-50'}`}
+                                  >{l}</button>
+                                ))}
+                              </div>
+                              <TextInput value={child.id_number}
+                                placeholder={child.id_doc_type === 'passport' ? 'AA000000' : '000000000'}
+                                inputMode={child.id_doc_type === 'passport' ? 'text' : 'numeric'}
+                                maxLength={child.id_doc_type === 'passport' ? 20 : 9} dir="ltr" required
                                 className={editChildIdErrors[idx] ? 'border-red-400 focus:ring-red-400' : ''}
-                                onChange={e => { setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: e.target.value.replace(/\D/g,'') } : c)); setEditChildIdErrors(er => ({ ...er, [idx]: '' })) }}
+                                onChange={e => { const raw = child.id_doc_type === 'passport' ? e.target.value : e.target.value.replace(/\D/g,''); setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, id_number: raw } : c)); setEditChildIdErrors(er => ({ ...er, [idx]: '' })) }}
                                 onBlur={async () => {
-                                  const digits = (child.id_number || '').replace(/\D/g, '')
-                                  if (digits && !validateIsraeliId(digits)) {
+                                  const passport = child.id_doc_type === 'passport'
+                                  const val = passport ? (child.id_number || '').trim() : (child.id_number || '').replace(/\D/g, '')
+                                  if (!passport && val && !validateIsraeliId(val)) {
                                     setEditChildIdErrors(er => ({ ...er, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
                                   }
                                   setEditChildIdErrors(er => ({ ...er, [idx]: '' }))
-                                  if (digits.length === 9) {
+                                  if (passport ? val.length >= 4 : val.length === 9) {
                                     // בעריכה — ילד שכבר שייך למשפחה זו לא נחשב ככפילות מול עצמו
-                                    const ownIds = (beneficiary?.children ?? []).map(c => (c.id_number ?? '').replace(/\D/g, ''))
-                                    if (ownIds.includes(digits)) return
+                                    const ownIds = (beneficiary?.children ?? []).map(c => String(c.id_number ?? '').trim())
+                                    if (ownIds.includes(val) || ownIds.includes(val.replace(/\D/g, ''))) return
                                     try {
-                                      const r = await fetch(`/api/portal/lookup?id=${digits}`)
+                                      const param = passport ? `passport=${encodeURIComponent(val)}` : `id=${val}`
+                                      const r = await fetch(`/api/portal/lookup?${param}`)
                                       const d = await r.json()
                                       if (d.found || d.foundAsChild) {
                                         setEditChildIdErrors(er => ({ ...er, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))

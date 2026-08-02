@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react'
-import { Loader2, Pencil, Plus, Trash2, Check, X, ExternalLink, ArrowRight } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2, ExternalLink, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -129,6 +129,8 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
   const [pinned, setPinned] = useState<string | null>(null)
   const [openCardFor, setOpenCardFor] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
+  // צומת שממתין לאישור דחייה — דחייה מפילה במפל גם צאצאים וגם כרטסות
+  const [rejectNode, setRejectNode] = useState<LineageNode | null>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
@@ -137,6 +139,8 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
   const [mergeMode, setMergeMode] = useState(false)
   const [mergeSel, setMergeSel] = useState<Set<string>>(new Set())
   const [keepId, setKeepId] = useState<string | null>(null)
+  // מיזוג אחורנית גם כשהניסוח שונה — אם אלו אותו אדם, גם אבותיהם אותו אדם
+  const [mergeUpApprox, setMergeUpApprox] = useState(true)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const [viewW, setViewW] = useState(760)
@@ -192,6 +196,21 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     return out
   }, [selfId, byId])
   const chainSet = useMemo(() => new Set(chainIds), [chainIds])
+
+  /** כל צאצאי הצומת בעץ המלא — להצגת היקף הדחייה לפני שמאשרים אותה. */
+  const descendantIds = useCallback((rootId: string): string[] => {
+    const childrenBy = new Map<string, string[]>()
+    allNodes.forEach(n => { if (n.parent_id) { const a = childrenBy.get(n.parent_id) ?? []; a.push(n.id); childrenBy.set(n.parent_id, a) } })
+    const out: string[] = []
+    const stack = [...(childrenBy.get(rootId) ?? [])]
+    let guard = 0
+    while (stack.length && guard++ < 20_000) {
+      const id = stack.pop()!
+      out.push(id)
+      for (const c of childrenBy.get(id) ?? []) stack.push(c)
+    }
+    return out
+  }, [allNodes])
 
   // קבוצות כפילות — אותו אב, אותו דור, אותו שם מנורמל. בדיוק ההגדרה של מסך
   // הניהול: בני דודים באותו שם אינם כפילות; רק אותו אדם שנרשם פעמיים.
@@ -402,7 +421,7 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ keepId: keep.id, mergeIds }),
+        body: JSON.stringify({ keepId: keep.id, mergeIds, cascadeUpApprox: mergeUpApprox }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setSaveErr(d.error ?? 'שגיאה במיזוג'); setSaving(false); return }
@@ -706,13 +725,43 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
                         </div>
                       )}
 
-                      {/* שורת אייקונים — עריכה · הוספת ילד · אימות · דחייה · מחיקה */}
+                      {/* ── סטטוס הדור — עריכה ישירות מכאן ──
+                          שלושת המצבים גלויים תמיד והנוכחי מסומן. הסטטוס קובע גם
+                          את סטטוס הכרטסת המקושרת וגם אם הדור יוצג לנרשמים הבאים
+                          (בבורר סדר הדורות מוצגים מאומתים בלבד). */}
+                      {canEdit && (
+                        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                            {([
+                              ['verified', '✓ מאושר', '#16A34A', '#DCFCE7'],
+                              ['pending', '⏳ ממתין', '#B45309', '#FEF3C7'],
+                              ['rejected', '✕ נדחה', '#DC2626', '#FEE2E2'],
+                            ] as const).map(([v, l, fg, bg]) => {
+                              const on = st === v
+                              return (
+                                <button key={v} type="button"
+                                  onClick={() => {
+                                    if (on) return
+                                    if (v === 'rejected') { setRejectNode(node); return }
+                                    void patchStatus(node, v)
+                                  }}
+                                  style={{ flex: 1, padding: '5px 0', borderRadius: 9, background: on ? fg : bg, color: on ? '#fff' : fg, border: `1.5px solid ${on ? fg : fg + '33'}`, cursor: on ? 'default' : 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                  {l}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div style={{ fontSize: 9.5, color: '#94A3B8', textAlign: 'center', fontWeight: 600, lineHeight: 1.4 }}>
+                            משפיע על הכרטסת המקושרת ועל הצגת הדור לנרשמים
+                          </div>
+                        </div>
+                      )}
+
+                      {/* שורת אייקונים — עריכה · הוספת ילד · מחיקה */}
                       <div style={{ display: 'flex', gap: 6 }}>
                         {[
                           ...(canEdit ? [{ icon: <Pencil size={13} />, color: p.ring, bg: '#F8FAFC', fn: () => { setFormName(node.name); setFormRelation(node.relation ?? null); setSaveErr(''); setModal({ type: 'edit', node }) }, title: 'ערוך' }] : []),
                           ...(canAdd ? [{ icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setSaveErr(''); setModal({ type: 'add', parentId: node.id, parentName: node.name }) }, title: 'הוסף ילד' }] : []),
-                          ...(canEdit && st !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => { void patchStatus(node, 'verified') }, title: 'אשר' }] : []),
-                          ...(canEdit && st !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => { void patchStatus(node, 'rejected') }, title: 'דחה' }] : []),
                           ...(canDelete ? [{ icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => { setSaveErr(''); setModal({ type: 'delete', node }) }, title: 'מחק' }] : []),
                         ].map((b, i) => (
                           <button key={i} type="button" onClick={b.fn} title={b.title}
@@ -826,6 +875,33 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
         {saveErr && <p style={{ color: '#DC2626', fontSize: 12, fontWeight: 700, marginTop: 8 }}>{saveErr}</p>}
       </Modal>
 
+      {/* אישור דחייה — ההיקף מוצג לפני הלחיצה ולא מתגלה אחריה */}
+      <Modal open={!!rejectNode} onClose={() => setRejectNode(null)} title="דחיית דור" size="sm"
+        footer={
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
+            <button type="button" onClick={() => { const n = rejectNode; setRejectNode(null); if (n) void patchStatus(n, 'rejected') }}
+              style={{ background: '#DC2626', color: '#fff', border: 'none', borderRadius: 10, padding: '8px 18px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>דחה</button>
+            <button type="button" onClick={() => setRejectNode(null)} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
+          </div>
+        }>
+        {rejectNode && (() => {
+          const kids = descendantIds(rejectNode.id)
+          const families = [rejectNode.id, ...kids].reduce((s, nid) => s + (linked[nid]?.length ?? 0), 0)
+          return (
+            <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 8px' }}>
+                לסמן את <strong style={{ color: '#0F172A' }}>{rejectNode.name}</strong> כ<strong style={{ color: '#DC2626' }}>נדחה</strong>?
+              </p>
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 11, padding: '10px 13px', fontSize: 12.5, color: '#991B1B', lineHeight: 1.7 }}>
+                {kids.length > 0 && <>· {kids.length} דורות שמתחתיו יידחו גם הם<br /></>}
+                {families > 0 && <>· {families} כרטסות משפחה מקושרות יעברו לסטטוס &quot;נדחה&quot;<br /></>}
+                · הדור לא יוצג יותר לנרשמים בבורר סדר הדורות
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
+
       <Modal open={modal?.type === 'merge'} onClose={closeModal} title="אישור מיזוג צמתים" size="sm"
         footer={
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
@@ -844,6 +920,16 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
             <ul style={{ margin: '0 0 10px', paddingRight: 18 }}>
               {modal.others.map(n => <li key={n.id} style={{ fontWeight: 700 }}>{n.name}</li>)}
             </ul>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#FAF5FF', border: '1.5px solid #E9D5FF', borderRadius: 11, padding: '9px 12px', cursor: 'pointer', margin: '0 0 10px' }}>
+              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', marginTop: 2 }} />
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#4C1D95' }}>
+                למזג גם את הדורות שמעל כשהניסוח שונה
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#7C3AED', marginTop: 3, lineHeight: 1.5 }}>
+                  אם אלו אותו אדם — גם אבותיהם אותו אדם. הניסוח המפורט הוא שיישאר.
+                </span>
+              </span>
+            </label>
             <p style={{ margin: 0, fontSize: 12, color: '#64748B' }}>
               הילדים והמשפחות המשויכות יעברו לצומת שנשאר, והכפילים יימחקו. פעולה זו ניתנת לביטול ממרכז המיזוגים.
             </p>

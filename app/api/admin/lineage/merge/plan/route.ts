@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
-  let body: { keepId?: string; mergeIds?: string[]; cascadeUp?: boolean; cascadeDown?: boolean }
+  let body: { keepId?: string; mergeIds?: string[]; cascadeUp?: boolean; cascadeDown?: boolean; cascadeUpApprox?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const keepId = String(body.keepId ?? '')
   const mergeIds = Array.from(new Set((body.mergeIds ?? []).filter(Boolean)))
   if (!keepId || !mergeIds.length) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
 
   const { plan, nodes } = await loadCascadePlan(admin, keepId, mergeIds, {
-    up: body.cascadeUp, down: body.cascadeDown,
+    up: body.cascadeUp, down: body.cascadeDown, upApprox: body.cascadeUpApprox === true,
   })
   const byId = new Map(nodes.map(n => [n.id, n]))
   const kidCount = new Map<string, number>()

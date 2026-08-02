@@ -71,6 +71,11 @@ export default function DuplicatesPanel({
   const [undoList, setUndoList] = useState<UndoBatch[]>([])
   // תצוגה מקדימה של המפל + בחירת שם לכל דור שבו הניסוחים שונים
   const [plan, setPlan] = useState<{ group: DupGroup; data: PlanResp; names: Record<string, string> } | null>(null)
+  // ⚠️ מיזוג אחורנית גם כשהניסוח שונה. השרשרת שהתפצלה נרשמה בכל ענף אחרת
+  // ("שמואל בנימין שישא" מול "רבי שמואל בנימין והרבנית חיה ליבא שישא"), ולכן
+  // מיזוג הבן לבדו השאיר את האב כפול. חל רק על *הורים של צמתים שמוזגו* —
+  // המבנה מוכיח שהם אותו אדם — ורק במיזוג המודרך, לא בהרצה מרוכזת.
+  const [upApprox, setUpApprox] = useState(true)
   const [planning, setPlanning] = useState<string | null>(null)
 
   const scan = useCallback(async () => {
@@ -123,14 +128,14 @@ export default function DuplicatesPanel({
   type MergeOutcome = 'ok' | 'gone' | 'error'
 
   // פתיחת תצוגה מקדימה: מחשבת את כל המפל ואוספת הכרעת שם לכל דור שנדרש
-  const openPlan = async (g: DupGroup) => {
+  const openPlan = async (g: DupGroup, approx = upApprox) => {
     const key = groupKey(g)
     setPlanning(key)
     try {
       const keep = chooseKeep(g.nodes)
       const r = await fetch('/api/admin/lineage/merge/plan', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId: keep.id, mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id) }),
+        body: JSON.stringify({ keepId: keep.id, mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id), cascadeUpApprox: approx }),
       })
       const d: PlanResp = await r.json()
       if (!r.ok) { toast.error((d as unknown as { error?: string }).error || 'שגיאה בחישוב המיזוג'); setPlanning(null); return }
@@ -148,7 +153,7 @@ export default function DuplicatesPanel({
     setPlanning(null)
   }
 
-  const mergeGroup = async (g: DupGroup, quiet = false, names?: Record<string, string>): Promise<MergeOutcome> => {
+  const mergeGroup = async (g: DupGroup, quiet = false, names?: Record<string, string>, approx = false): Promise<MergeOutcome> => {
     try {
       const keep = chooseKeep(g.nodes)
       const r = await fetch('/api/admin/lineage/merge', {
@@ -157,6 +162,9 @@ export default function DuplicatesPanel({
           keepId: keep.id,
           mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id),
           names: names ?? { [keep.id]: fullestName(g.nodes) },
+          // ⚠️ הרצה מרוכזת נשארת על התאמה מדויקת בלבד: מיזוג מקורב של עשרות
+          // קבוצות בבת אחת הוא בדיוק מה שאי אפשר לבדוק בדיעבד.
+          cascadeUpApprox: approx,
         }),
       })
       const d = await r.json()
@@ -384,6 +392,18 @@ export default function DuplicatesPanel({
             </div>
 
             <div style={{ padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* מיזוג הדורות שמעל גם בניסוח שונה — מה שמונע אבות כפולים אחרי מיזוג הבן */}
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#FAF5FF', border: '1.5px solid #E9D5FF', borderRadius: 12, padding: '10px 13px', cursor: planning ? 'default' : 'pointer' }}>
+                <input type="checkbox" checked={upApprox} disabled={!!planning}
+                  onChange={e => { setUpApprox(e.target.checked); void openPlan(plan.group, e.target.checked) }}
+                  style={{ width: 16, height: 16, accentColor: '#7C3AED', cursor: 'pointer', marginTop: 2 }} />
+                <span style={{ fontSize: 12.5, color: '#4C1D95', fontWeight: 700 }}>
+                  למזג גם את הדורות שמעל כשהניסוח שונה
+                  <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#7C3AED', marginTop: 3, lineHeight: 1.5 }}>
+                    אם אלו אותו אדם — גם אבותיהם אותו אדם, גם אם נרשמו בניסוח אחר. הניסוח המפורט הוא שיישאר, וניתן לערוך אותו כאן.
+                  </span>
+                </span>
+              </label>
               {plan.data.steps.map(s => (
                 <div key={s.keepId}
                   style={{ border: `1.5px solid ${s.direction === 'requested' ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 12, padding: '11px 13px', background: s.direction === 'requested' ? '#FAF5FF' : '#fff' }}>
@@ -451,7 +471,7 @@ export default function DuplicatesPanel({
                   const g = plan.group
                   const names = plan.names
                   setBusy('plan')
-                  const out = await mergeGroup(g, false, names)
+                  const out = await mergeGroup(g, false, names, upApprox)
                   setBusy(null); setPlan(null)
                   if (out !== 'error') { await scan(); await loadUndo(); onDone() }
                 }}

@@ -108,6 +108,10 @@ export interface MergeStep {
   mergeIds: string[]
   generation: number
   direction: 'requested' | 'up' | 'down'
+  /** שלב שנוצר מהתאמה מקורבת כלפי מעלה (ניסוח שונה) — רק כש-upApprox דלוק */
+  approx?: boolean
+  /** השם המוצע לצומת שנשאר בשלב מקורב — הניסוח המפורט מבין הכפילים */
+  suggestedName?: string
 }
 
 export interface CascadePlan {
@@ -124,10 +128,21 @@ export function planCascade(
   nodes: MergeNodeRow[],
   keepId: string,
   mergeIds: string[],
-  opts: { up?: boolean; down?: boolean } = {},
+  opts: { up?: boolean; down?: boolean; upApprox?: boolean } = {},
 ): CascadePlan {
   const doUp = opts.up !== false
   const doDown = opts.down !== false
+  // ⚠️ מיזוג כלפי מעלה גם כשהניסוח שונה — בהסכמת המשתמש בלבד.
+  //
+  // הבעיה שזה פותר: השרשרת שהתפצלה נרשמה בכל ענף בניסוח אחר — "רבי שמואל
+  // בנימין והרבנית חיה ליבא שישא" מול "שמואל בנימין שישא". הבן מוזג ידנית,
+  // אבל האב נשאר כפול כי המפתחות אינם זהים, וכך אחרי כל מיזוג נשאר זנב של
+  // אבות כפולים לתקן ידנית — בדיוק מה שהמפל נועד למנוע.
+  //
+  // ההיתר כאן אינו ניחוש שמות: ההורים נגזרים *מהמבנה*. אם המשתמש קבע ששני
+  // הבנים הם אותו אדם, אביו של האחד הוא אביו של השני. לכן זה חל רק על הורים
+  // של צמתים שמוזגו — לעולם לא על אחים בשם דומה — ורק כשהמשתמש ביקש זאת.
+  const doUpApprox = opts.upApprox === true
 
   const byId = new Map(nodes.map(n => [n.id, { ...n }]))
   const kids = new Map<string, string[]>()
@@ -148,7 +163,7 @@ export function planCascade(
   const genOf = (id: string) => byId.get(id)?.generation ?? 0
 
   /** מדמה מיזוג בזיכרון: הילדים עוברים ל-keep והכפילים מסומנים כמחוקים. */
-  const apply = (keep: string, ids: string[], direction: MergeStep['direction']) => {
+  const apply = (keep: string, ids: string[], direction: MergeStep['direction'], extra?: Partial<MergeStep>) => {
     const real = ids.filter(id => alive(id) && id !== keep)
     if (!real.length) return
     for (const m of real) {
@@ -162,7 +177,25 @@ export function planCascade(
       kids.delete(m)
       dead.add(m)
     }
-    steps.push({ keepId: keep, mergeIds: real, generation: genOf(keep), direction })
+    steps.push({ keepId: keep, mergeIds: real, generation: genOf(keep), direction, ...extra })
+  }
+
+  /**
+   * הניסוח המפורט מבין הכפילים — הוא שיישאר.
+   * ⚠️ בלי זה מיזוג מקורב כלפי מעלה היה יכול להשאיר דווקא את "שמואל בנימין
+   * שישא" ולמחוק את "רבי שמואל בנימין והרבנית חיה ליבא שישא", כלומר לאבד את
+   * שם האישה והתואר. מי-נשאר נקבע מהמבנה (אביו של הצומת שנשאר), והשם נבחר
+   * לפי כמות המידע.
+   */
+  const richestName = (ids: string[]): string => {
+    let best = ''
+    let bestWords = -1
+    for (const id of ids) {
+      const nm = nameOf(id)
+      const words = parseHebrewName(nm).words.length
+      if (words > bestWords || (words === bestWords && nm.length > best.length)) { best = nm; bestWords = words }
+    }
+    return best
   }
 
   if (!alive(keepId)) return { steps, stopped, topId: keepId, totalMerged: 0 }
@@ -183,22 +216,24 @@ export function planCascade(
 
     const key = autoMergeKey(nameOf(kp))
     const same: string[] = []
+    let hasApprox = false
     for (const c of cands) {
       if ((byId.get(c)?.status ?? '') === 'rejected') continue
-      if (autoMergeKey(nameOf(c)) === key) same.push(c)
-      else {
-        // ⚠️ התאמה מקורבת — נעצרים ומדווחים. מיזוג של שני אנשים שאינם אותו
-        // אדם הוא הרסני, ולכן ההכרעה הזו לעולם אינה נעשית אוטומטית.
-        stopped.push({
-          generation: genOf(kp), keepId: kp as string, keepName: nameOf(kp),
-          otherId: c, otherName: nameOf(c),
-        })
-      }
+      if (autoMergeKey(nameOf(c)) === key) { same.push(c); continue }
+      // התאמה מקורבת (ניסוח שונה): ממוזגת רק כשהמשתמש ביקש מיזוג אחורנית מלא.
+      // אחרת — נעצרים ומדווחים; מיזוג של שני אנשים שאינם אותו אדם הוא הרסני.
+      if (doUpApprox) { same.push(c); hasApprox = true; continue }
+      stopped.push({
+        generation: genOf(kp), keepId: kp as string, keepName: nameOf(kp),
+        otherId: c, otherName: nameOf(c),
+      })
     }
     if (!same.length) break
 
     const nextParents = same.map(parentOf)
-    apply(kp as string, same, 'up')
+    apply(kp as string, same, 'up', hasApprox
+      ? { approx: true, suggestedName: richestName([kp as string, ...same]) }
+      : undefined)
     curKeep = kp as string
     curParents = nextParents
   }
@@ -321,7 +356,7 @@ export async function loadCascadePlan(
   db: SupabaseClient,
   keepId: string,
   mergeIds: string[],
-  opts: { up?: boolean; down?: boolean } = {},
+  opts: { up?: boolean; down?: boolean; upApprox?: boolean } = {},
 ): Promise<{ plan: CascadePlan; nodes: MergeNodeRow[] }> {
   const { data } = await db.from('lineage_nodes').select(MERGE_NODE_SELECT)
   const nodes = (data ?? []) as MergeNodeRow[]
@@ -348,11 +383,13 @@ export async function mergeWithCascade(
     names?: Record<string, string>
     cascadeDown?: boolean
     cascadeUp?: boolean
+    /** מיזוג אחורנית גם כשהניסוח שונה (בהסכמת המשתמש) */
+    cascadeUpApprox?: boolean
   },
 ): Promise<MergeResult> {
   const ctx = { batchId: opts.batchId, userId: opts.userId }
   const { plan } = await loadCascadePlan(db, opts.keepId, opts.mergeIds, {
-    up: opts.cascadeUp, down: opts.cascadeDown,
+    up: opts.cascadeUp, down: opts.cascadeDown, upApprox: opts.cascadeUpApprox,
   })
 
   let children = 0, beneficiaries = 0, cascaded = 0, requested = 0
@@ -368,7 +405,10 @@ export async function mergeWithCascade(
 
     // ⚠️ השם נכתב אחרי המיזוג של אותו שלב ולא לפניו: אם השלב נכשל, לא נשאר
     // צומת שקיבל שם חדש אך לא בלע דבר.
-    const nm = opts.names?.[step.keepId]?.trim()
+    // בחירת המשתמש קודמת; בהיעדרה, שלב מקורב כלפי מעלה שומר את הניסוח המפורט
+    // (אחרת מיזוג "רבי שמואל בנימין והרבנית חיה ליבא שישא" אל "שמואל בנימין
+    // שישא" היה מוחק את שם האישה והתואר בלי שאיש ביקש).
+    const nm = (opts.names?.[step.keepId] ?? step.suggestedName)?.trim()
     if (nm) {
       const { error } = await db.from('lineage_nodes').update({ name: nm }).eq('id', step.keepId)
       if (error) console.error('[lineageMerge] עדכון שם נכשל:', error.message)
