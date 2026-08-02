@@ -413,6 +413,49 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   // clear node-path selection whenever a top filter changes, so the filter takes over
   useEffect(() => { setSelected(null) }, [statusFilter, generationFilter])
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // המשפחות הרשומות בענף של כל צומת.
+  //
+  // ⚠️ קישור ישיר (beneficiaries.lineage_node_id) קיים כמעט רק בדורות
+  // התחתונים — שם יושבים הנרשמים. כל האבות הקדמונים היו נשארים בלי כפתור
+  // בכלל, וזה בדיוק מה שנראה כאילו הכפתור לא עובד.
+  // לכן צומת בלי משפחה משלו מציג את המשפחות שמתחתיו בענף.
+  //
+  // צבירה מלמטה למעלה במעבר אחד, עם תקרה לכל צומת — בלעדיה צומת בדור 2 היה
+  // אוסף מאות רשומות לזיכרון, לכל צומת בנפרד.
+  // ─────────────────────────────────────────────────────────────────────────
+  const BRANCH_CAP = 15
+  const branchFamilies = useMemo(() => {
+    const kids = new Map<string, string[]>()
+    for (const n of nodes) {
+      if (!n.parent_id) continue
+      const a = kids.get(n.parent_id) ?? []
+      a.push(n.id)
+      kids.set(n.parent_id, a)
+    }
+    const out = new Map<string, { list: { id: string; name: string }[]; total: number }>()
+    const seen = new Set<string>()
+    const walk = (id: string): { list: { id: string; name: string }[]; total: number } => {
+      const hit = out.get(id)
+      if (hit) return hit
+      if (seen.has(id)) return { list: [], total: 0 }   // הגנת מעגל
+      seen.add(id)
+      const own = linked[id] ?? []
+      const list = [...own]
+      let total = own.length
+      for (const c of kids.get(id) ?? []) {
+        const sub = walk(c)
+        total += sub.total
+        for (const f of sub.list) if (list.length < BRANCH_CAP) list.push(f)
+      }
+      const res = { list, total }
+      out.set(id, res)
+      return res
+    }
+    for (const n of nodes) walk(n.id)
+    return out
+  }, [nodes, linked])
+
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
@@ -948,21 +991,30 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         המשפחה ידנית לפי שם. הכפתור מופיע רק כשיש משפחה מקושרת,
                         וריחוף עליו פותח את בחירת הכרטיסייה — כדי שאפשר יהיה
                         להשאיר את העץ פתוח ולעבוד לצידו. */}
-                    {(linked[pos.node.id] ?? []).length > 0 && (
+                    {(() => {
+                      const own = linked[pos.node.id] ?? []
+                      const branch = branchFamilies.get(pos.node.id) ?? { list: [], total: 0 }
+                      // משפחה משלו קודמת; אחרת המשפחות שבענף שמתחתיו
+                      const isOwn = own.length > 0
+                      const items = isOwn ? own : branch.list
+                      const total = isOwn ? own.length : branch.total
+                      if (!items.length) return null
+                      return (
                       <div style={{ position: 'relative', width: '100%' }}
                         onMouseEnter={() => setOpenCardFor(pos.node.id)}
                         onMouseLeave={() => setOpenCardFor(null)}>
                         <button type="button"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 12px', borderRadius: 10, background: '#0EA5E9', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                          <ExternalLink size={12} /> פתיחת הכרטסת
-                          {(linked[pos.node.id] ?? []).length > 1 && ` (${linked[pos.node.id].length})`}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 12px', borderRadius: 10, background: isOwn ? '#0EA5E9' : '#64748B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          <ExternalLink size={12} />
+                          {isOwn ? 'פתיחת הכרטסת' : 'משפחות בענף'}
+                          {total > 1 && ` (${total})`}
                         </button>
                         {openCardFor === pos.node.id && (
                           <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, paddingTop: 5, zIndex: 60 }}>
-                            <div style={{ background: '#fff', border: '1.5px solid #BAE6FD', borderRadius: 12, boxShadow: '0 10px 28px rgba(0,0,0,0.18)', padding: 7, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                              {(linked[pos.node.id] ?? []).map(b => (
+                            <div style={{ background: '#fff', border: '1.5px solid #BAE6FD', borderRadius: 12, boxShadow: '0 10px 28px rgba(0,0,0,0.18)', padding: 7, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260, overflowY: 'auto', minWidth: 200 }}>
+                              {items.map(b => (
                                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {(linked[pos.node.id] ?? []).length > 1 && (
+                                  {(items.length > 1 || !isOwn) && (
                                     <div style={{ fontSize: 10.5, fontWeight: 800, color: '#0C4A6E', padding: '0 2px' }}>{b.name}</div>
                                   )}
                                   <div style={{ display: 'flex', gap: 5 }}>
@@ -979,11 +1031,17 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                                   </div>
                                 </div>
                               ))}
+                              {total > items.length && (
+                                <div style={{ fontSize: 10.5, color: '#64748B', textAlign: 'center', padding: '3px 0' }}>
+                                  ועוד {total - items.length} משפחות בענף — היכנסו לצומת עמוק יותר
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
                       </div>
-                    )}
+                      )
+                    })()}
 
                     {/* מיקוד בענף — רק לצומת שיש לו צאצאים, ורק כשאינו כבר במוקד */}
                     {pos.node.children.length > 0 && focusId !== pos.node.id && (
