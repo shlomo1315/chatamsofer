@@ -12,6 +12,7 @@ import GratitudeTab from './GratitudeTab'
 import FeedbackTab from './FeedbackTab'
 import ExtendEligibility from '../ExtendEligibility'
 import RecoveryDaysEditor from '../RecoveryDaysEditor'
+import RecoveryHomeEditor from './RecoveryHomeEditor'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { formatIsraeliId } from '@/lib/validation'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
@@ -520,7 +521,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
             </Card>
           ),
         },
-        ...(aid.recovery_home ? [{
+        ...((aid.recovery_home || aid.wants_recovery !== false) ? [{
           key: 'recovery', label: 'בית החלמה', accent: 'sky' as const, icon: <Home size={15} />,
           content: (
             <Card>
@@ -528,9 +529,8 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                 <Home size={16} />
                 <span className="text-xs font-semibold text-slate-500 uppercase">בית החלמה</span>
               </div>
-              <div className="text-sm">
-                <span className="text-slate-500">שם: </span>{aid.recovery_home}
-              </div>
+              {/* בית ההחלמה — ניתן להחלפה מהירה ישירות מהכרטסת (גם למזכירות) */}
+              <RecoveryHomeEditor aidId={aid.id} current={aid.recovery_home ?? null} />
               {/* ימי זכאות בבית ההחלמה — ניתן לעריכה ידנית (ברירת מחדל: רגילה 2 · תאומים 4) */}
               <div className="mt-3 pt-3 border-t border-slate-100">
                 <div className="mb-2 inline-flex items-center gap-2 text-sm">

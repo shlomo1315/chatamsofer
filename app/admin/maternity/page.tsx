@@ -66,7 +66,7 @@ export default async function MaternityPage() {
           <p className="text-slate-400 text-sm mt-1">הוסף תיק יולדת חדש להתחלה</p>
         </div>
       ) : (
-        <MaternityTable data={aids} showCard />
+        <MaternityTable data={aids} showCard defaultFilter="pending" />
       )}
     </div>
   )

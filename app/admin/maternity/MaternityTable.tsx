@@ -110,9 +110,11 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
 }
 
-export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string }) {
+export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage, defaultFilter = 'all' }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string; defaultFilter?: Filter }) {
   const router = useRouter()
-  const [filter, setFilter] = useState<Filter>('all')
+  // ברירת המחדל של הסינון — בלשונית הראשית מתחילים ב"ממתין לאישור" (defaultFilter='pending'),
+  // כדי שהמזכירות תראה מיד את מה שדורש טיפול ולא את כל הרשימה.
+  const [filter, setFilter] = useState<Filter>(defaultFilter)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
   // סינון לפי ההטבה שהיולדת ביקשה (כרטיס / הבראה / שתיהן)
