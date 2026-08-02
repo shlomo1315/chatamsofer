@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin } from 'lucide-react'
 import DuplicatesPanel from './DuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
@@ -371,7 +371,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor, scanIds, locateIds }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string> }) {
   const toast = useToast()
   const canAdd = useCan('lineage', 'add')
   const canEdit = useCan('lineage', 'edit')
@@ -777,13 +777,19 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             const isSel = selected === pos.node.id
             const inMerge = mergeMode && mergeSel.has(pos.node.id)
             const isDup = dupIds.has(pos.node.id)
+            const inScan = scanIds.has(pos.node.id)
+            const inLocate = locateIds.has(pos.node.id)
+            // ⚠️ כשמאתרים קבוצה מהפאנל, כל השאר מעומעם — אחרת שני צמתים
+            // מודגשים בתוך עץ של 500 פשוט נבלעים ואי אפשר למצוא אותם.
             const isDimmed = mergeMode
               ? false
-              : selected !== null
-                ? !pathBranch.has(pos.node.id)
-                : dupFilter
-                  ? !isDup
-                  : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
+              : locateIds.size > 0
+                ? !inLocate
+                : selected !== null
+                  ? !pathBranch.has(pos.node.id)
+                  : dupFilter
+                    ? !isDup
+                    : (statusFilter !== null && nodeStatus !== statusFilter) || (generationFilter !== null && pos.node.generation !== generationFilter)
             const p = nodeStatus === 'verified' ? genPal
               : nodeStatus === 'rejected'
                 ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', light: '#FEF2F2', text: '#991B1B' }
@@ -804,9 +810,15 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   background: relOverlay + p.bg,
                   boxShadow: inMerge
                     ? `0 0 0 3px #fff, 0 0 0 6px #16A34A, 0 12px 32px rgba(22,163,74,0.4)`
-                    : isSel
-                      ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
-                      : `0 4px 18px ${p.shadow}`,
+                    // הקבוצה שאותרה מהפאנל — טבעת סגולה עבה ובולטת
+                    : inLocate
+                      ? `0 0 0 3px #fff, 0 0 0 7px #7C3AED, 0 14px 36px rgba(124,58,237,0.55)`
+                      : isSel
+                        ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
+                        // מועמד מהסריקה — טבעת דקה, מסמנת בלי להשתלט על המסך
+                        : inScan
+                          ? `0 0 0 2.5px #fff, 0 0 0 4.5px #A78BFA, 0 6px 20px rgba(124,58,237,0.35)`
+                          : `0 4px 18px ${p.shadow}`,
                   border: nodeStatus === 'verified' ? 'none' : `${Math.max(2, 2.5 * zoom)}px dashed #fff`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
@@ -828,9 +840,13 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   border: `2px solid ${p.ring}`,
                 }}>{pos.node.generation}</div>
 
-                {/* תג "כפול" — שם המופיע ביותר מצומת אחד */}
-                {isDup && zoom >= 0.5 && (
-                  <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: '#9333EA', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>כפול</div>
+                {/* תג "כפול" — שם המופיע ביותר מצומת אחד.
+                    ⚠️ מועמד מהסריקה מקבל תג משלו ("מועמד למיזוג"), כי הוא נמצא
+                    גם על התאמה מקורבת שהזיהוי המקומי (שם זהה בדיוק) לא תופס. */}
+                {(isDup || inScan) && zoom >= 0.5 && (
+                  <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: inScan ? '#7C3AED' : '#9333EA', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>
+                    {inScan ? 'מועמד למיזוג' : 'כפול'}
+                  </div>
                 )}
 
                 {/* כיסוי בחירה במצב מיזוג */}
@@ -1240,6 +1256,18 @@ export default function LineagePage() {
   // בחירת סגנון ההדפסה — רשימה או תרשים עץ
   const [printPick, setPrintPick] = useState(false)
   const [showDups, setShowDups] = useState(false)
+  // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
+  // *איפה* — ובעץ של 500 צמתים בלי הסימון על המפה אי אפשר להגיע אליהן.
+  const [scanIds, setScanIds] = useState<Set<string>>(new Set())
+  // הקבוצה שנבחרה מהפאנל — מודגשת חזק, והמבט נגלל אליה
+  const [locateIds, setLocateIds] = useState<Set<string>>(new Set())
+
+  const handleCandidates = useCallback((ids: string[]) => setScanIds(new Set(ids)), [])
+  const handleLocate = useCallback((ids: string[]) => {
+    setLocateIds(new Set(ids))
+    setStatusFilter(null); setGenerationFilter(null); setDupFilter(false)
+    if (ids[0]) setAnchor(a => ({ id: ids[0], n: (a?.n ?? 0) + 1 }))
+  }, [])
 
   function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
   function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
@@ -1502,7 +1530,28 @@ export default function LineagePage() {
         </div>
       </div>
 
-      {showDups && <DuplicatesPanel onDone={() => { void softRefresh() }} />}
+      {showDups && (
+        <DuplicatesPanel
+          onDone={() => { void softRefresh() }}
+          onCandidates={handleCandidates}
+          onLocate={handleLocate}
+        />
+      )}
+
+      {/* ⚠️ באנר יציאה מהדגשת הקבוצה: ההדגשה מעמעמת את כל שאר העץ, ובלי דרך
+          יציאה ברורה המשתמש נתקע עם מסך חיוור בלי להבין למה. */}
+      {locateIds.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 12, padding: '9px 14px', marginBottom: 12, flexWrap: 'wrap' }}>
+          <MapPin size={15} color="#7C3AED" />
+          <span style={{ flex: 1, minWidth: 180, fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
+            מוצגת קבוצת מיזוג מסומנת ({locateIds.size} צמתים) — שאר העץ מעומעם
+          </span>
+          <button onClick={() => setLocateIds(new Set())}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <X size={13} /> הצג את כל העץ
+          </button>
+        </div>
+      )}
 
       {/* ── באנר מצב "אילן צאצאים" — מה במוקד, יציאה, והדפסה ── */}
       {focusNode && (
@@ -1592,7 +1641,7 @@ export default function LineagePage() {
       ) : view === 'tree' ? (
         /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
            וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
-        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} />
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} />
       ) : (
         <TableView
           nodes={visibleNodes}

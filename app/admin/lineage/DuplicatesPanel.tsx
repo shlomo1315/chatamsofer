@@ -1,6 +1,6 @@
 'use client'
 import { useState, useCallback, useEffect } from 'react'
-import { Loader2, RefreshCw, X, Check, Undo2, AlertTriangle, Users } from 'lucide-react'
+import { Loader2, RefreshCw, X, Check, Undo2, AlertTriangle, Users, MapPin } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +34,15 @@ const LEVEL_UI: Record<Level, { label: string; hint: string; bg: string; fg: str
 const statusTxt = (s: string | null) => s === 'rejected' ? 'נדחה' : s === 'pending' ? 'ממתין' : 'מאושר'
 const relTxt = (r: string | null) => r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : 'לא צוין'
 
-export default function DuplicatesPanel({ onDone }: { onDone: () => void }) {
+export default function DuplicatesPanel({
+  onDone, onCandidates, onLocate,
+}: {
+  onDone: () => void
+  /** כל המועמדים שנמצאו — מסומנים על העץ כדי שיהיו נראים על המפה */
+  onCandidates: (ids: string[]) => void
+  /** מיקוד בקבוצה אחת — העץ גולל אליה ומדגיש אותה */
+  onLocate: (ids: string[]) => void
+}) {
   const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState<DupGroup[]>([])
@@ -49,12 +57,15 @@ export default function DuplicatesPanel({ onDone }: { onDone: () => void }) {
     try {
       const r = await fetch('/api/admin/lineage/duplicates?level=possible', { cache: 'no-store' })
       const d = await r.json()
-      setGroups(Array.isArray(d.groups) ? d.groups : [])
+      const gs: DupGroup[] = Array.isArray(d.groups) ? d.groups : []
+      setGroups(gs)
       setCounts(d.counts ?? { exact: 0, strong: 0, possible: 0 })
       setSel(new Set())
+      // כל המועמדים מסומנים על העץ — כך רואים על המפה איפה הכפילויות יושבות
+      onCandidates(gs.flatMap(g => g.nodes.map(n => n.id)))
     } catch { toast.error('שגיאה בסריקת הכפילויות') }
     setLoading(false)
-  }, [toast])
+  }, [toast, onCandidates])
 
   const loadUndo = useCallback(async () => {
     try {
@@ -279,6 +290,12 @@ export default function DuplicatesPanel({ onDone }: { onDone: () => void }) {
                     style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {busy === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />}
                     מזג — אותו אדם
+                  </button>
+                  {/* ⚠️ "הצג בעץ" לפני ההכרעה ולא אחריה: ההקשר במפה — מי האב,
+                      מה יש מסביב — הוא לעיתים מה שמכריע אם אלה אותו אדם. */}
+                  <button onClick={() => onLocate(g.nodes.map(n => n.id))} disabled={busy === key}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    <MapPin size={12} /> הצג בעץ
                   </button>
                   <button onClick={() => void notDuplicate(g)} disabled={busy === key}
                     style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fff', color: '#475569', border: '1.5px solid #CBD5E1', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
