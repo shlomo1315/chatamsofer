@@ -2224,7 +2224,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     return res.ok
   }
   // המסמכים שעדיין חסרים להגשת הבקשה (לא קיימים וגם לא נבחר קובץ)
-  const missingRequestIdDocs = () => requiredDocs.filter(d => !existingDocs[d] && !docFiles[d])
+  // חסרים מבין מסמכי החובה. ת"ז (הבעל/האשה) — כל אחד חובה בנפרד. ספח ת"ז
+  // (id_husband_appx / id_wife_appx) — מספיק אחד מהם (בעל *או* אשה); אם קיים
+  // לפחות ספח אחד, שניהם אינם נחשבים חסרים.
+  const has = (d: string) => !!existingDocs[d] || !!docFiles[d]
+  const missingRequestIdDocs = () => {
+    const appxKeys = requiredDocs.filter(d => d.endsWith('_appx'))
+    const hasAnyAppx = appxKeys.length > 0 && appxKeys.some(has)
+    return requiredDocs.filter(d => {
+      if (d.endsWith('_appx')) return !hasAnyAppx   // מספיק ספח אחד
+      return !has(d)
+    })
+  }
 
   const handleBirthRequest = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -2670,11 +2681,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     const replacing = !!replaceDoc[docType]
     return (
       <div className="border border-slate-200 rounded-xl p-4">
-        <p className="text-sm font-semibold text-slate-700 mb-1">{label}</p>
+        <p className="text-sm font-semibold text-slate-700 mb-1 flex items-center gap-2 flex-wrap">
+          {label}
+          {/* ספח — מספיק אחד מבין הבעל/האשה. מסומן כלא-חובה-בנפרד */}
+          {docType.endsWith('_appx') && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">מספיק ספח אחד (בעל או אשה)</span>
+          )}
+        </p>
         {/* ת"ז והספח הם שני קבצים נפרדים — ההנחיה משתנה לפי המשבצת */}
         <p className="text-xs font-bold text-red-600 mb-3">
           {docType.endsWith('_appx')
-            ? 'צילום הספח — הדף הנלווה לתעודת הזהות, שבו מופיעים הילדים'
+            ? 'צילום הספח — הדף הנלווה לתעודת הזהות. ⚠️ חובה שהספח יהיה מלא עם כל פרטי הילדים. מספיק ספח אחד (של הבעל או של האשה); ניתן לצרף גם את שניהם.'
             : 'צילום ברור של תעודת הזהות עצמה'}
         </p>
         {file ? (
