@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Mail, Send, Loader2, PenSquare, Reply, CheckCircle2, X, ChevronRight } from 'lucide-react'
 import { ParsedMessage } from '@/lib/gmail'
-import { sanitizeEmailHtml } from '@/lib/sanitizeEmailHtml'
+import MailBodyFrame from './MailBodyFrame'
 
 interface Props { email: string; name: string; beneficiaryId: string }
 
@@ -168,12 +168,9 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
           </div>
         </div>
 
-        {/* Body */}
-        <div
-          className="px-5 py-4 text-sm text-slate-800 leading-relaxed overflow-auto min-h-[200px]"
-          dir="auto"
-          dangerouslySetInnerHTML={{ __html: selected.body ? sanitizeEmailHtml(selected.body) : `<p style="color:#94a3b8">אין תוכן להצגה</p>` }}
-        />
+        {/* Body — מוצג ב-iframe מבודד ולא דרך dangerouslySetInnerHTML, למניעת
+            קריסת removeChild כש-React מנסה לעדכן DOM שהדפדפן תיקן (ראו MailBodyFrame) */}
+        <MailBodyFrame html={selected.body} />
       </div>
     )
   }

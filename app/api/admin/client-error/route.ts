@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return NextResponse.json({ ok: false }, { status: 401 })
 
-  let body: { message?: string; stack?: string; digest?: string; url?: string }
+  let body: { message?: string; stack?: string; digest?: string; url?: string; componentStack?: string }
   try { body = await request.json() } catch { return NextResponse.json({ ok: false }, { status: 400 }) }
 
   // חיתוך: דיווח פגום לא אמור למלא את היומן
@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
       url: cut(body.url, 300),
       digest: cut(body.digest, 80),
       message: cut(body.message, 500),
+      // componentStack מזהה את הקומפוננטה המדויקת שקרסה — המפתח לאיתור שורש removeChild
+      componentStack: cut(body.componentStack, 2000),
       stack: cut(body.stack, 2000),
     }),
   )

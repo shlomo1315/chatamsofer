@@ -27,6 +27,7 @@ import LineageTreeToggle from './LineageTreeToggle'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
 import WantsChoiceEditor from './WantsChoiceEditor'
 import CollapsibleMailThread from './CollapsibleMailThread'
+import MailTabBoundary from './MailTabBoundary'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -594,7 +595,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
         }] : []),
         ...(ben?.email ? [{
           key: 'mail', label: 'מיילים', accent: 'amber' as const, icon: <Mail size={15} />,
-          content: <CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} />,
+          content: <MailTabBoundary><CollapsibleMailThread email={ben.email} name={motherName} beneficiaryId={ben.id} /></MailTabBoundary>,
         }] : []),
         {
           key: 'gratitude', label: 'מכתבי ברכה', accent: 'amber' as const, icon: <Heart size={15} />,
