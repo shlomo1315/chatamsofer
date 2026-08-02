@@ -73,6 +73,21 @@ const escapeHtml = (s: string) =>
 
 const relLabel = (r: LineageNode['relation']) => r === 'son' ? 'בן' : r === 'son_in_law' ? 'חתן' : ''
 
+// ⚠️ סטטוס ובן/חתן מודפסים עם *סמל* ולא בצבע בלבד: הדף נשלח לצאצאים והם
+// מדפיסים אותו לרוב בשחור-לבן, ואז הבחנה שמסתמכת על צבע נעלמת לגמרי.
+const STATUS_BADGE: Record<string, { txt: string; cls: string }> = {
+  verified: { txt: '✓ מאושר', cls: 'ok' },
+  pending:  { txt: '⌛ ממתין לאישור', cls: 'pend' },
+  rejected: { txt: '✗ נדחה', cls: 'rej' },
+}
+const statusBadge = (s: LineageNode['status']) => STATUS_BADGE[s ?? 'verified'] ?? STATUS_BADGE.verified
+// קשר שלא הוגדר מוצג במפורש — כך רואים בדף עצמו איפה חסר מידע, וזו בדיוק
+// המטרה: שהצאצא ישלים מה שאנחנו לא יודעים.
+const relBadgeOf = (r: LineageNode['relation']) =>
+  r === 'son' ? { txt: 'בן', cls: 'son' }
+  : r === 'son_in_law' ? { txt: 'חתן', cls: 'law' }
+  : { txt: 'קשר לא צוין', cls: 'none' }
+
 function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMode = 'list'): string | null {
   const root = all.find(n => n.id === rootId)
   if (!root) return null
@@ -100,12 +115,14 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
     perDepth[depth] = (perDepth[depth] ?? 0) + 1
     const kids = childrenBy.get(n.id) ?? []
     const rel = relLabel(n.relation)
+    const st = statusBadge(n.status)
     return `<li class="d${Math.min(depth, 9)}">
       <div class="row">
         <span class="mark"></span>
         <span class="gen">דור ${n.generation}</span>
         <span class="name">${escapeHtml(n.name)}</span>
         ${rel ? `<span class="${n.relation === 'son_in_law' ? 'rel law' : 'rel'}">${rel}</span>` : ''}
+        <span class="st ${st.cls}">${st.txt}</span>
       </div>
       ${kids.length ? `<ul>${kids.map(k => renderList(k, depth + 1)).join('')}</ul>` : ''}
     </li>`
@@ -117,11 +134,16 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
     total++
     perDepth[depth] = (perDepth[depth] ?? 0) + 1
     const kids = childrenBy.get(n.id) ?? []
-    const rel = relLabel(n.relation)
+    const rb = relBadgeOf(n.relation)
+    const st = statusBadge(n.status)
     return `<li>
       <div class="nd${depth === 0 ? ' root' : ''}${n.relation === 'son_in_law' ? ' law' : ''}">
         <div class="nm">${escapeHtml(n.name)}</div>
-        <div class="mt">דור ${n.generation}${rel ? ` · ${rel}` : ''}</div>
+        <div class="mt">דור ${n.generation}</div>
+        <div class="bd">
+          <span class="b r-${rb.cls}">${rb.txt}</span>
+          <span class="b s-${st.cls}">${st.txt}</span>
+        </div>
       </div>
       ${kids.length ? `<ul>${kids.map(k => renderTree(k, depth + 1)).join('')}</ul>` : ''}
     </li>`
@@ -133,9 +155,14 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   // רוחב התרשים נקבע לפי הדור הרחב ביותר. הקטנה אוטומטית כדי שייכנס לרוחב
   // הדף לרוחב (A4 landscape פחות שוליים ≈ 1040px), עם רצפה של 35% כדי שלא
   // יגיע לגודל שאי אפשר לקרוא — אם צריך פחות מזה, עדיף מלכתחילה מצב רשימה.
+  // ⚠️ NODE_W חייב להישאר מסונכרן עם ה-CSS: רוחב הצומת + 6px ריפוד מכל צד
+  // קובע גם את מיקום הקו האופקי (חצי מרוחב ה-li) וגם את ההקטנה. שינוי רוחב
+  // ב-CSS בלי לעדכן כאן היה מזיז את כל הקווים.
+  const NODE_W = 132
+  const LI_W = NODE_W + 12
   const widest = perDepth.length ? Math.max(...perDepth) : 1
-  const scale = mode === 'tree' ? Math.max(0.35, Math.min(1, 1040 / (widest * 132))) : 1
-  const tooWide = mode === 'tree' && 1040 / (widest * 132) < 0.35
+  const scale = mode === 'tree' ? Math.max(0.35, Math.min(1, 1040 / (widest * LI_W))) : 1
+  const tooWide = mode === 'tree' && 1040 / (widest * LI_W) < 0.35
 
   const listCss = `
   ul { list-style: none; margin: 0; padding: 0 18px 0 0; }
@@ -154,6 +181,10 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   .rel { font-size: 9.5px; font-weight: 700; color: #1E40AF; background: #EFF6FF;
          border: 1px solid #BFDBFE; border-radius: 20px; padding: 1px 6px; }
   .rel.law { color: #92400E; background: #FFFBEB; border-color: #FDE68A; }
+  .st { font-size: 9.5px; font-weight: 700; border-radius: 20px; padding: 1px 6px; white-space: nowrap; }
+  .st.ok   { color: #166534; background: #F0FDF4; border: 1px solid #BBF7D0; }
+  .st.pend { color: #92400E; background: #FFFBEB; border: 1px solid #FDE68A; }
+  .st.rej  { color: #991B1B; background: #FEF2F2; border: 1px solid #FECACA; }
   .d0 > .row .name { font-size: 16px; font-weight: 800; color: #5B21B6; }`
 
   // ⚠️ הקו האופקי נמתח מ-66px מכל צד ולא בשיטת ::before/::after על הילד
@@ -174,7 +205,7 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   }
   /* הקו האופקי — ממרכז הילד הראשון עד מרכז האחרון */
   .tree ul::after {
-    content: ""; position: absolute; top: 24px; left: 66px; right: 66px; border-top: 1.5px solid #C4B5FD;
+    content: ""; position: absolute; top: 24px; left: ${LI_W / 2}px; right: ${LI_W / 2}px; border-top: 1.5px solid #C4B5FD;
   }
   .tree > ul::before, .tree > ul::after { display: none; }
   /* קו אנכי מהקו האופקי אל הצומת */
@@ -182,16 +213,28 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
     content: ""; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1.5px solid #C4B5FD;
   }
   .tree > ul > li::before { display: none; }
-  .tree .nd { position: relative; display: inline-block; width: 120px; vertical-align: top;
+  .tree .nd { position: relative; display: inline-block; width: ${NODE_W}px; vertical-align: top;
               border: 1.5px solid #DDD6FE; border-radius: 10px; background: #FAF5FF;
-              padding: 7px 6px; }
+              padding: 7px 5px; }
   .tree .nd.law { background: #FFFBEB; border-color: #FDE68A; }
   .tree .nd.root { background: #7C3AED; border-color: #6D28D9; }
   .tree .nd.root .nm { color: #fff; }
   .tree .nd.root .mt { color: #DDD6FE; }
   .tree .nm { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
   .tree .mt { font-size: 8.5px; font-weight: 600; color: #7C3AED; margin-top: 2px; }
-  .tree .nd.law .mt { color: #92400E; }`
+  .tree .nd.law .mt { color: #92400E; }
+  /* תגיות בן/חתן וסטטוס */
+  .tree .bd { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 4px; }
+  .tree .b { font-size: 7.5px; font-weight: 800; border-radius: 20px;
+             padding: 1px 5px; white-space: nowrap; border: 1px solid; }
+  .tree .r-son  { color: #1E40AF; background: #EFF6FF; border-color: #BFDBFE; }
+  .tree .r-law  { color: #92400E; background: #FFFBEB; border-color: #FDE68A; }
+  .tree .r-none { color: #64748B; background: #F8FAFC; border-color: #E2E8F0; }
+  .tree .s-ok   { color: #166534; background: #F0FDF4; border-color: #BBF7D0; }
+  .tree .s-pend { color: #92400E; background: #FFFBEB; border-color: #FDE68A; }
+  .tree .s-rej  { color: #991B1B; background: #FEF2F2; border-color: #FECACA; }
+  /* בשורש הרקע סגול כהה — התגיות חייבות רקע בהיר כדי להישאר קריאות */
+  .tree .nd.root .b { background: #fff; }`
 
   const noteHtml = mode === 'tree'
     ? `<strong>בקשה:</strong> נא לעבור על התרשים ולסמן את מי שאינו נכון, או להוסיף בכתב יד שם שחסר.
