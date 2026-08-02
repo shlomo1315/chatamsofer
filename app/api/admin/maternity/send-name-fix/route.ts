@@ -61,6 +61,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `שליחת המייל נכשלה: ${e instanceof Error ? e.message : String(e)}` }, { status: 500 })
   }
 
+  // שליחת קישור תיקון שם מסמנת שהתיק ממתין להשלמת/תיקון השם — כך הוא עובר בממשק
+  // מ"ממתין לאישור" ל"ממתין לתיקונים", ויחזור אוטומטית כשהשם ייקלט (baby_name_pending=false).
+  await admin.from('maternity_aids').update({ baby_name_pending: true, updated_at: new Date().toISOString() }).eq('id', aidId).then(undefined, () => {})
+
   // תיעוד בלוג
   try {
     await admin.from('activity_log').insert({
