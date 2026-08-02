@@ -11,16 +11,24 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // לכן כל החלטה משמעותית נרשמת גם כאן, חתומה בשם מי שביצע אותה.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** שם התצוגה של חבר הצוות — לנוחות תצוגה בלי join בכל שליפה. */
+/**
+ * שם התצוגה של חבר הצוות — לנוחות תצוגה בלי join בכל שליפה.
+ *
+ * ⚠️ נשלפות רק העמודות שקיימות בטבלה. קודם נשלף גם 'name', שאינו קיים
+ * ב-profiles — ו-PostgREST מכשיל את *כל* השאילתה על עמודה לא מוכרת, לא
+ * מתעלם ממנה. התוצאה: data חזר null תמיד, שם הכותב נשמר ריק, וכל רשומות
+ * התיעוד הוצגו כ"משתמש" במקום בשם האמיתי.
+ */
 export async function resolveAuthorName(
   db: SupabaseClient,
   userId: string | null | undefined,
 ): Promise<string | null> {
   if (!userId) return null
-  const { data } = await db.from('profiles').select('full_name, name, email').eq('id', userId).maybeSingle()
+  const { data, error } = await db.from('profiles').select('full_name, email').eq('id', userId).maybeSingle()
+  if (error) { console.error('[beneficiaryNotes] שליפת שם הכותב נכשלה:', error.message); return null }
   if (!data) return null
-  const p = data as { full_name?: string; name?: string; email?: string }
-  return p.full_name ?? p.name ?? p.email ?? null
+  const p = data as { full_name?: string | null; email?: string | null }
+  return (p.full_name?.trim() || p.email?.trim()) ?? null
 }
 
 /**

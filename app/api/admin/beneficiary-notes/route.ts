@@ -27,7 +27,25 @@ export async function GET(request: NextRequest) {
   // הטבלה נוצרת במיגרציה ידנית — עד שהיא רצה, מחזירים רשימה ריקה במקום שגיאה.
   if (error) return NextResponse.json({ notes: [] })
 
-  return NextResponse.json({ notes: data ?? [], currentUserId: staff.userId })
+  // ⚠️ השלמת שם הכותב לרשומות שנשמרו בלי שם. הן נוצרו כשהשליפה מ-profiles
+  // הייתה שבורה (עמודה לא קיימת ב-select), ולכן author_name נשמר ריק והתיעוד
+  // הוצג כ"משתמש". ההשלמה כאן מתקנת גם את מה שכבר נכתב, בלי מיגרציית נתונים.
+  const notes = (data ?? []) as { author_id: string | null; author_name: string | null }[]
+  const missing = [...new Set(notes.filter(n => !n.author_name && n.author_id).map(n => n.author_id as string))]
+  if (missing.length) {
+    const { data: profs } = await db.from('profiles').select('id, full_name, email').in('id', missing)
+    const byId = new Map(
+      (profs ?? []).map(p => {
+        const r = p as { id: string; full_name?: string | null; email?: string | null }
+        return [r.id, (r.full_name?.trim() || r.email?.trim()) ?? null]
+      }),
+    )
+    for (const n of notes) {
+      if (!n.author_name && n.author_id) n.author_name = byId.get(n.author_id) ?? null
+    }
+  }
+
+  return NextResponse.json({ notes, currentUserId: staff.userId })
 }
 
 export async function POST(request: NextRequest) {
