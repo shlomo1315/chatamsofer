@@ -284,9 +284,6 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [stayTo, setStayTo] = useState<Record<string, string | null>>(
     () => Object.fromEntries(aids.map(a => [a.id, a.recovery_stay_to ?? null])),
   )
-  const [receiptInput, setReceiptInput] = useState<Record<string, string>>(
-    () => Object.fromEntries(aids.map(a => [a.id, a.recovery_receipt_number ?? ''])),
-  )
   const [savingAmt, setSavingAmt] = useState<string | null>(null)
   const [editingAmt, setEditingAmt] = useState<Record<string, boolean>>({})
   // קובץ הקבלה + מצב נעילה של הרשומה
@@ -360,7 +357,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     const amt = Number(amountInput[aidId])
     if (!(Number.isFinite(amt) && amt > 0)) missing.push('סכום שמומש')
     if (!stayFrom[aidId] || !stayTo[aidId]) missing.push('תאריכי השהייה בלוח')
-    if ((receiptInput[aidId] ?? '').trim() === '') missing.push('מספר קבלה')
+    // מספר הקבלה אינו נדרש עוד — הקבלה עצמה מצורפת והמספר מופיע עליה
     // ⚠️ קישור שהוקלד ועדיין לא יובא נחשב תקין. קודם נבדק receiptUrl בלבד,
     // והוא מתעדכן ב-onBlur של שדה הקישור — אך React מחיל את העדכון *אחרי*
     // שמטפל הלחיצה כבר רץ. לכן נציג שהדביק קישור ולחץ מיד "אישור ושליחה"
@@ -372,7 +369,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     if (!hasReceipt) missing.push('קובץ קבלה')
     return missing
   }
-  // כל השדות חובה: סכום חיובי, לילות, מספר קבלה, וקובץ קבלה שהועלה
+  // כל השדות חובה: סכום חיובי, טווח שהייה, וקובץ קבלה שהועלה
   const canSubmit = (aidId: string) => missingFields(aidId).length === 0
 
   const sendAmount = async (aidId: string) => {
@@ -390,7 +387,6 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
             : nightsInput[aidId],
           stayFrom: stayFrom[aidId] ?? null,
           stayTo: stayTo[aidId] ?? null,
-          receiptNumber: (receiptInput[aidId] ?? '').trim(),
           // קישור ישיר לקבלה (אם הוזן במקום העלאת קובץ) — ה-backend ישמור אותו
           receiptUrl: receiptUrl[aidId] ?? null,
         }),
@@ -529,7 +525,6 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                 <div className="flex justify-between"><span className="text-slate-500">יולדת</span><span className="font-semibold text-slate-800">{motherName(a.beneficiary)}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">סכום שמומש</span><span className="font-semibold text-slate-800">₪{Number(amountInput[a.id]).toLocaleString('he-IL')}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">מספר לילות</span><span className="font-semibold text-slate-800">{nightsInput[a.id]}</span></div>
-                <div className="flex justify-between"><span className="text-slate-500">מספר קבלה</span><span className="font-semibold text-slate-800">{receiptInput[a.id]}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">קובץ קבלה</span><span className="font-semibold text-emerald-600">{receiptUrl[a.id] ? 'צורף ✓' : '—'}</span></div>
               </div>
               <div className="flex gap-2 p-4 border-t border-slate-100">
@@ -667,7 +662,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                               <div className="inline-flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2 max-w-xs mx-auto">
                                 <Check size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                                 <span className="text-sm font-semibold text-emerald-800 text-right leading-relaxed">
-                                  היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}{receiptInput[aid.id] ? ` · קבלה ${receiptInput[aid.id]}` : ''}
+                                  היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
@@ -748,15 +743,9 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   }}
                                 />
                               </div>
-                              <label className="flex flex-col gap-1.5 text-right">
-                                <span className="text-sm font-semibold text-slate-600">מספר קבלה</span>
-                                <input
-                                  value={receiptInput[aid.id] ?? ''}
-                                  onChange={e => setReceiptInput(mm => ({ ...mm, [aid.id]: e.target.value }))}
-                                  inputMode="text" placeholder="הזן/י מספר קבלה"
-                                  className="w-full px-3 py-3 text-base text-center rounded-xl border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                                />
-                              </label>
+                              {/* ⚠️ שדה "מספר קבלה" הוסר: הקבלה עצמה מצורפת, והמספר
+                                  מופיע עליה. שדה נפרד רק הכפיל הקלדה ידנית והוסיף
+                                  מקום לטעות. */}
                               <label className="flex flex-col gap-1.5 text-right">
                                 <span className="text-sm font-semibold text-slate-600">קובץ קבלה (תמונה/PDF)</span>
                                 <input

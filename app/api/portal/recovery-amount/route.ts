@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
   if (!Number.isInteger(nightsNum) || nightsNum < 1) {
     return NextResponse.json({ error: 'יש להזין מספר לילות' }, { status: 400 })
   }
+  // ⚠️ מספר הקבלה אינו נדרש עוד: הקבלה עצמה מצורפת והמספר מופיע עליה, ושדה
+  // נפרד רק הכפיל הקלדה ידנית. הערך עדיין מתקבל ונשמר אם נשלח — כדי שרשומות
+  // ישנות שכבר נושאות מספר לא יאבדו אותו בעדכון.
   const receipt = typeof receiptNumber === 'string' ? receiptNumber.trim() : ''
-  if (!receipt) return NextResponse.json({ error: 'יש להזין מספר קבלה' }, { status: 400 })
 
   // טווח תאריכי השהייה — חובה, פורמט ISO, ובתוך חלון 5 השבועות האחרונים
   const ISO = /^\d{4}-\d{2}-\d{2}$/
@@ -85,7 +87,9 @@ export async function POST(request: NextRequest) {
     recovery_nights: nightsNum,
     recovery_stay_from: from,
     recovery_stay_to: to,
-    recovery_receipt_number: receipt,
+    // ⚠️ נכתב רק כשנשלח ערך. כתיבה של '' הייתה מוחקת מספר קבלה שכבר קיים
+    // ברשומות שנקלטו לפני שהשדה הוסר מהטופס.
+    ...(receipt ? { recovery_receipt_number: receipt } : {}),
     // שמירת הקישור הישיר אם הוזן (כשלא הועלה קובץ פיזי)
     recovery_receipt_url: finalReceiptUrl,
     recovery_amount_status: 'executed', // בית ההחלמה מסמן ביצוע — אין צורך באישור נוסף
