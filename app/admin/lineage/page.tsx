@@ -1501,7 +1501,7 @@ export default function LineagePage() {
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
             {(['tree', 'table'] as View[]).map(v => (
               <button key={v} onClick={() => setView(v)}
