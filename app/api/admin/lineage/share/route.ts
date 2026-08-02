@@ -19,18 +19,39 @@ export async function GET(request: NextRequest) {
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
   const rootNodeId = request.nextUrl.searchParams.get('rootNodeId')
-  if (!rootNodeId) return NextResponse.json({ error: 'חסר מזהה צומת' }, { status: 400 })
 
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'Supabase לא מוגדר' }, { status: 500 })
 
+  // עם rootNodeId — הזמנות לצומת אחד (חלונית השיתוף בענף).
+  // בלי rootNodeId — כל ההזמנות בכל העץ, עם שם הצומת והדור (טבלת הניהול המרכזית).
+  if (rootNodeId) {
+    const { data } = await admin
+      .from('lineage_share_invites')
+      .select('token, recipient_name, recipient_email, created_at, expires_at, revoked_at, last_used_at')
+      .eq('root_node_id', rootNodeId)
+      .order('created_at', { ascending: false })
+    return NextResponse.json({ invites: data ?? [] })
+  }
+
   const { data } = await admin
     .from('lineage_share_invites')
-    .select('token, recipient_name, recipient_email, created_at, expires_at, revoked_at, last_used_at')
-    .eq('root_node_id', rootNodeId)
+    .select('token, root_node_id, recipient_name, recipient_email, created_at, expires_at, revoked_at, last_used_at, node:lineage_nodes(name, generation)')
     .order('created_at', { ascending: false })
 
-  return NextResponse.json({ invites: data ?? [] })
+  // שיטוח פרטי הצומת (name/generation) לרמה העליונה של כל שורה
+  const invites = (data ?? []).map(r => {
+    const node = Array.isArray(r.node) ? r.node[0] : r.node
+    return {
+      token: r.token, root_node_id: r.root_node_id,
+      recipient_name: r.recipient_name, recipient_email: r.recipient_email,
+      created_at: r.created_at, expires_at: r.expires_at,
+      revoked_at: r.revoked_at, last_used_at: r.last_used_at,
+      node_name: (node as { name?: string } | null)?.name ?? null,
+      node_generation: (node as { generation?: number } | null)?.generation ?? null,
+    }
+  })
+  return NextResponse.json({ invites })
 }
 
 export async function POST(request: NextRequest) {

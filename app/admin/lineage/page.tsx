@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2 } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
+import SharePermissionsPanel from './SharePermissionsPanel'
 import DuplicatesPanel from './DuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
@@ -1253,6 +1254,8 @@ export default function LineagePage() {
   const [focusId, setFocusId] = useState<string | null>(null)
   // צומת ששיתופו נערך כרגע (חלונית ניהול השיתוף)
   const [shareNode, setShareNode] = useState<{ id: string; name: string } | null>(null)
+  // מרכז השליטה המרכזי בכל הרשאות השיתוף (טבלת כל הקישורים)
+  const [showPermissions, setShowPermissions] = useState(false)
   // עוגן גלילה — { id, n }. ה-n הוא מונה: בלעדיו אותו מזהה פעמיים ברצף לא
   // היה מפעיל את המרכוז מחדש (המיזוג השני על אותו צומת לא היה מזיז את המבט).
   const [anchor, setAnchor] = useState<{ id: string; n: number } | null>(null)
@@ -1523,6 +1526,14 @@ export default function LineagePage() {
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
             {mergeMode ? 'סיום מיזוג' : '⚯ מזג ידנית'}
           </button>
+          {/* מרכז שליטה בכל הרשאות שיתוף העץ — כל הקישורים שנשלחו, למי/מתי, וביטול */}
+          {canEdit && (
+            <button onClick={() => setShowPermissions(true)}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+              style={{ background: '#fff', color: '#4338CA', border: '1px solid #C7D2FE' }}>
+              <Link2 size={14} /> הרשאות ענף
+            </button>
+          )}
           {canAdd && (
             <button
               onClick={() => { setFormName(''); setFormParentId(null); setModal({ type: 'add', parentId: null, parentName: '' }) }}
@@ -1592,6 +1603,11 @@ export default function LineagePage() {
       {/* חלונית ניהול שיתוף ענף — יצירת הזמנות + שליטה מלאה (ביטול הרשאות) */}
       {shareNode && (
         <ShareBranchModal nodeId={shareNode.id} nodeName={shareNode.name} onClose={() => setShareNode(null)} />
+      )}
+
+      {/* מרכז שליטה מרכזי — טבלת כל הרשאות השיתוף בכל העץ */}
+      {showPermissions && (
+        <SharePermissionsPanel onClose={() => setShowPermissions(false)} />
       )}
 
       {/* ── בחירת סגנון הדפסה ── */}
