@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2 } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
+import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
@@ -373,8 +374,9 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor, scanIds, locateIds }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string> }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
   const toast = useToast()
+  const router = useRouter()
   const canAdd = useCan('lineage', 'add')
   const canEdit = useCan('lineage', 'edit')
   const canDelete = useCan('lineage', 'delete')
@@ -391,6 +393,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     hoverTimer.current = setTimeout(() => setHovered(null), 280)
   }, [])
   const [modal, setModal] = useState<ModalState>(null)
+  // הצומת שתפריט "פתיחת הכרטסת" שלו פתוח כרגע
+  const [openCardFor, setOpenCardFor] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
@@ -939,6 +943,48 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         ⚯ מזג כפילים
                       </button>
                     )}
+                    {/* ── פתיחת הכרטסת המקושרת ──
+                        ⚠️ העץ ידע עד כה רק שמות, וכל מעבר לכרטסת דרש לחפש את
+                        המשפחה ידנית לפי שם. הכפתור מופיע רק כשיש משפחה מקושרת,
+                        וריחוף עליו פותח את בחירת הכרטיסייה — כדי שאפשר יהיה
+                        להשאיר את העץ פתוח ולעבוד לצידו. */}
+                    {(linked[pos.node.id] ?? []).length > 0 && (
+                      <div style={{ position: 'relative', width: '100%' }}
+                        onMouseEnter={() => setOpenCardFor(pos.node.id)}
+                        onMouseLeave={() => setOpenCardFor(null)}>
+                        <button type="button"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 12px', borderRadius: 10, background: '#0EA5E9', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          <ExternalLink size={12} /> פתיחת הכרטסת
+                          {(linked[pos.node.id] ?? []).length > 1 && ` (${linked[pos.node.id].length})`}
+                        </button>
+                        {openCardFor === pos.node.id && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, paddingTop: 5, zIndex: 60 }}>
+                            <div style={{ background: '#fff', border: '1.5px solid #BAE6FD', borderRadius: 12, boxShadow: '0 10px 28px rgba(0,0,0,0.18)', padding: 7, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                              {(linked[pos.node.id] ?? []).map(b => (
+                                <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  {(linked[pos.node.id] ?? []).length > 1 && (
+                                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#0C4A6E', padding: '0 2px' }}>{b.name}</div>
+                                  )}
+                                  <div style={{ display: 'flex', gap: 5 }}>
+                                    <button type="button"
+                                      onClick={() => window.open(`/admin/beneficiaries/${b.id}`, '_blank', 'noopener')}
+                                      style={{ flex: 1, background: '#F0F9FF', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 8, padding: '6px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                      כרטיסייה חדשה
+                                    </button>
+                                    <button type="button"
+                                      onClick={() => router.push(`/admin/beneficiaries/${b.id}`)}
+                                      style={{ flex: 1, background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                      כרטיסייה נוכחית
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* מיקוד בענף — רק לצומת שיש לו צאצאים, ורק כשאינו כבר במוקד */}
                     {pos.node.children.length > 0 && focusId !== pos.node.id && (
                       <button onClick={() => onFocusNode(pos.node.id)}
@@ -1262,6 +1308,8 @@ export default function LineagePage() {
   // בחירת סגנון ההדפסה — רשימה או תרשים עץ
   const [printPick, setPrintPick] = useState(false)
   const [showDups, setShowDups] = useState(false)
+  // צומת → המשפחות המקושרות אליו, לקפיצה ישירה מהעץ לכרטסת
+  const [linked, setLinked] = useState<Record<string, { id: string; name: string }[]>>({})
   // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
   // *איפה* — ובעץ של 500 צמתים בלי הסימון על המפה אי אפשר להגיע אליהן.
   const [scanIds, setScanIds] = useState<Set<string>>(new Set())
@@ -1399,10 +1447,12 @@ export default function LineagePage() {
     setLoading(true)
     try {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
-      const raw: LineageNode[] = (await r.json()).nodes ?? []
+      const d = await r.json()
+      const raw: LineageNode[] = d.nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
       // החתם סופר (הדור הנמוך ביותר) תמיד דור 1, וממשיך משם
       setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
+      setLinked(d.linked ?? {})
     } catch {}
     setLoading(false)
   }, [])
@@ -1410,9 +1460,11 @@ export default function LineagePage() {
   const softRefresh = useCallback(async () => {
     try {
       const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
-      const raw: LineageNode[] = (await r.json()).nodes ?? []
+      const d = await r.json()
+      const raw: LineageNode[] = d.nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
       setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
+      setLinked(d.linked ?? {})
     } catch {}
   }, [])
 
@@ -1671,7 +1723,7 @@ export default function LineagePage() {
       ) : view === 'tree' ? (
         /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
            וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
-        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} />
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
       ) : (
         <TableView
           nodes={visibleNodes}

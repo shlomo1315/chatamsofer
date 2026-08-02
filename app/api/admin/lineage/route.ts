@@ -28,7 +28,22 @@ export async function GET() {
     .order('name')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
-  return NextResponse.json({ nodes: data ?? [] }, { headers: NO_STORE })
+
+  // ⚠️ המשפחות המקושרות לכל צומת — כדי שאפשר יהיה לקפוץ מהעץ ישירות לכרטסת.
+  // בלי זה העץ יודע רק שמות, וכל מעבר לכרטסת דרש חיפוש ידני בשם.
+  // שאילתה אחת לכל העץ, ולא אחת לכל צומת.
+  const { data: bens } = await admin
+    .from('beneficiaries')
+    .select('id, full_name, family_name, spouse_name, lineage_node_id')
+    .not('lineage_node_id', 'is', null)
+  const linked: Record<string, { id: string; name: string }[]> = {}
+  for (const b of bens ?? []) {
+    const row = b as { id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }
+    const name = [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'ללא שם'
+    ;(linked[row.lineage_node_id] ??= []).push({ id: row.id, name })
+  }
+
+  return NextResponse.json({ nodes: data ?? [], linked }, { headers: NO_STORE })
 }
 
 export async function POST(request: NextRequest) {

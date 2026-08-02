@@ -134,10 +134,10 @@ export default function DuplicatesPanel({
       })
       const d: PlanResp = await r.json()
       if (!r.ok) { toast.error((d as unknown as { error?: string }).error || 'שגיאה בחישוב המיזוג'); setPlanning(null); return }
-      // ברירת מחדל לכל דור — הנוסח המלא ביותר מבין המשתתפים
+      // ⚠️ ברירת מחדל *לכל* דור, גם כשהשם זהה בכולם: גם אז המשתמש רוצה לעיתים
+      // לתקן ניסוח או להוסיף תואר, ולכן השדה נפתח תמיד ולא רק כשיש מחלוקת.
       const names: Record<string, string> = {}
       for (const s of d.steps) {
-        if (!s.needsNameChoice) continue
         names[s.keepId] = [...s.names].sort((a, b) => {
           const aw = a.trim().split(/\s+/).length, bw = b.trim().split(/\s+/).length
           return aw !== bw ? bw - aw : b.trim().length - a.trim().length
@@ -387,7 +387,7 @@ export default function DuplicatesPanel({
               {plan.data.steps.map(s => (
                 <div key={s.keepId}
                   style={{ border: `1.5px solid ${s.direction === 'requested' ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 12, padding: '11px 13px', background: s.direction === 'requested' ? '#FAF5FF' : '#fff' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: s.needsNameChoice ? 8 : 0, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: '#7C3AED', background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 20, padding: '1px 7px' }}>דור {s.generation}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B' }}>{DIR_LABEL[s.direction]}</span>
                     <span style={{ fontSize: 11.5, color: '#475569' }}>· {s.count} צמתים → 1</span>
@@ -396,10 +396,12 @@ export default function DuplicatesPanel({
                     )}
                   </div>
 
-                  {s.needsNameChoice && (
+                  {/* ⚠️ בחירת השם מוצגת תמיד, גם כשכל הניסוחים זהים: גם אז
+                      לעיתים רוצים לתקן ניסוח או להוסיף תואר, ואין סיבה לחסום. */}
+                  {(
                     <>
-                      <div style={{ fontSize: 11.5, fontWeight: 800, color: '#92400E', marginBottom: 6 }}>
-                        הניסוחים שונים — איזה שם יישאר?
+                      <div style={{ fontSize: 11.5, fontWeight: 800, color: s.needsNameChoice ? '#92400E' : '#475569', marginBottom: 6 }}>
+                        {s.needsNameChoice ? 'הניסוחים שונים — איזה שם יישאר?' : 'השם שיישאר (ניתן לערוך):'}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         {s.names.map(nm => {
