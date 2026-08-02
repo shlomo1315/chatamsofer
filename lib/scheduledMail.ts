@@ -11,6 +11,8 @@ export type ScheduledKind =
   | 'gratitude_letter'          // בקשת מכתב ברכה — 10 ימים אחרי אישור הלידה
   | 'gratitude_reminder'        // תזכורת — יומיים אחרי, אם עדיין לא הגיע מכתב
   | 'recovery_survey'           // בקשת משוב — 5 ימים אחרי סימון ההגעה
+  | 'card_pickup_reminder_1'    // תזכורת איסוף כרטיס — יומיים אחרי הטענה, אם לא שויך
+  | 'card_pickup_reminder_2'    // תזכורת שנייה — שבוע נוסף (9 ימים מהטענה), אם עדיין לא
 
 export interface EntityKey {
   kind: ScheduledKind
@@ -109,6 +111,25 @@ export async function cancelGratitudeReminder(aidId: string): Promise<void> {
     entityTable: 'maternity_aids',
     entityId: aidId,
   })
+}
+
+// ─── תזכורות איסוף/שיוך כרטיס מזון ───────────────────────────────────────────
+// נקבעות ברגע שהכרטיס נטען (card_status='loaded'), ומבוטלות ברגע שהכרטיס שויך
+// (card_picked_up_at נקבע). שתי תזכורות: יומיים מהטענה, ושבוע נוסף (9 ימים) אם
+// עדיין לא שויך. כל אחת בודקת בעצמה לפני השליחה (defense-in-depth).
+const CARD_REMINDER_1_DAYS = 2
+const CARD_REMINDER_2_DAYS = 9
+
+export async function scheduleCardPickupReminders(aidId: string, toEmail: string | null | undefined, loadedAt: Date): Promise<void> {
+  const at = (days: number) => new Date(loadedAt.getTime() + days * 86400000)
+  await scheduleEmail({ kind: 'card_pickup_reminder_1', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(CARD_REMINDER_1_DAYS) })
+  await scheduleEmail({ kind: 'card_pickup_reminder_2', entityTable: 'maternity_aids', entityId: aidId, toEmail, sendAfter: at(CARD_REMINDER_2_DAYS) })
+}
+
+/** מבטל את שתי תזכורות הכרטיס — נקרא ברגע שהכרטיס שויך (card_picked_up_at). */
+export async function cancelCardPickupReminders(aidId: string): Promise<void> {
+  await cancelScheduledEmail({ kind: 'card_pickup_reminder_1', entityTable: 'maternity_aids', entityId: aidId })
+  await cancelScheduledEmail({ kind: 'card_pickup_reminder_2', entityTable: 'maternity_aids', entityId: aidId })
 }
 
 /** מבטל מייל שטרם נשלח. מייל שכבר נשלח — לא מושפע. */

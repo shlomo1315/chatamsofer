@@ -249,6 +249,16 @@ export async function loadMaternityCardOnApproval(
   }).eq('id', aid.id)
 
   await logActivity(admin, { action: 'maternity_card_loaded', entityType: 'maternity_aid', entityId: aid.id, details: { amount, clientId, tlushId: result.tlushId, trigger: 'auto_on_approval' } })
+
+  // תזכורות איסוף/שיוך כרטיס — יומיים ושבוע נוסף אחרי ההטענה, אם היולדת לא תשייך
+  // את הכרטיס (card_picked_up_at). כל תזכורת בודקת בעצמה לפני השליחה ומתבטלת אם שויך.
+  try {
+    const { scheduleCardPickupReminders } = await import('./scheduledMail')
+    await scheduleCardPickupReminders(aid.id, b.email, new Date())
+  } catch (e) {
+    console.error('[maternity-card] תזמון תזכורות איסוף נכשל:', e)
+  }
+
   return { ok: true, clientId }
 }
 

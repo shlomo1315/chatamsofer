@@ -1230,6 +1230,51 @@ export function maternityCardEmail(
   }
 }
 
+// ─── תזכורת: הכרטיס נטען אך טרם שויך/נאסף ─────────────────────────────────────
+// נשלחת יומיים אחרי הטענת הכרטיס (ושוב שבוע נוסף) אם היולדת עדיין לא ביצעה את
+// השיוך הטלפוני בנדרים / לא אספה את הכרטיס. כוללת את רשימת כל המוקדים הפעילים.
+export function cardPickupReminderEmail(opts: {
+  familyName?: string | null
+  motherName?: string | null
+  isSecond?: boolean
+  centers: { name?: string | null; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[]
+}): BuiltEmail {
+  const greet = greetMrs(opts.familyName, opts.motherName)
+  const centerRows = opts.centers.length
+    ? opts.centers.map(c => {
+        const loc = [c.city, c.address].filter(Boolean).map(escapeHtml).join(', ')
+        const when = [c.pickup_days, c.pickup_hours].filter(Boolean).map(escapeHtml).join(' · ')
+        return `<tr><td style="padding:10px 14px;border-bottom:1px solid #f1f5f9;">
+          <p style="margin:0;color:#0f172a;font-size:15px;font-weight:800;">${escapeHtml(c.name)}</p>
+          ${loc ? `<p style="margin:3px 0 0;color:#475569;font-size:13px;">${loc}</p>` : ''}
+          ${when ? `<p style="margin:3px 0 0;color:#059669;font-size:12px;font-weight:600;">${when}</p>` : ''}
+        </td></tr>`
+      }).join('')
+    : `<tr><td style="padding:12px 14px;color:#64748b;font-size:14px;">פרטי המוקדים יימסרו במשרד.</td></tr>`
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greet},</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#92400e;font-size:16px;font-weight:800;">
+          ${opts.isSecond ? 'תזכורת נוספת — ' : ''}המערכת מזהה שעדיין לא שויך כרטיס המזון שלכם.
+        </p>
+        <p style="margin:8px 0 0;color:#78350f;font-size:14px;line-height:1.7;">
+          הכרטיס שלכם נטען ומוכן, אך טרם בוצע שיוך הכרטיס במערכת. במידה ועדיין לא לקחתם את
+          הכרטיס במוקד — ניתן לגשת לאחד המוקדים הבאים לאיסוף.
+        </p>
+      </td></tr>
+    </table>
+    <p style="margin:0 0 10px;color:#0f172a;font-size:15px;font-weight:800;">מוקדי החלוקה:</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${centerRows}</table>
+    <p style="margin:0;color:#64748b;font-size:13px;">לבירורים ניתן לפנות למזכירות היכל החתם סופר.</p>
+  `
+  return {
+    subject: opts.isSecond ? 'תזכורת נוספת — כרטיס המזון ממתין לאיסוף' : 'שימו לב — כרטיס המזון ממתין לאיסוף',
+    html: shell({ preheader: 'כרטיס המזון שלכם נטען וממתין לאיסוף', accent: '#f59e0b', title: 'כרטיס המזון ממתין', subtitle: 'אגף עזר ליולדות · היכל החתם סופר', body }),
+  }
+}
+
 // ─── עדכון: המלאי במוקד התחדש — מצורף שובר הכרטיס לאיסוף ──────────────────────
 export function cardStockReplenishedEmail(name: string, centerName?: string | null, phones?: (string | null | undefined)[]): BuiltEmail {
   const greet = greetMrs(null, name)

@@ -31,11 +31,40 @@ interface BenRow {
 export async function sendScheduled(db: SupabaseClient, job: ScheduledJob): Promise<SendOutcome> {
   const { data: aid } = await db
     .from('maternity_aids')
-    .select('id, status, birth_type, recovery_home, recovery_arrived, beneficiary:beneficiaries(family_name, full_name, spouse_name, city, email)')
+    .select('id, status, birth_type, recovery_home, recovery_arrived, card_status, card_loaded_at, card_picked_up_at, beneficiary:beneficiaries(family_name, full_name, spouse_name, city, email)')
     .eq('id', job.entity_id)
     .maybeSingle()
 
   if (!aid) return { outcome: 'cancelled', reason: 'הרשומה נמחקה' }
+
+  const benEarly = (Array.isArray(aid.beneficiary) ? aid.beneficiary[0] : aid.beneficiary) as BenRow | null
+
+  // ── תזכורת איסוף/שיוך כרטיס מזון ──
+  // נשלחת רק אם הכרטיס נטען אך עדיין לא שויך (card_picked_up_at ריק). אם כבר שויך
+  // או הסטטוס אינו 'loaded' — התזכורת מתבטלת. ה-status הכללי לא נבדק כאן: כרטיס נטען
+  // רק ללידה מאושרת ממילא, וגם אם התיק שינה סטטוס — היולדת עדיין צריכה לאסוף.
+  if (job.kind === 'card_pickup_reminder_1' || job.kind === 'card_pickup_reminder_2') {
+    if (aid.card_picked_up_at) return { outcome: 'cancelled', reason: 'הכרטיס כבר שויך/נאסף' }
+    if (aid.card_status !== 'loaded') return { outcome: 'cancelled', reason: 'הכרטיס אינו במצב "נטען"' }
+
+    // רשימת כל המוקדים הפעילים — מוצגת ליולדת כדי שתדע לאן לגשת
+    const { data: centers } = await db
+      .from('card_centers')
+      .select('name, city, address, pickup_days, pickup_hours')
+      .eq('is_active', true)
+      .order('name')
+
+    const { cardPickupReminderEmail } = await import('./emailTemplates')
+    const mail = cardPickupReminderEmail({
+      familyName: benEarly?.family_name ?? null,
+      motherName: benEarly?.spouse_name ?? null,
+      isSecond: job.kind === 'card_pickup_reminder_2',
+      centers: (centers ?? []) as { name?: string | null; city?: string | null; address?: string | null; pickup_days?: string | null; pickup_hours?: string | null }[],
+    })
+    const res = await deliverMail(job.to_email, mail.subject, mail.html, undefined, mailFor('maternity'))
+    return res.ok ? { outcome: 'sent' } : { outcome: 'failed', reason: res.error }
+  }
+
   if (aid.status !== 'active') return { outcome: 'cancelled', reason: 'הלידה אינה מאושרת' }
 
   const ben = (Array.isArray(aid.beneficiary) ? aid.beneficiary[0] : aid.beneficiary) as BenRow | null

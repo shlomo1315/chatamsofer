@@ -438,6 +438,11 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
           caller: callerPhone, callId, family_name: familyName, card_number_last4: cardNumber.slice(-4),
           nedarim_id: nedarimId, center: centerName,
         })
+        // הכרטיס שויך — מבטלים את תזכורות האיסוף הממתינות (best-effort)
+        try {
+          const { cancelCardPickupReminders } = await import('@/lib/scheduledMail')
+          await cancelCardPickupReminders(aidId)
+        } catch (e) { console.error('[yemot-maternity] ביטול תזכורות איסוף נכשל:', e) }
       }
       console.log(`[yemot-maternity] card linked, aid ${aidId} (${familyName}), center=${centerName}, firstTime=${firstTime}, already=${already}`)
       // הקראה איטית — הכרטיס הוטען בהצלחה ושם המוקד ייאמרו לאט וברור
