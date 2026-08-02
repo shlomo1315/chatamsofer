@@ -167,9 +167,8 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Filter cards */}
+      {/* Filter cards — 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת */}
       {!hideFilters && (
-      {/* 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת בלי גלילה */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
