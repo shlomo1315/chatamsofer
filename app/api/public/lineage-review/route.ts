@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, type TreeNodeRow } from '@/lib/lineageSync'
+import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, type TreeNodeRow } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { rateLimit } from '@/lib/rateLimit'
 import { clientIp } from '@/lib/rateLimit'
@@ -109,10 +109,13 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // סנכרון לכל האגפים — בדיוק כמו ב-PATCH האדמין:
-  // רענון lineage_chain של הצאצאים בתת-העץ, וקידום משפחות שהיחוס שלהן הושלם.
+  // דחיית מפל (צומת נדחה → כל צאצאיו נדחים), רענון lineage_chain, וקידום משפחות.
+  let cascaded: string[] = []
   try {
     const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT)).data as TreeNodeRow[] | null
     if (fresh) {
+      // דחייה מפילה את כל תת-העץ (לא ייתכן דור נדחה ודור אחריו מאושר)
+      if (newStatus === 'rejected') cascaded = await cascadeRejectSubtree(admin, fresh, nodeId)
       await resyncSubtree(admin, fresh, nodeId)
       if (newStatus === 'verified') await approveVerifiedBeneficiaries(admin, fresh, nodeId)
     }
@@ -132,5 +135,6 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  return NextResponse.json({ ok: true })
+  // cascaded — מזהי הצמתים שנדחו במפל (הצומת עצמו + צאצאיו); ה-UI מעדכן אותם
+  return NextResponse.json({ ok: true, cascaded })
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, List, Network } from 'lucide-react'
 
 interface Node {
   id: string
@@ -68,10 +68,13 @@ export default function LineageReviewClient({ token }: { token: string }) {
       })
       const data = await res.json()
       if (!res.ok || data.ok === false) { setError(data.error || 'הפעולה נכשלה'); return }
-      // עדכון אופטימי
-      setNodes(ns => ns.map(n => n.id === nodeId
-        ? { ...n, ...(action === 'verify' ? { status: 'verified' } : action === 'reject' ? { status: 'rejected' } : { name: name ?? n.name }) }
-        : n))
+      // עדכון אופטימי. בדחייה — כל צאצאיו נדחו במפל (data.cascaded), מסמנים את כולם.
+      const cascaded: string[] = Array.isArray(data.cascaded) ? data.cascaded : []
+      setNodes(ns => ns.map(n => {
+        if (action === 'reject' && (n.id === nodeId || cascaded.includes(n.id))) return { ...n, status: 'rejected' }
+        if (n.id === nodeId) return { ...n, ...(action === 'verify' ? { status: 'verified' } : { name: name ?? n.name }) }
+        return n
+      }))
       setEditing(null)
     } catch { setError('שגיאת רשת') }
     finally { setBusy(null) }

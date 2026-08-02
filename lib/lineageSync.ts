@@ -127,6 +127,33 @@ export async function resyncSubtree(
   return resyncBeneficiaryChains(db, nodes, subtreeNodeIds(nodes, changedNodeId))
 }
 
+/**
+ * דחיית מפל: כשצומת נדחה, כל צאצאיו בעץ נדחים גם הם אוטומטית — כי אם דור אינו
+ * מיוחס, ממילא כל צאצאיו אינם מיוחסים. לא ייתכן שדור נדחה ודור אחריו מאושר.
+ * (החזרה מדחייה אינה מפל: כדי לאשר צאצא צריך לאשר אותו במפורש — דחייה חמורה מדי
+ * לביטול אוטומטי.)
+ *
+ * מחזיר את מזהי הצמתים שנדחו (הצומת + כל צאצאיו שלא היו כבר rejected).
+ * best-effort — כשל נרשם ואינו מפיל את הפעולה.
+ */
+export async function cascadeRejectSubtree(
+  db: SupabaseClient,
+  nodes: TreeNodeRow[],
+  rejectedNodeId: string,
+): Promise<string[]> {
+  const ids = [...subtreeNodeIds(nodes, rejectedNodeId)]
+  // רק צמתים שאינם כבר rejected — כדי לא לדרוס ולרשום מיותר
+  const map = new Map(nodes.map(n => [n.id, n]))
+  const toReject = ids.filter(id => map.get(id)?.status !== 'rejected')
+  if (!toReject.length) return []
+  const { error } = await db
+    .from('lineage_nodes')
+    .update({ status: 'rejected', updated_at: new Date().toISOString() })
+    .in('id', toReject)
+  if (error) { console.error('[lineageSync] cascade reject:', error.message); return [] }
+  return toReject
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // אישור בעץ הדורות → אישור המשפחה בצאצאים.
 //

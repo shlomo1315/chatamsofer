@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -175,6 +175,23 @@ export async function PATCH(request: NextRequest) {
       if (anc.status === 'verified') break
       await admin.from('lineage_nodes').update({ status: 'verified' }).eq('id', cur).then(undefined, () => {})
       cur = (anc.parent_id as string | null) ?? null
+    }
+  }
+
+  // ── דחיית מפל ──
+  // צומת שנדחה מפיל אוטומטית את כל צאצאיו לדחייה — לא ייתכן שדור נדחה ודור אחריו
+  // מאושר. (חזרה מדחייה אינה מפל: יש לאשר כל צאצא במפורש.)
+  if (updates.status === 'rejected') {
+    const { data: nodesForCascade } = await admin.from('lineage_nodes').select(NODE_SELECT)
+    if (nodesForCascade) {
+      const rejected = await cascadeRejectSubtree(admin, nodesForCascade as TreeNodeRow[], id)
+      if (rejected.length > 1) {
+        console.log(`[lineage] node ${id} rejected → cascaded ${rejected.length - 1} descendant(s)`)
+        await logActivity(admin, {
+          userId: staff.userId, action: 'lineage_cascade_rejected',
+          entityType: 'lineage_node', entityId: id, details: { count: rejected.length - 1 },
+        }).catch(() => {})
+      }
     }
   }
 
