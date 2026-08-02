@@ -2442,6 +2442,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   // קישור mailto ל-igud עם הת"ז (שאיתה התחבר) בשורת הנושא — כדי שהמענה האוטומטי יזהה אוטומטית
   const igudMailto = `mailto:igud@chasamsofer.info?subject=${encodeURIComponent('תעודת זהות ' + (beneficiary?.id_number || pendingAuth?.id || ''))}`
+  // מייל המשרד (office) — לבירורי דחייה. נפרד מ-igud (שמשמש לרישום/הטבות).
+  const officeMailto = `mailto:office@chasamsofer.info?subject=${encodeURIComponent('בירור דחיית רישום ' + (beneficiary?.id_number || pendingAuth?.id || ''))}`
 
   // צאצא שטרם אושר — בהגשת הבקשה הראשונה נצרף גם צילומי תעודת זהות (אם עוד לא הועלו)
   const needsIdWithRequest = !!beneficiary && !isApproved && requiredDocs.some(d => !existingDocs[d])
@@ -3122,7 +3124,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <p className="text-sm text-slate-500 leading-relaxed">
                     לבירורים נוספים ניתן לפנות למשרד האיגוד במייל:
                     <br />
-                    <a href={igudMailto} className="font-semibold text-indigo-600">igud@chasamsofer.info</a>
+                    <a href={officeMailto} className="font-semibold text-indigo-600">office@chasamsofer.info</a>
                   </p>
                 </div>
                 ) : authView === 'intro' ? (
