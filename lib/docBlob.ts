@@ -1,6 +1,7 @@
 'use client'
 
 import { storagePath } from '@/lib/docUrl'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // טעינת מסמך דרך "ערוץ הנתונים" (/api/files/data) והרכבתו לקובץ מקומי בדפדפן.
@@ -23,10 +24,15 @@ export interface DocBlob {
 // הערך הוא ה-Promise עצמו, כך שגם קריאות מקבילות מתאחדות לבקשה אחת.
 const cache = new Map<string, Promise<DocBlob>>()
 
-function base64ToBlob(base64: string, contentType: string): Blob {
+function base64ToBlob(base64: string, contentType: string, enc?: string): Blob {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  // ⚠️ ביטול הערבול שנעשה בשרת. בלעדיו ה-base64 נושא את חתימת הקובץ
+  // ("JVBERi" ל-PDF, "/9j/" ל-JPEG) ומסנן התוכן מזהה אותה גם בתוך JSON.
+  // enc נבדק ולא מונח: תגובה שנשמרה במטמון לפני השינוי מגיעה בלי הסימון,
+  // ופענוח שלה היה הופך קובץ תקין לזבל.
+  if (enc === DOC_CIPHER_ID) scrambleBytes(bytes)
   return new Blob([bytes], { type: contentType })
 }
 
@@ -52,8 +58,8 @@ export function loadDocBlob(rawUrlOrPath: string, name?: string | null): Promise
       const d = await res.json().catch(() => ({}))
       throw new Error(d.error || 'שגיאה בטעינת הקובץ')
     }
-    const d = (await res.json()) as { data: string; contentType: string; name: string; size: number }
-    const blob = base64ToBlob(d.data, d.contentType)
+    const d = (await res.json()) as { data: string; contentType: string; name: string; size: number; enc?: string }
+    const blob = base64ToBlob(d.data, d.contentType, d.enc)
     return {
       objectUrl: URL.createObjectURL(blob),
       contentType: d.contentType,

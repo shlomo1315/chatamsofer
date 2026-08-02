@@ -413,48 +413,6 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   // clear node-path selection whenever a top filter changes, so the filter takes over
   useEffect(() => { setSelected(null) }, [statusFilter, generationFilter])
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // המשפחות הרשומות בענף של כל צומת.
-  //
-  // ⚠️ קישור ישיר (beneficiaries.lineage_node_id) קיים כמעט רק בדורות
-  // התחתונים — שם יושבים הנרשמים. כל האבות הקדמונים היו נשארים בלי כפתור
-  // בכלל, וזה בדיוק מה שנראה כאילו הכפתור לא עובד.
-  // לכן צומת בלי משפחה משלו מציג את המשפחות שמתחתיו בענף.
-  //
-  // צבירה מלמטה למעלה במעבר אחד, עם תקרה לכל צומת — בלעדיה צומת בדור 2 היה
-  // אוסף מאות רשומות לזיכרון, לכל צומת בנפרד.
-  // ─────────────────────────────────────────────────────────────────────────
-  const BRANCH_CAP = 15
-  const branchFamilies = useMemo(() => {
-    const kids = new Map<string, string[]>()
-    for (const n of nodes) {
-      if (!n.parent_id) continue
-      const a = kids.get(n.parent_id) ?? []
-      a.push(n.id)
-      kids.set(n.parent_id, a)
-    }
-    const out = new Map<string, { list: { id: string; name: string }[]; total: number }>()
-    const seen = new Set<string>()
-    const walk = (id: string): { list: { id: string; name: string }[]; total: number } => {
-      const hit = out.get(id)
-      if (hit) return hit
-      if (seen.has(id)) return { list: [], total: 0 }   // הגנת מעגל
-      seen.add(id)
-      const own = linked[id] ?? []
-      const list = [...own]
-      let total = own.length
-      for (const c of kids.get(id) ?? []) {
-        const sub = walk(c)
-        total += sub.total
-        for (const f of sub.list) if (list.length < BRANCH_CAP) list.push(f)
-      }
-      const res = { list, total }
-      out.set(id, res)
-      return res
-    }
-    for (const n of nodes) walk(n.id)
-    return out
-  }, [nodes, linked])
 
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
@@ -992,22 +950,26 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         וריחוף עליו פותח את בחירת הכרטיסייה — כדי שאפשר יהיה
                         להשאיר את העץ פתוח ולעבוד לצידו. */}
                     {(() => {
-                      const own = linked[pos.node.id] ?? []
-                      const branch = branchFamilies.get(pos.node.id) ?? { list: [], total: 0 }
-                      // משפחה משלו קודמת; אחרת המשפחות שבענף שמתחתיו
-                      const isOwn = own.length > 0
-                      const items = isOwn ? own : branch.list
-                      const total = isOwn ? own.length : branch.total
-                      if (!items.length) return null
+                      // ⚠️ רק הכרטסת של הצומת עצמו. "משפחות בענף" הוסר: כשעומדים
+                      // על צומת רוצים את הכרטסת שלו, ורשימת כל הצאצאים שמתחתיו
+                      // רק הסתירה את זה. צומת בלי כרטסת אומר זאת במפורש, במקום
+                      // להיעלם ולהשאיר את המשתמש בספק אם הכפתור פשוט לא עובד.
+                      const items = linked[pos.node.id] ?? []
+                      if (!items.length) {
+                        return (
+                          <div style={{ width: '100%', textAlign: 'center', padding: '6px 10px', borderRadius: 10, background: '#F8FAFC', border: '1px dashed #CBD5E1', color: '#94A3B8', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            אינו רשום עדיין בצאצאים
+                          </div>
+                        )
+                      }
                       return (
                       <div style={{ position: 'relative', width: '100%' }}
                         onMouseEnter={() => setOpenCardFor(pos.node.id)}
                         onMouseLeave={() => setOpenCardFor(null)}>
                         <button type="button"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 12px', borderRadius: 10, background: isOwn ? '#0EA5E9' : '#64748B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                          <ExternalLink size={12} />
-                          {isOwn ? 'פתיחת הכרטסת' : 'משפחות בענף'}
-                          {total > 1 && ` (${total})`}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%', padding: '7px 12px', borderRadius: 10, background: '#0EA5E9', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                          <ExternalLink size={12} /> פתיחת הכרטסת
+                          {items.length > 1 && ` (${items.length})`}
                         </button>
                         {/* ⚠️ שורה אחת לכל משפחה, לא שני כפתורים לכל אחת: עם 14
                             משפחות בענף התפריט הפך לקיר של כפתורים שאי אפשר לסרוק
@@ -1015,36 +977,27 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                             פותח בכרטיסייה חדשה. */}
                         {openCardFor === pos.node.id && (
                           <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', paddingTop: 6, zIndex: 60 }}>
-                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, boxShadow: '0 12px 32px rgba(15,23,42,0.18)', overflow: 'hidden', width: 250, direction: 'rtl' }}>
-                              <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '7px 11px', fontSize: 11, fontWeight: 800, color: '#334155' }}>
-                                {isOwn ? 'כרטסת המשפחה' : `משפחות בענף · ${total}`}
-                              </div>
-                              <div style={{ maxHeight: 236, overflowY: 'auto' }}>
-                                {items.map(b => (
-                                  <div key={b.id}
-                                    style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #F1F5F9' }}>
-                                    <button type="button"
-                                      onClick={() => router.push(`/admin/beneficiaries/${b.id}`)}
-                                      title="פתיחה בכרטיסייה הנוכחית"
-                                      style={{ flex: 1, textAlign: 'right', background: 'transparent', border: 'none', padding: '8px 11px', fontSize: 12, fontWeight: 700, color: '#0F172A', cursor: 'pointer', fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = '#F0F9FF' }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, boxShadow: '0 12px 32px rgba(15,23,42,0.18)', overflow: 'hidden', width: 232, direction: 'rtl' }}>
+                              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                {items.map((b, i) => (
+                                  <div key={b.id} style={{ padding: '9px 10px', borderTop: i ? '1px solid #F1F5F9' : 'none' }}>
+                                    <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0F172A', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                       {b.name}
-                                    </button>
-                                    <button type="button"
-                                      onClick={() => window.open(`/admin/beneficiaries/${b.id}`, '_blank', 'noopener')}
-                                      title="פתיחה בכרטיסייה חדשה"
-                                      style={{ flexShrink: 0, width: 34, background: 'transparent', border: 'none', borderRight: '1px solid #F1F5F9', color: '#0EA5E9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                      onMouseEnter={e => { e.currentTarget.style.background = '#F0F9FF' }}
-                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-                                      <ExternalLink size={13} />
-                                    </button>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                      <button type="button"
+                                        onClick={() => router.push(`/admin/beneficiaries/${b.id}`)}
+                                        style={{ width: '100%', background: '#0EA5E9', color: '#fff', border: 'none', borderRadius: 8, padding: '7px 9px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                        פתיחה בכרטיסייה זו
+                                      </button>
+                                      <button type="button"
+                                        onClick={() => window.open(`/admin/beneficiaries/${b.id}`, '_blank', 'noopener')}
+                                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, background: '#fff', color: '#0369A1', border: '1.5px solid #BAE6FD', borderRadius: 8, padding: '7px 9px', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                        <ExternalLink size={12} /> פתיחה בכרטיסייה חדשה
+                                      </button>
+                                    </div>
                                   </div>
                                 ))}
-                              </div>
-                              <div style={{ background: '#F8FAFC', borderTop: '1px solid #E2E8F0', padding: '6px 11px', fontSize: 10, color: '#94A3B8', lineHeight: 1.5 }}>
-                                {total > items.length && <div style={{ color: '#64748B', fontWeight: 700, marginBottom: 2 }}>ועוד {total - items.length} בענף — היכנסו לדור עמוק יותר</div>}
-                                לחיצה על השם — פתיחה כאן · ↗ — כרטיסייה חדשה
                               </div>
                             </div>
                           </div>

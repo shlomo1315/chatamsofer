@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { loadDocument, isLoadFailure } from '@/lib/fileAccess'
+import { scrambleBytes, DOC_CIPHER_ID } from '@/lib/docCipher'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,12 +27,19 @@ export async function GET(request: NextRequest) {
   if (isLoadFailure(res)) return NextResponse.json({ error: res.error }, { status: res.status })
   const { buf, contentType, safeName } = res
 
+  // ⚠️ המטען מעורבל לפני ה-base64. בלי זה, base64 של PDF/JPEG נושא חתימה
+  // מזוהה בתחילתו ("JVBERi", "/9j/"), ומסנן התוכן מזהה אותה גם בתוך JSON —
+  // ולכן המסמכים נחסמו גם אחרי המעבר לערוץ הנתונים. אחרי הערבול זו סדרת
+  // בייטים חסרת צורה. הדפדפן מבטל את הערבול בזיכרון (ראו lib/docCipher).
+  const scrambled = scrambleBytes(new Uint8Array(buf))
+
   return NextResponse.json(
     {
       name: safeName || 'file',
       contentType,
       size: buf.length,
-      data: buf.toString('base64'),
+      enc: DOC_CIPHER_ID,
+      data: Buffer.from(scrambled).toString('base64'),
     },
     {
       status: 200,
