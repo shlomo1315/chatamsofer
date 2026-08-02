@@ -389,7 +389,13 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   return babies.map((b, i) => (
                     <div key={i} className={i > 0 ? 'mt-3 pt-3 border-t border-slate-100' : ''}>
                       {aid.is_twins && <p className="text-xs font-semibold text-indigo-600 mb-1">תינוק {i + 1}</p>}
-                      <p className="text-sm"><span className="text-slate-500">שם התינוק: </span><span className="font-medium text-slate-800">{b.name ?? '—'}</span></p>
+                      <p className="text-sm flex items-center gap-2 flex-wrap"><span className="text-slate-500">שם התינוק: </span>
+                        {b.name
+                          ? <span className="font-medium text-slate-800">{b.name}</span>
+                          : (aid as { baby_name_pending?: boolean }).baby_name_pending
+                            ? <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">⏳ היולדת ציינה: עדיין אין שם</span>
+                            : <span className="font-medium text-slate-400">—</span>}
+                      </p>
                       {b.id_number && (
                         <p className="text-sm"><span className="text-slate-500">{b.id_type === 'passport' ? 'דרכון' : 'ת.ז'} התינוק: </span><span className="font-medium text-slate-800 ltr-num">{b.id_number}</span></p>
                       )}

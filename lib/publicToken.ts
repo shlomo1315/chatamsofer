@@ -7,9 +7,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // הטוקן מקודד את סוג הפנייה ואת מזהה הלידה, ופג אחרי 90 יום.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type PublicTokenKind = 'g' | 's' | 'l' // g = gratitude, s = survey, l = loan inquiry
+// g = gratitude, s = survey, l = loan inquiry, n = name-fix (תיקון שם התינוק)
+export type PublicTokenKind = 'g' | 's' | 'l' | 'n'
 
-const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום
+const TTL_MS = 90 * 24 * 60 * 60 * 1000 // 90 יום (ברירת מחדל)
+// תוקף מותאם לכל סוג — תיקון שם תקף 7 ימים בלבד (חלון קצר, מאובטח יותר)
+const TTL_BY_KIND: Partial<Record<PublicTokenKind, number>> = {
+  n: 7 * 24 * 60 * 60 * 1000,
+}
 
 function secret(): string {
   return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -20,7 +25,7 @@ function sign(payload: string): string {
 }
 
 export function signPublicToken(kind: PublicTokenKind, aidId: string): string {
-  const exp = Date.now() + TTL_MS
+  const exp = Date.now() + (TTL_BY_KIND[kind] ?? TTL_MS)
   const payload = `${kind}:${aidId}:${exp}`
   return Buffer.from(`${payload}:${sign(payload)}`).toString('base64url')
 }

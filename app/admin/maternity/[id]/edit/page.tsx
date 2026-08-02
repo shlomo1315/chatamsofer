@@ -45,6 +45,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
   // editable fields
   const [babyName, setBabyName] = useState('')
+  // "עדיין אין שם" — כשמסומן, השם נשמר NULL והדגל baby_name_pending=true (לא טקסט בשדה)
+  const [babyNamePending, setBabyNamePending] = useState(false)
   const [babyIdType, setBabyIdType] = useState<'id' | 'passport'>('id')
   const [babyIdNumber, setBabyIdNumber] = useState('')
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
@@ -69,6 +71,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
           .single()
         if (error || !data) throw error ?? new Error('not found')
         setBabyName(data.baby_name ?? '')
+        setBabyNamePending(!!data.baby_name_pending)
         setBabyIdType(data.baby_id_type ?? 'id')
         setBabyIdNumber(data.baby_id_number ?? '')
         setBabyGender(data.baby_gender ?? '')
@@ -94,7 +97,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {}
-    if (!babyName.trim()) e.babyName = 'שם תינוק חובה'
+    if (!babyName.trim() && !babyNamePending) e.babyName = 'שם תינוק חובה (או סמנו "עדיין אין שם")'
     if (!babyIdNumber.trim()) e.babyIdNumber = babyIdType === 'id' ? 'מספר תעודת זהות תינוק חובה' : 'מספר דרכון חובה'
     else if (babyIdType === 'id' && !validateIsraeliId(babyIdNumber)) e.babyIdNumber = 'תעודת זהות ישראלית לא תקינה'
     if (!babyGender) e.babyGender = 'יש לבחור מין תינוק'
@@ -123,7 +126,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       const updatePayload: Record<string, unknown> = {
         birth_date: babyBirthDate,
-        baby_name: babyName.trim() || null,
+        baby_name: babyNamePending ? null : (babyName.trim() || null),
+        baby_name_pending: babyNamePending,
         baby_id_type: babyIdType,
         baby_id_number: babyIdNumber || null,
         baby_gender: babyGender || null,
@@ -187,9 +191,19 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         {/* Baby name */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-slate-600">שם התינוק <span className="text-red-500">*</span></label>
-          <input type="text" value={babyName}
+          <input type="text" value={babyNamePending ? '' : babyName}
+            disabled={babyNamePending}
+            placeholder={babyNamePending ? 'עדיין אין שם' : ''}
             onChange={e => { setBabyName(e.target.value); clearErr('babyName') }}
-            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+            className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-400 ${fieldErrors.babyName ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`} />
+          {/* כפתור "עדיין אין שם" — שומר את הדגל ולא טקסט בשדה */}
+          <button type="button"
+            onClick={() => { setBabyNamePending(v => !v); clearErr('babyName') }}
+            className={`self-start inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              babyNamePending ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+            }`}>
+            {babyNamePending ? '✓ סומן: עדיין אין שם' : '⏳ עדיין אין שם'}
+          </button>
           {fieldErrors.babyName && <p className="text-xs text-red-600">{fieldErrors.babyName}</p>}
         </div>
 

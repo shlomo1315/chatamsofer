@@ -210,6 +210,9 @@ export async function POST(request: NextRequest) {
     beneficiary_id: String(beneficiary_id),
     birth_date: String(birth_date),
     baby_name: (!isSilent && primary?.name) ? primary.name : null,
+    // "עדיין אין שם" — מסומן כשהיולדת סימנה זאת מפורשות, או (תאימות לאחור) כשאין שם
+    // בלידה רגילה. baby_name נשאר NULL; הדגל מבדיל בין "אין שם עדיין" ל-NULL סתם.
+    baby_name_pending: !isSilent && !primary?.name && (body.baby_name_pending === true || body.baby_name_pending === undefined),
     baby_gender: (!isSilent && primary?.gender) ? primary.gender : null,
     baby_id_number: primary?.id_number ?? null,
     baby_id_type: primary ? primary.id_type : null,
