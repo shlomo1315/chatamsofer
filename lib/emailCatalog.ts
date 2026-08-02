@@ -112,7 +112,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'title', label: 'כותרת ראשית', default: 'נדרשת השלמת מסמכים' },
       { key: 'subtitle', label: 'כותרת משנה', default: 'עוד צעד אחד להשלמת התהליך' },
       { key: 'kicker', label: 'תווית קטנה מעל הפתיח', default: 'פעולה נדרשת' },
-      { key: 'intro', label: 'פסקת פתיחה', default: 'כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.\n      ניתן להעלות אותם ישירות דרך המערכת הדיגיטלית שלנו — מהמחשב או מהנייד.', multiline: true, hint: 'תגיות HTML פשוטות (strong) נתמכות' },
+      { key: 'intro', label: 'פסקת פתיחה', default: 'כדי להמשיך בטיפול בבקשתך, עליך <strong>להשלים את המסמכים הבאים</strong>.\n      ניתן להעלות אותם ישירות דרך המערכת האוטומטית שלנו.', multiline: true, hint: 'תגיות HTML פשוטות (strong) נתמכות' },
       { key: 'docs_title', label: 'כותרת רשימת המסמכים', default: 'מסמכים נדרשים:' },
       { key: 'button', label: 'טקסט הכפתור', default: 'להעלאת המסמכים' },
       { key: 'footnote', label: 'הערה בתחתית', default: 'בלחיצה על הכפתור תתבקש/י להזין את מספר תעודת הזהות,<br/>\n      ואז תועבר/י ישירות למסך העלאת המסמכים.', multiline: true },

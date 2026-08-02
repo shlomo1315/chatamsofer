@@ -62,7 +62,7 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
       { key: 'auth.title.reset', fallback: 'איפוס סיסמה', hint: 'כותרת — איפוס' },
       {
         key: 'auth.phone.choose',
-        fallback: 'בחר/י מספר טלפון אליו נצלצל ונקריא את קוד הכניסה:',
+        fallback: 'בחרו מספר טלפון אליו נצלצל ונקריא את קוד הכניסה:',
         hint: 'הנחיה לבחירת טלפון', multiline: true,
       },
       { key: 'auth.call.incoming', fallback: 'בקרוב תתקבל אצלך שיחה מהמערכת שלנו', hint: 'הודעה אחרי שליחה' },

@@ -2,6 +2,7 @@
 // (וכל אבותיו ה"ממתינים" שהוא הוסיף) הופכים ל"מאומת" (ירוק). סטטוס אחר → חזרה ל"ממתין".
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,5 +42,22 @@ export async function POST(request: NextRequest) {
     updated++
     cur = (node.parent_id as string | null) ?? null
   }
-  return NextResponse.json({ ok: true, updated })
+
+  // ── הילדים שהמשפחה הזינה נכנסים לעץ כמאושרים ──
+  // ⚠️ החיסכון האמיתי: היחוס של הילדים *הוא* היחוס של המשפחה שאושרה כעת, ואין
+  // סיבה לאשר כל אחד מהם שוב כשיבוא להירשם. משנכנסו לעץ כמאושרים הם מופיעים
+  // ברשימת הבחירה, הנרשם בוחר את עצמו במקום ליצור רשומה חדשה, וכשמשפחתו שלו
+  // תאושר — גם ילדיו ייכנסו כמאושרים, וכן הלאה.
+  // best-effort: כשל כאן לא הופך את האישור עצמו לכושל.
+  let children = { created: 0, verified: 0, linked: 0 }
+  try {
+    children = (await syncChildrenOfBeneficiary(admin, beneficiaryId)) ?? children
+    if (children.created || children.verified) {
+      console.log(`[approve-lineage] ${beneficiaryId} → ${children.created} ילדים נוספו לעץ, ${children.verified} אושרו`)
+    }
+  } catch (e) {
+    console.error('[approve-lineage] children sync failed:', e)
+  }
+
+  return NextResponse.json({ ok: true, updated, children })
 }

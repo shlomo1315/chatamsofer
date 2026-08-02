@@ -154,6 +154,44 @@ export async function cascadeRejectSubtree(
   return toReject
 }
 
+/**
+ * דחייה בעץ → דחיית המשפחות המקושרות.
+ *
+ * ⚠️ המראה של approveVerifiedBeneficiaries. עד כה דחיית צומת צבעה את העץ בלבד,
+ * והמשפחה המקושרת נשארה "מאושרת" בצאצאים — כלומר יחוס שנדחה במפורש והמשך
+ * זכאות מלאה, בלי שום דבר שסוגר את הפער.
+ *
+ * חל על הצומת שנדחה *וכל צאצאיו* (הם נדחו איתו במפל), על כל סטטוס שאינו כבר
+ * 'rejected'. אינו שולח מייל — דחייה בעץ היא פעולה פנימית, והמייל נשלח
+ * מהדחייה הידנית בכרטסת, שם היא מכוונת.
+ *
+ * מחזיר את מספר המשפחות שנדחו. best-effort — כשל נרשם ואינו מפיל את הפעולה.
+ */
+export async function rejectLinkedBeneficiaries(
+  db: SupabaseClient,
+  nodes: TreeNodeRow[],
+  rejectedNodeId: string,
+  reason = 'היחוס נדחה בעץ הדורות',
+): Promise<number> {
+  const ids = [...subtreeNodeIds(nodes, rejectedNodeId)]
+  if (!ids.length) return 0
+  const { data, error } = await db
+    .from('beneficiaries')
+    .update({
+      eligibility_status: 'rejected',
+      rejection_reason: reason,
+      updated_at: new Date().toISOString(),
+    })
+    .in('lineage_node_id', ids)
+    .neq('eligibility_status', 'rejected')
+    .select('id')
+  if (error) {
+    console.error('[lineageSync] rejectLinkedBeneficiaries:', error.message)
+    return 0
+  }
+  return (data ?? []).length
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // אישור בעץ הדורות → אישור המשפחה בצאצאים.
 //
@@ -185,18 +223,19 @@ function chainFullyVerified(byId: Map<string, TreeNodeRow>, nodeId: string): boo
  * צמתים ברצף היה מפיץ עשרות מיילים למשפחות בלי כוונה. המייל נשלח באישור
  * הידני מהכרטסת, שם הוא מכוון.
  *
- * מחזיר את מספר המשפחות שקודמו.
+ * מחזיר את מזהי המשפחות שקודמו — הקורא מריץ עליהן את המשך התהליך
+ * (הכנסת ילדיהן לעץ כמאושרים).
  */
 export async function approveVerifiedBeneficiaries(
   db: SupabaseClient,
   nodes: TreeNodeRow[],
   changedNodeId: string,
-): Promise<number> {
+): Promise<string[]> {
   const byId = new Map(nodes.map(n => [n.id, n]))
   // הצומת שאושר וכל צאצאיו: אישור של אב עשוי להשלים את השרשרת גם לצאצאים
   // שכבר היו מאומתים בעצמם וחיכו דווקא לחוליה הזו.
   const candidates = [...subtreeNodeIds(nodes, changedNodeId)].filter(id => chainFullyVerified(byId, id))
-  if (!candidates.length) return 0
+  if (!candidates.length) return []
 
   const { data, error } = await db
     .from('beneficiaries')
@@ -206,7 +245,7 @@ export async function approveVerifiedBeneficiaries(
     .select('id')
   if (error) {
     console.error('[lineageSync] approveVerifiedBeneficiaries:', error.message)
-    return 0
+    return []
   }
-  return (data ?? []).length
+  return (data ?? []).map(r => (r as { id: string }).id)
 }

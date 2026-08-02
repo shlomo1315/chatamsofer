@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -196,10 +197,20 @@ export async function PATCH(request: NextRequest) {
   // ── דחיית מפל ──
   // צומת שנדחה מפיל אוטומטית את כל צאצאיו לדחייה — לא ייתכן שדור נדחה ודור אחריו
   // מאושר. (חזרה מדחייה אינה מפל: יש לאשר כל צאצא במפורש.)
+  let rejectedBeneficiaries = 0
   if (updates.status === 'rejected') {
     const { data: nodesForCascade } = await admin.from('lineage_nodes').select(NODE_SELECT)
     if (nodesForCascade) {
       const rejected = await cascadeRejectSubtree(admin, nodesForCascade as TreeNodeRow[], id)
+      // ⚠️ דחייה בעץ → דחיית המשפחות המקושרות. בלי זה יחוס שנדחה במפורש
+      // השאיר את המשפחה "מאושרת" בצאצאים — הפער שהסטטוס בעץ אמור לסגור.
+      rejectedBeneficiaries = await rejectLinkedBeneficiaries(admin, nodesForCascade as TreeNodeRow[], id)
+      if (rejectedBeneficiaries) {
+        await logActivity(admin, {
+          userId: staff.userId, action: 'beneficiaries_rejected_from_lineage',
+          entityType: 'lineage_node', entityId: id, details: { count: rejectedBeneficiaries },
+        }).catch(() => {})
+      }
       if (rejected.length > 1) {
         console.log(`[lineage] node ${id} rejected → cascaded ${rejected.length - 1} descendant(s)`)
         await logActivity(admin, {
@@ -224,7 +235,8 @@ export async function PATCH(request: NextRequest) {
     // ⚠️ אישור בעץ → אישור המשפחה בצאצאים. עד כה הסנכרון היה חד-כיווני
     // (משפחה → עץ בלבד), ולכן צומת ירוק בעץ נשאר "ממתין לאישור" בצאצאים.
     if (updates.status === 'verified') {
-      approved = await approveVerifiedBeneficiaries(admin, freshNodes as TreeNodeRow[], id)
+      const approvedIds = await approveVerifiedBeneficiaries(admin, freshNodes as TreeNodeRow[], id)
+      approved = approvedIds.length
       if (approved) {
         console.log(`[lineage] node ${id} verified → approved ${approved} beneficiary/ies`)
         await logActivity(admin, {
@@ -234,10 +246,16 @@ export async function PATCH(request: NextRequest) {
           details: { count: approved },
         }).catch(() => {})
       }
+      // ⚠️ משפחה שאושרה — ילדיה (שהוזנו עם ת"ז) נכנסים לעץ כמאושרים, בדיוק
+      // כמו באישור מהכרטסת. אחרת אותה משפחה הייתה מתנהגת אחרת לפי *היכן*
+      // אושרה, והילדים היו ממתינים לאישור חוזר של יחוס שכבר אושר.
+      for (const benId of approvedIds) {
+        await syncChildrenOfBeneficiary(admin, benId).catch(() => null)
+      }
     }
   }
 
-  return NextResponse.json({ node: data, approvedBeneficiaries: approved })
+  return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries })
 }
 
 export async function DELETE(request: NextRequest) {

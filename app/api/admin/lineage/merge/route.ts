@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
   // names — צומת-שנשאר → שם סופי, לכל דור במפל. נאסף מראש בתצוגה המקדימה.
   let body: {
     keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean
+    cascadeUpApprox?: boolean
     finalName?: string; names?: Record<string, string>
   }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
       userId: staff.userId,
       cascadeDown: body.cascadeDown !== false,
       cascadeUp: body.cascadeUp !== false,
+      // ⚠️ מיזוג אחורנית גם כשהניסוח שונה — רק כשנשלח במפורש. השרשרת שהתפצלה
+      // נרשמה בכל ענף בניסוח אחר, ובלי זה האבות נשארו כפולים אחרי מיזוג הבנים.
+      cascadeUpApprox: body.cascadeUpApprox === true,
     })
   } catch (e) {
     return NextResponse.json(

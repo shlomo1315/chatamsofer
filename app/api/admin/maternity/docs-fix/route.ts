@@ -54,6 +54,11 @@ export async function POST(request: NextRequest) {
   // ── מעבר למעגל התיקונים ──
   // ⚠️ אותם שדות בדיוק כמו ב-StatusControl של הצאצא. איפוס חותמות הסבב הקודם
   // הכרחי: בלעדיו הבאנר בפורטל משווה מול סבב ישן ומציג תיקונים שכבר בוצעו.
+  //
+  // ⚠️ מפוצל לשתי כתיבות בכוונה. חותמות הדחייה (rejected_by/rejected_at) הן
+  // עמודות שנוספו במיגרציה מאוחרת; בסביבה שהמיגרציה טרם רצה בה כל העדכון נכשל
+  // ("עדכון סטטוס המשפחה נכשל") — כלומר אי אפשר היה בכלל לבקש השלמת מסמכים,
+  // רק בגלל ניקוי נלווה. הליבה נכתבת תמיד, וניקוי החותמות הוא best-effort.
   const { error: upErr } = await db.from('beneficiaries').update({
     eligibility_status: 'docs_pending',
     required_docs: docs.join(','),
@@ -61,11 +66,16 @@ export async function POST(request: NextRequest) {
     docs_returned_at: null,
     lineage_fixed_at: null,
     lineage_chain_before_fix: null,
-    rejected_by: null,
-    rejected_at: null,
     updated_at: new Date().toISOString(),
   }).eq('id', motherId)
-  if (upErr) return NextResponse.json({ error: 'עדכון סטטוס המשפחה נכשל' }, { status: 500 })
+  if (upErr) {
+    console.error('[maternity/docs-fix] update beneficiary failed:', upErr.message)
+    return NextResponse.json({ error: `עדכון סטטוס המשפחה נכשל: ${upErr.message}` }, { status: 500 })
+  }
+  await db.from('beneficiaries')
+    .update({ rejected_by: null, rejected_at: null })
+    .eq('id', motherId)
+    .then(undefined, () => {})
 
   const staffName = await resolveAuthorName(db, staff.userId)
   const types = await getDocTypes()

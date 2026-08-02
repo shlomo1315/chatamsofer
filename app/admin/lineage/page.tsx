@@ -164,9 +164,31 @@ function buildSubtreePrintHtml(all: LineageNode[], rootId: string, mode: PrintMo
   // ב-CSS בלי לעדכן כאן היה מזיז את כל הקווים.
   const NODE_W = 132
   const LI_W = NODE_W + 12
-  const widest = perDepth.length ? Math.max(...perDepth) : 1
-  const scale = mode === 'tree' ? Math.max(0.35, Math.min(1, 1040 / (widest * LI_W))) : 1
-  const tooWide = mode === 'tree' && 1040 / (widest * LI_W) < 0.35
+
+  // ⚠️ הרוחב האמיתי של התרשים נמדד ב*עלים*, לא במספר הצמתים בדור הרחב ביותר.
+  // זה היה הבאג: בפריסת flex מקוננת רוחב הענף הוא סכום רוחבי ילדיו, ולכן עץ
+  // שבו העלים מתפרסים על כמה דורות רחב בהרבה מהדור הרחב ביותר שלו. ההקטנה
+  // חושבה לפי המדד הקטן, התרשים יצא רחב מהדף — ובהדפסה זה פשוט נחתך בצד.
+  const leafUnits = (id: string, guard: Set<string>): number => {
+    if (guard.has(id)) return 1        // מעגל בנתונים — נספר כעלה ולא תולה
+    guard.add(id)
+    const kids = childrenBy.get(id) ?? []
+    if (!kids.length) return 1
+    return kids.reduce((s, k) => s + leafUnits(k.id, guard), 0)
+  }
+
+  // A4 לרוחב פחות שוליים ≈ 1040px; לגובה נשאר מקום אחרי כותרת, הערה וכותרת תחתונה.
+  const AVAIL_W = 1040
+  const AVAIL_H = 520
+  const LEVEL_H = 116                  // גובה צומת + המרווח האנכי בין הדורות
+  const widthUnits = mode === 'tree' ? leafUnits(root.id, new Set<string>()) : 1
+  const fitW = AVAIL_W / (widthUnits * LI_W)
+  const fitH = AVAIL_H / (Math.max(1, perDepth.length) * LEVEL_H)
+  // הרוחב נאכף במלואו (חיתוך לרוחב הוא איבוד מידע), הגובה מקטין עד 50% בלבד —
+  // עץ עמוק מאוד עדיף שימשיך לעמוד הבא מאשר שיוקטן עד שלא יהיה קריא.
+  const raw = Math.min(1, fitW, Math.max(fitH, 0.5))
+  const scale = mode === 'tree' ? Math.max(0.3, raw) : 1
+  const tooWide = mode === 'tree' && fitW < 0.3
 
   const listCss = `
   ul { list-style: none; margin: 0; padding: 0 18px 0 0; }
@@ -393,6 +415,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     hoverTimer.current = setTimeout(() => setHovered(null), 280)
   }, [])
   const [modal, setModal] = useState<ModalState>(null)
+  // הצומת שממתין לאישור דחייה (דחייה מפילה במפל צאצאים ומשפחות — נדרש אישור)
+  const [rejectNode, setRejectNode] = useState<TreeNode | null>(null)
   // הצומת שתפריט "פתיחת הכרטסת" שלו פתוח כרגע
   const [openCardFor, setOpenCardFor] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
@@ -582,6 +606,19 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
 
   async function handleSetStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
     await patchStatus(node, status)
+  }
+
+  /** כל הצאצאים של צומת בתצוגה — להצגת היקף הדחייה לפני שמאשרים אותה. */
+  function descendantsOfNode(node: TreeNode): string[] {
+    const out: string[] = []
+    const stack = [...(node.children ?? [])]
+    let guard = 0
+    while (stack.length && guard++ < 20_000) {
+      const cur = stack.pop() as TreeNode
+      out.push(cur.id)
+      for (const c of cur.children ?? []) stack.push(c)
+    }
+    return out
   }
 
   const selPos = selected ? positions.find(p => p.node.id === selected) ?? null : null
@@ -1014,13 +1051,46 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         🌳 הצג אילן צאצאים של דור זה
                       </button>
                     )}
+                    {/* ── סטטוס הדור — ניתן לעריכה ישירות מכאן ──
+                        ⚠️ עד כה היו כאן רק אייקוני "אשר"/"דחה" שהופיעו לסירוגין
+                        לפי הסטטוס הנוכחי, ולא היה שום מקום שאומר *מה הסטטוס
+                        עכשיו* או מאפשר לחזור ל"ממתין". כאן שלושת המצבים גלויים
+                        תמיד, והנוכחי מסומן.
+                        הסטטוס אינו קישוט: הוא קובע גם את סטטוס הכרטסת המקושרת
+                        (אישור → המשפחה מאושרת · דחייה → נדחית) וגם אם הדור יוצג
+                        לנרשמים הבאים בבורר סדר הדורות (מוצגים מאומתים בלבד). */}
+                    {canEdit && (
+                      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                          {([
+                            ['verified', '✓ מאושר', '#16A34A', '#DCFCE7'],
+                            ['pending', '⏳ ממתין', '#B45309', '#FEF3C7'],
+                            ['rejected', '✕ נדחה', '#DC2626', '#FEE2E2'],
+                          ] as const).map(([v, l, fg, bg]) => {
+                            const on = nodeStatus === v
+                            return (
+                              <button key={v} type="button" title={`סמן ${l.slice(2)}`}
+                                onClick={() => {
+                                  if (on) return
+                                  if (v === 'rejected') { setRejectNode(pos.node); return }
+                                  handleSetStatus(pos.node, v)
+                                }}
+                                style={{ flex: 1, padding: '5px 0', borderRadius: 9, background: on ? fg : bg, color: on ? '#fff' : fg, border: `1.5px solid ${on ? fg : fg + '33'}`, cursor: on ? 'default' : 'pointer', fontSize: 10.5, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                {l}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div style={{ fontSize: 9.5, color: '#94A3B8', textAlign: 'center', fontWeight: 600, lineHeight: 1.4 }}>
+                          משפיע על הכרטסת המקושרת ועל הצגת הדור לנרשמים
+                        </div>
+                      </div>
+                    )}
                     {/* שורת אייקונים */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[
                         ...(canEdit ? [{ icon: <Pencil size={13} />, color: p.ring, bg: p.light, fn: () => { setFormName(pos.node.name); setFormRelation(pos.node.relation ?? null); setModal({ type: 'edit', node: pos.node }) }, title: 'ערוך' }] : []),
                         ...(canAdd ? [{ icon: <Plus size={14} />, color: '#059669', bg: '#ECFDF5', fn: () => { setFormName(''); setFormRelation(null); setModal({ type: 'add', parentId: pos.node.id, parentName: pos.node.name }) }, title: 'הוסף ילד' }] : []),
-                        ...(canEdit && nodeStatus !== 'verified' ? [{ icon: <Check size={13} />, color: '#16A34A', bg: '#F0FDF4', fn: () => handleSetStatus(pos.node, 'verified' as const), title: 'אשר' }] : []),
-                        ...(canEdit && nodeStatus !== 'rejected' ? [{ icon: <X size={13} />, color: '#DC2626', bg: '#FEF2F2', fn: () => handleSetStatus(pos.node, 'rejected' as const), title: 'דחה' }] : []),
                         ...(canDelete ? [{ icon: <Trash2 size={13} />, color: '#64748B', bg: '#F1F5F9', fn: () => setModal({ type: 'delete', node: pos.node }), title: 'מחק' }] : []),
                       ].map((b, i) => (
                         <button key={i} onClick={b.fn} title={b.title} style={{ width: 32, height: 32, borderRadius: '50%', background: b.bg, color: b.color, border: `1.5px solid ${b.color}33`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{b.icon}</button>
@@ -1130,6 +1200,33 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
           </div>
         </Modal>
       )}
+
+      {/* ── אישור דחייה ──
+          ⚠️ דחייה אינה פעולה מקומית: היא מפילה במפל את כל הצאצאים בעץ, ודוחה
+          גם את המשפחות המקושרות בכרטסת. את ההיקף הזה חייבים לראות *לפני*
+          הלחיצה, ולא לגלות אותו אחריה. */}
+      {rejectNode && (() => {
+        const kids = descendantsOfNode(rejectNode)
+        const affected = [rejectNode.id, ...kids].reduce((sum, id) => sum + (linked[id]?.length ?? 0), 0)
+        return (
+          <Modal title="דחיית דור" onClose={() => setRejectNode(null)}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <p style={{ margin: 0, fontSize: 14, color: '#334155', lineHeight: 1.7 }}>
+                לסמן את <strong style={{ color: '#0F172A' }}>{rejectNode.name}</strong> כ<strong style={{ color: '#DC2626' }}>נדחה</strong>?
+              </p>
+              <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 11, padding: '11px 14px', fontSize: 12.5, color: '#991B1B', lineHeight: 1.7 }}>
+                {kids.length > 0 && <>· {kids.length} דורות שמתחתיו יידחו גם הם<br /></>}
+                {affected > 0 && <>· {affected} כרטסות משפחה מקושרות יעברו לסטטוס &quot;נדחה&quot;<br /></>}
+                · הדור לא יוצג יותר לנרשמים בבורר סדר הדורות
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <MBtn label="דחה" color="#DC2626" onClick={() => { const n = rejectNode; setRejectNode(null); handleSetStatus(n, 'rejected') }} />
+                <MBtn label="ביטול" color="#94A3B8" onClick={() => setRejectNode(null)} />
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
     </>
   )
 }
@@ -1271,6 +1368,11 @@ export default function LineagePage() {
   const [keepId, setKeepId] = useState<string | null>(null)
   const [mergeConfirm, setMergeConfirm] = useState(false)
   const [merging, setMerging] = useState(false)
+  // ⚠️ מיזוג אחורנית גם כשהניסוח שונה — דלוק כברירת מחדל. השרשרת שהתפצלה
+  // נרשמה בכל ענף בניסוח אחר ("רבי שמואל בנימין והרבנית חיה ליבא שישא" מול
+  // "שמואל בנימין שישא"), ובלי זה מיזוג הבן השאיר את האב כפול — וכל מיזוג
+  // הותיר זנב ידני לתקן.
+  const [mergeUpApprox, setMergeUpApprox] = useState(true)
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
   const [dupFilter, setDupFilter] = useState(false)
   // לאחר מיזוג — הצעה לאשר את הייחוס
@@ -1383,7 +1485,7 @@ export default function LineagePage() {
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds }),
+        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds, cascadeUpApprox: mergeUpApprox }),
       })
       const d = await res.json()
       if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
@@ -1492,6 +1594,23 @@ export default function LineagePage() {
   // טעינה ראשונית — נדחית בטיק אחד כדי לא לקרוא ל-setState סינכרונית בתוך
   // אפקט (אותו דפוס שנעשה בו שימוש בשאר המסכים במערכת).
   useEffect(() => { const t = setTimeout(() => { void loadAll() }, 0); return () => clearTimeout(t) }, [loadAll])
+
+  // ── קישור ישיר לענף: /admin/lineage?focus=<nodeId> ──
+  // ⚠️ נכנסים לכאן מכרטסת הצאצא ("פתיחה במסך הייחוס"), ובעץ של מאות צמתים
+  // בלי זה היה צריך לחפש את הצומת ידנית. נקרא פעם אחת, אחרי שהצמתים נטענו,
+  // וישירות מ-window.location — כדי לא לחייב את העמוד ב-Suspense של useSearchParams.
+  const didFocusParam = useRef(false)
+  useEffect(() => {
+    if (didFocusParam.current || !nodes.length) return
+    didFocusParam.current = true
+    const target = new URLSearchParams(window.location.search).get('focus')
+    if (!target || !nodes.some(n => n.id === target)) return
+    const t = setTimeout(() => {
+      setFocusId(target)
+      setAnchor(a => ({ id: target, n: (a?.n ?? 0) + 1 }))
+    }, 0)
+    return () => clearTimeout(t)
+  }, [nodes])
 
   const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
@@ -1859,6 +1978,16 @@ export default function LineagePage() {
               {mergeSel.size - 1} צמתים ימוזגו אל <strong style={{ color: '#166534' }}>{nodes.find(n => n.id === effectiveKeepId)?.name}</strong>.
               <br />כל הילדים והנרשמים המשויכים יועברו אליו, והכפילים יימחקו.
             </p>
+            {/* מיזוג הדורות שמעל — מה שמונע את זנב האבות הכפולים אחרי כל מיזוג */}
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: '#334155', cursor: 'pointer', background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: 11, padding: '10px 14px' }}>
+              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 16, height: 16, accentColor: '#9333EA', cursor: 'pointer', marginTop: 2 }} />
+              <span>
+                למזג גם את הדורות שמעל — <strong>גם כשהניסוח שונה</strong>
+                <span style={{ display: 'block', fontSize: 11.5, color: '#7E22CE', marginTop: 3, lineHeight: 1.5 }}>
+                  אם אלו אותו אדם, גם אבותיהם אותו אדם. כך &quot;שמואל בנימין שישא&quot; ו&quot;רבי שמואל בנימין והרבנית חיה ליבא שישא&quot; ימוזגו יחד — והניסוח המפורט הוא שיישאר.
+                </span>
+              </span>
+            </label>
             <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 11, padding: '10px 14px', fontSize: 12, color: '#92400E' }}>
               ⚠ פעולה זו אינה הפיכה.
             </div>

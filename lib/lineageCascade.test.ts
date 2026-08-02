@@ -64,6 +64,48 @@ describe('מפל כלפי מעלה — לפי ההורים של מה שמוזג'
     expect(plan.steps.some(s => s.mergeIds.includes('A2'))).toBe(false)
   })
 
+  it('upApprox — ניסוח שונה בהורים כן ממוזג, והשם המפורט נשמר', () => {
+    // ⚠️ המקרה האמיתי מהשטח: "שמואל בנימין שישא" מול "רבי שמואל בנימין
+    // והרבנית חיה ליבא שישא". הבן מוזג ידנית, והאב נשאר כפול — כי המפתחות
+    // אינם זהים. עם הסכמת המשתמש ההורים מתמזגים לפי המבנה, לא לפי השם.
+    const tree = [
+      n('root', 'החתם סופר', null, 5),
+      n('P1', 'רבי שמואל בנימין והרבנית חיה ליבא שישא', 'root', 6),
+      n('P2', 'שמואל בנימין שישא', 'root', 6),
+      n('K1', 'רבי צבי אלימלך והרבנית שרה שאשא ראטשילד', 'P1', 7),
+      n('K2', 'צבי אלימלך ראטשילד', 'P2', 7),
+    ]
+    const plan = planCascade(tree, 'K1', ['K2'], { upApprox: true })
+    const up = plan.steps.filter(s => s.direction === 'up')
+
+    expect(up).toHaveLength(1)
+    expect(up[0].keepId).toBe('P1')
+    expect(up[0].mergeIds).toEqual(['P2'])
+    expect(up[0].approx).toBe(true)
+    // הניסוח המפורט הוא שנשאר — אחרת שם האישה והתואר היו נמחקים בשקט
+    expect(up[0].suggestedName).toBe('רבי שמואל בנימין והרבנית חיה ליבא שישא')
+    expect(plan.stopped).toHaveLength(0)
+  })
+
+  it('upApprox חל רק על הורים של מה שמוזג — לא על אחים בשם דומה', () => {
+    // ⚠️ הקו האדום נשאר: אח בשם דומה תחת אותו אב אינו ממוזג לעולם אוטומטית.
+    const tree = [
+      n('root', 'החתם סופר', null, 1),
+      n('P1', 'רבי שמואל שישא', 'root', 2),
+      n('P2', 'שמואל שישא הזקן', 'root', 2),   // אח, לא הורה של מה שמוזג
+      n('K1', 'צבי ראטשילד', 'P1', 3),
+    ]
+    const plan = planCascade(tree, 'K1', [], { upApprox: true })
+    expect(plan.steps.some(s => s.mergeIds.includes('P2'))).toBe(false)
+  })
+
+  it('בלי upApprox ההתנהגות אינה משתנה — עצירה ודיווח', () => {
+    const tree = splitChain().map(x => (x.id === 'B2' ? { ...x, name: 'משה צבי כהן' } : x))
+    const plan = planCascade(tree, 'C1', ['C2'])
+    expect(plan.steps.some(s => s.mergeIds.includes('B2'))).toBe(false)
+    expect(plan.stopped).toHaveLength(1)
+  })
+
   it('כיבוי המפל כלפי מעלה משאיר רק את המיזוג שהתבקש', () => {
     const plan = planCascade(splitChain(), 'C1', ['C2'], { up: false, down: false })
     expect(plan.steps).toHaveLength(1)
