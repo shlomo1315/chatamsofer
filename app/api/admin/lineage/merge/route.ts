@@ -21,7 +21,10 @@ export async function POST(request: NextRequest) {
   if (!staff) return forbidden()
 
   // cascade — ברירת המחדל דלוקה: זה הלב של הפתרון (ראו lib/lineageMerge).
-  let body: { keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean }
+  // finalName — השם שיישא הצומת שנשאר. הכפילים נכתבים בניסוחים שונים
+  // ("רבי ישראל ורחל לבל" / "ישראל ורחל לבל" / "רבי ישראל ומרת רחל לבל"),
+  // והבחירה איזה ניסוח נכון היא של המשתמש ולא של המערכת.
+  let body: { keepId?: string; mergeIds?: string[]; cascadeDown?: boolean; cascadeUp?: boolean; finalName?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const keepId = body.keepId
   const mergeIds = Array.from(new Set((body.mergeIds ?? []).filter(Boolean)))
@@ -69,6 +72,14 @@ export async function POST(request: NextRequest) {
       { error: e instanceof Error ? e.message : 'שגיאה במיזוג' },
       { status: 500 },
     )
+  }
+
+  // ⚠️ שם היעד נכתב אחרי המיזוג ולא לפניו: אם המיזוג נכשל באמצע, לא נשארנו
+  // עם צומת שקיבל שם חדש אך לא בלע דבר — מצב שקשה לזהות בדיעבד.
+  const finalName = String(body.finalName ?? '').trim()
+  if (finalName) {
+    const { error: nameErr } = await admin.from('lineage_nodes').update({ name: finalName }).eq('id', keepId)
+    if (nameErr) console.error('[merge] עדכון שם היעד נכשל:', nameErr.message)
   }
 
   await logActivity(admin, {

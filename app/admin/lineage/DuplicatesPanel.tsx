@@ -51,6 +51,8 @@ export default function DuplicatesPanel({
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
   const [undoList, setUndoList] = useState<UndoBatch[]>([])
+  // חלונית בחירת השם שיישאר אחרי המיזוג
+  const [nameDlg, setNameDlg] = useState<{ group: DupGroup; chosen: string; custom: string } | null>(null)
 
   const scan = useCallback(async () => {
     setLoading(true)
@@ -88,14 +90,29 @@ export default function DuplicatesPanel({
     return a.id.localeCompare(b.id)
   })[0]
 
+  // ⚠️ ברירת המחדל לשם היא הניסוח *המלא ביותר* ולא זה של הצומת שנשאר: מי
+  // שנשאר נבחר לפי ילדים ואימות, ואין קשר בין זה לבין איכות ניסוח השם.
+  // "רבי ישראל ומרת רחל לבל" עדיף על "ישראל ורחל לבל" — ואת ההכרעה הסופית
+  // עושה המשתמש בחלונית.
+  const fullestName = (nodes: DupNode[]) =>
+    [...nodes].sort((a, b) => {
+      const aw = a.name.trim().split(/\s+/).length, bw = b.name.trim().split(/\s+/).length
+      if (aw !== bw) return bw - aw
+      return b.name.trim().length - a.name.trim().length
+    })[0].name
+
   type MergeOutcome = 'ok' | 'gone' | 'error'
 
-  const mergeGroup = async (g: DupGroup, quiet = false): Promise<MergeOutcome> => {
+  const mergeGroup = async (g: DupGroup, quiet = false, finalName?: string): Promise<MergeOutcome> => {
     try {
       const keep = chooseKeep(g.nodes)
       const r = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId: keep.id, mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id) }),
+        body: JSON.stringify({
+          keepId: keep.id,
+          mergeIds: g.nodes.filter(n => n.id !== keep.id).map(n => n.id),
+          finalName: finalName ?? fullestName(g.nodes),
+        }),
       })
       const d = await r.json()
       if (!r.ok) {
@@ -280,12 +297,7 @@ export default function DuplicatesPanel({
                 </div>
 
                 <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  <button onClick={async () => {
-                      setBusy(key)
-                      const out = await mergeGroup(g)
-                      setBusy(null)
-                      if (out !== 'error') { await scan(); await loadUndo(); onDone() }
-                    }}
+                  <button onClick={() => setNameDlg({ group: g, chosen: fullestName(g.nodes), custom: '' })}
                     disabled={busy === key}
                     style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {busy === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />}
@@ -305,6 +317,75 @@ export default function DuplicatesPanel({
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── בחירת השם שיישאר ──
+          ⚠️ הכפילים נכתבו בניסוחים שונים, והמערכת אינה יכולה לדעת איזה נוסח
+          נכון. היא מציעה את המלא ביותר — וההכרעה של המשתמש. */}
+      {nameDlg && (
+        <div onClick={() => setNameDlg(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 96, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 18, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+            <div style={{ background: '#F5F3FF', borderBottom: '2px solid #DDD6FE', padding: '14px 18px' }}>
+              <div style={{ fontSize: 15.5, fontWeight: 800, color: '#5B21B6' }}>איזה שם יישאר אחרי המיזוג?</div>
+              <div style={{ fontSize: 11.5, color: '#7C3AED', marginTop: 2 }}>
+                {nameDlg.group.nodes.length} רשומות ימוזגו לאחת · דור {nameDlg.group.generation}
+              </div>
+            </div>
+            <div style={{ padding: 16, maxHeight: 340, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {nameDlg.group.nodes.map(n => {
+                const on = nameDlg.chosen === n.name && !nameDlg.custom.trim()
+                return (
+                  <button key={n.id} type="button"
+                    onClick={() => setNameDlg(d => d && ({ ...d, chosen: n.name, custom: '' }))}
+                    style={{ display: 'flex', alignItems: 'center', gap: 9, textAlign: 'right', background: on ? '#FAF5FF' : '#fff', border: `2px solid ${on ? '#7C3AED' : '#E2E8F0'}`, borderRadius: 11, padding: '10px 12px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    <span style={{ width: 15, height: 15, borderRadius: '50%', border: `2px solid ${on ? '#7C3AED' : '#CBD5E1'}`, background: on ? '#7C3AED' : '#fff', flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>
+                      <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: '#0F172A' }}>{n.name}</span>
+                      <span style={{ display: 'block', fontSize: 10.5, color: '#64748B', marginTop: 1 }}>
+                        {relTxt(n.relation)} · {statusTxt(n.status)} · {n.children} ילדים
+                        {n.families > 0 ? ` · ${n.families} משפחות` : ''}
+                      </span>
+                    </span>
+                    {n.name === fullestName(nameDlg.group.nodes) && (
+                      <span style={{ fontSize: 9.5, fontWeight: 800, color: '#166534', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 20, padding: '2px 7px', whiteSpace: 'nowrap' }}>הנוסח המלא ביותר</span>
+                    )}
+                  </button>
+                )
+              })}
+
+              <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 5, paddingTop: 11 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#334155', marginBottom: 6 }}>או הזן שם אחר:</div>
+                <input
+                  value={nameDlg.custom}
+                  onChange={e => setNameDlg(d => d && ({ ...d, custom: e.target.value }))}
+                  placeholder="לדוגמה: רבי ישראל ומרת רחל לבל"
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13.5, borderRadius: 11, border: `2px solid ${nameDlg.custom.trim() ? '#7C3AED' : '#E2E8F0'}`, outline: 'none', fontFamily: 'inherit', direction: 'rtl' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '0 16px 16px' }}>
+              <button type="button" disabled={busy === 'name'}
+                onClick={async () => {
+                  const g = nameDlg.group
+                  const finalName = nameDlg.custom.trim() || nameDlg.chosen
+                  setBusy('name')
+                  const out = await mergeGroup(g, false, finalName)
+                  setBusy(null); setNameDlg(null)
+                  if (out !== 'error') { await scan(); await loadUndo(); onDone() }
+                }}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '11px 0', fontSize: 13.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {busy === 'name' ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
+                מזג — והשאר שם זה
+              </button>
+              <button type="button" onClick={() => setNameDlg(null)}
+                style={{ background: '#fff', color: '#475569', border: '2px solid #CBD5E1', borderRadius: 11, padding: '11px 18px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                ביטול
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
