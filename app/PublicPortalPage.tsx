@@ -56,6 +56,7 @@ interface FoundBeneficiary {
   full_name: string
   family_name?: string
   eligibility_status: string
+  rejection_reason?: string
   phone?: string
   phone2?: string
   spouse_phone?: string
@@ -4194,7 +4195,42 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         )}
 
         {/* ─── Step: Dashboard ─── */}
-        {step === 'dashboard' && beneficiary && (
+        {/* ─── צאצא שנדחה: מסך חוסם ───────────────────────────────────────────
+            רשומה שנדחתה (eligibility_status='rejected') אינה יכולה להתקדם לשום
+            פעולה. מוצג מסך דחייה בלבד עם הסיבה שנשמרה, במקום הדשבורד. */}
+        {step === 'dashboard' && beneficiary && isRejected && (
+          <div className="flex flex-col gap-4">
+            <Card>
+              <div className="flex flex-col items-center text-center gap-4 py-4">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle size={34} className="text-red-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900 mb-1">הרישום שלכם נדחה</h2>
+                  <p className="text-sm text-slate-500">לא ניתן להמשיך בהגשת בקשות דרך המערכת.</p>
+                </div>
+                {(beneficiary.rejection_reason ?? '').trim() ? (
+                  <div className="w-full rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4 text-right">
+                    <p className="text-xs font-semibold text-red-500 uppercase mb-1">סיבת הדחייה</p>
+                    <p className="text-[15px] font-semibold text-red-900 leading-relaxed whitespace-pre-wrap">
+                      {beneficiary.rejection_reason}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="w-full rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4 text-center">
+                    <p className="text-[15px] font-semibold text-red-900">הרישום נדחה. לפרטים נוספים ניתן לפנות למשרד.</p>
+                  </div>
+                )}
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  לבירורים ניתן לפנות למשרד האיגוד במייל{' '}
+                  <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>.
+                </p>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {step === 'dashboard' && beneficiary && !isRejected && (
           <div className="flex flex-col gap-4">
 
             {/* User header */}
