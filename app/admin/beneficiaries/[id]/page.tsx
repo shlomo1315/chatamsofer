@@ -37,9 +37,14 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
-  // rejecter:profiles — שם המשתמש שדחה, להצגת "מי דחה" בבאנר הדחייה
-  const { data, error } = await supabase.from('beneficiaries').select('*, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)').eq('id', id).single()
-  // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
+  // rejecter:profiles — שם המשתמש שדחה, להצגת "מי דחה" בבאנר הדחייה.
+  // ⚠️ עמיד: אם ה-FK/עמודה rejected_by עדיין לא קיימים (המיגרציה טרם רצה),
+  // ה-join נכשל — נופלים חזרה ל-select('*') כדי שהכרטסת לא תקרוס.
+  const withJoin = await supabase.from('beneficiaries').select('*, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)').eq('id', id).single()
+  if (!withJoin.error) return withJoin.data
+  if (withJoin.error.code === 'PGRST116' || withJoin.error.code === '22P02') return null
+
+  const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
   return data
 }
