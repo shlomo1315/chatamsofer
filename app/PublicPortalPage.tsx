@@ -1341,9 +1341,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [authPassword2, setAuthPassword2] = useState('')
   const [authCode, setAuthCode] = useState('')
   const [authEmailHint, setAuthEmailHint] = useState('')
-  // דגל דחייה מזוהה כבר בשלב הזיהוי (לפני כניסה) — להצגת הודעת דחייה במסך ה-intro.
-  // הסיבה המפורטת נחשפת רק אחרי כניסה מלאה (מסך הדחייה בדשבורד).
+  // דגל דחייה + הסיבה, מזוהים כבר בשלב הזיהוי — להצגת מסך הדחייה במסך ה-intro.
   const [authRejected, setAuthRejected] = useState(false)
+  const [authRejectReason, setAuthRejectReason] = useState('')
   const [authCodeSent, setAuthCodeSent] = useState(false)
   const [authIsSetup, setAuthIsSetup] = useState(false)
   // כניסה עם קוד בשיחה טלפונית (צינתוק ימות)
@@ -1757,6 +1757,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           setPendingAuth({ idType: 'id', id: digits })
           setAuthEmailHint(data.emailHint || '')
           setAuthRejected(!!data.isRejected)
+          setAuthRejectReason(data.rejectionReason || '')
           setAuthMode('login')
           setPhoneStep(''); setEmailStep(''); setAuthCode('')
           setAuthView(intendedAction.current ? 'login' : 'intro')
@@ -1782,6 +1783,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           setPendingAuth({ idType: 'passport', id: raw })
           setAuthEmailHint(data.emailHint || '')
           setAuthRejected(!!data.isRejected)
+          setAuthRejectReason(data.rejectionReason || '')
           setAuthMode('login')
           setPhoneStep(''); setEmailStep(''); setAuthCode('')
           setAuthView(intendedAction.current ? 'login' : 'intro')
@@ -3106,13 +3108,22 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
                     <AlertCircle size={34} className="text-red-600" />
                   </div>
-                  <div>
+                  <div className="w-full">
                     <h2 className="text-xl font-bold text-slate-900 mb-1">הרישום שלכם נדחה</h2>
-                    <p className="text-sm text-slate-500 leading-relaxed">
-                      לא ניתן להמשיך בהגשת בקשות. לבירור מלא של סיבת הדחייה ניתן לפנות למשרד האיגוד
-                      במייל <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>.
-                    </p>
+                    {authRejectReason.trim() ? (
+                      <div className="mt-3 w-full rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4 text-right">
+                        <p className="text-xs font-semibold text-red-500 uppercase mb-1">סיבת הדחייה</p>
+                        <p className="text-[15px] font-semibold text-red-900 leading-relaxed whitespace-pre-wrap">{authRejectReason}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500">לא ניתן להמשיך בהגשת בקשות.</p>
+                    )}
                   </div>
+                  <p className="text-sm text-slate-500 leading-relaxed">
+                    לבירורים נוספים ניתן לפנות למשרד האיגוד במייל:
+                    <br />
+                    <a href={igudMailto} className="font-semibold text-indigo-600">igud@chasamsofer.info</a>
+                  </p>
                 </div>
                 ) : authView === 'intro' ? (
                 <div className="flex flex-col gap-4">
@@ -4243,8 +4254,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </div>
                 )}
                 <p className="text-sm text-slate-500 leading-relaxed">
-                  לבירורים ניתן לפנות למשרד האיגוד במייל{' '}
-                  <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>.
+                  לבירורים נוספים ניתן לפנות למשרד האיגוד במייל:
+                  <br />
+                  <a href={igudMailto} className="font-semibold text-indigo-600">igud@chasamsofer.info</a>
                 </p>
               </div>
             </Card>

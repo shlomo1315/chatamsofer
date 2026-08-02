@@ -28,24 +28,26 @@ export async function GET(request: NextRequest) {
 
   // שלב הזיהוי מחזיר אך ורק האם המוטב רשום ומצב הסיסמה — ללא PII.
   // פרטי המוטב נמסרים רק לאחר אימות סיסמה (auth/login או auth/set-password).
-  // eligibility_status נכלל רק כדי להחזיר דגל בוליאני isRejected (לא הסיבה) —
-  // כדי להציג הודעת דחייה כללית כבר לפני כניסה. הסיבה המפורטת נמסרת רק אחרי אימות.
-  const gateSelect = 'id, email, portal_password_hash, eligibility_status'
+  // eligibility_status + rejection_reason נכללים כדי להציג את מסך הדחייה עם הסיבה
+  // כבר לפני כניסה. מי שהזין את הת"ז כבר הוכיח שהוא בעל הרשומה; הסיבה אינה PII רגיש.
+  const gateSelect = 'id, email, portal_password_hash, eligibility_status, rejection_reason'
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
 
     // 1. Check main beneficiaries table — לפי ת"ז הרשומה או ת"ז האישה (נשואים)
-    const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_password_hash: string | null; eligibility_status: string | null }>(admin, idParam, gateSelect)
+    const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_password_hash: string | null; eligibility_status: string | null; rejection_reason: string | null }>(admin, idParam, gateSelect)
     if (data) {
       const hasPassword = !!data.portal_password_hash
+      const isRejected = data.eligibility_status === 'rejected'
       return NextResponse.json({
         found: true,
         needsPassword: hasPassword,
         needsSetup: !hasPassword,
         hasEmail: !!data.email,
         emailHint: maskEmail(data.email),
-        isRejected: data.eligibility_status === 'rejected',
+        isRejected,
+        rejectionReason: isRejected ? (data.rejection_reason ?? '') : '',
       })
     }
 
