@@ -37,7 +37,8 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
-  const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
+  // rejecter:profiles — שם המשתמש שדחה, להצגת "מי דחה" בבאנר הדחייה
+  const { data, error } = await supabase.from('beneficiaries').select('*, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)').eq('id', id).single()
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
   return data
@@ -634,6 +635,31 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       {!isSpecial && earlyDeviation && <LineageAlertModal generations={earlyRedGens} allGens={alertGens} />}
 
       {beneficiary.eligibility_status === 'docs_returned' && <ReturnedFixesBanner beneficiary={beneficiary} />}
+
+      {/* באנר דחייה — סיבת הדחייה, מי דחה ומתי. מוצג כל עוד הצאצא במצב "נדחה". */}
+      {beneficiary.eligibility_status === 'rejected' && (
+        <div className="rounded-2xl border-2 border-red-200 bg-red-50 px-5 py-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+            <p className="text-sm font-bold text-red-800">❌ הרישום נדחה</p>
+            <p className="text-xs text-red-500">
+              {(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name && (
+                <>נדחה ע״י <span className="font-semibold">{(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name}</span></>
+              )}
+              {(beneficiary as { rejected_at?: string | null }).rejected_at && (
+                <> · {new Date((beneficiary as { rejected_at?: string }).rejected_at!).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
+              )}
+            </p>
+          </div>
+          {(beneficiary.rejection_reason ?? '').trim() ? (
+            <div className="rounded-xl bg-white border border-red-100 px-4 py-2.5">
+              <p className="text-xs font-semibold text-red-400 uppercase mb-0.5">סיבת הדחייה</p>
+              <p className="text-sm font-medium text-red-900 whitespace-pre-wrap">{beneficiary.rejection_reason}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-red-700">לא צוינה סיבת דחייה.</p>
+          )}
+        </div>
+      )}
 
       {/* תיעוד — ציר זמן אחד: בקשות השלמת המסמכים + הערות הצוות, עם שם הכותב
           ליד כל פריט. מחליף את הבאנר הנפרד ואת לשונית "יומן הערות". */}

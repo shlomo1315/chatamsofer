@@ -18,10 +18,23 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return unauthorized()
 
-  const { id, status, docsNotes } = await request.json()
+  const { id, status, reason, docsNotes } = await request.json()
   if (!id || !status) return NextResponse.json({ error: 'missing fields' }, { status: 400 })
 
   const client = getClient()
+
+  // תיעוד דחייה: מי דחה (staff.userId) ומתי — כדי שבממשק תוצג הסיבה + שם הדוחה + המועד.
+  // נעשה בשרת (יש כאן את זהות המשתמש), ולפני יציאה מוקדמת בענף rejected.
+  if (status === 'rejected') {
+    await client.from('beneficiaries').update({
+      rejected_by: staff.userId,
+      rejected_at: new Date().toISOString(),
+      ...(typeof reason === 'string' && reason.trim() ? { rejection_reason: reason.trim() } : {}),
+    }).eq('id', id).then(undefined, () => {})
+  } else if (status === 'approved' || status === 'docs_pending') {
+    // יציאה מדחייה — מנקים את חותמות הדחייה כדי שלא יישארו מוצגים
+    await client.from('beneficiaries').update({ rejected_by: null, rejected_at: null }).eq('id', id).then(undefined, () => {})
+  }
   const { data: ben, error } = await client
     .from('beneficiaries')
     .select('email, full_name, family_name, id_number, phone, city, marital_status, spouse_name, children_count, required_docs, lineage_fix_required, lineage_fix_note')
