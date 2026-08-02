@@ -48,8 +48,8 @@ export default function FamilyApprovalGate({ beneficiary, compact }: { beneficia
           <AlertTriangle size={18} className="flex-shrink-0" />
           <span className="font-bold text-sm">
             {isSpecial
-              ? 'שים לב, רשומה זו (אישור חריג) עדיין לא אושרה. ניתן לאשר אותה כאן.'
-              : 'שים לב, משפחה זו עדיין לא אישרו את הייחוס שלה. במידה ותרצה לאשר את הייחוס של משפחה זו — תוכל לעשות זאת כאן.'}
+              ? 'שים לב, רשומה זו (אישור חריג) עדיין לא אושרה.'
+              : 'שים לב, משפחה זו עדיין לא אישרו את הייחוס שלה.'}
           </span>
         </div>
         {/* אישור המשפחה ישירות מכאן */}
