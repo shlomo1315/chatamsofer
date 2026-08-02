@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2 } from 'lucide-react'
+import ShareBranchModal from './ShareBranchModal'
 import DuplicatesPanel from './DuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
@@ -1250,6 +1251,8 @@ export default function LineagePage() {
   // ולאבד את ההקשר בכל פעם. כאן בוחרים צומת ורואים רק אותו ואת צאצאיו —
   // התמונה כולה מול העיניים, ואפשר לתקן אחד אחרי השני.
   const [focusId, setFocusId] = useState<string | null>(null)
+  // צומת ששיתופו נערך כרגע (חלונית ניהול השיתוף)
+  const [shareNode, setShareNode] = useState<{ id: string; name: string } | null>(null)
   // עוגן גלילה — { id, n }. ה-n הוא מונה: בלעדיו אותו מזהה פעמיים ברצף לא
   // היה מפעיל את המרכוז מחדש (המיזוג השני על אותו צומת לא היה מזיז את המבט).
   const [anchor, setAnchor] = useState<{ id: string; n: number } | null>(null)
@@ -1573,11 +1576,22 @@ export default function LineagePage() {
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <Printer size={14} /> הדפסה / PDF
           </button>
+          {canEdit && (
+            <button onClick={() => setShareNode({ id: focusNode.id, name: focusNode.name })}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#4338CA', border: '1.5px solid #C7D2FE', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+              <Link2 size={14} /> שתף ענף לאישור
+            </button>
+          )}
           <button onClick={() => setFocusId(null)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#7C3AED', color: '#fff', border: 'none', borderRadius: 11, padding: '8px 15px', fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
             <X size={14} /> חזרה לעץ המלא
           </button>
         </div>
+      )}
+
+      {/* חלונית ניהול שיתוף ענף — יצירת הזמנות + שליטה מלאה (ביטול הרשאות) */}
+      {shareNode && (
+        <ShareBranchModal nodeId={shareNode.id} nodeName={shareNode.name} onClose={() => setShareNode(null)} />
       )}
 
       {/* ── בחירת סגנון הדפסה ── */}

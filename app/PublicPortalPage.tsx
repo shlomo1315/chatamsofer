@@ -1341,6 +1341,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [authPassword2, setAuthPassword2] = useState('')
   const [authCode, setAuthCode] = useState('')
   const [authEmailHint, setAuthEmailHint] = useState('')
+  // דגל דחייה מזוהה כבר בשלב הזיהוי (לפני כניסה) — להצגת הודעת דחייה במסך ה-intro.
+  // הסיבה המפורטת נחשפת רק אחרי כניסה מלאה (מסך הדחייה בדשבורד).
+  const [authRejected, setAuthRejected] = useState(false)
   const [authCodeSent, setAuthCodeSent] = useState(false)
   const [authIsSetup, setAuthIsSetup] = useState(false)
   // כניסה עם קוד בשיחה טלפונית (צינתוק ימות)
@@ -1753,6 +1756,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           // נדרש קוד זמני (מייל/טלפון) לפני חשיפת פרטי המוטב — אין יותר סיסמה קבועה
           setPendingAuth({ idType: 'id', id: digits })
           setAuthEmailHint(data.emailHint || '')
+          setAuthRejected(!!data.isRejected)
           setAuthMode('login')
           setPhoneStep(''); setEmailStep(''); setAuthCode('')
           setAuthView(intendedAction.current ? 'login' : 'intro')
@@ -1777,6 +1781,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         if (data.found) {
           setPendingAuth({ idType: 'passport', id: raw })
           setAuthEmailHint(data.emailHint || '')
+          setAuthRejected(!!data.isRejected)
           setAuthMode('login')
           setPhoneStep(''); setEmailStep(''); setAuthCode('')
           setAuthView(intendedAction.current ? 'login' : 'intro')
@@ -3094,7 +3099,22 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </div>
                   </form>
                 ) : authMode === 'login' ? (
-                authView === 'intro' ? (
+                authRejected ? (
+                /* רשומה שנדחתה — הודעת דחייה כללית כבר בשלב הזיהוי. הסיבה המפורטת
+                   נחשפת רק אחרי כניסה מלאה. אין המשך לשום פעולה. */
+                <div className="flex flex-col items-center text-center gap-4 py-4">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                    <AlertCircle size={34} className="text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 mb-1">הרישום שלכם נדחה</h2>
+                    <p className="text-sm text-slate-500 leading-relaxed">
+                      לא ניתן להמשיך בהגשת בקשות. לבירור מלא של סיבת הדחייה ניתן לפנות למשרד האיגוד
+                      במייל <a href={igudMailto} className="font-semibold text-indigo-600 break-all">igud@chasamsofer.info</a>.
+                    </p>
+                  </div>
+                </div>
+                ) : authView === 'intro' ? (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">

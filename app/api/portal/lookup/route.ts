@@ -28,13 +28,15 @@ export async function GET(request: NextRequest) {
 
   // שלב הזיהוי מחזיר אך ורק האם המוטב רשום ומצב הסיסמה — ללא PII.
   // פרטי המוטב נמסרים רק לאחר אימות סיסמה (auth/login או auth/set-password).
-  const gateSelect = 'id, email, portal_password_hash'
+  // eligibility_status נכלל רק כדי להחזיר דגל בוליאני isRejected (לא הסיבה) —
+  // כדי להציג הודעת דחייה כללית כבר לפני כניסה. הסיבה המפורטת נמסרת רק אחרי אימות.
+  const gateSelect = 'id, email, portal_password_hash, eligibility_status'
 
   if (idParam) {
     if (idParam.length < 5) return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
 
     // 1. Check main beneficiaries table — לפי ת"ז הרשומה או ת"ז האישה (נשואים)
-    const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_password_hash: string | null }>(admin, idParam, gateSelect)
+    const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_password_hash: string | null; eligibility_status: string | null }>(admin, idParam, gateSelect)
     if (data) {
       const hasPassword = !!data.portal_password_hash
       return NextResponse.json({
@@ -43,6 +45,7 @@ export async function GET(request: NextRequest) {
         needsSetup: !hasPassword,
         hasEmail: !!data.email,
         emailHint: maskEmail(data.email),
+        isRejected: data.eligibility_status === 'rejected',
       })
     }
 
