@@ -2,7 +2,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle } from 'lucide-react'
+import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
@@ -26,8 +26,17 @@ const motherName = (m?: MotherRef) => {
 
 // ── Status filter buckets ──────────────────────────────────────────────────────
 // ממתין=pending · מאושר=active · לא מאושר=cancelled · בדיקה מעמיקה=deep_review
-type Filter = 'all' | 'pending' | 'active' | 'cancelled' | 'deep_review'
-const matchesFilter = (a: MaternityAid, f: Filter) => f === 'all' ? true : a.status === f
+// ממתין לתיקונים=pending_fixes (baby_name_pending) — חוצה-סטטוס: היולדת סימנה
+// "עדיין אין שם" וטרם השלימה. כל עוד לא תוקן, הרשומה יושבת כאן ולא ב"ממתין לאישור".
+type Filter = 'all' | 'pending' | 'pending_fixes' | 'active' | 'cancelled' | 'deep_review'
+const namePending = (a: MaternityAid) => (a as { baby_name_pending?: boolean }).baby_name_pending === true
+const matchesFilter = (a: MaternityAid, f: Filter) => {
+  if (f === 'all') return true
+  if (f === 'pending_fixes') return namePending(a)
+  // "ממתין לאישור" לא כולל רשומות שממתינות לתיקון שם — הן בקטגוריה נפרדת
+  if (f === 'pending') return a.status === 'pending' && !namePending(a)
+  return a.status === f
+}
 
 // סינון לפי ההטבה שהיולדת ביקשה. undefined (בקשות ישנות) = ביקשה — תאימות לאחור.
 type BenefitFilter = 'all' | 'card' | 'recovery' | 'both'
@@ -50,6 +59,7 @@ interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Baby, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
   { key: 'pending', label: 'ממתין לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'pending_fixes', label: 'ממתין לתיקונים', icon: PencilLine, base: 'border-rose-200 hover:border-rose-300', active: 'border-rose-400 ring-2 ring-rose-200 bg-rose-50', iconCls: 'bg-rose-100 text-rose-700' },
   { key: 'deep_review', label: 'בדיקה מעמיקה', icon: AlertTriangle, base: 'border-orange-200 hover:border-orange-300', active: 'border-orange-400 ring-2 ring-orange-200 bg-orange-50', iconCls: 'bg-orange-100 text-orange-700' },
   { key: 'active', label: 'מאושר', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'cancelled', label: 'לא מאושר', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
@@ -131,9 +141,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     return () => { clearInterval(poll); window.removeEventListener('focus', onFocus) }
   }, [router])
 
+  // המונים תואמים ללוגיקת matchesFilter: "ממתין לאישור" לא כולל רשומות הממתינות
+  // לתיקון שם (הן נספרות ב"ממתין לתיקונים"), כדי שרשומה לא תיספר פעמיים.
   const counts = useMemo(() => ({
     all: data.length,
-    pending: data.filter(a => a.status === 'pending').length,
+    pending: data.filter(a => a.status === 'pending' && !namePending(a)).length,
+    pending_fixes: data.filter(a => namePending(a)).length,
     active: data.filter(a => a.status === 'active').length,
     cancelled: data.filter(a => a.status === 'cancelled').length,
     deep_review: data.filter(a => a.status === 'deep_review').length,

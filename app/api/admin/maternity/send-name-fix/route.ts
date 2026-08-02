@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
   const bodyHtml = `
     <p style="margin:0 0 14px;color:#0f172a;font-size:18px;font-weight:800;">שלום ${motherName},</p>
     <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
-      במערכת חסר שם תקין לתינוק שלכם. נשמח אם תשלימו את השם המדויק בלחיצה על הכפתור:
+      במערכת חסר שם תקין לתינוק שלכם. על מנת שנוכל להעביר את הבקשה שלכם לטיפול,
+      עליכם להשלים את השם המדויק בלחיצה על הכפתור:
     </p>
     <div style="text-align:center;margin:0 0 18px;">
       <a href="${link}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
