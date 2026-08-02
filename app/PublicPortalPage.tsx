@@ -101,6 +101,11 @@ const MARITAL_OPTIONS = [
 const OTHER_MARITAL_OPTIONS = MARITAL_OPTIONS.filter(o => o.value !== 'נשואים')
 const MARRIED_STATUSES = ['נשואים']
 
+// ⚠️ הדור המוקדם ביותר שבו ניתן לסמן "זה אני". אין אדם חי שהוא עצמו דור 2/3/4
+// לחתם סופר זיע״א — סימון כזה הוא תמיד טעות, והוא היה קוטע את השרשרת באמצע
+// ומשייך את הנרשם לאב-קדמון במקום לעצמו.
+const SELF_MIN_GENERATION = 5
+
 // פלטת צבעים לדורות — כל דור בגוון שונה (לציר הייחוס)
 const GEN_COLORS = [
   { bg: 'bg-indigo-50', text: 'text-indigo-800', border: 'border-indigo-200', dot: 'bg-indigo-500' },
@@ -943,6 +948,8 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   // ⚠️ מי שסימן "זה אני" אינו מוסיף את עצמו שוב — זו בדיוק הכפילות שנמנעה
   const canAddSelf = chain.length >= 1 && !selfAdded && !selfExistingId
   const lastIsNew = chain.length > 0 && chain[chain.length - 1].isNew
+  // הרשימה המוצגת היא דור chain.length + 2 — ו"זה אני" נפתח רק מדור SELF_MIN_GENERATION
+  const canMarkSelfHere = chain.length + 2 >= SELF_MIN_GENERATION
 
   return (
     <div className="flex flex-col">
@@ -961,7 +968,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               {row.fixed && <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>}
               {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
               {!row.fixed && (row as { id?: string | null }).id === selfExistingId && selfExistingId && (
-                <span className="text-[10px] font-extrabold text-white bg-green-600 rounded-full px-2 py-0.5 flex-shrink-0">זה אני</span>
+                <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex-shrink-0">זה אני</span>
               )}
               {relBadge(row.relation)}
               {!row.fixed && !selfAdded && (
@@ -1026,7 +1033,15 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                   <p className="text-xs font-medium text-slate-500 mb-1.5">בחר/י את דור {chain.length + 2}:</p>
                   {/* ⚠️ ליד כל שם — "זה אני". בלי זה נרשם שכבר קיים בעץ נאלץ
                       ללחוץ "הוסף אותי" ונוצר עותק שני שלו, וזה בדיוק מקור
-                      הכפילויות שאנחנו ממזגים ידנית אחר כך. */}
+                      הכפילויות שאנחנו ממזגים ידנית אחר כך.
+
+                      ⚠️ אבל הכפתור *דיסקרטי בכוונה*, ורק מדור 5 ומעלה:
+                      • הגבלת הדור — אין אדם חי שהוא עצמו דור 2/3/4 לחתם סופר.
+                        בדורות האלה סימון "זה אני" הוא תמיד טעות, והוא היה קוטע
+                        את השרשרת באמצע ומשייך את הנרשם לאב-קדמון.
+                      • הדיסקרטיות — כפתור ירוק בולט ליד כל שם הזמין לחיצה
+                        סתמית ("אולי זה אני?") במקום המשך בניית השרשרת. מי
+                        שבאמת מחפש את עצמו יזהה את הסמל ואת ההסבר בריחוף. */}
                   <div className="flex flex-col gap-1.5 mb-2">
                     {options.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
                       <div key={node.id} className="flex items-stretch gap-1.5">
@@ -1034,11 +1049,14 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                           className="flex-1 text-right text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
                           {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
                         </button>
-                        <button type="button" title="סמן שזה אתה — תשויך לרשומה הקיימת ולא ייווצר דור חדש"
-                          onClick={() => { void markSelfExisting(node) }}
-                          className="flex-shrink-0 text-xs font-extrabold px-3 rounded-lg border-2 border-green-500 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white transition-all duration-150 whitespace-nowrap">
-                          זה אני
-                        </button>
+                        {canMarkSelfHere && (
+                          <button type="button" title="זה אני — זהו שמי; שייכו אותי לרשומה הקיימת ואל תיצרו דור חדש"
+                            onClick={() => { void markSelfExisting(node) }}
+                            className="flex-shrink-0 inline-flex items-center justify-center w-8 rounded-lg border border-slate-200 bg-white text-slate-300 hover:border-green-500 hover:bg-green-50 hover:text-green-600 focus:border-green-500 focus:text-green-600 transition-colors duration-150">
+                            <User size={13} />
+                            <span className="sr-only">זה אני</span>
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

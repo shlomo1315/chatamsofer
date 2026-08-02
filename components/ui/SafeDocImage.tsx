@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ImageOff, Loader2 } from 'lucide-react'
+import { FileText, ImageOff, Loader2 } from 'lucide-react'
 import { loadDocBlob } from '@/lib/docBlob'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,8 +34,8 @@ export default function SafeDocImage({
   className?: string
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
-  const [state, setState] = useState<{ key: string; done: boolean; failed: boolean; fallback: string }>(
-    { key: '', done: false, failed: false, fallback: '' },
+  const [state, setState] = useState<{ key: string; done: boolean; failed: boolean; fallback: string; kind: string; err: string }>(
+    { key: '', done: false, failed: false, fallback: '', kind: '', err: '' },
   )
 
   useEffect(() => {
@@ -51,12 +51,21 @@ export default function SafeDocImage({
     mount.style.width = '100%'
     mount.style.height = '100%'
     host.appendChild(mount)
-    setState({ key: path, done: false, failed: false, fallback: '' })
+    setState({ key: path, done: false, failed: false, fallback: '', kind: '', err: '' })
 
     ;(async () => {
       try {
-        const { objectUrl } = await loadDocBlob(path, name)
+        const { objectUrl, contentType } = await loadDocBlob(path, name)
         if (!alive) return
+
+        // ⚠️ קובץ שאינו תמונה (PDF/Word) אינו "תקלה" — הוא פשוט לא מצויר.
+        // קודם הוא נפל למסלול השגיאה והוצג כתמונה שבורה, בלי שום רמז שמדובר
+        // בקובץ תקין מסוג אחר.
+        if (contentType && !contentType.startsWith('image/')) {
+          if (alive) setState({ key: path, done: true, failed: false, fallback: '', kind: contentType, err: '' })
+          return
+        }
+
         const blob = await (await fetch(objectUrl)).blob()
         if (!alive) return
 
@@ -65,7 +74,7 @@ export default function SafeDocImage({
           bitmap = await createImageBitmap(blob)
         } catch {
           // פורמט שאינו נתמך לפענוח — נפילה-לאחור ל-blob בתג תמונה
-          if (alive) setState({ key: path, done: true, failed: false, fallback: objectUrl })
+          if (alive) setState({ key: path, done: true, failed: false, fallback: objectUrl, kind: '', err: '' })
           return
         }
         if (!alive) { bitmap.close(); return }
@@ -86,9 +95,13 @@ export default function SafeDocImage({
         ctx.drawImage(bitmap, 0, 0)
         bitmap.close()
         mount.appendChild(canvas)
-        if (alive) setState({ key: path, done: true, failed: false, fallback: '' })
-      } catch {
-        if (alive) setState({ key: path, done: true, failed: true, fallback: '' })
+        if (alive) setState({ key: path, done: true, failed: false, fallback: '', kind: '', err: '' })
+      } catch (e) {
+        // ⚠️ הסיבה נשמרת ומוצגת. קודם כל כשל הוצג כאייקון תמונה שבורה בלי שום
+        // מידע — ולא הייתה דרך לדעת אם הקובץ חסר, פגום, או שההרשאה נדחתה.
+        const msg = e instanceof Error ? e.message : 'שגיאה בטעינת הקובץ'
+        console.error('[SafeDocImage]', path, msg)
+        if (alive) setState({ key: path, done: true, failed: true, fallback: '', kind: '', err: msg })
       }
     })()
 
@@ -98,12 +111,28 @@ export default function SafeDocImage({
     }
   }, [path, name, className])
 
-  const cur = state.key === path ? state : { done: false, failed: false, fallback: '' }
+  const cur = state.key === path ? state : { done: false, failed: false, fallback: '', kind: '', err: '' }
+
+  // קובץ תקין שאינו תמונה — מוצג כמסמך, לא כתקלה
+  if (cur.kind) {
+    const isPdf = cur.kind.includes('pdf')
+    return (
+      <div className={`flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-400 ${className}`}
+        title={name ?? undefined}>
+        <FileText size={22} className={isPdf ? 'text-rose-400' : 'text-sky-400'} />
+        <span className="text-[10px] font-bold">{isPdf ? 'PDF' : 'מסמך'}</span>
+      </div>
+    )
+  }
 
   if (cur.failed) {
+    // ⚠️ הסיבה מוצגת ולא רק אייקון שבור: בלעדיה אי אפשר לדעת אם הקובץ חסר
+    // באחסון, פגום, או שההרשאה נדחתה — וכל אבחון הופך לניחוש.
     return (
-      <div className={`flex items-center justify-center bg-slate-50 text-slate-300 ${className}`}>
-        <ImageOff size={22} />
+      <div className={`flex flex-col items-center justify-center gap-1 bg-rose-50 text-rose-400 px-2 text-center ${className}`}
+        title={cur.err || 'שגיאה בטעינת הקובץ'}>
+        <ImageOff size={20} />
+        <span className="text-[9.5px] font-semibold leading-tight line-clamp-2">{cur.err || 'שגיאה בטעינה'}</span>
       </div>
     )
   }
