@@ -10,8 +10,18 @@ export default function FixNameForm({ token, currentName }: { token: string; cur
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
   const [err, setErr] = useState('')
+  // חלון אישור לפני שמירה — "האם אתם בטוחים בשם" (כמו בטופס הבקשה)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  // לחיצה על "שמירה" פותחת קודם חלון אישור; האישור עצמו קורא ל-doSubmit
+  const askConfirm = () => {
+    const clean = name.replace(NON_HEBREW_NAME_CHARS, '').trim()
+    if (!clean) { setErr('יש להזין שם תקין (אותיות עבריות בלבד)'); return }
+    setErr(''); setConfirmOpen(true)
+  }
 
   const submit = async () => {
+    setConfirmOpen(false)
     const clean = name.replace(NON_HEBREW_NAME_CHARS, '').trim()
     if (!clean) { setErr('יש להזין שם תקין (אותיות עבריות בלבד)'); return }
     setErr(''); setSaving(true)
@@ -68,7 +78,7 @@ export default function FixNameForm({ token, currentName }: { token: string; cur
             setName(clean)
             if (err) setErr('')
           }}
-          onKeyDown={e => e.key === 'Enter' && submit()}
+          onKeyDown={e => e.key === 'Enter' && askConfirm()}
           placeholder="שם התינוק"
           inputMode="text"
           autoFocus
@@ -77,7 +87,7 @@ export default function FixNameForm({ token, currentName }: { token: string; cur
         {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
 
         <button
-          onClick={submit}
+          onClick={askConfirm}
           disabled={saving || !name.trim()}
           className="mt-5 w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all"
         >
@@ -87,6 +97,35 @@ export default function FixNameForm({ token, currentName }: { token: string; cur
 
         <p className="mt-4 text-center text-xs text-slate-400">אותיות עבריות בלבד.</p>
       </div>
+
+      {/* חלון אישור — "האם אתם בטוחים בשם", למניעת שמירת שם שגוי */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-l from-indigo-500 to-indigo-700 px-6 py-4">
+              <h2 className="text-white font-bold text-lg">אישור שם התינוק</h2>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-4">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                האם אתם בטוחים שזהו השם המדויק של התינוק? השם ייקלט במערכת כפי שהוזן.
+              </p>
+              <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3 text-center">
+                <p className="text-xl font-black text-indigo-900">{name.replace(NON_HEBREW_NAME_CHARS, '').trim()}</p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={() => setConfirmOpen(false)}
+                  className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                  חזרה לתיקון
+                </button>
+                <button onClick={submit} disabled={saving}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2.5 text-sm font-semibold text-white">
+                  {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} כן, זהו השם
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

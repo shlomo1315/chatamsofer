@@ -29,14 +29,36 @@ export default async function Page({ params }: { params: Promise<{ token: string
     )
   }
 
-  // שליפת שם התינוק הנוכחי (אם קיים) — למילוי מראש / חיווי
+  // שליפת מצב התיק — שם נוכחי + האם עדיין ממתין לשם
   let currentName = ''
+  let alreadyDone = false
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (url && key) {
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-    const { data } = await admin.from('maternity_aids').select('baby_name, baby_gender').eq('id', aidId).maybeSingle()
+    const { data } = await admin.from('maternity_aids').select('baby_name, baby_name_pending').eq('id', aidId).maybeSingle()
     if (data?.baby_name) currentName = String(data.baby_name)
+    // הקישור נשלח כשהשם היה חסר (baby_name_pending=true). אם כבר לא ממתין ויש שם —
+    // התיקון כבר בוצע (ע"י היולדת או אדמין). הקישור "מוצה" — מציגים חיווי, לא טופס.
+    alreadyDone = data ? (!data.baby_name_pending && !!data.baby_name) : false
+  }
+
+  if (alreadyDone) {
+    return (
+      <main dir="rtl" className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
+            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>כבר עשיתם תיקון השם</h1>
+          <p className="mt-3 text-sm leading-relaxed text-slate-600">
+            שם התינוק כבר עודכן במערכת{currentName ? <> (<span className="font-semibold">{currentName}</span>)</> : ''}. אין צורך בפעולה נוספת.
+          </p>
+        </div>
+      </main>
+    )
   }
 
   return <FixNameForm token={token} currentName={currentName} />
