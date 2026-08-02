@@ -114,48 +114,90 @@ export default function LineageReviewClient({ token }: { token: string }) {
 
         {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
 
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
-          {ordered.map(({ node, depth }) => {
-            const meta = STATUS_META[node.status] ?? STATUS_META.pending
+        {/* מתג תצוגה: רשימה / עץ */}
+        <div className="mb-3 flex justify-center">
+          <div className="inline-flex bg-white border border-slate-200 rounded-xl p-1 gap-1 shadow-sm">
+            {([['list', 'רשימה', List], ['tree', 'עץ', Network]] as const).map(([k, label, Ic]) => (
+              <button key={k} onClick={() => setViewMode(k)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-colors ${viewMode === k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>
+                <Ic size={15} /> {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* פעולות משותפות לכל צומת (רשימה + עץ) */}
+        {(() => {
+          const NodeActions = ({ node }: { node: Node }) => {
             const isBusy = busy === node.id
-            return (
-              <div key={node.id} className="px-4 py-3" style={{ paddingRight: `${16 + depth * 20}px` }}>
-                {editing === node.id ? (
-                  <div className="flex items-center gap-2">
-                    <input value={editName} autoFocus
-                      onChange={e => setEditName(e.target.value.replace(NON_HEBREW, ''))}
-                      onKeyDown={e => e.key === 'Enter' && editName.trim() && act(node.id, 'rename', editName.trim())}
-                      className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    <button onClick={() => act(node.id, 'rename', editName.trim())} disabled={isBusy || !editName.trim()}
-                      className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-3 py-2 text-white"><Check size={15} /></button>
-                    <button onClick={() => setEditing(null)} className="rounded-lg border border-slate-300 px-3 py-2 text-slate-500"><X size={15} /></button>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[11px] text-slate-400 flex-shrink-0">דור {node.generation}</span>
-                      <span className="font-semibold text-slate-800 truncate">{node.name}</span>
-                      {(node.relation === 'son' || node.relation === 'son_in_law') && (
-                        <span className="text-[10px] text-slate-400">({node.relation === 'son' ? 'בן' : 'חתן'})</span>
-                      )}
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {isBusy ? <Loader2 size={16} className="animate-spin text-slate-400" /> : <>
-                        <button onClick={() => act(node.id, 'verify')} title="אישור"
-                          className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
-                        <button onClick={() => act(node.id, 'reject')} title="דחייה"
-                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
-                        <button onClick={() => { setEditing(node.id); setEditName(node.name) }} title="תיקון שם"
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון</button>
-                      </>}
-                    </div>
-                  </div>
-                )}
+            if (editing === node.id) {
+              return (
+                <div className="flex items-center gap-2">
+                  <input value={editName} autoFocus
+                    onChange={e => setEditName(e.target.value.replace(NON_HEBREW, ''))}
+                    onKeyDown={e => e.key === 'Enter' && editName.trim() && act(node.id, 'rename', editName.trim())}
+                    className="flex-1 min-w-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  <button onClick={() => act(node.id, 'rename', editName.trim())} disabled={isBusy || !editName.trim()}
+                    className="rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-2.5 py-1.5 text-white"><Check size={14} /></button>
+                  <button onClick={() => setEditing(null)} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-slate-500"><X size={14} /></button>
+                </div>
+              )
+            }
+            return isBusy ? <Loader2 size={16} className="animate-spin text-slate-400" /> : (
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button onClick={() => act(node.id, 'verify')} title="אישור"
+                  className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
+                <button onClick={() => act(node.id, 'reject')} title="דחייה"
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
+                <button onClick={() => { setEditing(node.id); setEditName(node.name) }} title="תיקון שם"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון</button>
               </div>
             )
-          })}
-        </div>
+          }
+
+          const NodeLabel = ({ node }: { node: Node }) => {
+            const meta = STATUS_META[node.status] ?? STATUS_META.pending
+            return (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] text-slate-400 flex-shrink-0">דור {node.generation}</span>
+                <span className="font-semibold text-slate-800 truncate">{node.name}</span>
+                {(node.relation === 'son' || node.relation === 'son_in_law') && (
+                  <span className="text-[10px] text-slate-400">({node.relation === 'son' ? 'בן' : 'חתן'})</span>
+                )}
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
+              </div>
+            )
+          }
+
+          if (viewMode === 'tree') {
+            // תצוגת עץ — כרטיסים עם קו חיבור אנכי לפי עומק ההיררכיה
+            return (
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 flex flex-col gap-2">
+                {ordered.map(({ node, depth }) => (
+                  <div key={node.id} className="flex items-stretch gap-0" style={{ marginRight: `${depth * 22}px` }}>
+                    {depth > 0 && <div className="w-4 border-r-2 border-b-2 border-slate-200 rounded-br-lg -mt-3 ml-2" />}
+                    <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
+                      {editing === node.id ? <NodeActions node={node} /> : <><NodeLabel node={node} /><NodeActions node={node} /></>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+
+          // תצוגת רשימה (ברירת מחדל) — הזחה לפי דור
+          return (
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-100">
+              {ordered.map(({ node, depth }) => (
+                <div key={node.id} className="px-4 py-3" style={{ paddingRight: `${16 + depth * 20}px` }}>
+                  {editing === node.id
+                    ? <NodeActions node={node} />
+                    : <div className="flex items-center justify-between gap-3 flex-wrap"><NodeLabel node={node} /><NodeActions node={node} /></div>}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         <div className="mt-5 flex items-center justify-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
           <CheckCircle2 size={16} /> כל שינוי נשמר מיד ומתעדכן אצלנו במערכת. תודה על העזרה!
