@@ -61,9 +61,16 @@ export default function FixNameForm({ token, currentName }: { token: string; cur
         <label className="block text-sm font-medium text-slate-600 mb-1.5">שם התינוק</label>
         <input
           value={name}
-          onChange={e => { setName(e.target.value); if (err) setErr('') }}
+          onChange={e => {
+            // סינון תוך כדי הקלדה — אותיות עבריות בלבד. מספרים/לועזית לא נכנסים כלל,
+            // כדי שהמשתמש לא יזין שם פסול ורק בשליחה יגלה שנחסם.
+            const clean = e.target.value.replace(NON_HEBREW_NAME_CHARS, '')
+            setName(clean)
+            if (err) setErr('')
+          }}
           onKeyDown={e => e.key === 'Enter' && submit()}
           placeholder="שם התינוק"
+          inputMode="text"
           autoFocus
           className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
