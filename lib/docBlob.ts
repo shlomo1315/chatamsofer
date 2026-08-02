@@ -52,7 +52,11 @@ export function loadDocBlob(rawUrlOrPath: string, name?: string | null): Promise
   if (cached) return cached
 
   const pending = (async (): Promise<DocBlob> => {
-    const q = `p=${encodeURIComponent(urlOrPath)}${name ? `&name=${encodeURIComponent(name)}` : ''}`
+    // ⚠️ מזהה השיטה בכתובת — לא קישוט. התגובה נשמרת במטמון הדפדפן לשבוע
+    // (immutable), ולכן שינוי בצורת ההעברה לא היה מגיע כלל למי שכבר צפה
+    // במסמך: הדפדפן המשיך להגיש את הגרסה הישנה. שינוי המזהה משנה את הכתובת
+    // ובכך פוסל את המטמון הישן פעם אחת, בלי לוותר על המטמון הארוך.
+    const q = `p=${encodeURIComponent(urlOrPath)}&v=${DOC_CIPHER_ID}${name ? `&name=${encodeURIComponent(name)}` : ''}`
     const res = await fetch(`/api/files/data?${q}`, { credentials: 'same-origin' })
     if (!res.ok) {
       const d = await res.json().catch(() => ({}))

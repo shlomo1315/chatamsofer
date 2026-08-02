@@ -818,6 +818,12 @@ export interface LineageResult {
   nodeId: string | null
   ancestors: { id: string | null; name: string; relation: 'son' | 'son_in_law' | null; isNew: boolean }[]
   selfRelation: 'son' | 'son_in_law' | null
+  /**
+   * הנרשם סימן שהוא עצמו כבר קיים בעץ (הצומת האחרון בשרשרת הוא הוא).
+   * ⚠️ אז אין ליצור עבורו דור חדש: יצירה כזו הייתה מוסיפה עותק שני של אדם
+   * שכבר רשום — וזה בדיוק מקור הכפילויות שאנחנו ממזגים ידנית.
+   */
+  selfIsExisting: boolean
 }
 function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r: LineageResult) => void }) {
   const [root, setRoot] = useState<{ id: string; name: string } | null>(null)
@@ -835,6 +841,8 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   const [newErr, setNewErr] = useState('')
   const [selfAdded, setSelfAdded] = useState(false)
   const [selfRel, setSelfRel] = useState<'son' | 'son_in_law' | null>(null)
+  // הנרשם סימן שהוא עצמו כבר קיים ברשימה — משויך לצומת הקיים במקום ליצור חדש
+  const [selfExistingId, setSelfExistingId] = useState<string | null>(null)
   // חלונית אזהרה לפני הוספה ידנית — נפתחת מחדש בכל דור ובכל לחיצה (ללא זיכרון),
   // כי כל דור הוא בדיקה נפרדת וכפילות באחד מהם פוסלת את הרישום כולו.
   const [manualGate, setManualGate] = useState(false)
@@ -853,14 +861,40 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
 
   useEffect(() => {
     const deepestVerified = [...chain].reverse().find(c => !c.isNew && c.id)
-    // קשר (בן/חתן) נדרש רק לדורות שהנרשם הוסיף ידנית; דורות מאומתים מהעץ
-    // משתמשים בקשר שמוגדר בניהול (שעשוי להיות ריק) — אחרת אי אפשר להתקדם.
-    const valid = chain.length >= 1 && selfAdded && !!selfRel && chain.every(c => !c.isNew || !!c.relation)
-    onChange({ valid, nodeId: deepestVerified?.id ?? null, ancestors: chain, selfRelation: selfRel })
+    // ⚠️ כשהנרשם סימן שהוא עצמו כבר ברשימה, הצומת האחרון בשרשרת *הוא* הוא:
+    // אין דור נוסף להוסיף, ולכן גם אין צורך בבחירת בן/חתן עבורו — הקשר כבר
+    // מוגדר על הצומת הקיים בעץ.
+    const selfExisting = !!selfExistingId && chain.some(c => c.id === selfExistingId)
+    const valid = selfExisting
+      ? chain.length >= 1 && chain.every(c => !c.isNew || !!c.relation)
+      // קשר (בן/חתן) נדרש רק לדורות שהנרשם הוסיף ידנית; דורות מאומתים מהעץ
+      // משתמשים בקשר שמוגדר בניהול (שעשוי להיות ריק) — אחרת אי אפשר להתקדם.
+      : chain.length >= 1 && selfAdded && !!selfRel && chain.every(c => !c.isNew || !!c.relation)
+    onChange({
+      valid,
+      nodeId: selfExisting ? selfExistingId : (deepestVerified?.id ?? null),
+      ancestors: chain,
+      selfRelation: selfRel,
+      selfIsExisting: selfExisting,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chain, selfAdded, selfRel])
+  }, [chain, selfAdded, selfRel, selfExistingId])
+
+  /**
+   * "זה אני" — הנרשם מסמן שהצומת הקיים הוא הוא עצמו.
+   * ⚠️ הצומת נכנס לשרשרת ומסומן כנרשם, ולא נוצר עבורו דור חדש: יצירה כזו
+   * הייתה מוסיפה עותק שני של אדם שכבר רשום בעץ.
+   */
+  const markSelfExisting = async (node: LineageNode) => {
+    setChain(c => [...c, { id: node.id, name: node.name, relation: node.relation ?? null, isNew: false }])
+    setOptions([])
+    setSelfAdded(false)
+    setSelfRel(node.relation ?? null)
+    setSelfExistingId(node.id)
+  }
 
   const pickVerified = async (node: LineageNode) => {
+    setSelfExistingId(null)
     setSelfAdded(false)
     setChain(c => [...c, { id: node.id, name: node.name, relation: node.relation ?? null, isNew: false }])
     setOptions(await fetchChildren(node.id))
@@ -890,6 +924,9 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   const removeAt = async (chainIndex: number) => {
     const next = chain.slice(0, chainIndex)
     setChain(next)
+    // ⚠️ מחיקה מהשרשרת מבטלת גם את סימון "זה אני": אם הצומת שסומן ירד,
+    // הסימון היה נשאר תלוי על מזהה שכבר אינו בשרשרת והרישום היה נחסם.
+    setSelfExistingId(null)
     setSelfAdded(false); setAddOpen(false)
     const prev = next[next.length - 1]
     if (prev && !prev.isNew && prev.id) setOptions(await fetchChildren(prev.id))
@@ -903,7 +940,8 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
 
   if (loading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-3"><Loader2 size={14} className="animate-spin" /> טוען דורות…</div>
 
-  const canAddSelf = chain.length >= 1 && !selfAdded
+  // ⚠️ מי שסימן "זה אני" אינו מוסיף את עצמו שוב — זו בדיוק הכפילות שנמנעה
+  const canAddSelf = chain.length >= 1 && !selfAdded && !selfExistingId
   const lastIsNew = chain.length > 0 && chain[chain.length - 1].isNew
 
   return (
@@ -922,6 +960,9 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               <span className={`text-sm font-semibold flex-1 truncate ${col.text}`}>{row.name}</span>
               {row.fixed && <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>}
               {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
+              {!row.fixed && (row as { id?: string | null }).id === selfExistingId && selfExistingId && (
+                <span className="text-[10px] font-extrabold text-white bg-green-600 rounded-full px-2 py-0.5 flex-shrink-0">זה אני</span>
+              )}
               {relBadge(row.relation)}
               {!row.fixed && !selfAdded && (
                 <button type="button" onClick={() => removeAt(i - 1)}
@@ -983,12 +1024,22 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               {!lastIsNew && options.length > 0 && (
                 <>
                   <p className="text-xs font-medium text-slate-500 mb-1.5">בחר/י את דור {chain.length + 2}:</p>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
+                  {/* ⚠️ ליד כל שם — "זה אני". בלי זה נרשם שכבר קיים בעץ נאלץ
+                      ללחוץ "הוסף אותי" ונוצר עותק שני שלו, וזה בדיוק מקור
+                      הכפילויות שאנחנו ממזגים ידנית אחר כך. */}
+                  <div className="flex flex-col gap-1.5 mb-2">
                     {options.slice().sort((a, b) => a.name.localeCompare(b.name, 'he')).map(node => (
-                      <button key={node.id} type="button" onClick={() => pickVerified(node)}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
-                        {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
-                      </button>
+                      <div key={node.id} className="flex items-stretch gap-1.5">
+                        <button type="button" onClick={() => pickVerified(node)}
+                          className="flex-1 text-right text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
+                          {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
+                        </button>
+                        <button type="button" title="סמן שזה אתה — תשויך לרשומה הקיימת ולא ייווצר דור חדש"
+                          onClick={() => { void markSelfExisting(node) }}
+                          className="flex-shrink-0 text-xs font-extrabold px-3 rounded-lg border-2 border-green-500 bg-green-50 text-green-700 hover:bg-green-600 hover:text-white transition-all duration-150 whitespace-nowrap">
+                          זה אני
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </>
@@ -1500,9 +1551,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childSelf, regForm.marital_status])
-  const [lineageResult, setLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
+  const [lineageResult, setLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null, selfIsExisting: false })
   // מעגל תיקונים: תיקון עץ דורות מהאזור האישי — תוצאת המבורר + מצב שליחה
-  const [fixLineageResult, setFixLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
+  const [fixLineageResult, setFixLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null, selfIsExisting: false })
   const [fixLineageSubmitting, setFixLineageSubmitting] = useState(false)
   const [lineageNodeId, setLineageNodeId] = useState('')
   const [lineagePath, setLineagePath] = useState<string[]>([])
@@ -2176,10 +2227,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         : (() => {
             // מבורר הדורות: דור 1 (החתם סופר) + האבות שנבחרו + הנרשם
             const anc = lineageResult.ancestors
+            // ⚠️ כשהנרשם סימן "זה אני", הצומת האחרון בשרשרת *הוא* הוא — ולכן
+            // אין להוסיף לו דור נוסף ואין ליצור צומת חדש. יצירה כזו הייתה
+            // מוסיפה עותק שני של אדם שכבר רשום בעץ, וזה מקור הכפילויות.
+            const selfExisting = lineageResult.selfIsExisting
             const chainPayload = [
               { generation: 1, name: 'רבינו החתם סופר', relation: null as 'son' | 'son_in_law' | null },
               ...anc.map((a, i) => ({ generation: i + 2, name: a.name, relation: a.relation })),
-              { generation: anc.length + 2, name: selfDisplayName, relation: lineageResult.selfRelation },
+              ...(selfExisting ? [] : [{ generation: anc.length + 2, name: selfDisplayName, relation: lineageResult.selfRelation }]),
             ]
             return {
               lineage_node_id: lineageResult.nodeId,
@@ -2187,7 +2242,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               lineage_chain: chainPayload,
               lineage_new_nodes: [
                 ...anc.filter(a => a.isNew).map(a => ({ name: a.name, relation: a.relation })),
-                { name: selfDisplayName, relation: lineageResult.selfRelation },
+                ...(selfExisting ? [] : [{ name: selfDisplayName, relation: lineageResult.selfRelation }]),
               ],
             }
           })()
@@ -2852,7 +2907,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setChildMatch(null)
     setChildParentLineage(null)
     setChildSelf(null)
-    setLineageResult({ valid: false, nodeId: null, ancestors: [], selfRelation: null })
+    setLineageResult({ valid: false, nodeId: null, ancestors: [], selfRelation: null, selfIsExisting: false })
   }
 
   return (
