@@ -169,20 +169,21 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
       {!hideFilters && (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+      {/* 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת בלי גלילה */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {CARD_DEFS.map(c => {
           const Icon = c.icon
           const isActive = filter === c.key
           return (
             <button key={c.key}
               onClick={() => setFilter(isActive && c.key !== 'all' ? 'all' : c.key)}
-              className={`flex items-center gap-3 rounded-xl border bg-white p-3.5 text-right transition-all ${isActive ? c.active : c.base}`}>
-              <span className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${c.iconCls}`}>
-                <Icon size={18} />
+              className={`flex items-center gap-2 rounded-xl border bg-white p-2.5 text-right transition-all ${isActive ? c.active : c.base}`}>
+              <span className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.iconCls}`}>
+                <Icon size={15} />
               </span>
               <span className="flex flex-col min-w-0">
-                <span className="text-2xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key]}</span>
-                <span className="text-xs text-slate-500 mt-1 truncate">{c.label}</span>
+                <span className="text-xl font-bold text-slate-900 tabular-nums leading-none">{counts[c.key]}</span>
+                <span className="text-[11px] text-slate-500 mt-0.5 truncate">{c.label}</span>
               </span>
             </button>
           )

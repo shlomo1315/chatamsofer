@@ -26,6 +26,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
 
   const load = useCallback(async () => {
     try {
