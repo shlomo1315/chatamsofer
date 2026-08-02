@@ -2793,6 +2793,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
               </p>
             </div>
+            {/* אזהרה חזקה במיוחד — בכל ספק אין להירשם. מודגשת מאוד, ממש לפני ההצהרה. */}
+            <div className="rounded-2xl border-4 border-red-500 bg-red-600 p-5 mb-5 shadow-lg">
+              <p className="text-lg font-black text-white text-center leading-8" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
+                ⚠️ בכל ספק או פקפוק בסדר היחוס —<br />
+                אין להירשם בשום אופן!
+              </p>
+              <p className="mt-3 text-[15px] font-bold text-white text-center leading-7">
+                עד לבירור הספק, ועד שיהיה בידכם סדר היחוס הוודאי מדור לדור,
+                בלי שום ספק או פקפוק!
+              </p>
+            </div>
             <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-all duration-150">
               <input type="checkbox" checked={lineageDeclared}
                 onChange={e => setLineageDeclared(e.target.checked)}

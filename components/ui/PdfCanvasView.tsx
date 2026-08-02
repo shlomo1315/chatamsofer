@@ -57,7 +57,15 @@ export default function PdfCanvasView({
     let alive = true
     const host = hostRef.current
     if (!host) return
-    host.replaceChildren()
+    // ⚠️ יוצרים שכבת-ביניים (mount) משלנו בתוך ה-host ומצרפים אליה את ה-canvases.
+    // חובה: React מנהל את host דרך JSX (<div ref={hostRef} />). אם נצרף canvas
+    // ישירות ל-host, React לא יודע עליו, וכשמגיע עדכון (סגירת המודל / router.refresh
+    // / polling) הוא מנסה לתקן את ה-DOM שלו ונופל על "removeChild ... not a child".
+    // ה-mount הוא צומת שלנו-בלבד ש-React לעולם לא נוגע בו — כל ה-canvases חיים בתוכו,
+    // וב-cleanup אנחנו מסירים אותו בעצמנו. כך אין התנגשות בין React למניפולציה הידנית.
+    const mount = document.createElement('div')
+    if (cover) { mount.style.width = '100%'; mount.style.height = '100%'; mount.style.overflow = 'hidden' }
+    host.appendChild(mount)
     setState({ key: url, pages: 0, error: '', loading: true })
 
     ;(async () => {
@@ -97,7 +105,7 @@ export default function PdfCanvasView({
           if (!ctx) continue
           await page.render({ canvasContext: ctx, viewport }).promise
           if (!alive) return
-          host.appendChild(canvas)
+          mount.appendChild(canvas)
         }
         if (alive) setState({ key: url, pages: doc.numPages, error: '', loading: false })
       } catch (e) {
@@ -110,7 +118,12 @@ export default function PdfCanvasView({
       }
     })()
 
-    return () => { alive = false }
+    // cleanup: מסירים את ה-mount שיצרנו (עם כל ה-canvases שבתוכו) בעצמנו.
+    // ה-host עצמו נשאר ריק מבחינת React — כפי ש-React מצפה.
+    return () => {
+      alive = false
+      try { mount.remove() } catch { /* כבר הוסר */ }
+    }
   }, [url, name, maxPages, cover, direct])
 
   const current = state.key === url ? state : { pages: 0, error: '', loading: true }

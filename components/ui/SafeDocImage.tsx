@@ -41,7 +41,15 @@ export default function SafeDocImage({
     let alive = true
     const host = hostRef.current
     if (!host) return
-    host.replaceChildren()
+    // ⚠️ שכבת-ביניים (mount) משלנו, ולא צירוף ישיר ל-host: React מנהל את host דרך
+    // JSX (גם מרנדר בתוכו את ה-Loader עד שהציור מסתיים). צירוף canvas ישירות ל-host
+    // מתנגש עם React — בעדכון הבא (סגירת מודל / router.refresh / polling) הוא מנסה
+    // להסיר צומת שכבר שונה ונופל על "removeChild ... not a child". ה-mount הוא צומת
+    // שלנו-בלבד ש-React לא נוגע בו, ואותו מסירים ידנית ב-cleanup.
+    const mount = document.createElement('div')
+    mount.style.width = '100%'
+    mount.style.height = '100%'
+    host.appendChild(mount)
     setState({ key: path, done: false, failed: false, fallback: '' })
 
     ;(async () => {
@@ -72,14 +80,17 @@ export default function SafeDocImage({
         if (!ctx) { bitmap.close(); throw new Error('canvas unavailable') }
         ctx.drawImage(bitmap, 0, 0)
         bitmap.close()
-        host.appendChild(canvas)
+        mount.appendChild(canvas)
         if (alive) setState({ key: path, done: true, failed: false, fallback: '' })
       } catch {
         if (alive) setState({ key: path, done: true, failed: true, fallback: '' })
       }
     })()
 
-    return () => { alive = false }
+    return () => {
+      alive = false
+      try { mount.remove() } catch { /* כבר הוסר */ }
+    }
   }, [path, name])
 
   const cur = state.key === path ? state : { done: false, failed: false, fallback: '' }
@@ -97,10 +108,14 @@ export default function SafeDocImage({
     return <img src={cur.fallback} alt={alt} title={name ?? undefined} className={className} />
   }
 
+  // ⚠️ ה-host (שאליו מצורף ה-canvas ידנית) חייב להישאר ריק מבחינת React — אחרת
+  // React ינהל צאצא (Loader) באותו צומת שבו אנחנו מוסיפים canvas, וזה מקור התנגשות
+  // ה-removeChild. לכן ה-Loader מרונדר כ-overlay אחות (sibling) ולא כילד של ה-host.
   return (
-    <div ref={hostRef} className={className} title={name ?? undefined} aria-label={alt} role="img">
+    <div className={`relative ${className}`}>
+      <div ref={hostRef} className="w-full h-full" title={name ?? undefined} aria-label={alt} role="img" />
       {!cur.done && (
-        <div className="w-full h-full flex items-center justify-center bg-slate-50">
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
           <Loader2 size={18} className="animate-spin text-slate-300" />
         </div>
       )}
