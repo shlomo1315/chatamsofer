@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { X, Loader2, Link2, Check, Trash2, ShieldCheck, RotateCcw, GitBranch } from 'lucide-react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
+import { X, Loader2, Link2, Check, Trash2, ShieldCheck, RotateCcw, GitBranch, ChevronDown, ChevronLeft, Undo2 } from 'lucide-react'
 
 interface Invite {
   token: string
@@ -15,15 +15,36 @@ interface Invite {
   node_generation: number | null
 }
 
+interface ActivityItem {
+  id: string
+  action: string
+  nodeId: string
+  createdAt: string
+  previousName: string | null
+  newName: string | null
+  previousStatus: string | null
+  newStatus: string | null
+  undoneAt: string | null
+}
+
 const fmt = (s?: string | null) => s ? new Date(s).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
 
-// מרכז שליטה מרכזי בכל הרשאות שיתוף עץ הדורות — טבלה של כל הקישורים שנשלחו:
-// לאיזה ענף (שם+דור), למי (שם+מייל), מתי, כניסה אחרונה, סטטוס, וביטול לכל אחד.
+const actionLabel = (a: ActivityItem) => {
+  if (a.action === 'lineage_node_family_verified') return { text: 'אישר', cls: 'text-green-700 bg-green-50 border-green-200' }
+  if (a.action === 'lineage_node_family_rejected') return { text: 'דחה', cls: 'text-red-700 bg-red-50 border-red-200' }
+  return { text: 'תיקן שם', cls: 'text-indigo-700 bg-indigo-50 border-indigo-200' }
+}
+
+// מרכז שליטה בכל הרשאות שיתוף עץ הדורות. כל שורה ניתנת להרחבה כדי לראות בדיוק
+// אילו צמתים בן המשפחה אישר/דחה/תיקן ומתי — עם ביטול לכל פעולה בנפרד.
 export default function SharePermissionsPanel({ onClose }: { onClose: () => void }) {
   const [invites, setInvites] = useState<Invite[]>([])
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'revoked'>('all')
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [activity, setActivity] = useState<Record<string, ActivityItem[]>>({})
+  const [actLoading, setActLoading] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +59,30 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
 
   const isActive = (i: Invite) => !i.revoked_at && new Date(i.expires_at) > new Date()
   const statusOf = (i: Invite) => i.revoked_at ? 'revoked' : new Date(i.expires_at) < new Date() ? 'expired' : 'active'
+
+  const toggleExpand = async (token: string) => {
+    if (expanded === token) { setExpanded(null); return }
+    setExpanded(token)
+    if (!activity[token]) {
+      setActLoading(token)
+      try {
+        const res = await fetch(`/api/admin/lineage/share/activity?token=${encodeURIComponent(token)}`)
+        const data = await res.json()
+        if (res.ok) setActivity(a => ({ ...a, [token]: data.activity ?? [] }))
+      } catch { /* ignore */ }
+      finally { setActLoading(null) }
+    }
+  }
+
+  const undo = async (token: string, activityId: string) => {
+    try {
+      const res = await fetch('/api/admin/lineage/share/activity', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activityId }),
+      })
+      if (res.ok) setActivity(a => ({ ...a, [token]: (a[token] ?? []).map(x => x.id === activityId ? { ...x, undoneAt: new Date().toISOString() } : x) }))
+    } catch { /* ignore */ }
+  }
 
   const revoke = async (token: string) => {
     try {
@@ -68,7 +113,6 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
 
-        {/* סינון סטטוס */}
         <div className="px-5 py-2.5 border-b border-slate-100 flex items-center gap-2">
           {([['all', 'הכל'], ['active', 'פעילות'], ['revoked', 'מבוטלות / פגו']] as const).map(([k, label]) => (
             <button key={k} onClick={() => setStatusFilter(k)}
@@ -84,9 +128,10 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
           ) : shown.length === 0 ? (
             <div className="py-16 text-center text-sm text-slate-400">אין הרשאות להצגה.</div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-right">
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
                 <tr>
+                  <th className="text-right px-4 py-2 font-semibold w-8"></th>
                   <th className="text-right px-4 py-2 font-semibold">ענף (דור)</th>
                   <th className="text-right px-4 py-2 font-semibold">נמען</th>
                   <th className="text-right px-4 py-2 font-semibold">נשלח</th>
@@ -98,43 +143,88 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
               <tbody className="divide-y divide-slate-100">
                 {shown.map(i => {
                   const st = statusOf(i)
+                  const isOpen = expanded === i.token
+                  const acts = activity[i.token] ?? []
                   return (
-                    <tr key={i.token} className={st === 'active' ? '' : 'opacity-60'}>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <GitBranch size={13} className="text-violet-400 flex-shrink-0" />
-                          <span className="font-medium text-slate-800">{i.node_name ?? '—'}</span>
-                          {i.node_generation != null && <span className="text-[11px] text-slate-400">דור {i.node_generation}</span>}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="text-slate-800">{i.recipient_name || '—'}</div>
-                        <div className="text-[11px] text-slate-400 ltr-num" dir="ltr">{i.recipient_email}</div>
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-slate-500 ltr-num" dir="ltr">{fmt(i.created_at)}</td>
-                      <td className="px-4 py-2.5 text-xs text-slate-500 ltr-num" dir="ltr">{i.last_used_at ? fmt(i.last_used_at) : '—'}</td>
-                      <td className="px-4 py-2.5">
-                        {st === 'active' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">פעיל</span>
-                          : st === 'revoked' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">בוטל</span>
-                          : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">פג תוקף</span>}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        {isActive(i) ? (
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => copyLink(i.token)} title="העתק קישור"
-                              className={`p-1.5 rounded-lg border transition-colors ${copied === i.token ? 'border-green-300 bg-green-50 text-green-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                              {copied === i.token ? <Check size={14} /> : <Link2 size={14} />}
-                            </button>
-                            <button onClick={() => revoke(i.token)} title="ביטול הרשאה"
-                              className="p-1.5 rounded-lg border border-transparent text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                    <Fragment key={i.token}>
+                      <tr className={`${st === 'active' ? '' : 'opacity-60'} ${isOpen ? 'bg-indigo-50/40' : 'hover:bg-slate-50'} cursor-pointer align-top`} onClick={() => toggleExpand(i.token)}>
+                        <td className="px-4 py-2.5 text-slate-400">{isOpen ? <ChevronDown size={15} /> : <ChevronLeft size={15} />}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex items-center gap-1.5">
+                            <GitBranch size={13} className="text-violet-400 flex-shrink-0" />
+                            <span className="font-medium text-slate-800">{i.node_name ?? '—'}</span>
+                            {i.node_generation != null && <span className="text-[11px] text-slate-400">דור {i.node_generation}</span>}
                           </div>
-                        ) : (
-                          <span className="text-[11px] text-slate-300">—</span>
-                        )}
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="text-slate-800">{i.recipient_name || '—'}</div>
+                          <div className="text-[11px] text-slate-400" dir="ltr" style={{ textAlign: 'right' }}>{i.recipient_email}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmt(i.created_at)}</td>
+                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{i.last_used_at ? fmt(i.last_used_at) : '—'}</td>
+                        <td className="px-4 py-2.5">
+                          {st === 'active' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">פעיל</span>
+                            : st === 'revoked' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">בוטל</span>
+                            : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">פג תוקף</span>}
+                        </td>
+                        <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
+                          {isActive(i) ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => copyLink(i.token)} title="העתק קישור"
+                                className={`p-1.5 rounded-lg border transition-colors ${copied === i.token ? 'border-green-300 bg-green-50 text-green-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                                {copied === i.token ? <Check size={14} /> : <Link2 size={14} />}
+                              </button>
+                              <button onClick={() => revoke(i.token)} title="ביטול הרשאה"
+                                className="p-1.5 rounded-lg border border-transparent text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+
+                      {/* שורת פירוט — מה בן המשפחה עשה (אישר/דחה/תיקן) + ביטול לכל פעולה */}
+                      {isOpen && (
+                        <tr key={`${i.token}-details`} className="bg-slate-50/60">
+                          <td colSpan={7} className="px-6 py-3">
+                            {actLoading === i.token ? (
+                              <div className="py-3 text-center text-slate-400"><Loader2 size={16} className="animate-spin inline" /></div>
+                            ) : acts.length === 0 ? (
+                              <p className="text-xs text-slate-400 py-2 text-right">הנמען עדיין לא ביצע פעולות בענף זה.</p>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                <p className="text-xs font-semibold text-slate-500 mb-1">פעולות שבוצעו ({acts.length}):</p>
+                                {acts.map(a => {
+                                  const lbl = actionLabel(a)
+                                  return (
+                                    <div key={a.id} className={`flex items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 ${a.undoneAt ? 'opacity-50' : ''}`}>
+                                      <div className="flex items-center gap-2 flex-wrap text-xs">
+                                        <span className={`font-bold px-2 py-0.5 rounded-full border ${lbl.cls}`}>{lbl.text}</span>
+                                        {a.action === 'lineage_node_family_renamed' ? (
+                                          <span className="text-slate-600">«{a.previousName || '—'}» → <span className="font-semibold text-slate-800">«{a.newName || '—'}»</span></span>
+                                        ) : (
+                                          <span className="text-slate-600">צומת (סטטוס: {a.previousStatus || '—'} → <span className="font-semibold text-slate-800">{a.newStatus || '—'}</span>)</span>
+                                        )}
+                                        <span className="text-slate-400">· {fmt(a.createdAt)}</span>
+                                        {a.undoneAt && <span className="text-red-500 font-semibold">· בוטל</span>}
+                                      </div>
+                                      {!a.undoneAt && (
+                                        <button onClick={() => undo(i.token, a.id)}
+                                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 rounded-lg px-2 py-1 transition-colors flex-shrink-0">
+                                          <Undo2 size={12} /> בטל שינוי
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -143,7 +233,7 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
         </div>
 
         <div className="border-t border-slate-100 px-5 py-2.5 flex items-center justify-between">
-          <p className="text-[11px] text-slate-400">ביטול הרשאה מפסיק את הגישה מיד. שיתוף ענף חדש נעשה מתוך «אילן צאצאים» בעץ.</p>
+          <p className="text-[11px] text-slate-400">לחצו על שורה לפירוט הפעולות. ביטול שינוי מחזיר את הצומת למצבו הקודם.</p>
           <button onClick={() => { setLoading(true); load() }} className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
             <RotateCcw size={12} /> רענון
           </button>
