@@ -1009,33 +1009,43 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                           {isOwn ? 'פתיחת הכרטסת' : 'משפחות בענף'}
                           {total > 1 && ` (${total})`}
                         </button>
+                        {/* ⚠️ שורה אחת לכל משפחה, לא שני כפתורים לכל אחת: עם 14
+                            משפחות בענף התפריט הפך לקיר של כפתורים שאי אפשר לסרוק
+                            בעין. השם עצמו הוא הכפתור (פתיחה כאן), והאייקון בצד
+                            פותח בכרטיסייה חדשה. */}
                         {openCardFor === pos.node.id && (
-                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, paddingTop: 5, zIndex: 60 }}>
-                            <div style={{ background: '#fff', border: '1.5px solid #BAE6FD', borderRadius: 12, boxShadow: '0 10px 28px rgba(0,0,0,0.18)', padding: 7, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260, overflowY: 'auto', minWidth: 200 }}>
-                              {items.map(b => (
-                                <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                  {(items.length > 1 || !isOwn) && (
-                                    <div style={{ fontSize: 10.5, fontWeight: 800, color: '#0C4A6E', padding: '0 2px' }}>{b.name}</div>
-                                  )}
-                                  <div style={{ display: 'flex', gap: 5 }}>
-                                    <button type="button"
-                                      onClick={() => window.open(`/admin/beneficiaries/${b.id}`, '_blank', 'noopener')}
-                                      style={{ flex: 1, background: '#F0F9FF', color: '#0369A1', border: '1px solid #BAE6FD', borderRadius: 8, padding: '6px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                                      כרטיסייה חדשה
-                                    </button>
+                          <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', paddingTop: 6, zIndex: 60 }}>
+                            <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, boxShadow: '0 12px 32px rgba(15,23,42,0.18)', overflow: 'hidden', width: 250, direction: 'rtl' }}>
+                              <div style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', padding: '7px 11px', fontSize: 11, fontWeight: 800, color: '#334155' }}>
+                                {isOwn ? 'כרטסת המשפחה' : `משפחות בענף · ${total}`}
+                              </div>
+                              <div style={{ maxHeight: 236, overflowY: 'auto' }}>
+                                {items.map(b => (
+                                  <div key={b.id}
+                                    style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #F1F5F9' }}>
                                     <button type="button"
                                       onClick={() => router.push(`/admin/beneficiaries/${b.id}`)}
-                                      style={{ flex: 1, background: '#fff', color: '#475569', border: '1px solid #CBD5E1', borderRadius: 8, padding: '6px 8px', fontSize: 11, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                                      כרטיסייה נוכחית
+                                      title="פתיחה בכרטיסייה הנוכחית"
+                                      style={{ flex: 1, textAlign: 'right', background: 'transparent', border: 'none', padding: '8px 11px', fontSize: 12, fontWeight: 700, color: '#0F172A', cursor: 'pointer', fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = '#F0F9FF' }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                                      {b.name}
+                                    </button>
+                                    <button type="button"
+                                      onClick={() => window.open(`/admin/beneficiaries/${b.id}`, '_blank', 'noopener')}
+                                      title="פתיחה בכרטיסייה חדשה"
+                                      style={{ flexShrink: 0, width: 34, background: 'transparent', border: 'none', borderRight: '1px solid #F1F5F9', color: '#0EA5E9', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                      onMouseEnter={e => { e.currentTarget.style.background = '#F0F9FF' }}
+                                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+                                      <ExternalLink size={13} />
                                     </button>
                                   </div>
-                                </div>
-                              ))}
-                              {total > items.length && (
-                                <div style={{ fontSize: 10.5, color: '#64748B', textAlign: 'center', padding: '3px 0' }}>
-                                  ועוד {total - items.length} משפחות בענף — היכנסו לצומת עמוק יותר
-                                </div>
-                              )}
+                                ))}
+                              </div>
+                              <div style={{ background: '#F8FAFC', borderTop: '1px solid #E2E8F0', padding: '6px 11px', fontSize: 10, color: '#94A3B8', lineHeight: 1.5 }}>
+                                {total > items.length && <div style={{ color: '#64748B', fontWeight: 700, marginBottom: 2 }}>ועוד {total - items.length} בענף — היכנסו לדור עמוק יותר</div>}
+                                לחיצה על השם — פתיחה כאן · ↗ — כרטיסייה חדשה
+                              </div>
                             </div>
                           </div>
                         )}
