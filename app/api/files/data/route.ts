@@ -36,8 +36,10 @@ export async function GET(request: NextRequest) {
     {
       status: 200,
       headers: {
-        // מטמון פרטי קצר — כמו במסלול הקובץ
-        'Cache-Control': 'private, max-age=300',
+        // מטמון פרטי ארוך: הקבצים ממופים לנתיב ייחודי (…/{timestamp}_{name}) ולמעשה
+        // immutable — לכן אפשר לשמור בדפדפן זמן רב כדי שכרטסת שנפתחה כבר לא תיטען
+        // שוב. private בלבד — מסמכים רגישים לא נשמרים ב-CDN/proxy משותף.
+        'Cache-Control': 'private, max-age=604800, immutable',
       },
     }
   )
