@@ -1493,6 +1493,23 @@ export default function LineagePage() {
   // אפקט (אותו דפוס שנעשה בו שימוש בשאר המסכים במערכת).
   useEffect(() => { const t = setTimeout(() => { void loadAll() }, 0); return () => clearTimeout(t) }, [loadAll])
 
+  // ── קישור ישיר לענף: /admin/lineage?focus=<nodeId> ──
+  // ⚠️ נכנסים לכאן מכרטסת הצאצא ("פתיחה במסך הייחוס"), ובעץ של מאות צמתים
+  // בלי זה היה צריך לחפש את הצומת ידנית. נקרא פעם אחת, אחרי שהצמתים נטענו,
+  // וישירות מ-window.location — כדי לא לחייב את העמוד ב-Suspense של useSearchParams.
+  const didFocusParam = useRef(false)
+  useEffect(() => {
+    if (didFocusParam.current || !nodes.length) return
+    didFocusParam.current = true
+    const target = new URLSearchParams(window.location.search).get('focus')
+    if (!target || !nodes.some(n => n.id === target)) return
+    const t = setTimeout(() => {
+      setFocusId(target)
+      setAnchor(a => ({ id: target, n: (a?.n ?? 0) + 1 }))
+    }, 0)
+    return () => clearTimeout(t)
+  }, [nodes])
+
   const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
     const counts: Record<number, number> = {}

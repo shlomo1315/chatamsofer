@@ -101,10 +101,10 @@ const MARITAL_OPTIONS = [
 const OTHER_MARITAL_OPTIONS = MARITAL_OPTIONS.filter(o => o.value !== 'נשואים')
 const MARRIED_STATUSES = ['נשואים']
 
-// ⚠️ הדור המוקדם ביותר שבו ניתן לסמן "זה אני". אין אדם חי שהוא עצמו דור 2/3/4
+// ⚠️ הדור המוקדם ביותר שבו ניתן לסמן "זה אני". אין אדם חי שהוא עצמו דור 2־5
 // לחתם סופר זיע״א — סימון כזה הוא תמיד טעות, והוא היה קוטע את השרשרת באמצע
 // ומשייך את הנרשם לאב-קדמון במקום לעצמו.
-const SELF_MIN_GENERATION = 5
+const SELF_MIN_GENERATION = 6
 
 // פלטת צבעים לדורות — כל דור בגוון שונה (לציר הייחוס)
 const GEN_COLORS = [
@@ -1030,7 +1030,13 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
             <>
               {!lastIsNew && options.length > 0 && (
                 <>
-                  <p className="text-xs font-medium text-slate-500 mb-1.5">בחר/י את דור {chain.length + 2}:</p>
+                  {/* כותרת הבורר: הכיתוב מסביר *מה עושים* (בוחרים מהרשימה שלמטה),
+                      ותג קטן בצד ימין אומר *באיזה דור* מדובר — כך מספר הדור אינו
+                      בולע את ההוראה עצמה. */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">דור {chain.length + 2}</span>
+                    <p className="text-xs font-medium text-slate-500">בחרו את הדור הבא מתוך הרשימה כדלהלן:</p>
+                  </div>
                   {/* ⚠️ ליד כל שם — "זה אני". בלי זה נרשם שכבר קיים בעץ נאלץ
                       ללחוץ "הוסף אותי" ונוצר עותק שני שלו, וזה בדיוק מקור
                       הכפילויות שאנחנו ממזגים ידנית אחר כך.
