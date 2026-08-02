@@ -15,7 +15,12 @@ export async function POST(request: NextRequest) {
   const staff = await requireStaff()
   if (!staff) return NextResponse.json({ ok: false }, { status: 401 })
 
-  let body: { message?: string; stack?: string; digest?: string; url?: string; componentStack?: string }
+  let body: {
+    message?: string; stack?: string; digest?: string; url?: string; componentStack?: string
+    // נתק זמני שהמסך מטפל בו לבד (טעינה מחדש) — מדווח כדי שנדע אם הוא הופך
+    // לתופעה, אך מסומן בנפרד כדי שלא ייראה כמו קריסה אמיתית ביומן.
+    transient?: boolean; attempt?: number; autoRetry?: boolean
+  }
   try { body = await request.json() } catch { return NextResponse.json({ ok: false }, { status: 400 }) }
 
   // חיתוך: דיווח פגום לא אמור למלא את היומן
@@ -24,6 +29,8 @@ export async function POST(request: NextRequest) {
     '[client-error]',
     JSON.stringify({
       user: staff.email ?? staff.userId,
+      kind: body.transient ? (body.autoRetry ? 'transient-autoretry' : 'transient-final') : 'error',
+      attempt: Number(body.attempt) || 1,
       url: cut(body.url, 300),
       digest: cut(body.digest, 80),
       message: cut(body.message, 500),
