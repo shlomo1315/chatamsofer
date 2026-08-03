@@ -20,6 +20,7 @@ interface Summary {
     phone?: string | null
     city?: string | null
     address?: string | null
+    community?: string | null
     eligibilityStatus?: string | null
   }
   children: { total: number; married: number; atHome: number }
@@ -97,6 +98,7 @@ export default function FamilySummary({ loanId }: { loanId: string }) {
           <Row label="בעל" value={b.husbandName ? `${b.husbandName}${b.husbandAge != null ? ` · בן ${b.husbandAge}` : ''}` : null} />
           <Row label="אשה" value={b.wifeName ? `${b.wifeName}${b.wifeAge != null ? ` · בת ${b.wifeAge}` : ''}` : null} />
           <Row label="כתובת" value={[b.address, b.city].filter(Boolean).join(', ')} />
+          <Row label="קהילה" value={b.community?.trim() || null} />
           <Row label="טלפון" value={b.phone ? <span dir="ltr" className="tabular-nums">{b.phone}</span> : null} />
         </div>
 

@@ -337,6 +337,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             <DetailRow label={beneficiary.id_doc_type === 'passport' ? 'דרכון' : 'ת.ז.'} value={beneficiary.id_number} ltr />
             <DetailRow label="תאריך לידה" value={formatDate(beneficiary.birth_date)} />
             <DetailRow label="מצב משפחתי" value={beneficiary.marital_status ?? '—'} />
+            {/* ⚠️ הקהילה היא נתון תפעולי ולא נוי: לפיה נקבעות חלוקות, פילוחים
+                ופנייה לקהילה, והיא נשאלת בטופס הרישום כשדה חובה. עד כה היא
+                נשמרה ולא הוצגה בכרטסת — כלומר היה צריך לפתוח עריכה כדי לדעת. */}
+            <DetailRow label="קהילה" value={(beneficiary as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
             <DetailRow label="מספר ילדים" value={String(beneficiary.children_count)} />
             {beneficiary.nedarim_id && <DetailRow label="מזהה משפחה בנדרים קארד" value={beneficiary.nedarim_id} ltr />}
           </div>

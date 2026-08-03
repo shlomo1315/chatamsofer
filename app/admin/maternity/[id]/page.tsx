@@ -308,6 +308,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   <DetailRow label="שם מלא" value={[ben.family_name, ben.full_name].filter(Boolean).join(' ') || '—'} />
                   <DetailRow label="ת.ז." value={formatIsraeliId(ben.id_number) || '—'} ltr />
                   <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
+                  <DetailRow label="קהילה" value={(ben as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
                   <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
                 </div>
                 <div className="space-y-2">

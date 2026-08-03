@@ -23,6 +23,8 @@ type AwaitingRow = { id: string; name: string; failed: boolean; reason: string }
 type StrayRow = { aidId: string; name: string; cards: number; statusLabel: string; reason: string; loaded?: boolean }
 // לידות מאושרות מול כרטיסים שיצאו — "יש 48 מאושרות, למה המערכת מפחיתה 46?"
 type Coverage = { total: number; withCard: number; missing: { aidId: string; name: string; reason: string }[] }
+// תנועה מאז הספירה — עם שם, כדי ש"נוכו 1" יהיה תשובה ולא שאלה
+type SinceRow = { id: string; delta: number; reason: string; created_at: string | null; aidId: string | null; name: string | null; note: string | null }
 type Recon = {
   balance: number; totalIn: number; totalOut: number
   heldOk: number; strayCards: number; expectedBalance: number
@@ -74,6 +76,10 @@ export default function StockManager() {
   const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [recon, setRecon] = useState<Recon | null>(null)
   const [coverage, setCoverage] = useState<Coverage | null>(null)
+  const [since, setSince] = useState<SinceRow[]>([])
+  // ⚠️ הכרטיסים שיצאו בפועל נספרים מתיקי הלידות (card_load_status) ולא מהיומן —
+  // זו העדות הישירה, וממנה נגזרת ההפחתה בספירה במובן "נקנו בסך הכול".
+  const [issuedCards, setIssuedCards] = useState(0)
   const [showMissing, setShowMissing] = useState(false)
   const [showRecon, setShowRecon] = useState(false)
   const [returning, setReturning] = useState<string | null>(null)
@@ -92,6 +98,8 @@ export default function StockManager() {
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
       setRecon(d.recon && typeof d.recon.totalIn === 'number' ? d.recon as Recon : null)
       setCoverage(d.coverage && typeof d.coverage.total === 'number' ? d.coverage as Coverage : null)
+      setSince(Array.isArray(d.sinceCount) ? d.sinceCount as SinceRow[] : [])
+      setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
@@ -257,6 +265,11 @@ export default function StockManager() {
               <div className="w-full text-[12px] leading-relaxed text-slate-500">
                 <span className="ltr-num font-bold text-slate-700">{coverage.total}</span> לידות מאושרות שביקשו כרטיס ·
                 <span className="ltr-num font-bold text-slate-700"> {coverage.withCard}</span> מחזיקות כרטיס בפועל
+                {/* ⚠️ הכרטיסים שיצאו כוללים גם לידות שהאישור שלהן נסוג — הכרטיס
+                    אצלן. זה המספר שממנו נגזרת ההפחתה בספירת מלאי. */}
+                {issuedCards > coverage.withCard && (
+                  <span className="text-slate-400"> · סך הכרטיסים שיצאו מהמלאי: <span className="ltr-num font-bold text-slate-600">{issuedCards}</span></span>
+                )}
                 {coverage.missing.length > 0 && (
                   <>
                     {' · '}
@@ -386,6 +399,35 @@ export default function StockManager() {
                   </tr>
                 </tbody>
               </table>
+              {/* ⚠️ "נוכו 1" אינו תשובה — הוא שאלה: איזה כרטיס ושל מי. כשהטווח
+                  מתחיל בספירה יש בו תנועות בודדות, ולכן הן מוצגות בשמן. */}
+              {since.length > 0 && (
+                <div className="mt-3 border-t border-slate-100 pt-2">
+                  <p className="mb-1.5 text-[11px] font-bold text-slate-500">
+                    {recon.baselineAt ? 'התנועות מאז הספירה' : 'התנועות האחרונות'}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {since.map(m => (
+                      <div key={m.id}
+                        onClick={m.aidId ? () => router.push(`/admin/maternity/${m.aidId}`) : undefined}
+                        className={`flex items-baseline justify-between gap-2 rounded-lg px-2 py-1 text-[12px] ${m.aidId ? 'cursor-pointer hover:bg-slate-50' : ''}`}>
+                        <span className="min-w-0 text-slate-600">
+                          <span className="font-medium text-slate-800">{REASON_LABEL[m.reason as LedgerRow['reason']] ?? m.reason}</span>
+                          {m.name && <span className="text-slate-500"> · {m.name}</span>}
+                          {!m.name && m.note && <span className="text-slate-400"> · {m.note}</span>}
+                        </span>
+                        <span className="flex shrink-0 items-baseline gap-2">
+                          {m.created_at && <span className="ltr-num text-[11px] text-slate-400">{fmtDate(m.created_at)}</span>}
+                          <span className={`ltr-num font-bold ${m.delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {m.delta > 0 ? `+${m.delta}` : m.delta}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
                 כרטיסים שנוכו בגין לידות ולא הוחזרו: {recon.heldOk + recon.strayCards} — מהם {recon.heldOk} מגובים
                 בלידה מאושרת{recon.strayCards > 0 ? ` ו-${recon.strayCards} תלויים` : ''}.
@@ -461,10 +503,10 @@ export default function StockManager() {
       {modal === 'baseline' && (
         <BaselineModal
           currentBalance={balance ?? 0}
-          // ⚠️ "יצאו מהמגירה" = כרטיסים שנטענו בפועל: אלה שבידי לידות מאושרות
-          // *וגם* אלה שנטענו ליולדות שהאישור שלהן נסוג — הכרטיס אצלן. כרטיס
-          // שנוכה וההטענה שלו נכשלה נשאר במגירה ולכן אינו נספר כאן.
-          issued={(recon?.heldOk ?? 0) + (recon?.strays ?? []).filter(s => s.loaded).reduce((n, s) => n + s.cards, 0)}
+          // ⚠️ "יצאו מהמגירה" = כרטיסים שנטענו בפועל, נספרים מתיקי הלידות ולא
+          // מהיומן: קישור היומן עלול להיעדר (תיק שנמחק ונוצר מחדש), וספירה לפיו
+          // החזירה 49 במקום 51 — כלומר שני כרטיסים עודפים בספירת המלאי.
+          issued={issuedCards}
           onClose={() => setModal(null)}
           onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
         />

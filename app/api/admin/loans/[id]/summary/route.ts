@@ -56,7 +56,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const [benRes, loansRes, docsRes] = await Promise.all([
     db.from('beneficiaries')
-      .select('id, family_name, full_name, spouse_name, id_number, spouse_id_number, birth_date, spouse_birth_date, phone, email, city, address, marital_status, children, children_count, lineage_node_id, lineage_chain, eligibility_status')
+      .select('id, family_name, full_name, spouse_name, id_number, spouse_id_number, birth_date, spouse_birth_date, phone, email, city, address, marital_status, children, children_count, community_affiliation, lineage_node_id, lineage_chain, eligibility_status')
       .eq('id', benId)
       .maybeSingle(),
 
@@ -124,6 +124,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       city: b.city,
       address: b.address,
       maritalStatus: b.marital_status,
+      community: b.community_affiliation,
       eligibilityStatus: b.eligibility_status,
     },
     children: {
