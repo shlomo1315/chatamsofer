@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireNonMailStaff } from '@/lib/apiAuth'
 import { getPendingTasks } from '@/lib/pendingTasks'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   // הגנת הרשאה מפורשת (defense-in-depth מעבר ל-RLS) — מחזיר PII של בקשות ממתינות
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   try {
     const supabase = await createClient()
     // מקור אמת יחיד — אותה פונקציה שהכרטיס בדשבורד סופר ממנה, כדי שלא יהיה פער.

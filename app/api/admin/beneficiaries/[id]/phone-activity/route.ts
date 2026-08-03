@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -14,7 +14,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 // היסטוריית פעילות טלפון (שלוחת ימות) עבור צאצא מסוים.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
   const { id } = await params
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })

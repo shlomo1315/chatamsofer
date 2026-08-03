@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireNonMailStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -14,7 +14,7 @@ function getAdminClient() {
 
 // נתוני גלם לדוחות יולדות (כל השדות הרלוונטיים לסינון/ייצוא). הסינון נעשה בצד לקוח.
 export async function GET() {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
 

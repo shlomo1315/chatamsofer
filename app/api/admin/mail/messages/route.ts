@@ -5,6 +5,12 @@ import { DEPARTMENTS, type DepartmentKey } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
 
+// ⚠️ ניטרול תווים שמורים של מסנן .or() ושל תבנית ilike. בלעדיו פסיק או סוגר
+// בקלט החיפוש מוסיפים תנאי מסנן משלהם (filter injection). סינון המחלקה נאכף
+// כתנאי AND נפרד ואינו ניתן לעקיפה מכאן, ולכן החשיפה מוגבלת — אבל אין סיבה
+// לאפשר את זה בכלל. אותו ניטרול כמו ב-beneficiary-search.
+const safeLike = (q: string) => q.replace(/[,()*%_\\"']/g, ' ').trim()
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -77,7 +83,7 @@ export async function GET(request: NextRequest) {
     }
     if (effectiveKeys && effectiveKeys.length === 1) query = query.eq('department', effectiveKeys[0])
     else if (effectiveKeys && effectiveKeys.length > 1) query = query.in('department', effectiveKeys)
-    if (q) query = query.or(`subject.ilike.%${q}%,to_email.ilike.%${q}%`)
+    if (q) { const s = safeLike(q); query = query.or(`subject.ilike.%${s}%,to_email.ilike.%${s}%`) }
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     // השורה ה-51 (אם קיימת) מציינת שיש עמוד הבא — חותכים אותה ומחזירים hasMore.
@@ -127,7 +133,7 @@ export async function GET(request: NextRequest) {
     if (effectiveEmails.length === 1) query = query.eq('to_email', effectiveEmails[0])
     else if (effectiveEmails.length > 1) query = query.in('to_email', effectiveEmails)
   }
-  if (q) query = query.or(`subject.ilike.%${q}%,from_email.ilike.%${q}%,from_name.ilike.%${q}%`)
+  if (q) { const s = safeLike(q); query = query.or(`subject.ilike.%${s}%,from_email.ilike.%${s}%,from_name.ilike.%${s}%`) }
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

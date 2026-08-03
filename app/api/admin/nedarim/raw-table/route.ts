@@ -12,8 +12,11 @@ export const dynamic = 'force-dynamic'
 // רשימה חלקית, לא מוצא, ומכריח יצירת כפילות בכל אישור לידה.
 // לא מבצע שום כתיבה.
 // ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ מנהל בלבד: הנקודה מחזירה את טבלת המשפחות המלאה מנדרים (שמות, ת"ז,
+// כרטיסים). ההגדרות של נדרים כבר היו מוגנות למנהל, והנתונים עצמם לא — חוסר
+// עקביות שהותיר את המידע הרגיש פתוח לכל תפקיד צוות.
 export async function GET() {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   const creds = await getNedarimCreds()
   if (!creds) return NextResponse.json({ error: 'נדרים קארד אינו מוגדר' }, { status: 400 })
 

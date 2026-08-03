@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto'
+import { signPayload, verifySignature } from '@/lib/signedToken'
 
 // סשן חתום (HMAC) לפורטל בתי ההחלמה. עד כה ערך העוגייה היה '1' קבוע — כלומר
 // ניתן לזיוף ע"י כל אחד שיודע את שם בית ההחלמה (חשיפת PII של יולדות + זיוף רשומות).
@@ -6,21 +6,16 @@ import { createHmac, timingSafeEqual } from 'crypto'
 
 const MAX_AGE_SECONDS = 60 * 60 * 24 // 24 שעות (זהה ל-maxAge הקודם)
 
-function secret(): string {
-  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-}
-
-function sign(payload: string): string {
-  return createHmac('sha256', secret()).update(payload).digest('hex')
-}
-
 export const RECOVERY_PORTAL_MAX_AGE = MAX_AGE_SECONDS
 
 // יוצר אסימון חתום עבור בית החלמה מסוים.
+// ⚠️ מחרוזת ריקה = אין סוד חתימה, ולכן אין אסימון (ראו lib/signedToken).
 export function createRecoveryPortalToken(home: string): string {
   const exp = Date.now() + MAX_AGE_SECONDS * 1000
   const payload = `${home}:${exp}`
-  return Buffer.from(`${payload}:${sign(payload)}`).toString('base64url')
+  const sig = signPayload(payload)
+  if (!sig) return ''
+  return Buffer.from(`${payload}:${sig}`).toString('base64url')
 }
 
 // מאמת שהאסימון חתום כראוי, לא פג, ושייך *בדיוק* לבית ההחלמה המבוקש.
@@ -32,10 +27,7 @@ export function verifyRecoveryPortalToken(token: string | undefined, home: strin
   if (lastSep < 0) return false
   const payload = decoded.slice(0, lastSep)
   const sig = decoded.slice(lastSep + 1)
-  const expected = sign(payload)
-  const a = Buffer.from(sig)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return false
+  if (!verifySignature(payload, sig)) return false
   // payload = `${home}:${exp}` — שמות בתי החלמה אינם מכילים ':' (עברית/מספרים)
   const sep = payload.lastIndexOf(':')
   const tokenHome = payload.slice(0, sep)

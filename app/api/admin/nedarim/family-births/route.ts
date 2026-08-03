@@ -1,13 +1,13 @@
 // לידות המשפחה (לפי ת"ז) — להצגת "סיבת הטעינות" במודאל נדרים קארד.
 // כל לידה = טעינת כרטיס; כאן מחזירים תאריך לידה, שם התינוק וסטטוס.
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export async function GET(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403, headers: NO_STORE })
   const zeout = (request.nextUrl.searchParams.get('zeout') ?? '').replace(/\D/g, '')
   if (!zeout) return NextResponse.json({ births: [] }, { headers: NO_STORE })
 

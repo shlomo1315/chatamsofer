@@ -1,5 +1,5 @@
-import { createHmac, timingSafeEqual } from 'crypto'
 import type { NextRequest, NextResponse } from 'next/server'
+import { signPayload, verifySignature } from '@/lib/signedToken'
 
 // סשן חתום (HMAC) לפורטל הציבורי: נקבע אחרי איתור מוצלח לפי ת"ז,
 // וכל בקשת המשך (הבקשות שלי / עדכון פרטים) חייבת להתאים למוטב שבסשן.
@@ -7,18 +7,14 @@ import type { NextRequest, NextResponse } from 'next/server'
 const COOKIE_NAME = 'pb_session'
 const MAX_AGE_SECONDS = 60 * 60 * 6 // 6 שעות
 
-function secret(): string {
-  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-}
-
-function sign(payload: string): string {
-  return createHmac('sha256', secret()).update(payload).digest('hex')
-}
-
+// ⚠️ החתימה עברה ל-lib/signedToken — נכשל-סגור בהיעדר סוד. מחרוזת ריקה
+// פירושה "לא ניתן להנפיק סשן", והאימות ידחה כל אסימון.
 export function createPortalToken(beneficiaryId: string): string {
   const exp = Date.now() + MAX_AGE_SECONDS * 1000
   const payload = `${beneficiaryId}:${exp}`
-  return Buffer.from(`${payload}:${sign(payload)}`).toString('base64url')
+  const sig = signPayload(payload)
+  if (!sig) return ''
+  return Buffer.from(`${payload}:${sig}`).toString('base64url')
 }
 
 export function verifyPortalToken(token: string | undefined): string | null {
@@ -29,17 +25,16 @@ export function verifyPortalToken(token: string | undefined): string | null {
   if (lastSep < 0) return null
   const payload = decoded.slice(0, lastSep)
   const sig = decoded.slice(lastSep + 1)
-  const expected = sign(payload)
-  const a = Buffer.from(sig)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null
+  if (!verifySignature(payload, sig)) return null
   const [beneficiaryId, expStr] = [payload.slice(0, payload.lastIndexOf(':')), payload.slice(payload.lastIndexOf(':') + 1)]
   if (!beneficiaryId || Number(expStr) < Date.now()) return null
   return beneficiaryId
 }
 
 export function setPortalSession(response: NextResponse, beneficiaryId: string) {
-  response.cookies.set(COOKIE_NAME, createPortalToken(beneficiaryId), {
+  const token = createPortalToken(beneficiaryId)
+  if (!token) return   // אין סוד חתימה — לא מנפיקים עוגייה חסרת משמעות
+  response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',

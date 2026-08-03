@@ -7,8 +7,11 @@ export const dynamic = 'force-dynamic'
 // אבחון קריאה-בלבד: מציג את קבוצות "הגבלת חנויות" בנדרים (שם + מזהה מדויקים),
 // ואם נמסר ?zeout= — גם את מבנה הטעינות (Tlushim) של אותה משפחה, כדי לזהות איך
 // נדרים מקשרת טעינה לקבוצת הגבלה. לא מבצע שום כתיבה/פעולה חיה.
+// ⚠️ מנהל בלבד: הנקודה מחזירה את טבלת המשפחות המלאה מנדרים (שמות, ת"ז,
+// כרטיסים). ההגדרות של נדרים כבר היו מוגנות למנהל, והנתונים עצמם לא — חוסר
+// עקביות שהותיר את המידע הרגיש פתוח לכל תפקיד צוות.
 export async function GET(request: NextRequest) {
-  if (!(await requireStaff())) {
+  if (!(await requireStaff(['admin']))) {
     return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   }
   const creds = await getNedarimCreds()

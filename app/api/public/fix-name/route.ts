@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPublicToken } from '@/lib/publicToken'
+import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { babyNamePatch, type AidNameFields } from '@/lib/babyNames'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,12 @@ function getAdmin() {
 // קליטת שם התינוק מהעמוד הציבורי (הקישור שנשלח ליולדת). מאמת טוקן HMAC (kind='n'),
 // שומר את השם, ומכבה את דגל "עדיין אין שם". פתוח לציבור — מוגן רק ע"י הטוקן החתום.
 export async function POST(request: NextRequest) {
+  // ⚠️ הגישה חסומה באסימון HMAC ולכן ניחוש אינו מעשי, אבל הגבלת קצב היא חלק
+  // מההגנה בכל נקודת קצה ציבורית — כאן היא הייתה חסרה בעוד כל השאר מוגבלות.
+  if (!rateLimit(`fix-name:${clientIp(request)}`, 20, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'יותר מדי ניסיונות. נסו שוב בעוד מספר דקות.' }, { status: 429 })
+  }
+
   let body: { token?: string; name?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 

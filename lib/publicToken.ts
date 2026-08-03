@@ -1,4 +1,5 @@
-import { createHmac, timingSafeEqual, randomBytes } from 'crypto'
+import { randomBytes } from 'crypto'
+import { signPayload, verifySignature } from '@/lib/signedToken'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -16,18 +17,13 @@ const TTL_BY_KIND: Partial<Record<PublicTokenKind, number>> = {
   n: 7 * 24 * 60 * 60 * 1000,
 }
 
-function secret(): string {
-  return process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-}
-
-function sign(payload: string): string {
-  return createHmac('sha256', secret()).update(payload).digest('hex')
-}
-
+// ⚠️ מחרוזת ריקה = אין סוד חתימה, ולכן אין קישור (ראו lib/signedToken).
 export function signPublicToken(kind: PublicTokenKind, aidId: string): string {
   const exp = Date.now() + (TTL_BY_KIND[kind] ?? TTL_MS)
   const payload = `${kind}:${aidId}:${exp}`
-  return Buffer.from(`${payload}:${sign(payload)}`).toString('base64url')
+  const sig = signPayload(payload)
+  if (!sig) return ''
+  return Buffer.from(`${payload}:${sig}`).toString('base64url')
 }
 
 /** מאמת טוקן ומחזיר את מזהה הלידה, או null אם אינו תקין/פג. */
@@ -43,9 +39,7 @@ export function verifyPublicToken(token: string | undefined | null, kind: Public
   const payload = decoded.slice(0, lastSep)
   const sig = decoded.slice(lastSep + 1)
 
-  const a = Buffer.from(sig)
-  const b = Buffer.from(sign(payload))
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null
+  if (!verifySignature(payload, sig)) return null
 
   const parts = payload.split(':')
   if (parts.length !== 3) return null
