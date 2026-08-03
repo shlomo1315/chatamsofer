@@ -145,7 +145,7 @@ export default function CityStreetPicker({
               else onCityChange(v)
             }}
             onFocus={() => setShowCity(true)}
-            placeholder="חפש עיר..."
+            placeholder="חפשו עיר..."
             autoComplete="off"
             required={cityRequired}
             className={`${BASE} ${cityError ? ERR : ''}`}
@@ -193,7 +193,7 @@ export default function CityStreetPicker({
               if (city) setShowStreet(true)
             }}
             onFocus={() => { if (city) setShowStreet(true) }}
-            placeholder={city ? 'שם הרחוב' : 'בחר עיר תחילה'}
+            placeholder={city ? 'שם הרחוב' : 'בחרו עיר תחילה'}
             disabled={!city}
             autoComplete="off"
             required={addressRequired}
