@@ -63,6 +63,22 @@ export async function register() {
         console.log(`[unload-expired] daily run · processed=${res.processed}` + (res.error ? ` error=${res.error}` : ''))
       } catch (err) { console.error('[unload-expired] daily run failed', err) }
     }
+
+    // ── רשת ביטחון: טעינות של לידות שאינן מאושרות — כל שעה ──
+    // ⚠️ הכלל הוא שביטול אישור מבטל את הטעינה, אבל סטטוס לידה משתנה ביותר
+    // ממסלול אחד. מסלול שפוספס פירושו משפחה שאינה מאושרת ומחזיקה 600 ₪, וכרטיס
+    // שחסר במלאי בלי הסבר. הסריקה השעתית מבטיחה שהפער לא ישרוד יותר משעה.
+    const checkUnapproved = async () => {
+      try {
+        const { runUnloadUnapproved } = await import('@/lib/unloadExpired')
+        const res = await runUnloadUnapproved()
+        if (res.processed > 0) {
+          console.log(`[unload-unapproved] processed=${res.processed} mailed=${res.mailed}`)
+        }
+      } catch (err) { console.error('[unload-unapproved] run failed', err) }
+    }
+    setTimeout(() => { void checkUnapproved(); setInterval(() => { void checkUnapproved() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[unload-unapproved] hourly safety-net scheduler started')
     // בדיקה כל שעה — מפעילה את הפריקה כשמגיעה שעה 00:xx בישראל (פעם ביום)
     setTimeout(() => { void checkUnload(); setInterval(() => { void checkUnload() }, HOURLY_MS) }, INITIAL_DELAY_MS)
     console.log('[unload-expired] daily midnight (Israel) scheduler started')

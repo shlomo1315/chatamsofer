@@ -55,29 +55,13 @@ export async function POST(request: NextRequest) {
   if (!creds) return NextResponse.json({ error: 'חיבור נדרים פלוס לא מוגדר' }, { status: 500 })
 
   try {
-    const r = await unloadAidCard(admin, creds, aid as unknown as UnloadableAid, body.reason?.trim() || 'ביטול טעינה בעקבות שינוי סטטוס הלידה')
+    // ⚠️ returnToStock: true — הניכוי מהמלאי נעשה ברגע הטעינה, וביטול הטעינה
+    // משחרר את הכרטיס. עד כה הוא נבלע והמלאי הראה פחות ממה שהיה בפועל. להבדיל
+    // מהפריקה בתום שישה שבועות, שם הכרטיס נוצל וירד מהמלאי בצדק.
+    const r = await unloadAidCard(admin, creds, aid as unknown as UnloadableAid,
+      body.reason?.trim() || 'ביטול טעינה בעקבות שינוי סטטוס הלידה', { returnToStock: true })
     if (!r.ok) return NextResponse.json({ ok: false, error: r.message || 'פריקת הטעינה נכשלה' }, { status: 502 })
-
-    // ── החזרת הכרטיס למלאי ──
-    // ⚠️ הניכוי מהמלאי נעשה ברגע הטעינה. ביטול הטעינה בעקבות שינוי סטטוס
-    // מחזיר את הכרטיס לזמינות — ולכן הוא חייב לחזור גם למלאי. עד כה הוא נבלע:
-    // המלאי הראה פחות כרטיסים ממה שהיו בפועל, וההפרש לא היה ניתן להסבר.
-    // ⚠️ להבדיל מהפריקה האוטומטית בתום שישה שבועות — שם הכרטיס נוצל בפועל
-    // וירד מהמלאי בצדק, ולכן runUnloadExpired אינו מחזיר דבר.
-    let stockReturned = false
-    try {
-      const { addStockMovement } = await import('@/lib/cardStock')
-      await addStockMovement(admin, {
-        delta: 1, reason: 'adjust', aidId: aid.id,
-        note: 'החזרה אוטומטית — הטעינה בוטלה בעקבות שינוי סטטוס הלידה',
-        by: staff.userId,
-      })
-      stockReturned = true
-      const { processAwaitingStock } = await import('@/lib/maternityCards')
-      await processAwaitingStock(admin)
-    } catch (e) {
-      console.error('[unload-card] החזרת הכרטיס למלאי נכשלה:', e instanceof Error ? e.message : e)
-    }
+    const stockReturned = true
 
     // ── מייל תיקון ליולדת ──
     // ⚠️ המשפחה קיבלה מייל אישור וציפתה לכרטיס טעון. בלי הודעת תיקון מפורשת
