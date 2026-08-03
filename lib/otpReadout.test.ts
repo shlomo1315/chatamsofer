@@ -11,7 +11,7 @@ import { spokenCode } from './yemotCall'
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
-const PAUSE_TOKENS_BETWEEN_DIGITS = 2
+const PAUSE_TOKENS_BETWEEN_DIGITS = 1
 const DIGIT_TAIL = ' , , ,'
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
@@ -23,7 +23,7 @@ function slowTokens(text: string): string {
     if (DIGIT_SET.has(w)) {
       flush()
       // בין שתי ספרות — טוקני-פסיק נפרדים (הפסקה מובטחת מימות בין טוקנים)
-      if (lastWasDigit) for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
+      for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
       tokens.push(`t-${w}${DIGIT_TAIL}`)
       lastWasDigit = true
     } else { buf.push(w); lastWasDigit = false }
@@ -67,13 +67,11 @@ describe('הקראת קוד OTP בימות', () => {
     // שמפספס את הראשונה נשאר בלי קוד תקין.
     const code = '907162'
     const out = slowTokens(spokenCode(code))
-    const words = code.split('').map(d =>
-      ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
-    // הרצף כולל טוקני-פסיק בין הספרות: t-תשע.t-,.t-,.t-,.t-אפס...
-    // אותם ערכים כמו בקוד (PAUSE_TOKENS_BETWEEN_DIGITS + DIGIT_TAIL)
-    const pauses = Array(2).fill('t-,').join('.')
-    const seq = words.map(w => `t-${w}${DIGIT_TAIL}`).join('.' + pauses + '.')
-    expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
+    for (const d of code.split('')) {
+      const w = ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)]
+      // כל ספרה מופיעה כטוקן משלה, פעמיים (שתי ההקראות)
+      expect(out.split(`t-${w}${DIGIT_TAIL}`).length - 1).toBeGreaterThanOrEqual(2)
+    }
   })
 
   it('יש מילות חיץ לפני הספרה הראשונה', () => {
@@ -103,27 +101,53 @@ describe('הקראת קוד OTP בימות', () => {
 describe('הקראת קוד בשיחה יוצאת', () => {
   // עותק מדויק של ttsSafe ב-lib/yemotCall.ts
   const ttsSafe = (t: string) => String(t ?? '')
-    .replace(/[.\-"'&|=]/g, ' ')
+    .replace(/[.,\-"'&|=]/g, ' ')
     .replace(/[ \t]+/g, ' ')
-    .replace(/\s+,/g, ',')
     .trim()
 
-  it('יש פסיקי השהיה בין ספרה לספרה', () => {
+  it('אין פסיק בטקסט — פסיק קוטע את ההודעה ומנתק את השיחה', () => {
+    // ⚠️ זו הייתה תקלה חיה: ימות מפצלת את הטקסט האישי בפסיקים למשתני התבנית,
+    // ותבנית עם משתנה אחד מקריאה רק את מה שלפני הפסיק הראשון. השיחה הקריאה
+    // "קוד הכניסה שלך הוא" והתנתקה. הבדיקה הזו קיימת כדי שזה לא יחזור.
     const out = spokenCode('907162')
-    // בין כל שתי ספרות עוקבות — יותר מפסיק אחד, אחרת אין הפרדה נשמעת
-    expect(out).toMatch(/תשע,\s*,\s*,\s*אפס/)
-    expect((out.match(/,/g) ?? []).length).toBeGreaterThan(10)
+    expect(out).not.toContain(',')
+    expect(ttsSafe(out)).not.toContain(',')
   })
 
-  it('הפסיקים שורדים את הניקוי לפני השליחה לימות', () => {
-    // ⚠️ זה היה הבאג: ttsSafe מחק את כל הפסיקים, ולכן ההקראה יצאה רצופה.
-    const cleaned = ttsSafe(spokenCode('907162'))
-    expect(cleaned).toContain(',')
-    expect(cleaned).toMatch(/תשע,+\s*אפס/)
-  })
-
-  it('נקודות ומקפים עדיין מוסרים', () => {
-    // נקודה גרמה לימות להשהות ~15ש' לפני ההקראה
+  it('אין נקודה — ימות משהה ~15 שניות לפניה', () => {
+    expect(spokenCode('907162')).not.toContain('.')
     expect(ttsSafe('קוד. עם-מקף')).not.toMatch(/[.\-]/)
+  })
+
+  it('ההפרדה בין הספרות נעשית במילים — מילת מקום לפני כל ספרה', () => {
+    // זה מנגנון ההאטה היחיד שאינו תלוי בפיסוק: המילים יוצרות מרווח נשמע.
+    const out = spokenCode('907162')
+    expect(out).toMatch(/ספרה ראשונה תשע/)
+    expect(out).toMatch(/ספרה שנייה אפס/)
+    expect(out).toMatch(/ספרה שלישית שבע/)
+    expect(out).toMatch(/ספרה רביעית אחת/)
+    expect(out).toMatch(/ספרה חמישית שש/)
+    expect(out).toMatch(/ספרה שישית שתיים/)
+  })
+
+  it('שתי ספרות אינן נצמדות זו לזו בלי מילה ביניהן', () => {
+    const out = spokenCode('112233')
+    // "אחת אחת" רצוף פירושו שאין הפרדה — המאזין לא יכול לדעת כמה ספרות שמע
+    expect(out).not.toMatch(/(אחת|שתיים|שלוש) \1/)
+  })
+
+  it('כל ספרות הקוד מוקראות, פעמיים', () => {
+    const out = spokenCode('907162')
+    for (const w of ['תשע', 'אפס', 'שבע', 'אחת', 'שש', 'שתיים']) {
+      expect(out.split(w).length - 1).toBeGreaterThanOrEqual(2)
+    }
+    expect(out).toContain('ואני חוזר שנית')
+  })
+
+  it('יש מילות חיץ לפני הספרה הראשונה', () => {
+    // ⚠️ תחילת ההקראה נבלעת בזמן שהקו מתייצב אחרי המענה.
+    const out = spokenCode('907162')
+    expect(out.indexOf('תשע')).toBeGreaterThan(10)
+    expect(out.startsWith('שלום')).toBe(true)
   })
 })
