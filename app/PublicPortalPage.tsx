@@ -2983,7 +2983,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 הרישום מיועד אך ורק לנכדי רבינו החתם סופר!
               </p>
               <p className="text-sm text-amber-900 leading-relaxed mb-3">
-                אך ורק למי שיש בידו יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
+                אך ורק למי שיש בידיהם יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
                 ולא על חצאי עדויות.
               </p>
               <p className="text-[15px] font-semibold text-red-800 leading-8 bg-white/80 border-r-4 border-red-400 rounded-lg px-4 py-3" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
@@ -3005,7 +3005,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <input type="checkbox" checked={lineageDeclared}
                 onChange={e => setLineageDeclared(e.target.checked)}
                 className="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0" />
-              <span className="text-sm font-semibold text-slate-800">הרינו מצהיר כי אני עומד בקריטריון הנ&quot;ל</span>
+              <span className="text-sm font-semibold text-slate-800">הרינו מצהירים כי אנו עומדים בקריטריון הנ&quot;ל</span>
             </label>
             <button type="button" disabled={!lineageDeclared} onClick={() => setDeclModalOpen(false)}
               className="w-full bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 transition-all duration-150">
@@ -3898,14 +3898,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <GitBranch size={18} className="text-indigo-600" />
                   <h3 className="font-semibold text-slate-900"><EditableText k="reg.lineage.title" /> <span className="text-red-500">*</span></h3>
                 </div>
-                <p className="text-xs text-slate-500 mb-4">בנה את סדר הייחוס דור אחר דור עד רבינו החתם סופר זיע&quot;א, וסמן בכל דור בן/חתן.</p>
+                <p className="text-xs text-slate-500 mb-4">בנו את סדר הייחוס דור אחר דור עד רבינו החתם סופר זיע&quot;א, וסמנו בכל דור בן/חתן.</p>
 
                 {childParentLineage && childParentLineage.lineage_chain ? (
                   /* שיוך אוטומטי — הנרשם הוא ילד רשום, הייחוס נגזר מההורה */
                   <div className="rounded-2xl border-2 border-green-200 bg-green-50/60 p-4">
-                    <p className="text-sm font-bold text-green-800 mb-1">השיוך שלך נקבע אוטומטית</p>
+                    <p className="text-sm font-bold text-green-800 mb-1">השיוך שלכם נקבע אוטומטית</p>
                     <p className="text-xs text-green-700 mb-4 leading-relaxed">
-                      אתה רשום במערכת כבן של <strong>{childParentLineage.parentName}</strong>. סדר הייחוס שלך נגזר אוטומטית — אין צורך למלא ידנית.
+                      אתם רשומים במערכת כבן של <strong>{childParentLineage.parentName}</strong>. סדר הייחוס שלכם נגזר אוטומטית — אין צורך למלא ידנית.
                     </p>
                     {/* ציר הדורות — כל דור בשורה וצבע נפרדים, מחוברים בקו */}
                     {(() => {
@@ -3947,7 +3947,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <p className="text-xs text-amber-700 mb-4 leading-relaxed">הרישום מיועד אך ורק לנכדי רבינו החתם סופר בעלי יחוס ברור ומוסמך דור אחר דור.</p>
                     <button type="button" onClick={() => setDeclModalOpen(true)}
                       className="inline-flex items-center gap-2 bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-[0_6px_16px_-6px_rgba(217,119,6,0.5)] hover:shadow-[0_10px_22px_-8px_rgba(217,119,6,0.6)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-white text-sm font-semibold rounded-xl px-5 py-2.5 transition-all duration-150">
-                      הקש כאן למעבר לקריאת ההצהרה ובחירת סדר הדורות
+                      הקישו כאן למעבר לקריאת ההצהרה ובחירת סדר הדורות
                     </button>
                   </div>
                 ) : (
@@ -4632,7 +4632,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-3 transition-all duration-150 text-sm"
                   >
                     {statusSending ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
-                    לקבלת סטטוס הבקשה שלך למייל המעודכן במערכת על שמך — הקש כאן
+                    לקבלת סטטוס הבקשה שלכם למייל המעודכן במערכת על שמכם — הקישו כאן
                   </button>
                   {statusErr && <p className="text-xs text-red-600 mt-2">{statusErr}</p>}
                 </>
