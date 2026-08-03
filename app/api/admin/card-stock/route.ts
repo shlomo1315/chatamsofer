@@ -171,20 +171,40 @@ export async function GET() {
     })
     .slice(0, 100)
 
-  // ⚠️ הכרטיסים שיצאו מהמגירה נספרים מ-maternity_aids ולא מהיומן: העמודה
-  // card_load_status היא העדות הישירה לכך שכרטיס נטען בפועל, בזמן שקישור היומן
-  // עלול להיעדר (תיק שנמחק ונוצר מחדש, ניכוי מלפני שהיומן קישר תיקים). ספירה
-  // לפי היומן החזירה 49 במקום 51, ובספירת מלאי במובן "נקנו בסך הכול" זה מתרגם
-  // מיד לכרטיסים עודפים שהמערכת חושבת שיש לה.
-  const { count: issuedCards } = await admin
+  // ── כרטיסים טעונים בידי לידות שאינן מאושרות ──────────────────────────────
+  // ⚠️ נשלף מ-maternity_aids ולא מהיומן, ובכוונה: אחרי ספירת מלאי היומן מתחיל
+  // מנקודת הספירה, וכרטיס שנתקע *לפניה* היה נעלם מהמסך בזמן שהכסף עדיין בידי
+  // משפחה שאינה מאושרת. זו תקלה שדורשת פעולה (ביטול הטעינה) ולא נתון להכניס
+  // לחשבון — ולכן היא מדווחת בנפרד, תמיד, ללא תלות בטווח ההתאמה.
+  const { data: unapprovedLoads } = await admin
     .from('maternity_aids')
-    .select('id', { count: 'exact', head: true })
-    .or('card_load_status.in.(loaded,unloaded),card_tlush_id.not.is.null')
+    .select('id, status, card_load_amount, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
+    .eq('card_load_status', 'loaded')
+    .not('card_tlush_id', 'is', null)
+    .neq('status', 'active')
+
+  const STATUS_HE: Record<string, string> = {
+    pending: 'ממתין לאישור', cancelled: 'לא מאושר', deep_review: 'בדיקה מעמיקה',
+  }
+  const loadedNotApproved = (unapprovedLoads ?? []).map(a => {
+    const benRaw = (a as Record<string, unknown>).beneficiary
+    const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
+    return {
+      aidId: a.id as string,
+      name: [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || 'לא ידוע',
+      statusLabel: STATUS_HE[String(a.status ?? '')] ?? '—',
+      amount: Number((a as { card_load_amount?: number | null }).card_load_amount ?? 0) || null,
+    }
+  })
 
   return NextResponse.json(
     {
       balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails,
-      recon, coverage, sinceCount, issuedCards: issuedCards ?? 0,
+      recon, coverage, sinceCount, loadedNotApproved,
+      // ⚠️ "כרטיסים שנמסרו" = לידות מאושרות שמחזיקות כרטיס. לא "כל מה שאי פעם
+      // נטען": כרטיס טעון בידי לידה שאינה מאושרת הוא תקלה לתיקון, וספירתו
+      // כ"נמסר" הייתה מקבעת אותה במלאי במקום להציג אותה לטיפול.
+      issuedCards: coverage.withCard,
     },
     { headers: NO_STORE },
   )

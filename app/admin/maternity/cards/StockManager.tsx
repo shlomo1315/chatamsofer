@@ -25,6 +25,8 @@ type StrayRow = { aidId: string; name: string; cards: number; statusLabel: strin
 type Coverage = { total: number; withCard: number; missing: { aidId: string; name: string; reason: string }[] }
 // תנועה מאז הספירה — עם שם, כדי ש"נוכו 1" יהיה תשובה ולא שאלה
 type SinceRow = { id: string; delta: number; reason: string; created_at: string | null; aidId: string | null; name: string | null; note: string | null }
+// כרטיס טעון בידי לידה שאינה מאושרת — תקלה לתיקון, לא נתון לחישוב
+type UnapprovedLoad = { aidId: string; name: string; statusLabel: string; amount: number | null }
 type Recon = {
   balance: number; totalIn: number; totalOut: number
   heldOk: number; strayCards: number; expectedBalance: number
@@ -80,6 +82,8 @@ export default function StockManager() {
   // ⚠️ הכרטיסים שיצאו בפועל נספרים מתיקי הלידות (card_load_status) ולא מהיומן —
   // זו העדות הישירה, וממנה נגזרת ההפחתה בספירה במובן "נקנו בסך הכול".
   const [issuedCards, setIssuedCards] = useState(0)
+  const [unapproved, setUnapproved] = useState<UnapprovedLoad[]>([])
+  const [fixingAll, setFixingAll] = useState(false)
   const [showMissing, setShowMissing] = useState(false)
   const [showRecon, setShowRecon] = useState(false)
   const [returning, setReturning] = useState<string | null>(null)
@@ -100,6 +104,7 @@ export default function StockManager() {
       setCoverage(d.coverage && typeof d.coverage.total === 'number' ? d.coverage as Coverage : null)
       setSince(Array.isArray(d.sinceCount) ? d.sinceCount as SinceRow[] : [])
       setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
+      setUnapproved(Array.isArray(d.loadedNotApproved) ? d.loadedNotApproved as UnapprovedLoad[] : [])
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
@@ -122,6 +127,54 @@ export default function StockManager() {
       }
     } catch { /* ignore */ }
     setReturning(null)
+    await load()
+  }, [load])
+
+  // ביטול טעינה של לידה שאינה מאושרת — פורק את הכסף בנדרים, מנתק את הכרטיס
+  // המגנטי, מחזיר את הכרטיס למלאי ושולח מייל תיקון למשפחה.
+  // ⚠️ זו הפעולה הנכונה לכרטיס שעדיין טעון: החזרה למלאי לבדה הייתה משאירה את
+  // המשפחה עם 600 ₪ שאינם מאושרים, ואת המערכת עם כרטיס שאינו קיים פיזית.
+  const cancelLoad = useCallback(async (row: StrayRow) => {
+    setReturning(row.aidId)
+    try {
+      const r = await fetch('/api/nedarim/unload-card', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aidId: row.aidId,
+          rejected: row.statusLabel === 'לא מאושר',
+          reason: `ביטול טעינה — ${row.reason}`,
+        }),
+      })
+      const d = await r.json()
+      if (r.ok && d.ok) {
+        setFlash(`הטעינה בוטלה · ${row.name}${d.stockReturned ? ' · הכרטיס חזר למלאי' : ''}${d.mailed ? ' · נשלח מייל תיקון' : ''}`)
+      } else {
+        setFlash(d?.error || 'ביטול הטעינה נכשל')
+      }
+      setTimeout(() => setFlash(''), 6000)
+    } catch { setFlash('שגיאת רשת') }
+    setReturning(null)
+    await load()
+  }, [load])
+
+  // ביטול כל הטעינות שאינן מאושרות — בלחיצה אחת.
+  // ⚠️ הפער הזה נצבר משינויי סטטוס שנעשו לפני שהכלל נאכף, ולכן לא נכון לדרוש
+  // מהמנהל לרדוף אחריהן אחת-אחת: זו הפעולה שמיישרת את המלאי בבת אחת.
+  const fixAllUnapproved = useCallback(async () => {
+    setFixingAll(true)
+    try {
+      const r = await fetch('/api/admin/maternity/unload-unapproved', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setFlash(`${d.processed} טעינות בוטלו · ${d.processed} כרטיסים חזרו למלאי${d.mailed ? ` · ${d.mailed} מיילי תיקון נשלחו` : ''}`)
+      } else {
+        setFlash(d?.error || 'הפעולה נכשלה')
+      }
+      setTimeout(() => setFlash(''), 7000)
+    } catch { setFlash('שגיאת רשת') }
+    setFixingAll(false)
     await load()
   }, [load])
 
@@ -231,58 +284,72 @@ export default function StockManager() {
       {!loading && recon && (
         <div className="rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-              {recon.baselineAt ? (
-                <span className="text-slate-500">
-                  מלאי פתיחה <strong className="ltr-num text-slate-800">{recon.opening}</strong>
-                  <span className="text-slate-400"> (ספירה מ־<span className="ltr-num">{fmtDate(recon.baselineAt)}</span>)</span>
-                </span>
-              ) : (
-                <span className="text-slate-500">
-                  הוכנסו למלאי <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
-                </span>
-              )}
-              {recon.baselineAt && recon.totalIn > 0 && (
-                <>
-                  <span className="text-slate-300">·</span>
-                  <span className="text-slate-500">
-                    נוספו <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
-                  </span>
-                </>
-              )}
-              <span className="text-slate-300">·</span>
-              <span className="text-slate-500">
-                נוכו <strong className="ltr-num text-slate-800">{recon.totalOut}</strong>
-              </span>
-              <span className="text-slate-300">·</span>
-              <span className="text-slate-500">
-                במלאי <strong className="ltr-num text-slate-800">{recon.balance}</strong>
-              </span>
+            {/* ── המשוואה, בשפה של המנהל ──
+                ⚠️ מסך שמציג "נוכו 436" למנהל שיודע שחילק 49 כרטיסים אינו מדווח
+                אלא מבלבל. הכלל היחיד שמוצג כאן הוא זה שהוא עובד לפיו:
+                נקנו − נמסרו ללידות מאושרות = במלאי. כל השאר (יומן, תנועות,
+                תקופת בדיקות) יושב ב"פילוח מלא" ואינו על הפנים של המסך. */}
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+              <span className="text-slate-500">סך הכרטיסים שנקנו</span>
+              <strong className="ltr-num text-base text-slate-900">{recon.balance + issuedCards}</strong>
+              <span className="text-slate-400">−</span>
+              <span className="text-slate-500">נמסרו ללידות מאושרות</span>
+              <strong className="ltr-num text-base text-slate-900">{issuedCards}</strong>
+              <span className="text-slate-400">=</span>
+              <span className="text-slate-500">במלאי</span>
+              <strong className="ltr-num text-base text-emerald-700">{recon.balance}</strong>
             </div>
-            {/* ⚠️ הפער שגורם לכל הבלבול: "48 מאושרות" אינו "48 כרטיסים יצאו".
-                מוצג בשם ובסיבה, כדי שלא יהיה צריך לנחש איפה נעלם כרטיס. */}
-            {coverage && coverage.total > 0 && (
-              <div className="w-full text-[12px] leading-relaxed text-slate-500">
-                <span className="ltr-num font-bold text-slate-700">{coverage.total}</span> לידות מאושרות שביקשו כרטיס ·
-                <span className="ltr-num font-bold text-slate-700"> {coverage.withCard}</span> מחזיקות כרטיס בפועל
-                {/* ⚠️ הכרטיסים שיצאו כוללים גם לידות שהאישור שלהן נסוג — הכרטיס
-                    אצלן. זה המספר שממנו נגזרת ההפחתה בספירת מלאי. */}
-                {issuedCards > coverage.withCard && (
-                  <span className="text-slate-400"> · סך הכרטיסים שיצאו מהמלאי: <span className="ltr-num font-bold text-slate-600">{issuedCards}</span></span>
-                )}
-                {coverage.missing.length > 0 && (
-                  <>
-                    {' · '}
-                    <button type="button" onClick={() => setShowMissing(s => !s)}
-                      className="font-bold text-amber-700 underline decoration-dotted underline-offset-2 hover:text-amber-900">
-                      {coverage.missing.length} ללא כרטיס — {showMissing ? 'הסתר' : 'מי?'}
+
+            {/* ⚠️ תקלה, לא נתון: כרטיס טעון בידי לידה שאינה מאושרת פירושו כסף
+                שאינו מאושר בידי משפחה *וגם* כרטיס שחסר במלאי. הוא אינו נספר
+                כ"נמסר" — הוא מוצג לתיקון, עם פעולה אחת שמסדרת הכול. */}
+            {unapproved.length > 0 && (
+              <div className="w-full rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1.5 text-[13px] font-bold text-rose-800">
+                      <AlertTriangle size={14} className="shrink-0" />
+                      {unapproved.length} כרטיסים טעונים בידי לידות שאינן מאושרות
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-rose-700">
+                      הכסף עדיין בכרטיס, והכרטיס חסר במלאי. ביטול הטעינה פורק את הכסף בנדרים,
+                      מחזיר את הכרטיס למלאי ושולח מייל תיקון למשפחה.
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <button type="button" onClick={() => void fixAllUnapproved()} disabled={fixingAll}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-60">
+                      {fixingAll ? <Loader2 size={13} className="animate-spin" /> : <AlertTriangle size={13} />}
+                      ביטול כל הטעינות והחזרה למלאי
                     </button>
-                  </>
-                )}
-                {recon.strayCards > 0 && (
-                  <span className="text-slate-400"> · ועוד {recon.strayCards} כרטיסים בידי לידות שאינן מאושרות</span>
-                )}
-                {showMissing && coverage.missing.length > 0 && (
+                  )}
+                </div>
+                <div className="mt-2 flex flex-col gap-1">
+                  {unapproved.map(u => (
+                    <button key={u.aidId} type="button" onClick={() => router.push(`/admin/maternity/${u.aidId}`)}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-right hover:border-rose-400">
+                      <span className="text-[12px] font-bold text-slate-800">{u.name}</span>
+                      <span className="flex items-center gap-2">
+                        {u.amount ? <span className="ltr-num text-[11px] font-bold text-rose-700">{u.amount} ₪</span> : null}
+                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{u.statusLabel}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ⚠️ ההפרש בין "מאושרות" ל"קיבלו כרטיס" מוצג בשם ובסיבה: לידה
+                שההטענה שלה נכשלה או שממתינה למלאי אינה כרטיס אבוד. */}
+            {coverage && coverage.missing.length > 0 && (
+              <div className="w-full text-[12px] leading-relaxed text-slate-500">
+                <span className="ltr-num font-bold text-slate-700">{coverage.total}</span> לידות מאושרות ביקשו כרטיס,
+                <span className="ltr-num font-bold text-slate-700"> {coverage.withCard}</span> קיבלו ·{' '}
+                <button type="button" onClick={() => setShowMissing(s => !s)}
+                  className="font-bold text-amber-700 underline decoration-dotted underline-offset-2 hover:text-amber-900">
+                  {coverage.missing.length} טרם קיבלו — {showMissing ? 'הסתר' : 'מי?'}
+                </button>
+                {showMissing && (
                   <div className="mt-2 flex flex-col gap-1.5">
                     {coverage.missing.map(m => (
                       <button key={m.aidId} type="button" onClick={() => router.push(`/admin/maternity/${m.aidId}`)}
@@ -295,6 +362,7 @@ export default function StockManager() {
                 )}
               </div>
             )}
+
             <div className="flex items-center gap-3">
               {canEdit && (
                 <button type="button" onClick={() => setModal('baseline')}
@@ -352,9 +420,10 @@ export default function StockManager() {
                         המשפחה. "החזרה למלאי" כאן הייתה יוצרת כרטיס פנטום, ולכן
                         הפעולה היא ביטול הטעינה בכרטסת, שמחזיר את הכרטיס לבד. */}
                     {canEdit && (s.loaded ? (
-                      <button type="button" onClick={() => router.push(`/admin/maternity/${s.aidId}`)}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
-                        <AlertTriangle size={12} /> הכרטיס טעון — לביטול הטעינה
+                      <button type="button" onClick={() => void cancelLoad(s)} disabled={returning === s.aidId}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60">
+                        {returning === s.aidId ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+                        ביטול הטעינה והחזרה למלאי
                       </button>
                     ) : (
                       <button type="button" onClick={() => void returnCard(s)} disabled={returning === s.aidId}
@@ -507,6 +576,7 @@ export default function StockManager() {
           // מהיומן: קישור היומן עלול להיעדר (תיק שנמחק ונוצר מחדש), וספירה לפיו
           // החזירה 49 במקום 51 — כלומר שני כרטיסים עודפים בספירת המלאי.
           issued={issuedCards}
+          unapprovedCount={unapproved.length}
           onClose={() => setModal(null)}
           onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
         />
@@ -536,10 +606,12 @@ export default function StockManager() {
 // ממה שקיים. לכן המובן נבחר במפורש, והחישוב מוצג לפני האישור.
 type CountMode = 'drawer' | 'purchased'
 
-function BaselineModal({ currentBalance, issued, onClose, onDone }: {
+function BaselineModal({ currentBalance, issued, unapprovedCount, onClose, onDone }: {
   currentBalance: number
-  /** כרטיסים שנטענו ומוחזקים כרגע בידי לידות מאושרות — אינם במגירה */
+  /** כרטיסים שנמסרו ללידות מאושרות — אינם במגירה */
   issued: number
+  /** כרטיסים טעונים בידי לידות שאינן מאושרות — תקלה שכדאי לתקן לפני הספירה */
+  unapprovedCount: number
   onClose: () => void
   onDone: (msg: string) => void
 }) {
@@ -600,7 +672,7 @@ function BaselineModal({ currentBalance, issued, onClose, onDone }: {
         <div className="mb-3 flex gap-2">
           {([
             { key: 'drawer' as CountMode, label: 'הכרטיסים שיש במגירה', hint: 'ספירה פיזית של מה שזמין להנפקה עכשיו' },
-            { key: 'purchased' as CountMode, label: 'סך הכרטיסים שנקנו', hint: `המערכת תפחית ${issued} שכבר נטענו ליולדות` },
+            { key: 'purchased' as CountMode, label: 'סך הכרטיסים שנקנו', hint: `המערכת תפחית ${issued} שנמסרו ללידות מאושרות` },
           ]).map(o => (
             <button key={o.key} type="button" onClick={() => setMode(o.key)}
               className={`flex-1 rounded-xl border px-3 py-2 text-right transition-colors ${
@@ -627,7 +699,7 @@ function BaselineModal({ currentBalance, issued, onClose, onDone }: {
             <>
               <div className="flex justify-between"><span>נקנו בסך הכול</span><span className="ltr-num font-bold">{entered ?? '—'}</span></div>
               <div className="flex justify-between">
-                <span>נטענו ונמסרו ליולדות</span>
+                <span>נמסרו ללידות מאושרות</span>
                 <span className="ltr-num font-bold text-rose-600">{issued > 0 ? `−${issued}` : 0}</span>
               </div>
             </>
@@ -640,6 +712,15 @@ function BaselineModal({ currentBalance, issued, onClose, onDone }: {
             </span>
           </div>
         </div>
+
+        {/* ⚠️ כרטיס טעון בידי לידה שאינה מאושרת אינו במגירה — אבל גם אינו
+            "נמסר". אם סופרים לפניו, הוא נכנס למלאי כאילו הוא בפנים. */}
+        {unapprovedCount > 0 && (
+          <p className="mt-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] leading-relaxed text-rose-800">
+            <strong>{unapprovedCount} כרטיסים טעונים בידי לידות שאינן מאושרות.</strong> מומלץ לבטל את הטעינות
+            שלהן לפני הספירה (כפתור אחד במסך) — אז הכרטיסים יחזרו למלאי, והמספרים יסתדרו מעצמם.
+          </p>
+        )}
 
         {shortfall && (
           <p className="mt-2.5 flex items-start gap-1.5 text-[12px] font-bold text-rose-600">

@@ -24,6 +24,11 @@ export async function unloadAidCard(
   creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>,
   aid: UnloadableAid,
   reason: string,
+  // ⚠️ החזרת הכרטיס למלאי תלויה ב*סיבת* הפריקה, ולכן היא פרמטר ולא התנהגות
+  // קבועה: פריקה בתום שישה שבועות מסיימת כרטיס שנוצל בפועל — החזרתו למלאי
+  // הייתה מנפחת אותו. פריקה בעקבות ביטול אישור משחררת כרטיס שלא היה צריך
+  // לצאת, והוא חייב לחזור.
+  opts: { returnToStock?: boolean } = {},
 ): Promise<{ ok: boolean; message?: string }> {
   const r = await prikatTlush(creds, String(aid.card_tlush_id))
   if (!r.ok) {
@@ -56,6 +61,23 @@ export async function unloadAidCard(
     card_load_error: cardRemoveError,
   }).eq('id', aid.id)
 
+  let stockReturned = false
+  if (opts.returnToStock) {
+    try {
+      const { addStockMovement } = await import('@/lib/cardStock')
+      await addStockMovement(admin, {
+        delta: 1, reason: 'adjust', aidId: aid.id,
+        note: `החזרה אוטומטית — הטעינה בוטלה (${reason})`,
+      })
+      stockReturned = true
+      // הכרטיס חזר למלאי → מיד לשחרר יולדת שממתינה בתור
+      const { processAwaitingStock } = await import('@/lib/maternityCards')
+      await processAwaitingStock(admin)
+    } catch (e) {
+      console.error('[unloadAidCard] החזרת הכרטיס למלאי נכשלה:', e instanceof Error ? e.message : e)
+    }
+  }
+
   await admin.from('activity_log').insert({
     action: 'maternity_card_unloaded',
     entity_type: 'maternity_aid',
@@ -63,9 +85,70 @@ export async function unloadAidCard(
     details: {
       tlushId: aid.card_tlush_id, reason,
       card_removed: cardRemoved, card_remove_error: cardRemoveError, card_number_last4: cardNumber.slice(-4),
+      stock_returned: stockReturned,
     },
   })
   return { ok: true }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// פריקת טעינות של לידות שאינן מאושרות — רשת ביטחון.
+//
+// ⚠️ הכלל הוא שביטול אישור מבטל את הטעינה, אבל סטטוס לידה משתנה ביותר ממסלול
+// אחד (מסך היולדות, החזרת תיקונים, עדכון מהפורטל). מסלול שפוספס פירושו משפחה
+// שאינה מאושרת ומחזיקה 600 ₪ — וכרטיס שחסר במלאי בלי הסבר. הסריקה הזו סוגרת
+// את הפער מכל כיוון: אם נשארה טעינה חיה לתיק שאינו 'active', היא נפרקת,
+// הכרטיס חוזר למלאי, והמשפחה מקבלת את מייל התיקון.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function runUnloadUnapproved(
+  opts: { notify?: boolean } = {},
+): Promise<{ ok: boolean; processed: number; mailed: number; error?: string }> {
+  const creds = await getNedarimCreds()
+  if (!creds) return { ok: false, processed: 0, mailed: 0, error: 'חיבור נדרים פלוס לא מוגדר' }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return { ok: false, processed: 0, mailed: 0, error: 'Supabase לא מוגדר' }
+  const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+
+  const { data: aids, error } = await admin
+    .from('maternity_aids')
+    .select('id, status, card_tlush_id, card_number, beneficiary:beneficiaries(nedarim_id, email, full_name, family_name, spouse_name)')
+    .eq('card_load_status', 'loaded')
+    .not('card_tlush_id', 'is', null)
+    .neq('status', 'active')
+  if (error) return { ok: false, processed: 0, mailed: 0, error: error.message }
+
+  let processed = 0
+  let mailed = 0
+  for (const aid of aids ?? []) {
+    try {
+      const statusHe = aid.status === 'cancelled' ? 'הבקשה אינה מאושרת'
+        : aid.status === 'pending' ? 'הבקשה חזרה להמתנה לאישור'
+        : 'הבקשה אינה מאושרת'
+      const r = await unloadAidCard(admin, creds, aid as unknown as UnloadableAid,
+        `ביטול טעינה — ${statusHe}`, { returnToStock: true })
+      if (!r.ok) continue
+      processed++
+
+      if (opts.notify !== false) {
+        const ben = aid.beneficiary as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null
+        if (ben?.email) {
+          const { birthApprovalRetractedEmail } = await import('@/lib/emailTemplates')
+          const { deliverMail } = await import('@/lib/sendMail')
+          const { mailFor } = await import('@/lib/departments')
+          const motherName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || String(ben.full_name ?? '')
+          const payload = birthApprovalRetractedEmail(motherName, { rejected: aid.status === 'cancelled' })
+          const res = await deliverMail(ben.email, payload.subject, payload.html, undefined, mailFor('maternity'))
+          if (res.ok) mailed++
+        }
+      }
+    } catch (e) {
+      console.error('[unload-unapproved] failed for', aid.id, e)
+    }
+  }
+
+  return { ok: true, processed, mailed }
 }
 
 // פריקה אוטומטית של כרטיסים שעברו 6 שבועות מהלידה.
