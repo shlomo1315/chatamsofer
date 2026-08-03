@@ -1,5 +1,5 @@
 import {
-  Users, Landmark, Baby, UtensilsCrossed, HeartHandshake,
+  Users, Landmark, Baby, UtensilsCrossed, Gift,
   HandCoins, Mail, TrendingUp, Clock, AlertCircle, CheckCircle2,
   ArrowLeft, ArrowUpRight, Download,
 } from 'lucide-react'
@@ -29,6 +29,11 @@ interface DashData {
   widowPending: number
   widowInProgress: number
   distributionsPlanned: number
+  // חלוקות חגים — החלוקה שהרישום אליה פתוח כרגע
+  holidayName: string | null
+  holidayRegistered: number
+  holidayExpected: number
+  holidayOpen: boolean
   aidPending: number
   aidAwaiting: number
   aidApproved: number
@@ -41,6 +46,7 @@ const EMPTY: DashData = {
   activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
   maternityActive: 0, maternityPending: 0, maternityDeepReview: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
+  holidayName: null, holidayRegistered: 0, holidayExpected: 0, holidayOpen: false,
   aidPending: 0, aidAwaiting: 0, aidApproved: 0, dismissedByType: {}, deepReview: 0,
 }
 
@@ -95,6 +101,19 @@ const getStats = unstable_cache(
     ])
 
     const loadedCount = cardsLoaded.count ?? 0
+
+    // ── חלוקת החגים הפתוחה ──
+    // ⚠️ שאילתה תלויה (קודם החלוקה, אחר כך הנרשמים אליה) ולכן אינה ב-Promise.all.
+    const { data: openDist } = await supabase
+      .from('distributions')
+      .select('id, name, year, amount_per_family')
+      .eq('registration_open', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const holidayRegistered = openDist
+      ? (await supabase.from('distribution_recipients').select('id', headCount).eq('distribution_id', openDist.id)).count ?? 0
+      : 0
     return {
       totalBeneficiaries: totalBeneficiaries.count ?? 0,
       newBeneficiariesWeek: newBeneficiariesWeek.count ?? 0,
@@ -114,6 +133,12 @@ const getStats = unstable_cache(
       widowPending: widowPending.count ?? 0,
       widowInProgress: widowInProgress.count ?? 0,
       distributionsPlanned: distributionsPlanned.count ?? 0,
+      holidayName: openDist ? [openDist.name, openDist.year].filter(Boolean).join(' ') : null,
+      holidayRegistered: holidayRegistered,
+      // ⚠️ הצפי מחושב מהנרשמים × הסכום למשפחה ואינו נשמר: סכום שנשמר מתיישן
+      // ברישום הבא, והמנהל מתכנן תקציב לפי נתון שאינו נכון.
+      holidayExpected: holidayRegistered * Number(openDist?.amount_per_family ?? 0),
+      holidayOpen: !!openDist,
       aidPending: aidPending.count ?? 0,
       aidAwaiting: aidAwaiting.count ?? 0,
       aidApproved: aidApproved.count ?? 0,
@@ -149,7 +174,18 @@ function getGreeting() {
 
 
 export default async function DashboardPage() {
-  const s = await getStats()
+  const cached = await getStats()
+  // ⚠️ מלאי הכרטיסים נקרא *מחוץ* למטמון, בכל טעינה. הספירות הכבדות יכולות
+  // להיות בנות חמש שניות, אבל המלאי לא: כשהדשבורד הציג 251 ומסך הכרטיסים 250,
+  // המנהל אינו חושב "מטמון" אלא "אחד מהמספרים שקרי" — ומפסיק להאמין לשניהם.
+  // שאילתה אחת על view מסוכם, זולה דיה לכל טעינה.
+  const liveStock = await (async () => {
+    const db = getServiceClient()
+    if (!db) return null
+    const { data } = await db.from('card_stock_balance').select('balance').maybeSingle()
+    return data ? Number(data.balance ?? 0) : null
+  })()
+  const s = liveStock == null ? cached : { ...cached, cardsRemaining: liveStock }
   // "ממתינים לטיפול" — נספר מאותו מקור אמת שהפאנל משתמש בו (getPendingTasks),
   // כדי שהכרטיס והרשימה יראו *בדיוק* אותו מספר. הניכוי-ספירה הקודם נתן פער
   // (כרטיס 1, רשימה 4) כשהיו שורות dismissed יתומות שכבר לא ממתינות.
@@ -266,14 +302,21 @@ export default async function DashboardPage() {
             ]}
           />
 
+          {/* ⚠️ חלוקות חגים במקום אלמנות ויתומים: המחלקה הפעילה היא זו שצריכה
+              להיות על הלוח. בשלב הרישום הנתון הקריטי הוא הצפי התקציבי — לפיו
+              נקבע מה אפשר להתחייב, ולכן הוא מוצג ולא רק מספר הנרשמים. */}
           <DeptCard
-            title="אלמנות ויתומים"
-            icon={<HeartHandshake size={20} />}
-            href="/admin/widows"
+            title="חלוקות חגים"
+            icon={<Gift size={20} />}
+            href="/admin/distributions"
             accent="#a855f7"
-            rows={[
-              { label: 'בקשות חדשות', value: fmt(s.widowPending), tone: s.widowPending > 0 ? 'warning' : 'neutral' },
-              { label: 'בטיפול', value: fmt(s.widowInProgress), tone: 'info' },
+            rows={s.holidayOpen ? [
+              { label: 'נרשמו לחלוקה', value: fmt(s.holidayRegistered), tone: s.holidayRegistered > 0 ? 'success' : 'neutral' },
+              { label: 'צפי תקציבי', value: fmtCur(s.holidayExpected), tone: 'info' },
+              { label: 'החלוקה הפעילה', value: s.holidayName ?? '—', tone: 'neutral' },
+            ] : [
+              { label: 'רישום פתוח', value: 'אין', tone: 'warning' },
+              { label: 'חלוקות בתכנון', value: fmt(s.distributionsPlanned), tone: 'neutral' },
             ]}
           />
 

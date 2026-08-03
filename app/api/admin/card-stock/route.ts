@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
-import { reconcileStock, heldAidIds, approvedCardCoverage } from '@/lib/cardStockRecon'
+import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
@@ -23,7 +23,7 @@ export async function GET() {
   // כרטיס — ולכן היא מחושבת כאן ומוחזרת עם המלאי, ולא נשארת שאלה פתוחה.
   const { data: fullLedger, error: fullErr } = await admin
     .from('card_stock_ledger')
-    .select('delta, reason, aid_id, created_at')
+    .select('id, delta, reason, aid_id, created_at, note')
     .order('created_at', { ascending: false })
     .limit(5000)
   if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr.message)
@@ -136,8 +136,56 @@ export async function GET() {
     }
   }), heldIds)
 
+  // ── מה קרה מאז הספירה ───────────────────────────────────────────────────
+  // ⚠️ "נוכו 1" אינו תשובה — הוא שאלה: איזה כרטיס, של מי, ומתי. כשהטווח מתחיל
+  // בספירה יש בו בדרך כלל תנועות בודדות, ולכן הן מוצגות בשמן במקום להשאיר את
+  // המנהל לפתוח יומן של חמישים שורות ולנחש איזו מהן נכנסת לחישוב.
+  const sinceIds = [...new Set(
+    scopedLedger(fullLedger ?? []).map(r => (r as { aid_id?: string | null }).aid_id).filter(Boolean),
+  )] as string[]
+  const sinceNames = new Map<string, string>()
+  if (sinceIds.length) {
+    const { data: rows } = await admin
+      .from('maternity_aids')
+      .select('id, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
+      .in('id', sinceIds)
+    for (const r of rows ?? []) {
+      const benRaw = (r as Record<string, unknown>).beneficiary
+      const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
+      const nm = [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ')
+      if (nm) sinceNames.set(r.id as string, nm)
+    }
+  }
+  const sinceCount = scopedLedger(fullLedger ?? [])
+    .map(r => {
+      const row = r as { id?: string; delta: number; reason: string | null; created_at?: string | null; note?: string | null; aid_id?: string | null }
+      return {
+        id: String(row.id ?? ''),
+        delta: Number(row.delta) || 0,
+        reason: row.reason ?? 'adjust',
+        created_at: row.created_at ?? null,
+        aidId: row.aid_id ?? null,
+        name: row.aid_id ? sinceNames.get(row.aid_id) ?? null : null,
+        note: row.note ?? null,
+      }
+    })
+    .slice(0, 100)
+
+  // ⚠️ הכרטיסים שיצאו מהמגירה נספרים מ-maternity_aids ולא מהיומן: העמודה
+  // card_load_status היא העדות הישירה לכך שכרטיס נטען בפועל, בזמן שקישור היומן
+  // עלול להיעדר (תיק שנמחק ונוצר מחדש, ניכוי מלפני שהיומן קישר תיקים). ספירה
+  // לפי היומן החזירה 49 במקום 51, ובספירת מלאי במובן "נקנו בסך הכול" זה מתרגם
+  // מיד לכרטיסים עודפים שהמערכת חושבת שיש לה.
+  const { count: issuedCards } = await admin
+    .from('maternity_aids')
+    .select('id', { count: 'exact', head: true })
+    .or('card_load_status.in.(loaded,unloaded),card_tlush_id.not.is.null')
+
   return NextResponse.json(
-    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails, recon, coverage },
+    {
+      balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails,
+      recon, coverage, sinceCount, issuedCards: issuedCards ?? 0,
+    },
     { headers: NO_STORE },
   )
 }

@@ -53,6 +53,8 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           <p><span className="text-slate-500">ת.ז: </span><span className="ltr-num">{b?.id_number ?? '—'}</span></p>
           {b?.spouse_name && <p><span className="text-slate-500">בן/בת זוג: </span>{b.spouse_name}</p>}
           {b?.marital_status && <p><span className="text-slate-500">מצב משפחתי: </span>{b.marital_status}</p>}
+          {(b as { community_affiliation?: string | null })?.community_affiliation?.trim() &&
+            <p><span className="text-slate-500">קהילה: </span>{(b as { community_affiliation?: string | null }).community_affiliation}</p>}
           {b?.phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{b.phone}</span></p>}
           {(b?.address || b?.city) && <p className="col-span-2"><span className="text-slate-500">כתובת: </span>{[b.address, b.city].filter(Boolean).join(', ')}</p>}
           <p><span className="text-slate-500">מספר ילדים: </span>{b?.children_count ?? 0}</p>
