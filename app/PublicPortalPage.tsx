@@ -3021,40 +3021,46 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       {/* חלון הצהרת ייחוס — לפני בחירת סדר הדורות (טופס ציבורי) */}
       {declModalOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl">
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
+          {/* ⚠️ הכל חייב להיכנס לחלונית בלי גלילה: זו הצהרה שחייבים *לראות*
+              במלואה לפני שמסמנים אותה, וגלילה מסתירה בדיוק את האזהרה החזקה
+              שמעל הסימון. לכן הריווח והגדלים צפופים, והגלילה נשארת רק כרשת
+              ביטחון למסכים נמוכים במיוחד. */}
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[95vh] overflow-y-auto p-4 sm:p-5"
             style={{ animation: 'pop-in 0.25s ease-out' }}>
-            <h2 className="text-2xl font-extrabold text-center text-indigo-900 mb-4">שלום וברכה!</h2>
-            <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 mb-5">
-              <p className="text-base font-bold text-amber-900 mb-3 text-center leading-relaxed">
+            <h2 className="text-lg sm:text-xl font-extrabold text-center text-indigo-900 mb-2.5">שלום וברכה!</h2>
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 mb-2.5">
+              <p className="text-[14.5px] font-bold text-amber-900 mb-1.5 text-center leading-snug">
                 הרישום מיועד אך ורק לנכדי רבינו החתם סופר!
               </p>
-              <p className="text-sm text-amber-900 leading-relaxed mb-3">
+              <p className="text-[12.5px] text-amber-900 leading-snug mb-2">
                 אך ורק למי שיש בידיהם יחוס ברור ומוסמך דור אחר דור עד החתם סופר, אין להתבסס בשום אופן על השערות או שמועות,
                 ולא על חצאי עדויות.
               </p>
-              <p className="text-[15px] font-semibold text-red-800 leading-8 bg-white/80 border-r-4 border-red-400 rounded-lg px-4 py-3" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
+              {/* ⚠️ ההסתייגות הזו היא הלב: מי שקיבל בעבר אישור או הטבה מניח שסדר
+                  היחוס שלו אושר. לכן היא מודגשת חזק — טקסט כבד, רקע אדמדם ומסגרת. */}
+              <p className="text-[13.5px] font-extrabold text-red-900 leading-[1.5] bg-red-50 border-2 border-red-300 rounded-lg px-3 py-2.5" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
                 גם אלו שבעבר קיבלו מאיתנו אישור או הטבה מסוימת, אין לראות בכך אישור על סדר הייחוס. ואין להם בשום אופן להרשם כעת עד שיהיה בידם סדר יחוס מוסמך ודאי ומוחלט דור אחר דור עד החתם סופר.
               </p>
             </div>
             {/* אזהרה חזקה במיוחד — בכל ספק אין להירשם. מודגשת מאוד, ממש לפני ההצהרה. */}
-            <div className="rounded-2xl border-4 border-red-500 bg-red-600 p-5 mb-5 shadow-lg">
-              <p className="text-lg font-black text-white text-center leading-8" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
+            <div className="rounded-xl border-[3px] border-red-500 bg-red-600 p-3 mb-2.5 shadow-lg">
+              <p className="text-[15.5px] font-black text-white text-center leading-snug" style={{ fontFamily: 'David, "Frank Ruhl Libre", Georgia, serif' }}>
                 ⚠️ בכל ספק או פקפוק בסדר היחוס —<br />
                 אין להירשם בשום אופן!
               </p>
-              <p className="mt-3 text-[15px] font-bold text-white text-center leading-7">
+              <p className="mt-1.5 text-[13px] font-bold text-white text-center leading-snug">
                 עד לבירור הספק, ועד שיהיה בידכם סדר היחוס הוודאי מדור לדור,
                 בלי שום ספק או פקפוק!
               </p>
             </div>
-            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-slate-200 p-4 mb-5 hover:bg-slate-50 transition-all duration-150">
+            <label className="flex items-center gap-2.5 cursor-pointer rounded-xl border-2 border-indigo-200 bg-indigo-50/60 px-3 py-2.5 mb-2.5 hover:bg-indigo-50 transition-all duration-150">
               <input type="checkbox" checked={lineageDeclared}
                 onChange={e => setLineageDeclared(e.target.checked)}
-                className="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0" />
-              <span className="text-sm font-semibold text-slate-800">הרינו מצהירים כי אנו עומדים בקריטריון הנ&quot;ל</span>
+                className="w-5 h-5 accent-indigo-600 flex-shrink-0" />
+              <span className="text-[13.5px] font-bold text-slate-800">הרינו מצהירים כי אנו עומדים בקריטריון הנ&quot;ל</span>
             </label>
             <button type="button" disabled={!lineageDeclared} onClick={() => setDeclModalOpen(false)}
-              className="w-full bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl py-3 transition-all duration-150">
+              className="w-full bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] active:scale-[0.98] disabled:shadow-none disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl py-2.5 text-[14.5px] transition-all duration-150">
               להמשך — בחירת סדר הדורות
             </button>
           </div>
@@ -3533,9 +3539,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
               )}
 
-              {/* כפתור "חזרה" גלובלי — מוסתר במסך קוד המייל, ששם כבר יש "חזרה"
-                  פנימי (חזרה לבחירת שיטת קבלת הקוד) — אחרת מופיעים שני "חזרה". */}
-              {emailStep !== 'code' && (
+              {/* כפתור "חזרה" גלובלי — מוסתר בכל מסך שיש בו כבר "חזרה" פנימי:
+                  קוד המייל, וגם מסכי השיחה הטלפונית (בחירת מספר / הזנת הקוד).
+                  ⚠️ קודם נבדק רק מסך קוד המייל, ולכן במסך קוד השיחה הופיעו שני
+                  כפתורי "חזרה" זה מתחת לזה. */}
+              {emailStep !== 'code' && !phoneStep && (
                 <button type="button"
                   onClick={() => { setError(''); setStep('id-lookup'); setPendingAuth(null); setAuthPassword(''); setAuthPassword2(''); setAuthCode(''); setAuthCodeSent(false); setPhoneStep(''); setAuthPhones([]); setAuthPhoneHint('') }}
                   className="text-sm text-slate-400 hover:text-slate-600 mx-auto mt-3 block">

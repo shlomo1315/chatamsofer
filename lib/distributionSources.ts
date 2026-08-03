@@ -5,11 +5,12 @@
 // (שמייבא next/headers, כלומר שרת בלבד), ורכיבי הלקוח צריכים רק את התוויות.
 // ייבוא מהמודול השרתי היה מגרר את כל הצד השרתי לבאנדל של הדפדפן ושובר את הבילד.
 // ─────────────────────────────────────────────────────────────────────────────
-export type RegisterSource = 'portal' | 'phone' | 'email' | 'admin'
+export type RegisterSource = 'portal' | 'phone' | 'email' | 'nedarim' | 'admin'
 
 export const SOURCE_LABEL: Record<RegisterSource, string> = {
   portal: 'ממשק דיגיטלי',
   phone: 'טלפון',
   email: 'מייל',
+  nedarim: 'נדרים פלוס',
   admin: 'הזנה ידנית',
 }
