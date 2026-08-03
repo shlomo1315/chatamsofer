@@ -11,7 +11,8 @@ import { spokenCode } from './yemotCall'
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
-const PAUSE_TOKENS_BETWEEN_DIGITS = 6
+const PAUSE_TOKENS_BETWEEN_DIGITS = 2
+const DIGIT_TAIL = ' , , ,'
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
   const tokens: string[] = []
@@ -23,7 +24,7 @@ function slowTokens(text: string): string {
       flush()
       // בין שתי ספרות — טוקני-פסיק נפרדים (הפסקה מובטחת מימות בין טוקנים)
       if (lastWasDigit) for (let i = 0; i < PAUSE_TOKENS_BETWEEN_DIGITS; i++) tokens.push('t-,')
-      tokens.push(`t-${w}`)
+      tokens.push(`t-${w}${DIGIT_TAIL}`)
       lastWasDigit = true
     } else { buf.push(w); lastWasDigit = false }
   }
@@ -47,7 +48,8 @@ describe('הקראת קוד OTP בימות', () => {
     const out = slowTokens(spokenCode('123456'))
     const tokens = out.split('.')
     for (const w of ['אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש']) {
-      expect(tokens).toContain(`t-${w}`)   // כל ספרה טוקן משלה
+      // כל ספרה טוקן משלה, עם פסיקי-השהיה בסופו
+      expect(tokens).toContain(`t-${w}${DIGIT_TAIL}`)
     }
     // בין הספרות יש טוקני-פסיק להשהיה
     expect(tokens.filter(t => t === 't-,').length).toBeGreaterThanOrEqual(6)
@@ -68,9 +70,9 @@ describe('הקראת קוד OTP בימות', () => {
     const words = code.split('').map(d =>
       ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
     // הרצף כולל טוקני-פסיק בין הספרות: t-תשע.t-,.t-,.t-,.t-אפס...
-    // אותו מספר טוקני-השהיה כמו בקוד (PAUSE_TOKENS_BETWEEN_DIGITS)
-    const pauses = Array(6).fill('t-,').join('.')
-    const seq = words.map(w => `t-${w}`).join('.' + pauses + '.')
+    // אותם ערכים כמו בקוד (PAUSE_TOKENS_BETWEEN_DIGITS + DIGIT_TAIL)
+    const pauses = Array(2).fill('t-,').join('.')
+    const seq = words.map(w => `t-${w}${DIGIT_TAIL}`).join('.' + pauses + '.')
     expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
   })
 

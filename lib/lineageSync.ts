@@ -237,15 +237,79 @@ export async function approveVerifiedBeneficiaries(
   const candidates = [...subtreeNodeIds(nodes, changedNodeId)].filter(id => chainFullyVerified(byId, id))
   if (!candidates.length) return []
 
+  // ⚠️ לא רק 'pending': משפחה במצב 'review' (ממתינה לבדיקת מסמכים) או בלי
+  // סטטוס כלל (רשומות ותיקות) נשארה "ממתינה לאישור" אחרי שהצומת שלה אושר בעץ —
+  // בדיוק התלונה מהשטח. 'docs_pending' ו-'rejected' עדיין אינם מקודמים: הראשון
+  // ממתין למסמכים והשני נדחה בהחלטה מפורשת.
   const { data, error } = await db
     .from('beneficiaries')
     .update({ eligibility_status: 'approved', updated_at: new Date().toISOString() })
     .in('lineage_node_id', candidates)
-    .eq('eligibility_status', 'pending')
+    .or('eligibility_status.in.(pending,review),eligibility_status.is.null')
     .select('id')
   if (error) {
     console.error('[lineageSync] approveVerifiedBeneficiaries:', error.message)
     return []
   }
-  return (data ?? []).map(r => (r as { id: string }).id)
+  const approved = (data ?? []).map(r => (r as { id: string }).id)
+
+  // ── נפילה-לאחור: משפחה שאין לה שיוך לצומת ──
+  // ⚠️ הפער האמיתי שהתגלה: משפחה שנרשמה בלי lineage_node_id (או שהשיוך אבד
+  // במיזוג) *אינה* יכולה להיות מקושרת לצומת שאושר, ולכן שום אישור בעץ לא נגע
+  // בה — היא נשארה "ממתינה לאישור" לנצח בלי שאיש יבין למה.
+  // הקישור נעשה רק בהתאמה *מלאה* של השרשרת: אותו אורך ואותם שמות מנורמלים בכל
+  // דור. התאמה חלקית (שם בודד) הייתה יכולה לשייך אדם לענף של אחר.
+  const linked = await linkOrphansByChain(db, byId, candidates)
+  return [...approved, ...linked]
+}
+
+/** נרמול שם להשוואה — בלי תארים, גרשיים וכפילות רווחים. */
+function nameKey(v: unknown): string {
+  return String(v ?? '')
+    .replace(/["'׳״]/g, '')
+    .replace(/\b(רבי|ר|הרב|הרה"ג|מרת|הרבנית|זצ"ל|זיע"א|שליט"א|הי"ד)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function linkOrphansByChain(
+  db: SupabaseClient,
+  byId: Map<string, TreeNodeRow>,
+  candidates: string[],
+): Promise<string[]> {
+  if (!candidates.length) return []
+  // מפתח → מזהה צומת. המפתח הוא שרשרת השמות המנורמלת מהשורש עד הצומת.
+  const keyToNode = new Map<string, string>()
+  for (const id of candidates) {
+    const path = pathToRoot(byId, id)
+    if (!path.length) continue
+    keyToNode.set(path.map(n => nameKey(n.name)).join('|'), id)
+  }
+  if (!keyToNode.size) return []
+
+  const { data: orphans, error } = await db
+    .from('beneficiaries')
+    .select('id, lineage_chain, eligibility_status')
+    .is('lineage_node_id', null)
+  if (error) { console.error('[lineageSync] load orphans:', error.message); return [] }
+
+  const out: string[] = []
+  for (const row of orphans ?? []) {
+    const b = row as { id: string; lineage_chain?: unknown; eligibility_status?: string | null }
+    const chain = Array.isArray(b.lineage_chain) ? (b.lineage_chain as { name?: string }[]) : []
+    if (!chain.length) continue
+    const nodeId = keyToNode.get(chain.map(c => nameKey(c.name)).join('|'))
+    if (!nodeId) continue
+    const status = b.eligibility_status ?? null
+    const promote = status === null || status === 'pending' || status === 'review'
+    const { error: upErr } = await db.from('beneficiaries').update({
+      lineage_node_id: nodeId,
+      ...(promote ? { eligibility_status: 'approved' } : {}),
+      updated_at: new Date().toISOString(),
+    }).eq('id', b.id)
+    if (upErr) { console.error('[lineageSync] link orphan:', upErr.message); continue }
+    console.log(`[lineageSync] משפחה ${b.id} שויכה לצומת ${nodeId} לפי התאמת שרשרת מלאה${promote ? ' ואושרה' : ''}`)
+    if (promote) out.push(b.id)
+  }
+  return out
 }

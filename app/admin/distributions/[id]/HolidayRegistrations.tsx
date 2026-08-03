@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil } from 'lucide-react'
+import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
@@ -50,7 +50,7 @@ const KIDS_BUCKETS: { key: string; label: string; test: (n: number | null) => bo
 ]
 
 const SOURCE_ICON: Record<RegisterSource, typeof Monitor> = {
-  portal: Monitor, phone: Phone, email: Mail, admin: Pencil,
+  portal: Monitor, phone: Phone, email: Mail, nedarim: CreditCard, admin: Pencil,
 }
 
 export default function HolidayRegistrations({
@@ -74,7 +74,7 @@ export default function HolidayRegistrations({
 
   // ── פילוחים — מחושבים מהנתונים בזמן אמת, בלי סיכומים שמורים ──
   const bySource = useMemo(() => {
-    const m: Record<string, number> = { portal: 0, phone: 0, email: 0, admin: 0 }
+    const m: Record<string, number> = { portal: 0, phone: 0, email: 0, nedarim: 0, admin: 0 }
     rows.forEach(r => { m[r.source] = (m[r.source] ?? 0) + 1 })
     return m
   }, [rows])
@@ -161,7 +161,7 @@ export default function HolidayRegistrations({
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-bold text-slate-500 mb-2">פילוח לפי ערוץ</p>
           <div className="flex flex-col gap-1">
-            {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => {
+            {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => {
               const I = SOURCE_ICON[s]
               return (
                 <div key={s} className="flex items-center justify-between text-[12.5px]">
@@ -192,7 +192,7 @@ export default function HolidayRegistrations({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-400 w-16">ערוץ:</span>
           <button className={chip(source === 'all')} onClick={() => setSource('all')}>הכל</button>
-          {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => (
+          {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => (
             <button key={s} className={chip(source === s)} onClick={() => setSource(s)}>{SOURCE_LABEL[s]} ({bySource[s] ?? 0})</button>
           ))}
         </div>

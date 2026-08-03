@@ -107,7 +107,7 @@ export function statsFromRows(
   rows: { source?: string | null; notified_at?: string | null }[],
   amountPerFamily: number | null | undefined,
 ): DistributionStats {
-  const bySource: Record<RegisterSource, number> = { portal: 0, phone: 0, email: 0, admin: 0 }
+  const bySource: Record<RegisterSource, number> = { portal: 0, phone: 0, email: 0, nedarim: 0, admin: 0 }
   let notified = 0
   for (const r of rows) {
     const src = (r.source ?? 'admin') as RegisterSource
