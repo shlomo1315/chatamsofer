@@ -68,7 +68,9 @@ const hangupMsg = (text: string, callId?: string) =>
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
 // מספר טוקני-ההשהיה בין ספרה לספרה. כל טוקן = הודעה נפרדת שימות עוצרת לפניה
 // ואחריה, ולכן ההפסקה *מובטחת* (לא תלויה בשאלה אם ה-TTS בולע פסיקים).
-const PAUSE_TOKENS_BETWEEN_DIGITS = 3
+// ⚠️ הועלה מ-3 ל-6: בשטח ההקראה עדיין נשמעה מהירה מכדי לרשום את הקוד תוך
+// כדי שמיעה, וזה כל תפקידה. ההארכה בשיחה זניחה מול קוד שלא נקלט.
+const PAUSE_TOKENS_BETWEEN_DIGITS = 6
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
   const tokens: string[] = []
