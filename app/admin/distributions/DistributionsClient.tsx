@@ -22,7 +22,7 @@ export default function DistributionsClient({ distributions }: { distributions: 
     const q = query.trim().toLowerCase()
     if (!q) return distributions
     return distributions.filter(d =>
-      [d.name, d.holiday, d.description].filter(Boolean).join(' ').toLowerCase().includes(q)
+      [d.name, d.year, d.holiday, d.description].filter(Boolean).join(' ').toLowerCase().includes(q)
     )
   }, [distributions, query])
 
@@ -61,13 +61,24 @@ export default function DistributionsClient({ distributions }: { distributions: 
                       <Gift size={18} className="text-indigo-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-slate-900">{d.name}</h3>
+                      <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                        {d.name}
+                        {d.year && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{d.year}</span>}
+                      </h3>
                       {d.holiday && <p className="text-xs text-slate-500 mt-0.5">{d.holiday}</p>}
                       {d.description && <p className="text-sm text-slate-600 mt-1 line-clamp-2">{d.description}</p>}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    {/* ⚠️ מצב הרישום בולט יותר מהסטטוס: זה מה שקובע אם הערוצים
+                        (ממשק / טלפון / מייל) מקבלים רישומים ברגע זה. */}
+                    {d.registration_open
+                      ? <span className="rounded-full bg-green-100 border border-green-300 px-2.5 py-0.5 text-[11px] font-extrabold text-green-800">🟢 פתוח לרישום</span>
+                      : <span className="rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-bold text-slate-500">סגור לרישום</span>}
                     <StatusBadge status={d.status} />
+                    {d.amount_per_family != null && (
+                      <span className="text-xs font-bold text-emerald-700">{Number(d.amount_per_family).toLocaleString('he-IL')} ₪ למשפחה</span>
+                    )}
                     {d.total_budget != null && (
                       <span className="text-sm font-semibold text-emerald-700 flex items-center gap-1">
                         <Wallet size={13} />{fmtCur(d.total_budget)}
