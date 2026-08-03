@@ -15,8 +15,15 @@ create index if not exists card_stock_ledger_created_idx on public.card_stock_le
 create index if not exists card_stock_ledger_aid_idx      on public.card_stock_ledger(aid_id);
 
 alter table public.card_stock_ledger enable row level security;
-create policy "card_stock_ledger_read"   on public.card_stock_ledger for select to authenticated using (true);
-create policy "card_stock_ledger_insert" on public.card_stock_ledger for insert to authenticated with check (true);
+-- ⚠️ צוות בלבד (is_staff), לא "כל משתמש מאומת". קודם היה כאן using(true), כלומר
+-- כל חשבון מאומת יכל לקרוא את יומן המלאי *וגם להוסיף לו תנועות* — כלומר לנפח או
+-- לרוקן את מלאי הכרטיסים. הטבלה נכתבת אך ורק דרך service-role (lib/cardStock),
+-- ולכן ההידוק אינו נוגע בשום זרימה קיימת.
+drop policy if exists "card_stock_ledger_read" on public.card_stock_ledger;
+drop policy if exists "card_stock_ledger_insert" on public.card_stock_ledger;
+drop policy if exists "card_stock_ledger_staff_all" on public.card_stock_ledger;
+create policy "card_stock_ledger_staff_all" on public.card_stock_ledger
+  for all using (public.is_staff()) with check (public.is_staff());
 
 -- המלאי הנוכחי (סכום כל התנועות). VIEW נוח לתצוגה אונליין.
 create or replace view public.card_stock_balance as
