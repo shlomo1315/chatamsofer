@@ -1,3 +1,8 @@
+-- ⚠️ אידמפוטנטי: לפני כל create policy מופיע drop policy if exists.
+-- הרצה חוזרת נכשלה קודם על 'policy "profiles_select_own" already exists', וכיוון
+-- שה-SQL editor עוטף את הסקריפט בטרנזקציה — *כל* ההקשחה שאחרי אותה שורה התגלגלה
+-- אחורה ולא נכנסה לתוקף. מיגרציית אבטחה שאינה ניתנת להרצה חוזרת היא מיגרציה
+-- שאי אפשר לוודא, וזה בדיוק מה שקרה כאן.
 -- ===================================================================
 -- RLS hardening: replace "any authenticated user can do everything"
 -- policies with staff-only policies.
@@ -37,7 +42,9 @@ grant execute on function public.is_staff() to authenticated, anon, service_role
 -- profiles: own row readable (login/role checks) + staff read all
 -- -------------------------------------------------------------------
 drop policy if exists "authenticated users can read all" on public.profiles;
+drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"   on public.profiles for select using (auth.uid() = id);
+drop policy if exists "profiles_select_staff" on public.profiles;
 create policy "profiles_select_staff" on public.profiles for select using (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -46,9 +53,13 @@ create policy "profiles_select_staff" on public.profiles for select using (publi
 drop policy if exists "authenticated users can read all" on public.families;
 drop policy if exists "authenticated users can insert"   on public.families;
 drop policy if exists "authenticated users can update"   on public.families;
+drop policy if exists "families_staff_select" on public.families;
 create policy "families_staff_select" on public.families for select using (public.is_staff());
+drop policy if exists "families_staff_insert" on public.families;
 create policy "families_staff_insert" on public.families for insert with check (public.is_staff());
+drop policy if exists "families_staff_update" on public.families;
 create policy "families_staff_update" on public.families for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "families_staff_delete" on public.families;
 create policy "families_staff_delete" on public.families for delete using (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -57,15 +68,20 @@ create policy "families_staff_delete" on public.families for delete using (publi
 drop policy if exists "authenticated users can read all" on public.beneficiaries;
 drop policy if exists "authenticated users can insert"   on public.beneficiaries;
 drop policy if exists "authenticated users can update"   on public.beneficiaries;
+drop policy if exists "beneficiaries_staff_select" on public.beneficiaries;
 create policy "beneficiaries_staff_select" on public.beneficiaries for select using (public.is_staff());
+drop policy if exists "beneficiaries_staff_insert" on public.beneficiaries;
 create policy "beneficiaries_staff_insert" on public.beneficiaries for insert with check (public.is_staff());
+drop policy if exists "beneficiaries_staff_update" on public.beneficiaries;
 create policy "beneficiaries_staff_update" on public.beneficiaries for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "beneficiaries_staff_delete" on public.beneficiaries;
 create policy "beneficiaries_staff_delete" on public.beneficiaries for delete using (public.is_staff());
 
 -- -------------------------------------------------------------------
 -- family_relations
 -- -------------------------------------------------------------------
 drop policy if exists "authenticated users can read all" on public.family_relations;
+drop policy if exists "family_relations_staff_all" on public.family_relations;
 create policy "family_relations_staff_all" on public.family_relations
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -74,6 +90,7 @@ create policy "family_relations_staff_all" on public.family_relations
 -- -------------------------------------------------------------------
 drop policy if exists "authenticated users can read all" on public.documents;
 drop policy if exists "documents_table_all"              on public.documents;
+drop policy if exists "documents_staff_all" on public.documents;
 create policy "documents_staff_all" on public.documents
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -83,9 +100,13 @@ create policy "documents_staff_all" on public.documents
 drop policy if exists "authenticated users can read all" on public.maternity_aids;
 drop policy if exists "authenticated users can insert"   on public.maternity_aids;
 drop policy if exists "authenticated users can update"   on public.maternity_aids;
+drop policy if exists "maternity_aids_staff_select" on public.maternity_aids;
 create policy "maternity_aids_staff_select" on public.maternity_aids for select using (public.is_staff());
+drop policy if exists "maternity_aids_staff_insert" on public.maternity_aids;
 create policy "maternity_aids_staff_insert" on public.maternity_aids for insert with check (public.is_staff());
+drop policy if exists "maternity_aids_staff_update" on public.maternity_aids;
 create policy "maternity_aids_staff_update" on public.maternity_aids for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "maternity_aids_staff_delete" on public.maternity_aids;
 create policy "maternity_aids_staff_delete" on public.maternity_aids for delete using (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -94,9 +115,13 @@ create policy "maternity_aids_staff_delete" on public.maternity_aids for delete 
 drop policy if exists "authenticated users can read all" on public.loans;
 drop policy if exists "authenticated users can insert"   on public.loans;
 drop policy if exists "authenticated users can update"   on public.loans;
+drop policy if exists "loans_staff_select" on public.loans;
 create policy "loans_staff_select" on public.loans for select using (public.is_staff());
+drop policy if exists "loans_staff_insert" on public.loans;
 create policy "loans_staff_insert" on public.loans for insert with check (public.is_staff());
+drop policy if exists "loans_staff_update" on public.loans;
 create policy "loans_staff_update" on public.loans for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "loans_staff_delete" on public.loans;
 create policy "loans_staff_delete" on public.loans for delete using (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -104,6 +129,7 @@ create policy "loans_staff_delete" on public.loans for delete using (public.is_s
 -- -------------------------------------------------------------------
 drop policy if exists "authenticated users can read all" on public.loan_payments;
 drop policy if exists "authenticated users can insert"   on public.loan_payments;
+drop policy if exists "loan_payments_staff_all" on public.loan_payments;
 create policy "loan_payments_staff_all" on public.loan_payments
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -113,6 +139,7 @@ create policy "loan_payments_staff_all" on public.loan_payments
 drop policy if exists "authenticated users can read all" on public.distributions;
 drop policy if exists "authenticated users can insert"   on public.distributions;
 drop policy if exists "authenticated users can update"   on public.distributions;
+drop policy if exists "distributions_staff_all" on public.distributions;
 create policy "distributions_staff_all" on public.distributions
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -122,6 +149,7 @@ create policy "distributions_staff_all" on public.distributions
 drop policy if exists "authenticated users can read all" on public.distribution_recipients;
 drop policy if exists "authenticated users can insert"   on public.distribution_recipients;
 drop policy if exists "authenticated users can update"   on public.distribution_recipients;
+drop policy if exists "distribution_recipients_staff_all" on public.distribution_recipients;
 create policy "distribution_recipients_staff_all" on public.distribution_recipients
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -130,7 +158,9 @@ create policy "distribution_recipients_staff_all" on public.distribution_recipie
 -- -------------------------------------------------------------------
 drop policy if exists "authenticated users can read all" on public.activity_log;
 drop policy if exists "authenticated users can insert"   on public.activity_log;
+drop policy if exists "activity_log_staff_select" on public.activity_log;
 create policy "activity_log_staff_select" on public.activity_log for select using (public.is_staff());
+drop policy if exists "activity_log_staff_insert" on public.activity_log;
 create policy "activity_log_staff_insert" on public.activity_log for insert with check (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -138,6 +168,7 @@ create policy "activity_log_staff_insert" on public.activity_log for insert with
 -- -------------------------------------------------------------------
 -- (existing "authenticated users can read own" / "users can update own
 --  notifications" policies are already correctly scoped — kept as-is)
+drop policy if exists "notifications_staff_select" on public.notifications;
 create policy "notifications_staff_select" on public.notifications for select using (public.is_staff());
 
 -- -------------------------------------------------------------------
@@ -146,6 +177,7 @@ create policy "notifications_staff_select" on public.notifications for select us
 --  bypasses RLS anyway and needs no policy)
 -- -------------------------------------------------------------------
 drop policy if exists "service_role_all" on public.widow_requests;
+drop policy if exists "widow_requests_staff_all" on public.widow_requests;
 create policy "widow_requests_staff_all" on public.widow_requests
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -156,6 +188,7 @@ drop policy if exists "financial_aid_read"   on public.financial_aid_requests;
 drop policy if exists "financial_aid_insert" on public.financial_aid_requests;
 drop policy if exists "financial_aid_update" on public.financial_aid_requests;
 drop policy if exists "financial_aid_delete" on public.financial_aid_requests;
+drop policy if exists "financial_aid_staff_all" on public.financial_aid_requests;
 create policy "financial_aid_staff_all" on public.financial_aid_requests
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -166,6 +199,7 @@ drop policy if exists "widow_payments_read"   on public.widow_support_payments;
 drop policy if exists "widow_payments_insert" on public.widow_support_payments;
 drop policy if exists "widow_payments_update" on public.widow_support_payments;
 drop policy if exists "widow_payments_delete" on public.widow_support_payments;
+drop policy if exists "widow_support_payments_staff_all" on public.widow_support_payments;
 create policy "widow_support_payments_staff_all" on public.widow_support_payments
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -176,6 +210,7 @@ drop policy if exists "card_centers_read"   on public.card_centers;
 drop policy if exists "card_centers_insert" on public.card_centers;
 drop policy if exists "card_centers_update" on public.card_centers;
 drop policy if exists "card_centers_delete" on public.card_centers;
+drop policy if exists "card_centers_staff_all" on public.card_centers;
 create policy "card_centers_staff_all" on public.card_centers
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -186,6 +221,7 @@ create policy "card_centers_staff_all" on public.card_centers
 drop policy if exists "recovery_homes_read"   on public.recovery_homes;
 drop policy if exists "recovery_homes_insert" on public.recovery_homes;
 drop policy if exists "recovery_homes_delete" on public.recovery_homes;
+drop policy if exists "recovery_homes_staff_all" on public.recovery_homes;
 create policy "recovery_homes_staff_all" on public.recovery_homes
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -193,6 +229,7 @@ create policy "recovery_homes_staff_all" on public.recovery_homes
 -- lineage_nodes: was service_role-only, but admin pages read it with
 -- the staff session — add staff access (service_role policy kept)
 -- -------------------------------------------------------------------
+drop policy if exists "lineage_nodes_staff_all" on public.lineage_nodes;
 create policy "lineage_nodes_staff_all" on public.lineage_nodes
   for all using (public.is_staff()) with check (public.is_staff());
 
@@ -202,7 +239,9 @@ create policy "lineage_nodes_staff_all" on public.lineage_nodes
 -- -------------------------------------------------------------------
 alter table public.mail_events    enable row level security;
 alter table public.email_tracking enable row level security;
+drop policy if exists "mail_events_staff_all" on public.mail_events;
 create policy "mail_events_staff_all" on public.mail_events
   for all using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "email_tracking_staff_all" on public.email_tracking;
 create policy "email_tracking_staff_all" on public.email_tracking
   for all using (public.is_staff()) with check (public.is_staff());
