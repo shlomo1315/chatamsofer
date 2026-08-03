@@ -11,7 +11,7 @@ import { spokenCode } from './yemotCall'
 const TTS_INVALID = /[.,\-"'&|=]/g
 const tts = (t: string) => String(t ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 const DIGIT_SET = new Set(['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'])
-const PAUSE_TOKENS_BETWEEN_DIGITS = 3
+const PAUSE_TOKENS_BETWEEN_DIGITS = 6
 function slowTokens(text: string): string {
   const words = tts(text).split(' ').filter(Boolean)
   const tokens: string[] = []
@@ -68,7 +68,8 @@ describe('הקראת קוד OTP בימות', () => {
     const words = code.split('').map(d =>
       ['אפס', 'אחת', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה', 'תשע'][Number(d)])
     // הרצף כולל טוקני-פסיק בין הספרות: t-תשע.t-,.t-,.t-,.t-אפס...
-    const pauses = Array(3).fill('t-,').join('.')
+    // אותו מספר טוקני-השהיה כמו בקוד (PAUSE_TOKENS_BETWEEN_DIGITS)
+    const pauses = Array(6).fill('t-,').join('.')
     const seq = words.map(w => `t-${w}`).join('.' + pauses + '.')
     expect(out.split(seq).length - 1).toBe(2)   // רצף הספרות המלא, פעמיים
   })

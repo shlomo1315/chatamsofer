@@ -1076,11 +1076,15 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                           {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
                         </button>
                         {canMarkSelfHere && (
+                          /* ⚠️ הכפתור בולט ומסומן בטקסט ולא באייקון מעומעם: מי
+                             שכבר קיים בעץ ולא מזהה את האפשרות לוחץ "הוסף אותי"
+                             ונוצר עותק שני שלו — וזה מקור הכפילויות שאנחנו
+                             ממזגים ידנית אחר כך. עדיף שיראה אותו מיד. */
                           <button type="button" title="זה אני — זהו שמי; שייכו אותי לרשומה הקיימת ואל תיצרו דור חדש"
                             onClick={() => { void markSelfExisting(node) }}
-                            className="flex-shrink-0 inline-flex items-center justify-center w-8 rounded-lg border border-slate-200 bg-white text-slate-300 hover:border-green-500 hover:bg-green-50 hover:text-green-600 focus:border-green-500 focus:text-green-600 transition-colors duration-150">
+                            className="flex-shrink-0 inline-flex items-center justify-center gap-1 px-3 rounded-lg border-2 border-green-400 bg-green-50 text-green-700 text-xs font-bold shadow-sm hover:bg-green-600 hover:text-white hover:border-green-600 focus:bg-green-600 focus:text-white transition-all duration-150 whitespace-nowrap">
                             <User size={13} />
-                            <span className="sr-only">זה אני</span>
+                            זה אני
                           </button>
                         )}
                       </div>
