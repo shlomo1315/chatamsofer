@@ -20,20 +20,22 @@ async function getDistributions(): Promise<Distribution[]> {
 export default async function DistributionsPage() {
   const distributions = await getDistributions()
   const active = distributions.filter((d) => d.status === 'active' || d.status === 'planning').length
+  const openForRegistration = distributions.filter((d) => d.registration_open === true).length
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="חלוקות" subtitle={`${distributions.length} חלוקות`}>
+      <PageHeader title="חלוקות חגים" subtitle={`${distributions.length} חלוקות`}>
         <Link href="/admin/distributions/new">
           <Button>
             <Plus size={16} />
-            חלוקה חדשה
+            חלוקת חגים חדשה
           </Button>
         </Link>
       </PageHeader>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
+          { label: 'פתוח לרישום', value: openForRegistration, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
           { label: 'בתכנון / פעיל', value: active, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
           { label: 'הושלמו', value: distributions.filter((d) => d.status === 'completed').length, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-100' },
           { label: 'סה״כ', value: distributions.length, color: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },

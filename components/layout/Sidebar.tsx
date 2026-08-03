@@ -53,7 +53,7 @@ const MATERNITY_CHILD_ICONS: Record<string, React.ElementType> = {
 const navBottom: NavItem[] = [
   { href: '/admin/loans',         label: 'הלוואות',        icon: CreditCard,     section: 'loans' },
   { href: '/admin/financial-aid', label: 'סיוע רפואי',     icon: HandCoins,      section: 'financial_aid' },
-  { href: '/admin/distributions', label: 'חלוקות',         icon: Gift,           section: 'distributions' },
+  { href: '/admin/distributions', label: 'חלוקות חגים',         icon: Gift,           section: 'distributions' },
   { href: '/admin/widows',        label: 'אלמנות ויתומים', icon: HeartHandshake, section: 'widows' },
   { href: '/admin/reports',       label: 'דוחות',          icon: BarChart3,      section: 'reports' },
   { href: '/admin/newsletter',    label: 'ניוזלטר',        icon: Send,           section: 'newsletter' },

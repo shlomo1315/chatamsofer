@@ -1639,3 +1639,57 @@ export function birthApprovalRetractedEmail(
     }),
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// חלוקות חגים — שני מיילים, בשני רגעים שונים.
+//
+// 1. holidayCallNoticeEmail — נשלח למי שנרשם *במערכת* (איגוד הצאצאים / נדרים):
+//    הרישום לחלוקת החגים עצמה נעשה בשלוחה הטלפונית, וללא אותו רישום אין זכאות.
+//    ⚠️ זו האזהרה הקריטית: משפחה שנרשמה לאיגוד בטוחה שסיימה, ובלי המייל הזה היא
+//    מגלה רק בדיעבד שלא נרשמה לחלוקה. לכן מספר הטלפון והתאריך האחרון בולטים.
+// 2. holidayRegisteredEmail — נשלח אחרי הרישום לחלוקה עצמה: אישור קליטה + מה
+//    צפוי בהמשך (עדכון על אופן החלוקה).
+//
+// כל הטקסטים נקראים דרך textFor ולכן ניתנים לעריכה במסך "הודעות מייל" — מספר
+// הטלפון והתאריך משתנים מחג לחג, ואין טעם שיהיו קבועים בקוד.
+// ─────────────────────────────────────────────────────────────────────────────
+export function holidayCallNoticeEmail(name: string, vars: { distribution?: string } = {}): BuiltEmail {
+  const t = (k: string) => textFor('holiday_call_notice', k)
+  const fill = (v: string) => v.replace(/\{חלוקה\}/g, vars.distribution ?? '')
+  const body = `
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:14px 16px;margin:0 0 18px;">
+      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;font-family:Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
+    </div>
+    <div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
+      <p style="margin:0 0 10px;color:#991b1b;font-size:15px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('phone_title')))}</p>
+      <p style="margin:0 0 12px;text-align:center;">
+        <span style="display:inline-block;background:#dc2626;color:#fff;font-size:24px;font-weight:900;letter-spacing:2px;border-radius:12px;padding:12px 26px;direction:ltr;">${escapeHtml(t('phone'))}</span>
+      </p>
+      <p style="margin:0;color:#991b1b;font-size:14px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('warning')))}</p>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;margin:0 0 18px;">
+      <p style="margin:0;color:#92400e;font-size:15px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('deadline')))}</p>
+    </div>
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+  return {
+    subject: fill(t('subject')),
+    html: shell({ preheader: fill(t('preheader')), accent: '#0f766e', title: fill(t('title')), subtitle: fill(t('subtitle')), body }),
+  }
+}
+
+export function holidayRegisteredEmail(name: string, vars: { distribution?: string } = {}): BuiltEmail {
+  const t = (k: string) => textFor('holiday_registered', k)
+  const fill = (v: string) => v.replace(/\{חלוקה\}/g, vars.distribution ?? '')
+  const body = `
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
+      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
+    </div>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('next')))}</p>
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+  return {
+    subject: fill(t('subject')),
+    html: shell({ preheader: fill(t('preheader')), accent: '#0f766e', title: fill(t('title')), subtitle: fill(t('subtitle')), body }),
+  }
+}

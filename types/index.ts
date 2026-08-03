@@ -261,11 +261,22 @@ export interface Distribution {
   total_budget?: number
   status: DistributionStatus
   distribution_date?: string
+  // ── חלוקות חגים (שלב הרישום) ──
+  /** שנה חופשית — "תשפ״ו" / "2026" */
+  year?: string
+  /** הסכום המתוכנן לכל משפחה; ממנו נגזר הצפי הכולל */
+  amount_per_family?: number
+  /** הרישום פתוח? רק חלוקה פעילה מקבלת רישומים */
+  registration_open?: boolean
+  registration_opened_at?: string
+  registration_closed_at?: string
   created_by?: string
   created_at: string
   updated_at: string
   recipients?: DistributionRecipient[]
 }
+
+export type DistributionSource = 'portal' | 'phone' | 'email' | 'admin'
 
 export interface DistributionRecipient {
   id: string
@@ -275,6 +286,12 @@ export interface DistributionRecipient {
   amount?: number
   item_description?: string
   received_at?: string
+  /** מאיפה הגיע הרישום — לפילוח ערוצים */
+  source?: DistributionSource
+  registered_at?: string
+  phone?: string
+  notified_at?: string
+  notify_error?: string
   status: DistributionRecipientStatus
   family?: Family
   beneficiary?: Beneficiary
