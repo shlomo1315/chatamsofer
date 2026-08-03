@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement } from '@/lib/cardStock'
+import { reconcileStock, heldAidIds } from '@/lib/cardStockRecon'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
@@ -15,6 +16,38 @@ export async function GET() {
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
 
   const balance = await getStockBalance(admin)
+
+  // ── התאמת המלאי ─────────────────────────────────────────────────────────
+  // ⚠️ המלאי לבדו אינו בר-בירור: "הכנסתי 300, אישרתי 48, למה 247?". התשובה
+  // דורשת את *כל* היומן (לא 50 שורות) ואת מצבם העכשווי של התיקים שנוכה בגינם
+  // כרטיס — ולכן היא מחושבת כאן ומוחזרת עם המלאי, ולא נשארת שאלה פתוחה.
+  const { data: fullLedger, error: fullErr } = await admin
+    .from('card_stock_ledger')
+    .select('delta, reason, aid_id')
+    .order('created_at', { ascending: false })
+    .limit(5000)
+  if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr.message)
+
+  const heldIds = heldAidIds(fullLedger ?? [])
+  const { data: heldAids, error: heldErr } = heldIds.length
+    ? await admin
+        .from('maternity_aids')
+        .select('id, status, card_load_status, beneficiary:beneficiaries(family_name, spouse_name, full_name)')
+        .in('id', heldIds)
+    : { data: [], error: null }
+  if (heldErr) console.error('[card-stock] recon aids query failed:', heldErr.message)
+
+  const recon = reconcileStock(fullLedger ?? [], (heldAids ?? []).map(a => {
+    const benRaw = (a as Record<string, unknown>).beneficiary
+    const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
+    return {
+      id: a.id as string,
+      status: (a as { status?: string | null }).status ?? null,
+      card_load_status: (a as { card_load_status?: string | null }).card_load_status ?? null,
+      name: [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || null,
+    }
+  }))
+
   // ⚠️ שליפה שטוחה + חיבור ידני, ולא join מקונן. ה-join המקונן
   // (aid:maternity_aids(beneficiary:beneficiaries(...))) החזיר aid ריק
   // ועמודת "פרטים" ביומן הופיעה כ-"—" בכל שורה של אישור לידה.
@@ -85,7 +118,7 @@ export async function GET() {
   })
 
   return NextResponse.json(
-    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails },
+    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails, recon },
     { headers: NO_STORE },
   )
 }
@@ -100,8 +133,41 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { delta?: number; note?: string; aidId?: string | null; runQueue?: boolean }
+  let body: { delta?: number; note?: string; aidId?: string | null; runQueue?: boolean; returnAid?: string; cards?: number }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+
+  // ── החזרת כרטיס תלוי למלאי ──────────────────────────────────────────────
+  // ⚠️ נרשם כ-'adjust' ולא כ-'restock': אלה אינם כרטיסים חדשים שנכנסו למחסן
+  // אלא ניכוי שבוטל. אם היה נרשם כהוספת מלאי, "סך הכרטיסים שהוכנסו" היה תופח
+  // בכל תיקון והמנהל היה מאבד את הנתון היחיד שהוא מכיר בוודאות — כמה קנה.
+  if (body.returnAid) {
+    const aidId = String(body.returnAid)
+    const cards = Math.max(1, Math.trunc(Number(body.cards) || 1))
+    // ⚠️ אימות מול החישוב ולא אמון בקליינט: בקשה חוזרת (רענון, לחיצה כפולה)
+    // הייתה מזרימה כרטיסים שלא היו למלאי.
+    const { data: fullLedger } = await admin
+      .from('card_stock_ledger')
+      .select('delta, reason, aid_id')
+      .order('created_at', { ascending: false })
+      .limit(5000)
+    if (!heldAidIds(fullLedger ?? []).includes(aidId)) {
+      return NextResponse.json({ error: 'הכרטיס של תיק זה אינו תלוי — ייתכן שהוחזר כבר' }, { status: 409 })
+    }
+    try {
+      await addStockMovement(admin, {
+        delta: cards, reason: 'adjust', aidId,
+        note: body.note?.trim() || 'החזרה למלאי — הניכוי אינו מגובה בלידה מאושרת',
+        by: staff.userId,
+      })
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה' }, { status: 500 })
+    }
+    // הכרטיס חזר למלאי → מיד לשחרר ממתינות בתור, כמו בכל הוספת מלאי
+    const balance = await getStockBalance(admin)
+    await resetAlertIfAboveThreshold(admin, balance)
+    const res = await processAwaitingStock(admin)
+    return NextResponse.json({ balance, processed: res.processed, failed: res.failed, errors: res.errors })
+  }
 
   // הרצת התור בלבד (delta=0) — לטיפול ביולדות שנתקעו ולא נכנסו לתור,
   // בלי להוסיף מלאי. מאפשר "לשחרר" מצב תקוע מהמסך.

@@ -23,7 +23,12 @@ export async function loadMaternityCardOnApproval(
     .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date')
     .eq('id', aidId).maybeSingle()
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
-  if (aid.card_load_status === 'loaded' || aid.card_tlush_id) return { ok: true, already: true } // כבר נטען
+  // ⚠️ 'unloaded' אינו "כבר נטען": זהו תיק שהטעינה שלו *בוטלה* (שינוי סטטוס או
+  // תום שישה שבועות), ו-card_tlush_id נשמר בו לתיעוד. בלי הבדיקה הזו אישור
+  // מחודש של אותה לידה היה מחזיר "כבר נטען", המשפחה הייתה נשארת עם כרטיס ריק
+  // ואיש לא היה יודע — כי מבחינת המסך הטעינה בוצעה.
+  const unloaded = aid.card_load_status === 'unloaded'
+  if (!unloaded && (aid.card_load_status === 'loaded' || aid.card_tlush_id)) return { ok: true, already: true } // כבר נטען
 
   // ⚠️ כל יציאה בכישלון חייבת להשאיר עקבות על התיק. קודם היו כאן ארבעה
   // מסלולי יציאה שלא כתבו כלום — כשל בניכוי המלאי, נדרים לא מוגדר, והמשפחה
