@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
+import { babiesOf, babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import RecoveryDatePicker from './RecoveryDatePicker'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { extractUrl } from '@/lib/extractUrl'
@@ -189,12 +190,12 @@ function DetailModal({ aid, onClose }: { aid: Aid; onClose: () => void }) {
               {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-800"><Baby size={11} /> לידת תאומים</span>}
             </p>
             {(() => {
-              const babies = Array.isArray(aid.babies) && aid.babies.length
-                ? aid.babies
-                : [{ name: aid.baby_name, gender: aid.baby_gender }]
+              const babies = babiesOf(aid as AidNameFields)
+              const fallback = babyNameLabel(aid as AidNameFields)
               return babies.map((b, i) => (
                 <div key={i} className={i > 0 ? 'pt-2 border-t border-indigo-100' : ''}>
-                  <Row icon={<Baby size={14} />} label={aid.is_twins ? `תינוק ${i + 1}` : 'שם התינוק'} value={b.name || '—'} />
+                  {/* ⚠️ בלי הפתרון האחיד הגיע לכאן שם ישן שהיולדת כבר ביטלה */}
+                  <Row icon={<Baby size={14} />} label={aid.is_twins ? `תינוק ${i + 1}` : 'שם התינוק'} value={(b.name && String(b.name).trim()) || (i === 0 ? fallback.text : '—')} />
                   {b.gender && <Row icon={<User size={14} />} label="מין" value={b.gender === 'male' ? 'זכר' : 'נקבה'} />}
                 </div>
               ))
@@ -449,7 +450,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
       if (!q) return true
       const m = a.beneficiary
       return [
-        motherName(m), m?.spouse_id_number, a.baby_name,
+        motherName(m), m?.spouse_id_number, babyNameLabel(a as AidNameFields).text,
         fmtDate(a.birth_date), a.card_number,
       ].filter(Boolean).join(' ').toLowerCase().includes(q)
     })
@@ -648,7 +649,10 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                         <td className="px-4 py-3.5 font-mono text-slate-500 text-center align-middle"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                         <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">
                           <span className="inline-flex items-center gap-1.5">
-                            {aid.baby_name ?? '—'}
+                            {(() => {
+                              const nm = babyNameLabel(aid as AidNameFields)
+                              return nm.pending ? <span className="text-amber-700 font-semibold">⏳ {nm.text}</span> : <span>{nm.text}</span>
+                            })()}
                             {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"><Baby size={12} /> תאומים</span>}
                           </span>
                         </td>

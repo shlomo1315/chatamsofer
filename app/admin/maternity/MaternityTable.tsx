@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
+import { babyNameLabel, isNamePending, type AidNameFields } from '@/lib/babyNames'
 import { recoveryDaysOf } from '@/lib/maternity'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
@@ -29,7 +30,12 @@ const motherName = (m?: MotherRef) => {
 // ממתין לתיקונים=pending_fixes (baby_name_pending) — חוצה-סטטוס: היולדת סימנה
 // "עדיין אין שם" וטרם השלימה. כל עוד לא תוקן, הרשומה יושבת כאן ולא ב"ממתין לאישור".
 type Filter = 'all' | 'pending' | 'pending_fixes' | 'active' | 'cancelled' | 'deep_review'
-const namePending = (a: MaternityAid) => (a as { baby_name_pending?: boolean }).baby_name_pending === true
+// ⚠️ isNamePending בודק *שני* המקורות (baby_name + babies[]): רשומה שהשם שלה
+// הושלם באחד מהם אינה "ממתינה לתיקון" רק כי הדגל נשאר דלוק.
+// וגם: רק תיק שעדיין ממתין לאישור יושב כאן. תיק שאושר (או בוטל) — הטיפול בו
+// נגמר; קודם הוא נספר גם כ"מאושר" וגם כ"ממתין לתיקונים", ולכן סכום הכרטיסים
+// היה גדול מסך הכול, והיולדת נראתה כאילו לא טופלה.
+const namePending = (a: MaternityAid) => isNamePending(a as AidNameFields) && a.status === 'pending'
 const matchesFilter = (a: MaternityAid, f: Filter) => {
   if (f === 'all') return true
   if (f === 'pending_fixes') return namePending(a)
@@ -103,7 +109,7 @@ const searchHaystack = (a: MaternityAid) => {
   return [
     motherName(m),
     m?.spouse_id_number,
-    a.baby_name,
+    babyNameLabel(a as AidNameFields).text,
     a.baby_id_number,
     formatDate(a.birth_date),
     a.recovery_home,
@@ -250,7 +256,13 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-700">
                       <span className="inline-flex items-center gap-1.5 flex-wrap">
-                        {aid.baby_name ?? <span className="text-slate-300">—</span>}
+                        {(() => {
+                          const nm = babyNameLabel(aid as AidNameFields)
+                          if (nm.missing) return <span className="text-slate-300">—</span>
+                          return nm.pending
+                            ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">⏳ {nm.text}</span>
+                            : <span>{nm.text}</span>
+                        })()}
                         {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
                       </span>
                     </td>

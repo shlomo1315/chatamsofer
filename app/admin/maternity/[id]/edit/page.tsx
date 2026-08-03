@@ -10,6 +10,7 @@ import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { openDocInNewTab } from '@/lib/docBlob'
 import { format, addWeeks } from 'date-fns'
+import { babyNamePatch } from '@/lib/babyNames'
 import { he } from 'date-fns/locale'
 
 const RECOVERY_HOMES = ['אם וילד', 'טלזסטון', 'ביכורים']
@@ -47,6 +48,8 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
   const [babyName, setBabyName] = useState('')
   // "עדיין אין שם" — כשמסומן, השם נשמר NULL והדגל baby_name_pending=true (לא טקסט בשדה)
   const [babyNamePending, setBabyNamePending] = useState(false)
+  // מערך התינוקות של התיק — נשמר כדי שהשמירה תעדכן גם אותו ולא רק את השדה הסקלרי
+  const [aidBabies, setAidBabies] = useState<unknown>(null)
   const [babyIdType, setBabyIdType] = useState<'id' | 'passport'>('id')
   const [babyIdNumber, setBabyIdNumber] = useState('')
   const [babyGender, setBabyGender] = useState<'male' | 'female' | ''>('')
@@ -72,6 +75,7 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
         if (error || !data) throw error ?? new Error('not found')
         setBabyName(data.baby_name ?? '')
         setBabyNamePending(!!data.baby_name_pending)
+        setAidBabies((data as { babies?: unknown }).babies ?? null)
         setBabyIdType(data.baby_id_type ?? 'id')
         setBabyIdNumber(data.baby_id_number ?? '')
         setBabyGender(data.baby_gender ?? '')
@@ -126,8 +130,10 @@ export default function EditMaternityPage({ params }: { params: Promise<{ id: st
 
       const updatePayload: Record<string, unknown> = {
         birth_date: babyBirthDate,
-        baby_name: babyNamePending ? null : (babyName.trim() || null),
-        baby_name_pending: babyNamePending,
+        // ⚠️ דרך babyNamePatch: השם נכתב גם ל-babies[] וגם ל-baby_name. קודם
+        // נכתב רק השדה הסקלרי, ולכן סימון "עדיין אין שם" השאיר במערך שם ישן
+        // (או להיפך) — וכל מסך הציג משהו אחר.
+        ...babyNamePatch({ babies: aidBabies }, babyNamePending ? null : (babyName.trim() || null)),
         baby_id_type: babyIdType,
         baby_id_number: babyIdNumber || null,
         baby_gender: babyGender || null,
