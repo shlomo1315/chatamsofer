@@ -18,6 +18,7 @@ export interface ReconLedgerRow {
   delta: number
   reason: string | null
   aid_id?: string | null
+  created_at?: string | null
 }
 
 export interface ReconAid {
@@ -57,6 +58,17 @@ export interface StockRecon {
   /** המלאי שהיה אמור להיות אלמלא הכרטיסים התלויים */
   expectedBalance: number
   strays: StrayCard[]
+  /** מלאי הפתיחה שנקבע ידנית (0 כשלא נקבע) */
+  opening: number
+  /** מועד קביעת מלאי הפתיחה — null כשההתאמה מכסה את כל היומן */
+  baselineAt: string | null
+  /**
+   * כרטיסים שנוכו בגין לידות שנמחקו מהמערכת.
+   * ⚠️ מדווח בנפרד ובלי שמות מפני שאין מה להציג: מחיקת תיק מאפסת את aid_id
+   * ביומן (on delete set null), ולכן הקישור לשם המשפחה אבד. בלי השורה הזו
+   * הניכויים האלה היו "נעלמים" מההתאמה והסכומים לא היו מסתדרים.
+   */
+  deletedAidCards: number
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,10 +105,33 @@ function isBacked(aid: ReconAid | undefined): { ok: boolean; reason: string } {
  * תיק שאי פעם הופיע ביומן. עם מאות שורות, שליפה של כולם הייתה מייצרת בקשה
  * ענקית מול PostgREST על נתונים שאינם דרושים לחישוב.
  */
+/**
+ * מועד מלאי הפתיחה האחרון — התנועות שקדמו לו אינן נכללות בהתאמה.
+ *
+ * ⚠️ ההתאמה חייבת נקודת אפס: היומן צבר תנועות מתקופת הבדיקות, וסכימת הכל
+ * הציגה "הוכנסו 683" מול מנהל שיודע שקנה 300. המלאי עצמו לא משתנה — הוא תמיד
+ * סכום היומן — רק *ההסבר* נמדד מנקודת הספירה הפיזית והלאה.
+ */
+export function baselineAtOf(ledger: ReconLedgerRow[]): string | null {
+  let latest: string | null = null
+  for (const row of ledger) {
+    if (row.reason !== 'baseline' || !row.created_at) continue
+    if (!latest || row.created_at > latest) latest = row.created_at
+  }
+  return latest
+}
+
+/** התנועות שנכללות בהתאמה — אחרי מלאי הפתיחה (או כולן, כשלא נקבע). */
+export function scopedLedger(ledger: ReconLedgerRow[]): ReconLedgerRow[] {
+  const at = baselineAtOf(ledger)
+  if (!at) return ledger
+  return ledger.filter(r => !!r.created_at && r.created_at > at)
+}
+
 export function heldAidIds(ledger: ReconLedgerRow[]): string[] {
   const net = new Map<string, number>()
   const birthAids = new Set<string>()
-  for (const row of ledger) {
+  for (const row of scopedLedger(ledger)) {
     if (!row.aid_id) continue
     const delta = Number(row.delta) || 0
     net.set(row.aid_id, (net.get(row.aid_id) ?? 0) + delta)
@@ -108,6 +143,12 @@ export function heldAidIds(ledger: ReconLedgerRow[]): string[] {
 export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): StockRecon {
   const byId = new Map(aids.map(a => [a.id, a]))
 
+  // המלאי האמיתי — סכום *כל* היומן, גם מלפני מלאי הפתיחה. הוא לעולם אינו נגזר
+  // מטווח ההתאמה, כדי שהמספר במסך יהיה תמיד זהה למסד.
+  const balance = ledger.reduce((s, r) => s + (Number(r.delta) || 0), 0)
+  const baselineAt = baselineAtOf(ledger)
+  const rows = scopedLedger(ledger)
+
   let totalIn = 0
   let totalOut = 0
   const reasonMap = new Map<string, ReasonLine>()
@@ -116,7 +157,12 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
   // בלבד הייתה מדווחת על כרטיס חסר שכבר חזר למלאי.
   const netByAid = new Map<string, number>()
 
-  for (const row of ledger) {
+  // ניכויי לידה שאיבדו את הקישור לתיק (התיק נמחק → aid_id התאפס), בניכוי
+  // החזרות שנרשמו באותו אופן
+  let orphanOut = 0
+  let orphanBack = 0
+
+  for (const row of rows) {
     const delta = Number(row.delta) || 0
     if (delta > 0) totalIn += delta
     else totalOut += -delta
@@ -128,11 +174,17 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
     reasonMap.set(reason, line)
 
     if (row.aid_id) netByAid.set(row.aid_id, (netByAid.get(row.aid_id) ?? 0) + delta)
+    else if (BIRTH_REASONS.has(reason) && delta < 0) orphanOut += -delta
+    else if (reason === 'adjust' && delta > 0) orphanBack += delta
   }
+
+  // מלאי הפתיחה — כל מה שקדם לו מקופל למספר אחד, כך שהזהות
+  // "פתיחה + נכנס − יצא = מלאי" מתקיימת תמיד, לכל טווח.
+  const opening = balance - totalIn + totalOut
 
   // רק תיקים שנוכה בגינם כרטיס בפועל (ולא, למשל, הוספת מלאי שנרשמה על תיק)
   const birthAids = new Set(
-    ledger.filter(r => r.aid_id && BIRTH_REASONS.has(r.reason ?? '') && Number(r.delta) < 0).map(r => r.aid_id as string),
+    rows.filter(r => r.aid_id && BIRTH_REASONS.has(r.reason ?? '') && Number(r.delta) < 0).map(r => r.aid_id as string),
   )
 
   let heldOk = 0
@@ -159,8 +211,9 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
   }
 
   strays.sort((a, b) => b.cards - a.cards || a.name.localeCompare(b.name, 'he'))
-  const strayCards = strays.reduce((s, r) => s + r.cards, 0)
-  const balance = totalIn - totalOut
+  const namedStray = strays.reduce((s, r) => s + r.cards, 0)
+  const deletedAidCards = Math.max(0, orphanOut - orphanBack)
+  const strayCards = namedStray + deletedAidCards
 
   return {
     balance,
@@ -171,5 +224,8 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
     strayCards,
     expectedBalance: balance + strayCards,
     strays,
+    opening,
+    baselineAt,
+    deletedAidCards,
   }
 }

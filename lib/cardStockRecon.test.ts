@@ -85,6 +85,98 @@ describe('reconcileStock', () => {
     expect(r.totalIn).toBe(301)
   })
 
+  it('ניכוי לידה שאיבד את הקישור לתיק (התיק נמחק) נספר בנפרד ומסכם את הפער', () => {
+    const r = reconcileStock(
+      [restock(300), { delta: -1, reason: 'birth_approval', aid_id: null }, { delta: -1, reason: 'birth_approval', aid_id: null }],
+      [],
+    )
+    expect(r.balance).toBe(298)
+    expect(r.deletedAidCards).toBe(2)
+    expect(r.strayCards).toBe(2)          // כלול בפער, גם בלי שם להציג
+    expect(r.strays).toHaveLength(0)
+    expect(r.expectedBalance).toBe(300)
+  })
+
+  it('החזרה שאיבדה את הקישור מקזזת ניכוי מחוסר-תיק', () => {
+    const r = reconcileStock(
+      [restock(300), { delta: -1, reason: 'birth_approval', aid_id: null }, { delta: 1, reason: 'adjust', aid_id: null }],
+      [],
+    )
+    expect(r.deletedAidCards).toBe(0)
+    expect(r.strayCards).toBe(0)
+  })
+
+  // ── מלאי פתיחה (ספירה פיזית) ────────────────────────────────────────────
+  describe('מלאי פתיחה', () => {
+    const at = (s: string) => `2026-08-0${s}T10:00:00.000Z`
+
+    it('התאמה נמדדת מנקודת הספירה בלבד — תנועות הבדיקות אינן נכנסות לחישוב', () => {
+      const r = reconcileStock([
+        { delta: 683, reason: 'restock', aid_id: null, created_at: at('1') },
+        { delta: -436, reason: 'manual_out', aid_id: null, created_at: at('2') },
+        // ספירה פיזית: 300 בפועל מול 247 מחושבים → תנועת התאמה של +53
+        { delta: 53, reason: 'baseline', aid_id: null, created_at: at('3') },
+        { delta: -1, reason: 'birth_approval', aid_id: 'a', created_at: at('4') },
+      ], [approved('a')])
+
+      expect(r.balance).toBe(299)          // תמיד סכום כל היומן
+      expect(r.opening).toBe(300)          // מלאי הפתיחה שנקבע
+      expect(r.totalIn).toBe(0)
+      expect(r.totalOut).toBe(1)
+      expect(r.baselineAt).toBe(at('3'))
+      // הזהות שהמנהל בודק: פתיחה + נכנס − יצא = מלאי
+      expect(r.opening + r.totalIn - r.totalOut).toBe(r.balance)
+      // הפילוח מציג רק את מה שקרה מאז הספירה
+      expect(r.byReason.map(l => l.reason)).toEqual(['birth_approval'])
+    })
+
+    it('כרטיסים שנתקעו לפני הספירה אינם מוצגים כפער — הספירה כבר כוללת אותם', () => {
+      const r = reconcileStock([
+        { delta: 300, reason: 'restock', aid_id: null, created_at: at('1') },
+        { delta: -1, reason: 'birth_approval', aid_id: 'old', created_at: at('2') },
+        { delta: 0, reason: 'baseline', aid_id: null, created_at: at('3') },
+      ], [{ id: 'old', name: 'לידה שנדחתה', status: 'cancelled', card_load_status: 'loaded' }])
+
+      expect(r.balance).toBe(299)
+      expect(r.opening).toBe(299)
+      expect(r.strayCards).toBe(0)
+      expect(r.strays).toHaveLength(0)
+    })
+
+    it('פער שנוצר אחרי הספירה כן מדווח', () => {
+      const r = reconcileStock([
+        { delta: 300, reason: 'baseline', aid_id: null, created_at: at('1') },
+        { delta: -1, reason: 'birth_approval', aid_id: 'x', created_at: at('2') },
+      ], [{ id: 'x', name: 'נדחתה אחרי הספירה', status: 'cancelled', card_load_status: 'loaded' }])
+
+      expect(r.opening).toBe(300)
+      expect(r.balance).toBe(299)
+      expect(r.strayCards).toBe(1)
+      expect(r.expectedBalance).toBe(300)
+    })
+
+    it('ספירה חדשה גוברת על קודמת', () => {
+      const r = reconcileStock([
+        { delta: 100, reason: 'baseline', aid_id: null, created_at: at('1') },
+        { delta: -1, reason: 'birth_approval', aid_id: 'x', created_at: at('2') },
+        { delta: 201, reason: 'baseline', aid_id: null, created_at: at('3') },
+        { delta: -1, reason: 'birth_approval', aid_id: 'y', created_at: at('4') },
+      ], [approved('x'), approved('y')])
+
+      expect(r.baselineAt).toBe(at('3'))
+      expect(r.opening).toBe(300)
+      expect(r.balance).toBe(299)
+      expect(r.totalOut).toBe(1)
+    })
+
+    it('בלי ספירה — מלאי הפתיחה 0 וההתאמה מכסה את כל היומן', () => {
+      const r = reconcileStock([restock(300), birth('a')], [approved('a')])
+      expect(r.opening).toBe(0)
+      expect(r.baselineAt).toBeNull()
+      expect(r.totalIn).toBe(300)
+    })
+  })
+
   it('התרחיש שהמנהל דיווח עליו: 300 הוטענו, 48 אושרו, 247 במלאי — 5 תלויים', () => {
     const ledger: ReconLedgerRow[] = [restock(300)]
     const aids: ReconAid[] = []
