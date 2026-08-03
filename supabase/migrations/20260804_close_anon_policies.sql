@@ -1,10 +1,16 @@
 -- ============================================================================
--- 🔴🔴 קריטי: סגירת 124 policies שהעניקו גישה מלאה ל-anon (בלי התחברות בכלל)
+-- 🔴 אבטחה: סגירת policies מסוג "allow all" שהעניקו גישה ללא התחברות
 -- ============================================================================
 --
 -- מה נמצא בפרודקשן:
---   124 policies בסכמה public שה-roles שלהן כולל anon, בשם "allow all".
+--   policies בסכמה public בשם "allow all" עם תנאי `true` — כלומר גישה מלאה.
 --   דוגמאות שנראו: family_tree, maternity_requests, holiday_distributions.
+--
+-- ⚠️ הקריטריון הוא ה*תנאי* ולא רשימת התפקידים. ב-Postgres policy שנוצר בלי TO
+-- מקבל אוטומטית את התפקיד public בעמודת roles — גם כשהתנאי שלו הוא is_staff().
+-- ספירה לפי roles בלבד מזהה שגית גם את כל ה-policies התקינות של הצוות (כך יצא
+-- בסקירה "124 פתוחות" במקום המספר האמיתי). לכן הסינון כאן דורש *גם* roles של
+-- anon/public *וגם* תנאי שאינו מזכיר is_staff.
 --
 -- מה זה אומר בפועל:
 --   anon אינו "משתמש אנונימי מחובר" אלא **בלי שום התחברות**. המפתח הציבורי
@@ -19,8 +25,9 @@
 --   בהיקף מלא.
 --
 -- מה עושה המיגרציה:
---   1. מסירה **כל** policy בסכמה public שה-roles שלה כוללים anon או public.
---      דינמית ולא לפי רשימת שמות — כדי שלא תישאר שורה שלא חשבנו עליה.
+--   1. מסירה כל policy בסכמה public שה-roles שלה כוללים anon/public *והתנאי שלה
+--      אינו is_staff*. דינמית ולא לפי רשימת שמות — כדי שלא תישאר שורה שלא חשבנו
+--      עליה, וגם לא תוסר הרשאה תקינה.
 --   2. מוודאת שלכל טבלה שנפגעה יש policy של צוות (is_staff), כדי שמסכי הניהול
 --      שקוראים מהדפדפן עם ה-JWT של איש הצוות ימשיכו לעבוד.
 --
@@ -48,6 +55,11 @@ begin
     from pg_policies
     where schemaname = 'public'
       and ('anon' = any(roles) or 'public' = any(roles))
+      -- ⚠️ רק policies שאינן מותנות ב-is_staff. בלי התנאי הזה הסקריפט מוחק גם
+      -- את ההרשאות התקינות של הצוות ומחליף אותן ב-policy גורפת אחת לכל טבלה,
+      -- ואיתן נעלמות הרשאות מפורטות (למשל profiles_select_own — קריאת הפרופיל
+      -- של המשתמש עצמו).
+      and coalesce(qual, with_check, 'true') not ilike '%is_staff%'
   loop
     execute format('drop policy if exists %I on %I.%I', pol.policyname, pol.schemaname, pol.tablename);
     dropped := dropped + 1;
@@ -83,10 +95,12 @@ end $$;
 -- ============================================================================
 -- בדיקת שפיות — אחרי ההרצה שתי השאילתות האלה חייבות להחזיר 0 שורות:
 --
---   -- א. אין policy פתוח ל-anon
---   select tablename, policyname, roles::text
+--   -- א. אין policy פתוח באמת (roles של anon/public *וגם* תנאי בלי is_staff)
+--   select tablename, policyname, roles::text, coalesce(qual, with_check) as expr
 --   from pg_policies
---   where schemaname = 'public' and ('anon' = any(roles) or 'public' = any(roles));
+--   where schemaname = 'public'
+--     and ('anon' = any(roles) or 'public' = any(roles))
+--     and coalesce(qual, with_check, 'true') not ilike '%is_staff%';
 --
 --   -- ב. אין טבלה עם RLS בלי policy (כלומר מסכי הניהול לא נשברו)
 --   select c.relname from pg_class c
