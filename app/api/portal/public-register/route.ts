@@ -14,6 +14,7 @@ import { normalizeLineageNodeName } from '@/lib/lineageNameFormat'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets } from '@/lib/govData'
+import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,13 @@ export async function POST(request: NextRequest) {
     spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, community_affiliation, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits, signature,
     email_verify_token, phone_verify_token, phone_tokens,
   } = body
+  // ⚠️ רישום לחלוקת החגים *באמצע ההרשמה*: טופס נדרים פלוס (וגם הטופס שלנו)
+  // מסמנים תיבה בתוך הרישום עצמו, ולא שולחים בקשה נפרדת אחר כך. מתקבלים כמה
+  // שמות כי לכל טופס חופש בשם השדה שלו.
+  const wantsHoliday =
+    body.holiday_register === true || body.holiday_register === 'true' || body.holiday_register === 1 || body.holiday_register === '1' ||
+    body.holiday === true || body.holiday === 'true' || body.holiday === 1 || body.holiday === '1' ||
+    body.register_holiday === true || body.register_holiday === 'true' || body.register_holiday === 1 || body.register_holiday === '1'
 
   if (!id_number || !full_name || !family_name) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -294,6 +302,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הנתונים. אנא נסה שוב.' }, { status: 500 })
   }
 
+  // ── רישום לחלוקת החגים, כחלק מאותה הרשמה ──
+  // ⚠️ best-effort ואחרי שהרישום נשמר: כשל כאן לא יבטל הרשמה שהושלמה. אם אין
+  // חלוקה פתוחה — הסימון פשוט מתעלם (הטופס אינו יודע מה מצב הרישום אצלנו).
+  let holidayRegistered = false
+  if (wantsHoliday) {
+    try {
+      const { data: justCreated } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
+      if (justCreated?.id) {
+        const r = await registerToOpenDistribution(justCreated.id, isNedarim ? 'nedarim' : 'portal')
+        holidayRegistered = r.ok
+        console.log(`[public-register] רישום לחלוקת חגים: ok=${r.ok} created=${r.created}${r.error ? ` (${r.error})` : ''}`)
+      }
+    } catch (e) { console.error('[public-register] holiday register failed:', e) }
+  }
+
   // שיוך למפרע: מיילים ישנים של הנרשם שכבר במערכת אך ללא שיוך — לקשר אליו כעת (לא חוסם).
   try {
     const { data: newBen } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
@@ -402,5 +425,6 @@ export async function POST(request: NextRequest) {
       .catch((e) => console.error('[public-register] announcement call error:', e))
   }
 
-  return NextResponse.json({ ok: true })
+  // holiday — מוחזר כדי שהטופס יוכל להציג "נרשמתם גם לחלוקת החגים"
+  return NextResponse.json({ ok: true, ...(wantsHoliday ? { holidayRegistered } : {}) })
 }
