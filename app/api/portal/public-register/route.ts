@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     id_number, id_doc_type, full_name, family_name, phone, phone2, email,
     address, city, birth_date, gender, marital_status,
     spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, community_affiliation, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits, signature,
-    email_verify_token, phone_verify_token, phone_tokens,
+    email_verify_token, phone_verify_token, phone_tokens, email_tokens,
   } = body
   // ⚠️ רישום לחלוקת החגים *באמצע ההרשמה*: טופס נדרים פלוס (וגם הטופס שלנו)
   // מסמנים תיבה בתוך הרישום עצמו, ולא שולחים בקשה נפרדת אחר כך. מתקבלים כמה
@@ -111,9 +111,30 @@ export async function POST(request: NextRequest) {
   // שנבנו עבורו: nedarim-form/verify תומך ב-'phone' בלבד). בלי הפטור הזה
   // כל רישום משם היה נכשל ב-400. אימות הטלפון עצמו נאכף בהמשך לכל המסלולים,
   // כולל נדרים — הוא ההגנה האמיתית.
+  // אסימון אימות המייל — מתקבל בשני מבנים, כדי שהטופס של נדרים לא יידרש לשנות
+  // את מה שכבר עובד אצלו בטלפון:
+  //   email_verify_token: "<טוקן>"                     ← יחיד (יש שדה מייל אחד)
+  //   email_tokens: [{ value: "a@b.com", token: "…" }]  ← מבנה זהה ל-phone_tokens
+  const emailTokenFor = (addr: string): string | undefined => {
+    if (typeof email_verify_token === 'string' && email_verify_token) return email_verify_token
+    const list = Array.isArray(email_tokens) ? (email_tokens as { value?: unknown; token?: unknown }[]) : []
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+    const hit = list.find(t => norm(t?.value) === norm(addr) && t?.token)
+    return hit ? String(hit.token) : undefined
+  }
+  const emailToken = email ? emailTokenFor(String(email)) : undefined
+
   if (!isNedarim) {
-    if (!email || !verifyVerifyToken(email_verify_token as string | undefined, 'email', String(email))) {
+    if (!email || !verifyVerifyToken(emailToken, 'email', String(email))) {
       return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
+    }
+  } else if (email && emailToken) {
+    // ⚠️ טופס נדרים: אימות המייל אינו חובה — בעמדות אין מייל לאמת, ודרישה
+    // גורפת הייתה חוסמת כל רישום משם. אבל *אם* נשלח אסימון, הוא חייב להיות
+    // תקף: אסימון פגום שמתקבל בשקט הוא הגרוע מכל העולמות — הטופס מציג "אומת"
+    // והמערכת שומרת מייל שלא אומת מעולם.
+    if (!verifyVerifyToken(emailToken, 'email', String(email))) {
+      return NextResponse.json({ error: 'אימות כתובת המייל אינו תקף. יש לשלוח קוד חדש ולאמת שוב.' }, { status: 400 })
     }
   }
   // טלפונים — חובה לפחות מספר אחד מאומת. אוספים את כל המספרים המאומתים (verified_phones).
