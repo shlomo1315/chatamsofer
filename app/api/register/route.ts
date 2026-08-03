@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { verifySignature } from '@/lib/signedToken'
 import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
@@ -9,7 +9,6 @@ import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 
 function verifyNonce(nonce: string, email: string): boolean {
   try {
-    const secret = process.env.OTP_NONCE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     const decoded = Buffer.from(nonce, 'base64url').toString()
     const lastColon = decoded.lastIndexOf(':')
     const payload = decoded.slice(0, lastColon)
@@ -20,8 +19,8 @@ function verifyNonce(nonce: string, email: string): boolean {
     if (storedEmail !== email) return false
     if (isNaN(exp) || exp < Date.now()) return false
 
-    const expectedSig = createHmac('sha256', secret).update(payload).digest('hex')
-    return timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))
+    // ⚠️ נכשל-סגור בהיעדר סוד חתימה (ראו lib/signedToken)
+    return verifySignature(payload, sig)
   } catch {
     return false
   }

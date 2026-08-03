@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff } from '@/lib/apiAuth'
+import { requireNonMailStaff } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,7 @@ function getAdminClient() {
 
 // מחזיר את מזהה הבקשה הממתינה הבאה (לפי סדר כניסה), או null אם אין.
 export async function GET(request: NextRequest) {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const url = new URL(request.url)
   const table = url.searchParams.get('table') ?? ''
   const currentId = url.searchParams.get('currentId') ?? ''

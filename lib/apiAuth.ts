@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
@@ -120,6 +121,24 @@ export async function requirePermission(section: SectionKey, action: PermAction)
   return staff
 }
 
+/**
+ * איש צוות שאינו מוגבל ל"מייל בלבד".
+ *
+ * ⚠️ ההגבלה "מייל בלבד" נאכפה עד כה ב-proxy.ts בלבד — כלומר על *המסכים*.
+ * ה-middleware אינו מכסה /api כלל, ולכן חשבון מייל-בלבד (או סשן שנגנב ממנו)
+ * שנחסם מכל מסך ניהול יכל בכל זאת להוציא PII מלא בקריאת fetch אחת מהקונסול:
+ * beneficiary-search, reports, next-pending, nedarim. ההגבלה נראתה אכיפה
+ * ולא הייתה אכיפה.
+ *
+ * מנהל חורג כמו בכל מקום אחר (mail_only אינו חל על admin).
+ */
+export async function requireNonMailStaff(allowedRoles?: StaffRole[]): Promise<StaffContext | null> {
+  const staff = await requireStaff(allowedRoles)
+  if (!staff) return null
+  if (staff.mailOnly && staff.role !== 'admin') return null
+  return staff
+}
+
 export function forbidden(message = 'אין הרשאה לבצע פעולה זו') {
   return NextResponse.json({ error: message }, { status: 403 })
 }
@@ -136,8 +155,16 @@ export function serverMisconfigured() {
 export function verifyCronSecret(request: Request): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
+  // ⚠️ השוואה בזמן קבוע ולא ===: השוואת מחרוזות רגילה יוצאת בתו הראשון השונה,
+  // ומדליפה מידע על הסוד דרך זמן התגובה.
+  const eq = (given: string | null | undefined) => {
+    if (!given) return false
+    const a = Buffer.from(String(given))
+    const b = Buffer.from(secret)
+    if (a.length !== b.length) return false
+    try { return timingSafeEqual(a, b) } catch { return false }
+  }
   const auth = request.headers.get('authorization')
-  if (auth === `Bearer ${secret}`) return true
-  const url = new URL(request.url)
-  return url.searchParams.get('secret') === secret
+  if (auth?.startsWith('Bearer ') && eq(auth.slice(7))) return true
+  return eq(new URL(request.url).searchParams.get('secret'))
 }

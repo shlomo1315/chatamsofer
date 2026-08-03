@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs'
+import { randomInt } from 'crypto'
 
 // מדיניות סיסמה לפורטל: לפחות 10 תווים, לפחות אות אחת באנגלית ולפחות ספרה אחת.
 export function passwordError(pw: string): string | null {
@@ -17,9 +18,14 @@ export async function verifyPassword(pw: string, hash: string | null | undefined
   try { return await bcrypt.compare(pw, hash) } catch { return false }
 }
 
-// קוד אימות חד-פעמי בן 6 ספרות
+// קוד אימות חד-פעמי בן 6 ספרות.
+//
+// ⚠️ randomInt (CSPRNG) ולא Math.random. Math.random ב-V8 הוא xorshift128+ ואינו
+// קריפטוגרפי: תוקף שמבקש קודים לעצמו רואה פלטים עוקבים של אותו מחולל, משחזר את
+// מצבו, ומחשב את הקוד ש*יישלח למשפחה אחרת*. נעילת חמישה ניסיונות בולמת ניחוש
+// עיוור אך אינה בולמת חיזוי — שם הקוד הראשון נכון.
 export function generateCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000))
+  return String(randomInt(100000, 1000000))
 }
 
 export async function hashCode(code: string): Promise<string> {

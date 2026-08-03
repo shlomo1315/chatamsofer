@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, getServiceClient } from '@/lib/apiAuth'
 import { getNedarimCreds, getClientsTable, getClientCardFull, type NedarimCreds } from '@/lib/nedarim'
 
 export const dynamic = 'force-dynamic'
@@ -184,7 +184,7 @@ async function getUnloadByZeout(): Promise<Record<string, UnloadInfo>> {
 }
 
 export async function GET() {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   const creds = await getNedarimCreds()
   if (!creds) return NextResponse.json({ configured: false })
 
