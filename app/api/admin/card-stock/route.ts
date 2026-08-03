@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
-import { reconcileStock, heldAidIds } from '@/lib/cardStockRecon'
+import { reconcileStock, heldAidIds, approvedCardCoverage } from '@/lib/cardStockRecon'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
@@ -117,8 +117,27 @@ export async function GET() {
     }
   })
 
+  // ── לידות מאושרות מול כרטיסים שיצאו ─────────────────────────────────────
+  // ⚠️ "יש 48 מאושרות" אינו "יצאו 48 כרטיסים", והפער הזה הוא מקור הבלבול
+  // המרכזי: לידה שביקשה בית החלמה בלבד אינה מקבלת כרטיס, ולידה שההטענה שלה
+  // נכשלה לא הוציאה כרטיס. לכן מוחזרת השוואה בשמות ולא מספר יחיד.
+  // ⚠️ מבוסס על awaitingRows שכבר נשלף (אותו סינון status='active') ולא על
+  // שאילתה נוספת — המסך הזה כבר סובל מריבוי שאילתות.
+  const cardWanters = (awaitingRows ?? []).filter(a => (a as { wants_food_card?: boolean }).wants_food_card !== false)
+  const coverage = approvedCardCoverage(cardWanters.map(a => {
+    const benRaw = (a as Record<string, unknown>).beneficiary
+    const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
+    return {
+      id: a.id as string,
+      status: 'active',
+      card_load_status: (a as { card_load_status?: string | null }).card_load_status ?? null,
+      name: [ben?.family_name, ben?.spouse_name || ben?.full_name].filter(Boolean).join(' ') || null,
+      awaitingStock: isAwaitingCard(a),
+    }
+  }), heldIds)
+
   return NextResponse.json(
-    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails, recon },
+    { balance, ledger: ledger ?? [], awaiting: awaitingList.length, awaitingDetails, recon, coverage },
     { headers: NO_STORE },
   )
 }
@@ -174,6 +193,16 @@ export async function POST(request: NextRequest) {
       .limit(5000)
     if (!heldAidIds(fullLedger ?? []).includes(aidId)) {
       return NextResponse.json({ error: 'הכרטיס של תיק זה אינו תלוי — ייתכן שהוחזר כבר' }, { status: 409 })
+    }
+    // ⚠️ כרטיס שעדיין טעון בנדרים אינו במגירה: הכסף בו וייתכן שהוא בידי
+    // המשפחה. החזרתו למלאי הייתה יוצרת כרטיס פנטום — המערכת סופרת כרטיס שאינו
+    // קיים ומנפיקה אותו שוב. ביטול הטעינה הוא שמחזיר אותו, והוא עושה זאת לבד.
+    const { data: aidRow } = await admin
+      .from('maternity_aids').select('card_load_status').eq('id', aidId).maybeSingle()
+    if (aidRow?.card_load_status === 'loaded') {
+      return NextResponse.json({
+        error: 'הכרטיס עדיין טעון בנדרים — יש לבטל את הטעינה בכרטסת הלידה, וההחזרה למלאי תתבצע אוטומטית',
+      }, { status: 409 })
     }
     try {
       await addStockMovement(admin, {

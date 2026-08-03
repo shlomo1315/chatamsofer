@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileStock, type ReconLedgerRow, type ReconAid } from './cardStockRecon'
+import { reconcileStock, approvedCardCoverage, type ReconLedgerRow, type ReconAid } from './cardStockRecon'
 
 const restock = (n: number) => ({ delta: n, reason: 'restock', aid_id: null })
 const birth = (aidId: string) => ({ delta: -1, reason: 'birth_approval', aid_id: aidId })
@@ -191,5 +191,61 @@ describe('reconcileStock', () => {
     expect(r.heldOk).toBe(48)
     expect(r.strayCards).toBe(5)
     expect(r.expectedBalance).toBe(252)
+  })
+
+  it('כרטיס תלוי שעדיין טעון מסומן — אחרת החזרתו למלאי הייתה יוצרת כרטיס פנטום', () => {
+    const r = reconcileStock(
+      [restock(300), birth('a'), birth('b')],
+      [
+        { id: 'a', name: 'טעונה', status: 'pending', card_load_status: 'loaded' },
+        { id: 'b', name: 'נכשלה', status: 'pending', card_load_status: 'failed' },
+      ],
+    )
+    expect(r.strays.find(s => s.aidId === 'a')!.loaded).toBe(true)
+    expect(r.strays.find(s => s.aidId === 'b')!.loaded).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('approvedCardCoverage', () => {
+  const held = ['a', 'b']
+
+  it('מאושרות שמחזיקות כרטיס נספרות, ולא נוצר פער מדומה', () => {
+    const c = approvedCardCoverage(
+      [{ id: 'a', name: 'ראשונה', card_load_status: 'loaded' }, { id: 'b', name: 'שנייה', card_load_status: 'loaded' }],
+      held,
+    )
+    expect(c).toMatchObject({ total: 2, withCard: 2 })
+    expect(c.missing).toHaveLength(0)
+  })
+
+  it('מאושרת שההטענה שלה נכשלה מדווחת כמאושרת בלי כרטיס, עם הסיבה', () => {
+    const c = approvedCardCoverage(
+      [{ id: 'a', name: 'ראשונה', card_load_status: 'loaded' }, { id: 'z', name: 'כשל', card_load_status: 'failed' }],
+      held,
+    )
+    expect(c).toMatchObject({ total: 2, withCard: 1 })
+    expect(c.missing).toEqual([{ aidId: 'z', name: 'כשל', reason: 'ההטענה נכשלה — לא יצא כרטיס' }])
+  })
+
+  it('מאושרת שממתינה למלאי אינה "כרטיס אבוד" אלא תור', () => {
+    const c = approvedCardCoverage([{ id: 'w', name: 'ממתינה', card_load_status: null, awaitingStock: true }], [])
+    expect(c.missing[0].reason).toContain('ממתינה למלאי')
+  })
+
+  it('כרטיס שנפרק בתום הזכאות נחשב כמי שקיבלה כרטיס', () => {
+    const c = approvedCardCoverage([{ id: 'old', name: 'ותיקה', card_load_status: 'unloaded' }], [])
+    expect(c.withCard).toBe(1)
+    expect(c.missing).toHaveLength(0)
+  })
+
+  it('התרחיש שהמנהל שאל עליו: 48 מאושרות, 46 עם כרטיס — שתיים בשם ובסיבה', () => {
+    const aids = Array.from({ length: 46 }, (_, i) => ({ id: `k${i}`, name: `מאושרת ${i}`, card_load_status: 'loaded' }))
+    aids.push({ id: 'x', name: 'ההטענה נכשלה', card_load_status: 'failed' })
+    aids.push({ id: 'y', name: 'טרם נטענה', card_load_status: 'pending' })
+    const c = approvedCardCoverage(aids, aids.slice(0, 46).map(a => a.id))
+    expect(c.total).toBe(48)
+    expect(c.withCard).toBe(46)
+    expect(c.missing.map(m => m.name)).toEqual(['ההטענה נכשלה', 'טרם נטענה'])
   })
 })
