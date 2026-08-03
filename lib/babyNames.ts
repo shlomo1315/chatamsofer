@@ -114,3 +114,52 @@ export function babyNamePatch(aid: AidNameFields, name: string | null, index = 0
   }
   return patch
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// סנכרון שם התינוק מרשימת הילדים של המשפחה אל תיק הלידה.
+//
+// ⚠️ החוליה החסרה שהתגלתה אצל אייזנער חוה רחל: היולדת *כן* תיקנה את השם — אבל
+// בעדכון הפרטים בפורטל, כלומר ברשימת הילדים של המשפחה (beneficiaries.children).
+// תיק הלידה לא ידע על כך כלל, ולכן המשיך להציג "עדיין אין שם". הכיוון ההפוך
+// (תיק → כרטסת) היה מסונכרן מזמן; זה הכיוון שנשכח.
+//
+// מסונכרן רק לתיק שאין בו שם אמיתי — כדי שתיקון של הצוות בתיק לא יידרס בשקט
+// ע"י שם ישן שנשאר ברשימת הילדים.
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ any על הלקוח בכוונה: הטיפוסים המחושבים של supabase-js על שאילתה מקוננת
+// מפוצצים את בודק הטיפוסים (TS2589), והפונקציה הזו נקראת ממסלול שרת בלבד.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyDb = any
+
+export async function syncMaternityNamesFromChildren(
+  db: AnyDb,
+  beneficiaryId: string,
+  children: unknown,
+): Promise<number> {
+  const kids = (Array.isArray(children) ? children : []) as { name?: string | null; id_number?: string | null; maternity_aid_id?: string | null }[]
+  if (!kids.length) return 0
+
+  const { data } = await db.from('maternity_aids')
+    .select('id, baby_name, baby_name_pending, babies, baby_id_number')
+    .eq('beneficiary_id', beneficiaryId)
+  const aids = (data ?? []) as (AidNameFields & { id: string; baby_id_number?: string | null })[]
+  if (!aids.length) return 0
+
+  const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+  let synced = 0
+  for (const aid of aids) {
+    if (babyRealName(aid)) continue      // בתיק כבר יש שם — לא נוגעים
+    const match = kids.find(k => {
+      const name = clean(k.name)
+      if (!name) return false
+      if (k.maternity_aid_id && k.maternity_aid_id === aid.id) return true
+      const kid = digits(k.id_number), bid = digits(aid.baby_id_number)
+      return !!kid && !!bid && kid === bid
+    })
+    const name = match ? clean(match.name) : null
+    if (!name) continue
+    const { error } = await db.from('maternity_aids').update(babyNamePatch(aid, name)).eq('id', aid.id)
+    if (!error) synced++
+  }
+  return synced
+}

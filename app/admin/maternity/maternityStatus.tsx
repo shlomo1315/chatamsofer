@@ -8,6 +8,7 @@ import { Clock, Check, X, ChevronDown, CheckCircle2, AlertTriangle, Mail, FileTe
 import { createClient } from '@/lib/supabase/client'
 import { goToNextPending } from '@/lib/nextPending'
 import type { MaternityAid, MaternityStatus } from '@/types'
+import { format } from 'date-fns'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import MaternityDocsFixDialog from './MaternityDocsFixDialog'
@@ -163,9 +164,46 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // חלונית "השלמת מסמכים" — תקלה במסמכי התיק; היולדת מתבקשת לצרף שוב במקום
   // שהבקשה תידחה. אינה משנה את סטטוס הלידה (ראו MaternityDocsFixDialog).
   const [docsFixOpen, setDocsFixOpen] = useState(false)
+  // ── אזהרת ביטול טעינה ──
+  // ⚠️ טעינה שבוצעה נשארה עד כה בתוקף לנצח: שינוי הסטטוס ל"לא מאושר" או חזרה
+  // ל"ממתין" לא נגעו בכסף, והיולדת נשארה עם היתרה בכרטיס למרות שהבקשה נדחתה.
+  // עכשיו שינוי הסטטוס פורק את הטעינה — ולכן חייבים לומר זאת מראש, במפורש,
+  // עם הסכום והתאריך, ולא לבצע פעולה כספית בלי שהמזכיר ידע.
+  const [unloadWarn, setUnloadWarn] = useState<MaternityStatus | null>(null)
 
   const pill = STATUS_PILL[aid.status] ?? STATUS_PILL.pending
   const Icon = pill.icon
+
+  // טעינה חיה בתיק — כסף שנמצא כרגע בכרטיס של היולדת
+  const loadedAid = aid as unknown as { card_load_status?: string; card_tlush_id?: string | null; card_load_amount?: number | null; card_loaded_at?: string | null }
+  const hasLiveLoad = loadedAid.card_load_status === 'loaded' && !!loadedAid.card_tlush_id
+  const loadAmount = Number(loadedAid.card_load_amount ?? 0)
+  const loadedAtText = loadedAid.card_loaded_at
+    ? format(new Date(loadedAid.card_loaded_at), 'dd/MM/yyyy HH:mm')
+    : null
+
+  // פריקת הטעינה — נקראת אחרי שינוי סטטוס שמוציא את התיק מ"מאושר"
+  const unloadCard = async (nextLabel: string, rejected: boolean) => {
+    try {
+      const res = await fetch('/api/nedarim/unload-card', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aidId: aid.id, reason: `שינוי סטטוס הלידה ל"${nextLabel}"`, rejected }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || d.ok === false) {
+        toast.error(`הסטטוס עודכן, אך ביטול הטעינה נכשל: ${d.error ?? res.status}. יש לפרוק ידנית בנדרים.`)
+        return
+      }
+      if (d.unloaded) {
+        toast.success(d.mailed
+          ? 'הטעינה בוטלה, והמייל שמבטל את הודעת האישור נשלח ליולדת'
+          : 'הטעינה בוטלה — היתרה אופסה והכרטיס נותק מהמשפחה')
+        if (d.unloaded && d.mailError) toast.error(`מייל התיקון לא נשלח: ${d.mailError}`)
+      }
+    } catch {
+      toast.error('הסטטוס עודכן, אך ביטול הטעינה נכשל (שגיאת רשת). יש לפרוק ידנית בנדרים.')
+    }
+  }
 
   const setStatus = async (next: MaternityStatus, reason?: string, note?: string) => {
     // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר לידה גם אם היחוס
@@ -209,6 +247,11 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
               body: JSON.stringify({ beneficiaryId: mother.id }),
             }).catch(() => {})
           }
+        }
+        // ⚠️ יוצאים מ"מאושר" ויש טעינה חיה → פורקים אותה. בלי זה בקשה שנדחתה
+        // המשיכה להיות ממומנת: הכסף נשאר בכרטיס והמלאי כבר נוכה.
+        if (next !== 'active' && hasLiveLoad) {
+          await unloadCard(STATUS_PILL[next]?.label ?? next, next === 'cancelled')
         }
         // דחיית לידה עם סיבה — שולח ליולדת מייל מעוצב עם סיבת הדחייה
         if (next === 'cancelled' && reason) {
@@ -263,6 +306,16 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     { value: 'pending',   label: 'החזר לממתין',  cls: 'text-amber-700 hover:bg-amber-50', icon: Clock },
   ]
 
+  // המשך אחרי אישור אזהרת ביטול הטעינה — ממשיכים לזרימה הרגילה של אותו סטטוס
+  const proceedAfterUnloadWarn = () => {
+    const value = unloadWarn
+    setUnloadWarn(null)
+    if (!value) return
+    if (value === 'cancelled') { setRejectReason(''); setRejectNote(''); setRejectOpen(true); return }
+    if (value === 'deep_review') { setDeepReason(''); setDeepOpen(true); return }
+    void setStatus(value)
+  }
+
   // המשך אישור הלידה אחרי שער המשפחה: בדיקת מלאי כרטיסים ואז אישור.
   // מופרד כדי שגם "אשר בכל זאת" מאזהרת המשפחה יעבור דרך אותה בדיקת מלאי.
   const proceedApproveAfterFamily = async () => {
@@ -282,6 +335,12 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   // בחירת אפשרות — דחייה ('cancelled') נפתחת דרך חלונית סיבה; אישור לידה ('active')
   // בודק אישור משפחה ומלאי כרטיסים ומזהיר אם צריך; השאר מיד.
   const onOption = async (value: MaternityStatus) => {
+    // יש טעינה חיה ומוציאים את התיק מ"מאושר" → קודם אזהרה מפורשת עם הסכום והתאריך
+    if (hasLiveLoad && value !== 'active') {
+      setOpen(false)
+      setUnloadWarn(value)
+      return
+    }
     if (value === 'cancelled') {
       setOpen(false)
       setRejectReason('')
@@ -409,6 +468,52 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
           </div>
         </div>
       )}
+      {/* ── אזהרת ביטול טעינה ──
+          נפתחת לפני *כל* יציאה מ"מאושר" כשיש טעינה חיה. אומרת במפורש כמה כסף
+          ומאיזה תאריך עומד להתבטל — פעולה כספית לא נעשית בלי שהמזכיר יידע. */}
+      {unloadWarn && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
+          onClick={() => setUnloadWarn(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-amber-500 px-5 py-4 flex items-center gap-2.5">
+              <AlertTriangle size={22} className="text-white flex-shrink-0" />
+              <h3 className="text-base font-extrabold text-white">שימו לב — הטעינה תתבטל</h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-slate-800 leading-relaxed mb-3">
+                לתיק זה בוצעה טעינה
+                {loadAmount > 0 && <> בסך <strong className="text-amber-700">{loadAmount.toLocaleString('he-IL')} ₪</strong></>}
+                {loadedAtText && <> בתאריך <strong className="ltr-num">{loadedAtText}</strong></>}.
+              </p>
+              <div className="rounded-xl bg-amber-50 border-2 border-amber-300 px-4 py-3 mb-3">
+                <p className="text-sm font-bold text-amber-900 leading-relaxed">
+                  שינוי הסטטוס ל&quot;{STATUS_PILL[unloadWarn]?.label ?? unloadWarn}&quot; יבטל את הטעינה:
+                </p>
+                <ul className="mt-2 space-y-1 text-[13px] text-amber-900 leading-relaxed">
+                  <li>· הטעינה תיפרק בנדרים פלוס והיתרה בכרטיס תתאפס</li>
+                  <li>· הכרטיס המגנטי ינותק מהמשפחה</li>
+                  <li>· הפעולה תתועד ביומן הפעילות של התיק</li>
+                  <li>· ליולדת יישלח מייל שמבטל את הודעת האישור שקיבלה</li>
+                </ul>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                לאישור מחדש בהמשך יהיה צורך לטעון את הכרטיס שוב.
+              </p>
+            </div>
+            <div className="px-5 pb-5 flex flex-col gap-2">
+              <button type="button" onClick={proceedAfterUnloadWarn}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-amber-500 to-amber-600 px-4 py-3 text-sm font-bold text-white transition hover:from-amber-600 hover:to-amber-700">
+                <Check size={16} /> הבנתי — שנה סטטוס ובטל את הטעינה
+              </button>
+              <button type="button" onClick={() => setUnloadWarn(null)}
+                className="w-full rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                השאר כמו שזה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {rejectOpen && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/50 p-4" dir="rtl"
           onClick={() => setRejectOpen(false)}>

@@ -254,13 +254,13 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
                     <td className="px-2.5 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                    <td className="px-2.5 py-3 align-middle text-slate-700">
-                      <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    <td className="px-2.5 py-3 align-middle text-slate-700 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
                         {(() => {
                           const nm = babyNameLabel(aid as AidNameFields)
                           if (nm.missing) return <span className="text-slate-300">—</span>
                           return nm.pending
-                            ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">⏳ {nm.text}</span>
+                            ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">⏳ {nm.text}</span>
                             : <span>{nm.text}</span>
                         })()}
                         {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}

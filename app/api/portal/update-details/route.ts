@@ -4,6 +4,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
 import { normalizePhone } from '@/lib/phone'
 import { validateIsraeliId } from '@/lib/validation'
+import { syncMaternityNamesFromChildren } from '@/lib/babyNames'
 
 export const dynamic = 'force-dynamic'
 
@@ -167,6 +168,16 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from('beneficiaries').update(update).eq('id', String(beneficiary_id))
   if (error) return NextResponse.json({ error: `שגיאה בעדכון: ${error.message}` }, { status: 500 })
+
+  // ⚠️ שם ילד שתוקן כאן חייב להגיע גם לתיק הלידה. בלי זה היולדת מתקנת את השם
+  // בעדכון הפרטים, תיק הלידה ממשיך להציג "עדיין אין שם", ובבית ההחלמה לא יודעים
+  // מה שם התינוק — בדיוק המקרה שדווח. best-effort: כשל לא מפיל את העדכון.
+  if (children !== undefined) {
+    try {
+      const n = await syncMaternityNamesFromChildren(admin, String(beneficiary_id), update.children)
+      if (n) console.log(`[update-details] שם התינוק סונכרן ל-${n} תיקי לידה`)
+    } catch (e) { console.error('[update-details] sync baby name failed:', e) }
+  }
 
   return NextResponse.json({ ok: true })
 }
