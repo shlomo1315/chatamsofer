@@ -176,7 +176,9 @@ export default function StatusControl({ id, status, advance, readOnly }: {
   const options: { value: EligibilityStatus; label: string; cls: string; icon: typeof Check }[] = [
     { value: 'approved',     label: 'אישור יחוס',       cls: 'text-green-700 hover:bg-green-50',  icon: Check    },
     { value: 'rejected',     label: 'דחה',              cls: 'text-red-600 hover:bg-red-50',      icon: X        },
-    { value: 'docs_pending', label: 'השלמת מסמכים',    cls: 'text-blue-600 hover:bg-blue-50',    icon: FileText },
+    // ⚠️ "השלמת מסמכים" הוסר מתפריט הצאצא בכוונה: הבקשה נעשית מהמחלקה שצריכה
+    // את המסמכים (כרטסת הלידה / ההלוואה), שם יודעים מה חסר ובשביל מה. התצוגה
+    // של הסטטוס נשארה — משפחה שנמצאת במעגל התיקונים עדיין מוצגת כך כאן.
     // המסמכים והפרטים תקינים, רק היחוס צריך בדיקה — עובר לאחראי הבדיקה המעמיקה
     { value: 'deep_review',  label: 'העבר לאישור מנהל לאחר בדיקת מסמכים', cls: 'text-orange-700 hover:bg-orange-50', icon: AlertTriangle },
     { value: 'pending',      label: 'החזר לממתין',      cls: 'text-amber-700 hover:bg-amber-50',  icon: Clock    },

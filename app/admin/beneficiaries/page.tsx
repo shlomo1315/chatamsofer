@@ -28,6 +28,9 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         </AdminOnly>
       </PageHeader>
 
+      {/* ⚠️ מסך הצאצאים אינו מציג את כרטיסי "השלמת מסמכים" ו"הוחזרו תיקונים":
+          מעגל התיקונים מנוהל מהמחלקה שביקשה אותו (לידות/הלוואות), ובמסך הזה
+          שני הכרטיסים רק העמיסו את שורת הסינון. שאר המחלקות לא נגעו. */}
       <BeneficiariesTable
         data={rows}
         counts={counts}
@@ -37,6 +40,7 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         status={p.status}
         sort={p.sort}
         marital={p.marital}
+        cardKeys={['all', 'pending', 'deep_review', 'approved', 'rejected']}
       />
     </div>
   )
