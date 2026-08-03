@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyPublicToken } from '@/lib/publicToken'
+import { babyNamePatch, type AidNameFields } from '@/lib/babyNames'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,15 +35,17 @@ export async function POST(request: NextRequest) {
 
   const { data: aid } = await admin
     .from('maternity_aids')
-    .select('id, babies, beneficiary_id, baby_id_number')
+    .select('id, baby_name, baby_name_pending, babies, beneficiary_id, baby_id_number')
     .eq('id', aidId)
     .maybeSingle()
   if (!aid) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
 
-  // עדכון השם בתיק + כיבוי דגל "אין שם"
+  // עדכון השם בתיק + כיבוי דגל "אין שם".
+  // ⚠️ דרך babyNamePatch — כדי שהשם ייכתב גם ל-babies[] וגם ל-baby_name. קודם
+  // נכתב רק השדה הסקלרי, וכרטסת הלידה (שקוראת את המערך) המשיכה להציג את הישן.
   const { error } = await admin
     .from('maternity_aids')
-    .update({ baby_name: name, baby_name_pending: false, updated_at: new Date().toISOString() })
+    .update(babyNamePatch(aid as AidNameFields, name))
     .eq('id', aidId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

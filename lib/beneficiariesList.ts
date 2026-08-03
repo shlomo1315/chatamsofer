@@ -15,6 +15,21 @@ export const LIST_COLUMNS =
 // כרטיסי הסטטוס שהטבלה מציגה — ה-counts נשלפים לכל אחד בנפרד מ-DB.
 export const STATUS_KEYS = ['pending', 'docs_pending', 'docs_returned', 'deep_review', 'approved', 'rejected', 'review'] as const
 
+// ─────────────────────────────────────────────────────────────────────────────
+// "ממתין לאישור ראשוני" = כל מה שעדיין לא הוכרע.
+//
+// ⚠️ מעגל התיקונים (השלמת מסמכים / הוחזרו תיקונים) הוא *מצב ביניים של המתנה*,
+// ולא סטטוס משלו מבחינת הכרטסת. כשכרטיסי מעגל התיקונים הוסרו ממסך הצאצאים,
+// הרשומות האלה לא נספרו באף כרטיס — סך הכול היה 119 וסכום הכרטיסים 109, כלומר
+// 10 משפחות שנעלמו מהעין. הקיבוץ מחזיר אותן ל"ממתין לאישור ראשוני": גם הספירה
+// וגם הסינון בלחיצה. הסטטוס המדויק של כל שורה ממשיך להופיע בתג שלה בטבלה.
+//
+// review — סטטוס היסטורי שנשאר בנתונים; נספר גם הוא כהמתנה ולא נופל בין הכיסאות.
+// ─────────────────────────────────────────────────────────────────────────────
+const PENDING_GROUP = ['pending', 'docs_pending', 'docs_returned', 'review']
+// eligibility_status ריק (רשומות ותיקות) — גם הוא המתנה, אחרת הוא לא נספר כלל
+const PENDING_OR = `eligibility_status.in.(${PENDING_GROUP.join(',')}),eligibility_status.is.null`
+
 // עמודות שהחיפוש החופשי מכסה (ilike). trigram indexes קיימים על שם/טלפון.
 const SEARCH_COLUMNS = [
   'full_name', 'family_name', 'id_number', 'phone', 'phone2', 'email',
@@ -71,7 +86,8 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
   // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   dataQ = applySpecial(dataQ)
-  if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
+  if (p.status === 'pending') dataQ = dataQ.or(PENDING_OR)
+  else if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
   if (maritalValues.length) dataQ = dataQ.in('marital_status', maritalValues)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
   const { data, error } = await dataQ
@@ -88,7 +104,8 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
     try {
       let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
       q = applySpecial(q)
-      if (status !== 'all') q = q.eq('eligibility_status', status)
+      if (status === 'pending') q = q.or(PENDING_OR)
+      else if (status !== 'all') q = q.eq('eligibility_status', status)
       if (maritalValues.length) q = q.in('marital_status', maritalValues)
       if (p.q) q = q.or(searchOr(p.q))
       const { count: c, error: cErr } = await q

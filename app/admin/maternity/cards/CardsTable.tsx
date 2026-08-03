@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { useRouter } from 'next/navigation'
 import { Check, X, CreditCard, Loader2, Search, RotateCcw } from 'lucide-react'
 import type { MaternityAid, CardCenter, CardStatus } from '@/types'
@@ -104,7 +105,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
     if (filter !== 'all' && s !== filter) return false
     if (!query.trim()) return true
     const b = a.beneficiary as Ben | undefined
-    const hay = [motherName(b), b?.spouse_id_number, a.baby_name].filter(Boolean).join(' ').toLowerCase()
+    const hay = [motherName(b), b?.spouse_id_number, babyNameLabel(a as AidNameFields).text].filter(Boolean).join(' ').toLowerCase()
     return hay.includes(query.trim().toLowerCase())
   })
 
@@ -162,7 +163,10 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                   className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer">
                   <td className="px-5 py-4 font-semibold text-slate-800 whitespace-nowrap border-l border-slate-100">{motherName(b)}</td>
                   <td className="px-5 py-4 font-mono text-slate-600 border-l border-slate-100"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
-                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{aid.baby_name ?? <span className="text-slate-300">—</span>}</td>
+                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{(() => {
+                    const nm = babyNameLabel(aid as AidNameFields)
+                    return nm.missing ? <span className="text-slate-300">—</span> : <span className={nm.pending ? 'text-amber-700 font-semibold' : ''}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
+                  })()}</td>
                   <td className="px-5 py-4 text-slate-600 border-l border-slate-100"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
                   <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{center?.name ?? <span className="text-slate-300">—</span>}</td>
                   <td className="px-5 py-4 border-l border-slate-100"><span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>

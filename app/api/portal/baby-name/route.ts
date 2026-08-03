@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
+import { babyNamePatch, type AidNameFields } from '@/lib/babyNames'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,9 +50,19 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // ⚠️ קוראים את התיק לפני העדכון: השם נכתב גם ל-babies[] וגם ל-baby_name,
+  // והדגל "עדיין אין שם" מכובה. בלי כיבוי הדגל התיק נשאר ב"ממתין לתיקונים"
+  // גם אחרי שהיולדת השלימה את השם.
+  const { data: aid } = await admin.from('maternity_aids')
+    .select('id, baby_name, baby_name_pending, babies')
+    .eq('id', maternity_id)
+    .eq('beneficiary_id', beneficiary_id)
+    .maybeSingle()
+  if (!aid) return NextResponse.json({ error: 'הרשומה לא נמצאה' }, { status: 404 })
+
   // עדכון רק אם הלידה שייכת למוטב (אימות בעלות)
   const { error } = await admin.from('maternity_aids')
-    .update({ baby_name: baby_name.trim(), updated_at: new Date().toISOString() })
+    .update(babyNamePatch(aid as AidNameFields, baby_name.trim()))
     .eq('id', maternity_id)
     .eq('beneficiary_id', beneficiary_id)
   if (error) return NextResponse.json({ error: 'שגיאה בעדכון' }, { status: 500 })
