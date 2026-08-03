@@ -8,6 +8,7 @@ import { unstable_cache } from 'next/cache'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getPendingTasks } from '@/lib/pendingTasks'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import PendingTasksPanel from './PendingTasksPanel'
 
 interface DashData {
@@ -62,7 +63,7 @@ const getStats = unstable_cache(
     const [
       totalBeneficiaries, newBeneficiariesWeek, approved, pending,
       activeLoans, pendingLoans, defaultedLoans, loansApprovedWeek,
-      maternityActive, maternityPending, maternityDeepReview, cardsLoaded, cardsPending,
+      maternityActive, maternityPending, maternityDeepReview, activeAidRows,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
       activeLoanAmounts, cardStockBalance, dismissedTasks, deepReview,
@@ -75,11 +76,16 @@ const getStats = unstable_cache(
       supabase.from('loans').select('id', headCount).in('status', ['pending', 'inquiry']),
       supabase.from('loans').select('id', headCount).eq('status', 'defaulted'),
       supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']).gte('created_at', weekAgo),
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active'),
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'pending'),
+      // ⚠️ לידות שקטות מוצגות בלשונית נפרדת ומסוננות ממסך היולדות, ולכן הן
+      // מוחרגות גם כאן: אחרת "תיקים פעילים" בדשבורד מציג 50 והמסך 49.
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('birth_type.is.null,birth_type.neq.silent'),
+      supabase.from('maternity_aids').select('id', headCount).eq('status', 'pending').or('birth_type.is.null,birth_type.neq.silent'),
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'deep_review'),
-      supabase.from('maternity_aids').select('id', headCount).eq('card_status', 'loaded'),
-      supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('card_status.is.null,card_status.eq.pending'),
+      // ⚠️ מקור אמת יחיד עם מסך הכרטיסים, ולא ספירה עצמאית: העמודה הישנה
+      // card_status כמעט אינה נכתבת עוד (card_load_status היא החיה), ולכן
+      // "כרטיסים טעונים" בדשבורד הראה 52 בזמן שמסך הכרטיסים הראה 49. שני
+      // מספרים לאותו דבר = המנהל מפסיק להאמין לשניהם.
+      supabase.from('maternity_aids').select(`id, status, ${AWAITING_SELECT}`).eq('status', 'active'),
       supabase.from('widow_requests').select('id', headCount).eq('status', 'pending'),
       supabase.from('widow_requests').select('id', headCount).eq('status', 'in_progress'),
       supabase.from('distributions').select('id', headCount).in('status', ['planning', 'active']),
@@ -100,7 +106,11 @@ const getStats = unstable_cache(
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'deep_review'),
     ])
 
-    const loadedCount = cardsLoaded.count ?? 0
+    // כרטיסים שנמסרו = לידות מאושרות שמחזיקות כרטיס (נטען, או נפרק בתום
+    // הזכאות — הכרטיס נוצל). זהה להגדרה במסך הכרטיסים.
+    const aidRows = (activeAidRows.data ?? []) as (AwaitingAid & { card_load_status?: string | null })[]
+    const loadedCount = aidRows.filter(a => a.card_load_status === 'loaded' || a.card_load_status === 'unloaded').length
+    const awaitingCount = aidRows.filter(isAwaitingCard).length
 
     // ── חלוקת החגים הפתוחה ──
     // ⚠️ שאילתה תלויה (קודם החלוקה, אחר כך הנרשמים אליה) ולכן אינה ב-Promise.all.
@@ -128,7 +138,7 @@ const getStats = unstable_cache(
       maternityPending: maternityPending.count ?? 0,
       maternityDeepReview: maternityDeepReview.count ?? 0,
       cardsLoaded: loadedCount,
-      cardsPending: cardsPending.count ?? 0,
+      cardsPending: awaitingCount,
       cardsRemaining: Number(cardStockBalance.data?.balance ?? 0),
       widowPending: widowPending.count ?? 0,
       widowInProgress: widowInProgress.count ?? 0,
@@ -297,7 +307,7 @@ export default async function DashboardPage() {
             accent="#10b981"
             rows={[
               { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: s.cardsPending > 0 ? 'warning' : 'neutral' },
-              { label: 'כרטיסים טעונים', value: fmt(s.cardsLoaded), tone: 'success' },
+              { label: 'נמסרו ללידות מאושרות', value: fmt(s.cardsLoaded), tone: 'success' },
               { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: s.cardsRemaining < 5 ? 'danger' : 'info' },
             ]}
           />
