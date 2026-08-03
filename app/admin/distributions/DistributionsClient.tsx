@@ -11,7 +11,9 @@ import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButton
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 const fmtCur = (n?: number) =>
   n != null
-    ? new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
+    // ⚠️ סמל השקל *אחרי* המספר: Intl עם style currency מציב אותו לפני, וזה
+    // לא הצורה שקוראים בעברית ("500 ₪" ולא "₪500").
+    ? `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
     : '—'
 
 export default function DistributionsClient({ distributions }: { distributions: Distribution[] }) {

@@ -19,6 +19,7 @@ import NedarimSettings from './NedarimSettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
+import YemotHolidaySettings from './YemotHolidaySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
@@ -213,6 +214,11 @@ export default async function SettingsPage() {
         {/* Yemot maternity messages (editable text / human recordings) */}
         <Collapsible title="הקלטות שלוחת יולדות (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
           <YemotMaternitySettings />
+        </Collapsible>
+
+        {/* הודעות שלוחת חלוקות החגים — הערוץ המרכזי לרישום לחלוקה */}
+        <Collapsible title="הקלטות שלוחת חלוקות חגים (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
+          <YemotHolidaySettings />
         </Collapsible>
 
         {/* Full system backup (DB + files) to Google Drive */}

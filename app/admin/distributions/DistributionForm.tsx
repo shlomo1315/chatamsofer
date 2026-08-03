@@ -12,6 +12,36 @@ import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 // סכום), וזו כל מטרת שלב הרישום — לדעת מראש למה להיערך. לכן הוא מוצג בבירור
 // ומוסבר במקום.
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// שנות תשפ״ה→ תשצ״ה — נגזרות מהשנה העברית הנוכחית ולא רשימה קבועה בקוד, כדי
+// שהבורר לא יתיישן בעוד שנתיים.
+// ⚠️ הגרשיים נכתבים בגרש כפול עברי (״) ולא במרכאות לועזיות — כך זה נראה נכון
+// בעברית וגם אינו שובר את הקראת הטקסט בשלוחה הטלפונית.
+// ─────────────────────────────────────────────────────────────────────────────
+function hebrewYearOptions(): string[] {
+  // ⚠️ המאות אינן אות אחת: 700 = ת+ש (400+300), 500 = תק, 900 = תתק. מיפוי
+  // "אות אחת למאה" היה מייצר "תזפ״ו" במקום "תשפ״ו".
+  const HUNDREDS: Record<number, string> = { 5: 'תק', 6: 'תר', 7: 'תש', 8: 'תת', 9: 'תתק' }
+  const ONES = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט']
+  const TENS = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ']
+  // השנה העברית הנוכחית לפי הלוח הגרגוריאני (מדויק דיו לבורר שנים: מספטמבר
+  // ואילך כבר השנה העברית הבאה)
+  const now = new Date()
+  const base = now.getFullYear() + 3760 + (now.getMonth() >= 8 ? 1 : 0)
+  const out: string[] = []
+  for (let y = base - 1; y <= base + 5; y++) {
+    const within = y - 5000                    // 786 → תשפ״ו
+    const h = Math.floor(within / 100)
+    const t = Math.floor((within % 100) / 10)
+    const o = within % 10
+    const letters = `${HUNDREDS[h] ?? ''}${TENS[t] ?? ''}${ONES[o] ?? ''}`
+    // גרש כפול לפני האות האחרונה — הצורה המקובלת (תשפ״ו)
+    const label = letters.length > 1 ? `${letters.slice(0, -1)}״${letters.slice(-1)}` : letters
+    out.push(label)
+  }
+  return out
+}
+
 export interface DistributionFormValues {
   id?: string
   name?: string | null
@@ -20,6 +50,8 @@ export interface DistributionFormValues {
   amount_per_family?: number | null
   distribution_date?: string | null
 }
+
+const YEARS = hebrewYearOptions()
 
 export default function DistributionForm({ initial }: { initial?: DistributionFormValues }) {
   const router = useRouter()
@@ -66,7 +98,12 @@ export default function DistributionForm({ initial }: { initial?: DistributionFo
         </div>
         <div className="sm:col-span-1">
           <label className="mb-1.5 block text-xs font-bold text-slate-600">שנה</label>
-          <input value={year} onChange={e => setYear(e.target.value)} placeholder='למשל: תשפ"ו' className={field} />
+          <select value={year} onChange={e => setYear(e.target.value)} className={field}>
+            <option value="">— בחרו שנה —</option>
+            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {/* שנה שנשמרה בעבר ואינה בטווח הבורר — נשארת זמינה כדי שעריכה לא תמחק אותה */}
+            {year && !YEARS.includes(year) && <option value={year}>{year}</option>}
+          </select>
         </div>
         <div className="sm:col-span-1">
           <label className="mb-1.5 block text-xs font-bold text-slate-600">סכום לכל משפחה (₪)</label>

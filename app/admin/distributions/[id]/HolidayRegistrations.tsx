@@ -30,7 +30,8 @@ export interface RegistrationRow {
 }
 
 const fmtDateTime = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yy HH:mm', { locale: he }) : '—'
-const fmtCur = (n: number) => new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
+// סמל השקל אחרי המספר — כך קוראים אותו בעברית ("500 ₪")
+const fmtCur = (n: number) => `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
 // ⚠️ טווחי הגיל ומספר הילדים הם *פילוח* ולא סינון של הנתונים: הכרטיסים
 // מסננים את הטבלה, כדי שאפשר יהיה לענות מיד על "כמה משפחות עם 6 ילדים ומעלה".
