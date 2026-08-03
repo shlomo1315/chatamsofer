@@ -38,6 +38,61 @@ export interface StrayCard {
   statusLabel: string
   /** ההסבר: למה הכרטיס הזה נוכה ואינו מגובה */
   reason: string
+  /**
+   * הכרטיס עדיין טעון בנדרים.
+   * ⚠️ ההבחנה קריטית: כרטיס טעון נמצא *מחוץ* למגירה — הכסף בו, וייתכן שהוא כבר
+   * בידי המשפחה. החזרתו למלאי הייתה יוצרת כרטיס פנטום: המערכת סופרת כרטיס
+   * שאינו קיים פיזית ומנפיקה אותו שוב. במקרה כזה הפעולה הנכונה היא ביטול
+   * הטעינה — והוא זה שמחזיר את הכרטיס למלאי.
+   */
+  loaded: boolean
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// כיסוי כרטיסים ללידות מאושרות — "יש 48 מאושרות, למה המערכת מפחיתה 46?"
+//
+// ⚠️ "מספר המאושרות" ו"מספר הכרטיסים שיצאו" אינם אותו מספר, לשני הכיוונים:
+// לידה מאושרת שביקשה בית החלמה בלבד אינה מקבלת כרטיס; לידה שההטענה שלה נכשלה
+// לא הוציאה כרטיס; ומצד שני יש כרטיסים טעונים בידי לידות שהאישור שלהן נסוג.
+// לכן ההשוואה מוצגת בשמות ולא כמספר יחיד — אחרת כל פער נראה כמו כרטיס אבוד.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface ApprovedGap {
+  aidId: string
+  name: string
+  reason: string
+}
+
+export interface ApprovedCoverage {
+  /** לידות מאושרות שביקשו כרטיס מזון */
+  total: number
+  /** מהן — כמה מחזיקות כרטיס בפועל */
+  withCard: number
+  /** המאושרות שאינן מחזיקות כרטיס, עם הסיבה */
+  missing: ApprovedGap[]
+}
+
+export function approvedCardCoverage(
+  activeAids: (ReconAid & { awaitingStock?: boolean })[],
+  heldIds: string[],
+): ApprovedCoverage {
+  const held = new Set(heldIds)
+  const missing: ApprovedGap[] = []
+  let withCard = 0
+  for (const aid of activeAids) {
+    if (held.has(aid.id)) { withCard++; continue }
+    // ⚠️ 'loaded'/'unloaded' בלי ניכוי מוחזק פירושו שהכרטיס נוכה לפני שהיומן
+    // קישר תיקים, או שהתיק נוצר מחדש. נספר כמחזיק — אחרת הוא היה מוצג כחסר
+    // בזמן שהמשפחה מחזיקה כרטיס טעון.
+    if (aid.card_load_status === 'loaded' || aid.card_load_status === 'unloaded') { withCard++; continue }
+    missing.push({
+      aidId: aid.id,
+      name: aid.name?.trim() || 'לא ידוע',
+      reason: aid.card_load_status === 'failed' ? 'ההטענה נכשלה — לא יצא כרטיס'
+        : aid.awaitingStock ? 'ממתינה למלאי — הכרטיס עוד לא יצא'
+        : 'אושרה אך טרם נטען לה כרטיס',
+    })
+  }
+  return { total: activeAids.length, withCard, missing }
 }
 
 export interface ReasonLine {
@@ -206,6 +261,7 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
         // ⚠️ ניכוי כפול על תיק תקין הוא סיפור אחר לגמרי מדחייה, וההסבר חייב
         // לומר זאת: אחרת המנהל מחפש למה הלידה "לא מאושרת" והיא כן מאושרת.
         reason: ok ? `נוכו ${held} כרטיסים לאותה לידה — עודף של ${stray}` : reason,
+        loaded: aid?.card_load_status === 'loaded',
       })
     }
   }

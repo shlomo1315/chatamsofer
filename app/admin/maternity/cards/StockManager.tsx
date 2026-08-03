@@ -20,7 +20,9 @@ type AwaitingRow = { id: string; name: string; failed: boolean; reason: string }
 // ⚠️ "הכנסתי 300, אישרתי 48, למה נשארו 247?" — שאלה שאין עליה תשובה במסך שמציג
 // מספר אחד. הפילוח נגזר מכל היומן ומצביע בשם ובסיבה על כל כרטיס שנוכה ואינו
 // מגובה בלידה מאושרת, כך שהפער תמיד מוסבר וגם ניתן לתיקון מכאן.
-type StrayRow = { aidId: string; name: string; cards: number; statusLabel: string; reason: string }
+type StrayRow = { aidId: string; name: string; cards: number; statusLabel: string; reason: string; loaded?: boolean }
+// לידות מאושרות מול כרטיסים שיצאו — "יש 48 מאושרות, למה המערכת מפחיתה 46?"
+type Coverage = { total: number; withCard: number; missing: { aidId: string; name: string; reason: string }[] }
 type Recon = {
   balance: number; totalIn: number; totalOut: number
   heldOk: number; strayCards: number; expectedBalance: number
@@ -71,6 +73,8 @@ export default function StockManager() {
   const [running, setRunning] = useState(false)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
   const [recon, setRecon] = useState<Recon | null>(null)
+  const [coverage, setCoverage] = useState<Coverage | null>(null)
+  const [showMissing, setShowMissing] = useState(false)
   const [showRecon, setShowRecon] = useState(false)
   const [returning, setReturning] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -87,6 +91,7 @@ export default function StockManager() {
       setAwaitingDetails(Array.isArray(d.awaitingDetails) ? d.awaitingDetails : [])
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
       setRecon(d.recon && typeof d.recon.totalIn === 'number' ? d.recon as Recon : null)
+      setCoverage(d.coverage && typeof d.coverage.total === 'number' ? d.coverage as Coverage : null)
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
@@ -246,6 +251,37 @@ export default function StockManager() {
                 במלאי <strong className="ltr-num text-slate-800">{recon.balance}</strong>
               </span>
             </div>
+            {/* ⚠️ הפער שגורם לכל הבלבול: "48 מאושרות" אינו "48 כרטיסים יצאו".
+                מוצג בשם ובסיבה, כדי שלא יהיה צריך לנחש איפה נעלם כרטיס. */}
+            {coverage && coverage.total > 0 && (
+              <div className="w-full text-[12px] leading-relaxed text-slate-500">
+                <span className="ltr-num font-bold text-slate-700">{coverage.total}</span> לידות מאושרות שביקשו כרטיס ·
+                <span className="ltr-num font-bold text-slate-700"> {coverage.withCard}</span> מחזיקות כרטיס בפועל
+                {coverage.missing.length > 0 && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => setShowMissing(s => !s)}
+                      className="font-bold text-amber-700 underline decoration-dotted underline-offset-2 hover:text-amber-900">
+                      {coverage.missing.length} ללא כרטיס — {showMissing ? 'הסתר' : 'מי?'}
+                    </button>
+                  </>
+                )}
+                {recon.strayCards > 0 && (
+                  <span className="text-slate-400"> · ועוד {recon.strayCards} כרטיסים בידי לידות שאינן מאושרות</span>
+                )}
+                {showMissing && coverage.missing.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {coverage.missing.map(m => (
+                      <button key={m.aidId} type="button" onClick={() => router.push(`/admin/maternity/${m.aidId}`)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-right hover:border-indigo-300">
+                        <span className="block text-[12px] font-bold text-slate-800">{m.name}</span>
+                        <span className="block text-[11px] text-slate-500">{m.reason}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               {canEdit && (
                 <button type="button" onClick={() => setModal('baseline')}
@@ -299,13 +335,21 @@ export default function StockManager() {
                       </span>
                       <span className="mt-0.5 block text-[11px] text-slate-500">{s.reason}</span>
                     </button>
-                    {canEdit && (
+                    {/* ⚠️ כרטיס שעדיין טעון אינו במגירה — הכסף בו וייתכן שהוא בידי
+                        המשפחה. "החזרה למלאי" כאן הייתה יוצרת כרטיס פנטום, ולכן
+                        הפעולה היא ביטול הטעינה בכרטסת, שמחזיר את הכרטיס לבד. */}
+                    {canEdit && (s.loaded ? (
+                      <button type="button" onClick={() => router.push(`/admin/maternity/${s.aidId}`)}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-50">
+                        <AlertTriangle size={12} /> הכרטיס טעון — לביטול הטעינה
+                      </button>
+                    ) : (
                       <button type="button" onClick={() => void returnCard(s)} disabled={returning === s.aidId}
                         className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
                         {returning === s.aidId ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                         החזרה למלאי
                       </button>
-                    )}
+                    ))}
                   </div>
                 ))}
               </div>
@@ -417,7 +461,10 @@ export default function StockManager() {
       {modal === 'baseline' && (
         <BaselineModal
           currentBalance={balance ?? 0}
-          issued={recon?.heldOk ?? 0}
+          // ⚠️ "יצאו מהמגירה" = כרטיסים שנטענו בפועל: אלה שבידי לידות מאושרות
+          // *וגם* אלה שנטענו ליולדות שהאישור שלהן נסוג — הכרטיס אצלן. כרטיס
+          // שנוכה וההטענה שלו נכשלה נשאר במגירה ולכן אינו נספר כאן.
+          issued={(recon?.heldOk ?? 0) + (recon?.strays ?? []).filter(s => s.loaded).reduce((n, s) => n + s.cards, 0)}
           onClose={() => setModal(null)}
           onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
         />
