@@ -213,7 +213,7 @@ function chainFullyVerified(byId: Map<string, TreeNodeRow>, nodeId: string): boo
 }
 
 /**
- * מאשר משפחות שהיחוס שלהן הושלם — הצומת שאושר וכל צאצאיו.
+ * מאשר משפחות שהיחוס שלהן הושלם — הצומת שאושר, כל צאצאיו, *וכל אבותיו*.
  *
  * ⚠️ מקודמות רק משפחות במצב 'pending'. משפחה ב-'docs_pending' ממתינה
  * למסמכים, וקידום אוטומטי שלה היה מדלג על דרישת המסמכים בלי שאיש שם לב;
@@ -232,9 +232,18 @@ export async function approveVerifiedBeneficiaries(
   changedNodeId: string,
 ): Promise<string[]> {
   const byId = new Map(nodes.map(n => [n.id, n]))
-  // הצומת שאושר וכל צאצאיו: אישור של אב עשוי להשלים את השרשרת גם לצאצאים
-  // שכבר היו מאומתים בעצמם וחיכו דווקא לחוליה הזו.
-  const candidates = [...subtreeNodeIds(nodes, changedNodeId)].filter(id => chainFullyVerified(byId, id))
+  // ── מי מועמד לקידום ──
+  // • הצומת שאושר וכל *צאצאיו* — אישור של אב עשוי להשלים את השרשרת גם לצאצאים
+  //   שכבר היו מאומתים בעצמם וחיכו דווקא לחוליה הזו.
+  // • ⚠️ וגם כל *אבותיו*: אישור צומת מאמת אוטומטית את שרשרת האבות ה"ממתינים"
+  //   שמעליו (ראו הראוט), ולכן ברגע הזה גם היחוס שלהם הושלם. עד כה הם לא נבדקו
+  //   כלל — מי שאישר את הבן ראה שהאבא נצבע ירוק בעץ אבל הכרטסת שלו נשארה
+  //   "ממתינה לאישור", בלי שום דבר שיסגור את הפער.
+  const scope = new Set<string>([
+    ...subtreeNodeIds(nodes, changedNodeId),
+    ...pathToRoot(byId, changedNodeId).map(n => n.id),
+  ])
+  const candidates = [...scope].filter(id => chainFullyVerified(byId, id))
   if (!candidates.length) return []
 
   // ⚠️ לא רק 'pending': משפחה במצב 'review' (ממתינה לבדיקת מסמכים) או בלי
