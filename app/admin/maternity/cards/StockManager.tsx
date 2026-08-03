@@ -16,6 +16,18 @@ type LedgerRow = {
 // יולדת שממתינה לכרטיס — עם שם וסיבה, כדי שהמונה יהיה בר-בירור ולא מספר סתום
 type AwaitingRow = { id: string; name: string; failed: boolean; reason: string }
 
+// ── התאמת המלאי ────────────────────────────────────────────────────────────
+// ⚠️ "הכנסתי 300, אישרתי 48, למה נשארו 247?" — שאלה שאין עליה תשובה במסך שמציג
+// מספר אחד. הפילוח נגזר מכל היומן ומצביע בשם ובסיבה על כל כרטיס שנוכה ואינו
+// מגובה בלידה מאושרת, כך שהפער תמיד מוסבר וגם ניתן לתיקון מכאן.
+type StrayRow = { aidId: string; name: string; cards: number; statusLabel: string; reason: string }
+type Recon = {
+  balance: number; totalIn: number; totalOut: number
+  heldOk: number; strayCards: number; expectedBalance: number
+  byReason: { reason: string; count: number; total: number }[]
+  strays: StrayRow[]
+}
+
 const REASON_LABEL: Record<LedgerRow['reason'], string> = {
   restock: 'הוספת מלאי',
   birth_approval: 'אישור לידה',
@@ -56,6 +68,9 @@ export default function StockManager() {
   const [showAwaiting, setShowAwaiting] = useState(false)
   const [running, setRunning] = useState(false)
   const [ledger, setLedger] = useState<LedgerRow[]>([])
+  const [recon, setRecon] = useState<Recon | null>(null)
+  const [showRecon, setShowRecon] = useState(false)
+  const [returning, setReturning] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<'add' | 'remove' | null>(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -69,9 +84,31 @@ export default function StockManager() {
       setAwaiting(typeof d.awaiting === 'number' ? d.awaiting : 0)
       setAwaitingDetails(Array.isArray(d.awaitingDetails) ? d.awaitingDetails : [])
       setLedger(Array.isArray(d.ledger) ? d.ledger : [])
+      setRecon(d.recon && typeof d.recon.totalIn === 'number' ? d.recon as Recon : null)
     } catch { /* ignore */ }
     setLoading(false)
   }, [])
+
+  // החזרת כרטיס תלוי למלאי — ניכוי שאינו מגובה בלידה מאושרת.
+  const returnCard = useCallback(async (row: StrayRow) => {
+    setReturning(row.aidId)
+    try {
+      const r = await fetch('/api/admin/card-stock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnAid: row.aidId, cards: row.cards, note: `החזרה למלאי — ${row.reason}` }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        setFlash(`${row.cards === 1 ? 'כרטיס' : `${row.cards} כרטיסים`} הוחזרו למלאי · ${row.name}`)
+        setTimeout(() => setFlash(''), 4000)
+      } else if (d?.error) {
+        setFlash(d.error)
+        setTimeout(() => setFlash(''), 5000)
+      }
+    } catch { /* ignore */ }
+    setReturning(null)
+    await load()
+  }, [load])
 
   // הרצת התור ידנית — משחררת יולדת שנתקעה בלי להוסיף מלאי.
   const runQueue = useCallback(async () => {
@@ -172,6 +209,103 @@ export default function StockManager() {
           </div>
         )}
       </div>
+
+      {/* ── התאמת מלאי: מאיפה הגיע המספר ── */}
+      {/* ⚠️ מוצג תמיד ולא רק בפער: זו הדרך היחידה לאמת את המלאי מול מה שהמנהל
+          יודע בוודאות — כמה כרטיסים קנה וכמה לידות אישר. */}
+      {!loading && recon && (
+        <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+              <span className="text-slate-500">
+                הוכנסו למלאי <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="text-slate-500">
+                נוכו <strong className="ltr-num text-slate-800">{recon.totalOut}</strong>
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="text-slate-500">
+                במלאי <strong className="ltr-num text-slate-800">{recon.balance}</strong>
+              </span>
+            </div>
+            <button type="button" onClick={() => setShowRecon(s => !s)}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline decoration-dotted underline-offset-2">
+              {showRecon ? 'הסתר פילוח' : 'פילוח מלא'}
+            </button>
+          </div>
+
+          {recon.strayCards > 0 && (
+            <div className="border-t border-amber-200 bg-amber-50/60 px-4 py-3">
+              <p className="flex items-start gap-1.5 text-sm font-bold text-amber-800">
+                <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+                <span>
+                  {recon.strayCards} כרטיסים נוכו ואינם מגובים בלידה מאושרת — לכן במלאי{' '}
+                  <span className="ltr-num">{recon.balance}</span> ולא{' '}
+                  <span className="ltr-num">{recon.expectedBalance}</span>
+                </span>
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-amber-700">
+                כל אישור לידה מנכה כרטיס. כשהבקשה חוזרת להמתנה, נדחית או שההטענה נכשלת — הניכוי אינו מתבטל
+                מעצמו. אלה הכרטיסים שנתקעו, וניתן להחזירם למלאי מכאן.
+              </p>
+              <div className="mt-2.5 flex flex-col gap-1.5">
+                {recon.strays.map(s => (
+                  <div key={s.aidId}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2">
+                    <button type="button" onClick={() => router.push(`/admin/maternity/${s.aidId}`)}
+                      className="text-right min-w-0 flex-1 group">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-[13px] font-bold text-slate-800 group-hover:text-indigo-700">{s.name}</span>
+                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{s.statusLabel}</span>
+                        {s.cards > 1 && (
+                          <span className="ltr-num rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">{s.cards} כרטיסים</span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">{s.reason}</span>
+                    </button>
+                    {canEdit && (
+                      <button type="button" onClick={() => void returnCard(s)} disabled={returning === s.aidId}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
+                        {returning === s.aidId ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                        החזרה למלאי
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showRecon && (
+            <div className="border-t border-slate-200 px-4 py-3">
+              <table className="w-full text-sm">
+                <tbody>
+                  {recon.byReason.map(l => (
+                    <tr key={l.reason} className="border-b border-slate-100 last:border-0">
+                      <td className="py-1.5 text-slate-600">{REASON_LABEL[l.reason as LedgerRow['reason']] ?? l.reason}</td>
+                      <td className="py-1.5 text-slate-400 text-[12px] ltr-num">{l.count} תנועות</td>
+                      <td className={`py-1.5 text-left font-bold ltr-num ${l.total > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {l.total > 0 ? `+${l.total}` : l.total}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-slate-200">
+                    <td className="py-1.5 font-bold text-slate-700">מלאי כרגע</td>
+                    <td />
+                    <td className="py-1.5 text-left font-extrabold text-slate-900 ltr-num">{recon.balance}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                מתוך {recon.totalOut} הכרטיסים שנוכו, {recon.heldOk} מוחזקים בידי לידות מאושרות
+                {recon.strayCards > 0 ? ` ו-${recon.strayCards} נתקעו ללא גיבוי` : ''}.
+                פריקה בתום שישה שבועות אינה פער — הכרטיס נוצל בפועל.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* יומן תנועות */}
       <div>
