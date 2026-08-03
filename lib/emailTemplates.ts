@@ -1592,3 +1592,50 @@ export function gratitudeReceivedEmail(opts: {
     }),
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// חזרה מאישור לידה — "המייל הקודם נשלח בטעות".
+//
+// ⚠️ למה זה נדרש: אישור לידה שולח מייל אישור וטוען כרטיס. כשמתברר שהאישור היה
+// שגוי (הסטטוס מוחזר לממתין או שהבקשה נדחית) הטעינה נפרקת — אבל המשפחה נשארה
+// עם מייל אישור ביד ועם ציפייה לכרטיס טעון. בלי הודעת תיקון מפורשת הפער הזה
+// מתגלה רק בחנות, מול הקופה.
+//
+// הניסוח מכוון: אומר במפורש שהמייל הקודם נשלח בטעות, מה המצב עכשיו, ומה יקרה
+// אם הבקשה תאושר בהמשך — בלי להיכנס לסיבת ההחלטה (היא נשלחת בנפרד בדחייה).
+// ─────────────────────────────────────────────────────────────────────────────
+export function birthApprovalRetractedEmail(
+  name: string,
+  opts: { rejected?: boolean } = {},
+): BuiltEmail {
+  const stateLine = opts.rejected
+    ? 'בקשתכם <strong>נדחתה</strong>, ואינה מאושרת.'
+    : 'בקשתכם <strong>אינה מאושרת בשלב זה</strong>, והיא ממתינה כעת לבדיקה ולאישור.'
+  const body = `
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
+      <p style="margin:0;color:#92400e;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+        המייל שקיבלתם מאיתנו על <strong>אישור בקשתכם</strong> נשלח אליכם <strong>בטעות</strong>.
+        ${stateLine}
+      </p>
+    </div>
+    <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+      אם בהמשך תאושר בקשתכם — תקבלו על כך הודעה נוספת במייל. עד אז אין צורך בפעולה מצדכם.
+    </p>
+    <p style="margin:0 0 6px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+      אנו מתנצלים על הטעות ועל אי הנוחות.
+    </p>
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">
+      בברכה מרובה,<br/>היכל החתם סופר
+    </p>`
+  return {
+    subject: 'עדכון בנוגע לבקשתכם — היכל החתם סופר',
+    html: shell({
+      preheader: 'המייל הקודם על אישור הבקשה נשלח בטעות — הבקשה אינה מאושרת בשלב זה.',
+      accent: '#d97706',
+      title: 'עדכון בנוגע לבקשתכם',
+      subtitle: 'אגף עזר ליולדות · היכל החתם סופר',
+      body,
+    }),
+  }
+}

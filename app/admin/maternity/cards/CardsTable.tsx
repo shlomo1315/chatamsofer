@@ -165,7 +165,7 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
                   <td className="px-5 py-4 font-mono text-slate-600 border-l border-slate-100"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
                   <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{(() => {
                     const nm = babyNameLabel(aid as AidNameFields)
-                    return nm.missing ? <span className="text-slate-300">—</span> : <span className={nm.pending ? 'text-amber-700 font-semibold' : ''}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
+                    return nm.missing ? <span className="text-slate-300">—</span> : <span className={nm.pending ? 'text-amber-700 font-semibold whitespace-nowrap' : ''}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
                   })()}</td>
                   <td className="px-5 py-4 text-slate-600 border-l border-slate-100"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
                   <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{center?.name ?? <span className="text-slate-300">—</span>}</td>

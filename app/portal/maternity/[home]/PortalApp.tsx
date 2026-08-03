@@ -651,7 +651,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                           <span className="inline-flex items-center gap-1.5">
                             {(() => {
                               const nm = babyNameLabel(aid as AidNameFields)
-                              return nm.pending ? <span className="text-amber-700 font-semibold">⏳ {nm.text}</span> : <span>{nm.text}</span>
+                              return nm.pending ? <span className="text-amber-700 font-semibold whitespace-nowrap">⏳ {nm.text}</span> : <span>{nm.text}</span>
                             })()}
                             {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"><Baby size={12} /> תאומים</span>}
                           </span>
