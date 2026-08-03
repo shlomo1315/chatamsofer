@@ -417,6 +417,7 @@ export default function StockManager() {
       {modal === 'baseline' && (
         <BaselineModal
           currentBalance={balance ?? 0}
+          issued={recon?.heldOk ?? 0}
           onClose={() => setModal(null)}
           onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
         />
@@ -440,26 +441,42 @@ export default function StockManager() {
 // ⚠️ אין כאן "כתיבת מלאי": המלאי נשאר סכום היומן, והספירה נרשמת כתנועת התאמה
 // מפורשת (baseline). מכאן והלאה ההתאמה נמדדת מנקודת הספירה — כך שיומן שצבר
 // תנועות בדיקה אינו מזהם את ההסבר, ומצד שני שום תנועה אמיתית לא נמחקת.
-function BaselineModal({ currentBalance, onClose, onDone }: {
+// ⚠️ שני מובנים שונים למספר אחד, וזה מקור לטעות יקרה: "300" יכול להיות מה
+// שנמצא במגירה עכשיו, או מה שנקנה בסך הכול. אם הוזן מספר הרכישה כאילו הוא
+// המלאי הפנוי, המערכת תחשוב שיש לה כרטיסים שכבר נמסרו ליולדות — ותנפיק יותר
+// ממה שקיים. לכן המובן נבחר במפורש, והחישוב מוצג לפני האישור.
+type CountMode = 'drawer' | 'purchased'
+
+function BaselineModal({ currentBalance, issued, onClose, onDone }: {
   currentBalance: number
+  /** כרטיסים שנטענו ומוחזקים כרגע בידי לידות מאושרות — אינם במגירה */
+  issued: number
   onClose: () => void
   onDone: (msg: string) => void
 }) {
+  const [mode, setMode] = useState<CountMode>('drawer')
   const [qty, setQty] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
-  const target = qty.trim() === '' ? null : Math.trunc(Number(qty.replace(/[^\d]/g, '')))
+  const entered = qty.trim() === '' ? null : Math.trunc(Number(qty.replace(/[^\d]/g, '')))
+  // במובן "נקנו בסך הכול" — הכרטיסים שכבר נטענו ונמסרו יורדים מהמספר
+  const target = entered == null ? null : mode === 'drawer' ? entered : Math.max(0, entered - issued)
   const diff = target == null ? 0 : target - currentBalance
+  const shortfall = mode === 'purchased' && entered != null && entered < issued
 
   const submit = async () => {
     if (target == null || !Number.isFinite(target) || target < 0) { setErr('יש להזין את מספר הכרטיסים שנמצאו בספירה'); return }
+    if (shortfall) { setErr(`נטענו כבר ${issued} כרטיסים — מספר הרכישה אינו יכול להיות קטן מהם`); return }
     setBusy(true); setErr('')
     try {
+      const modeNote = mode === 'purchased'
+        ? `ספירה: ${entered} נקנו בסך הכול, ${issued} נטענו ליולדות → ${target} במלאי`
+        : `ספירה פיזית: ${target} כרטיסים במגירה`
       const r = await fetch('/api/admin/card-stock', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ setBaseline: target, note: note.trim() || undefined }),
+        body: JSON.stringify({ setBaseline: target, note: note.trim() ? `${note.trim()} · ${modeNote}` : modeNote }),
       })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
@@ -479,12 +496,35 @@ function BaselineModal({ currentBalance, onClose, onDone }: {
         </div>
 
         <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
-          הזינו את מספר הכרטיסים שנמצאו בספירה הפיזית. המערכת תרשום תנועת התאמה, וההתאמה
-          במסך תימדד מנקודה זו והלאה — כך שתנועות מתקופת הבדיקות לא ימשיכו להשפיע על החישוב.
-          יומן התנועות נשמר במלואו.
+          הספירה קובעת <strong>כמה כרטיסים פיזיים זמינים להנפקה</strong>. ההתאמה במסך תימדד
+          מנקודה זו והלאה, כך שתנועות מתקופת הבדיקות לא ימשיכו להשפיע על החישוב, ויומן התנועות
+          נשמר במלואו.
+        </p>
+        {/* ⚠️ החשש הראשון של מי שלוחץ כאן הוא "מה יקרה לטעינות שכבר בוצעו".
+            התשובה חייבת להופיע לפני הכפתור, לא אחריו. */}
+        <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] leading-relaxed text-emerald-800">
+          הספירה <strong>אינה נוגעת בטעינות שבוצעו</strong>: אף ארנק בנדרים אינו נפרק, אף משפחה
+          אינה מאבדת את הטעינה שקיבלה, ולא נשלחת שום הודעה. זו רשומת מלאי בלבד.
         </p>
 
-        <label className="mb-1.5 block text-xs font-bold text-slate-600">מספר הכרטיסים בפועל</label>
+        <label className="mb-1.5 block text-xs font-bold text-slate-600">המספר שאני מזין הוא…</label>
+        <div className="mb-3 flex gap-2">
+          {([
+            { key: 'drawer' as CountMode, label: 'הכרטיסים שיש במגירה', hint: 'ספירה פיזית של מה שזמין להנפקה עכשיו' },
+            { key: 'purchased' as CountMode, label: 'סך הכרטיסים שנקנו', hint: `המערכת תפחית ${issued} שכבר נטענו ליולדות` },
+          ]).map(o => (
+            <button key={o.key} type="button" onClick={() => setMode(o.key)}
+              className={`flex-1 rounded-xl border px-3 py-2 text-right transition-colors ${
+                mode === o.key ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-slate-300'}`}>
+              <span className="block text-[12px] font-bold text-slate-800">{o.label}</span>
+              <span className="mt-0.5 block text-[10px] leading-snug text-slate-500">{o.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <label className="mb-1.5 block text-xs font-bold text-slate-600">
+          {mode === 'drawer' ? 'מספר הכרטיסים שנמצאו בספירה' : 'סך הכרטיסים שנקנו'}
+        </label>
         <input value={qty} onChange={e => setQty(e.target.value)} inputMode="numeric" dir="ltr" placeholder="300"
           className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
 
@@ -494,7 +534,16 @@ function BaselineModal({ currentBalance, onClose, onDone }: {
 
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
           <div className="flex justify-between"><span>מלאי מחושב כרגע</span><span className="ltr-num font-bold">{currentBalance}</span></div>
-          <div className="flex justify-between"><span>לפי הספירה</span><span className="ltr-num font-bold">{target ?? '—'}</span></div>
+          {mode === 'purchased' && (
+            <>
+              <div className="flex justify-between"><span>נקנו בסך הכול</span><span className="ltr-num font-bold">{entered ?? '—'}</span></div>
+              <div className="flex justify-between">
+                <span>נטענו ונמסרו ליולדות</span>
+                <span className="ltr-num font-bold text-rose-600">{issued > 0 ? `−${issued}` : 0}</span>
+              </div>
+            </>
+          )}
+          <div className="flex justify-between"><span>מלאי לאחר הספירה</span><span className="ltr-num font-bold">{target ?? '—'}</span></div>
           <div className="mt-1 flex justify-between border-t border-slate-200 pt-1">
             <span>תנועת ההתאמה שתירשם</span>
             <span className={`ltr-num font-bold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
@@ -502,6 +551,13 @@ function BaselineModal({ currentBalance, onClose, onDone }: {
             </span>
           </div>
         </div>
+
+        {shortfall && (
+          <p className="mt-2.5 flex items-start gap-1.5 text-[12px] font-bold text-rose-600">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            נטענו כבר {issued} כרטיסים — מספר הרכישה אינו יכול להיות קטן מהם.
+          </p>
+        )}
 
         {err && <p className="mt-2.5 text-sm font-bold text-red-600">{err}</p>}
 
