@@ -58,8 +58,9 @@ export default async function ReportsPage() {
     .filter((l: { status: string }) => l.status === 'active')
     .reduce((s: number, l: { amount: number }) => s + l.amount, 0)
 
+  // סמל השקל אחרי המספר ("12,500 ₪") — Intl עם style currency מציב אותו לפני
   const fmtCur = (n: number) =>
-    new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(n)
+    `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
   return (
     <div className="flex flex-col gap-6">

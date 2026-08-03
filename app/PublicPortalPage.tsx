@@ -1727,6 +1727,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [baby2IdError, setBaby2IdError] = useState('')
   const [recoveryHomes, setRecoveryHomes] = useState<string[]>(RECOVERY_HOMES_DEFAULT)
   const [recoveryHomesSilent, setRecoveryHomesSilent] = useState<string[]>([])
+  // ── חלוקת חגים ──
+  // ⚠️ נטען בכל כניסה לאזור האישי: הרישום נפתח ונסגר מהניהול, והכפתור חייב
+  // לשקף את המצב *כרגע* ולא מצב שנשמר בכניסה קודמת.
+  const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean } | null>(null)
+  const [holidaySaving, setHolidaySaving] = useState(false)
+
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
   const [showSilentInfo, setShowSilentInfo] = useState(false)
@@ -2645,6 +2651,42 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setStep('new-birth')
     return true
   }
+  // ⚠️ נטען פעם אחת לכל כניסה של משפחה מזוהה לאזור האישי. אין polling: המצב
+  // משתנה נדיר (פתיחה/סגירה מהניהול), ורענון הדף מביא אותו מחדש.
+  useEffect(() => {
+    if (step !== 'dashboard' || !beneficiary?.id) return
+    let alive = true
+    const t = setTimeout(() => {
+      void fetch(`/api/portal/holiday-register?beneficiary_id=${beneficiary.id}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(d => {
+          if (!alive) return
+          setHoliday(d?.open
+            ? { open: true, name: String(d.distribution?.name ?? 'חלוקת חגים'), year: d.distribution?.year ?? null, registered: !!d.registered }
+            : null)
+        })
+        .catch(() => {})
+    }, 0)
+    return () => { alive = false; clearTimeout(t) }
+  }, [step, beneficiary?.id])
+
+  // רישום לחלוקת החגים מהאזור האישי (ערוץ "ממשק דיגיטלי")
+  const registerHoliday = async () => {
+    if (!beneficiary?.id) return
+    setHolidaySaving(true)
+    try {
+      const res = await fetch('/api/portal/holiday-register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(d.error || 'הרישום נכשל'); setHolidaySaving(false); return }
+      setHoliday(h => h ? { ...h, registered: true } : h)
+      setError('')
+    } catch { setError('שגיאת רשת — נסו שוב') }
+    setHolidaySaving(false)
+  }
+
   const goToSilentBirthForm = () => {
     if (!gateAllows('maternity', 'עזר יולדות')) return
     if (!canRequestBirth) { setError('בקשה זו זמינה לרשומים במצב נשואים בלבד.'); return }
@@ -4768,6 +4810,45 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </button>
                 )}
 
+                {/* ── רישום לחלוקת חגים ──
+                    מוצג רק כשהרישום פתוח בניהול. מי שכבר רשום רואה אישור ולא
+                    כפתור — רישום כפול אינו יוצר שורה נוספת, אבל אין סיבה להזמין
+                    אותו. ⚠️ הכפתור אינו חוסם לפי סטטוס אישור: מטרת השלב הזה היא
+                    לדעת מי מבקש להשתתף, וההכרעה מי זכאי נעשית אחר כך בניהול. */}
+                {holiday?.open && (
+                  <div className={`rounded-2xl border-2 p-5 ${holiday.registered ? 'border-green-200 bg-green-50' : 'border-teal-200 bg-teal-50'}`}>
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${holiday.registered ? 'bg-green-100' : 'bg-teal-100'}`}>
+                        <Gift size={22} className={holiday.registered ? 'text-green-600' : 'text-teal-600'} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900">
+                          {holiday.name}{holiday.year ? ` ${holiday.year}` : ''}
+                        </p>
+                        {holiday.registered ? (
+                          <>
+                            <p className="text-sm font-bold text-green-700 mt-1">✓ רישומכם נקלט בהצלחה</p>
+                            <p className="text-xs text-green-700 mt-1 leading-relaxed">
+                              בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                              הרישום לחלוקה פתוח כעת. לחיצה אחת ואתם רשומים — אין צורך למלא פרטים.
+                            </p>
+                            <button type="button" onClick={registerHoliday} disabled={holidaySaving}
+                              className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98] disabled:opacity-50">
+                              {holidaySaving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                              הרשמו לחלוקה
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* עדכון פרטים אישיים — זמין לכל הסטטוסים */}
                 <button
                   onClick={openEditDetails}
@@ -5322,8 +5403,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
                         <EditableText k="loan.monthly.label" />{' '}
                         <strong>
-                        {new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 })
-                            .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)}
+                        {new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 })
+                            .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)} ₪
                         </strong>
                       </div>
                     </div>
