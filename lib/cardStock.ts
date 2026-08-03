@@ -45,6 +45,28 @@ export async function addStockMovement(
   return getStockBalance(admin)
 }
 
+// ─── קביעת מלאי פתיחה (ספירה פיזית) ─────────────────────────────────────────
+// ⚠️ אין "כתיבת מלאי" ישירה: המלאי הוא סכום היומן, וכל דרך אחרת הייתה יוצרת
+// מספר שמור שנפרד מהתנועות. לכן ספירה פיזית נרשמת כתנועה — ההפרש בין הספירה
+// למלאי המחושב — ומסומנת כ-'baseline'. מכאן והלאה ההתאמה נמדדת מהנקודה הזו,
+// וכל התנועות שקדמו לה (בדיקות, ניסיונות) נשארות ביומן לתיעוד בלבד.
+export async function setBaselineStock(
+  admin: SupabaseClient,
+  target: number,
+  opts: { note?: string; by?: string | null } = {},
+): Promise<{ balance: number; delta: number }> {
+  const current = await getStockBalance(admin)
+  const delta = Math.trunc(target) - current
+  const { error } = await admin.from('card_stock_ledger').insert({
+    // delta=0 נרשם גם הוא: זו הצהרה מפורשת "ספרתי, המספר נכון", והיא מהווה
+    // את נקודת האפס להתאמה גם כשלא היה צריך לתקן דבר.
+    delta, reason: 'baseline', note: opts.note?.trim() || 'ספירת מלאי — קביעת מלאי פתיחה',
+    created_by: opts.by ?? null,
+  })
+  if (error) throw new Error(error.message)
+  return { balance: await getStockBalance(admin), delta }
+}
+
 // ─── הגדרות התראה (סף + מיילים) ─────────────────────────────────────────────
 export async function getAlertSettings(admin?: SupabaseClient): Promise<StockAlertSettings> {
   const client = admin ?? getServiceClient()

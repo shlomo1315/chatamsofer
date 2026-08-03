@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
-import { getStockBalance, addStockMovement } from '@/lib/cardStock'
+import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
 import { reconcileStock, heldAidIds } from '@/lib/cardStockRecon'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
@@ -23,7 +23,7 @@ export async function GET() {
   // כרטיס — ולכן היא מחושבת כאן ומוחזרת עם המלאי, ולא נשארת שאלה פתוחה.
   const { data: fullLedger, error: fullErr } = await admin
     .from('card_stock_ledger')
-    .select('delta, reason, aid_id')
+    .select('delta, reason, aid_id, created_at')
     .order('created_at', { ascending: false })
     .limit(5000)
   if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr.message)
@@ -133,8 +133,30 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { delta?: number; note?: string; aidId?: string | null; runQueue?: boolean; returnAid?: string; cards?: number }
+  let body: { delta?: number; note?: string; aidId?: string | null; runQueue?: boolean; returnAid?: string; cards?: number; setBaseline?: number }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+
+  // ── ספירת מלאי: קביעת המלאי לפי הספירה הפיזית ────────────────────────────
+  if (body.setBaseline != null) {
+    const target = Math.trunc(Number(body.setBaseline))
+    if (!Number.isFinite(target) || target < 0) {
+      return NextResponse.json({ error: 'יש להזין מספר כרטיסים תקין' }, { status: 400 })
+    }
+    let result: { balance: number; delta: number }
+    try {
+      result = await setBaselineStock(admin, target, { note: body.note, by: staff.userId })
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : 'שגיאה' }, { status: 500 })
+    }
+    // המלאי גדל → יש כרטיסים לממתינות. קטן → אין מה להריץ.
+    let processed = 0
+    if (result.delta > 0) {
+      await resetAlertIfAboveThreshold(admin, result.balance)
+      const res = await processAwaitingStock(admin)
+      processed = res.processed
+    }
+    return NextResponse.json({ balance: result.balance, delta: result.delta, processed })
+  }
 
   // ── החזרת כרטיס תלוי למלאי ──────────────────────────────────────────────
   // ⚠️ נרשם כ-'adjust' ולא כ-'restock': אלה אינם כרטיסים חדשים שנכנסו למחסן
@@ -147,7 +169,7 @@ export async function POST(request: NextRequest) {
     // הייתה מזרימה כרטיסים שלא היו למלאי.
     const { data: fullLedger } = await admin
       .from('card_stock_ledger')
-      .select('delta, reason, aid_id')
+      .select('delta, reason, aid_id, created_at')
       .order('created_at', { ascending: false })
       .limit(5000)
     if (!heldAidIds(fullLedger ?? []).includes(aidId)) {

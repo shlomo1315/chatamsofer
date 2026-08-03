@@ -1,13 +1,13 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw } from 'lucide-react'
+import { Package, Plus, Minus, Loader2, X, History, AlertTriangle, CheckCircle2, Clock, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { useStaffPermissions } from '@/components/StaffPermissions'
 
 type LedgerRow = {
   id: string
   delta: number
-  reason: 'restock' | 'birth_approval' | 'manual_out' | 'auto_assign' | 'adjust'
+  reason: 'restock' | 'birth_approval' | 'manual_out' | 'auto_assign' | 'adjust' | 'baseline'
   note: string | null
   created_at: string
   aid?: { id?: string; beneficiary?: { family_name?: string; spouse_name?: string; full_name?: string; id_number?: string; spouse_id_number?: string } } | null
@@ -26,6 +26,7 @@ type Recon = {
   heldOk: number; strayCards: number; expectedBalance: number
   byReason: { reason: string; count: number; total: number }[]
   strays: StrayRow[]
+  opening: number; baselineAt: string | null; deletedAidCards: number
 }
 
 const REASON_LABEL: Record<LedgerRow['reason'], string> = {
@@ -34,6 +35,7 @@ const REASON_LABEL: Record<LedgerRow['reason'], string> = {
   manual_out: 'הורדה ידנית',
   auto_assign: 'שיוך אוטומטי',
   adjust: 'התאמה',
+  baseline: 'ספירת מלאי',
 }
 
 // תאריך ושעה מופרדים — כדי שלא ייווצר פסיק RTL שבור בין התאריך לשעה
@@ -72,7 +74,7 @@ export default function StockManager() {
   const [showRecon, setShowRecon] = useState(false)
   const [returning, setReturning] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<'add' | 'remove' | null>(null)
+  const [modal, setModal] = useState<'add' | 'remove' | 'baseline' | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [flash, setFlash] = useState('')
 
@@ -217,9 +219,24 @@ export default function StockManager() {
         <div className="rounded-2xl border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-              <span className="text-slate-500">
-                הוכנסו למלאי <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
-              </span>
+              {recon.baselineAt ? (
+                <span className="text-slate-500">
+                  מלאי פתיחה <strong className="ltr-num text-slate-800">{recon.opening}</strong>
+                  <span className="text-slate-400"> (ספירה מ־<span className="ltr-num">{fmtDate(recon.baselineAt)}</span>)</span>
+                </span>
+              ) : (
+                <span className="text-slate-500">
+                  הוכנסו למלאי <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
+                </span>
+              )}
+              {recon.baselineAt && recon.totalIn > 0 && (
+                <>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-slate-500">
+                    נוספו <strong className="ltr-num text-slate-800">{recon.totalIn}</strong>
+                  </span>
+                </>
+              )}
               <span className="text-slate-300">·</span>
               <span className="text-slate-500">
                 נוכו <strong className="ltr-num text-slate-800">{recon.totalOut}</strong>
@@ -229,10 +246,18 @@ export default function StockManager() {
                 במלאי <strong className="ltr-num text-slate-800">{recon.balance}</strong>
               </span>
             </div>
-            <button type="button" onClick={() => setShowRecon(s => !s)}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline decoration-dotted underline-offset-2">
-              {showRecon ? 'הסתר פילוח' : 'פילוח מלא'}
-            </button>
+            <div className="flex items-center gap-3">
+              {canEdit && (
+                <button type="button" onClick={() => setModal('baseline')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                  <ClipboardCheck size={13} /> ספירת מלאי
+                </button>
+              )}
+              <button type="button" onClick={() => setShowRecon(s => !s)}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline decoration-dotted underline-offset-2">
+                {showRecon ? 'הסתר פילוח' : 'פילוח מלא'}
+              </button>
+            </div>
           </div>
 
           {recon.strayCards > 0 && (
@@ -249,6 +274,16 @@ export default function StockManager() {
                 כל אישור לידה מנכה כרטיס. כשהבקשה חוזרת להמתנה, נדחית או שההטענה נכשלת — הניכוי אינו מתבטל
                 מעצמו. אלה הכרטיסים שנתקעו, וניתן להחזירם למלאי מכאן.
               </p>
+              {/* ⚠️ ניכויים שאיבדו את הקישור לתיק — אין שם להציג ואי אפשר לבדוק
+                  את מצב הלידה, ולכן הם מדווחים כשורה מסכמת. בלעדיה המספרים לא
+                  היו מסתדרים והפער היה נראה כשגיאת חישוב. */}
+              {recon.deletedAidCards > 0 && (
+                <p className="mt-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-[12px] leading-relaxed text-slate-600">
+                  מתוכם <strong className="ltr-num">{recon.deletedAidCards}</strong> כרטיסים נוכו בגין לידות
+                  ש<strong>נמחקו מהמערכת</strong> — הקישור לתיק אבד עם המחיקה, ולכן אין מה להציג לגביהם.
+                  {canEdit && ' הדרך ליישר את המלאי היא "ספירת מלאי" — הזנת המספר הפיזי שנמצא בפועל.'}
+                </p>
+              )}
               <div className="mt-2.5 flex flex-col gap-1.5">
                 {recon.strays.map(s => (
                   <div key={s.aidId}
@@ -279,8 +314,18 @@ export default function StockManager() {
 
           {showRecon && (
             <div className="border-t border-slate-200 px-4 py-3">
+              {/* ⚠️ הטבלה חייבת להסתכם *בדיוק* למלאי, אחרת היא מזיקה: מנהל
+                  שמחשבר ומגלה הפרש מפסיק להאמין למסך. לכן מלאי הפתיחה מופיע
+                  כשורה ראשונה, וכל תנועה שאחריה מופיעה בשורה משלה. */}
               <table className="w-full text-sm">
                 <tbody>
+                  {recon.baselineAt && (
+                    <tr className="border-b border-slate-100">
+                      <td className="py-1.5 text-slate-600">מלאי פתיחה (ספירה)</td>
+                      <td className="py-1.5 text-[12px] text-slate-400 ltr-num">{fmtDate(recon.baselineAt)}</td>
+                      <td className="py-1.5 text-left font-bold text-slate-700 ltr-num">{recon.opening}</td>
+                    </tr>
+                  )}
                   {recon.byReason.map(l => (
                     <tr key={l.reason} className="border-b border-slate-100 last:border-0">
                       <td className="py-1.5 text-slate-600">{REASON_LABEL[l.reason as LedgerRow['reason']] ?? l.reason}</td>
@@ -298,9 +343,10 @@ export default function StockManager() {
                 </tbody>
               </table>
               <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                מתוך {recon.totalOut} הכרטיסים שנוכו, {recon.heldOk} מוחזקים בידי לידות מאושרות
-                {recon.strayCards > 0 ? ` ו-${recon.strayCards} נתקעו ללא גיבוי` : ''}.
-                פריקה בתום שישה שבועות אינה פער — הכרטיס נוצל בפועל.
+                כרטיסים שנוכו בגין לידות ולא הוחזרו: {recon.heldOk + recon.strayCards} — מהם {recon.heldOk} מגובים
+                בלידה מאושרת{recon.strayCards > 0 ? ` ו-${recon.strayCards} תלויים` : ''}.
+                יתר הניכויים הם הורדות ידניות. פריקה בתום שישה שבועות אינה פער — הכרטיס נוצל בפועל.
+                {recon.baselineAt && ' תנועות שקדמו לספירה מקופלות במלאי הפתיחה ואינן נספרות שוב.'}
               </p>
             </div>
           )}
@@ -368,7 +414,15 @@ export default function StockManager() {
         )}
       </div>
 
-      {modal && (
+      {modal === 'baseline' && (
+        <BaselineModal
+          currentBalance={balance ?? 0}
+          onClose={() => setModal(null)}
+          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 5000); load() }}
+        />
+      )}
+
+      {(modal === 'add' || modal === 'remove') && (
         <StockMovementModal
           mode={modal}
           currentBalance={balance ?? 0}
@@ -378,6 +432,90 @@ export default function StockManager() {
           onRefresh={load}
         />
       )}
+    </div>
+  )
+}
+
+// ─── מודאל ספירת מלאי ───────────────────────────────────────────────────────
+// ⚠️ אין כאן "כתיבת מלאי": המלאי נשאר סכום היומן, והספירה נרשמת כתנועת התאמה
+// מפורשת (baseline). מכאן והלאה ההתאמה נמדדת מנקודת הספירה — כך שיומן שצבר
+// תנועות בדיקה אינו מזהם את ההסבר, ומצד שני שום תנועה אמיתית לא נמחקת.
+function BaselineModal({ currentBalance, onClose, onDone }: {
+  currentBalance: number
+  onClose: () => void
+  onDone: (msg: string) => void
+}) {
+  const [qty, setQty] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const target = qty.trim() === '' ? null : Math.trunc(Number(qty.replace(/[^\d]/g, '')))
+  const diff = target == null ? 0 : target - currentBalance
+
+  const submit = async () => {
+    if (target == null || !Number.isFinite(target) || target < 0) { setErr('יש להזין את מספר הכרטיסים שנמצאו בספירה'); return }
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/admin/card-stock', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setBaseline: target, note: note.trim() || undefined }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
+      const extra = d.processed > 0 ? ` · ${d.processed} יולדות ממתינות נטענו` : ''
+      onDone(`המלאי נקבע ל-${target} כרטיסים${extra}`)
+    } catch { setErr('שגיאת רשת'); setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 font-bold text-slate-900">
+            <ClipboardCheck size={17} className="text-slate-500" /> ספירת מלאי
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+
+        <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
+          הזינו את מספר הכרטיסים שנמצאו בספירה הפיזית. המערכת תרשום תנועת התאמה, וההתאמה
+          במסך תימדד מנקודה זו והלאה — כך שתנועות מתקופת הבדיקות לא ימשיכו להשפיע על החישוב.
+          יומן התנועות נשמר במלואו.
+        </p>
+
+        <label className="mb-1.5 block text-xs font-bold text-slate-600">מספר הכרטיסים בפועל</label>
+        <input value={qty} onChange={e => setQty(e.target.value)} inputMode="numeric" dir="ltr" placeholder="300"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-left text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+
+        <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-600">הערה (לא חובה)</label>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="למשל: ספירה לאחר סיום הבדיקות"
+          className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
+          <div className="flex justify-between"><span>מלאי מחושב כרגע</span><span className="ltr-num font-bold">{currentBalance}</span></div>
+          <div className="flex justify-between"><span>לפי הספירה</span><span className="ltr-num font-bold">{target ?? '—'}</span></div>
+          <div className="mt-1 flex justify-between border-t border-slate-200 pt-1">
+            <span>תנועת ההתאמה שתירשם</span>
+            <span className={`ltr-num font-bold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+              {target == null ? '—' : diff > 0 ? `+${diff}` : diff}
+            </span>
+          </div>
+        </div>
+
+        {err && <p className="mt-2.5 text-sm font-bold text-red-600">{err}</p>}
+
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={() => void submit()} disabled={busy}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-900 disabled:opacity-60">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <ClipboardCheck size={15} />} קביעת המלאי
+          </button>
+          <button type="button" onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+            ביטול
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
