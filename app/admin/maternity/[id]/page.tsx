@@ -33,6 +33,7 @@ import CollapsibleMailThread from './CollapsibleMailThread'
 import MailTabBoundary from './MailTabBoundary'
 import { format, differenceInCalendarDays } from 'date-fns'
 import { he } from 'date-fns/locale'
+import { registrationSourceLabel } from '@/lib/distributionSources'
 
 interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name: string | null }
 
@@ -310,6 +311,7 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                   <DetailRow label="מצב משפחתי" value={ben.marital_status ?? '—'} />
                   <DetailRow label="קהילה" value={(ben as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
                   <DetailRow label="מספר ילדים" value={String(ben.children_count ?? 0)} />
+                  <DetailRow label="אופן ההרשמה" value={registrationSourceLabel((ben as { registration_source?: string | null }).registration_source)} />
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-slate-400">פרטי קשר</p>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Users, Loader2, ArrowLeft, GitBranch, Banknote, IdCard, ExternalLink } from 'lucide-react'
+import { registrationSourceLabel } from '@/lib/distributionSources'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // סיכום המשפחה שמאחורי הבקשה — כדי שההחלטה תתקבל עם כל התמונה, בלי לצאת
@@ -21,6 +22,7 @@ interface Summary {
     city?: string | null
     address?: string | null
     community?: string | null
+    registrationSource?: string | null
     eligibilityStatus?: string | null
   }
   children: { total: number; married: number; atHome: number }
@@ -99,6 +101,7 @@ export default function FamilySummary({ loanId }: { loanId: string }) {
           <Row label="אשה" value={b.wifeName ? `${b.wifeName}${b.wifeAge != null ? ` · בת ${b.wifeAge}` : ''}` : null} />
           <Row label="כתובת" value={[b.address, b.city].filter(Boolean).join(', ')} />
           <Row label="קהילה" value={b.community?.trim() || null} />
+          <Row label="אופן ההרשמה" value={registrationSourceLabel(b.registrationSource)} />
           <Row label="טלפון" value={b.phone ? <span dir="ltr" className="tabular-nums">{b.phone}</span> : null} />
         </div>
 

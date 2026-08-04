@@ -26,6 +26,7 @@ import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
+import { registrationSourceLabel } from '@/lib/distributionSources'
 
 // ⏱️ עזר מדידה זמני — מודד כמה כל שאילתה לוקחת ומדפיס ללוג השרת.
 async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -342,6 +343,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
                 נשמרה ולא הוצגה בכרטסת — כלומר היה צריך לפתוח עריכה כדי לדעת. */}
             <DetailRow label="קהילה" value={(beneficiary as { community_affiliation?: string | null }).community_affiliation?.trim() || '—'} />
             <DetailRow label="מספר ילדים" value={String(beneficiary.children_count)} />
+            {/* ⚠️ באיזה אופן נרשם — אתר / נדרים פלוס / מייל / הזנה ידנית. עד כה
+                לא נשמר בכלל, כלומר אחרי השמירה לא היה שום סימן מאיפה הכרטסת
+                הגיעה. רשומות מלפני העמודה מוצגות כ"לא תועד" ולא בניחוש. */}
+            <DetailRow
+              label="אופן ההרשמה"
+              value={registrationSourceLabel((beneficiary as { registration_source?: string | null }).registration_source)}
+            />
             {beneficiary.nedarim_id && <DetailRow label="מזהה משפחה בנדרים קארד" value={beneficiary.nedarim_id} ltr />}
           </div>
         </Card>

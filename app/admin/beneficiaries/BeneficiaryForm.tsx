@@ -897,9 +897,11 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
         const { error } = await supabase.from('beneficiaries').update(payload).eq('id', beneficiaryId)
         if (error) throw error
       } else {
+        // ⚠️ ערוץ ההרשמה נכתב ביצירה בלבד ולא בעריכה: כרטסת שנרשמה באתר ונערכה
+        // אחר כך במשרד נרשמה באתר — עדכון בעריכה היה מוחק את המקור האמיתי.
         const { data: inserted, error } = await supabase
           .from('beneficiaries')
-          .insert(payload)
+          .insert({ ...payload, registration_source: 'admin' })
           .select()
           .single()
         if (error) throw error

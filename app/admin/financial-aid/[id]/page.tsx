@@ -8,6 +8,7 @@ import DocThumb from '@/components/ui/DocThumb'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import FinancialAidDetail from './FinancialAidDetail'
+import { registrationSourceLabel } from '@/lib/distributionSources'
 
 async function getReq(id: string): Promise<FinancialAidRequest | null> {
   if (!isSupabaseConfigured()) return null
@@ -55,6 +56,7 @@ export default async function FinancialAidDetailPage({ params }: { params: Promi
           {b?.marital_status && <p><span className="text-slate-500">מצב משפחתי: </span>{b.marital_status}</p>}
           {(b as { community_affiliation?: string | null })?.community_affiliation?.trim() &&
             <p><span className="text-slate-500">קהילה: </span>{(b as { community_affiliation?: string | null }).community_affiliation}</p>}
+          <p><span className="text-slate-500">אופן ההרשמה: </span>{registrationSourceLabel((b as { registration_source?: string | null })?.registration_source)}</p>
           {b?.phone && <p><span className="text-slate-500">טלפון: </span><span className="ltr-num">{b.phone}</span></p>}
           {(b?.address || b?.city) && <p className="col-span-2"><span className="text-slate-500">כתובת: </span>{[b.address, b.city].filter(Boolean).join(', ')}</p>}
           <p><span className="text-slate-500">מספר ילדים: </span>{b?.children_count ?? 0}</p>
