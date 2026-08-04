@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Share2 } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Distribution } from '@/types'
 import Button from '@/components/ui/Button'
@@ -43,6 +43,10 @@ export default async function DistributionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="חלוקות חגים" subtitle={`${distributions.length} חלוקות`}>
+        <a href="/shared/distributions" target="_blank" rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors">
+          <Share2 size={15} /> קישור שיתוף
+        </a>
         <Link href="/admin/distributions/new">
           <Button>
             <Plus size={16} />

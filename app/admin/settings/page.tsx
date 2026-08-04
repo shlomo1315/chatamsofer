@@ -18,6 +18,7 @@ import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
 import NedarimHolidaySettings from './NedarimHolidaySettings'
 import LoansPortalSettings from './LoansPortalSettings'
+import DistributionsShareSettings from './DistributionsShareSettings'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
 import YemotHolidaySettings from './YemotHolidaySettings'
@@ -216,6 +217,11 @@ export default async function SettingsPage() {
         {/* Loans portal */}
         <Collapsible title="פורטל הלוואות" icon={<Banknote size={16} className="text-amber-500" />}>
           <LoansPortalSettings />
+        </Collapsible>
+
+        {/* שיתוף חלוקות חגים — דף תצוגה בלבד מוגן בסיסמה */}
+        <Collapsible title="שיתוף חלוקות חגים (תצוגה בלבד)" icon={<Gift size={16} className="text-indigo-500" />}>
+          <DistributionsShareSettings />
         </Collapsible>
 
         {/* Yemot maternity messages (editable text / human recordings) */}
