@@ -71,18 +71,20 @@ export interface ApprovedCoverage {
   missing: ApprovedGap[]
 }
 
+// ⚠️ heldIds (התיקים שמחזיקים ניכוי ביומן) אינו פרמטר לחישוב אלא נשאר בחתימה
+// לתאימות הקוראים: העדות הקובעת ל"מחזיקה כרטיס" היא card_load_status, לא היומן.
+// תיק עם ניכוי ביומן שלא נטען בפועל הוא כרטיס שלא יצא — ולכן "טרם קיבלה".
 export function approvedCardCoverage(
   activeAids: (ReconAid & { awaitingStock?: boolean })[],
-  heldIds: string[],
+  _heldIds: string[] = [],
 ): ApprovedCoverage {
-  const held = new Set(heldIds)
+  void _heldIds
   const missing: ApprovedGap[] = []
   let withCard = 0
   for (const aid of activeAids) {
-    if (held.has(aid.id)) { withCard++; continue }
-    // ⚠️ 'loaded'/'unloaded' בלי ניכוי מוחזק פירושו שהכרטיס נוכה לפני שהיומן
-    // קישר תיקים, או שהתיק נוצר מחדש. נספר כמחזיק — אחרת הוא היה מוצג כחסר
-    // בזמן שהמשפחה מחזיקה כרטיס טעון.
+    // ⚠️ העדות הקובעת היא card_load_status ולא קישור היומן, וזו אותה הגדרה
+    // בדיוק כמו holdsCard בדשבורד (lib/awaitingFilter). קודם נספר כאן גם תיק
+    // שיש לו ניכוי ביומן אך לא נטען בפועל, ומכאן נבע ההפרש בין שני המסכים.
     if (aid.card_load_status === 'loaded' || aid.card_load_status === 'unloaded') { withCard++; continue }
     missing.push({
       aidId: aid.id,

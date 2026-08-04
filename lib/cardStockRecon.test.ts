@@ -249,3 +249,37 @@ describe('approvedCardCoverage', () => {
     expect(c.missing.map(m => m.name)).toEqual(['ההטענה נכשלה', 'טרם נטענה'])
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ הבדיקה הזו קיימת כדי שהמספר "נמסרו" יישאר זהה בדשבורד ובמסך הכרטיסים.
+// הם הציגו 54 מול 49 מפני שכל אחד חישב בדרך משלו: הדשבורד לפי card_load_status
+// בלי לבדוק wants_food_card, והמסך לפי קישור היומן. עכשיו שניהם על אותה הגדרה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('הגדרה אחת ל"נמסרו" בשני המסכים', () => {
+  const aids = [
+    { id: 'a', name: 'נטענה', card_load_status: 'loaded' },
+    { id: 'b', name: 'נפרקה בתום הזכאות', card_load_status: 'unloaded' },
+    { id: 'c', name: 'ביקשה בית החלמה בלבד', card_load_status: 'loaded', wants_food_card: false },
+    { id: 'd', name: 'ההטענה נכשלה', card_load_status: 'failed' },
+    { id: 'e', name: 'יש ניכוי ביומן אך לא נטענה', card_load_status: null },
+  ]
+
+  it('מסך הכרטיסים: רק מי שנטען לה כרטיס נספרת', () => {
+    // ⚠️ 'e' מופיעה ב-heldIds ובכל זאת אינה נספרת: ניכוי ביומן בלי הטענה
+    // פירושו שהכרטיס לא יצא מהמגירה.
+    const c = approvedCardCoverage(aids.filter(a => a.wants_food_card !== false), ['e'])
+    expect(c.withCard).toBe(2)
+    expect(c.missing.map(m => m.aidId).sort()).toEqual(['d', 'e'])
+  })
+
+  it('הדשבורד סופר בדיוק את אותו הדבר', async () => {
+    const { holdsCard } = await import('./awaitingFilter')
+    expect(aids.filter(holdsCard).length).toBe(2)
+  })
+
+  it('לידה שביקשה בית החלמה בלבד אינה "נמסרה" גם כשיש לה טעינה', async () => {
+    const { holdsCard } = await import('./awaitingFilter')
+    expect(holdsCard({ card_load_status: 'loaded', wants_food_card: false })).toBe(false)
+    expect(holdsCard({ card_load_status: 'loaded' })).toBe(true)
+  })
+})
