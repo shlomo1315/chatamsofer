@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
 import type { RegisterSource } from '@/lib/distributionSources'
+import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -158,22 +159,39 @@ function BarRow({ label, count, max, color }: { label: string; count: number; ma
   )
 }
 
-function BreakdownCard({ title, icon, rows, color, scroll }: {
+function BreakdownCard({ title, icon, rows, color, scroll, collapsible }: {
   title: string; icon: React.ReactNode; rows: { label: string; count: number }[]; color: string; scroll?: boolean
+  collapsible?: boolean   // ⚠️ קהילות — עשוי להכיל עשרות ערכים ברישום מאסיבי, ולכן
+                          // מכווץ כברירת מחדל ונפתח בלחיצה לקוביות קטנות, שלא ידחוף את הדף.
 }) {
   const max = rows.reduce((m, r) => Math.max(m, r.count), 0)
+  const [open, setOpen] = useState(!collapsible)
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col">
-      <div className="flex items-center gap-2 mb-4 text-slate-700">
-        {icon}<h3 className="text-sm font-bold">{title}</h3>
-      </div>
-      {rows.length === 0 ? (
+      <button type="button" disabled={!collapsible} onClick={() => collapsible && setOpen(o => !o)}
+        className={`flex items-center gap-2 text-slate-700 ${collapsible ? 'justify-between cursor-pointer' : ''} ${open ? 'mb-4' : ''}`}>
+        <span className="flex items-center gap-2">{icon}<h3 className="text-sm font-bold">{title}</h3>
+          {collapsible && <span className="text-[11px] font-bold text-slate-400 ltr-num">({rows.length})</span>}
+        </span>
+        {collapsible && <span className="text-xs text-slate-400">{open ? '▲' : '▼'}</span>}
+      </button>
+      {open && (rows.length === 0 ? (
         <p className="text-center text-slate-400 text-xs py-6">אין נתונים</p>
+      ) : collapsible ? (
+        // ── תצוגת קוביות קטנות (chips) — קומפקטית, מתאימה להרבה ערכים ──
+        <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pl-1">
+          {rows.map(r => (
+            <span key={r.label} className="inline-flex items-center gap-1.5 rounded-xl border border-violet-100 bg-violet-50 px-2.5 py-1.5">
+              <span className="text-[12px] text-slate-700 font-medium max-w-[120px] truncate" title={r.label}>{r.label}</span>
+              <span className="rounded-full bg-violet-500 text-white text-[11px] font-bold px-1.5 ltr-num">{r.count}</span>
+            </span>
+          ))}
+        </div>
       ) : (
         <div className={`flex flex-col gap-2.5 ${scroll ? 'max-h-64 overflow-y-auto pl-1' : ''}`}>
           {rows.map(r => <BarRow key={r.label} label={r.label} count={r.count} max={max} color={color} />)}
         </div>
-      )}
+      ))}
     </div>
   )
 }
@@ -211,98 +229,32 @@ function BreakdownPanels({ recipients }: { recipients: Recipient[] }) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <BreakdownCard title="לפי ערים" icon={<MapPin size={16} className="text-rose-500" />} rows={cities} color="bg-rose-400" scroll />
-      <BreakdownCard title="לפי קהילות" icon={<Users size={16} className="text-violet-500" />} rows={communities} color="bg-violet-400" scroll />
+      <BreakdownCard title="לפי קהילות" icon={<Users size={16} className="text-violet-500" />} rows={communities} color="bg-violet-400" collapsible />
       <BreakdownCard title="לפי מספר ילדים" icon={<Baby size={16} className="text-teal-500" />} rows={kids} color="bg-teal-400" />
     </div>
   )
 }
 
-// ── בורר דור: בחירת דור → צאצאיו + מספר נרשמים לכל אחד ───────────────────────
-// לכל צומת בדור הנבחר סופרים כמה מהנרשמים הם צאצאיו — כלומר ה-lineage_node_id
-// שלהם נמצא בתת-העץ של אותו צומת. כך רואים "כמה נכדים/צאצאים של רבי X נרשמו".
-function GenerationExplorer({ recipients, nodes }: { recipients: Recipient[]; nodes: LineageNode[] }) {
-  const byId = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes])
-
-  // מזהי הדורות הקיימים בעץ (2 ומעלה — דור 1 הוא החתם סופר, שורש יחיד).
-  const generations = useMemo(() => {
-    const gens = new Set<number>()
-    nodes.forEach(n => { if (n.generation >= 2) gens.add(n.generation) })
-    return [...gens].sort((a, b) => a - b)
-  }, [nodes])
-
-  const [gen, setGen] = useState<number | null>(null)
-
-  // עולים מכל צומת עד השורש ומחזירים את כל האבות-הקדמונים (כולל עצמו).
-  const ancestorsOf = useMemo(() => {
-    const cache = new Map<string, Set<string>>()
-    const walk = (id: string | null): Set<string> => {
-      if (!id) return new Set()
-      const hit = cache.get(id); if (hit) return hit
-      const set = new Set<string>()
-      let cur: string | null = id, guard = 0
-      while (cur && guard++ < 40) { set.add(cur); cur = byId.get(cur)?.parent_id ?? null }
-      cache.set(id, set)
-      return set
-    }
-    return walk
-  }, [byId])
-
-  // לכל צומת בדור הנבחר — מספר הנרשמים שהוא אב-קדמון שלהם.
-  const rowsForGen = useMemo(() => {
-    if (gen == null) return []
-    const genNodes = nodes.filter(n => n.generation === gen)
-    // אוסף אבות-קדמונים של כל נרשם משויך (לפי הצומת שלו)
-    const recAncestors = recipients
-      .map(r => r.beneficiary?.lineage_node_id)
-      .filter((id): id is string => !!id)
-      .map(id => ancestorsOf(id))
-    return genNodes
-      .map(node => ({
-        node,
-        count: recAncestors.filter(anc => anc.has(node.id)).length,
-      }))
-      .filter(x => x.count > 0)
-      .sort((a, b) => b.count - a.count)
-  }, [gen, nodes, recipients, ancestorsOf])
-
+// ── עץ הדורות הוויזואלי המלא — לצפייה בלבד ────────────────────────────────────
+// שימוש חוזר ב-LineageTreeSvg (אותו מנוע בדיוק כמו עץ הניהול ודף הביקורת), עם
+// אותם נתונים בדיוק (lineageNodes מה-API). לצפייה בלבד — onSelect ריק, אין עריכה.
+function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
   if (!nodes.length) return null
-  const maxCount = rowsForGen.reduce((m, r) => Math.max(m, r.count), 0)
-
+  // השורש — צומת דור 1 (החתם סופר). LineageTreeSvg יגזור את כל העץ ממנו.
+  const root = nodes.find(n => n.generation === 1) ?? nodes.find(n => !n.parent_id) ?? null
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-center gap-2 mb-4 text-slate-700">
+      <div className="flex items-center gap-2 mb-1 text-slate-700">
         <GitBranch size={16} className="text-indigo-500" />
-        <h3 className="text-sm font-bold">פילוח לפי דור בעץ הדורות</h3>
+        <h3 className="text-sm font-bold">עץ הדורות</h3>
       </div>
-      <p className="text-[12px] text-slate-500 mb-3">בחרו דור כדי לראות כמה מצאצאיו של כל אב באותו דור נרשמו לחלוקות.</p>
-      <div className="flex flex-wrap gap-1.5 mb-4">
-        {generations.map(g => (
-          <button key={g} type="button" onClick={() => setGen(g === gen ? null : g)}
-            className={`rounded-full px-3 py-1 text-xs font-bold transition ${g === gen ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50'}`}>
-            דור {g}
-          </button>
-        ))}
-      </div>
-      {gen == null ? (
-        <p className="text-center text-slate-400 text-xs py-6">בחרו דור למעלה</p>
-      ) : rowsForGen.length === 0 ? (
-        <p className="text-center text-slate-400 text-xs py-6">אין נרשמים המשויכים לצאצאי דור {gen}</p>
-      ) : (
-        <div className="flex flex-col gap-2.5 max-h-80 overflow-y-auto pl-1">
-          {rowsForGen.map(({ node, count }) => {
-            const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0
-            return (
-              <div key={node.id} className="flex items-center gap-2">
-                <span className="w-40 shrink-0 truncate text-[12px] text-slate-700 font-medium" title={node.name}>{node.name}</span>
-                <div className="flex-1 h-5 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-indigo-400 transition-all duration-500" style={{ width: `${Math.max(pct, 6)}%` }} />
-                </div>
-                <span className="w-10 shrink-0 text-left text-[12px] font-bold text-indigo-700 ltr-num">{count}</span>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <p className="text-[12px] text-slate-500 mb-3">עץ היוחסין המלא — לצפייה בלבד. גררו להזזה · גלגלת לגלילה · Ctrl+גלגלת לזום.</p>
+      <LineageTreeSvg
+        nodes={nodes.map(n => ({ id: n.id, name: n.name, parent_id: n.parent_id, generation: n.generation, status: n.status ?? 'verified', relation: null }))}
+        rootId={root?.id ?? null}
+        selectedId={null}
+        onSelect={() => { /* צפייה בלבד */ }}
+      />
     </div>
   )
 }
@@ -424,8 +376,8 @@ export default function SharedDistributionsPage() {
         {/* ── פילוחים חיים — ערים · קהילות · מספר ילדים ── */}
         <BreakdownPanels recipients={recipients} />
 
-        {/* ── בורר דור — בחירת דור בעץ הדורות → צאצאיו + מספר נרשמים ── */}
-        <GenerationExplorer recipients={recipients} nodes={lineageNodes} />
+        {/* ── עץ הדורות הוויזואלי המלא — לצפייה בלבד ── */}
+        <GenerationExplorer nodes={lineageNodes} />
 
         {/* חיפוש */}
         {distributions.length > 3 && (
