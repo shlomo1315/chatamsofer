@@ -5607,7 +5607,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <p className="text-[13.5px] leading-relaxed text-slate-600 mb-5">
                 {holidayModal.mode === 'created'
                   ? 'בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת.'
-                  : 'רישומכם כבר קיים במערכת — אין צורך בפעולה נוספת. בעזרת השם תקבלו עדכון על אופן החלוקה בהמשך.'}
+                  : 'הבקשה שלכם לחלוקה זו כבר נקלטה במערכת, נשלח לכם הודעה מסודרת לגבי ההמשך.'}
               </p>
               <button type="button" onClick={() => setHolidayModal(null)}
                 className="w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">

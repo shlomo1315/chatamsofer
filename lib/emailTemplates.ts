@@ -1719,10 +1719,9 @@ export function holidayAlreadyRegisteredEmail(
   const body = `
     <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
-      <p style="margin:0 0 6px;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">רישומכם ל${escapeHtml(distName)} כבר נקלט במערכת — אין צורך בפעולה נוספת.</p>
+      <p style="margin:0 0 6px;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">הבקשה שלכם ל${escapeHtml(distName)} כבר נקלטה במערכת, נשלח לכם הודעה מסודרת לגבי ההמשך.</p>
       ${dateStr ? `<p style="margin:0;color:#047857;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">תאריך הרישום: ${escapeHtml(dateStr)}</p>` : ''}
     </div>
-    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה.</p>
     <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
   return {
     subject: `רישומכם ל${distName} כבר נקלט`,

@@ -407,7 +407,7 @@ export default function HolidayRegistrations({
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] whitespace-nowrap">
             <thead className="bg-slate-50 text-slate-500">
-              <tr className="[&>th]:px-3 [&>th]:py-3 [&>th]:font-bold [&>th]:text-right">
+              <tr className="[&>th]:px-3 [&>th]:py-3 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
                 {canEdit && (
                   <th className="w-8">
                     <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
@@ -428,7 +428,7 @@ export default function HolidayRegistrations({
               ) : filtered.map(r => {
                 const I = SOURCE_ICON[r.source]
                 return (
-                  <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5">
+                  <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
                     {canEdit && (
                       <td>
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}
