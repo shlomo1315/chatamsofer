@@ -41,14 +41,18 @@ export async function GET(req: NextRequest) {
     recipients = recs ?? []
   }
 
-  // עץ הדורות — לבורר הדור בדף השיתוף (בחירת דור → צאצאיו + מספר נרשמים).
-  // מוחזר תמיד; קל-משקל (id/name/parent_id/generation) ומרונדר בצד הלקוח.
+  // עץ הדורות — לעץ הוויזואלי בדף השיתוף. קל-משקל, מרונדר בצד הלקוח.
   const { data: lineageNodes } = await admin
     .from('lineage_nodes')
     .select('id, name, parent_id, generation, status')
 
+  // סה"כ צאצאים רשומים במערכת (לקוביית הסיכום בדשבורד) — ספירה בלבד, ללא נתונים.
+  const { count: beneficiariesCount } = await admin
+    .from('beneficiaries')
+    .select('id', { count: 'exact', head: true })
+
   return NextResponse.json(
-    { distributions: distributions ?? [], recipients, lineageNodes: lineageNodes ?? [] },
+    { distributions: distributions ?? [], recipients, lineageNodes: lineageNodes ?? [], beneficiariesCount: beneficiariesCount ?? 0 },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

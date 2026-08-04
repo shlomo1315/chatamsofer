@@ -56,7 +56,9 @@ export interface HolidayTableControls {
   busyId?: string | null
   setApprovalFor?: (ids: string[], status: 'approved' | 'rejected') => void
   clearCard?: (id: string) => void
-  showMessage?: boolean   // עמודת "הודעה" (נשלח/נכשל) — רק בניהול
+  showMessage?: boolean     // עמודת "הודעה" (נשלח/נכשל) — רק בניהול
+  hideApproval?: boolean    // הסתרת עמודת "אישור הבקשה" — בדף השיתוף
+  hideCard?: boolean        // הסתרת עמודת "כרטיס" — בדף השיתוף
 }
 
 export default function HolidayRecipientsTable({
@@ -69,7 +71,8 @@ export default function HolidayRecipientsTable({
   controls?: HolidayTableControls
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
-    busyId, setApprovalFor, clearCard, showMessage = false } = controls
+    busyId, setApprovalFor, clearCard, showMessage = false,
+    hideApproval = false, hideCard = false } = controls
 
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
@@ -88,8 +91,8 @@ export default function HolidayRecipientsTable({
             )}
             <th>שם המשפחה</th>
             <th>ת״ז</th>
-            <th>אישור הבקשה</th>
-            <th>כרטיס</th>
+            {!hideApproval && <th>אישור הבקשה</th>}
+            {!hideCard && <th>כרטיס</th>}
             <th>בן/בת זוג</th>
             <th>טלפון</th>
             <th>מייל</th>
@@ -120,6 +123,7 @@ export default function HolidayRecipientsTable({
                     : r.name}
                 </td>
                 <td className="font-mono text-slate-600 ltr-num">{r.id_number ?? '—'}</td>
+                {!hideApproval && (
                 <td>
                   <div className="flex items-center gap-1.5">
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${APPROVAL_STYLE[r.approval_status]}`}>
@@ -140,6 +144,8 @@ export default function HolidayRecipientsTable({
                     )}
                   </div>
                 </td>
+                )}
+                {!hideCard && (
                 <td>
                   {r.card_linked_at ? (
                     <div className="flex items-center gap-1.5">
@@ -156,6 +162,7 @@ export default function HolidayRecipientsTable({
                     <span className="text-[11px] text-slate-400">{r.approval_status === 'approved' ? 'ממתין לשיוך' : '—'}</span>
                   )}
                 </td>
+                )}
                 <td className="text-slate-600">{r.spouse_name ?? '—'}</td>
                 <td className="font-mono text-slate-600 ltr-num">{r.ben_phone ?? r.phone ?? '—'}</td>
                 <td className="text-slate-600" dir="ltr">{r.email ?? '—'}</td>

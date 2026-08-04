@@ -265,6 +265,7 @@ export default function SharedDistributionsPage() {
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
+  const [beneficiariesCount, setBeneficiariesCount] = useState(0)
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [countdown, setCountdown] = useState(10)
@@ -278,6 +279,7 @@ export default function SharedDistributionsPage() {
         setDistributions(d.distributions ?? [])
         setRecipients(d.recipients ?? [])
         setLineageNodes(d.lineageNodes ?? [])
+        setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setState('unlocked')
         setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
@@ -317,10 +319,9 @@ export default function SharedDistributionsPage() {
   }, [recipients])
 
   const totals = useMemo(() => {
-    let registered = 0
-    for (const d of distributions) registered += (byDist.get(d.id) ?? []).length
-    return { registered, distributions: distributions.length }
-  }, [distributions, byDist])
+    const openCount = distributions.filter(d => d.registration_open).length
+    return { openCount, distributions: distributions.length }
+  }, [distributions])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -360,16 +361,19 @@ export default function SharedDistributionsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        {/* דשבורד מסכם — רק נרשמו + חלוקות. צפי תקציבי ומאושרים הוסרו לבקשת
-            ההנהלה (הסכום למשפחה עוד לא סופי, ואישורים אינם רלוונטיים לתצוגה זו). */}
-        <div className="grid grid-cols-2 gap-4 max-w-2xl">
-          <div className="rounded-2xl border-2 border-indigo-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-indigo-600 mb-1"><Users size={16} /><span className="text-xs font-bold text-slate-500">סה״כ נרשמו</span></div>
-            <p className="text-3xl font-extrabold text-indigo-700 ltr-num">{totals.registered.toLocaleString('he-IL')}</p>
+        {/* דשבורד מסכם — 3 קוביות: חלוקות פתוחות כעת · כלל החלוקות · סה"כ צאצאים במערכת. */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
+          <div className="rounded-2xl border-2 border-green-200 bg-white p-5">
+            <div className="flex items-center gap-2 text-green-600 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">חלוקות פתוחות כעת</span></div>
+            <p className="text-3xl font-extrabold text-green-700 ltr-num">{totals.openCount.toLocaleString('he-IL')}</p>
           </div>
           <div className="rounded-2xl border-2 border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-slate-500 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">חלוקות</span></div>
+            <div className="flex items-center gap-2 text-slate-500 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">כלל החלוקות</span></div>
             <p className="text-3xl font-extrabold text-slate-700 ltr-num">{totals.distributions.toLocaleString('he-IL')}</p>
+          </div>
+          <div className="rounded-2xl border-2 border-indigo-200 bg-white p-5">
+            <div className="flex items-center gap-2 text-indigo-600 mb-1"><Users size={16} /><span className="text-xs font-bold text-slate-500">סה״כ צאצאים במערכת</span></div>
+            <p className="text-3xl font-extrabold text-indigo-700 ltr-num">{beneficiariesCount.toLocaleString('he-IL')}</p>
           </div>
         </div>
 
@@ -445,6 +449,7 @@ export default function SharedDistributionsPage() {
                       }))}
                       amountPerFamily={d.amount_per_family ?? null}
                       fmtDateTime={fmtDateTime} fmtCur={fmtCurNum}
+                      controls={{ hideApproval: true, hideCard: true }}
                     />
                   </div>
                 )}
