@@ -107,18 +107,19 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
   // במעט מהעותק השמור אצל הצאצא (למשל "רבי נתן יהודה סופר" מול "רבי נתן יהודה
   // (נטע)") לא נמצא — והדור הוצג כחריג אדום למרות שבעץ הוא ירוק ומאושר.
   if (out.pathNodes.length) {
-    // ⚠️ הסטטוס של כל דור נגזר ממצב *הדור בעץ*, לא מהצומת הספציפי שהצאצא משויך
-    // אליו: אם קיים ולו צומת אחד מאושר (verified) באותו דור — הדור מוצג כמאושר
-    // (כחול), בדיוק כפי שהעץ מראה אותו. צומת ה"ממתין" של הצאצא הזה לא צריך לצבוע
-    // את כל הדור כתום כשהדור עצמו כבר אושר בעץ. verified > pending > rejected.
-    const verifiedGens = new Set(nodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
-    const rejectedGens = new Set(nodes.filter(n => n.status === 'rejected').map(n => n.generation))
+    // ✅ הצבע נגזר מהסטטוס של *הצומת הספציפי במסלול של הצאצא*, בדיוק כפי שהעץ
+    // הוויזואלי מראה אותו (statusBadge לפי n.status של אותו צומת). לכן:
+    //   verified / null / '' → כחול (מאושר) · rejected → אדום · pending → כתום.
+    //
+    // ⚠️ אין כאן "כלל-על" שצובע דור שלם כחול כי קיים בו צומת verified אחר: בדור
+    // אחד יכולים להיות מאה צאצאים שונים — חלקם מאושרים וחלקם ממתינים. הצאצא הזה
+    // צריך להיצבע לפי *הצומת שלו* בלבד. צומת שעדיין pending בעץ (כתום) חייב
+    // להישאר כתום בצ'יפ, ומרגע שמאשרים אותו בעץ (status→verified) הוא נהיה כחול
+    // מיד. כלל-העל הישן צבע צאצא ממתין בכחול רק כי "מישהו אחר" באותו דור אושר.
     for (const n of out.pathNodes) {
       const status: GenStatus =
-        verifiedGens.has(n.generation) ? 'verified'
-        : isNodeVerified(n.status) ? 'verified'
+        isNodeVerified(n.status) ? 'verified'
         : n.status === 'rejected' ? 'rejected'
-        : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
         : 'pending'
       out.genStatus.set(n.generation, status)
     }
@@ -144,6 +145,9 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
       // הסטטוס האמיתי של הדור: הצומת התואם (לפי דור+שם) והסטטוס שלו בעץ.
       // מעדיפים צומת verified; אם אין — לוקחים כל צומת תואם (pending/rejected);
       // אם אין כלל — null (אין במאגר → נחשב ממתין).
+      // ⚠️ התאמת שם לצומת *מסוים* — ומעדיפים את הצומת התואם ה-verified אם יש
+      // כזה בעל אותו שם, אחרת lרושמים לפי הצומת התואם שנמצא. זו התאמת שם (אין
+      // מזהה), ולכן צומת verified באותו שם הוא הזיהוי הנכון של אותו אדם.
       const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
       const vNode = matches.find(n => isNodeVerified(n.status))
       const status: GenStatus = vNode ? 'verified'
@@ -154,16 +158,10 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
     }
   }
 
-  // ⚠️ כלל-על אחיד לשני הענפים: אם קיים ולו צומת אחד מאושר (verified) באותו דור
-  // בעץ — הדור מוצג כמאושר (כחול), בלי קשר למה שהחישוב לעיל קבע. זה מה שהעץ
-  // הוויזואלי מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
-  const verifiedGens = new Set(nodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
-  for (const gen of verifiedGens) {
-    // רק לדורות שכבר בשרשרת (יש להם ערך במפה) — לא ממציאים דורות חדשים.
-    if (out.genStatus.has(gen) && out.genStatus.get(gen) !== 'verified') {
-      out.genStatus.set(gen, 'verified')
-    }
-  }
+  // ✅ אין "כלל-על" שמעלה דור שלם לכחול כי קיים בו צומת verified אחר: הצבע הוא
+  // של *הצומת של הצאצא הזה* בלבד. דור שהצומת שלו עדיין pending (כתום בעץ) חייב
+  // להישאר כתום בצ'יפ, ומרגע שמאשרים אותו בעץ הוא נהיה כחול מיד. כלל-העל הישן
+  // צבע צאצא ממתין בכחול רק כי "מישהו אחר" באותו מספר-דור אושר — וזה היה שגוי.
   return out
 }
 

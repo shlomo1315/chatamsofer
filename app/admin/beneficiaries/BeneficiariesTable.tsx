@@ -62,7 +62,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'full_name',
     header: 'שם מלא',
     sortable: true,
-    className: 'min-w-[160px]',
+    className: 'min-w-[140px]',
     render: (row) => (
       <Link
         href={`/admin/beneficiaries/${row.id}`}
@@ -98,7 +98,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'spouse_name',
     header: 'בן/בת זוג',
     sortable: true,
-    className: 'min-w-[140px]',
+    className: 'min-w-[110px]',
     render: (row) =>
       row.spouse_name ? (
         <div className="flex flex-col gap-0.5">
@@ -130,7 +130,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'email',
     header: 'מייל',
     sortable: false,
-    className: 'min-w-[150px]',
+    className: 'min-w-[130px]',
     render: (row) =>
       row.email ? (
         <button
@@ -200,7 +200,7 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     key: 'registration_source',
     header: 'אופן הרישום',
     sortable: true,
-    className: 'min-w-[110px]',
+    className: 'min-w-[95px]',
     // ⚠️ צבע לפי הערוץ — כדי שאפשר יהיה לסרוק את העמודה במבט: נדרים=סגול,
     // אתר=אינדיגו, טלפון=טורקיז, מייל=כחול, הזנה ידנית=אפור. "לא תועד"=אפור בהיר.
     render: (row) => {

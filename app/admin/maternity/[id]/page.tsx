@@ -119,20 +119,16 @@ async function computeGenStatus(
   // התאמת שמות (למטה) נשארת רק לשרשרת ידנית בלי שיוך — אחרת הבדל ניסוח בשם
   // ("רבי נתן יהודה סופר" מול "רבי נתן יהודה (נטע)") צובע דור מאושר באדום.
   const allNodes = [...map.values()]
-  // ⚠️ כלל-על אחיד עם כרטסת הצאצא: אם קיים ולו צומת אחד מאושר (verified) באותו
-  // דור בעץ — הדור מוצג כמאושר (כחול), בלי קשר לצומת הספציפי של הצאצא. זה מה
-  // שהעץ מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
-  const verifiedGens = new Set(allNodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
-  const rejectedGens = new Set(allNodes.filter(n => n.status === 'rejected').map(n => n.generation))
 
   const path = pathToRoot(map as unknown as Map<string, TreeNodeRow>, nodeId)
   if (path.length) {
+    // ✅ צבע לפי הצומת הספציפי במסלול של הצאצא — לא כלל-על שמעלה דור שלם לכחול
+    // כי יש בו צומת verified אחר. צומת pending (כתום בעץ) נשאר כתום בצ'יפ, ומרגע
+    // שמאשרים אותו בעץ הוא נהיה כחול מיד. זהה לכרטסת הצאצא.
     for (const n of path) {
       const status: GenStatus =
-        verifiedGens.has(n.generation) ? 'verified'
-        : isNodeVerified(n.status) ? 'verified'
+        isNodeVerified(n.status) ? 'verified'
         : n.status === 'rejected' ? 'rejected'
-        : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
         : 'pending'
       out.set(n.generation, status)
     }
@@ -156,10 +152,7 @@ async function computeGenStatus(
       : null
     out.set(e.generation, status)
   }
-  // כלל-על אחרי הכל: דור עם צומת מאושר בעץ → כחול (רק לדורות שכבר בשרשרת).
-  for (const gen of verifiedGens) {
-    if (out.has(gen) && out.get(gen) !== 'verified') out.set(gen, 'verified')
-  }
+  // ✅ אין כלל-על שמעלה דור שלם לכחול — הצבע לפי הצומת התואם בלבד. זהה לכרטסת הצאצא.
   return out
 }
 

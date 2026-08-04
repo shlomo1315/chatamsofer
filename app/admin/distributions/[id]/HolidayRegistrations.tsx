@@ -403,49 +403,38 @@ export default function HolidayRegistrations({
       )}
 
       {/* ── טבלת הנרשמים ──
-          ⚠️ 17 עמודות — עם whitespace-nowrap הטבלה נחתכה וחייבה גלילה צדדית.
-          עכשיו: פונט קומפקטי, padding מצומצם, ועמודות ארוכות (כתובת/מייל) שוברות
-          שורה במקום לדחוף את השאר. table-fixed מונע חפיפה בין עמודות. */}
+          ✅ גישה: רוחב מינימלי בפיקסלים לכל עמודה + גלילה רוחבית *בתוך הכרטיס*
+          בלבד (הדף עצמו לא גולל). 16 עמודות פשוט לא נכנסות למסך צר בלי לדחוס —
+          וניסיון לדחוס ב-table-fixed+אחוזים שבר את התוכן לשורות והזיז ערכים
+          מתחת לכותרת שלהם. עכשיו כל עמודה מקבלת רוחב מינימלי הגיוני, whitespace-
+          nowrap מונע שבירה, וכל ערך עומד בדיוק מתחת לכותרת שלו. */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-[12px] table-fixed">
-            {/* רוחב יחסי לכל עמודה — כדי ש-table-fixed יחלק הגיונית: קצרות (גיל,
-                ילדים, אישור) צרות, ארוכות (שם, כתובת, מייל) רחבות. */}
-            {/* ⚠️ עם table-fixed הרוחבים חייבים להסתכם ל-100% בדיוק — חריגה גורמת
-                לדפדפן לדחוס תאים באופן לא־פרופורציונלי, התוכן נשבר לשורה נוספת
-                והערכים כבר לא עומדים מתחת לכותרת. (ה-checkbox הוא w-8 קבוע, מחוץ ל-%.)
-                סכום כאן = 100.0% בדיוק. */}
-            <colgroup>
-              {canEdit && <col className="w-8" />}
-              <col className="w-[10%]" />{/* שם */}
-              <col className="w-[6%]" />{/* ת"ז */}
-              <col className="w-[6%]" />{/* אישור */}
-              <col className="w-[6%]" />{/* כרטיס */}
-              <col className="w-[7%]" />{/* בן/בת */}
-              <col className="w-[6%]" />{/* טלפון */}
-              <col className="w-[9%]" />{/* מייל */}
-              <col className="w-[9%]" />{/* כתובת */}
-              <col className="w-[5%]" />{/* עיר */}
-              <col className="w-[6%]" />{/* קהילה */}
-              <col className="w-[4%]" />{/* גיל */}
-              <col className="w-[4%]" />{/* ילדים */}
-              <col className="w-[6%]" />{/* ערוץ */}
-              <col className="w-[6%]" />{/* תאריך */}
-              <col className="w-[4%]" />{/* סכום */}
-              <col className="w-[6%]" />{/* הודעה */}
-            </colgroup>
+          <table className="w-full min-w-[1360px] text-[12px] border-collapse">
             <thead className="bg-slate-50 text-slate-500">
-              <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0 [&>th]:align-top">
+              <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0 [&>th]:align-middle [&>th]:whitespace-nowrap">
                 {canEdit && (
-                  <th className="w-8">
+                  <th className="w-9">
                     <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
                       className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
                   </th>
                 )}
-                <th>שם המשפחה</th><th>ת״ז</th><th>אישור הבקשה</th><th>כרטיס</th>
-                <th>בן/בת זוג</th><th>טלפון</th><th>מייל</th>
-                <th>כתובת</th><th>עיר</th><th>קהילה</th><th>גיל</th><th>ילדים</th>
-                <th>ערוץ</th><th>תאריך רישום</th><th>סכום</th><th>הודעה</th>
+                <th className="min-w-[150px]">שם המשפחה</th>
+                <th className="min-w-[95px]">ת״ז</th>
+                <th className="min-w-[130px]">אישור הבקשה</th>
+                <th className="min-w-[110px]">כרטיס</th>
+                <th className="min-w-[110px]">בן/בת זוג</th>
+                <th className="min-w-[100px]">טלפון</th>
+                <th className="min-w-[160px]">מייל</th>
+                <th className="min-w-[150px]">כתובת</th>
+                <th className="min-w-[80px]">עיר</th>
+                <th className="min-w-[90px]">קהילה</th>
+                <th className="min-w-[55px]">גיל</th>
+                <th className="min-w-[55px]">ילדים</th>
+                <th className="min-w-[90px]">ערוץ</th>
+                <th className="min-w-[130px]">תאריך רישום</th>
+                <th className="min-w-[75px]">סכום</th>
+                <th className="min-w-[90px]">הודעה</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -456,7 +445,7 @@ export default function HolidayRegistrations({
               ) : filtered.map(r => {
                 const I = SOURCE_ICON[r.source]
                 return (
-                  <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words [&>td]:whitespace-normal [&_span.ltr-num]:!whitespace-normal [&_span.ltr-num]:break-words">
+                  <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
                     {canEdit && (
                       <td>
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}
@@ -508,12 +497,12 @@ export default function HolidayRegistrations({
                         <span className="text-[11px] text-slate-400">{r.approval_status === 'approved' ? 'ממתין לשיוך' : '—'}</span>
                       )}
                     </td>
-                    <td className="text-slate-600">{r.spouse_name ?? '—'}</td>
+                    <td className="text-slate-600"><span className="block max-w-[110px] truncate" title={r.spouse_name ?? undefined}>{r.spouse_name ?? '—'}</span></td>
                     <td className="font-mono text-slate-600"><span className="ltr-num">{r.ben_phone ?? r.phone ?? '—'}</span></td>
-                    <td className="text-slate-600">{r.email ?? '—'}</td>
-                    <td className="text-slate-600">{r.address ?? '—'}</td>
-                    <td className="text-slate-600">{r.city ?? '—'}</td>
-                    <td className="text-slate-600">{r.community ?? '—'}</td>
+                    <td className="text-slate-600"><span className="block max-w-[160px] truncate" title={r.email ?? undefined} dir="ltr">{r.email ?? '—'}</span></td>
+                    <td className="text-slate-600"><span className="block max-w-[150px] truncate" title={r.address ?? undefined}>{r.address ?? '—'}</span></td>
+                    <td className="text-slate-600"><span className="block max-w-[80px] truncate" title={r.city ?? undefined}>{r.city ?? '—'}</span></td>
+                    <td className="text-slate-600"><span className="block max-w-[90px] truncate" title={r.community ?? undefined}>{r.community ?? '—'}</span></td>
                     <td className="text-slate-600 ltr-num">{r.age ?? '—'}</td>
                     <td className="text-slate-600 ltr-num">{r.children_count ?? '—'}</td>
                     <td>
