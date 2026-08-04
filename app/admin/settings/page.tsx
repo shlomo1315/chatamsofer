@@ -19,6 +19,7 @@ import NedarimSettings from './NedarimSettings'
 import NedarimHolidaySettings from './NedarimHolidaySettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import DistributionsShareSettings from './DistributionsShareSettings'
+import ElevenLabsStudio from './ElevenLabsStudio'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
 import YemotHolidaySettings from './YemotHolidaySettings'
@@ -232,6 +233,11 @@ export default async function SettingsPage() {
         {/* הודעות שלוחת חלוקות החגים — הערוץ המרכזי לרישום לחלוקה */}
         <Collapsible title="הקלטות שלוחת חלוקות חגים (ימות)" icon={<Phone size={16} className="text-teal-500" />}>
           <YemotHolidaySettings />
+        </Collapsible>
+
+        {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
+        <Collapsible title="אולפן קול — טקסט חופשי (ElevenLabs)" icon={<Sparkles size={16} className="text-indigo-500" />}>
+          <ElevenLabsStudio />
         </Collapsible>
 
         {/* Full system backup (DB + files) to Google Drive */}
