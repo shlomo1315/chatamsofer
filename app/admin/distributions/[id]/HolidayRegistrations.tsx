@@ -88,6 +88,7 @@ export default function HolidayRegistrations({
   const [query, setQuery] = useState('')
   const [source, setSource] = useState<RegisterSource | 'all'>('all')
   const [community, setCommunity] = useState<string>('all')
+  const [communityOpen, setCommunityOpen] = useState(false)   // פילטר קהילה מכווץ כברירת מחדל
   const [ageBucket, setAgeBucket] = useState<string>('all')
   const [kidsBucket, setKidsBucket] = useState<string>('all')
   const [approval, setApproval] = useState<ApprovalStatus | 'all'>('all')
@@ -332,12 +333,23 @@ export default function HolidayRegistrations({
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] font-bold text-slate-400 w-16">קהילה:</span>
-          <button className={chip(community === 'all')} onClick={() => setCommunity('all')}>הכל</button>
-          {communities.map(([c, n]) => (
-            <button key={c} className={chip(community === c)} onClick={() => setCommunity(c)}>{c} ({n})</button>
-          ))}
+        {/* ⚠️ קהילה — מכווץ כברירת מחדל (עשוי להכיל עשרות ערכים ברישום מאסיבי).
+            לחיצה על הכותרת פותחת את רשימת הצ'יפים; כשמסונן, הבחירה מוצגת גם סגור. */}
+        <div className="flex items-start gap-2 flex-wrap">
+          <button type="button" onClick={() => setCommunityOpen(o => !o)}
+            className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1 shrink-0 pt-1">
+            קהילה{community !== 'all' ? `: ${community}` : ` (${communities.length})`} <span className="text-slate-400">{communityOpen ? '▲' : '▼'}</span>
+          </button>
+          {communityOpen ? (
+            <div className="flex items-center gap-2 flex-wrap flex-1">
+              <button className={chip(community === 'all')} onClick={() => setCommunity('all')}>הכל</button>
+              {communities.map(([c, n]) => (
+                <button key={c} className={chip(community === c)} onClick={() => setCommunity(c)}>{c} ({n})</button>
+              ))}
+            </div>
+          ) : community !== 'all' ? (
+            <button className={chip(true)} onClick={() => setCommunity('all')}>{community} ✕</button>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-400 w-16">גיל:</span>
