@@ -8,12 +8,14 @@
 // ⚠️ למה זה הערוץ המרכזי: חלק גדול מהמשפחות אינן גולשות. רישום שדורש ממשק היה
 // מדיר אותן לגמרי, ולכן הרישום הטלפוני הוא זה שקובע זכאות.
 //
-// ⚠️ מי יכול להירשם: רק מי שיש לו *כרטסת משלו* באיגוד הצאצאים. מי שמופיע כילד
-// בכרטסת של הוריו אינו רשום באיגוד בעצמו — הזיהוי כאן הוא מול טבלת הצאצאים
-// בלבד, ולכן ילד כזה לא יזוהה וישמע שעליו להירשם קודם לאיגוד.
+// ⚠️ הזיהוי הוא לפי *תעודת זהות שמוקשת בשיחה*, ולא לפי המספר שממנו התקשרו: על
+// אותו מספר יכולים להיות רשומים כמה נרשמים (הורים וילדים נשואים באותו בית),
+// וזיהוי לפי טלפון היה רושם את הכרטסת הלא נכונה — טעות שקטה שאיש לא היה מגלה
+// עד החלוקה עצמה. הטלפון עדיין נשמר על הרישום, לתיעוד בלבד.
 //
-// הזיהוי: לפי מספר הטלפון שממנו התקשרו (טלפון ראשי, נוסף או של האישה).
-// אין הקלדת ת"ז — מי שמתקשר ממספר רשום מזוהה מיד.
+// ⚠️ מי יכול להירשם: רק מי שיש לו *כרטסת משלו* באיגוד הצאצאים. מי שמופיע כילד
+// בכרטסת של הוריו אינו רשום באיגוד בעצמו — החיפוש הוא מול טבלת הצאצאים בלבד,
+// ולכן ת"ז שלו לא תימצא והוא ישמע שעליו להירשם קודם לאיגוד.
 //
 // פרוטוקול התגובה (זהה לשלוחת היולדות):
 //   • הודעה:      id_list_message=<token>      (token = t-<טקסט TTS> או f-<קובץ>)
@@ -29,12 +31,16 @@ import { timingSafeEqual } from 'node:crypto'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { getHolidayMessages, type HolidayMessages } from '@/lib/yemotHolidayMessages'
+import { digitsOnly, idOrFilter, sameId } from '@/lib/idLookup'
 
 export const dynamic = 'force-dynamic'
 
 // ⚠️ משתנה חדש לכל ניסיון: קריאה חוזרת של משתנה שכבר מלא יוצרת לולאה אינסופית
-// בימות. כאן יש הקשה אחת, ולכן די בשלושה.
+// בימות. שלושה ניסיונות להקשת ת"ז — טעות בהקשה של 9 ספרות שכיחה, ולנתק אחריה
+// היה מאלץ את המתקשר לחייג שוב.
+const ID_VARS = ['collect_id', 'collect_id2', 'collect_id3']
 const CONFIRM_VARS = ['collect_confirm', 'collect_confirm2', 'collect_confirm3']
+const ID_DIGITS = 9
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(String(a)), bb = Buffer.from(String(b))
@@ -49,9 +55,25 @@ const joinTokens = (...tokens: string[]) => tokens.filter(Boolean).join('.')
 const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`
 const goToFolder = (target: string) => `go_to_folder=${target}`
 
-function readTap(valName: string, promptTokens: string[], allowed: (string | number)[]): string {
-  const ops = [valName, 'yes', '1', '1', '10', 'No', 'no', 'no', '', allowed.join('.'), '', '', '', '']
+type ReadOpts = { max?: number | ''; min?: number; wait?: number; allowed?: (string | number)[] }
+function readTap(valName: string, promptTokens: string[], opts: ReadOpts = {}): string {
+  const { max = '', min = 1, wait = 15, allowed } = opts
+  const ops = [
+    valName, 'yes',
+    max === '' ? '' : String(max), String(min), String(wait),
+    'No', 'no', 'no', '',
+    allowed && allowed.length ? allowed.join('.') : '',
+    '', '', '', '',
+  ]
   return `read=${joinTokens(...promptTokens)}=${ops.join(',')}`
+}
+
+/** בקשת הקשת ת"ז — עם הודעת הקדמה אופציונלית (ת"ז לא תקינה / לא נמצאה). */
+function askIdCommand(msgs: HolidayMessages, varName: string, prefixKey?: string): string {
+  return readTap(varName, [
+    prefixKey ? msgToken(msgs, prefixKey) : '',
+    msgToken(msgs, 'ask_id'),
+  ].filter(Boolean), { max: ID_DIGITS, min: 1 })
 }
 
 function yemotText(commands: string[], callId?: string) {
@@ -68,21 +90,13 @@ const msgToken = (msgs: HolidayMessages, key: string, repl?: Record<string, stri
   return tToken(t)
 }
 
-/** נרמול טלפון ישראלי להשוואה — ספרות בלבד, בלי קידומת בינלאומית ובלי אפס מוביל. */
-function phoneKey(v: unknown): string {
-  let d = String(v ?? '').replace(/\D/g, '')
-  if (d.startsWith('972')) d = d.slice(3)
-  return d.replace(/^0+/, '')
-}
-
 type Member = {
   id: string
   family_name?: string | null
   full_name?: string | null
   spouse_name?: string | null
-  phone?: string | null
-  phone2?: string | null
-  spouse_phone?: string | null
+  id_number?: string | null
+  spouse_id_number?: string | null
   is_active?: boolean | null
   eligibility_status?: string | null
 }
@@ -96,25 +110,28 @@ function memberCanRegister(m: Member): boolean {
 }
 
 /**
- * איתור המשפחה לפי מספר הטלפון שממנו התקשרו (ראשי / נוסף / של האישה).
+ * איתור הכרטסת לפי תעודת הזהות שהוקשה — של הבעל או של האישה, שתיהן על אותה
+ * כרטסת משפחתית.
  *
  * ⚠️ החיפוש הוא בטבלת הצאצאים בלבד ולא בילדים שרשומים בתוך כרטסת של הורה:
  * הרישום לחלוקה פתוח רק למי שיש לו כרטסת משלו באיגוד.
+ *
+ * ⚠️ מחפשים בכמה גרסאות של המספר (עם ואפילו בלי אפס מוביל) — ת"ז נשמרה במאגר
+ * בכמה צורות, והשוואה אחת מדויקת הייתה מחזירה "לא נמצא" למשפחה שכן רשומה.
  */
-async function findMemberByPhone(phone: string): Promise<Member | null> {
+async function findMemberById(idNumber: string): Promise<Member | null> {
   const db = getServiceClient()
   if (!db) return null
-  const key = phoneKey(phone)
-  if (!key) return null
+  const filter = idOrFilter(idNumber, ['id_number', 'spouse_id_number'])
+  if (!filter) return null
   const { data } = await db
     .from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, phone, phone2, spouse_phone, is_active, eligibility_status')
-    .or(`phone.ilike.%${key}%,phone2.ilike.%${key}%,spouse_phone.ilike.%${key}%`)
+    .select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, is_active, eligibility_status')
+    .or(filter)
     .limit(5)
   const rows = (data ?? []) as Member[]
-  // ⚠️ ilike הוא התאמה גסה — מאמתים התאמה מדויקת אחרי הנרמול, אחרת מספר
-  // שמכיל את המספר כתת-מחרוזת היה יכול לרשום משפחה אחרת.
-  const exact = rows.filter(r => [r.phone, r.phone2, r.spouse_phone].some(p => phoneKey(p) === key))
+  // אימות חוזר בקוד — כדי שלא נסתמך על צורת השמירה במסד
+  const exact = rows.filter(r => sameId(r.id_number, idNumber) || sameId(r.spouse_id_number, idNumber))
   // מעדיפים כרטסת שיכולה להירשם — כדי ששתי כרטסות היסטוריות (אחת לא פעילה)
   // לא יחסמו משפחה שדווקא כן רשומה כראוי.
   return exact.find(memberCanRegister) ?? exact[0] ?? null
@@ -142,9 +159,32 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
     return yemotText([idMessage(msgToken(msgs, 'closed')), goToFolder('hangup')], callId)
   }
 
-  const ben = await findMemberByPhone(apiPhone)
+  // ── הקשת תעודת הזהות ──────────────────────────────────────────────────────
+  // ימות מחזירה בכל בקשה גם את ההקשות הקודמות, ולכן מאתרים את הניסיון האחרון.
+  let attempt = -1
+  for (let i = ID_VARS.length - 1; i >= 0; i--) {
+    if (String(params[ID_VARS[i]] ?? '').trim()) { attempt = i; break }
+  }
+  if (attempt < 0) {
+    return yemotText([askIdCommand(msgs, ID_VARS[0])], callId)
+  }
+
+  const typedId = digitsOnly(params[ID_VARS[attempt]])
+  const hasNextTry = attempt + 1 < ID_VARS.length
+
+  // ⚠️ אורך בלבד ולא ספרת ביקורת: כרטסת שנשמרה עם מספר שאינו עובר את הביקורת
+  // (או דרכון) קיימת במאגר, וחסימה על הביקורת הייתה מונעת ממנה להירשם. מספר
+  // שאינו קיים אצלנו ממילא ייפול על "לא נמצא".
+  if (typedId.length !== ID_DIGITS) {
+    if (hasNextTry) return yemotText([askIdCommand(msgs, ID_VARS[attempt + 1], 'id_invalid')], callId)
+    return yemotText([idMessage(msgToken(msgs, 'id_invalid')), goToFolder('hangup')], callId)
+  }
+
+  const ben = await findMemberById(typedId)
   if (!ben) {
-    console.log(`[yemot-holiday] phone=${apiPhone} אינו רשום באיגוד`)
+    console.log(`[yemot-holiday] ת"ז שהוקשה אינה רשומה באיגוד (ניסיון ${attempt + 1})`)
+    // טעות בהקשה של 9 ספרות שכיחה — מבקשים שוב במשתנה הבא, ולא מנתקים מיד
+    if (hasNextTry) return yemotText([askIdCommand(msgs, ID_VARS[attempt + 1], 'not_found')], callId)
     return yemotText([idMessage(msgToken(msgs, 'not_found')), goToFolder('hangup')], callId)
   }
   if (!memberCanRegister(ben)) {
@@ -166,14 +206,15 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
     }
   }
 
-  // שלב האישור — 1 לרישום. המשתנה נקרא רק אחרי שהוקש (ימות מחזירה אותו בפרמטרים).
-  const confirmed = CONFIRM_VARS.map(v => String(params[v] ?? '').trim()).filter(Boolean).pop() ?? ''
+  // שלב האישור — 1 לרישום. המשתנה משויך לניסיון ה-ת"ז הנוכחי, כדי שהקשה מניסיון
+  // קודם לא תיחשב אישור לזיהוי חדש.
+  const confirmed = String(params[CONFIRM_VARS[attempt]] ?? '').trim()
   if (!confirmed) {
     return yemotText([
-      readTap(CONFIRM_VARS[0], [
+      readTap(CONFIRM_VARS[attempt], [
         msgToken(msgs, 'identify', { name }),
         msgToken(msgs, 'ask_confirm', { distribution: distName }),
-      ], [1]),
+      ], { max: 1, min: 1, allowed: [1] }),
     ], callId)
   }
   if (confirmed !== '1') {
