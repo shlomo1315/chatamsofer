@@ -51,9 +51,12 @@ export async function sendVerifyCode(
     return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
   }
 
-  // תקרה גלובלית מוחלטת על סך השליחות בערוץ — בולמת call/email-bombing
-  // כשתוקף מסובב מספרים/כתובות ו-IP-ים. כל שיחת ימות עולה כסף.
-  const globalCap = channel === 'phone' ? 60 : 200
+  // תקרה גלובלית מוחלטת על סך השליחות בערוץ — בולמת call/email-bombing.
+  // ⚠️ הועלתה דרסטית לשחרור המוני (אלפי נרשמים לגיטימיים ב-15 דק'): התקרה
+  // הישנה (60 שיחות/15דק') נחסמה מיד בשיא וחסמה המונים מלקבל אימות. ההגנה
+  // האמיתית מפני bombing נשארת ב-per-value (4 לטלפון) + per-IP (20) שלמעלה —
+  // הן חוסמות תוקף בודד; התקרה הגלובלית רק גג-על מפני תקלה קיצונית.
+  const globalCap = channel === 'phone' ? 8000 : 8000
   if (!rateLimit(`verify-send-global:${channel}`, globalCap, 15 * 60 * 1000)) {
     console.error(`[verify/send] global ${channel} cap hit — possible flooding attack`)
     return { status: 429, body: { error: 'השירות עמוס כעת. אנא נסו שוב מאוחר יותר.' } }
@@ -83,8 +86,16 @@ export async function sendVerifyCode(
   if (upErr) return { status: 500, body: { error: 'שגיאת שרת' } }
 
   if (channel === 'email') {
+    // ⚠️ ניקוי כתובת המייל לפני שליחה: משתמשים מזינים לעיתים רווחים נסתרים,
+    // תווי כיווניות (RLM/LRM) או אותיות עבריות בטעות — ו-Resend דוחה כתובת
+    // עם תווים שאינם ASCII ("Invalid `to` field"). מסירים הכל ומוודאים תקינות.
+    const cleanEmail = raw.trim().replace(/[‎‏‪-‮\s]/g, '')
+    if (!/^[\x00-\x7F]+$/.test(cleanEmail) || !/^[^@]+@[^@]+\.[^@]+$/.test(cleanEmail)) {
+      console.error('[verify/send] email invalid/non-ASCII:', JSON.stringify(raw))
+      return { status: 400, body: { error: 'כתובת המייל אינה תקינה. יש להזין כתובת באותיות לועזיות בלבד.' } }
+    }
     const mail = verifyCodeEmail(code)
-    const res = await deliverMail(raw, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+    const res = await deliverMail(cleanEmail, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
     if (!res || !res.ok) {
       console.error('[verify/send] email failed:', res?.error)
       return { status: 502, body: { error: 'שליחת המייל נכשלה. נסו שוב או פנו למזכירות.' } }
