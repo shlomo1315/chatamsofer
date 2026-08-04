@@ -17,8 +17,26 @@ async function getDistributions(): Promise<Distribution[]> {
   return data ?? []
 }
 
+// ספירת נרשמים חיה לכל חלוקה — { distribution_id: count }. שאילתה אחת קלה
+// (רק distribution_id), נספר בקוד. מוצג על כרטיס החלוקה ברשימה.
+async function getRegistrationCounts(ids: string[]): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured() || !ids.length) return {}
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('distribution_recipients')
+    .select('distribution_id')
+    .in('distribution_id', ids)
+  if (error) { console.error('[distributions] count query failed:', error); return {} }
+  const counts: Record<string, number> = {}
+  for (const r of (data ?? []) as { distribution_id: string }[]) {
+    counts[r.distribution_id] = (counts[r.distribution_id] ?? 0) + 1
+  }
+  return counts
+}
+
 export default async function DistributionsPage() {
   const distributions = await getDistributions()
+  const counts = await getRegistrationCounts(distributions.map(d => d.id))
   const active = distributions.filter((d) => d.status === 'active' || d.status === 'planning').length
   const openForRegistration = distributions.filter((d) => d.registration_open === true).length
 
@@ -47,7 +65,7 @@ export default async function DistributionsPage() {
         ))}
       </div>
 
-      <DistributionsClient distributions={distributions} />
+      <DistributionsClient distributions={distributions} counts={counts} />
     </div>
   )
 }
