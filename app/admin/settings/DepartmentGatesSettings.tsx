@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Loader2, Heart, Landmark, Stethoscope, HandHeart } from 'lucide-react'
+import { Loader2, Heart, Landmark, Stethoscope, HandHeart, Gift } from 'lucide-react'
 
 // המחלקות + תווית + אייקון + צבע. הסדר תואם ל-GATED_DEPARTMENTS בשרת.
 const DEPTS: { key: string; label: string; hint: string; icon: typeof Heart; color: string }[] = [
@@ -8,6 +8,9 @@ const DEPTS: { key: string; label: string; hint: string; icon: typeof Heart; col
   { key: 'gemach',        label: 'גמ"ח הלוואות',     hint: 'בקשות הלוואה',                     icon: Landmark,    color: 'text-emerald-600 bg-emerald-50' },
   { key: 'financial_aid', label: 'סיוע רפואי',        hint: 'בקשות סיוע כספי/רפואי',            icon: Stethoscope, color: 'text-sky-600 bg-sky-50' },
   { key: 'widows',        label: 'אלמנות ויתומים',    hint: 'בקשות תמיכה לאלמנות ויתומים',      icon: HandHeart,   color: 'text-violet-600 bg-violet-50' },
+  // ⚠️ מתג-אב: סגירה כאן מכבה את חלוקות החגים בכל הערוצים — פורטל, מייל,
+  // שלוחה טלפונית וטופס נדרים — גם אם קיימת חלוקה שהרישום אליה פתוח.
+  { key: 'holidays',      label: 'חלוקות חגים',      hint: 'סגירה כאן מכבה את הרישום בכל הערוצים, גם אם חלוקה פתוחה', icon: Gift, color: 'text-teal-600 bg-teal-50' },
 ]
 
 export default function DepartmentGatesSettings() {

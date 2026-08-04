@@ -226,11 +226,14 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
   return L.join('\n')
 }
 
+/** תיבת האיגוד — היעד של כל טיוטות ההגשה במייל. מוגדר פעם אחת. */
+export const IGUD_MAILBOX = 'igud@chasamsofer.info'
+
 // קישור mailto מלא לטיוטה (subjectPrefix לעקיפה — למשל "בקשת סיוע אלמן")
 export function draftMailto(type: ReqType, idNumber: string, ctx: Ctx, subjectPrefix?: string): string {
   const subject = `${subjectPrefix ?? SUBJECT_PREFIX[type]} · ת.ז ${idNumber}`
   const body = buildDraftBody(type, idNumber, ctx)
-  return `mailto:igud@chasamsofer.info?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+  return `mailto:${IGUD_MAILBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
 // ── פרסור גוף המייל שהתקבל ────────────────────────────────────────────────────

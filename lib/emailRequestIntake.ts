@@ -6,7 +6,7 @@ import { mailFor } from './departments'
 import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
 import {
   detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
-  draftMailto, type ReqType,
+  draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
 
 type InAttachment = { filename: string; url?: string; mimeType?: string }
@@ -58,7 +58,84 @@ function reject(
 }
 
 // מחזיר true אם המייל זוהה כבקשה וטופל (כדי לדלג על מענה אוטומטי אחר).
+// ─────────────────────────────────────────────────────────────────────────────
+// רישום לחלוקת חגים במייל.
+//
+// ⚠️ מסלול נפרד ומכוון: לחלוקת חגים אין *שום* שדה למלא — רק "רשמו אותי". העברתו
+// דרך מנגנון הטפסים (שדות, ולידציה, קבצים מצורפים) הייתה מוסיפה מכניקה שלמה
+// לבקשה שאין בה נתונים. הזיהוי והאבטחה זהים לחלוטין: ת"ז מלאה בנושא + התאמה
+// לכתובת המייל הרשומה.
+// ─────────────────────────────────────────────────────────────────────────────
+export const HOLIDAY_SUBJECT_PREFIX = 'רישום לחלוקת חגים'
+
+export function isHolidaySubject(subject: string): boolean {
+  const s = String(subject ?? '')
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\u00A0\u2007\u202F\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+  return /חלוק[הת]?\s*(ה)?חגים/.test(s) || /רישום\s*לחלוק/.test(s)
+}
+
+async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<boolean> {
+  const from = (msg.fromEmail || '').toLowerCase()
+  if (!from || from.endsWith('@chasamsofer.info') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return true
+
+  const { getOpenDistribution, registerToOpenDistribution } = await import('./holidayDistributions')
+  const { holidayRegisteredEmail } = await import('./emailTemplates')
+  const send = async (subject: string, html: string) => {
+    await deliverMail(from, subject, html, undefined, { ...mailFor('igud'), skipLog: true })
+  }
+
+  // ⚠️ מתג-האב ומצב הרישום נבדקים דרך getOpenDistribution — אותה נקודה שכל
+  // הערוצים נגזרים ממנה, כדי שלא ייווצר ערוץ שממשיך לרשום אחרי סגירה.
+  const dist = await getOpenDistribution()
+  if (!dist) {
+    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">הרישום לחלוקת החגים אינו פתוח כרגע. נשמח לעמוד לרשותכם במועד הרישום.</p>')
+    return true
+  }
+
+  const idM = String(msg.subject).match(/\d{9}/)
+  if (!idM) {
+    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא. יש להשיב עם הנושא: <strong>רישום לחלוקת חגים &lt;תעודת זהות&gt;</strong></p>')
+    return true
+  }
+  const idNumber = idM[0]
+
+  const { data: ben } = await admin
+    .from('beneficiaries')
+    .select('id, full_name, family_name, spouse_name, email, eligibility_status')
+    .or(`id_number.eq.${idNumber},spouse_id_number.eq.${idNumber}`)
+    .maybeSingle()
+
+  // ⚠️ אותה אבטחה כמו בשאר הבקשות: כתובת שולח ניתנת לזיוף ות"ז אינה סוד, ולכן
+  // נדרשת התאמה לכתובת הרשומה. הודעת הכשל גנרית ואינה חושפת אם הת"ז קיימת.
+  const benEmail = (ben?.email || '').trim().toLowerCase()
+  if (!ben || !benEmail || benEmail !== from) {
+    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">לא ניתן לאמת את הבקשה מכתובת מייל זו. יש לשלוח מהכתובת הרשומה במערכת, או להירשם דרך האזור האישי.</p>')
+    return true
+  }
+
+  const result = await registerToOpenDistribution(ben.id, 'email')
+  if (!result.ok) {
+    await send('רישום לחלוקת חגים', `<p style="font-family:Arial">${result.error ?? 'הרישום נכשל'}. אנא נסו שוב או פנו למשרד.</p>`)
+    return true
+  }
+
+  const name = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ')
+  const mail = holidayRegisteredEmail(name, { distribution: [dist.name, dist.year].filter(Boolean).join(' ') })
+  // ⚠️ מי שכבר רשום מקבל את אותו מייל עם שורת פתיחה שמבהירה זאת, ולא הודעת
+  // כשל: רישום כפול אינו שגיאה מבחינת המשפחה, והיא צריכה לדעת שהיא בפנים.
+  const html = result.created
+    ? mail.html
+    : `<p style="font-family:Arial;font-size:15px;color:#0f766e;font-weight:700">אתם כבר רשומים לחלוקה זו — אין צורך בפעולה נוספת.</p>${mail.html}`
+  await send(mail.subject, html)
+  return true
+}
+
 export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promise<boolean> {
+  // ⚠️ נבדק *לפני* detectReqType: הנושא "רישום לחלוקת חגים" אינו סוג טופס, ואילו
+  // היה נופל לזיהוי הרגיל הוא היה מוחזר כ-null והמייל היה נבלע בשקט.
+  if (isHolidaySubject(msg.subject)) return handleHolidayEmail(admin, msg)
+
   const type = detectReqType(msg.subject)
   if (!type) return false
 
@@ -319,6 +396,22 @@ export async function buildDraftLinks(
     const prefix = `בקשת סיוע ${maritalStatus}` // "בקשת סיוע אלמן" / "בקשת סיוע אלמנה"
     links.push({ label: prefix, href: draftMailto('widow', idNumber, ctx, prefix), open: isOpen('widow') })
   }
+  // ── רישום לחלוקת חגים במייל ──
+  // ⚠️ מופיע רק כשיש חלוקה שהרישום אליה פתוח *וגם* מתג-האב פתוח — שתי הבדיקות
+  // יחד יושבות ב-getOpenDistribution, ולכן די בקריאה אחת. בלי שדות למלא:
+  // הנושא נושא את הת"ז וזה כל מה שנדרש.
+  const { getOpenDistribution } = await import('./holidayDistributions')
+  const openDist = await getOpenDistribution()
+  if (openDist) {
+    const subject = `${HOLIDAY_SUBJECT_PREFIX} ${idNumber}`
+    const body = `שלום וברכה\n\nאבקש לרשום אותי לחלוקת ${openDist.name}${openDist.year ? ` ${openDist.year}` : ''}.\n\nאין צורך למלא פרטים נוספים — יש לשלוח את המייל כמו שהוא.`
+    links.push({
+      label: `להרשמה לחלוקת ${openDist.name}${openDist.year ? ` ${openDist.year}` : ''}`,
+      href: `mailto:${IGUD_MAILBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`,
+      open: true,
+    })
+  }
+
   // ⚠️ מחלקה סגורה (שער סגור בהגדרות) — לא מוצגת כלל, לא מאפור. המשתמש ביקש
   // שכפתור של מחלקה שאינה פעילה לא יופיע בכלל, גם במייל וגם בטופס הציבורי.
   return links.filter(l => l.open)

@@ -26,10 +26,19 @@ export interface ActiveDistribution {
   registration_open: boolean
 }
 
-/** החלוקה שהרישום אליה פתוח כרגע — null כשאין. */
+/**
+ * החלוקה שהרישום אליה פתוח כרגע — null כשאין.
+ *
+ * ⚠️ מתג-האב של המחלקה (הגדרות → שערי מחלקות → "חלוקות חגים") נבדק *כאן*, ולא
+ * בכל ערוץ בנפרד: הפורטל, מייל ההטבות, השלוחה הטלפונית וטופס נדרים כולם נגזרים
+ * מהפונקציה הזו. סגירה בהגדרות מכבה את כולם בבת אחת, גם אם חלוקה פתוחה לרישום.
+ * אכיפה בכל ערוץ בנפרד הייתה מבטיחה שערוץ אחד יישכח.
+ */
 export async function getOpenDistribution(): Promise<ActiveDistribution | null> {
   const db = getServiceClient()
   if (!db) return null
+  const { isDepartmentOpen } = await import('@/lib/departmentGates')
+  if (!(await isDepartmentOpen('holidays', db))) return null
   const { data } = await db
     .from('distributions')
     .select('id, name, year, amount_per_family, registration_open')
