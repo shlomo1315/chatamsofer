@@ -111,12 +111,23 @@ export default function YemotHolidaySettings() {
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-[12.5px] leading-relaxed text-teal-900">
+      <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-[12.5px] leading-relaxed text-teal-900">
         השלוחה מזהה את המשפחה <strong>לפי מספר הטלפון שממנו התקשרו</strong> (ראשי, נוסף או של האישה),
-        מקריאה את שם החלוקה הפתוחה לרישום, ומבקשת הקשה 1 לאישור. מי שכבר רשום שומע זאת ואינו נרשם פעמיים.
+        מקריאה את שם החלוקה הפתוחה, ומציעה תפריט:
+        <ul className="my-1.5 mr-4 list-disc space-y-0.5">
+          <li><strong>הקשה 1</strong> — רישום לחלוקה הפתוחה. מי שכבר רשום שומע זאת ואינו נרשם פעמיים.</li>
+          <li>
+            <strong>הקשה 2</strong> — שיוך הכרטיס שהמשפחה קיבלה במוקד: 16 ספרות, חזרה על הספרות לאישור,
+            ושיוך מול נדרים. <strong>פתוח רק למשפחה שנרשמה ואושרה</strong> לאותה חלוקה; מי שאינו מאושר
+            שומע למה (טרם אושר / נדחה / לא נרשם).
+          </li>
+        </ul>
+        {/* ⚠️ תת-שלוחות בימות אינן נדרשות: שלוחת API אחת מנהלת את כל התפריט,
+            והפיצול לשתי שלוחות היה מפצל גם את הלוגיקה לשני מקומות. */}
+        בימות מגדירים <strong>שלוחה אחת מסוג API</strong> — ההסתעפות לתפריט נעשית בשרת ואין צורך בתת-שלוחות.
         <br />
-        כתובת השלוחה בימות (שלוחת API): <code className="rounded bg-white px-1.5 py-0.5 text-[11px]" dir="ltr">/api/webhooks/yemot-holiday</code>
-      </p>
+        כתובת השלוחה: <code className="rounded bg-white px-1.5 py-0.5 text-[11px]" dir="ltr">/api/webhooks/yemot-holiday</code>
+      </div>
 
       {meta.map(m => {
         const value = messages[m.key]?.text ?? m.defaultText
