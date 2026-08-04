@@ -41,3 +41,20 @@ export function isAwaitingCard(a: AwaitingAid): boolean {
 /** העמודות הדרושות ל-isAwaitingCard — כדי ש-select לא ישכח שדה ויְשַׁקֵּר. */
 export const AWAITING_SELECT =
   'card_status, card_voucher_status, card_load_status, card_tlush_id, birth_type, wants_food_card'
+
+/**
+ * האם הלידה מחזיקה כרטיס שיצא מהמלאי — "נמסרו".
+ *
+ * ⚠️ מקור אמת יחיד, בדיוק מאותה סיבה שקיים isAwaitingCard: המספר הזה הוצג בשני
+ * מסכים לפי שתי הגדרות שונות. הדשבורד ספר כל תיק מאושר עם card_load_status
+ * טעון/פרוק (54), ומסך הכרטיסים ספר לפי קישור היומן בתוספת בקשת כרטיס (49).
+ * שני מספרים לאותו דבר = המנהל מפסיק להאמין לשניהם.
+ *
+ * ההגדרה: לידה מאושרת שביקשה כרטיס מזון ובפועל נטען לה כרטיס.
+ * 'unloaded' נספר גם הוא — זו הפריקה בתום הזכאות, והכרטיס הפיזי נוצל ואינו
+ * חוזר למגירה. מניח שהתיק כבר סונן ל-status='active'.
+ */
+export function holdsCard(a: AwaitingAid): boolean {
+  if (a.wants_food_card === false) return false
+  return a.card_load_status === 'loaded' || a.card_load_status === 'unloaded'
+}

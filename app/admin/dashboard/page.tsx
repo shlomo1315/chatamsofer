@@ -8,7 +8,7 @@ import { unstable_cache } from 'next/cache'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getPendingTasks } from '@/lib/pendingTasks'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
-import { isAwaitingCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
+import { isAwaitingCard, holdsCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import PendingTasksPanel from './PendingTasksPanel'
 
 interface DashData {
@@ -106,10 +106,11 @@ const getStats = unstable_cache(
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'deep_review'),
     ])
 
-    // כרטיסים שנמסרו = לידות מאושרות שמחזיקות כרטיס (נטען, או נפרק בתום
-    // הזכאות — הכרטיס נוצל). זהה להגדרה במסך הכרטיסים.
-    const aidRows = (activeAidRows.data ?? []) as (AwaitingAid & { card_load_status?: string | null })[]
-    const loadedCount = aidRows.filter(a => a.card_load_status === 'loaded' || a.card_load_status === 'unloaded').length
+    // ⚠️ holdsCard הוא מקור האמת היחיד ל"נמסרו" — משותף עם מסך הכרטיסים. קודם
+    // היה כאן תנאי מקומי שלא בדק wants_food_card, ולכן הדשבורד הציג 54 בעוד
+    // מסך הכרטיסים הציג 49.
+    const aidRows = (activeAidRows.data ?? []) as AwaitingAid[]
+    const loadedCount = aidRows.filter(holdsCard).length
     const awaitingCount = aidRows.filter(isAwaitingCard).length
 
     // ── חלוקת החגים הפתוחה ──
