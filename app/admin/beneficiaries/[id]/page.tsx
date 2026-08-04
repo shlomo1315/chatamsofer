@@ -531,6 +531,18 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         if (!gens.some(g => g.generation === 1)) {
           gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
         }
+        // ⚠️ הצאצא *עצמו* — הנרשם — אינו צומת בעץ הדורות (העץ הוא של האבות;
+        // lineage_node_id שלו מצביע לאב האחרון). לכן הוא נעדר מסוף השרשרת. מוסיפים
+        // אותו כדור אחרון (שם משפחה + הבעל והאישה), כדי שסדר הדורות יסתיים בו —
+        // "עד אליו כולל אותו". נגזר הדור מהצומת האחרון + 1.
+        {
+          const lastGen = gens.length ? Math.max(...gens.map(g => g.generation)) : 1
+          const fam = (beneficiary.family_name ?? '').trim()
+          const husband = (beneficiary.full_name ?? '').trim()
+          const wife = (beneficiary.spouse_name ?? '').trim()
+          const selfName = [fam, [husband, wife].filter(Boolean).join(' ו')].filter(Boolean).join(' ') || husband || 'הצאצא'
+          gens.push({ generation: lastGen + 1, name: selfName, status: 'verified', relation: null })
+        }
         // relation מגיע מהמסד כטקסט חופשי — מצמצמים לערכים שהרכיב מכיר
         const pickerNodes: import('./LineageChainChips').TreeNode[] = allNodes.map(n => ({
           id: n.id, name: n.name, generation: n.generation, parent_id: n.parent_id, status: n.status,

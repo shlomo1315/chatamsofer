@@ -98,6 +98,9 @@ async function runTtsCall(
     const res = await fetch(`${YEMOT_API}/RunCampaign`, { method: 'POST', body: form })
     const json = await res.json().catch(() => null)
     if (!json || (json.responseStatus && json.responseStatus !== 'OK')) {
+      // ⚠️ לוג דיאגנוסטי מלא — "General error" מימות אינו אומר למה. חושפים את כל
+      // התשובה כדי לדעת אם זו מכסה/תבנית/פרמטר. להסרה אחרי האבחון.
+      console.error('[yemot RunCampaign TTS] FULL RESPONSE:', JSON.stringify(json), 'HTTP', res.status)
       return { ok: false, error: json ? String(json.message ?? json.responseStatus) : `HTTP ${res.status}` }
     }
     return { ok: true }
