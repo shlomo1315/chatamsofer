@@ -27,6 +27,7 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
+import { genColor, deviatingGens } from '@/lib/lineageDeviation'
 
 // ⏱️ עזר מדידה זמני — מודד כמה כל שאילתה לוקחת ומדפיס ללוג השרת.
 async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -74,13 +75,14 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
   path: string[]
   /** צמתי המסלול בעץ (שורש→עלה). כשקיים — הוא מקור האמת לשרשרת ולסטטוסים. */
   pathNodes: LineageNode[]
-  deviating: Set<number>
   genStatus: Map<number, GenStatus>
 }> {
+  // ⚠️ אין כאן יותר סט "חורגים": מי חורג נקבע ב-lib/lineageDeviation מתוך
+  // genStatus. סט מקומי שנבנה בכלל משלו היה נפרד מהצ'יפים ומההתראה, וזה בדיוק
+  // מה שקרה — הוא סימן כחורג כל דור ≤5 שלא נמצא בהתאמת שמות.
   const out = {
     path: [] as string[],
     pathNodes: [] as LineageNode[],
-    deviating: new Set<number>(),
     genStatus: new Map<number, GenStatus>(),
   }
 
@@ -102,7 +104,6 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
         : n.status === 'rejected' ? 'rejected'
         : 'pending'
       out.genStatus.set(n.generation, status)
-      if (status !== 'verified') out.deviating.add(n.generation)
     }
     return out
   }
@@ -110,7 +111,6 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
   // ── נפילה-לאחור: אין שיוך לצומת (שרשרת ידנית בלבד) → התאמת שמות ──
   if (chain.length) {
     const { namesMatch } = await import('@/lib/hebrewName')
-    const verified = nodes.filter(n => n.status === 'verified')
     for (const e of chain) {
       // הסטטוס האמיתי של הדור: הצומת התואם (לפי דור+שם) והסטטוס שלו בעץ.
       // מעדיפים צומת verified; אם אין — לוקחים כל צומת תואם (pending/rejected);
@@ -122,9 +122,6 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
         : matches.length ? 'pending'
         : null
       out.genStatus.set(e.generation, status)
-      // deviating נשמר לתאימות: דור ≤5 שאינו verified = חשוד (להתראה הקופצת)
-      const ok = verified.some(n => n.generation === e.generation && namesMatch(n.name, e.name))
-      if (!ok) out.deviating.add(e.generation)
     }
   }
   return out
@@ -250,17 +247,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineageData = await computeLineageData(allNodes, beneficiary?.lineage_node_id, typedChain)
   const lineagePath = lineageData.path
   const pathNodes = lineageData.pathNodes   // מסלול הצמתים בעץ — מקור האמת כשקיים
-  const deviatingGens = lineageData.deviating
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
-  // חריג (אדום) = דור ≤5 שאינו מאושר (verified), או צומת rejected בכל דור.
-  // כלל הצבע (זהה ל-statusColor ב-LineageChainChips):
-  //   verified→כחול · rejected→אדום · אחר: דור ≤5→אדום (חריג!) · דור >5→כתום.
-  const genColor = (s: 'verified' | 'pending' | 'rejected' | null, generation: number): 'blue' | 'orange' | 'red' =>
-    s === 'verified' ? 'blue' : s === 'rejected' ? 'red' : generation <= 5 ? 'red' : 'orange'
-  // הדורות החריגים (אדומים) בתוך 5 הראשונים → מקפיצים את חלונית ההתראה.
-  const earlyRedGens = [...genStatus.entries()]
-    .filter(([g, s]) => g <= 5 && g > 1 && genColor(s, g) === 'red')
-    .map(([g]) => g)
+  // ⚠️ כלל החריגה מרוכז ב-lib/lineageDeviation ומשותף לצ'יפים, לחלונית ובכרטסת
+  // היולדות. בפרט: "אין צומת תואם במאגר" אינו חריגה אלא חוסר ידיעה — קודם הוא
+  // נצבע אדום, ולכן ההתראה קפצה לכל מי שנרשם למרות ש-5 הדורות הראשונים תקינים.
+  const earlyRedGens = deviatingGens(genStatus.entries())
   const earlyDeviation = earlyRedGens.length > 0
   // שרשרת (עם relation) לתגיות בן/חתן, וסימוני הצבע הידניים שנשמרו.
   const chainForMarks = Array.isArray(beneficiary?.lineage_chain)
@@ -279,7 +270,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     alertSource.map(c => ({
       generation: c.generation,
       name: c.generation === 1 ? CHATAM_SOFER_ROOT : c.name,
-      color: c.generation === 1 ? 'blue' : genColor(genStatus.get(c.generation) ?? null, c.generation),
+      color: c.generation === 1 ? 'blue' : genColor(c.generation, genStatus.get(c.generation) ?? null),
     }))
 
   if (!beneficiary && isSupabaseConfigured()) notFound()
@@ -711,10 +702,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
             {/* פירוט הדורות הבעייתיים — רק עד דור 5. דורות 6+ הם דורות חדשים
                 (מעבר לעץ המאושר, מסומנים כתום), ואינם "לא תואמים" — אין טעם
                 להציגם כאן. רק סטיות בדורות 1-5 (שאמורים להיות מאושרים) בעייתיות. */}
-            {[...deviatingGens].some(g => g <= 5) && (
+            {earlyRedGens.length > 0 && (
               <p className="text-sm text-red-800 mt-2 font-semibold flex items-center gap-1.5">
                 <AlertTriangle size={14} className="flex-shrink-0" />
-                דורות שאינם תואמים לנתיב המאושר: {[...deviatingGens].filter(g => g <= 5).sort((a, b) => a - b).map(g => `דור ${g}`).join(', ')}
+                דורות שאינם תואמים לנתיב המאושר: {earlyRedGens.map(g => `דור ${g}`).join(', ')}
                 <span className="font-normal text-red-600">(מסומנים באדום בעץ הדורות)</span>
               </p>
             )}
