@@ -286,7 +286,7 @@ export default function HolidayRegistrations({
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-bold text-slate-500 mb-2">פילוח לפי ערוץ</p>
           <div className="flex flex-col gap-1">
-            {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => {
+            {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => {
               const I = SOURCE_ICON[s]
               return (
                 <div key={s} className="flex items-center justify-between text-[12.5px]">
@@ -317,7 +317,7 @@ export default function HolidayRegistrations({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-400 w-16">ערוץ:</span>
           <button className={chip(source === 'all')} onClick={() => setSource('all')}>הכל</button>
-          {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => (
+          {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => (
             <button key={s} className={chip(source === s)} onClick={() => setSource(s)}>{SOURCE_LABEL[s]} ({bySource[s] ?? 0})</button>
           ))}
         </div>
@@ -402,12 +402,36 @@ export default function HolidayRegistrations({
         </div>
       )}
 
-      {/* ── טבלת הנרשמים ── */}
+      {/* ── טבלת הנרשמים ──
+          ⚠️ 17 עמודות — עם whitespace-nowrap הטבלה נחתכה וחייבה גלילה צדדית.
+          עכשיו: פונט קומפקטי, padding מצומצם, ועמודות ארוכות (כתובת/מייל) שוברות
+          שורה במקום לדחוף את השאר. table-fixed מונע חפיפה בין עמודות. */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px] whitespace-nowrap">
+          <table className="w-full text-[12px] table-fixed">
+            {/* רוחב יחסי לכל עמודה — כדי ש-table-fixed יחלק הגיונית: קצרות (גיל,
+                ילדים, אישור) צרות, ארוכות (שם, כתובת, מייל) רחבות. */}
+            <colgroup>
+              {canEdit && <col className="w-[2.5%]" />}
+              <col className="w-[9%]" />{/* שם */}
+              <col className="w-[6.5%]" />{/* ת"ז */}
+              <col className="w-[6%]" />{/* אישור */}
+              <col className="w-[6%]" />{/* כרטיס */}
+              <col className="w-[7%]" />{/* בן/בת */}
+              <col className="w-[6.5%]" />{/* טלפון */}
+              <col className="w-[9%]" />{/* מייל */}
+              <col className="w-[9%]" />{/* כתובת */}
+              <col className="w-[5%]" />{/* עיר */}
+              <col className="w-[6%]" />{/* קהילה */}
+              <col className="w-[3.5%]" />{/* גיל */}
+              <col className="w-[3.5%]" />{/* ילדים */}
+              <col className="w-[6%]" />{/* ערוץ */}
+              <col className="w-[7%]" />{/* תאריך */}
+              <col className="w-[5%]" />{/* סכום */}
+              <col className="w-[5%]" />{/* הודעה */}
+            </colgroup>
             <thead className="bg-slate-50 text-slate-500">
-              <tr className="[&>th]:px-3 [&>th]:py-3 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+              <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0 [&>th]:align-top">
                 {canEdit && (
                   <th className="w-8">
                     <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
@@ -428,7 +452,7 @@ export default function HolidayRegistrations({
               ) : filtered.map(r => {
                 const I = SOURCE_ICON[r.source]
                 return (
-                  <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+                  <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words">
                     {canEdit && (
                       <td>
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}
