@@ -119,8 +119,14 @@ async function computeGenStatus(
 
   if (!chain.length) return out
   const nodes = [...map.values()]
+  // ⚠️ אותה לוגיקה בדיוק כמו בכרטסת הצאצא: קודם הליכה בעץ מהשורש (השרשרת
+  // המוקלדת נושאת ניסוח מורכב שאינו שווה לשם הצומת), ואחר כך התאמת שמות שטוחה
+  // למה שלא זוהה. שתי לוגיקות שונות לאותה שאלה היו מציגות צבע אחר באותו דור.
+  const { resolveChainAgainstTree } = await import('@/lib/lineageResolve')
+  for (const [gen, r] of resolveChainAgainstTree(nodes, chain)) out.set(gen, r.status)
   const { namesMatch } = await import('@/lib/hebrewName')
   for (const e of chain) {
+    if (out.has(e.generation)) continue
     const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
     const status: GenStatus = matches.find(n => n.status === 'verified') ? 'verified'
       : matches.find(n => n.status === 'rejected') ? 'rejected'

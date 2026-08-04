@@ -19,6 +19,15 @@ import type { RegisterSource } from '@/lib/distributionSources'
 
 export const dynamic = 'force-dynamic'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// החגים שתחת "מענק לקראת החגים" בשאלת ההטבות בעבר.
+//
+// ⚠️ רשימה אחת שמשרתת את הטופס שלנו, את טופס נדרים ואת האכיפה בשרת. הוספת חג
+// בעתיד נעשית כאן, ואז שלושתם יודעים עליו — לעומת שלוש רשימות שהיו מתפצלות
+// בחג הראשון שמתווסף.
+// ─────────────────────────────────────────────────────────────────────────────
+export const HOLIDAY_GRANT_KEYS = ['tishrei_5786', 'pesach_5786', 'shavuot_5786'] as const
+
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -39,8 +48,16 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   const isNedarim = request.headers.get('origin') === 'https://matara.pro'
   const registrationSource: RegisterSource = channel ?? (isNedarim ? 'nedarim' : 'portal')
 
-  // הגבלת קצב — מניעת רישומי ספאם המוניים
-  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+  // ── הגבלת קצב ──
+  // ⚠️ תקרה גבוהה לערוץ נדרים בכוונה: הטופס שלהם מוגש גם מעמדות שירות, וכל
+  // העמדות באותו מקום יוצאות מכתובת IP אחת. תקרה של 10 לשעה הייתה חוסמת את
+  // הנרשם ה-11 בשחרור המוני — כלומר משביתה את הערוץ בדיוק ברגע השיא.
+  //
+  // ⚠️ ההגנה האמיתית שם אינה ה-IP אלא אימות הטלפון בקוד (אסימון חתום שנבדק
+  // בהמשך), ולכן ההרפיה כאן אינה פותחת ערוץ ספאם. הטופס הציבורי שלנו נשאר
+  // בתקרה ההדוקה — שם אין עמדות ואין סיבה לרישומים המוניים מאותו IP.
+  const rateMax = registrationSource === 'nedarim' ? 400 : 10
+  if (!rateLimit(`public-register:${registrationSource}:${clientIp(request)}`, rateMax, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 
@@ -84,6 +101,23 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // (matara.pro) שמגיע ישירות ל-API ולא עובר את בדיקת הטופס הציבורי.
   if (!community_affiliation || !String(community_affiliation).trim()) {
     return NextResponse.json({ error: 'יש להזין השתייכות קהילתית' }, { status: 400 })
+  }
+
+  // ⚠️ "מענק לקראת החגים" — מי שסימן אותו חייב לציין באילו חגים. עד כה זה נאכף
+  // בטופס שלנו בלבד, ולכן טופס נדרים (matara.pro) שפונה ישירות ל-API היה יכול
+  // לשמור holiday_grant=true בלי אף חג. הנתון הזה הוא הבסיס לתכנון החלוקה,
+  // ו"קיבל מענק אך לא ידוע באיזה חג" הוא בדיוק מה שאין ממנו מה ללמוד.
+  {
+    const pb = (past_benefits && typeof past_benefits === 'object' ? past_benefits : {}) as Record<string, unknown>
+    if (pb.holiday_grant === true || pb.holiday_grant === 'true') {
+      if (!HOLIDAY_GRANT_KEYS.some(k => pb[k] === true || pb[k] === 'true')) {
+        return NextResponse.json({
+          error: 'סומן "מענק לקראת החגים" — יש לציין באילו חגים התקבל המענק',
+          field: 'past_benefits',
+          expected: HOLIDAY_GRANT_KEYS,
+        }, { status: 400 })
+      }
+    }
   }
   {
     const addr = String(address ?? '').trim()

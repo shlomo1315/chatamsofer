@@ -42,7 +42,7 @@ async function getData(id: string) {
     supabase.from('distributions').select('*').eq('id', id).single(),
     supabase
       .from('distribution_recipients')
-      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false }),
   ])
@@ -59,7 +59,7 @@ async function getData(id: string) {
     }
     const row = r as unknown as {
       id: string; source?: string | null; registered_at?: string | null; phone?: string | null
-      notified_at?: string | null; amount?: number | null; beneficiary_id?: string | null
+      notified_at?: string | null; notify_error?: string | null; amount?: number | null; beneficiary_id?: string | null
       approval_status?: string | null; approved_at?: string | null
       card_number?: string | null; card_linked_at?: string | null; card_link_error?: string | null
     }
@@ -69,6 +69,7 @@ async function getData(id: string) {
       registered_at: row.registered_at ?? null,
       phone: row.phone ?? null,
       notified_at: row.notified_at ?? null,
+      notify_error: row.notify_error ?? null,
       amount: row.amount ?? null,
       beneficiary_id: row.beneficiary_id ?? null,
       approval_status: ((row.approval_status ?? 'pending') as ApprovalStatus),

@@ -1703,3 +1703,68 @@ export function holidayRegisteredEmail(name: string, vars: { distribution?: stri
     html: shell({ preheader: fill(t('preheader')), accent: '#0f766e', title: fill(t('title')), subtitle: fill(t('subtitle')), body }),
   }
 }
+
+// ─── חלוקת חגים — הודעת אישור לנרשם ─────────────────────────────────────────
+// נשלחת אחרי שהצוות אישר את הבקשה. המטרה מעשית: להודיע שהבקשה אושרה, ומה
+// לעשות עכשיו — לאסוף כרטיס ולשייך אותו (בטלפון או בממשק).
+//
+// ⚠️ מספר השלוחה מגיע כפרמטר ואינו קבוע בקוד: הוא נקבע מול ימות ומשתנה, וקידוד
+// שלו כאן היה שולח משפחות לשלוחה שאינה קיימת.
+export function holidayApprovedEmail(opts: {
+  familyName?: string | null
+  spouseName?: string | null
+  distributionName: string
+  amount?: number | null
+  phoneExtension?: string | null
+  portalBase?: string
+}): BuiltEmail {
+  const base = opts.portalBase || PORTAL_BASE_DEFAULT
+  const name = [opts.familyName, opts.spouseName].filter(Boolean).join(' ')
+  const dist = escapeHtml(opts.distributionName)
+  const amount = Number(opts.amount ?? 0)
+  const body = `
+    <p style="margin:0 0 8px;color:#0d9488;font-size:13px;font-weight:700;letter-spacing:0.5px;">הבקשה אושרה</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greetHe(name)}</h2>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#f0fdfa;border-right:4px solid #0d9488;border-radius:0 12px 12px 0;padding:16px 20px;">
+        <p style="margin:0;color:#0f766e;font-size:15px;font-weight:800;">
+          בקשתכם לחלוקת ${dist} אושרה
+        </p>
+      </td></tr>
+    </table>
+    ${amount > 0 ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:14px;padding:18px 22px;text-align:center;">
+        <p style="margin:0;color:#065f46;font-size:13px;font-weight:600;">הסכום לחלוקה</p>
+        <p style="margin:6px 0 0;color:#047857;font-size:30px;font-weight:900;" dir="ltr">₪${amount.toLocaleString('he-IL')}</p>
+      </td></tr>
+    </table>` : ''}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0;color:#1e40af;font-size:15px;font-weight:800;">מה עושים עכשיו</p>
+        <p style="margin:8px 0 0;color:#1e3a8a;font-size:14px;line-height:1.9;">
+          לאחר קבלת הכרטיס במוקד יש <strong>לשייך אותו</strong> כדי שיהיה פעיל${
+            opts.phoneExtension
+              ? ` — בשלוחה <strong dir="ltr">${escapeHtml(opts.phoneExtension)}</strong> במוקד הטלפוני, בהקשה 2`
+              : ' — בשלוחה הטלפונית של החלוקות, בהקשה 2'
+          }, או בממשק האישי.
+          <br />כרטיס שלא שויך אינו פעיל ולא ניתן להשתמש בו.
+        </p>
+      </td></tr>
+    </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
+      <tr><td style="background:#0d9488;border-radius:12px;">
+        <a href="${base}?action=holiday" style="display:inline-block;padding:13px 30px;color:#ffffff;font-size:15px;font-weight:800;text-decoration:none;">
+          לממשק האישי
+        </a>
+      </td></tr>
+    </table>
+  `
+  return {
+    subject: `בקשתכם לחלוקת ${opts.distributionName} אושרה — היכל החתם סופר`,
+    html: shell({
+      preheader: `בקשתכם לחלוקת ${opts.distributionName} אושרה. לאחר קבלת הכרטיס יש לשייך אותו כדי שיהיה פעיל.`,
+      accent: '#0d9488', title: 'הבקשה אושרה', subtitle: `חלוקת ${opts.distributionName}`, body,
+    }),
+  }
+}

@@ -144,6 +144,20 @@ async function runFileCall(phone: string): Promise<{ ok: boolean; notConfigured?
   }
 }
 
+/**
+ * שיחה יוצאת שמקריאה טקסט חופשי ב-TTS — בלי נפילה-לאחור לקמפיין קובץ.
+ *
+ * ⚠️ בשימוש להודעות שהתוכן שלהן משתנה (למשל אישור בקשה לחלוקת חגים).
+ * placeAnnouncementCall מנגן את ההקלטה של *אישור הרישום* כשמוגדרת תבנית קובץ,
+ * ולכן שימוש בו כאן היה משמיע למשפחה הודעה על נושא אחר לגמרי.
+ */
+export async function placeTtsCall(
+  phone: string,
+  text: string,
+): Promise<{ ok: boolean; notConfigured?: boolean; error?: string }> {
+  return runTtsCall(phone, ttsSafe(text))
+}
+
 // שיחה יוצאת שמקריאה הודעה כללית (למשל אישור קליטת רישום).
 // אם הוגדרה תבנית קמפיין שמנגנת קובץ (YEMOT_ANNOUNCE_TEMPLATE_ID) — מפעילים אותה
 // (מנגנת את ההקלטה הטבעית). אם הקמפיין נכשל (לא חויג) — נפילה-לאחור ל-TTS כדי שבכל
