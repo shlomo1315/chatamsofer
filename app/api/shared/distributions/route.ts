@@ -34,15 +34,21 @@ export async function GET(req: NextRequest) {
   if (ids.length) {
     const { data: recs, error: recErr } = await admin
       .from('distribution_recipients')
-      .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
+      .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
       .in('distribution_id', ids)
       .order('registered_at', { ascending: false })
     if (recErr) return NextResponse.json({ error: recErr.message }, { status: 500 })
     recipients = recs ?? []
   }
 
+  // עץ הדורות — לבורר הדור בדף השיתוף (בחירת דור → צאצאיו + מספר נרשמים).
+  // מוחזר תמיד; קל-משקל (id/name/parent_id/generation) ומרונדר בצד הלקוח.
+  const { data: lineageNodes } = await admin
+    .from('lineage_nodes')
+    .select('id, name, parent_id, generation, status')
+
   return NextResponse.json(
-    { distributions: distributions ?? [], recipients },
+    { distributions: distributions ?? [], recipients, lineageNodes: lineageNodes ?? [] },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

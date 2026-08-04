@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
-import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby } from 'lucide-react'
+import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -24,6 +24,14 @@ interface Beneficiary {
   children_count?: number | null
   birth_date?: string | null
   spouse_birth_date?: string | null
+  lineage_node_id?: string | null
+}
+interface LineageNode {
+  id: string
+  name: string
+  parent_id: string | null
+  generation: number
+  status?: string | null
 }
 interface Recipient {
   id: string
@@ -206,6 +214,96 @@ function BreakdownPanels({ recipients }: { recipients: Recipient[] }) {
   )
 }
 
+// ── בורר דור: בחירת דור → צאצאיו + מספר נרשמים לכל אחד ───────────────────────
+// לכל צומת בדור הנבחר סופרים כמה מהנרשמים הם צאצאיו — כלומר ה-lineage_node_id
+// שלהם נמצא בתת-העץ של אותו צומת. כך רואים "כמה נכדים/צאצאים של רבי X נרשמו".
+function GenerationExplorer({ recipients, nodes }: { recipients: Recipient[]; nodes: LineageNode[] }) {
+  const byId = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes])
+
+  // מזהי הדורות הקיימים בעץ (2 ומעלה — דור 1 הוא החתם סופר, שורש יחיד).
+  const generations = useMemo(() => {
+    const gens = new Set<number>()
+    nodes.forEach(n => { if (n.generation >= 2) gens.add(n.generation) })
+    return [...gens].sort((a, b) => a - b)
+  }, [nodes])
+
+  const [gen, setGen] = useState<number | null>(null)
+
+  // עולים מכל צומת עד השורש ומחזירים את כל האבות-הקדמונים (כולל עצמו).
+  const ancestorsOf = useMemo(() => {
+    const cache = new Map<string, Set<string>>()
+    const walk = (id: string | null): Set<string> => {
+      if (!id) return new Set()
+      const hit = cache.get(id); if (hit) return hit
+      const set = new Set<string>()
+      let cur: string | null = id, guard = 0
+      while (cur && guard++ < 40) { set.add(cur); cur = byId.get(cur)?.parent_id ?? null }
+      cache.set(id, set)
+      return set
+    }
+    return walk
+  }, [byId])
+
+  // לכל צומת בדור הנבחר — מספר הנרשמים שהוא אב-קדמון שלהם.
+  const rowsForGen = useMemo(() => {
+    if (gen == null) return []
+    const genNodes = nodes.filter(n => n.generation === gen)
+    // אוסף אבות-קדמונים של כל נרשם משויך (לפי הצומת שלו)
+    const recAncestors = recipients
+      .map(r => r.beneficiary?.lineage_node_id)
+      .filter((id): id is string => !!id)
+      .map(id => ancestorsOf(id))
+    return genNodes
+      .map(node => ({
+        node,
+        count: recAncestors.filter(anc => anc.has(node.id)).length,
+      }))
+      .filter(x => x.count > 0)
+      .sort((a, b) => b.count - a.count)
+  }, [gen, nodes, recipients, ancestorsOf])
+
+  if (!nodes.length) return null
+  const maxCount = rowsForGen.reduce((m, r) => Math.max(m, r.count), 0)
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex items-center gap-2 mb-4 text-slate-700">
+        <GitBranch size={16} className="text-indigo-500" />
+        <h3 className="text-sm font-bold">פילוח לפי דור בעץ הדורות</h3>
+      </div>
+      <p className="text-[12px] text-slate-500 mb-3">בחרו דור כדי לראות כמה מצאצאיו של כל אב באותו דור נרשמו לחלוקות.</p>
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {generations.map(g => (
+          <button key={g} type="button" onClick={() => setGen(g === gen ? null : g)}
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${g === gen ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50'}`}>
+            דור {g}
+          </button>
+        ))}
+      </div>
+      {gen == null ? (
+        <p className="text-center text-slate-400 text-xs py-6">בחרו דור למעלה</p>
+      ) : rowsForGen.length === 0 ? (
+        <p className="text-center text-slate-400 text-xs py-6">אין נרשמים המשויכים לצאצאי דור {gen}</p>
+      ) : (
+        <div className="flex flex-col gap-2.5 max-h-80 overflow-y-auto pl-1">
+          {rowsForGen.map(({ node, count }) => {
+            const pct = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0
+            return (
+              <div key={node.id} className="flex items-center gap-2">
+                <span className="w-40 shrink-0 truncate text-[12px] text-slate-700 font-medium" title={node.name}>{node.name}</span>
+                <div className="flex-1 h-5 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-indigo-400 transition-all duration-500" style={{ width: `${Math.max(pct, 6)}%` }} />
+                </div>
+                <span className="w-10 shrink-0 text-left text-[12px] font-bold text-indigo-700 ltr-num">{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Recipients table (view-only) ──
 function RecipientsTable({ rows, amountPerFamily }: { rows: Recipient[]; amountPerFamily?: number | null }) {
   if (!rows.length) return <p className="px-4 py-8 text-center text-slate-400 text-sm">אין נרשמים לחלוקה זו</p>
@@ -278,6 +376,7 @@ export default function SharedDistributionsPage() {
   const [state, setState] = useState<'checking' | 'locked' | 'unlocked'>('checking')
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
+  const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [countdown, setCountdown] = useState(10)
@@ -290,6 +389,7 @@ export default function SharedDistributionsPage() {
         const d = await res.json()
         setDistributions(d.distributions ?? [])
         setRecipients(d.recipients ?? [])
+        setLineageNodes(d.lineageNodes ?? [])
         setState('unlocked')
         setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
@@ -387,6 +487,9 @@ export default function SharedDistributionsPage() {
 
         {/* ── פילוחים חיים — ערים · קהילות · מספר ילדים ── */}
         <BreakdownPanels recipients={recipients} />
+
+        {/* ── בורר דור — בחירת דור בעץ הדורות → צאצאיו + מספר נרשמים ── */}
+        <GenerationExplorer recipients={recipients} nodes={lineageNodes} />
 
         {/* חיפוש */}
         {distributions.length > 3 && (
