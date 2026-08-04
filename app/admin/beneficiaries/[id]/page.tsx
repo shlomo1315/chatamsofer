@@ -144,6 +144,17 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
       out.genStatus.set(e.generation, status)
     }
   }
+
+  // ⚠️ כלל-על אחיד לשני הענפים: אם קיים ולו צומת אחד מאושר (verified) באותו דור
+  // בעץ — הדור מוצג כמאושר (כחול), בלי קשר למה שהחישוב לעיל קבע. זה מה שהעץ
+  // הוויזואלי מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
+  const verifiedGens = new Set(nodes.filter(n => n.status === 'verified').map(n => n.generation))
+  for (const gen of verifiedGens) {
+    // רק לדורות שכבר בשרשרת (יש להם ערך במפה) — לא ממציאים דורות חדשים.
+    if (out.genStatus.has(gen) && out.genStatus.get(gen) !== 'verified') {
+      out.genStatus.set(gen, 'verified')
+    }
+  }
   return out
 }
 
