@@ -194,7 +194,11 @@ async function handle(params: Record<string, string>): Promise<NextResponse> {
     return yemotText([idMessage(msgToken(msgs, 'not_eligible')), goToFolder('hangup')], callId)
   }
 
-  const name = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || String(ben.full_name ?? '')
+  // ⚠️ הקראה בשלוחה = *שם המשפחה בלבד*. קודם צורף גם שם האישה/הפרטי
+  // (spouse_name || full_name) והשלוחה הקריאה "משפחת <שם האישה>" — לא רצוי.
+  // נופלים ל-full_name רק כשאין family_name כלל (רשומות ישנות), כדי שלא ייווצר
+  // זיהוי ריק.
+  const name = (ben.family_name?.trim() || ben.full_name?.trim() || '').trim()
   const distName = `${dist.name}${dist.year ? ` ${dist.year}` : ''}`
 
   // ⚠️ כבר רשום — בכל ערוץ (אתר, מייל, נדרים או שיחה קודמת). נאמר לו זאת *לפני*
