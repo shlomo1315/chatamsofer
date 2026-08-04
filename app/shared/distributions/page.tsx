@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
-import { Lock, LogIn, Loader2, Users, Wallet, Gift, CalendarDays, ShieldCheck, Search, LogOut } from 'lucide-react'
+import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -119,6 +119,89 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
           </form>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── פילוחים חיים: ערים · קהילות · מספר ילדים ─────────────────────────────────
+// כל פילוח מחושב בזמן אמת מכלל הנרשמים (על פני כל החלוקות), ומוצג כגרף עמודות
+// אופקי — כדי שאפשר יהיה לסרוק את ההתפלגות במבט. הרשימות ארוכות מקבלות גלילה
+// פנימית, כדי שאלפי נרשמים לא ידחפו את הדף.
+const KIDS_BUCKETS: { label: string; test: (n: number) => boolean }[] = [
+  { label: '0–2 ילדים', test: n => n <= 2 },
+  { label: '3–5 ילדים', test: n => n >= 3 && n <= 5 },
+  { label: '6–8 ילדים', test: n => n >= 6 && n <= 8 },
+  { label: '9 ילדים ומעלה', test: n => n >= 9 },
+]
+
+function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.round((count / max) * 100) : 0
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-28 shrink-0 truncate text-[12px] text-slate-600" title={label}>{label}</span>
+      <div className="flex-1 h-5 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${Math.max(pct, count > 0 ? 6 : 0)}%` }} />
+      </div>
+      <span className="w-8 shrink-0 text-left text-[12px] font-bold text-slate-700 ltr-num">{count}</span>
+    </div>
+  )
+}
+
+function BreakdownCard({ title, icon, rows, color, scroll }: {
+  title: string; icon: React.ReactNode; rows: { label: string; count: number }[]; color: string; scroll?: boolean
+}) {
+  const max = rows.reduce((m, r) => Math.max(m, r.count), 0)
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col">
+      <div className="flex items-center gap-2 mb-4 text-slate-700">
+        {icon}<h3 className="text-sm font-bold">{title}</h3>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-center text-slate-400 text-xs py-6">אין נתונים</p>
+      ) : (
+        <div className={`flex flex-col gap-2.5 ${scroll ? 'max-h-64 overflow-y-auto pl-1' : ''}`}>
+          {rows.map(r => <BarRow key={r.label} label={r.label} count={r.count} max={max} color={color} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BreakdownPanels({ recipients }: { recipients: Recipient[] }) {
+  // ⚠️ פילוח לפי *משפחה ייחודית* (beneficiary_id) ולא לפי שורת רישום — משפחה
+  // שרשומה לשתי חלוקות לא תיספר פעמיים בהתפלגות הדמוגרפית.
+  const uniq = useMemo(() => {
+    const seen = new Map<string, Beneficiary>()
+    for (const r of recipients) {
+      const b = r.beneficiary
+      const key = b?.id || r.id
+      if (b && !seen.has(key)) seen.set(key, b)
+    }
+    return [...seen.values()]
+  }, [recipients])
+
+  const cities = useMemo(() => {
+    const m = new Map<string, number>()
+    uniq.forEach(b => { const c = b.city?.trim() || 'לא צוין'; m.set(c, (m.get(c) ?? 0) + 1) })
+    return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+  }, [uniq])
+
+  const communities = useMemo(() => {
+    const m = new Map<string, number>()
+    uniq.forEach(b => { const c = b.community_affiliation?.trim() || 'לא צוין'; m.set(c, (m.get(c) ?? 0) + 1) })
+    return [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count)
+  }, [uniq])
+
+  const kids = useMemo(() =>
+    KIDS_BUCKETS.map(bkt => ({ label: bkt.label, count: uniq.filter(b => bkt.test(b.children_count ?? 0)).length })),
+    [uniq])
+
+  if (!uniq.length) return null
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      <BreakdownCard title="לפי ערים" icon={<MapPin size={16} className="text-rose-500" />} rows={cities} color="bg-rose-400" scroll />
+      <BreakdownCard title="לפי קהילות" icon={<Users size={16} className="text-violet-500" />} rows={communities} color="bg-violet-400" scroll />
+      <BreakdownCard title="לפי מספר ילדים" icon={<Baby size={16} className="text-teal-500" />} rows={kids} color="bg-teal-400" />
     </div>
   )
 }
@@ -246,15 +329,9 @@ export default function SharedDistributionsPage() {
   }, [recipients])
 
   const totals = useMemo(() => {
-    let registered = 0, expected = 0, approved = 0
-    for (const d of distributions) {
-      const rows = byDist.get(d.id) ?? []
-      registered += rows.length
-      const amt = Number(d.amount_per_family ?? 0)
-      expected += rows.length * amt
-      approved += rows.filter(r => r.approval_status === 'approved').length
-    }
-    return { registered, expected, approved, distributions: distributions.length }
+    let registered = 0
+    for (const d of distributions) registered += (byDist.get(d.id) ?? []).length
+    return { registered, distributions: distributions.length }
   }, [distributions, byDist])
 
   const visible = useMemo(() => {
@@ -295,25 +372,21 @@ export default function SharedDistributionsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        {/* דשבורד מסכם */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* דשבורד מסכם — רק נרשמו + חלוקות. צפי תקציבי ומאושרים הוסרו לבקשת
+            ההנהלה (הסכום למשפחה עוד לא סופי, ואישורים אינם רלוונטיים לתצוגה זו). */}
+        <div className="grid grid-cols-2 gap-4 max-w-2xl">
           <div className="rounded-2xl border-2 border-indigo-200 bg-white p-5">
             <div className="flex items-center gap-2 text-indigo-600 mb-1"><Users size={16} /><span className="text-xs font-bold text-slate-500">סה״כ נרשמו</span></div>
             <p className="text-3xl font-extrabold text-indigo-700 ltr-num">{totals.registered.toLocaleString('he-IL')}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-emerald-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-emerald-600 mb-1"><Wallet size={16} /><span className="text-xs font-bold text-slate-500">צפי תקציבי</span></div>
-            <p className="text-3xl font-extrabold text-emerald-700 ltr-num">{fmtCur(totals.expected)}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-green-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-green-600 mb-1"><ShieldCheck size={16} /><span className="text-xs font-bold text-slate-500">מאושרים</span></div>
-            <p className="text-3xl font-extrabold text-green-700 ltr-num">{totals.approved.toLocaleString('he-IL')}</p>
           </div>
           <div className="rounded-2xl border-2 border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2 text-slate-500 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">חלוקות</span></div>
             <p className="text-3xl font-extrabold text-slate-700 ltr-num">{totals.distributions.toLocaleString('he-IL')}</p>
           </div>
         </div>
+
+        {/* ── פילוחים חיים — ערים · קהילות · מספר ילדים ── */}
+        <BreakdownPanels recipients={recipients} />
 
         {/* חיפוש */}
         {distributions.length > 3 && (
@@ -328,7 +401,6 @@ export default function SharedDistributionsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map(d => {
             const rows = byDist.get(d.id) ?? []
-            const expected = d.amount_per_family != null ? rows.length * Number(d.amount_per_family) : null
             const isOpen = openId === d.id
             return (
               <button key={d.id} type="button" onClick={() => setOpenId(isOpen ? null : d.id)}
@@ -357,12 +429,6 @@ export default function SharedDistributionsPage() {
                       <div className="flex items-center gap-1.5 text-indigo-600 mb-0.5"><Users size={14} /><span className="text-[11px] font-bold text-slate-500">נרשמו</span></div>
                       <p className={`text-2xl font-extrabold ltr-num ${rows.length > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>{rows.length.toLocaleString('he-IL')}</p>
                     </div>
-                    {expected != null && (
-                      <div className="flex-1 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                        <div className="flex items-center gap-1.5 text-emerald-600 mb-0.5"><Wallet size={14} /><span className="text-[11px] font-bold text-slate-500">צפי</span></div>
-                        <p className="text-2xl font-extrabold ltr-num text-emerald-700">{fmtCur(expected)}</p>
-                      </div>
-                    )}
                   </div>
                   {d.distribution_date && (
                     <p className="text-xs text-slate-400 flex items-center gap-1 mt-3"><CalendarDays size={12} />{fmtDate(d.distribution_date)}</p>
