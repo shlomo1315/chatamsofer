@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
     spouse_id_number: cleanSpouseId,
     eligibility_status: 'pending',
     is_active: true,
+    // באיזה אופן נרשם — הראוט הזה הוא הרישום מהאתר שלנו
+    registration_source: 'portal',
   }).select('id').single()
 
   if (error) {

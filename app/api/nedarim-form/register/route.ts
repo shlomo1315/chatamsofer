@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server'
-import { POST as publicRegister } from '../../portal/public-register/route'
+import { handlePublicRegister } from '../../portal/public-register/route'
 import { jsonCors, preflight, withCors } from '@/lib/cors'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10,8 +10,12 @@ import { jsonCors, preflight, withCors } from '@/lib/cors'
 // שלהם החזיר 404.
 //
 // אין כאן שכפול של לוגיקת הרישום — הבקשה מועברת ל-portal/public-register,
-// שהוא מקור האמת (ולידציה, אימות טלפון, יוחסין, מייל אישור). ההבדל היחיד:
-// עטיפת CORS, כי public-register נועד לאותו מקור ואינו מאפשר קריאה מ-matara.pro.
+// שהוא מקור האמת (ולידציה, אימות טלפון, יוחסין, מייל אישור). ההבדלים היחידים:
+// עטיפת CORS (כי public-register נועד לאותו מקור ואינו מאפשר קריאה מ-matara.pro),
+// וסימון ערוץ ההרשמה כ-'nedarim'.
+//
+// ⚠️ הערוץ נקבע לפי הראוט שנקרא ולא לפי כותרת origin: כותרת נשלטת בידי הלקוח,
+// ואילו העובדה שהבקשה הגיעה לכאן היא ודאית.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   let res: NextResponse
   try {
-    res = await publicRegister(request)
+    res = await handlePublicRegister(request, 'nedarim')
   } catch (e) {
     console.error('[nedarim-form/register] שגיאה:', e)
     return jsonCors({ error: 'שגיאה בשמירת הנתונים. אנא נסו שוב.' }, { status: 500 }, origin)

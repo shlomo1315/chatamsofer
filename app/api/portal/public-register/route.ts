@@ -15,6 +15,7 @@ import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets } from '@/lib/govData'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
+import type { RegisterSource } from '@/lib/distributionSources'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,10 +26,18 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * ההרשמה לאיגוד — מקור האמת לכל הערוצים.
+ *
+ * ⚠️ channel מועבר במפורש מהראוט שנקרא (למשל nedarim-form/register → 'nedarim')
+ * ולא נגזר מכותרת origin: כותרת נשלטת בידי הלקוח, ואילו הראוט שנקרא הוא עובדה.
+ * ברירת המחדל היא 'portal' — הרישום מהאתר שלנו.
+ */
+export async function handlePublicRegister(request: NextRequest, channel?: RegisterSource) {
   // טופס נדרים פלוס רץ בדפדפן המשתמש מ-matara.pro (ראה lib/cors.ts), ולכן
   // כל נרשם מגיע מה-IP שלו — אותה תקרה מתאימה לשניהם.
   const isNedarim = request.headers.get('origin') === 'https://matara.pro'
+  const registrationSource: RegisterSource = channel ?? (isNedarim ? 'nedarim' : 'portal')
 
   // הגבלת קצב — מניעת רישומי ספאם המוניים
   if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
@@ -285,6 +294,8 @@ export async function POST(request: NextRequest) {
     // 'pending' (בדיקה רגילה) או 'deep_review' (סטייה ביחוס בתוך 5 הדורות)
     eligibility_status: eligibilityStatus,
     is_active: true,
+    // באיזה אופן נרשם — נשמר בעת הרישום, כי בדיעבד אין דרך להבדיל בין ערוץ לערוץ
+    registration_source: registrationSource,
   }
 
   // נשואים = משפחה אחת = כרטסת אחת. הבעל והאשה נשמרים על אותה רשומה
@@ -309,8 +320,8 @@ export async function POST(request: NextRequest) {
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, verified_phones, signature, community_affiliation, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits; void verified_phones; void signature; void community_affiliation
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, verified_phones, signature, community_affiliation, registration_source, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits; void verified_phones; void signature; void community_affiliation; void registration_source
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)
@@ -448,4 +459,8 @@ export async function POST(request: NextRequest) {
 
   // holiday — מוחזר כדי שהטופס יוכל להציג "נרשמתם גם לחלוקת החגים"
   return NextResponse.json({ ok: true, ...(wantsHoliday ? { holidayRegistered } : {}) })
+}
+
+export async function POST(request: NextRequest) {
+  return handlePublicRegister(request)
 }
