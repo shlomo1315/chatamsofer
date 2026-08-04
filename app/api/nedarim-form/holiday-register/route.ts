@@ -44,7 +44,8 @@ async function resolve(idParam: string) {
 
 export async function GET(request: NextRequest) {
   const origin = request.headers.get('origin')
-  if (!rateLimit(`nedarim-holiday:${clientIp(request)}`, 40, 15 * 60 * 1000)) {
+  // תקרה גבוהה לשחרור המוני — ראו הערה ב-nedarim-form/lookup.
+  if (!rateLimit(`nedarim-holiday:${clientIp(request)}`, 3000, 15 * 60 * 1000)) {
     return jsonCors({ error: 'יותר מדי ניסיונות. נסו שוב בעוד מספר דקות.' }, { status: 429 }, origin)
   }
 
@@ -69,7 +70,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const origin = request.headers.get('origin')
-  if (!rateLimit(`nedarim-holiday-post:${clientIp(request)}`, 20, 15 * 60 * 1000)) {
+  // תקרה גבוהה לשחרור המוני — הרישום עצמו מוגן ע"י אימות טלפון + ת"ז ייחודית.
+  if (!rateLimit(`nedarim-holiday-post:${clientIp(request)}`, 3000, 15 * 60 * 1000)) {
     return jsonCors({ error: 'יותר מדי ניסיונות. נסו שוב בעוד מספר דקות.' }, { status: 429 }, origin)
   }
 

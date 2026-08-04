@@ -50,16 +50,15 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   const registrationSource: RegisterSource = channel ?? (isNedarim ? 'nedarim' : 'portal')
 
   // ── הגבלת קצב ──
-  // ⚠️ תקרה גבוהה לערוץ נדרים בכוונה: הטופס שלהם מוגש גם מעמדות שירות, וכל
-  // העמדות באותו מקום יוצאות מכתובת IP אחת. תקרה של 10 לשעה הייתה חוסמת את
-  // הנרשם ה-11 בשחרור המוני — כלומר משביתה את הערוץ בדיוק ברגע השיא.
-  //
-  // ⚠️ ההגנה האמיתית שם אינה ה-IP אלא אימות הטלפון בקוד (אסימון חתום שנבדק
-  // בהמשך), ולכן ההרפיה כאן אינה פותחת ערוץ ספאם. הטופס הציבורי שלנו נשאר
-  // בתקרה ההדוקה — שם אין עמדות ואין סיבה לרישומים המוניים מאותו IP.
-  const rateMax = registrationSource === 'nedarim' ? 400 : 10
-  if (!rateLimit(`public-register:${registrationSource}:${clientIp(request)}`, rateMax, 60 * 60 * 1000)) {
-    return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
+  // ⚠️ נדרים פלוס — *ללא הגבלה*: הערוץ מיועד לשחרור המוני של אלפי נרשמים
+  // בדקות (עמדות שירות רבות שיוצאות לעיתים מ-IP אחד), ותקרה כלשהי הייתה חוסמת
+  // את הנרשמים בדיוק ברגע השיא. ההגנה האמיתית שם היא אימות הטלפון בקוד (אסימון
+  // חתום שנבדק בהמשך) + אכיפת ת"ז ייחודית במסד — לא ה-IP. הטופס הציבורי שלנו
+  // נשאר בתקרה הדוקה (אין שם עמדות ואין סיבה לרישום המוני מאותו IP).
+  if (registrationSource !== 'nedarim') {
+    if (!rateLimit(`public-register:${registrationSource}:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+      return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
+    }
   }
 
   let body: Record<string, unknown>
@@ -262,24 +261,45 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     }
   }
 
-  // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות
+  // מניעת כפילות תעודת זהות של הילדים — קריטי למניעת טעויות.
+  // ⚠️ ביצועים לרישום המוני: קודם היו *שתי* שאילתות DB רצופות לכל ילד (משפחה עם
+  // 8 ילדים = 16 סבבי רשת), והשנייה סורקת JSON כבד. עכשיו: הבדיקות המקומיות
+  // (כפילות ברשימה / זהות להורה) רצות ראשונות ללא DB, ובדיקת ה"כבר קיים" נעשית
+  // בשאילתה *אחת* לכל השדות (id_number/spouse) ובשאילתה אחת ל-children — לכל
+  // הילדים יחד. מוריד את עומס ה-DB דרסטית כשאלפי טפסים מגיעים במקביל.
   if (Array.isArray(children) && children.length) {
     const seen = new Set<string>()
+    const childIds: string[] = []
     for (const c of children as { name?: string; id_number?: string }[]) {
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       if (!cid) continue
       const childName = (c?.name ?? '').trim() || 'הילד/ה'
-      // א. כפילות בתוך אותה משפחה (אותה רשימה / זהה להורה) — מציינים שם
       if (seen.has(cid)) return NextResponse.json({ error: `תעודת הזהות של ${childName} מופיעה פעמיים ברשימת הילדים.` }, { status: 409 })
       if (cid === cleanId || (cleanSpouseId && cid === cleanSpouseId)) {
         return NextResponse.json({ error: `תעודת הזהות של ${childName} זהה לזו של ההורה. יש להזין תעודת זהות נכונה.` }, { status: 409 })
       }
       seen.add(cid)
-      // ב. כבר קיים במערכת על שם רשומה אחרת — לא חושפים פרטים
-      const { data: asBen } = await admin.from('beneficiaries').select('id').or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).limit(1)
-      const { data: asChild } = await admin.from('beneficiaries').select('id').contains('children', [{ id_number: cid }]).limit(1)
-      if ((asBen?.length || asChild?.length)) {
-        return NextResponse.json({ error: `תעודת הזהות ${cid} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 409 })
+      childIds.push(cid)
+    }
+    if (childIds.length) {
+      // שאילתה אחת: האם מי מת"ז הילדים כבר קיימת כבעל/אשה של רשומה קיימת.
+      const orExpr = childIds.flatMap(id => [`id_number.eq.${id}`, `spouse_id_number.eq.${id}`]).join(',')
+      const [{ data: asBen }, ...childHits] = await Promise.all([
+        admin.from('beneficiaries').select('id_number, spouse_id_number').or(orExpr).limit(childIds.length * 2),
+        // בדיקת "רשום כילד אצל אחר" — שאילתה אחת לכל ת"ז (contains דורש ערך יחיד)
+        ...childIds.map(id => admin.from('beneficiaries').select('id').contains('children', [{ id_number: id }]).limit(1)),
+      ])
+      const takenAsBen = new Set<string>()
+      for (const row of (asBen ?? []) as { id_number?: string; spouse_id_number?: string }[]) {
+        if (row.id_number) takenAsBen.add(String(row.id_number).replace(/\D/g, ''))
+        if (row.spouse_id_number) takenAsBen.add(String(row.spouse_id_number).replace(/\D/g, ''))
+      }
+      for (let i = 0; i < childIds.length; i++) {
+        const cid = childIds[i]
+        const asChild = childHits[i]?.data
+        if (takenAsBen.has(cid) || (asChild?.length)) {
+          return NextResponse.json({ error: `תעודת הזהות ${cid} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 409 })
+        }
       }
     }
   }

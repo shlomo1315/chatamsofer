@@ -27,8 +27,10 @@ export async function OPTIONS(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const origin = request.headers.get('origin')
 
-  // הגבלת קצב — בולמת ניסיונות אנומרציה של תעודות זהות
-  if (!rateLimit(`nedarim-lookup:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
+  // הגבלת קצב — תקרה גבוהה מאוד לנדרים: בשחרור המוני עמדות רבות בודקות ת"ז
+  // מאותו IP, ותקרה נמוכה הייתה חוסמת בדיוק בשיא. 2000/15דק' עדיין בולם
+  // אנומרציה אוטומטית אך אינו מפריע לרישום אמיתי.
+  if (!rateLimit(`nedarim-lookup:${clientIp(request)}`, 2000, 15 * 60 * 1000)) {
     return jsonCors({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 }, origin)
   }
 
