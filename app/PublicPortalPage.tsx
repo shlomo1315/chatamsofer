@@ -5605,13 +5605,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             onClick={() => setHolidayModal(null)}>
             <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl text-center"
               onClick={e => e.stopPropagation()}>
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              {/* ⚠️ שלושה מצבים:
+                  • invite  — נכנסו מקישור החלוקה ועדיין לא רשומים → הזמנה + כפתור רישום.
+                  • created — הרישום נקלט עכשיו.
+                  • already — המשפחה כבר רשומה (הבעל או האישה — אותה כרטסת צאצא).
+                  קודם המצב invite לא היה מטופל ונפל בטעות ל"אתם כבר רשומים" בלי
+                  כפתור רישום, כך שמי שהוזמן מהקישור לא יכל להירשם. */}
+              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${holidayModal.mode === 'invite' ? 'bg-teal-100' : 'bg-green-100'}`}>
                 {holidayModal.mode === 'created'
                   ? <Check size={34} className="text-green-600" strokeWidth={3} />
-                  : <Gift size={32} className="text-green-600" />}
+                  : <Gift size={32} className={holidayModal.mode === 'invite' ? 'text-teal-600' : 'text-green-600'} />}
               </div>
               <h2 className="text-xl font-extrabold text-slate-900 mb-1.5">
-                {holidayModal.mode === 'created' ? 'רישומכם נקלט בהצלחה!' : 'אתם כבר רשומים'}
+                {holidayModal.mode === 'created' ? 'הבקשה התקבלה בהצלחה!'
+                  : holidayModal.mode === 'invite' ? 'רישום לחלוקת החגים'
+                  : 'הבקשה שלכם כבר התקבלה'}
               </h2>
               <p className="text-sm font-bold text-teal-700 mb-3">
                 {holidayModal.name}
@@ -5626,13 +5634,29 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               )}
               <p className="text-[13.5px] leading-relaxed text-slate-600 mb-5">
                 {holidayModal.mode === 'created'
-                  ? 'בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת.'
-                  : 'הבקשה שלכם לחלוקה זו כבר נקלטה במערכת, נשלח לכם הודעה מסודרת לגבי ההמשך.'}
+                  ? 'הבקשה שלכם לחלוקה נקלטה בהצלחה. נשלח לכם עדכון מסודר לגבי ההמשך. אין צורך בפעולה נוספת.'
+                  : holidayModal.mode === 'invite'
+                  ? 'משפחתכם מוזמנת להירשם לחלוקה זו. לחצו על הכפתור להגשת בקשת הרישום — לאחר מכן יישלח אליכם עדכון בהמשך.'
+                  : 'הרישום שלכם לחלוקה זו כבר התקבל במערכת. נשלח לכם עדכון מסודר לגבי ההמשך.'}
               </p>
-              <button type="button" onClick={() => setHolidayModal(null)}
-                className="w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
-                הבנתי, תודה
-              </button>
+              {holidayModal.mode === 'invite' ? (
+                <div className="flex flex-col gap-2">
+                  <button type="button" disabled={holidaySaving}
+                    onClick={() => void registerHoliday()}
+                    className="w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98] disabled:opacity-60">
+                    {holidaySaving ? 'רושם…' : 'להגשת בקשת הרישום'}
+                  </button>
+                  <button type="button" onClick={() => setHolidayModal(null)}
+                    className="text-sm text-slate-500 hover:text-slate-700 underline self-center">
+                    לא כעת
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setHolidayModal(null)}
+                  className="w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
+                  הבנתי, תודה
+                </button>
+              )}
             </div>
           </div>
         )}

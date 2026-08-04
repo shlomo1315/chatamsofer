@@ -279,6 +279,11 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineagePath = lineageData.path
   const pathNodes = lineageData.pathNodes   // מסלול הצמתים בעץ — מקור האמת כשקיים
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
+  // ⚠️ לוג דיאגנוסטי זמני — לאבחון צ'יפים כתומים שאמורים להיות כחולים. להסרה.
+  console.log(`[LINEAGE-DIAG/${id}] node_id=${beneficiary?.lineage_node_id ?? 'NULL'} pathNodes=${pathNodes.length} chain=${typedChain.length} allNodes=${allNodes.length}`)
+  console.log(`[LINEAGE-DIAG/${id}] genStatus=${JSON.stringify([...genStatus.entries()])}`)
+  console.log(`[LINEAGE-DIAG/${id}] pathNodes_detail=${JSON.stringify(pathNodes.map(n => ({ g: n.generation, s: n.status, name: n.name })))}`)
+  console.log(`[LINEAGE-DIAG/${id}] nodes_by_gen=${JSON.stringify([...new Set(allNodes.map(n => n.generation))].sort((a,b)=>a-b).map(g => ({ g, statuses: allNodes.filter(n=>n.generation===g).map(n=>n.status) })))}`)
   // ⚠️ כלל החריגה מרוכז ב-lib/lineageDeviation ומשותף לצ'יפים, לחלונית ובכרטסת
   // היולדות. בפרט: "אין צומת תואם במאגר" אינו חריגה אלא חוסר ידיעה — קודם הוא
   // נצבע אדום, ולכן ההתראה קפצה לכל מי שנרשם למרות ש-5 הדורות הראשונים תקינים.
