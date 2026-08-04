@@ -1782,8 +1782,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לשקף את המצב *כרגע* ולא מצב שנשמר בכניסה קודמת.
   const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean; registeredAt?: string | null } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
-  // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, או "כבר רשומים"
-  const [holidayModal, setHolidayModal] = useState<{ mode: 'invite' | 'created' | 'already'; name: string; registeredAt?: string | null } | null>(null)
+  // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, "כבר רשומים",
+  // או "הרישום סגור" (נכנסו מהקישור אך המחלקה/החלוקה סגורה כעת).
+  const [holidayModal, setHolidayModal] = useState<{ mode: 'invite' | 'created' | 'already' | 'closed'; name: string; registeredAt?: string | null } | null>(null)
+  const [holidayLoaded, setHolidayLoaded] = useState(false)
 
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
@@ -2716,6 +2718,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           setHoliday(d?.open
             ? { open: true, name: String(d.distribution?.name ?? 'חלוקת חגים'), year: d.distribution?.year ?? null, registered: !!d.registered, registeredAt: d.registeredAt ?? null }
             : null)
+          // ⚠️ סימון שהנתונים *נטענו* — כדי להבחין בין "עדיין טוען" (holiday=null
+          // כברירת מחדל) לבין "נטען, והמחלקה/החלוקה סגורה". בלי זה, מי שנכנס מקישור
+          // החלוקה כשהיא סגורה לא קיבל שום משוב.
+          setHolidayLoaded(true)
         })
         .catch(() => {})
     }, 0)
@@ -2831,10 +2837,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // לכן גוללים אליו ומדגישים אותו. אם החלוקה עוד לא נטענה (הבקשה מקבילה
     // לכניסה) — לא מנקים את הכוונה, וה-effect ינסה שוב כשהיא תגיע.
     else if (a === 'holiday') {
-      // ⚠️ מחכים שנתוני החלוקה ייטענו לפני שמחליטים מה להציג. אם עדיין לא — לא
-      // מנקים את הכוונה, וה-effect ינסה שוב כשהם יגיעו.
-      if (!holiday) opened = false
-      else if (holiday.registered) {
+      // ⚠️ מחכים שנתוני החלוקה ייטענו לפני שמחליטים מה להציג (holidayLoaded).
+      // עד אז — לא מנקים את הכוונה, וה-effect ינסה שוב כשהם יגיעו.
+      if (!holidayLoaded) opened = false
+      else if (!holiday) {
+        // נטען, אך אין חלוקה פתוחה (מחלקה סגורה בהגדרות או אין חלוקה פעילה) —
+        // פופאפ "הרישום סגור", כדי שמי שנכנס מהקישור יקבל משוב ולא מסך ריק.
+        setHolidayModal({ mode: 'closed', name: 'חלוקת החגים' })
+      } else if (holiday.registered) {
         // כבר רשום — פופאפ "כבר התקבלה בקשתכם" עם תאריך הרישום
         setHolidayModal({ mode: 'already', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`, registeredAt: holiday.registeredAt })
       } else {
@@ -5611,17 +5621,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   • already — המשפחה כבר רשומה (הבעל או האישה — אותה כרטסת צאצא).
                   קודם המצב invite לא היה מטופל ונפל בטעות ל"אתם כבר רשומים" בלי
                   כפתור רישום, כך שמי שהוזמן מהקישור לא יכל להירשם. */}
-              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${holidayModal.mode === 'invite' ? 'bg-teal-100' : 'bg-green-100'}`}>
+              <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full ${holidayModal.mode === 'closed' ? 'bg-slate-100' : holidayModal.mode === 'invite' ? 'bg-teal-100' : 'bg-green-100'}`}>
                 {holidayModal.mode === 'created'
                   ? <Check size={34} className="text-green-600" strokeWidth={3} />
-                  : <Gift size={32} className={holidayModal.mode === 'invite' ? 'text-teal-600' : 'text-green-600'} />}
+                  : <Gift size={32} className={holidayModal.mode === 'closed' ? 'text-slate-400' : holidayModal.mode === 'invite' ? 'text-teal-600' : 'text-green-600'} />}
               </div>
               <h2 className="text-xl font-extrabold text-slate-900 mb-1.5">
                 {holidayModal.mode === 'created' ? 'הבקשה התקבלה בהצלחה!'
                   : holidayModal.mode === 'invite' ? 'רישום לחלוקת החגים'
+                  : holidayModal.mode === 'closed' ? 'הרישום סגור כעת'
                   : 'הבקשה שלכם כבר התקבלה'}
               </h2>
-              <p className="text-sm font-bold text-teal-700 mb-3">
+              <p className={`text-sm font-bold mb-3 ${holidayModal.mode === 'closed' ? 'text-slate-500' : 'text-teal-700'}`}>
                 {holidayModal.name}
               </p>
               {holidayModal.mode === 'already' && holidayModal.registeredAt && (
@@ -5637,6 +5648,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ? 'הבקשה שלכם לחלוקה נקלטה בהצלחה. נשלח לכם עדכון מסודר לגבי ההמשך. אין צורך בפעולה נוספת.'
                   : holidayModal.mode === 'invite'
                   ? 'משפחתכם מוזמנת להירשם לחלוקה זו. לחצו על הכפתור להגשת בקשת הרישום — לאחר מכן יישלח אליכם עדכון בהמשך.'
+                  : holidayModal.mode === 'closed'
+                  ? 'הרישום לחלוקת החגים אינו פתוח כעת. כשייפתח נעדכן אתכם. נשמח לעמוד לרשותכם במועד הרישום.'
                   : 'הרישום שלכם לחלוקה זו כבר התקבל במערכת. נשלח לכם עדכון מסודר לגבי ההמשך.'}
               </p>
               {holidayModal.mode === 'invite' ? (
