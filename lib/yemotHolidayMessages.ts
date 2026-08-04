@@ -30,13 +30,11 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
     defaultText: 'שלום וברכה המערכת זיהתה אתכם בשם {name}',
     hint: 'הודעה דינמית — חובה לכלול {name}. אין אפשרות הקלטה.',
   },
-  // ── תפריט השלוחה ───────────────────────────────────────────────────────────
-  // ⚠️ שתי האפשרויות מוקראות תמיד, גם למי שאינו מאושר לשיוך כרטיס: תפריט
-  // שמשתנה בין מתקשרים הופך את ההדרכה בעל-פה ("הקישו 2") לשגויה לחלק מהם.
-  // מי שאינו זכאי שומע בענף עצמו *למה*, וזה מסביר יותר מאפשרות שנעלמה.
+  // ⚠️ שלב א' — רישום בלבד. שיוך הכרטיס נעשה בשלב הבא, ולכן אין כאן תפריט:
+  // תפריט בן אפשרות אחת מאריך את השיחה ומבלבל, במיוחד למי שאינו גולש.
   {
-    key: 'menu', label: 'תפריט ראשי', allowAudio: false, placeholders: ['distribution'],
-    defaultText: 'לרישום לחלוקת {distribution} הקישו 1 לשיוך כרטיס שקיבלתם הקישו 2',
+    key: 'ask_confirm', label: 'בקשת אישור הרישום', allowAudio: false, placeholders: ['distribution'],
+    defaultText: 'לרישום לחלוקת {distribution} הקישו 1',
     hint: 'הודעה דינמית — חובה לכלול {distribution} (שם החלוקה הפעילה).',
   },
   {
@@ -45,11 +43,19 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   },
   {
     key: 'already', label: 'כבר רשומים', allowAudio: false, placeholders: ['name', 'distribution'],
-    defaultText: 'אתם כבר רשומים לחלוקת {distribution} אין צורך בפעולה נוספת',
+    defaultText: 'רישומכם לחלוקת {distribution} כבר נקלט אין צורך בפעולה נוספת',
+    hint: 'נשמע למי שנרשם כבר — בטלפון, באתר, במייל או בטופס נדרים.',
   },
+  // ⚠️ "אינו רשום" ולא "שגיאה": הרישום לחלוקה פתוח רק למי שיש לו כרטסת משלו
+  // באיגוד הצאצאים. מי שמופיע כילד בכרטסת של הוריו אינו רשום באיגוד בעצמו,
+  // והמספר שלו לא יזוהה — ההודעה אומרת לו מה לעשות ולא רק שנכשל.
   {
     key: 'not_found', label: 'טלפון לא מזוהה', allowAudio: true,
-    defaultText: 'מספר הטלפון שלכם אינו רשום במערכת יש להירשם קודם לאיגוד הצאצאים ולאחר מכן לחייג שוב',
+    defaultText: 'מספר הטלפון שלכם אינו רשום באיגוד הצאצאים יש להירשם קודם לאיגוד ולאחר מכן לחייג שוב',
+  },
+  {
+    key: 'not_eligible', label: 'כרטסת שאינה פעילה', allowAudio: true,
+    defaultText: 'הכרטסת שלכם באיגוד הצאצאים אינה פעילה לרישום כרגע לפרטים נוספים ניתן לפנות למשרד',
   },
   {
     key: 'closed', label: 'הרישום סגור', allowAudio: true,
@@ -58,46 +64,6 @@ export const HOLIDAY_MESSAGE_META: HolidayMsgMeta[] = [
   { key: 'cancelled', label: 'המשתמש לא אישר', allowAudio: true, defaultText: 'הרישום לא בוצע תודה ולהתראות' },
   { key: 'failed', label: 'תקלה ברישום', allowAudio: true, defaultText: 'אירעה תקלה ברישום אנא נסו שוב מאוחר יותר או פנו למשרד' },
 
-  // ── שיוך כרטיס (הקשה 2) ───────────────────────────────────────────────────
-  // פתוח רק למשפחה שנרשמה *ואושרה* לחלוקה הפתוחה. לכל סירוב הודעה משלו, כדי
-  // שהמתקשר ידע אם עליו להירשם, להמתין לאישור, או שאין מה לעשות.
-  {
-    key: 'card_ask', label: 'בקשת מספר הכרטיס', allowAudio: true,
-    defaultText: 'הקישו את 16 ספרות מספר הכרטיס ולאחר מכן הקישו סולמית',
-  },
-  {
-    key: 'card_readback', label: 'חזרה על הספרות לאישור', allowAudio: false, placeholders: ['card'],
-    defaultText: 'הקשתם את המספר {card} לאישור הקישו 1 לתיקון הקישו 2',
-    hint: 'הודעה דינמית — חובה לכלול {card}. הספרות מוקראות אחת אחת.',
-  },
-  {
-    key: 'card_length', label: 'מספר כרטיס לא תקין', allowAudio: true,
-    defaultText: 'מספר הכרטיס חייב להיות 16 ספרות אנא הקישו שוב',
-  },
-  {
-    key: 'card_not_registered', label: 'לא נרשמו לחלוקה', allowAudio: true,
-    defaultText: 'לא נמצאה בקשה שלכם לחלוקה הנוכחית ניתן להירשם כעת בהקשה 1 בתפריט',
-  },
-  {
-    key: 'card_not_approved', label: 'הבקשה טרם אושרה', allowAudio: true,
-    defaultText: 'בקשתכם לחלוקה נמצאת בבדיקה וטרם אושרה לאחר האישור תוכלו לשייך את הכרטיס',
-  },
-  {
-    key: 'card_rejected', label: 'הבקשה נדחתה', allowAudio: true,
-    defaultText: 'בקשתכם לחלוקה הנוכחית לא אושרה לפרטים נוספים ניתן לפנות למשרד',
-  },
-  {
-    key: 'card_already', label: 'כרטיס כבר שויך', allowAudio: true,
-    defaultText: 'כרטיס כבר שויך עבורכם בחלוקה זו אין צורך בפעולה נוספת',
-  },
-  {
-    key: 'card_success', label: 'הכרטיס שויך בהצלחה', allowAudio: true,
-    defaultText: 'הכרטיס שויך בהצלחה וניתן להשתמש בו תודה ובשורות טובות',
-  },
-  {
-    key: 'card_failed', label: 'שיוך הכרטיס נכשל', allowAudio: true,
-    defaultText: 'שיוך הכרטיס לא הושלם אנא נסו שוב מאוחר יותר או פנו למשרד',
-  },
 ]
 
 const META_BY_KEY = new Map(HOLIDAY_MESSAGE_META.map(m => [m.key, m]))
