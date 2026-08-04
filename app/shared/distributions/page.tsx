@@ -325,6 +325,16 @@ export default function SharedDistributionsPage() {
     return { openCount, distributions: distributions.length }
   }, [distributions])
 
+  // ── החלוקה הפתוחה לרישום + מספר הנרשמים אליה (הנתון הראשי בכרטיס-העל) ──
+  // אם יש כמה פתוחות — הראשונה (העדכנית). אם אין — נופלים לעדכנית ביותר.
+  const featured = useMemo(() => {
+    const open = distributions.find(d => d.registration_open) ?? distributions[0] ?? null
+    if (!open) return null
+    const count = (byDist.get(open.id) ?? []).length
+    const title = `${open.name}${open.year ? ` ${open.year}` : ''}`
+    return { title, count }
+  }, [distributions, byDist])
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return distributions
@@ -375,22 +385,26 @@ export default function SharedDistributionsPage() {
               <Users size={26} className="text-[#9a7b2e]" />
             </div>
             <div>
-              <p className="text-[12px] font-bold text-[#a08a5a] tracking-wide mb-0.5">כמות הנרשמים במערכת</p>
-              <p className="text-5xl font-extrabold text-[#3a3630] ltr-num leading-none">{beneficiariesCount.toLocaleString('he-IL')}</p>
+              <p className="text-[12px] font-bold text-[#a08a5a] tracking-wide mb-0.5">
+                מספר הצאצאים שנרשמו לחלוקת {featured?.title ?? 'חגי תשרי תשפ״ז'}
+              </p>
+              <p className="text-5xl font-extrabold text-[#3a3630] ltr-num leading-none">{(featured?.count ?? 0).toLocaleString('he-IL')}</p>
             </div>
           </div>
         </div>
 
-        {/* ── טאבים ראשיים — שורה אחת למעלה, כמו צ'יפי סינון; לחיצה פותחת סקשן ── */}
-        <div className="flex items-center gap-2 flex-wrap border-b border-slate-200 pb-3">
+        {/* ── טאבים ראשיים — פרוסים לרוחב, גדולים ומרווחים (grid שווה) ── */}
+        <div className="grid grid-cols-3 gap-3">
           {([
-            { key: 'distributions', label: 'חלוקות ונרשמים', icon: <Gift size={15} /> },
-            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={15} /> },
-            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={15} /> },
+            { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={20} /> },
+            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={20} /> },
+            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={20} /> },
           ] as const).map(t => (
             <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
-              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition ${
-                activeTab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+              className={`flex items-center justify-center gap-2.5 rounded-2xl px-5 py-5 text-base font-bold transition-all ${
+                activeTab === t.key
+                  ? 'bg-gradient-to-b from-[#b08d3f] to-[#8a6a24] text-white shadow-[0_6px_18px_-6px_rgba(176,141,63,0.6)]'
+                  : 'bg-white border border-[#e8dfc9] text-[#6b5d3e] hover:border-[#d9b95c] hover:text-[#8a6a24] hover:shadow-sm'
               }`}>
               {t.icon}{t.label}
             </button>
@@ -468,9 +482,9 @@ export default function SharedDistributionsPage() {
                         city: r.beneficiary?.city ?? null, age: ageOf(r.beneficiary),
                         children_count: r.beneficiary?.children_count ?? null,
                       }))}
-                      amountPerFamily={d.amount_per_family ?? null}
+                      amountPerFamily={null}
                       fmtDateTime={fmtDateTime} fmtCur={fmtCurNum}
-                      controls={{ hideApproval: true, hideCard: true }}
+                      controls={{ hideApproval: true, hideCard: true, hideSource: true }}
                     />
                   </div>
                 )}

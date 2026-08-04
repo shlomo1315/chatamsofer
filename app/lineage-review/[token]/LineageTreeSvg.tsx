@@ -106,13 +106,12 @@ export default function LineageTreeSvg({
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
+    // ⚠️ זהה לעץ הדורות בתוכנה (LineageBranchView): גלגלת = זום (לא pan), כדי
+    // שהחוויה תהיה אותו דבר בדיוק. שיפט/Ctrl אינם נדרשים — פשוט מגלגלים לזום,
+    // ואת ההזזה עושים בגרירה. זום עדין (0.0012) לתחושה חלקה.
     const handler = (e: WheelEvent) => {
       e.preventDefault()
-      if (e.ctrlKey || e.metaKey) {
-        setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.0015)))
-      } else {
-        setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }))
-      }
+      setZoom(z => Math.min(2.5, Math.max(0.3, +(z - e.deltaY * 0.0012).toFixed(3))))
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
@@ -129,7 +128,7 @@ export default function LineageTreeSvg({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50/60">
-        <span className="text-[11px] text-slate-400">גררו להזזה · גלגלת לגלילה · Ctrl+גלגלת לזום</span>
+        <span className="text-[11px] text-slate-400">גררו להזזה · גלגלת לזום</span>
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={() => setZoom(z => Math.max(0.3, z - 0.1))}
             className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50">−</button>

@@ -59,6 +59,7 @@ export interface HolidayTableControls {
   showMessage?: boolean     // עמודת "הודעה" (נשלח/נכשל) — רק בניהול
   hideApproval?: boolean    // הסתרת עמודת "אישור הבקשה" — בדף השיתוף
   hideCard?: boolean        // הסתרת עמודת "כרטיס" — בדף השיתוף
+  hideSource?: boolean      // הסתרת עמודת "ערוץ" — בדף השיתוף
 }
 
 export default function HolidayRecipientsTable({
@@ -72,7 +73,7 @@ export default function HolidayRecipientsTable({
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
     busyId, setApprovalFor, clearCard, showMessage = false,
-    hideApproval = false, hideCard = false } = controls
+    hideApproval = false, hideCard = false, hideSource = false } = controls
 
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
@@ -100,7 +101,7 @@ export default function HolidayRecipientsTable({
             <th>עיר</th>
             <th>גיל</th>
             <th>ילדים</th>
-            <th>ערוץ</th>
+            {!hideSource && <th>ערוץ</th>}
             <th>תאריך רישום</th>
             {amountPerFamily != null && <th>סכום</th>}
             {showMessage && <th>הודעה</th>}
@@ -170,11 +171,13 @@ export default function HolidayRecipientsTable({
                 <td className="text-slate-600">{r.city ?? '—'}</td>
                 <td className="text-slate-600 ltr-num">{r.age ?? '—'}</td>
                 <td className="text-slate-600 ltr-num">{r.children_count ?? '—'}</td>
+                {!hideSource && (
                 <td>
                   <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
                     <I size={11} /> {SOURCE_LABEL[r.source]}
                   </span>
                 </td>
+                )}
                 <td className="text-slate-500 ltr-num">{fmtDateTime(r.registered_at)}</td>
                 {amountPerFamily != null && (
                   <td className="font-bold text-emerald-700 ltr-num">{amountPerFamily ? fmtCur(amountPerFamily) : '—'}</td>
