@@ -112,16 +112,29 @@ async function computeGenStatus(
   // ✅ מקור האמת: כשיש שיוך לצומת בעץ, הסטטוס נגזר מהמסלול לפי מזהי צמתים.
   // התאמת שמות (למטה) נשארת רק לשרשרת ידנית בלי שיוך — אחרת הבדל ניסוח בשם
   // ("רבי נתן יהודה סופר" מול "רבי נתן יהודה (נטע)") צובע דור מאושר באדום.
+  const allNodes = [...map.values()]
+  // ⚠️ כלל-על אחיד עם כרטסת הצאצא: אם קיים ולו צומת אחד מאושר (verified) באותו
+  // דור בעץ — הדור מוצג כמאושר (כחול), בלי קשר לצומת הספציפי של הצאצא. זה מה
+  // שהעץ מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
+  const verifiedGens = new Set(allNodes.filter(n => n.status === 'verified').map(n => n.generation))
+  const rejectedGens = new Set(allNodes.filter(n => n.status === 'rejected').map(n => n.generation))
+
   const path = pathToRoot(map as unknown as Map<string, TreeNodeRow>, nodeId)
   if (path.length) {
     for (const n of path) {
-      out.set(n.generation, n.status === 'verified' ? 'verified' : n.status === 'rejected' ? 'rejected' : 'pending')
+      const status: GenStatus =
+        verifiedGens.has(n.generation) ? 'verified'
+        : n.status === 'verified' ? 'verified'
+        : n.status === 'rejected' ? 'rejected'
+        : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
+        : 'pending'
+      out.set(n.generation, status)
     }
     return out
   }
 
   if (!chain.length) return out
-  const nodes = [...map.values()]
+  const nodes = allNodes
   // ⚠️ אותה לוגיקה בדיוק כמו בכרטסת הצאצא: קודם הליכה בעץ מהשורש (השרשרת
   // המוקלדת נושאת ניסוח מורכב שאינו שווה לשם הצומת), ואחר כך התאמת שמות שטוחה
   // למה שלא זוהה. שתי לוגיקות שונות לאותה שאלה היו מציגות צבע אחר באותו דור.
@@ -136,6 +149,10 @@ async function computeGenStatus(
       : matches.length ? 'pending'
       : null
     out.set(e.generation, status)
+  }
+  // כלל-על אחרי הכל: דור עם צומת מאושר בעץ → כחול (רק לדורות שכבר בשרשרת).
+  for (const gen of verifiedGens) {
+    if (out.has(gen) && out.get(gen) !== 'verified') out.set(gen, 'verified')
   }
   return out
 }
