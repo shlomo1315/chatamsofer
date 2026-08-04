@@ -452,7 +452,7 @@ export default function HolidayRegistrations({
               ) : filtered.map(r => {
                 const I = SOURCE_ICON[r.source]
                 return (
-                  <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words">
+                  <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words [&>td]:whitespace-normal [&_span.ltr-num]:!whitespace-normal [&_span.ltr-num]:break-words">
                     {canEdit && (
                       <td>
                         <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}

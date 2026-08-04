@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
-import { Lock, LogIn, Loader2, Users, Wallet, Gift, CalendarDays, RefreshCw, ShieldCheck, Search } from 'lucide-react'
+import { Lock, LogIn, Loader2, Users, Wallet, Gift, CalendarDays, ShieldCheck, Search, LogOut } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -127,10 +127,27 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
 function RecipientsTable({ rows, amountPerFamily }: { rows: Recipient[]; amountPerFamily?: number | null }) {
   if (!rows.length) return <p className="px-4 py-8 text-center text-slate-400 text-sm">אין נרשמים לחלוקה זו</p>
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[13px] whitespace-nowrap">
+    <div className="w-full">
+      <table className="w-full text-[12px] table-fixed">
+        <colgroup>
+          <col className="w-[9%]" />{/* שם */}
+          <col className="w-[6.5%]" />{/* ת"ז */}
+          <col className="w-[6.5%]" />{/* אישור */}
+          <col className="w-[6.5%]" />{/* כרטיס */}
+          <col className="w-[8%]" />{/* בן/בת */}
+          <col className="w-[7%]" />{/* טלפון */}
+          <col className="w-[10%]" />{/* מייל */}
+          <col className="w-[10%]" />{/* כתובת */}
+          <col className="w-[5.5%]" />{/* עיר */}
+          <col className="w-[6.5%]" />{/* קהילה */}
+          <col className="w-[4%]" />{/* גיל */}
+          <col className="w-[4%]" />{/* ילדים */}
+          <col className="w-[6.5%]" />{/* ערוץ */}
+          <col className="w-[8%]" />{/* תאריך */}
+          <col className="w-[5.5%]" />{/* סכום */}
+        </colgroup>
         <thead className="bg-slate-50 text-slate-500">
-          <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+          <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:align-top [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
             <th>שם המשפחה</th><th>ת״ז</th><th>אישור</th><th>כרטיס</th><th>בן/בת זוג</th>
             <th>טלפון</th><th>מייל</th><th>כתובת</th><th>עיר</th><th>קהילה</th>
             <th>גיל</th><th>ילדים</th><th>ערוץ</th><th>תאריך רישום</th><th>סכום</th>
@@ -141,7 +158,7 @@ function RecipientsTable({ rows, amountPerFamily }: { rows: Recipient[]; amountP
             const b = r.beneficiary
             const status = (r.approval_status ?? 'pending')
             return (
-              <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+              <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words [&>td]:whitespace-normal [&_span]:!whitespace-normal [&_span]:break-words">
                 <td className="font-semibold text-slate-800">{benName(b)}</td>
                 <td className="font-mono text-slate-600"><span className="ltr-num">{b?.id_number ?? '—'}</span></td>
                 <td>
@@ -176,11 +193,10 @@ export default function SharedDistributionsPage() {
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
+  const [countdown, setCountdown] = useState(10)
 
-  const load = useCallback(async (spinner: boolean) => {
-    if (spinner) setRefreshing(true)
+  const load = useCallback(async () => {
     try {
       const res = await fetch('/api/shared/distributions', { cache: 'no-store' })
       if (res.status === 401) { setState('locked'); return }
@@ -189,21 +205,31 @@ export default function SharedDistributionsPage() {
         setDistributions(d.distributions ?? [])
         setRecipients(d.recipients ?? [])
         setState('unlocked')
+        setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
-    } catch { /* השאר במצב הנוכחי — polling ינסה שוב */ }
-    finally { if (spinner) setRefreshing(false) }
+    } catch { /* השאר במצב הנוכחי — הטיימר ינסה שוב */ }
   }, [])
 
   // טעינה ראשונית
-  useEffect(() => { void load(false) }, [load])
+  useEffect(() => { void load() }, [load])
 
-  // ⚠️ רענון חי — polling כל 10 שניות (ולא Supabase Realtime שהעמיס בעבר).
-  // רץ רק כשפתוח ומאומת. מרענן בשקט בלי ספינר מהבהב.
+  // ⚠️ רענון חי — ספירה לאחור מ-10 שניות, ואז load. רץ רק כשפתוח ומאומת.
+  // polling (ולא Supabase Realtime שהעמיס בעבר). הספירה מוצגת למשתמש.
   useEffect(() => {
     if (state !== 'unlocked') return
-    const t = setInterval(() => { void load(false) }, 10_000)
+    const t = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { void load(); return 10 }
+        return c - 1
+      })
+    }, 1000)
     return () => clearInterval(t)
   }, [state, load])
+
+  const logout = useCallback(async () => {
+    try { await fetch('/api/shared/distributions/logout', { method: 'POST' }) } catch {}
+    setState('locked')
+  }, [])
 
   // ספירות ופילוח — נגזרים מהנתונים בכל טעינה
   const byDist = useMemo(() => {
@@ -238,7 +264,7 @@ export default function SharedDistributionsPage() {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 size={28} className="animate-spin text-indigo-400" /></div>
   }
   if (state === 'locked') {
-    return <PasswordScreen onAuth={() => { setState('checking'); void load(false) }} />
+    return <PasswordScreen onAuth={() => { setState('checking'); void load() }} />
   }
 
   return (
@@ -250,13 +276,18 @@ export default function SharedDistributionsPage() {
             <Image src="/logo.png" alt="היכל החתם סופר" width={44} height={44} className="rounded-xl" />
             <div>
               <h1 className="text-lg font-extrabold text-slate-900">חלוקות חגים</h1>
-              <p className="text-xs text-slate-500 flex items-center gap-1"><ShieldCheck size={12} /> תצוגה בלבד · היכל החתם סופר</p>
+              <p className="text-xs text-slate-500 flex items-center gap-1"><ShieldCheck size={12} /> היכל החתם סופר</p>
             </div>
           </div>
-          <button onClick={() => void load(true)} disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition disabled:opacity-50">
-            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> רענון
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-slate-400 hidden sm:inline">
+              הנתונים יתרעננו שוב בעוד <span className="font-bold text-indigo-600 ltr-num">{countdown}</span> שניות
+            </span>
+            <button onClick={logout}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-600 transition">
+              <LogOut size={14} /> התנתקות
+            </button>
+          </div>
         </div>
       </header>
 
@@ -353,7 +384,7 @@ export default function SharedDistributionsPage() {
           </div>
         )}
 
-        <p className="text-center text-[11px] text-slate-400 pt-2">מתעדכן אוטומטית · תצוגה בלבד · כל הפרטים מוצפנים</p>
+        <p className="text-center text-[11px] text-slate-400 pt-2">מתעדכן אוטומטית · כל הפרטים מוצפנים</p>
       </main>
     </div>
   )
