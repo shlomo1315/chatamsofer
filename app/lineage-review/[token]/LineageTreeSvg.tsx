@@ -2,9 +2,10 @@
 import { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// עץ יוחסין ויזואלי (SVG) לדף הביקורת הציבורי — אותו אלגוריתם פריסה כמו עץ
-// הדורות בניהול (subtreeW: כל צומת ממורכז מעל תת-העץ שלו, בלי חפיפה). מיון
-// ילדים לפי שם. צבע לפי סטטוס. זום בגלגלת/כפתורים ו-pan בגרירה.
+// עץ יוחסין ויזואלי — העתק נאמן של מנוע עץ הדורות המלא (app/admin/lineage),
+// מוגבל לענף שנבחר בקישור. אותם קבועים (NW/NH/HGAP/VGAP/PAD), אותו layoutTree
+// עם subtreeW, אותם קווי חיבור אורתוגונליים ורקע קלף. קליק בוחר צומת; זום
+// בכפתורים/גלגלת; pan בגרירה.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface TreeNode {
@@ -15,59 +16,51 @@ export interface TreeNode {
   status: string
   relation?: string | null
 }
-
 interface TreeNodeH extends TreeNode { children: TreeNodeH[] }
-interface Positioned { node: TreeNode; x: number; y: number; cx: number }
+interface Positioned { node: TreeNode; x: number; y: number; cx: number; cy: number }
 
-const NODE_W = 150
-const NODE_H = 56
-const H_GAP = 22
-const V_GAP = 44
-const PAD = 24
+// קבועים זהים לעץ הדורות המלא
+const NW = 172, NH = 58, HGAP = 48, VGAP = 96, PAD = 72
 
-const NODE_COLOR: Record<string, { bg: string; ring: string }> = {
-  verified: { bg: 'linear-gradient(160deg,#3B82F6 0%,#2563EB 100%)', ring: '#1D4ED8' },
-  pending:  { bg: 'linear-gradient(160deg,#FB923C 0%,#EA580C 100%)', ring: '#C2410C' },
-  rejected: { bg: 'linear-gradient(160deg,#F87171 0%,#DC2626 100%)', ring: '#B91C1C' },
-}
-const glyph = (s: string) => s === 'verified' ? '✓' : s === 'rejected' ? '✕' : '!'
+// פלטת "קלף וחותם" — זהה לעץ הדורות
+const PALETTE = [
+  { bg: 'linear-gradient(160deg,#e0b94a 0%,#c69e2d 78%)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)', text: '#8a6a1e' },
+  { bg: 'linear-gradient(160deg,#d3a344 0%,#bf8b34 78%)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)', text: '#7d5a1f' },
+  { bg: 'linear-gradient(160deg,#c68a4e 0%,#b3703a 78%)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)', text: '#7a4a26' },
+  { bg: 'linear-gradient(160deg,#b56f4f 0%,#a15a3d 78%)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)',  text: '#6f3a2a' },
+  { bg: 'linear-gradient(160deg,#a15a58 0%,#8c4a44 78%)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)',  text: '#5f3230' },
+  { bg: 'linear-gradient(160deg,#867059 0%,#6f5a44 78%)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)',  text: '#4d3f30' },
+]
+const pal = (g: number) => PALETTE[g % PALETTE.length]
 
-// בונה יער היררכי מהצמתים השטוחים, ממויין לפי שם — בדיוק כמו עץ הדורות
 function buildForest(nodes: TreeNode[], rootId: string | null): TreeNodeH[] {
-  const byId = new Map<string, TreeNodeH>()
-  nodes.forEach(n => byId.set(n.id, { ...n, children: [] }))
+  const map = new Map<string, TreeNodeH>()
+  nodes.forEach(n => map.set(n.id, { ...n, children: [] }))
   const roots: TreeNodeH[] = []
-  for (const n of nodes) {
-    const node = byId.get(n.id)!
-    if (n.parent_id && byId.has(n.parent_id)) byId.get(n.parent_id)!.children.push(node)
-    else if (!n.parent_id) roots.push(node)
-  }
-  for (const node of byId.values()) node.children.sort((a, b) => a.name.localeCompare(b.name, 'he'))
-  // אם יש rootId מפורש — מתחילים ממנו בלבד (הענף המשותף)
-  if (rootId && byId.has(rootId)) return [byId.get(rootId)!]
-  return roots.length ? roots : [...byId.values()].filter(n => !n.parent_id || !byId.has(n.parent_id))
+  nodes.forEach(n => {
+    const node = map.get(n.id)!
+    if (n.parent_id && map.has(n.parent_id)) map.get(n.parent_id)!.children.push(node)
+    else roots.push(node)
+  })
+  if (rootId && map.has(rootId)) return [map.get(rootId)!]
+  return roots
 }
 
-// רוחב תת-העץ (בפיקסלים) — לפריסה בלי חפיפה, כמו ב-admin/lineage
 function subtreeW(n: TreeNodeH): number {
-  if (!n.children.length) return NODE_W + H_GAP
-  return n.children.reduce((s, c) => s + subtreeW(c), 0)
+  return n.children.length ? n.children.reduce((s, c) => s + subtreeW(c), 0) : NW + HGAP
 }
 
-function layoutForest(roots: TreeNodeH[]): { positioned: Positioned[]; width: number; height: number } {
+function layoutTree(roots: TreeNodeH[]): Positioned[] {
   const result: Positioned[] = []
   const place = (n: TreeNodeH, x: number, y: number) => {
-    const sw = subtreeW(n)
-    const cx = x + sw / 2
-    result.push({ node: n, x: cx - NODE_W / 2, y, cx })
+    const sw = subtreeW(n), cx = x + sw / 2
+    result.push({ node: n, x: cx - NW / 2, y, cx, cy: y + NH / 2 })
     let cx2 = x
-    for (const c of n.children) { place(c, cx2, y + NODE_H + V_GAP); cx2 += subtreeW(c) }
+    n.children.forEach(c => { place(c, cx2, y + NH + VGAP); cx2 += subtreeW(c) })
   }
   let sx = PAD
-  for (const r of roots) { place(r, sx, PAD); sx += subtreeW(r) }
-  const width = result.length ? Math.max(...result.map(p => p.x + NODE_W)) + PAD : 400
-  const height = result.length ? Math.max(...result.map(p => p.y + NODE_H)) + PAD : 300
-  return { positioned: result, width, height }
+  roots.forEach(r => { place(r, sx, PAD); sx += subtreeW(r) })
+  return result
 }
 
 export default function LineageTreeSvg({
@@ -78,24 +71,26 @@ export default function LineageTreeSvg({
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
-  const { positioned, width, height, edges } = useMemo(() => {
+  const { positions, edges, w, h } = useMemo(() => {
     const forest = buildForest(nodes, rootId)
-    const { positioned, width, height } = layoutForest(forest)
-    const byId = new Map(positioned.map(p => [p.node.id, p]))
+    const positions = layoutTree(forest)
+    const byId = new Map(positions.map(p => [p.node.id, p]))
     const edges: { from: Positioned; to: Positioned }[] = []
-    for (const p of positioned) {
+    for (const p of positions) {
       if (p.node.parent_id && byId.has(p.node.parent_id)) edges.push({ from: byId.get(p.node.parent_id)!, to: p })
     }
-    return { positioned, width, height, edges }
+    const w = positions.length ? Math.max(...positions.map(p => p.x + NW)) + PAD : 800
+    const h = positions.length ? Math.max(...positions.map(p => p.y + NH)) + PAD : 400
+    return { positions, edges, w, h }
   }, [nodes, rootId])
 
-  const [zoom, setZoom] = useState(0.75)
+  const [zoom, setZoom] = useState(0.7)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const onDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-node]')) return
+    if ((e.target as HTMLElement).closest('[data-lin-node]')) return
     dragRef.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }
   }, [pan])
   const onMove = useCallback((e: React.MouseEvent) => {
@@ -103,26 +98,19 @@ export default function LineageTreeSvg({
     setPan({ x: dragRef.current.px + (e.clientX - dragRef.current.x), y: dragRef.current.py + (e.clientY - dragRef.current.y) })
   }, [])
   const onUp = useCallback(() => { dragRef.current = null }, [])
-
-  // גלילת עכבר: Ctrl/⌘+גלגלת = זום, גלגלת רגילה = pan אנכי, Shift+גלגלת = pan אופקי
   const onWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
-    if (e.ctrlKey || e.metaKey) {
-      setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.0015)))
-    } else if (e.shiftKey) {
-      setPan(p => ({ ...p, x: p.x - e.deltaY }))
-    } else {
-      setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }))
-    }
+    if (e.ctrlKey || e.metaKey) setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.0015)))
+    else setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }))
   }, [])
 
-  // מרכוז ראשוני על השורש/ראש היער
+  // מרכוז ראשוני על השורש
   useEffect(() => {
     const el = containerRef.current
-    if (!el || !positioned.length) return
-    const root = positioned.find(p => p.node.id === rootId) ?? positioned[0]
-    setPan({ x: el.clientWidth / 2 - root.cx * 0.75, y: 20 })
-  }, [positioned, rootId])
+    if (!el || !positions.length) return
+    const root = positions.find(p => p.node.id === rootId) ?? positions[0]
+    setPan({ x: el.clientWidth / 2 - root.cx * 0.7, y: 24 })
+  }, [positions, rootId])
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -136,36 +124,60 @@ export default function LineageTreeSvg({
             className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50">+</button>
         </div>
       </div>
-      <div ref={containerRef} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel}
-        className="relative overflow-hidden cursor-grab active:cursor-grabbing bg-[#FAF7F0]" style={{ height: 480 }}>
-        <div style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'absolute' }}>
-          <svg width={width} height={height} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+      <div ref={containerRef} dir="ltr" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel}
+        className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{
+          height: 500,
+          background:
+            'radial-gradient(60% 50% at 50% 0%, rgba(198,158,45,0.05), transparent 70%),' +
+            'repeating-linear-gradient(0deg, transparent 0 39px, rgba(27,50,86,0.025) 39px 40px),' +
+            'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
+        }}>
+        <div style={{ position: 'absolute', transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: '0 0' }}>
+          <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
-              const x1 = e.from.x + NODE_W / 2, y1 = e.from.y + NODE_H
-              const x2 = e.to.x + NODE_W / 2, y2 = e.to.y
-              const my = (y1 + y2) / 2
-              return <path key={i} d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`} fill="none" stroke="#C9B58B" strokeWidth={2.5} strokeLinecap="round" />
+              const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
+              const mid = (y1 + y2) / 2
+              const col = pal(e.from.node.generation).ring
+              const r = Math.min(10 * zoom, Math.abs(x2 - x1) / 2, Math.abs(mid - y1))
+              const dir = x2 >= x1 ? 1 : -1
+              const d = Math.abs(x2 - x1) < 1
+                ? `M${x1},${y1} L${x2},${y2}`
+                : `M${x1},${y1} L${x1},${mid - r} Q${x1},${mid} ${x1 + dir * r},${mid} L${x2 - dir * r},${mid} Q${x2},${mid} ${x2},${mid + r} L${x2},${y2}`
+              return (
+                <g key={i}>
+                  <path d={d} fill="none" stroke="#fff" strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+                  <path d={d} fill="none" stroke={col} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+                </g>
+              )
             })}
           </svg>
-          {positioned.map(p => {
-            const c = NODE_COLOR[p.node.status] ?? NODE_COLOR.pending
-            const sel = selectedId === p.node.id
+          {positions.map(pos => {
+            const st = pos.node.status ?? 'verified'
+            const genPal = pal(pos.node.generation)
+            const relOverlay = pos.node.relation === 'son_in_law' ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), ' : ''
+            const isSel = selectedId === pos.node.id
+            // צבע לפי סטטוס — זהה לעץ הדורות: verified=צבע הדור, rejected=אדום, pending=כתום
+            const p = st === 'verified' ? genPal
+              : st === 'rejected'
+                ? { bg: 'linear-gradient(135deg,#EF4444 0%,#DC2626 100%)', ring: '#DC2626', shadow: 'rgba(220,38,38,0.4)', text: '#991B1B' }
+                : { bg: 'linear-gradient(135deg,#FB923C 0%,#EA580C 100%)', ring: '#EA580C', shadow: 'rgba(234,88,12,0.4)', text: '#9A3412' }
             return (
-              <div key={p.node.id} data-node role="button" tabIndex={0}
-                onClick={() => onSelect(p.node.id)}
-                onKeyDown={ev => { if (ev.key === 'Enter') onSelect(p.node.id) }}
+              <div key={pos.node.id} data-lin-node="1"
+                onClick={e => { e.stopPropagation(); onSelect(pos.node.id) }}
                 style={{
-                  position: 'absolute', left: p.x, top: p.y, width: NODE_W, height: NODE_H,
-                  background: c.bg, color: '#fff', borderRadius: 12,
-                  border: sel ? '3px solid #1B3256' : `2px solid ${c.ring}`,
-                  boxShadow: sel ? '0 0 0 4px rgba(27,50,86,0.15)' : '0 2px 6px rgba(0,0,0,0.12)',
-                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  justifyContent: 'center', padding: '4px 8px', textAlign: 'center', userSelect: 'none',
+                  position: 'absolute', left: pos.x * zoom, top: pos.y * zoom,
+                  width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
+                  background: relOverlay + p.bg,
+                  boxShadow: isSel ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}` : `0 4px 14px ${p.shadow}`,
+                  cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  padding: `0 ${10 * zoom}px`, textAlign: 'center', color: '#fff', userSelect: 'none', direction: 'rtl', zIndex: 2,
                 }}>
-                <span style={{ position: 'absolute', top: -9, insetInlineEnd: -9, width: 20, height: 20, borderRadius: '50%', background: '#fff', color: c.ring, fontSize: 12, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${c.ring}` }}>{glyph(p.node.status)}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, lineHeight: 1.25, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{p.node.name}</span>
-                <span style={{ fontSize: 9, opacity: 0.85, marginTop: 2 }}>
-                  דור {p.node.generation}{p.node.relation === 'son' ? ' · בן' : p.node.relation === 'son_in_law' ? ' · חתן' : ''}
+                <span style={{ position: 'absolute', top: -8 * zoom, insetInlineEnd: -8 * zoom, minWidth: 18 * zoom, height: 18 * zoom, padding: `0 ${4 * zoom}px`, borderRadius: 9 * zoom, background: '#fff', color: p.ring, fontSize: 11 * zoom, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${p.ring}` }}>
+                  {st === 'verified' ? '✓' : st === 'rejected' ? '✕' : '!'}
+                </span>
+                <span style={{ fontSize: 13 * zoom, fontWeight: 800, lineHeight: 1.2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{pos.node.name}</span>
+                <span style={{ fontSize: 9.5 * zoom, opacity: 0.85, marginTop: 2 * zoom }}>
+                  דור {pos.node.generation}{pos.node.relation === 'son' ? ' · בן' : pos.node.relation === 'son_in_law' ? ' · חתן' : ''}
                 </span>
               </div>
             )

@@ -1658,6 +1658,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [childIdErrors, setChildIdErrors] = useState<Record<number, string>>({})
   const [phoneError, setPhoneError] = useState('')
   const [emailError, setEmailError] = useState('')
+
+  // בדיקה בזמן אמת: האם הטלפון כבר בשימוש אצל צאצא אחר. מחזיר true אם תפוס.
+  // ⚠️ נכשל-פתוח: אם הבדיקה נכשלת (רשת) לא חוסמים — האכיפה האמיתית בשרת בהגשה.
+  const checkPhoneTaken = useCallback(async (phone: string): Promise<boolean> => {
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length < 9) return false
+    try {
+      const res = await fetch('/api/portal/phone-availability', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      })
+      if (!res.ok) return false
+      const d = await res.json()
+      return !!d.taken
+    } catch { return false }
+  }, [])
+  const PHONE_TAKEN_MSG = 'מספר הנייד הזה כבר רשום במערכת אצל נרשם אחר — יש להזין מספר אחר'
   // אסימוני אימות מייל/טלפון (רישום)
   const [regEmailToken, setRegEmailToken] = useState<string | null>(null)
   const [regPhoneToken, setRegPhoneToken] = useState<string | null>(null)
@@ -1765,8 +1782,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לשקף את המצב *כרגע* ולא מצב שנשמר בכניסה קודמת.
   const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean; registeredAt?: string | null } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
-  // פופאפ מלא לאחר רישום לחלוקה — הצלחה חדשה או "כבר רשומים" (עם תאריך המקור)
-  const [holidayModal, setHolidayModal] = useState<{ mode: 'created' | 'already'; name: string; registeredAt?: string | null } | null>(null)
+  // פופאפ מלא לחלוקה: הזמנה להירשם (מקישור המייל), הצלחה חדשה, או "כבר רשומים"
+  const [holidayModal, setHolidayModal] = useState<{ mode: 'invite' | 'created' | 'already'; name: string; registeredAt?: string | null } | null>(null)
 
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
@@ -2814,14 +2831,15 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // לכן גוללים אליו ומדגישים אותו. אם החלוקה עוד לא נטענה (הבקשה מקבילה
     // לכניסה) — לא מנקים את הכוונה, וה-effect ינסה שוב כשהיא תגיע.
     else if (a === 'holiday') {
+      // ⚠️ מחכים שנתוני החלוקה ייטענו לפני שמחליטים מה להציג. אם עדיין לא — לא
+      // מנקים את הכוונה, וה-effect ינסה שוב כשהם יגיעו.
       if (!holiday) opened = false
-      else {
-        const el = document.getElementById('holiday-card')
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          el.classList.add('ring-4', 'ring-teal-300')
-          setTimeout(() => el.classList.remove('ring-4', 'ring-teal-300'), 2600)
-        }
+      else if (holiday.registered) {
+        // כבר רשום — פופאפ "כבר התקבלה בקשתכם" עם תאריך הרישום
+        setHolidayModal({ mode: 'already', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`, registeredAt: holiday.registeredAt })
+      } else {
+        // פופאפ מלא — הזמנה להירשם לחלוקה הפתוחה, עם כפתור
+        setHolidayModal({ mode: 'invite', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}` })
       }
     }
     if (opened) intendedAction.current = null
@@ -3926,6 +3944,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                         onBlur={() => {
                           if (regForm.phone && !validatePhone(regForm.phone)) { setPhoneError('אנא הזן מספר נייד תקין המתחיל ב-05'); return }
                           setPhoneError('')
+                          // התרעה מיידית: הטלפון כבר בשימוש אצל צאצא אחר
+                          if (regForm.phone) void checkPhoneTaken(regForm.phone).then(taken => { if (taken) setPhoneError(PHONE_TAKEN_MSG) })
                           // התרעה מיידית על טלפון זהה בין הבעל לאשה
                           if (regForm.phone && regForm.spouse_phone && regForm.phone.replace(/\D/g, '') === regForm.spouse_phone.replace(/\D/g, '')) {
                             setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל')
@@ -3950,7 +3970,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             const sp = regForm.spouse_phone.trim()
                             if (sp && !validatePhone(sp)) { setSpousePhoneError('אנא הזן מספר נייד תקין המתחיל ב-05') }
                             else if (sp && regForm.phone && sp.replace(/\D/g, '') === regForm.phone.replace(/\D/g, '')) { setSpousePhoneError('מספר הטלפון של האישה זהה למספר הטלפון של הבעל') }
-                            else { setSpousePhoneError('') }
+                            else { setSpousePhoneError(''); if (sp) void checkPhoneTaken(sp).then(taken => { if (taken) setSpousePhoneError(PHONE_TAKEN_MSG) }) }
                           }}
                           placeholder="0500000000" dir="ltr" maxLength={11}
                           className={spousePhoneError ? 'border-red-400 focus:ring-red-400' : ''}
@@ -4714,7 +4734,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
             {beneficiary.eligibility_status === 'docs_returned' && (
               <div className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 text-sm text-teal-700">
                 <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                <span>התיקון שהגשת התקבל במלואו וממתין לבדיקת המשרד. אין צורך בפעולה נוספת — נעדכן אותך בהודעה מסודרת.</span>
+                <span>כבר התקבלה בקשת רישום שלכם לחלוקה זו, נעדכן אתכם בהמשך על אופן החלוקה, בהצלחה.</span>
               </div>
             )}
 
