@@ -1763,8 +1763,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ── חלוקת חגים ──
   // ⚠️ נטען בכל כניסה לאזור האישי: הרישום נפתח ונסגר מהניהול, והכפתור חייב
   // לשקף את המצב *כרגע* ולא מצב שנשמר בכניסה קודמת.
-  const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean } | null>(null)
+  const [holiday, setHoliday] = useState<{ open: boolean; name: string; year?: string | null; registered: boolean; registeredAt?: string | null } | null>(null)
   const [holidaySaving, setHolidaySaving] = useState(false)
+  // פופאפ מלא לאחר רישום לחלוקה — הצלחה חדשה או "כבר רשומים" (עם תאריך המקור)
+  const [holidayModal, setHolidayModal] = useState<{ mode: 'created' | 'already'; name: string; registeredAt?: string | null } | null>(null)
 
   // לידה שקטה
   const [silentForm, setSilentForm] = useState({ birth_date: '', recovery_home: '', notes: '' })
@@ -2695,7 +2697,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         .then(d => {
           if (!alive) return
           setHoliday(d?.open
-            ? { open: true, name: String(d.distribution?.name ?? 'חלוקת חגים'), year: d.distribution?.year ?? null, registered: !!d.registered }
+            ? { open: true, name: String(d.distribution?.name ?? 'חלוקת חגים'), year: d.distribution?.year ?? null, registered: !!d.registered, registeredAt: d.registeredAt ?? null }
             : null)
         })
         .catch(() => {})
@@ -2716,6 +2718,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       if (!res.ok) { setError(d.error || 'הרישום נכשל'); setHolidaySaving(false); return }
       setHoliday(h => h ? { ...h, registered: true } : h)
       setError('')
+      // פופאפ מלא: הצלחה חדשה, או "כבר רשומים" עם תאריך הרישום המקורי
+      setHolidayModal({
+        mode: d.already ? 'already' : 'created',
+        name: String(d.distribution ?? holiday?.name ?? 'חלוקת החגים'),
+        registeredAt: d.registeredAt ?? null,
+      })
     } catch { setError('שגיאת רשת — נסו שוב') }
     setHolidaySaving(false)
   }
@@ -4887,6 +4895,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                             <p className="text-xs text-green-700 mt-1 leading-relaxed">
                               בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת.
                             </p>
+                            <button type="button"
+                              onClick={() => setHolidayModal({ mode: 'already', name: `${holiday.name}${holiday.year ? ` ${holiday.year}` : ''}`, registeredAt: holiday.registeredAt })}
+                              className="mt-2 text-xs font-bold text-green-700 underline underline-offset-2 hover:text-green-800">
+                              צפייה בפרטי הרישום
+                            </button>
                           </>
                         ) : (
                           <>
@@ -4901,6 +4914,44 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           </>
                         )}
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── פופאפ מלא לאחר רישום לחלוקה — הצלחה חדשה או "כבר רשומים" ── */}
+                {holidayModal && (
+                  <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+                    onClick={() => setHolidayModal(null)}>
+                    <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl text-center animate-[fadeIn_0.2s_ease-out]"
+                      onClick={e => e.stopPropagation()}>
+                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                        {holidayModal.mode === 'created'
+                          ? <Check size={34} className="text-green-600" strokeWidth={3} />
+                          : <Gift size={32} className="text-green-600" />}
+                      </div>
+                      <h2 className="text-xl font-extrabold text-slate-900 mb-1.5">
+                        {holidayModal.mode === 'created' ? 'רישומכם נקלט בהצלחה!' : 'אתם כבר רשומים'}
+                      </h2>
+                      <p className="text-sm font-bold text-teal-700 mb-3">
+                        {holidayModal.name}
+                      </p>
+                      {holidayModal.mode === 'already' && holidayModal.registeredAt && (
+                        <p className="text-[13px] text-slate-500 mb-3">
+                          נרשמתם בתאריך{' '}
+                          <span className="font-bold text-slate-700">
+                            {(() => { try { return new Date(holidayModal.registeredAt!).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) } catch { return '' } })()}
+                          </span>
+                        </p>
+                      )}
+                      <p className="text-[13.5px] leading-relaxed text-slate-600 mb-5">
+                        {holidayModal.mode === 'created'
+                          ? 'בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה. אין צורך בפעולה נוספת.'
+                          : 'רישומכם כבר קיים במערכת — אין צורך בפעולה נוספת. בעזרת השם תקבלו עדכון על אופן החלוקה בהמשך.'}
+                      </p>
+                      <button type="button" onClick={() => setHolidayModal(null)}
+                        className="w-full rounded-2xl bg-gradient-to-b from-teal-500 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition-all duration-150 hover:from-teal-600 hover:to-teal-700 active:scale-[0.98]">
+                        הבנתי, תודה
+                      </button>
                     </div>
                   </div>
                 )}

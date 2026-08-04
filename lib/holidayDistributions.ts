@@ -54,6 +54,8 @@ export interface RegisterResult {
   /** נרשם עכשיו (false = היה רשום כבר) */
   created: boolean
   distribution?: ActiveDistribution
+  /** תאריך הרישום — הקיים כשכבר רשום, או של הרישום החדש. ISO. */
+  registeredAt?: string | null
   error?: string
 }
 
@@ -77,28 +79,41 @@ export async function registerToOpenDistribution(
 
   const { data: existing } = await db
     .from('distribution_recipients')
-    .select('id')
+    .select('id, registered_at')
     .eq('distribution_id', dist.id)
     .eq('beneficiary_id', beneficiaryId)
     .maybeSingle()
-  if (existing) return { ok: true, created: false, distribution: dist }
+  if (existing) {
+    const reg = existing as { registered_at?: string | null }
+    return { ok: true, created: false, distribution: dist, registeredAt: reg.registered_at ?? null }
+  }
 
+  const now = new Date().toISOString()
   const { error } = await db.from('distribution_recipients').insert({
     distribution_id: dist.id,
     beneficiary_id: beneficiaryId,
     amount: dist.amount_per_family ?? null,
     source,
     phone: opts.phone ?? null,
-    registered_at: new Date().toISOString(),
+    registered_at: now,
     status: 'pending',
   })
   if (error) {
     // התנגשות באינדקס הייחודי = נרשם במקביל בערוץ אחר. זו הצלחה, לא כשל.
-    if (String(error.code) === '23505') return { ok: true, created: false, distribution: dist }
+    // ⚠️ נמשך שוב את התאריך הקיים — כדי שגם במרוץ מקביל נחזיר את תאריך המקור.
+    if (String(error.code) === '23505') {
+      const { data: race } = await db
+        .from('distribution_recipients')
+        .select('registered_at')
+        .eq('distribution_id', dist.id)
+        .eq('beneficiary_id', beneficiaryId)
+        .maybeSingle()
+      return { ok: true, created: false, distribution: dist, registeredAt: (race as { registered_at?: string | null } | null)?.registered_at ?? null }
+    }
     console.error('[holiday] register failed:', error.message)
     return { ok: false, created: false, error: 'הרישום נכשל' }
   }
-  return { ok: true, created: true, distribution: dist }
+  return { ok: true, created: true, distribution: dist, registeredAt: now }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

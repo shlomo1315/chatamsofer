@@ -1704,6 +1704,32 @@ export function holidayRegisteredEmail(name: string, vars: { distribution?: stri
   }
 }
 
+// holidayAlreadyRegisteredEmail — נשלח כשמישהו מנסה להירשם שוב לאותה חלוקה.
+// ⚠️ אינו הודעת שגיאה: המשפחה כבר רשומה, ומטרת המייל להרגיע ("הרישום שלכם כבר
+// נקלט") ולציין את *תאריך הרישום המקורי* — כדי שיהיה ברור שלא נוצר רישום כפול.
+export function holidayAlreadyRegisteredEmail(
+  name: string,
+  vars: { distribution?: string; registeredAt?: string | null } = {},
+): BuiltEmail {
+  const distName = vars.distribution ?? 'חלוקת החגים'
+  let dateStr = ''
+  if (vars.registeredAt) {
+    try { dateStr = new Date(vars.registeredAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) } catch { dateStr = '' }
+  }
+  const body = `
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
+      <p style="margin:0 0 6px;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">רישומכם ל${escapeHtml(distName)} כבר נקלט במערכת — אין צורך בפעולה נוספת.</p>
+      ${dateStr ? `<p style="margin:0;color:#047857;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">תאריך הרישום: ${escapeHtml(dateStr)}</p>` : ''}
+    </div>
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">בעזרת השם, במהלך חודש אלול תקבלו עדכון מדויק על אופן החלוקה.</p>
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+  return {
+    subject: `רישומכם ל${distName} כבר נקלט`,
+    html: shell({ preheader: 'הרישום שלכם כבר קיים במערכת', accent: '#0f766e', title: 'כבר רשומים', subtitle: distName, body }),
+  }
+}
+
 // ─── חלוקת חגים — הודעת אישור לנרשם ─────────────────────────────────────────
 // נשלחת אחרי שהצוות אישר את הבקשה. המטרה מעשית: להודיע שהבקשה אושרה, ומה
 // לעשות עכשיו — לאסוף כרטיס ולשייך אותו (בטלפון או בממשק).

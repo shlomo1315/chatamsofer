@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
-import { holidayRegisteredEmail } from '@/lib/emailTemplates'
+import { holidayRegisteredEmail, holidayAlreadyRegisteredEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 
@@ -25,16 +25,18 @@ export async function GET(request: NextRequest) {
   if (!dist) return NextResponse.json({ open: false }, { headers: { 'Cache-Control': 'no-store' } })
 
   let registered = false
+  let registeredAt: string | null = null
   if (beneficiaryId && sessionId === beneficiaryId) {
     const db = getServiceClient()
     if (db) {
       const { data } = await db.from('distribution_recipients')
-        .select('id').eq('distribution_id', dist.id).eq('beneficiary_id', beneficiaryId).maybeSingle()
+        .select('id, registered_at').eq('distribution_id', dist.id).eq('beneficiary_id', beneficiaryId).maybeSingle()
       registered = !!data
+      registeredAt = (data as { registered_at?: string | null } | null)?.registered_at ?? null
     }
   }
   return NextResponse.json(
-    { open: true, distribution: { id: dist.id, name: dist.name, year: dist.year }, registered },
+    { open: true, distribution: { id: dist.id, name: dist.name, year: dist.year }, registered, registeredAt },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
@@ -52,23 +54,39 @@ export async function POST(request: NextRequest) {
 
   const result = await registerToOpenDistribution(beneficiaryId, 'portal')
   if (!result.ok) return NextResponse.json({ error: result.error ?? 'הרישום נכשל' }, { status: 400 })
-  if (!result.created) {
-    return NextResponse.json({ ok: true, already: true, distribution: result.distribution?.name ?? null })
-  }
 
-  // ── אישור במייל ──
-  // best-effort: הרישום כבר נשמר, וכשל בשליחה לא יבטל אותו. מתועד על השורה
-  // (notified_at / notify_error) כדי שבמסך הניהול יהיה אפשר לראות למי לא יצא.
   const db = getServiceClient()
-  let mailed = false
-  let mailError: string | null = null
+  // פרטי המשפחה — לשם ולמייל
+  let name = ''
+  let email: string | null = null
   if (db) {
     const { data: ben } = await db.from('beneficiaries')
       .select('email, full_name, family_name, spouse_name').eq('id', beneficiaryId).maybeSingle()
-    const email = (ben as { email?: string | null } | null)?.email
+    const b = ben as { email?: string | null; full_name?: string | null; family_name?: string | null; spouse_name?: string | null } | null
+    email = b?.email ?? null
+    name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || String(b?.full_name ?? '')
+  }
+
+  // ── כבר רשום: מייל "כבר נקלט" עם תאריך הרישום המקורי, בלי ליצור שורה נוספת ──
+  if (!result.created) {
     if (email) {
-      const b = ben as { full_name?: string | null; family_name?: string | null; spouse_name?: string | null }
-      const name = [b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || String(b.full_name ?? '')
+      const payload = holidayAlreadyRegisteredEmail(name, { distribution: result.distribution?.name, registeredAt: result.registeredAt })
+      try { await deliverMail(email, payload.subject, payload.html, undefined, mailFor('igud')) } catch { /* best-effort */ }
+    }
+    return NextResponse.json({
+      ok: true, already: true,
+      distribution: result.distribution?.name ?? null,
+      registeredAt: result.registeredAt ?? null,
+    })
+  }
+
+  // ── רישום חדש: אישור במייל ──
+  // best-effort: הרישום כבר נשמר, וכשל בשליחה לא יבטל אותו. מתועד על השורה
+  // (notified_at / notify_error) כדי שבמסך הניהול יהיה אפשר לראות למי לא יצא.
+  let mailed = false
+  let mailError: string | null = null
+  if (db) {
+    if (email) {
       const payload = holidayRegisteredEmail(name, { distribution: result.distribution?.name })
       try {
         const res = await deliverMail(email, payload.subject, payload.html, undefined, mailFor('igud'))
@@ -84,5 +102,9 @@ export async function POST(request: NextRequest) {
       .eq('beneficiary_id', beneficiaryId)
   }
 
-  return NextResponse.json({ ok: true, already: false, mailed, distribution: result.distribution?.name ?? null })
+  return NextResponse.json({
+    ok: true, already: false, mailed,
+    distribution: result.distribution?.name ?? null,
+    registeredAt: result.registeredAt ?? null,
+  })
 }
