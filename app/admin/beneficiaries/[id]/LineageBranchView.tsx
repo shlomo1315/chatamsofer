@@ -100,7 +100,13 @@ type ModalState =
 // פתיחת אילן היוחסין של אותו ענף (הצומת וכל צאצאיו) בתוך אותו חלון, מיזוג
 // כפילים, עריכה/הוספה/אימות/דחייה/מחיקה, סימון בן/חתן, וקפיצה לכרטסת המקושרת.
 // ─────────────────────────────────────────────────────────────────────────────
-export default function LineageBranchView({ nodeId }: { nodeId: string | null }) {
+export default function LineageBranchView({ nodeId, self }: {
+  nodeId: string | null
+  // ⚠️ הצאצא עצמו (הנרשם) אינו צומת בעץ הדורות — lineage_node_id שלו מצביע
+  // לאב האחרון. כדי שיופיע בסוף העץ מזריקים אותו כצומת וירטואלי (status pending
+  // = כתום, כי טרם אושר) שההורה שלו הוא nodeId. נטו-תצוגה: לא נשמר ולא נערך.
+  self?: { name: string } | null
+}) {
   const router = useRouter()
   const toast = useToast()
   const canAdd = useCan('lineage', 'add')
@@ -170,11 +176,22 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
       const d = await r.json()
       const raw: LineageNode[] = d.nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
-      setAllNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))
+      const normalized = raw.map(n => ({ ...n, generation: n.generation - minGen + 1 }))
+      // ── הזרקת הצאצא עצמו כצומת וירטואלי בקצה (כתום — טרם אושר) ──
+      if (self?.name && nodeId) {
+        const parent = normalized.find(n => n.id === nodeId)
+        if (parent && !normalized.some(n => n.id === `self:${nodeId}`)) {
+          normalized.push({
+            id: `self:${nodeId}`, name: self.name, parent_id: nodeId,
+            generation: parent.generation + 1, status: 'pending', relation: null,
+          } as LineageNode)
+        }
+      }
+      setAllNodes(normalized)
       setLinked(d.linked ?? {})
     } catch {}
     if (spinner) setLoading(false)
-  }, [])
+  }, [self?.name, nodeId])
   // נדחית בטיק אחד כדי לא לקרוא ל-setState סינכרונית בתוך אפקט (אותו דפוס
   // שנעשה בו שימוש במסך הייחוס המלא).
   useEffect(() => { const t = setTimeout(() => { void load(true) }, 0); return () => clearTimeout(t) }, [load])

@@ -327,8 +327,19 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     )
   }
 
-  const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
-  const formatDateTime = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy HH:mm', { locale: he }) : '—'
+  // ⚠️ הגנה מפני תאריך לא-תקין: מחרוזת לא-ריקה אך פגומה (new Date → Invalid Date)
+  // גרמה ל-format של date-fns לזרוק RangeError שהפיל את *כל* הכרטסת בפרודקשן.
+  // עכשיו בודקים isNaN לפני format ומחזירים '—' על תאריך שאינו ניתן לפענוח.
+  const formatDate = (d?: string) => {
+    if (!d) return '—'
+    const dt = new Date(d)
+    return isNaN(dt.getTime()) ? '—' : format(dt, 'dd/MM/yyyy', { locale: he })
+  }
+  const formatDateTime = (d?: string) => {
+    if (!d) return '—'
+    const dt = new Date(d)
+    return isNaN(dt.getTime()) ? '—' : format(dt, 'dd/MM/yyyy HH:mm', { locale: he })
+  }
   const fullName = [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
   const registeredKids = Array.isArray(beneficiary.children)
     ? (beneficiary.children as { name: string; id_number?: string; gender?: string; birth_date?: string; marital_status?: string; birth_status?: 'pending' | 'approved'; maternity_aid_id?: string }[])
@@ -541,7 +552,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           const husband = (beneficiary.full_name ?? '').trim()
           const wife = (beneficiary.spouse_name ?? '').trim()
           const selfName = [fam, [husband, wife].filter(Boolean).join(' ו')].filter(Boolean).join(' ') || husband || 'הצאצא'
-          gens.push({ generation: lastGen + 1, name: selfName, status: 'verified', relation: null })
+          // ⚠️ כתום (pending) — הצאצא עצמו עדיין לא מאושר בעץ הדורות. הוא הנרשם,
+          // ואישורו נעשה בנפרד; צביעתו כחול (verified) הייתה מטעה כאילו אושר.
+          gens.push({ generation: lastGen + 1, name: selfName, status: 'pending', relation: null })
         }
         // relation מגיע מהמסד כטקסט חופשי — מצמצמים לערכים שהרכיב מכיר
         const pickerNodes: import('./LineageChainChips').TreeNode[] = allNodes.map(n => ({
@@ -557,8 +570,17 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <LineageAssignEditor beneficiaryId={id} currentNodeId={beneficiary.lineage_node_id ?? null} />
       </div>
 
-      {/* visual tree with this beneficiary's branch highlighted */}
-      <LineageBranchView nodeId={beneficiary.lineage_node_id ?? null} />
+      {/* visual tree with this beneficiary's branch highlighted.
+          self — הצאצא עצמו, מוזרק כצומת כתום בקצה העץ (טרם אושר). */}
+      <LineageBranchView
+        nodeId={beneficiary.lineage_node_id ?? null}
+        self={{
+          name: [
+            (beneficiary.family_name ?? '').trim(),
+            [(beneficiary.full_name ?? '').trim(), (beneficiary.spouse_name ?? '').trim()].filter(Boolean).join(' ו'),
+          ].filter(Boolean).join(' ') || (beneficiary.full_name ?? '').trim() || 'הצאצא',
+        }}
+      />
     </Card>
   )
 
@@ -703,7 +725,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
               {(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name && (
                 <>נדחה ע״י <span className="font-semibold">{(beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name}</span></>
               )}
-              {(beneficiary as { rejected_at?: string | null }).rejected_at && (
+              {(beneficiary as { rejected_at?: string | null }).rejected_at && !isNaN(new Date((beneficiary as { rejected_at?: string }).rejected_at!).getTime()) && (
                 <> · {new Date((beneficiary as { rejected_at?: string }).rejected_at!).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
               )}
             </p>
