@@ -210,6 +210,10 @@ export function benefitsLinkEmail(
   draftLinks?: { label: string; href: string; open?: boolean }[],
   maritalStatus?: string | null,
   gates?: { maternity?: boolean; gemach?: boolean; financial_aid?: boolean; widows?: boolean },
+  // ⚠️ חלוקת החגים אינה "שער מחלקה" אלא חלוקה קונקרטית שהרישום אליה פתוח או
+  // סגור. לכן אין כאן מתג שני בהגדרות — הכפתור מופיע כשיש חלוקה פתוחה בפועל,
+  // ונעלם מעצמו כשהרישום נסגר. מתג נפרד היה נפרד מהמציאות ביום שבו נסגר הרישום.
+  holiday?: { open: boolean; name?: string | null } | null,
 ): BuiltEmail {
   const base = portalBase.replace(/\/$/, '')
   const accent = '#4f46e5'
@@ -229,6 +233,12 @@ export function benefitsLinkEmail(
     deptOpen('gemach') ? btn(`${base}/?action=loan`, t('btn_loan'), '#e0f2fe', '#075985') : '',
     deptOpen('financial_aid') ? btn(`${base}/?action=aid`, t('btn_aid'), '#dcfce7', '#166534') : '',
     (widower && deptOpen('widows')) ? btn(`${base}/?action=aid`, t('btn_widow'), '#ede9fe', '#5b21b6') : '',
+    // חלוקת חגים — רק כשהרישום פתוח בפועל. שם החלוקה נכנס לטקסט הכפתור אם יש.
+    holiday?.open
+      ? btn(`${base}/?action=holiday`,
+          holiday.name ? `${t('btn_holiday')} (${holiday.name})` : t('btn_holiday'),
+          '#ccfbf1', '#0f766e')
+      : '',
     // עדכון פרטים אישיים — זמין תמיד, ללא תלות בשערי המחלקות: אינו בקשה
     // להטבה אלא תיקון הפרטים של המשפחה עצמה.
     btn(`${base}/?action=details`, t('btn_details'), '#f1f5f9', '#334155'),
