@@ -88,6 +88,8 @@ export interface Beneficiary {
   }[]
   eligibility_status: EligibilityStatus
   is_active: boolean
+  // ערוץ ההרשמה לאיגוד — portal/nedarim/phone/email/admin. ראו lib/distributionSources.
+  registration_source?: string | null
   notes?: string
   signature?: string | null
   rejection_reason?: string

@@ -8,6 +8,7 @@ import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
 import { useListParams } from '@/lib/useListParams'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
+import { registrationSourceLabel, registrationSourceOf } from '@/lib/distributionSources'
 
 // תווית סטטוס מלאה לטבלה
 const STATUS_CHIP: Record<string, string> = {
@@ -194,6 +195,29 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
     sortable: true,
     className: 'min-w-[120px]',
     render: (row) => <StatusChip status={row.eligibility_status} />,
+  },
+  {
+    key: 'registration_source',
+    header: 'אופן הרישום',
+    sortable: true,
+    className: 'min-w-[110px]',
+    // ⚠️ צבע לפי הערוץ — כדי שאפשר יהיה לסרוק את העמודה במבט: נדרים=סגול,
+    // אתר=אינדיגו, טלפון=טורקיז, מייל=כחול, הזנה ידנית=אפור. "לא תועד"=אפור בהיר.
+    render: (row) => {
+      const src = registrationSourceOf(row.registration_source)
+      const tint =
+        src === 'nedarim' ? 'bg-violet-50 text-violet-700'
+        : src === 'portal' ? 'bg-indigo-50 text-indigo-700'
+        : src === 'phone' ? 'bg-teal-50 text-teal-700'
+        : src === 'email' ? 'bg-sky-50 text-sky-700'
+        : src === 'admin' ? 'bg-slate-100 text-slate-600'
+        : 'bg-slate-50 text-slate-400'
+      return (
+        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${tint}`}>
+          {registrationSourceLabel(row.registration_source)}
+        </span>
+      )
+    },
   },
 ]
 

@@ -36,16 +36,20 @@ export interface ActiveDistribution {
  */
 export async function getOpenDistribution(): Promise<ActiveDistribution | null> {
   const db = getServiceClient()
-  if (!db) return null
+  if (!db) { console.error('[getOpenDistribution] no service client'); return null }
   const { isDepartmentOpen } = await import('@/lib/departmentGates')
-  if (!(await isDepartmentOpen('holidays', db))) return null
-  const { data } = await db
+  const deptOpen = await isDepartmentOpen('holidays', db)
+  if (!deptOpen) { console.log('[getOpenDistribution] closed=DEPARTMENT_GATE (holidays סגור בהגדרות)'); return null }
+  const { data, error } = await db
     .from('distributions')
     .select('id, name, year, amount_per_family, registration_open')
     .eq('registration_open', true)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+  if (error) { console.error('[getOpenDistribution] query error:', error.message); return null }
+  if (!data) { console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)') }
+  else { console.log(`[getOpenDistribution] OPEN dist=${(data as ActiveDistribution).id} name=${(data as ActiveDistribution).name}`) }
   return (data as ActiveDistribution | null) ?? null
 }
 

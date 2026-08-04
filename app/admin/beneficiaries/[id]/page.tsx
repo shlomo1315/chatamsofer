@@ -59,10 +59,19 @@ async function getBeneficiary(id: string): Promise<Beneficiary | null> {
 type LineageNode = { id: string; name: string; parent_id: string | null; generation: number; status: string; relation?: string | null }
 
 // שליפת כל צמתי עץ הדורות — נקראת *במקביל* לשאר השאילתות (אינה תלויה ב-beneficiary).
+//
+// ⚠️ service client (ולא createClient מבוסס-הסשן): קריאת lineage_nodes חסומה
+// ב-RLS למשתמש המחובר, ולכן createClient החזיר 0 שורות *בשקט* (data=[], בלי
+// error) — וכל הדורות בצ'יפים נצבעו כתום ("ממתין") בעוד העץ הוויזואלי, שנטען
+// דרך /api/lineage עם service key, הראה אותם ירוקים. זו הייתה הסתירה בין העץ
+// לצ'יפים. עכשיו שניהם קוראים את אותם הצמתים דרך service.
 async function getAllLineageNodes(): Promise<LineageNode[]> {
   if (!isSupabaseConfigured()) return []
-  const supabase = await createClient()
-  const { data } = await supabase.from('lineage_nodes').select(NODE_SELECT)
+  const { getServiceClient } = await import('@/lib/apiAuth')
+  const db = getServiceClient()
+  if (!db) return []
+  const { data, error } = await db.from('lineage_nodes').select(NODE_SELECT)
+  if (error) console.error('[getAllLineageNodes] load failed:', error.message)
   return (data ?? []) as LineageNode[]
 }
 
@@ -279,11 +288,6 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   const lineagePath = lineageData.path
   const pathNodes = lineageData.pathNodes   // מסלול הצמתים בעץ — מקור האמת כשקיים
   const genStatus = lineageData.genStatus   // דור → סטטוס הצומת בעץ (לצביעה כחול/כתום/אדום)
-  // ⚠️ לוג דיאגנוסטי זמני — לאבחון צ'יפים כתומים שאמורים להיות כחולים. להסרה.
-  console.log(`[LINEAGE-DIAG/${id}] node_id=${beneficiary?.lineage_node_id ?? 'NULL'} pathNodes=${pathNodes.length} chain=${typedChain.length} allNodes=${allNodes.length}`)
-  console.log(`[LINEAGE-DIAG/${id}] genStatus=${JSON.stringify([...genStatus.entries()])}`)
-  console.log(`[LINEAGE-DIAG/${id}] pathNodes_detail=${JSON.stringify(pathNodes.map(n => ({ g: n.generation, s: n.status, name: n.name })))}`)
-  console.log(`[LINEAGE-DIAG/${id}] nodes_by_gen=${JSON.stringify([...new Set(allNodes.map(n => n.generation))].sort((a,b)=>a-b).map(g => ({ g, statuses: allNodes.filter(n=>n.generation===g).map(n=>n.status) })))}`)
   // ⚠️ כלל החריגה מרוכז ב-lib/lineageDeviation ומשותף לצ'יפים, לחלונית ובכרטסת
   // היולדות. בפרט: "אין צומת תואם במאגר" אינו חריגה אלא חוסר ידיעה — קודם הוא
   // נצבע אדום, ולכן ההתראה קפצה לכל מי שנרשם למרות ש-5 הדורות הראשונים תקינים.

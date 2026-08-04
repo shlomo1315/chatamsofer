@@ -91,7 +91,12 @@ async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   // ⚠️ TTL *וגם* גרסה: כל כתיבת status (approve-lineage וכו') מקדמת את הגרסה
   // ומבטלת את המטמון מיד, גם אם עדיין בתוך חלון 5 הדקות. ראו lib/lineageSync.
   if (_lineageCache && _lineageCache.version === version && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
-  const supabase = await createClient()
+  // ⚠️ service client (ולא createClient מבוסס-הסשן): RLS על lineage_nodes חוסם
+  // את המשתמש המחובר ומחזיר 0 שורות בשקט, וכל הצ'יפים נצבעים כתום. זהה לתיקון
+  // ב-getAllLineageNodes בכרטסת הצאצא.
+  const { getServiceClient } = await import('@/lib/apiAuth')
+  const supabase = getServiceClient()
+  if (!supabase) return new Map()
   const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT)
   if (error) throw error
   const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
