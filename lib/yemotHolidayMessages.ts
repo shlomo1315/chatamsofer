@@ -104,3 +104,17 @@ export async function saveHolidayMessages(input: HolidayMessages): Promise<boole
   if (error) { console.error('[yemotHolidayMessages] save failed:', error.message); return false }
   return true
 }
+
+/**
+ * קביעת/הסרת הקלטה להודעה. null = חזרה ל-TTS.
+ *
+ * ⚠️ מוגן ב-allowAudio: הודעה דינמית (עם {name}/{distribution}) אינה יכולה
+ * להישמע מהקלטה קבועה — היא הייתה מקריאה שם משפחה או שם חלוקה שגויים.
+ */
+export async function setHolidayMessageAudio(key: string, audio: string | null): Promise<boolean> {
+  if (!META_BY_KEY.get(key)?.allowAudio) return false
+  const msgs = await getHolidayMessages()
+  if (!msgs[key]) return false
+  msgs[key] = { ...msgs[key], audio }
+  return saveHolidayMessages(msgs)
+}
