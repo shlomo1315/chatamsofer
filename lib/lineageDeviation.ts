@@ -37,6 +37,19 @@ export function asGenStatus(v: unknown): GenStatus {
 }
 
 /**
+ * האם צומת בעץ נחשב *מאושר* (verified) לצורך צביעה.
+ *
+ * ⚠️ כלל־על אחד לכל המערכת: צומת ללא סטטוס מפורש (null / undefined / '') נחשב
+ * מאושר — בדיוק כפי שהעץ הוויזואלי מציג אותו (`node.status ?? 'verified'`).
+ * בלי זה נוצרה סתירה: העץ מראה דור ✓ ירוק, אך הצ'יפ בכרטסת נשאר כתום כי
+ * `status === 'verified'` דחה את הצמתים ש־status שלהם ריק. כל בדיקת "מאושר"
+ * חייבת לעבור דרך כאן — לא להשוות ידנית ל-'verified'.
+ */
+export function isNodeVerified(status: unknown): boolean {
+  return status == null || status === '' || status === 'verified'
+}
+
+/**
  * האם הדור מהווה חריגה — כלומר שינוי אמיתי מול העץ המאושר.
  *
  * דור 1 (החתם סופר) הוא השורש ואינו נבדק.

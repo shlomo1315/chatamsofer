@@ -28,6 +28,7 @@ import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
 import LineageChainChips, { type ChainGen } from '@/app/admin/beneficiaries/[id]/LineageChainChips'
+import { isNodeVerified } from '@/lib/lineageDeviation'
 import WantsChoiceEditor from './WantsChoiceEditor'
 import CollapsibleMailThread from './CollapsibleMailThread'
 import MailTabBoundary from './MailTabBoundary'
@@ -116,7 +117,7 @@ async function computeGenStatus(
   // ⚠️ כלל-על אחיד עם כרטסת הצאצא: אם קיים ולו צומת אחד מאושר (verified) באותו
   // דור בעץ — הדור מוצג כמאושר (כחול), בלי קשר לצומת הספציפי של הצאצא. זה מה
   // שהעץ מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
-  const verifiedGens = new Set(allNodes.filter(n => n.status === 'verified').map(n => n.generation))
+  const verifiedGens = new Set(allNodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
   const rejectedGens = new Set(allNodes.filter(n => n.status === 'rejected').map(n => n.generation))
 
   const path = pathToRoot(map as unknown as Map<string, TreeNodeRow>, nodeId)
@@ -124,7 +125,7 @@ async function computeGenStatus(
     for (const n of path) {
       const status: GenStatus =
         verifiedGens.has(n.generation) ? 'verified'
-        : n.status === 'verified' ? 'verified'
+        : isNodeVerified(n.status) ? 'verified'
         : n.status === 'rejected' ? 'rejected'
         : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
         : 'pending'
@@ -144,7 +145,7 @@ async function computeGenStatus(
   for (const e of chain) {
     if (out.has(e.generation)) continue
     const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
-    const status: GenStatus = matches.find(n => n.status === 'verified') ? 'verified'
+    const status: GenStatus = matches.find(n => isNodeVerified(n.status)) ? 'verified'
       : matches.find(n => n.status === 'rejected') ? 'rejected'
       : matches.length ? 'pending'
       : null

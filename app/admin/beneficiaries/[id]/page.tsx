@@ -27,7 +27,7 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
-import { genColor, deviatingGens } from '@/lib/lineageDeviation'
+import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
 
 // ⏱️ עזר מדידה זמני — מודד כמה כל שאילתה לוקחת ומדפיס ללוג השרת.
 async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -102,12 +102,12 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
     // אליו: אם קיים ולו צומת אחד מאושר (verified) באותו דור — הדור מוצג כמאושר
     // (כחול), בדיוק כפי שהעץ מראה אותו. צומת ה"ממתין" של הצאצא הזה לא צריך לצבוע
     // את כל הדור כתום כשהדור עצמו כבר אושר בעץ. verified > pending > rejected.
-    const verifiedGens = new Set(nodes.filter(n => n.status === 'verified').map(n => n.generation))
+    const verifiedGens = new Set(nodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
     const rejectedGens = new Set(nodes.filter(n => n.status === 'rejected').map(n => n.generation))
     for (const n of out.pathNodes) {
       const status: GenStatus =
         verifiedGens.has(n.generation) ? 'verified'
-        : n.status === 'verified' ? 'verified'
+        : isNodeVerified(n.status) ? 'verified'
         : n.status === 'rejected' ? 'rejected'
         : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
         : 'pending'
@@ -136,7 +136,7 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
       // מעדיפים צומת verified; אם אין — לוקחים כל צומת תואם (pending/rejected);
       // אם אין כלל — null (אין במאגר → נחשב ממתין).
       const matches = nodes.filter(n => n.generation === e.generation && namesMatch(n.name, e.name))
-      const vNode = matches.find(n => n.status === 'verified')
+      const vNode = matches.find(n => isNodeVerified(n.status))
       const status: GenStatus = vNode ? 'verified'
         : matches.find(n => n.status === 'rejected') ? 'rejected'
         : matches.length ? 'pending'
@@ -148,7 +148,7 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
   // ⚠️ כלל-על אחיד לשני הענפים: אם קיים ולו צומת אחד מאושר (verified) באותו דור
   // בעץ — הדור מוצג כמאושר (כחול), בלי קשר למה שהחישוב לעיל קבע. זה מה שהעץ
   // הוויזואלי מראה, וזה מה שהצ'יפים חייבים להראות. verified תמיד גובר על pending.
-  const verifiedGens = new Set(nodes.filter(n => n.status === 'verified').map(n => n.generation))
+  const verifiedGens = new Set(nodes.filter(n => isNodeVerified(n.status)).map(n => n.generation))
   for (const gen of verifiedGens) {
     // רק לדורות שכבר בשרשרת (יש להם ערך במפה) — לא ממציאים דורות חדשים.
     if (out.genStatus.has(gen) && out.genStatus.get(gen) !== 'verified') {

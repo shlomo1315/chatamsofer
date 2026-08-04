@@ -69,8 +69,11 @@ export interface ResolvedGen {
   status: 'verified' | 'pending' | 'rejected'
 }
 
+// ⚠️ צומת ללא סטטוס מפורש (null/'') נחשב מאושר — זהה לעץ הוויזואלי
+// (`node.status ?? 'verified'`) ולכלל isNodeVerified. אחרת דור שבעץ ✓ ירוק
+// היה חוזר כ-pending ומצייר את הצ'יפ כתום.
 const statusOf = (n: ResolveNode): ResolvedGen['status'] =>
-  n.status === 'verified' ? 'verified' : n.status === 'rejected' ? 'rejected' : 'pending'
+  n.status === 'rejected' ? 'rejected' : n.status === 'pending' ? 'pending' : 'verified'
 
 /**
  * הליכה בעץ מהשורש לפי השרשרת המוקלדת. מחזירה מפה של הדורות שזוהו בוודאות.

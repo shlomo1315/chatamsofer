@@ -129,22 +129,25 @@ function RecipientsTable({ rows, amountPerFamily }: { rows: Recipient[]; amountP
   return (
     <div className="w-full">
       <table className="w-full text-[12px] table-fixed">
+        {/* ⚠️ עם table-fixed הרוחבים חייבים להסתכם ל-100% בדיוק — חריגה גורמת
+            לדפדפן לדחוס תאים באופן לא־פרופורציונלי, התוכן נשבר לשורה נוספת
+            והערכים כבר לא עומדים מתחת לכותרת. סכום כאן = 100.0% בדיוק. */}
         <colgroup>
-          <col className="w-[9%]" />{/* שם */}
-          <col className="w-[6.5%]" />{/* ת"ז */}
-          <col className="w-[6.5%]" />{/* אישור */}
-          <col className="w-[6.5%]" />{/* כרטיס */}
+          <col className="w-[10%]" />{/* שם */}
+          <col className="w-[6%]" />{/* ת"ז */}
+          <col className="w-[6%]" />{/* אישור */}
+          <col className="w-[6%]" />{/* כרטיס */}
           <col className="w-[8%]" />{/* בן/בת */}
           <col className="w-[7%]" />{/* טלפון */}
           <col className="w-[10%]" />{/* מייל */}
           <col className="w-[10%]" />{/* כתובת */}
-          <col className="w-[5.5%]" />{/* עיר */}
-          <col className="w-[6.5%]" />{/* קהילה */}
+          <col className="w-[5%]" />{/* עיר */}
+          <col className="w-[6%]" />{/* קהילה */}
           <col className="w-[4%]" />{/* גיל */}
           <col className="w-[4%]" />{/* ילדים */}
-          <col className="w-[6.5%]" />{/* ערוץ */}
-          <col className="w-[8%]" />{/* תאריך */}
-          <col className="w-[5.5%]" />{/* סכום */}
+          <col className="w-[6%]" />{/* ערוץ */}
+          <col className="w-[7%]" />{/* תאריך */}
+          <col className="w-[5%]" />{/* סכום */}
         </colgroup>
         <thead className="bg-slate-50 text-slate-500">
           <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:align-top [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">

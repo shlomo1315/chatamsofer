@@ -411,24 +411,28 @@ export default function HolidayRegistrations({
           <table className="w-full text-[12px] table-fixed">
             {/* רוחב יחסי לכל עמודה — כדי ש-table-fixed יחלק הגיונית: קצרות (גיל,
                 ילדים, אישור) צרות, ארוכות (שם, כתובת, מייל) רחבות. */}
+            {/* ⚠️ עם table-fixed הרוחבים חייבים להסתכם ל-100% בדיוק — חריגה גורמת
+                לדפדפן לדחוס תאים באופן לא־פרופורציונלי, התוכן נשבר לשורה נוספת
+                והערכים כבר לא עומדים מתחת לכותרת. (ה-checkbox הוא w-8 קבוע, מחוץ ל-%.)
+                סכום כאן = 100.0% בדיוק. */}
             <colgroup>
-              {canEdit && <col className="w-[2.5%]" />}
-              <col className="w-[9%]" />{/* שם */}
-              <col className="w-[6.5%]" />{/* ת"ז */}
+              {canEdit && <col className="w-8" />}
+              <col className="w-[10%]" />{/* שם */}
+              <col className="w-[6%]" />{/* ת"ז */}
               <col className="w-[6%]" />{/* אישור */}
               <col className="w-[6%]" />{/* כרטיס */}
               <col className="w-[7%]" />{/* בן/בת */}
-              <col className="w-[6.5%]" />{/* טלפון */}
+              <col className="w-[6%]" />{/* טלפון */}
               <col className="w-[9%]" />{/* מייל */}
               <col className="w-[9%]" />{/* כתובת */}
               <col className="w-[5%]" />{/* עיר */}
               <col className="w-[6%]" />{/* קהילה */}
-              <col className="w-[3.5%]" />{/* גיל */}
-              <col className="w-[3.5%]" />{/* ילדים */}
+              <col className="w-[4%]" />{/* גיל */}
+              <col className="w-[4%]" />{/* ילדים */}
               <col className="w-[6%]" />{/* ערוץ */}
-              <col className="w-[7%]" />{/* תאריך */}
-              <col className="w-[5%]" />{/* סכום */}
-              <col className="w-[5%]" />{/* הודעה */}
+              <col className="w-[6%]" />{/* תאריך */}
+              <col className="w-[4%]" />{/* סכום */}
+              <col className="w-[6%]" />{/* הודעה */}
             </colgroup>
             <thead className="bg-slate-50 text-slate-500">
               <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0 [&>th]:align-top">
