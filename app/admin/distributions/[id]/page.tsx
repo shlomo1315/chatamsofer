@@ -48,6 +48,10 @@ async function getData(id: string) {
   ])
   if (distRes.error && distRes.error.code !== 'PGRST116' && distRes.error.code !== '22P02') throw distRes.error
   if (!distRes.data) return null
+  if (recRes.error) {
+    console.error(`[admin/distributions/${id}] recipients query failed:`, recRes.error)
+    throw recRes.error
+  }
 
   const rows: RegistrationRow[] = (recRes.data ?? []).map(r => {
     const b = (r as unknown as { beneficiary?: BenRow | null }).beneficiary ?? null

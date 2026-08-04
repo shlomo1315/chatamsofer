@@ -178,7 +178,11 @@ export default function LineageBranchView({ nodeId }: { nodeId: string | null })
   // נדחית בטיק אחד כדי לא לקרוא ל-setState סינכרונית בתוך אפקט (אותו דפוס
   // שנעשה בו שימוש במסך הייחוס המלא).
   useEffect(() => { const t = setTimeout(() => { void load(true) }, 0); return () => clearTimeout(t) }, [load])
-  const refresh = useCallback(() => load(false), [load])
+  // ⚠️ load() מרענן רק את העץ עצמו (state מקומי). הצ'יפים בראש הדף (LineageChainChips)
+  // מקבלים את הסטטוס כ-prop שמחושב פעם אחת ב-server component בזמן הרינדור — בלי
+  // router.refresh() הם נשארים קפואים גם אחרי ששינוי נשמר, וסותרים את העץ שכבר
+  // התעדכן. שני המקורות חייבים להסתנכרן יחד בכל שינוי.
+  const refresh = useCallback(() => { void load(false); router.refresh() }, [load, router])
 
   const byId = useMemo(() => new Map(allNodes.map(n => [n.id, n])), [allNodes])
   const kidCount = useMemo(() => {

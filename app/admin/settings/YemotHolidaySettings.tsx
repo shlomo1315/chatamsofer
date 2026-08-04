@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Check, Type, Mic, Volume2, Upload, Trash2, Wand2 } from 'lucide-react'
+import { Loader2, Check, Type, Mic, Volume2, Upload, Trash2, Wand2, Play } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
 type Msg = { text: string; audio?: string | null }
 type Meta = { key: string; label: string; defaultText: string; allowAudio: boolean; placeholders?: string[]; hint?: string }
+
+// הודעה כשירה להשמעה מקדימה: אין בה placeholder כמו {name} שדורש נתון אמיתי מהשיחה
+const hasPlaceholder = (t: string) => /\{[^}]+\}/.test(t)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הודעות שלוחת חלוקות החגים בימות.
@@ -28,7 +31,11 @@ export default function YemotHolidaySettings() {
   // ⚠️ אותו מנגנון קול בדיוק כמו בשלוחת היולדות: הקלטה אנושית או קול נוירוני,
   // לכל הודעה בנפרד. הודעה שיש לה קובץ — מושמעת ממנו (f-<file>) ולא כ-TTS.
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState<string | null>(null)
+  const [hasKey, setHasKey] = useState(false)
+  const [voiceId, setVoiceId] = useState('')
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // ⚠️ קובץ קול נוצר מהטקסט *השמור*, ולכן שינוי טקסט שלא נשמר עלול לייצר קול
   // שאינו תואם למה שמוצג. הכפתור מודיע על זה במקום להסתיר.
@@ -75,19 +82,50 @@ export default function YemotHolidaySettings() {
 
   useEffect(() => {
     let alive = true
-    fetch('/api/admin/yemot-holiday/messages')
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
-      .then(({ ok, data }) => {
+    Promise.all([
+      fetch('/api/admin/yemot-holiday/messages').then(r => r.json().then(data => ({ ok: r.ok, data }))),
+      fetch('/api/admin/elevenlabs/settings').then(r => r.json().then(data => ({ ok: r.ok, data }))).catch(() => ({ ok: false, data: {} })),
+    ])
+      .then(([msgs, cfg]) => {
         if (!alive) return
-        if (!ok) { toast.error(data.error || 'שגיאה בטעינה'); return }
-        setMeta(data.meta ?? [])
-        setMessages(data.messages ?? {})
+        if (!msgs.ok) { toast.error(msgs.data.error || 'שגיאה בטעינה'); return }
+        setMeta(msgs.data.meta ?? [])
+        setMessages(msgs.data.messages ?? {})
+        if (cfg.ok) {
+          setHasKey(!!cfg.data.hasKey)
+          setVoiceId(cfg.data.voiceId ?? '')
+        }
       })
       .catch(() => { if (alive) toast.error('שגיאה בטעינת ההודעות') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // השמעה מקדימה — מייצר אודיו ומשמיע בדפדפן בלי להעלות לימות
+  const preview = async (id: string, text: string) => {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    setPreviewId(id)
+    try {
+      const res = await fetch('/api/admin/elevenlabs/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId: voiceId || undefined }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || `שגיאה בהשמעה (${res.status})`)
+      if (!data?.audio) throw new Error(data?.error || 'לא התקבל אודיו')
+      const audio = new Audio(`data:${data.mime || 'audio/mpeg'};base64,${data.audio}`)
+      audioRef.current = audio
+      audio.onended = () => { if (audioRef.current === audio) audioRef.current = null }
+      audio.onerror = () => toast.error('הדפדפן לא הצליח לנגן את האודיו')
+      await audio.play()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה בהשמעה')
+    } finally {
+      setPreviewId(null)
+    }
+  }
 
   const save = async () => {
     setSaving(true); setSavedOk(false)
@@ -197,6 +235,14 @@ export default function YemotHolidaySettings() {
                   {busyKey === m.key ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
                   יצירת קול טבעי
                 </button>
+                {hasKey && voiceId && !hasPlaceholder(value) && (
+                  <button type="button" disabled={previewId === m.key || busyKey === m.key}
+                    onClick={() => void preview(m.key, value)}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+                    {previewId === m.key ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                    השמע
+                  </button>
+                )}
                 {messages[m.key]?.audio && (
                   <button type="button" disabled={busyKey === m.key}
                     onClick={() => void removeRecording(m.key)}
