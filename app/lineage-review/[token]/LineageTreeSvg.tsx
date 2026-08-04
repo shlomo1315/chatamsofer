@@ -98,10 +98,24 @@ export default function LineageTreeSvg({
     setPan({ x: dragRef.current.px + (e.clientX - dragRef.current.x), y: dragRef.current.py + (e.clientY - dragRef.current.y) })
   }, [])
   const onUp = useCallback(() => { dragRef.current = null }, [])
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    if (e.ctrlKey || e.metaKey) setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.0015)))
-    else setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }))
+
+  // ⚠️ גלילה חלקה: onWheel של React הוא passive, ולכן preventDefault בו מתעלם
+  // והדפדפן מגלגל את העמוד במקביל — תחושת "קפיצות". רושמים listen ידני עם
+  // { passive: false } כדי שהגלגלת תזיז את העץ בלבד, חלק. גלגלת רגילה = pan
+  // אנכי/אופקי · Ctrl/⌘+גלגלת = זום סביב מרכז.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      if (e.ctrlKey || e.metaKey) {
+        setZoom(z => Math.min(2, Math.max(0.3, z - e.deltaY * 0.0015)))
+      } else {
+        setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }))
+      }
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
   }, [])
 
   // מרכוז ראשוני על השורש
@@ -124,7 +138,7 @@ export default function LineageTreeSvg({
             className="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50">+</button>
         </div>
       </div>
-      <div ref={containerRef} dir="ltr" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel}
+      <div ref={containerRef} dir="ltr" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
         className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{
           height: 500,
           background:

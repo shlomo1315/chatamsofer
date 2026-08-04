@@ -48,7 +48,8 @@ const APPROVAL_STYLE: Record<ApprovalStatus, string> = {
   rejected: 'bg-rose-50 text-rose-800 border-rose-200',
 }
 
-const fmtDateTime = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yy HH:mm', { locale: he }) : '—'
+// ⚠️ כולל שניות — לראות את הרגע המדויק של הרישום (חשוב בשחרור המוני).
+const fmtDateTime = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yy HH:mm:ss', { locale: he }) : '—'
 // סמל השקל אחרי המספר — כך קוראים אותו בעברית ("500 ₪")
 const fmtCur = (n: number) => `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
