@@ -2,12 +2,13 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard } from 'lucide-react'
+import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
+import type { ApprovalStatus } from '@/lib/holidayCards'
 
 export interface RegistrationRow {
   id: string
@@ -17,6 +18,11 @@ export interface RegistrationRow {
   notified_at: string | null
   amount: number | null
   beneficiary_id: string | null
+  approval_status: ApprovalStatus
+  approved_at: string | null
+  card_number: string | null
+  card_linked_at: string | null
+  card_link_error: string | null
   name: string
   id_number: string | null
   spouse_name: string | null
@@ -27,6 +33,17 @@ export interface RegistrationRow {
   community: string | null
   children_count: number | null
   age: number | null
+}
+
+// ⚠️ האישור אינו קוסמטי: הוא מה שפותח את שיוך הכרטיס בשלוחה הטלפונית ובממשק.
+// לכן הוא מוצג כעמודה ראשית עם פעולה ישירה, ולא מוסתר במסך עריכה נפרד.
+const APPROVAL_LABEL: Record<ApprovalStatus, string> = {
+  pending: 'ממתין לאישור', approved: 'מאושר', rejected: 'נדחה',
+}
+const APPROVAL_STYLE: Record<ApprovalStatus, string> = {
+  pending: 'bg-amber-50 text-amber-800 border-amber-200',
+  approved: 'bg-green-50 text-green-800 border-green-200',
+  rejected: 'bg-rose-50 text-rose-800 border-rose-200',
 }
 
 const fmtDateTime = (d?: string | null) => d ? format(new Date(d), 'dd/MM/yy HH:mm', { locale: he }) : '—'
@@ -70,7 +87,10 @@ export default function HolidayRegistrations({
   const [community, setCommunity] = useState<string>('all')
   const [ageBucket, setAgeBucket] = useState<string>('all')
   const [kidsBucket, setKidsBucket] = useState<string>('all')
+  const [approval, setApproval] = useState<ApprovalStatus | 'all'>('all')
   const [toggling, setToggling] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // ── פילוחים — מחושבים מהנתונים בזמן אמת, בלי סיכומים שמורים ──
   const bySource = useMemo(() => {
@@ -94,10 +114,20 @@ export default function HolidayRegistrations({
     [rows],
   )
 
+  // ⚠️ נגזר מהשורות בכל טעינה: הכרטיסים האלה הם מה שהמנהל בודק לפניהם ("כמה
+  // ממתינים לאישור", "כמה מאושרים כבר שייכו כרטיס"), ומונה שמור היה מתיישן.
+  const approvalCounts = useMemo(() => {
+    const m: Record<ApprovalStatus, number> = { pending: 0, approved: 0, rejected: 0 }
+    rows.forEach(r => { m[r.approval_status] = (m[r.approval_status] ?? 0) + 1 })
+    return m
+  }, [rows])
+  const cardsLinked = useMemo(() => rows.filter(r => r.card_linked_at).length, [rows])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return rows.filter(r => {
       if (source !== 'all' && r.source !== source) return false
+      if (approval !== 'all' && r.approval_status !== approval) return false
       if (community !== 'all' && (r.community?.trim() || 'לא צוין') !== community) return false
       if (ageBucket !== 'all' && !AGE_BUCKETS.find(b => b.key === ageBucket)?.test(r.age)) return false
       if (kidsBucket !== 'all' && !KIDS_BUCKETS.find(b => b.key === kidsBucket)?.test(r.children_count)) return false
@@ -105,7 +135,7 @@ export default function HolidayRegistrations({
       return [r.name, r.id_number, r.spouse_name, r.ben_phone, r.phone, r.email, r.address, r.city, r.community]
         .filter(Boolean).join(' ').toLowerCase().includes(q)
     })
-  }, [rows, query, source, community, ageBucket, kidsBucket])
+  }, [rows, query, source, community, ageBucket, kidsBucket, approval])
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
   const expectedAll = rows.length * amountPerFamily
@@ -126,12 +156,62 @@ export default function HolidayRegistrations({
     setToggling(false)
   }
 
+  // אישור / דחייה — לשורה בודדת או לכל המסומנות. אותה קריאה בשני המקרים, כדי
+  // שלא יהיו שני מסלולי עדכון שיכולים להיפרד זה מזה.
+  const setApprovalFor = async (ids: string[], status: ApprovalStatus) => {
+    if (!ids.length) return
+    setBusyId(ids.length === 1 ? ids[0] : 'bulk')
+    try {
+      const res = await fetch('/api/admin/distributions/recipients', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, approval_status: status }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'העדכון נכשל'); setBusyId(null); return }
+      toast.success(status === 'approved'
+        ? `${ids.length} אושרו — הכרטיס נפתח לשיוך בטלפון ובממשק`
+        : status === 'rejected' ? `${ids.length} נדחו` : `${ids.length} חזרו להמתנה`)
+      setSelected(new Set())
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setBusyId(null)
+  }
+
+  const clearCard = async (id: string) => {
+    setBusyId(id)
+    try {
+      const res = await fetch('/api/admin/distributions/recipients', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id], clear_card: true }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'הניקוי נכשל'); setBusyId(null); return }
+      toast.success('שיוך הכרטיס נוקה — המשפחה יכולה לשייך כרטיס מחדש')
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setBusyId(null)
+  }
+
+  const toggleRow = (id: string) => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const allShownSelected = filtered.length > 0 && filtered.every(r => selected.has(r.id))
+  const toggleAllShown = () => setSelected(prev => {
+    const next = new Set(prev)
+    if (allShownSelected) filtered.forEach(r => next.delete(r.id))
+    else filtered.forEach(r => next.add(r.id))
+    return next
+  })
+
   const exportCsv = () => {
-    const head = ['שם', 'ת"ז', 'בן/בת זוג', 'טלפון', 'מייל', 'כתובת', 'עיר', 'קהילה', 'גיל', 'ילדים', 'ערוץ', 'תאריך רישום', 'סכום מתוכנן']
+    const head = ['שם', 'ת"ז', 'בן/בת זוג', 'טלפון', 'מייל', 'כתובת', 'עיר', 'קהילה', 'גיל', 'ילדים', 'ערוץ', 'תאריך רישום', 'סכום מתוכנן', 'אישור', 'מספר כרטיס', 'שויך בתאריך']
     const lines = filtered.map(r => [
       r.name, r.id_number ?? '', r.spouse_name ?? '', r.ben_phone ?? r.phone ?? '', r.email ?? '',
       r.address ?? '', r.city ?? '', r.community ?? '', r.age ?? '', r.children_count ?? '',
       SOURCE_LABEL[r.source], fmtDateTime(r.registered_at), amountPerFamily || '',
+      APPROVAL_LABEL[r.approval_status], r.card_number ?? '', fmtDateTime(r.card_linked_at),
     ])
     const csv = [head, ...lines].map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
     const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
@@ -148,7 +228,7 @@ export default function HolidayRegistrations({
   return (
     <div className="flex flex-col gap-5">
       {/* ── מונים חיים: נרשמים וצפי תקציבי ── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <div className="rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-5">
           <div className="flex items-center gap-2 text-indigo-700 mb-1"><Users size={16} /><span className="text-xs font-bold">נרשמו</span></div>
           <p className="text-3xl font-extrabold text-indigo-900 ltr-num">{rows.length.toLocaleString('he-IL')}</p>
@@ -157,6 +237,28 @@ export default function HolidayRegistrations({
           <div className="flex items-center gap-2 text-emerald-700 mb-1"><Wallet size={16} /><span className="text-xs font-bold">צפי תקציבי</span></div>
           <p className="text-3xl font-extrabold text-emerald-900 ltr-num">{fmtCur(expectedAll)}</p>
           <p className="text-[11px] text-emerald-700 mt-1">{rows.length} × {fmtCur(amountPerFamily)} למשפחה</p>
+        </div>
+        {/* ── אישורים וכרטיסים — המסלול שאחרי הרישום ── */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center gap-2 text-slate-500 mb-2"><ShieldCheck size={16} /><span className="text-xs font-bold">אישורים וכרטיסים</span></div>
+          <div className="flex flex-col gap-1 text-[12.5px]">
+            <div className="flex items-center justify-between">
+              <span className="text-amber-800">ממתינים לאישור</span>
+              <span className="font-extrabold text-amber-900 ltr-num">{approvalCounts.pending}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-green-800">מאושרים</span>
+              <span className="font-extrabold text-green-900 ltr-num">{approvalCounts.approved}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-rose-800">נדחו</span>
+              <span className="font-extrabold text-rose-900 ltr-num">{approvalCounts.rejected}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-1">
+              <span className="text-slate-600">כרטיסים ששויכו</span>
+              <span className="font-extrabold text-slate-800 ltr-num">{cardsLinked} / {approvalCounts.approved}</span>
+            </div>
+          </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-bold text-slate-500 mb-2">פילוח לפי ערוץ</p>
@@ -194,6 +296,15 @@ export default function HolidayRegistrations({
           <button className={chip(source === 'all')} onClick={() => setSource('all')}>הכל</button>
           {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => (
             <button key={s} className={chip(source === s)} onClick={() => setSource(s)}>{SOURCE_LABEL[s]} ({bySource[s] ?? 0})</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] font-bold text-slate-400 w-16">אישור:</span>
+          <button className={chip(approval === 'all')} onClick={() => setApproval('all')}>הכל</button>
+          {(['pending', 'approved', 'rejected'] as ApprovalStatus[]).map(s => (
+            <button key={s} className={chip(approval === s)} onClick={() => setApproval(s)}>
+              {APPROVAL_LABEL[s]} ({approvalCounts[s]})
+            </button>
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -235,32 +346,104 @@ export default function HolidayRegistrations({
         </button>
       </div>
 
+      {/* ── פעולה מרוכזת על המסומנים ── */}
+      {canEdit && selected.size > 0 && (
+        <div className="flex items-center gap-3 flex-wrap rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3">
+          <span className="text-[13px] font-bold text-indigo-900">סומנו {selected.size}</span>
+          <button type="button" disabled={busyId === 'bulk'}
+            onClick={() => void setApprovalFor([...selected], 'approved')}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50">
+            {busyId === 'bulk' ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} אישור הכל
+          </button>
+          <button type="button" disabled={busyId === 'bulk'}
+            onClick={() => void setApprovalFor([...selected], 'rejected')}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50">
+            <X size={13} /> דחיית הכל
+          </button>
+          <button type="button" onClick={() => setSelected(new Set())}
+            className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול הסימון</button>
+          <span className="text-[11.5px] text-indigo-700">אישור פותח למשפחה את שיוך הכרטיס בשלוחה הטלפונית ובממשק</span>
+        </div>
+      )}
+
       {/* ── טבלת הנרשמים ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] whitespace-nowrap">
             <thead className="bg-slate-50 text-slate-500">
               <tr className="[&>th]:px-3 [&>th]:py-3 [&>th]:font-bold [&>th]:text-right">
-                <th>שם המשפחה</th><th>ת״ז</th><th>בן/בת זוג</th><th>טלפון</th><th>מייל</th>
+                {canEdit && (
+                  <th className="w-8">
+                    <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
+                      className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
+                  </th>
+                )}
+                <th>שם המשפחה</th><th>ת״ז</th><th>אישור הבקשה</th><th>כרטיס</th>
+                <th>בן/בת זוג</th><th>טלפון</th><th>מייל</th>
                 <th>כתובת</th><th>עיר</th><th>קהילה</th><th>גיל</th><th>ילדים</th>
-                <th>ערוץ</th><th>תאריך רישום</th><th>סכום</th><th>אישור</th>
+                <th>ערוץ</th><th>תאריך רישום</th><th>סכום</th><th>הודעה</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={14} className="px-4 py-14 text-center text-slate-400 font-medium">
+                <tr><td colSpan={canEdit ? 17 : 16} className="px-4 py-14 text-center text-slate-400 font-medium">
                   {rows.length ? 'אין נרשמים שמתאימים לסינון' : 'עדיין לא נרשמו משפחות לחלוקה זו'}
                 </td></tr>
               ) : filtered.map(r => {
                 const I = SOURCE_ICON[r.source]
                 return (
                   <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5">
+                    {canEdit && (
+                      <td>
+                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}
+                          className="h-4 w-4 accent-indigo-600" aria-label={`סימון ${r.name}`} />
+                      </td>
+                    )}
                     <td className="font-semibold text-slate-800">
                       {r.beneficiary_id
                         ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-indigo-700 hover:underline">{r.name}</Link>
                         : r.name}
                     </td>
                     <td className="font-mono text-slate-600"><span className="ltr-num">{r.id_number ?? '—'}</span></td>
+                    {/* ── אישור הבקשה — הפעולה שפותחת את שיוך הכרטיס ── */}
+                    <td>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${APPROVAL_STYLE[r.approval_status]}`}>
+                          {APPROVAL_LABEL[r.approval_status]}
+                        </span>
+                        {canEdit && (
+                          busyId === r.id
+                            ? <Loader2 size={13} className="animate-spin text-slate-400" />
+                            : <>
+                                {r.approval_status !== 'approved' && (
+                                  <button type="button" title="אישור הבקשה" onClick={() => void setApprovalFor([r.id], 'approved')}
+                                    className="rounded-lg p-1 text-green-700 hover:bg-green-50"><Check size={14} /></button>
+                                )}
+                                {r.approval_status !== 'rejected' && (
+                                  <button type="button" title="דחיית הבקשה" onClick={() => void setApprovalFor([r.id], 'rejected')}
+                                    className="rounded-lg p-1 text-rose-600 hover:bg-rose-50"><X size={14} /></button>
+                                )}
+                              </>
+                        )}
+                      </div>
+                    </td>
+                    {/* ── מספר הכרטיס ששויך (בטלפון או בממשק) ── */}
+                    <td>
+                      {r.card_linked_at ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[12px] text-slate-700 ltr-num">{r.card_number}</span>
+                          <span className="text-[11px] font-bold text-green-700">✓</span>
+                          {canEdit && (busyId === r.id
+                            ? <Loader2 size={12} className="animate-spin text-slate-400" />
+                            : <button type="button" title="ניקוי השיוך כדי לאפשר כרטיס אחר" onClick={() => void clearCard(r.id)}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"><X size={12} /></button>)}
+                        </div>
+                      ) : r.card_link_error ? (
+                        <span className="text-[11px] font-bold text-rose-700" title={r.card_link_error}>נכשל</span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">{r.approval_status === 'approved' ? 'ממתין לשיוך' : '—'}</span>
+                      )}
+                    </td>
                     <td className="text-slate-600">{r.spouse_name ?? '—'}</td>
                     <td className="font-mono text-slate-600"><span className="ltr-num">{r.ben_phone ?? r.phone ?? '—'}</span></td>
                     <td className="text-slate-600">{r.email ?? '—'}</td>

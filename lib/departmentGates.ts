@@ -14,7 +14,10 @@ import { getServiceClient } from '@/lib/apiAuth'
 const GATES_KEY = 'department_gates'
 
 // המחלקות שניתן לפתוח/לסגור. המפתחות תואמים לזרימות הבקשה בפורטל.
-export const GATED_DEPARTMENTS = ['maternity', 'gemach', 'financial_aid', 'widows'] as const
+// ⚠️ 'holidays' הוא מתג-אב: הוא *מעל* מצב הרישום של החלוקה עצמה. חלוקה יכולה
+// להיות פתוחה לרישום ובכל זאת לא תוצג בשום ערוץ אם המתג כאן סגור. כך יש נקודת
+// כיבוי אחת לכל המחלקה, בלי לגעת בחלוקות עצמן.
+export const GATED_DEPARTMENTS = ['maternity', 'gemach', 'financial_aid', 'widows', 'holidays'] as const
 export type GatedDepartment = (typeof GATED_DEPARTMENTS)[number]
 
 export const DEPARTMENT_LABELS: Record<GatedDepartment, string> = {
@@ -22,6 +25,7 @@ export const DEPARTMENT_LABELS: Record<GatedDepartment, string> = {
   gemach: 'גמ"ח הלוואות',
   financial_aid: 'סיוע רפואי',
   widows: 'אלמנות ויתומים',
+  holidays: 'חלוקות חגים',
 }
 
 export type DepartmentGates = Record<GatedDepartment, boolean>
@@ -32,6 +36,10 @@ export const DEFAULT_GATES: DepartmentGates = {
   gemach: false,
   financial_aid: false,
   widows: false,
+  // ⚠️ פתוח כברירת מחדל, ובכוונה: השליטה האמיתית היא registration_open של
+  // החלוקה. אילו היה סגור כברירת מחדל, התקנת העדכון הייתה מכבה בשקט ערוץ
+  // שעובד — למי שטרם נגע בהגדרות אין רשומה שמורה, והברירה היא שקובעת.
+  holidays: true,
 }
 
 // קריאת מצב כל המחלקות. נופל לברירת המחדל אם אין הגדרה שמורה.
