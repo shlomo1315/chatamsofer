@@ -18,7 +18,14 @@ export type NedarimCreds = { mosadId: string; apiPassword: string }
 
 // הגדרות נדרים הנשמרות תחת מפתח 'nedarim_card' ב-app_settings.
 // הכתיבה ממזגת (patch) כדי לא לדרוס שדות שלא נמסרו — למשל שמירת קוד ה-API לא מוחקת את מזהה קבוצת ההגבלה.
-type NedarimStoredSettings = { mosadId?: string; apiPassword?: string; maternityLimitedId?: string }
+type NedarimStoredSettings = {
+  mosadId?: string; apiPassword?: string; maternityLimitedId?: string
+  // ── חלוקות חגים ──
+  // ⚠️ הרשאה נפרדת בכוונה: החגים והיולדות הם שני תקציבים ושתי קבוצות הגבלת
+  // חנויות, ולעיתים שני מוסדות בנדרים. שימוש בהרשאה אחת לשניהם היה מקשר טעינת
+  // חג לתקציב היולדות, וזה בלתי-הפיך מבחינת הדיווח.
+  holidayMosadId?: string; holidayApiPassword?: string; holidayLimitedId?: string
+}
 
 async function readNedarimSettings(): Promise<NedarimStoredSettings> {
   const admin = getServiceClient()
@@ -63,6 +70,51 @@ export async function getMaternityLimitedId(): Promise<string> {
 
 export async function saveMaternityLimitedId(limitedId: string): Promise<boolean> {
   return writeNedarimSettings({ maternityLimitedId: String(limitedId).trim() })
+}
+
+// ── חלוקות חגים — הרשאת נדרים נפרדת ────────────────────────────────────────
+/**
+ * פרטי החיבור לנדרים עבור החגים.
+ *
+ * ⚠️ נפילה-לאחור להרשאה הראשית *בכוונה*: שיוך הכרטיס בשלוחה הטלפונית עובד היום
+ * עם ההרשאה הראשית, והחזרת null כשלא הוגדרה הרשאת חגים הייתה משביתה ערוץ עובד
+ * ברגע הפריסה. מי שרוצה הפרדה מגדיר; מי שלא — ממשיך כמו קודם.
+ */
+export async function getHolidayNedarimCreds(): Promise<NedarimCreds | null> {
+  const s = await readNedarimSettings()
+  if (s.holidayMosadId && s.holidayApiPassword) {
+    return { mosadId: String(s.holidayMosadId), apiPassword: String(s.holidayApiPassword) }
+  }
+  return getNedarimCreds()
+}
+
+/** האם הוגדרה הרשאה *נפרדת* לחגים (לעומת שימוש בראשית). */
+export async function hasSeparateHolidayCreds(): Promise<boolean> {
+  const s = await readNedarimSettings()
+  return !!(s.holidayMosadId && s.holidayApiPassword)
+}
+
+export async function saveHolidayNedarimCreds(creds: NedarimCreds): Promise<boolean> {
+  return writeNedarimSettings({
+    holidayMosadId: creds.mosadId.trim(),
+    holidayApiPassword: creds.apiPassword.trim(),
+  })
+}
+
+/** ניקוי ההרשאה הנפרדת — חזרה לשימוש בהרשאה הראשית. */
+export async function clearHolidayNedarimCreds(): Promise<boolean> {
+  return writeNedarimSettings({ holidayMosadId: '', holidayApiPassword: '' })
+}
+
+/** קבוצת "הגבלת חנויות" לטעינות החגים. ריק = בלי הגבלה. */
+export async function getHolidayLimitedId(): Promise<string> {
+  const s = await readNedarimSettings()
+  if (s.holidayLimitedId && String(s.holidayLimitedId).trim()) return String(s.holidayLimitedId).trim()
+  return (process.env.NEDARIM_HOLIDAY_LIMITED_ID ?? '').trim()
+}
+
+export async function saveHolidayLimitedId(limitedId: string): Promise<boolean> {
+  return writeNedarimSettings({ holidayLimitedId: String(limitedId).trim() })
 }
 
 export type NedarimResponse = { Result?: string; Message?: string; [k: string]: unknown }

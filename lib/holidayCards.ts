@@ -16,7 +16,7 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, type ActiveDistribution } from '@/lib/holidayDistributions'
 import {
-  getNedarimCreds, setMagneticCard, getClientCardFull, findClientByZeout,
+  getHolidayNedarimCreds, setMagneticCard, getClientCardFull, findClientByZeout,
 } from '@/lib/nedarim'
 
 export const HOLIDAY_CARD_DIGITS = 16
@@ -126,7 +126,8 @@ export async function linkHolidayCard(
   }
   const rec = elig.recipient
 
-  const creds = await getNedarimCreds()
+  // ⚠️ הרשאת החגים ולא הראשית: החגים והיולדות הם שני תקציבים בנדרים
+  const creds = await getHolidayNedarimCreds()
   if (!creds) return { ok: false, linked: false, error: 'ממשק נדרים אינו מוגדר' }
 
   // מזהה נדרים של המשפחה — מהרשומה, ובהיעדרו חיפוש לפי ת"ז ושמירה חזרה, כדי
@@ -182,7 +183,7 @@ export async function linkHolidayCard(
 }
 
 async function cardLinkedInNedarim(
-  creds: NonNullable<Awaited<ReturnType<typeof getNedarimCreds>>>,
+  creds: NonNullable<Awaited<ReturnType<typeof getHolidayNedarimCreds>>>,
   nedarimId: string,
   digits: string,
 ): Promise<boolean> {

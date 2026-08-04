@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck } from 'lucide-react'
+import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
@@ -16,6 +16,7 @@ export interface RegistrationRow {
   registered_at: string | null
   phone: string | null
   notified_at: string | null
+  notify_error: string | null
   amount: number | null
   beneficiary_id: string | null
   approval_status: ApprovalStatus
@@ -192,6 +193,28 @@ export default function HolidayRegistrations({
     setBusyId(null)
   }
 
+  // שליחת הודעת האישור — מייל + צינתוק. בלי בחירה: כל המאושרים שטרם קיבלו.
+  // ⚠️ הצינתוק אינו "תוספת" למייל: לחלק מהמשפחות אין מייל, ואצלן הוא הערוץ
+  // היחיד. לכן שני הערוצים נשלחים יחד וכל אחד נכשל בנפרד.
+  const [notifying, setNotifying] = useState(false)
+  const notify = async (ids: string[]) => {
+    setNotifying(true)
+    try {
+      const res = await fetch('/api/admin/distributions/recipients/notify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ids.length ? { ids } : { distributionId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'השליחה נכשלה'); setNotifying(false); return }
+      if (d.empty) toast.success('אין מאושרים שממתינים להודעה')
+      else if (d.failed > 0) toast.error(`נשלחו ${d.sent} · נכשלו ${d.failed} — הסיבה מופיעה בעמודת ההודעה`)
+      else toast.success(`נשלחה הודעת אישור ל-${d.sent}${d.skipped ? ` · ${d.skipped} דולגו` : ''}`)
+      setSelected(new Set())
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setNotifying(false)
+  }
+
   const toggleRow = (id: string) => setSelected(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -340,6 +363,14 @@ export default function HolidayRegistrations({
         <span className="text-xs font-bold text-slate-500">
           מוצגים {filtered.length.toLocaleString('he-IL')} · {fmtCur(expectedFiltered)}
         </span>
+        {canEdit && approvalCounts.approved > 0 && (
+          <button type="button" disabled={notifying} onClick={() => void notify([])}
+            title="מייל וצינתוק לכל מי שאושר וטרם קיבל הודעה"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50">
+            {notifying ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            הודעת אישור לכל המאושרים
+          </button>
+        )}
         <button type="button" onClick={exportCsv}
           className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">
           <Download size={14} /> ייצוא לאקסל
@@ -359,6 +390,11 @@ export default function HolidayRegistrations({
             onClick={() => void setApprovalFor([...selected], 'rejected')}
             className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-50">
             <X size={13} /> דחיית הכל
+          </button>
+          <button type="button" disabled={notifying}
+            onClick={() => void notify([...selected])}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-teal-700 disabled:opacity-50">
+            {notifying ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} שליחת הודעת אישור
           </button>
           <button type="button" onClick={() => setSelected(new Set())}
             className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול הסימון</button>
@@ -459,10 +495,18 @@ export default function HolidayRegistrations({
                     </td>
                     <td className="text-slate-500 ltr-num">{fmtDateTime(r.registered_at)}</td>
                     <td className="font-bold text-emerald-700 ltr-num">{amountPerFamily ? fmtCur(amountPerFamily) : '—'}</td>
+                    {/* ⚠️ "נשלח" לצד שגיאה אינו סתירה: מייל עבר וצינתוק נכשל הוא
+                        מצב שכיח, והצוות צריך לראות שערוץ אחד לא הגיע. */}
                     <td>
-                      {r.notified_at
-                        ? <span className="text-[11px] font-bold text-green-700">✓ נשלח</span>
-                        : <span className="text-[11px] font-bold text-slate-400">—</span>}
+                      {r.notified_at ? (
+                        <span className="text-[11px] font-bold text-green-700" title={fmtDateTime(r.notified_at)}>
+                          ✓ נשלח{r.notify_error ? <span className="text-amber-700" title={r.notify_error}> ⚠</span> : null}
+                        </span>
+                      ) : r.notify_error ? (
+                        <span className="text-[11px] font-bold text-rose-700" title={r.notify_error}>נכשל</span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-slate-400">—</span>
+                      )}
                     </td>
                   </tr>
                 )

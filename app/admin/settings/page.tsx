@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -16,6 +16,7 @@ import RebuildRoutingButton from './RebuildRoutingButton'
 import VoucherTextsManager from './VoucherTextsManager'
 import EmailTemplatesManager from './EmailTemplatesManager'
 import NedarimSettings from './NedarimSettings'
+import NedarimHolidaySettings from './NedarimHolidaySettings'
 import LoansPortalSettings from './LoansPortalSettings'
 import YemotCallLog from './YemotCallLog'
 import YemotMaternitySettings from './YemotMaternitySettings'
@@ -194,6 +195,12 @@ export default async function SettingsPage() {
         {/* Nedarim Card connection */}
         <Collapsible title="נדרים קארד" icon={<CreditCard size={16} className="text-emerald-500" />}>
           <NedarimSettings />
+        </Collapsible>
+
+        {/* ⚠️ הרשאת נדרים של החגים — נפרדת מזו של היולדות: שני תקציבים ושתי
+            קבוצות הגבלת חנויות, ולעיתים שני מוסדות. */}
+        <Collapsible title="נדרים קארד — חלוקות חגים" icon={<Gift size={16} className="text-teal-500" />}>
+          <NedarimHolidaySettings />
         </Collapsible>
 
         {/* Card stock low-balance alert (threshold + recipient emails) */}
