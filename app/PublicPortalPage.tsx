@@ -1489,7 +1489,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // מאיזו מחלקה הגיע הקישור (?action=). נשמר לכל אורך הכניסה כדי שבאזור
   // האישי תוצג *רק* הבקשה של אותה מחלקה — לכל מחלקה יש קישור משלה, ואין
   // סיבה להציג למי שהגיע לבקשת לידה גם הלוואה וסיוע.
-  const [arrivedFor, setArrivedFor] = useState<'birth' | 'loan' | 'aid' | 'docs' | 'details' | null>(null)
+  const [arrivedFor, setArrivedFor] = useState<'birth' | 'loan' | 'aid' | 'docs' | 'details' | 'holiday' | null>(null)
   const [docsGateModal, setDocsGateModal] = useState(false)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
@@ -1689,7 +1689,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [showOtherMarital, setShowOtherMarital] = useState(false)
 
   // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
-  const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | 'details' | null>(null)
+  const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | 'details' | 'holiday' | null>(null)
 
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
@@ -2752,7 +2752,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // Read the intended action from the URL once on mount (from the email buttons)
   useEffect(() => {
     const a = new URLSearchParams(window.location.search).get('action')
-    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details') {
+    if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details' || a === 'holiday') {
       intendedAction.current = a
       setArrivedFor(a)
     }
@@ -2773,9 +2773,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // קישור "עדכון פרטים אישיים" מהמייל — פותח ישירות את מסך העריכה
     else if (a === 'details') openEditDetails()
+    // ⚠️ קישור חלוקת החגים אינו פותח טופס — אין טופס, יש כפתור אחד בכרטיס.
+    // לכן גוללים אליו ומדגישים אותו. אם החלוקה עוד לא נטענה (הבקשה מקבילה
+    // לכניסה) — לא מנקים את הכוונה, וה-effect ינסה שוב כשהיא תגיע.
+    else if (a === 'holiday') {
+      if (!holiday) opened = false
+      else {
+        const el = document.getElementById('holiday-card')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.add('ring-4', 'ring-teal-300')
+          setTimeout(() => el.classList.remove('ring-4', 'ring-teal-300'), 2600)
+        }
+      }
+    }
     if (opened) intendedAction.current = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, beneficiary, deptGates])
+  }, [step, beneficiary, deptGates, holiday])
 
   // משפחה בהשלמת מסמכים — התראה מיידית בכניסה לאזור האישי, פעם אחת.
   useEffect(() => {
@@ -4828,7 +4842,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     אותו. ⚠️ הכפתור אינו חוסם לפי סטטוס אישור: מטרת השלב הזה היא
                     לדעת מי מבקש להשתתף, וההכרעה מי זכאי נעשית אחר כך בניהול. */}
                 {holiday?.open && (
-                  <div className={`rounded-2xl border-2 p-5 ${holiday.registered ? 'border-green-200 bg-green-50' : 'border-teal-200 bg-teal-50'}`}>
+                  <div id="holiday-card"
+                    className={`rounded-2xl border-2 p-5 transition-shadow duration-300 ${holiday.registered ? 'border-green-200 bg-green-50' : 'border-teal-200 bg-teal-50'}`}>
                     <div className="flex items-start gap-4">
                       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${holiday.registered ? 'bg-green-100' : 'bg-teal-100'}`}>
                         <Gift size={22} className={holiday.registered ? 'text-green-600' : 'text-teal-600'} />

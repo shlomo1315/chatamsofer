@@ -72,7 +72,11 @@ export async function POST(request: NextRequest) {
   // מצב פתיחת/סגירת המחלקות — כדי לא להציג כפתורי בקשה למחלקה סגורה
   const { getDepartmentGates } = await import('@/lib/departmentGates')
   const gates = await getDepartmentGates(admin)
-  const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks, ben.marital_status, gates)
+  // ⚠️ נבדק בזמן השליחה — הכפתור מופיע רק אם יש חלוקה שהרישום אליה פתוח כרגע.
+  const { getOpenDistribution } = await import('@/lib/holidayDistributions')
+  const openDist = await getOpenDistribution()
+  const mail = benefitsLinkEmail(name, undefined, undefined, draftLinks, ben.marital_status, gates,
+    openDist ? { open: true, name: [openDist.name, openDist.year].filter(Boolean).join(' ') } : null)
   const result = await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('igud'))
   if (!result.ok) {
     console.error('[send-benefits-link] deliverMail failed:', result.error)
