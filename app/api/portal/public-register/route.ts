@@ -48,8 +48,16 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   const isNedarim = request.headers.get('origin') === 'https://matara.pro'
   const registrationSource: RegisterSource = channel ?? (isNedarim ? 'nedarim' : 'portal')
 
-  // הגבלת קצב — מניעת רישומי ספאם המוניים
-  if (!rateLimit(`public-register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
+  // ── הגבלת קצב ──
+  // ⚠️ תקרה גבוהה לערוץ נדרים בכוונה: הטופס שלהם מוגש גם מעמדות שירות, וכל
+  // העמדות באותו מקום יוצאות מכתובת IP אחת. תקרה של 10 לשעה הייתה חוסמת את
+  // הנרשם ה-11 בשחרור המוני — כלומר משביתה את הערוץ בדיוק ברגע השיא.
+  //
+  // ⚠️ ההגנה האמיתית שם אינה ה-IP אלא אימות הטלפון בקוד (אסימון חתום שנבדק
+  // בהמשך), ולכן ההרפיה כאן אינה פותחת ערוץ ספאם. הטופס הציבורי שלנו נשאר
+  // בתקרה ההדוקה — שם אין עמדות ואין סיבה לרישומים המוניים מאותו IP.
+  const rateMax = registrationSource === 'nedarim' ? 400 : 10
+  if (!rateLimit(`public-register:${registrationSource}:${clientIp(request)}`, rateMax, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
   }
 

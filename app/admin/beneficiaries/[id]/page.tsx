@@ -108,10 +108,22 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
     return out
   }
 
-  // ── נפילה-לאחור: אין שיוך לצומת (שרשרת ידנית בלבד) → התאמת שמות ──
+  // ── נפילה-לאחור: אין שיוך לצומת (שרשרת מוקלדת בלבד) ──
   if (chain.length) {
+    // ⚠️ קודם *הליכה בעץ* מהשורש למטה (lib/lineageResolve): השרשרת המוקלדת נושאת
+    // ניסוח מורכב ("מרת שמחה אשת רבי משה טוביה לעהמאן") שאינו שווה לשם הצומת,
+    // ולכן השוואת שם-מול-שם החזירה "לא נמצא" לכל הדורות — וכל מי שנרשם ראה את
+    // הליבה המאושרת של העץ כ"ממתין לאימות". ההליכה דורשת רצף הורה-ילד, ולכן
+    // התאמה חלקית בשם בטוחה בה; דו-משמעות עוצרת אותה ואינה מנחשת.
+    const { resolveChainAgainstTree } = await import('@/lib/lineageResolve')
+    const resolved = resolveChainAgainstTree(nodes, chain)
+    for (const [gen, r] of resolved) out.genStatus.set(gen, r.status)
+
+    // מה שההליכה לא זיהתה — התאמת שמות שטוחה כמו קודם. תוספת, לא החלפה: כך
+    // שרשראות שכן עבדו עד היום ממשיכות לעבוד בדיוק אותו דבר.
     const { namesMatch } = await import('@/lib/hebrewName')
     for (const e of chain) {
+      if (out.genStatus.has(e.generation)) continue
       // הסטטוס האמיתי של הדור: הצומת התואם (לפי דור+שם) והסטטוס שלו בעץ.
       // מעדיפים צומת verified; אם אין — לוקחים כל צומת תואם (pending/rejected);
       // אם אין כלל — null (אין במאגר → נחשב ממתין).

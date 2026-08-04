@@ -349,7 +349,28 @@ async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{
   return all
 }
 
+// ⚠️ מטמון בזיכרון לרשימת הרחובות של עיר.
+//
+// בלעדיו כל רישום קורא את *כל* רחובות העיר מהמסד (ירושלים ובני ברק — אלפי
+// שורות, כלומר 2 עד 4 סבבי רשת של 1000 שורות כל אחד) רק כדי לאמת רחוב אחד.
+// בשחרור המוני דרך נדרים זו ההוצאה הכבדה ביותר בבקשה, והיא חוזרת זהה בכל
+// רישום. רשימת רחובות רשמית אינה משתנה בתוך דקות, ולכן מטמון קצר בטוח לחלוטין.
+const _streetCache = new Map<string, { at: number; list: string[] }>()
+const STREET_CACHE_MS = 10 * 60_000
+
 export async function getStreets(admin: SupabaseClient, city: string): Promise<string[]> {
+  const key = String(city ?? '').trim()
+  const hit = _streetCache.get(key)
+  if (hit && Date.now() - hit.at < STREET_CACHE_MS) return hit.list
+
+  const list = await getStreetsUncached(admin, key)
+  // ⚠️ רק תוצאה לא-ריקה נשמרת: רשימה ריקה פירושה שהסנכרון נכשל, ושמירתה הייתה
+  // מנציחה "לעיר הזו אין רחובות" ל-10 דקות — כלומר חוסמת כל רישום מאותה עיר.
+  if (list.length) _streetCache.set(key, { at: Date.now(), list })
+  return list
+}
+
+async function getStreetsUncached(admin: SupabaseClient, city: string): Promise<string[]> {
   const data = await readAllStreetRows(admin, city)
 
   const fresh = data.length > 0 && Date.now() - new Date(data[0].synced_at).getTime() < STALE_MS
