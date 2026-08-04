@@ -48,8 +48,10 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb)
 }
 
-// TTS של ימות אינו סובל את התווים האלה — מסירים אותם ולא נותנים להם לשבור שיחה
-const tts = (t: string) => String(t ?? '').replace(/[.\-"'&|]/g, ' ').replace(/\s+/g, ' ').trim()
+// TTS של ימות אינו סובל את התווים האלה — מסירים אותם ולא נותנים להם לשבור שיחה.
+// ⚠️ כולל גרש (׳) וגרשיים (״) עבריים — הם מופיעים בקיצורי שנה ("תשפ״ז") ושיבשו
+// את ההקראה. הסרתם משאירה "תשפז", שימות מקריאה כמילה תקינה.
+const tts = (t: string) => String(t ?? '').replace(/[.\-"'&|׳״]/g, ' ').replace(/\s+/g, ' ').trim()
 const tToken = (t: string) => `t-${tts(t)}`
 const joinTokens = (...tokens: string[]) => tokens.filter(Boolean).join('.')
 const idMessage = (...tokens: string[]) => `id_list_message=${joinTokens(...tokens)}`

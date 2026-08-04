@@ -89,7 +89,8 @@ function phoneMatches(stored: string | null | undefined, caller: string): boolea
 
 // ── בניית תגובת ימות ─────────────────────────────────────────────────────────
 // טקסט TTS — הסרת תווים שאסורים בימות (. - " ' & |) כדי לא לשבור את הפורמט.
-const TTS_INVALID = /[.\-"'&|]/g
+// כולל גרש (׳) וגרשיים (״) עבריים — מופיעים בקיצורי שנה ושמות, ומשבשים הקראה
+const TTS_INVALID = /[.\-"'&|׳״]/g
 function tts(text: string): string {
   return String(text ?? '').replace(TTS_INVALID, ' ').replace(/\s+/g, ' ').trim()
 }
