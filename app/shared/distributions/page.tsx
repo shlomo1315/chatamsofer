@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import Image from 'next/image'
 import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
+import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
+import type { RegisterSource } from '@/lib/distributionSources'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -60,6 +62,7 @@ interface Distribution {
 }
 
 const fmtCur = (n?: number | null) => n != null ? `${Math.round(Number(n) || 0).toLocaleString('he-IL')} ₪` : '—'
+const fmtCurNum = (n: number) => `${Math.round(n || 0).toLocaleString('he-IL')} ₪`
 const fmtDate = (d?: string | null) => d ? new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
 const fmtDateTime = (d?: string | null) => d ? new Date(d).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
 
@@ -304,73 +307,6 @@ function GenerationExplorer({ recipients, nodes }: { recipients: Recipient[]; no
   )
 }
 
-// ── Recipients table (view-only) ──
-function RecipientsTable({ rows, amountPerFamily }: { rows: Recipient[]; amountPerFamily?: number | null }) {
-  if (!rows.length) return <p className="px-4 py-8 text-center text-slate-400 text-sm">אין נרשמים לחלוקה זו</p>
-  return (
-    <div className="w-full">
-      <table className="w-full text-[12px] table-fixed">
-        {/* ⚠️ עם table-fixed הרוחבים חייבים להסתכם ל-100% בדיוק — חריגה גורמת
-            לדפדפן לדחוס תאים באופן לא־פרופורציונלי, התוכן נשבר לשורה נוספת
-            והערכים כבר לא עומדים מתחת לכותרת. סכום כאן = 100.0% בדיוק. */}
-        <colgroup>
-          <col className="w-[10%]" />{/* שם */}
-          <col className="w-[6%]" />{/* ת"ז */}
-          <col className="w-[6%]" />{/* אישור */}
-          <col className="w-[6%]" />{/* כרטיס */}
-          <col className="w-[8%]" />{/* בן/בת */}
-          <col className="w-[7%]" />{/* טלפון */}
-          <col className="w-[10%]" />{/* מייל */}
-          <col className="w-[10%]" />{/* כתובת */}
-          <col className="w-[5%]" />{/* עיר */}
-          <col className="w-[6%]" />{/* קהילה */}
-          <col className="w-[4%]" />{/* גיל */}
-          <col className="w-[4%]" />{/* ילדים */}
-          <col className="w-[6%]" />{/* ערוץ */}
-          <col className="w-[7%]" />{/* תאריך */}
-          <col className="w-[5%]" />{/* סכום */}
-        </colgroup>
-        <thead className="bg-slate-50 text-slate-500">
-          <tr className="[&>th]:px-2 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:align-top [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-            <th>שם המשפחה</th><th>ת״ז</th><th>אישור</th><th>כרטיס</th><th>בן/בת זוג</th>
-            <th>טלפון</th><th>מייל</th><th>כתובת</th><th>עיר</th><th>קהילה</th>
-            <th>גיל</th><th>ילדים</th><th>ערוץ</th><th>תאריך רישום</th><th>סכום</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map(r => {
-            const b = r.beneficiary
-            const status = (r.approval_status ?? 'pending')
-            return (
-              <tr key={r.id} className="hover:bg-indigo-50/40 align-top [&>td]:px-2 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:break-words [&>td]:whitespace-normal [&_span]:!whitespace-normal [&_span]:break-words">
-                <td className="font-semibold text-slate-800">{benName(b)}</td>
-                <td className="font-mono text-slate-600"><span className="ltr-num">{b?.id_number ?? '—'}</span></td>
-                <td>
-                  <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${APPROVAL_STYLE[status] ?? APPROVAL_STYLE.pending}`}>
-                    {APPROVAL_LABEL[status] ?? status}
-                  </span>
-                </td>
-                <td>{r.card_linked_at ? <span className="font-mono text-[12px] text-slate-700 ltr-num">{r.card_number} ✓</span> : <span className="text-[11px] text-slate-400">—</span>}</td>
-                <td className="text-slate-600">{b?.spouse_name ?? '—'}</td>
-                <td className="font-mono text-slate-600"><span className="ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</span></td>
-                <td className="text-slate-600">{b?.email ?? '—'}</td>
-                <td className="text-slate-600">{b?.address ?? '—'}</td>
-                <td className="text-slate-600">{b?.city ?? '—'}</td>
-                <td className="text-slate-600">{b?.community_affiliation ?? '—'}</td>
-                <td className="text-slate-600 ltr-num">{ageOf(b) ?? '—'}</td>
-                <td className="text-slate-600 ltr-num">{b?.children_count ?? '—'}</td>
-                <td><span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{SOURCE_LABEL[r.source ?? 'admin'] ?? r.source}</span></td>
-                <td className="text-slate-500 ltr-num">{fmtDateTime(r.registered_at)}</td>
-                <td className="font-bold text-emerald-700 ltr-num">{amountPerFamily ? fmtCur(amountPerFamily) : '—'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
 // ── Main ──
 export default function SharedDistributionsPage() {
   const [state, setState] = useState<'checking' | 'locked' | 'unlocked'>('checking')
@@ -541,7 +477,23 @@ export default function SharedDistributionsPage() {
                 {/* טבלת נרשמים — נפתחת בלחיצה */}
                 {isOpen && (
                   <div className="border-t border-slate-200 bg-white" onClick={e => e.stopPropagation()}>
-                    <RecipientsTable rows={rows} amountPerFamily={d.amount_per_family} />
+                    <HolidayRecipientsTable
+                      rows={rows.map(r => ({
+                        id: r.id, source: (r.source ?? 'admin') as RegisterSource,
+                        registered_at: r.registered_at ?? null, phone: r.phone ?? null,
+                        notified_at: null, notify_error: null, beneficiary_id: r.beneficiary?.id ?? null,
+                        approval_status: (r.approval_status ?? 'pending') as 'pending' | 'approved' | 'rejected',
+                        card_number: r.card_number ?? null, card_linked_at: r.card_linked_at ?? null,
+                        name: benName(r.beneficiary), id_number: r.beneficiary?.id_number ?? null,
+                        spouse_name: r.beneficiary?.spouse_name ?? null,
+                        ben_phone: r.beneficiary?.phone ?? r.beneficiary?.phone2 ?? r.phone ?? null,
+                        email: r.beneficiary?.email ?? null, address: r.beneficiary?.address ?? null,
+                        city: r.beneficiary?.city ?? null, age: ageOf(r.beneficiary),
+                        children_count: r.beneficiary?.children_count ?? null,
+                      }))}
+                      amountPerFamily={d.amount_per_family ?? null}
+                      fmtDateTime={fmtDateTime} fmtCur={fmtCurNum}
+                    />
                   </div>
                 )}
               </button>

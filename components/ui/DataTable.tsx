@@ -110,7 +110,7 @@ export default function DataTable<T extends { id: string }>({
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
-                  className={`bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
+                  className={`bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
                   onClick={() => col.sortable && toggleSort(String(col.key))}
                 >
                   <div className="flex items-center gap-1">
@@ -121,7 +121,7 @@ export default function DataTable<T extends { id: string }>({
                   </div>
                 </th>
               ))}
-              {actions && <th className="bg-slate-50 px-5 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center">פעולות</th>}
+              {actions && <th className="bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center sticky left-0 bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -151,14 +151,16 @@ export default function DataTable<T extends { id: string }>({
                   onClick={rowHref ? () => router.push(rowHref(row)) : undefined}
                   className={`hover:bg-indigo-50/40 transition-colors duration-100 ${rowHref ? 'cursor-pointer' : ''}`}>
                   {columns.map((col) => (
-                    <td key={String(col.key)} className={`px-5 py-3.5 text-slate-700 align-middle whitespace-nowrap ${col.className ?? ''}`}>
+                    <td key={String(col.key)} className={`px-3 py-3.5 text-slate-700 align-middle whitespace-nowrap ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}
                     </td>
                   ))}
                   {actions && (
-                    <td className="px-5 py-3.5 align-middle text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
+                    // ⚠️ עמודת הפעולות נצמדת לקצה (sticky) כך שהיא תמיד נראית גם
+                    // כשהטבלה רחבה וגוללת — קודם היא נחתכה מחוץ למסך.
+                    <td className="px-3 py-3.5 align-middle text-center whitespace-nowrap sticky left-0 bg-white shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
                   )}
                 </tr>
               ))

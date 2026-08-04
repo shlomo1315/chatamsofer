@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import type { ApprovalStatus } from '@/lib/holidayCards'
+import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
 
 export interface RegistrationRow {
   id: string
@@ -402,156 +403,18 @@ export default function HolidayRegistrations({
         </div>
       )}
 
-      {/* ── טבלת הנרשמים ──
-          ✅ גישה: רוחב מינימלי בפיקסלים לכל עמודה + גלילה רוחבית *בתוך הכרטיס*
-          בלבד (הדף עצמו לא גולל). 16 עמודות פשוט לא נכנסות למסך צר בלי לדחוס —
-          וניסיון לדחוס ב-table-fixed+אחוזים שבר את התוכן לשורות והזיז ערכים
-          מתחת לכותרת שלהם. עכשיו כל עמודה מקבלת רוחב מינימלי הגיוני, whitespace-
-          nowrap מונע שבירה, וכל ערך עומד בדיוק מתחת לכותרת שלו. */}
+      {/* ── טבלת הנרשמים — קומפוננטה משותפת עם דף השיתוף (זהות מובטחת) ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          {/* ✅ table-fixed + colgroup ברוחבי *פיקסלים* — זה מה שבאמת אוכף את רוחב
-              כל עמודה (min-width על <td> לבדו אינו נאכף בטבלה, ולכן התוכן דלף
-              לשורה שנייה והזיז ערכים מתחת לכותרת הלא-נכונה). min-w על הטבלה כולה
-              (סכום הרוחבים) מפעיל גלילה רוחבית *בתוך הכרטיס* כשהמסך צר — לא בדף.
-              עמודת "קהילה" הוסרה מכאן ועברה לפילוח מכווץ (אלפי נרשמים). */}
-          <table className="text-[12px] border-collapse table-fixed min-w-[1230px] w-full">
-            <colgroup>
-              {canEdit && <col className="w-[36px]" />}
-              <col className="w-[150px]" />{/* שם */}
-              <col className="w-[95px]" />{/* ת"ז */}
-              <col className="w-[130px]" />{/* אישור */}
-              <col className="w-[110px]" />{/* כרטיס */}
-              <col className="w-[110px]" />{/* בן/בת */}
-              <col className="w-[100px]" />{/* טלפון */}
-              <col className="w-[160px]" />{/* מייל */}
-              <col className="w-[140px]" />{/* כתובת */}
-              <col className="w-[80px]" />{/* עיר */}
-              <col className="w-[50px]" />{/* גיל */}
-              <col className="w-[50px]" />{/* ילדים */}
-              <col className="w-[95px]" />{/* ערוץ */}
-              <col className="w-[120px]" />{/* תאריך */}
-              <col className="w-[75px]" />{/* סכום */}
-              <col className="w-[85px]" />{/* הודעה */}
-            </colgroup>
-            <thead className="bg-slate-50 text-slate-500">
-              <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0 [&>th]:align-middle [&>th]:whitespace-nowrap">
-                {canEdit && (
-                  <th>
-                    <input type="checkbox" checked={allShownSelected} onChange={toggleAllShown}
-                      className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
-                  </th>
-                )}
-                <th>שם המשפחה</th>
-                <th>ת״ז</th>
-                <th>אישור הבקשה</th>
-                <th>כרטיס</th>
-                <th>בן/בת זוג</th>
-                <th>טלפון</th>
-                <th>מייל</th>
-                <th>כתובת</th>
-                <th>עיר</th>
-                <th>גיל</th>
-                <th>ילדים</th>
-                <th>ערוץ</th>
-                <th>תאריך רישום</th>
-                <th>סכום</th>
-                <th>הודעה</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
-                <tr><td colSpan={canEdit ? 16 : 15} className="px-4 py-14 text-center text-slate-400 font-medium">
-                  {rows.length ? 'אין נרשמים שמתאימים לסינון' : 'עדיין לא נרשמו משפחות לחלוקה זו'}
-                </td></tr>
-              ) : filtered.map(r => {
-                const I = SOURCE_ICON[r.source]
-                return (
-                  <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
-                    {canEdit && (
-                      <td>
-                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)}
-                          className="h-4 w-4 accent-indigo-600" aria-label={`סימון ${r.name}`} />
-                      </td>
-                    )}
-                    <td className="font-semibold text-slate-800">
-                      {r.beneficiary_id
-                        ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="block truncate hover:text-indigo-700 hover:underline" title={r.name}>{r.name}</Link>
-                        : <span className="block truncate" title={r.name}>{r.name}</span>}
-                    </td>
-                    <td className="font-mono text-slate-600"><span className="ltr-num">{r.id_number ?? '—'}</span></td>
-                    {/* ── אישור הבקשה — הפעולה שפותחת את שיוך הכרטיס ── */}
-                    <td>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${APPROVAL_STYLE[r.approval_status]}`}>
-                          {APPROVAL_LABEL[r.approval_status]}
-                        </span>
-                        {canEdit && (
-                          busyId === r.id
-                            ? <Loader2 size={13} className="animate-spin text-slate-400" />
-                            : <>
-                                {r.approval_status !== 'approved' && (
-                                  <button type="button" title="אישור הבקשה" onClick={() => void setApprovalFor([r.id], 'approved')}
-                                    className="rounded-lg p-1 text-green-700 hover:bg-green-50"><Check size={14} /></button>
-                                )}
-                                {r.approval_status !== 'rejected' && (
-                                  <button type="button" title="דחיית הבקשה" onClick={() => void setApprovalFor([r.id], 'rejected')}
-                                    className="rounded-lg p-1 text-rose-600 hover:bg-rose-50"><X size={14} /></button>
-                                )}
-                              </>
-                        )}
-                      </div>
-                    </td>
-                    {/* ── מספר הכרטיס ששויך (בטלפון או בממשק) ── */}
-                    <td>
-                      {r.card_linked_at ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[12px] text-slate-700 ltr-num">{r.card_number}</span>
-                          <span className="text-[11px] font-bold text-green-700">✓</span>
-                          {canEdit && (busyId === r.id
-                            ? <Loader2 size={12} className="animate-spin text-slate-400" />
-                            : <button type="button" title="ניקוי השיוך כדי לאפשר כרטיס אחר" onClick={() => void clearCard(r.id)}
-                                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600"><X size={12} /></button>)}
-                        </div>
-                      ) : r.card_link_error ? (
-                        <span className="text-[11px] font-bold text-rose-700" title={r.card_link_error}>נכשל</span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">{r.approval_status === 'approved' ? 'ממתין לשיוך' : '—'}</span>
-                      )}
-                    </td>
-                    <td className="text-slate-600"><span className="block truncate" title={r.spouse_name ?? undefined}>{r.spouse_name ?? '—'}</span></td>
-                    <td className="font-mono text-slate-600"><span className="block truncate ltr-num">{r.ben_phone ?? r.phone ?? '—'}</span></td>
-                    <td className="text-slate-600"><span className="block truncate" title={r.email ?? undefined} dir="ltr">{r.email ?? '—'}</span></td>
-                    <td className="text-slate-600"><span className="block truncate" title={r.address ?? undefined}>{r.address ?? '—'}</span></td>
-                    <td className="text-slate-600"><span className="block truncate" title={r.city ?? undefined}>{r.city ?? '—'}</span></td>
-                    <td className="text-slate-600 ltr-num">{r.age ?? '—'}</td>
-                    <td className="text-slate-600 ltr-num">{r.children_count ?? '—'}</td>
-                    <td>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
-                        <I size={11} /> {SOURCE_LABEL[r.source]}
-                      </span>
-                    </td>
-                    <td className="text-slate-500 ltr-num">{fmtDateTime(r.registered_at)}</td>
-                    <td className="font-bold text-emerald-700 ltr-num">{amountPerFamily ? fmtCur(amountPerFamily) : '—'}</td>
-                    {/* ⚠️ "נשלח" לצד שגיאה אינו סתירה: מייל עבר וצינתוק נכשל הוא
-                        מצב שכיח, והצוות צריך לראות שערוץ אחד לא הגיע. */}
-                    <td>
-                      {r.notified_at ? (
-                        <span className="text-[11px] font-bold text-green-700" title={fmtDateTime(r.notified_at)}>
-                          ✓ נשלח{r.notify_error ? <span className="text-amber-700" title={r.notify_error}> ⚠</span> : null}
-                        </span>
-                      ) : r.notify_error ? (
-                        <span className="text-[11px] font-bold text-rose-700" title={r.notify_error}>נכשל</span>
-                      ) : (
-                        <span className="text-[11px] font-bold text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <HolidayRecipientsTable
+          rows={filtered}
+          amountPerFamily={amountPerFamily}
+          fmtDateTime={fmtDateTime}
+          fmtCur={fmtCur}
+          controls={{
+            canEdit, selected, toggleRow, allShownSelected, toggleAllShown,
+            busyId, setApprovalFor, clearCard, showMessage: true,
+          }}
+        />
       </div>
     </div>
   )
