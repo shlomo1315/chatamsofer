@@ -339,43 +339,45 @@ export default function SharedDistributionsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/40" dir="rtl">
-      {/* Header עם לוגו */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-[#FBF8F1]" dir="rtl"
+      style={{ backgroundImage: 'radial-gradient(70% 50% at 50% 0%, rgba(176,141,63,0.06), transparent 60%)' }}>
+      {/* Header — פס זהב עליון (חותם השושלת) + כותרת ספרותית */}
+      <div className="h-1 bg-gradient-to-l from-[#d9b95c] via-[#b08d3f] to-[#8a6a24]" />
+      <header className="bg-white/80 backdrop-blur border-b border-[#e8dfc9] sticky top-0 z-10">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="היכל החתם סופר" width={44} height={44} className="rounded-xl" />
+            <Image src="/logo.png" alt="היכל החתם סופר" width={46} height={46} className="rounded-xl ring-1 ring-[#e8dfc9]" />
             <div>
-              <h1 className="text-lg font-extrabold text-slate-900">חלוקות חגים</h1>
-              <p className="text-xs text-slate-500 flex items-center gap-1"><ShieldCheck size={12} /> היכל החתם סופר</p>
+              <h1 className="text-xl font-extrabold text-[#3a3630] tracking-tight">חלוקות חגים</h1>
+              <p className="text-[11px] text-[#a08a5a] font-semibold flex items-center gap-1 tracking-wide"><ShieldCheck size={12} /> היכל החתם סופר · מרכז השושלת</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400 hidden sm:inline">
-              הנתונים יתרעננו שוב בעוד <span className="font-bold text-indigo-600 ltr-num">{countdown}</span> שניות
+            <span className="text-[11px] text-slate-400 hidden sm:inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              רענון בעוד <span className="font-bold text-[#b08d3f] ltr-num">{countdown}</span> שנ׳
             </span>
             <button onClick={logout}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-600 transition">
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">
               <LogOut size={14} /> התנתקות
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        {/* דשבורד מסכם — 3 קוביות: חלוקות פתוחות כעת · כלל החלוקות · סה"כ צאצאים במערכת. */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
-          <div className="rounded-2xl border-2 border-green-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-green-600 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">חלוקות פתוחות כעת</span></div>
-            <p className="text-3xl font-extrabold text-green-700 ltr-num">{totals.openCount.toLocaleString('he-IL')}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-slate-500 mb-1"><Gift size={16} /><span className="text-xs font-bold text-slate-500">כלל החלוקות</span></div>
-            <p className="text-3xl font-extrabold text-slate-700 ltr-num">{totals.distributions.toLocaleString('he-IL')}</p>
-          </div>
-          <div className="rounded-2xl border-2 border-indigo-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-indigo-600 mb-1"><Users size={16} /><span className="text-xs font-bold text-slate-500">סה״כ צאצאים במערכת</span></div>
-            <p className="text-3xl font-extrabold text-indigo-700 ltr-num">{beneficiariesCount.toLocaleString('he-IL')}</p>
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-8 py-8 flex flex-col gap-7">
+        {/* ── כרטיס-על: כמות הנרשמים במערכת. הנתון היחיד, לכן מוצג גדול ומכובד —
+            "big number" מכוון: זה מדד הליבה שההנהלה מסתכלת עליו. ── */}
+        <div className="relative overflow-hidden rounded-3xl border border-[#e8dfc9] bg-white shadow-[0_2px_20px_-8px_rgba(176,141,63,0.25)]">
+          <div className="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-[#d9b95c] to-[#8a6a24]" />
+          <div className="flex items-center gap-5 px-7 py-6">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f5ecd4] to-[#e6d5a8] ring-1 ring-[#e0cf9e]">
+              <Users size={26} className="text-[#9a7b2e]" />
+            </div>
+            <div>
+              <p className="text-[12px] font-bold text-[#a08a5a] tracking-wide mb-0.5">כמות הנרשמים במערכת</p>
+              <p className="text-5xl font-extrabold text-[#3a3630] ltr-num leading-none">{beneficiariesCount.toLocaleString('he-IL')}</p>
+            </div>
           </div>
         </div>
 
