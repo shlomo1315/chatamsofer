@@ -238,21 +238,21 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'הטבה', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
+                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'הטבה', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', 'אופן הגשה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
                   <th key={h} className="px-2.5 py-3.5 text-xs font-semibold text-slate-500 align-middle whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={11 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={12 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visible.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
                   <tr key={aid.id}
                     onClick={() => router.push(`/admin/maternity/${aid.id}`)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
-                    <td className="px-2.5 py-3 align-middle font-medium text-slate-800">{motherName(m)}</td>
+                    <td className="px-2.5 py-3 align-top font-medium text-slate-800"><span className="block max-w-[160px] break-words">{motherName(m)}</span></td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-700 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
@@ -278,7 +278,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     </td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
-                    <td className="px-2.5 py-3 align-middle text-slate-600">{aid.recovery_home ?? '—'}</td>
+                    <td className="px-2.5 py-3 align-top text-slate-600"><span className="block max-w-[150px] break-words">{aid.recovery_home ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle">
                       <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
                     </td>
@@ -315,6 +315,16 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
+                    </td>
+                    {/* אופן הגשת הבקשה — אתר / מייל / הזנה ידנית */}
+                    <td className="px-2.5 py-3 align-middle whitespace-nowrap">
+                      {(() => {
+                        const src = (aid as { source?: string | null }).source
+                        if (src === 'portal') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">האתר</span>
+                        if (src === 'email') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">מייל</span>
+                        if (src === 'admin') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">הזנה ידנית</span>
+                        return <span className="text-[11px] text-slate-400">—</span>
+                      })()}
                     </td>
                     {showCard && (
                       <td className="px-2.5 py-3 align-middle whitespace-nowrap">

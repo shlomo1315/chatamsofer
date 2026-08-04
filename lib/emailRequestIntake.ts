@@ -260,6 +260,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
         notes: data.notes ?? null,
         birth_type: type === 'silent_birth' ? 'silent' : 'live',
         status: 'pending',
+        source: 'email',   // אופן הגשה — נקלט מהמייל
       })
       insErr = r.error?.message ?? null
     } else if (type === 'loan') {

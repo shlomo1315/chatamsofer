@@ -105,7 +105,7 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
       return [
         { key: 'birth_date', label: 'תאריך לידה', hint: 'בפורמט DD/MM/YYYY, למשל 22/06/2026', required: true },
         { key: 'baby_gender', label: 'מין הנולד/ת', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['בן', 'בת'] },
-        { key: 'baby_name', label: 'שם הנולד/ת', hint: 'אם אין עדיין שם — השאירו ריק', required: false },
+        { key: 'baby_name', label: 'שם הנולד/ת', hint: 'אם אין עדיין שם/ברית — כתבו בדיוק: עדיין אין שם', required: false },
         { key: 'baby_id_number', label: 'תעודת זהות של הנולד/ת', hint: '9 ספרות כולל ספרת ביקורת', required: true },
         { key: 'wants_food_card', label: 'מעוניין בכרטיס מזון', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
         { key: 'wants_recovery', label: 'מעוניין בבית החלמה', hint: 'השאירו רק אחד, מחקו את השני', required: true, options: ['כן', 'לא'] },
@@ -175,6 +175,10 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
     // אנושית. לכן הגשה במייל מוגבלת לת"ז בלבד.
     L.push('• הגשה במייל אפשרית רק לתינוק שיש לו תעודת זהות ישראלית. אם לתינוק יש דרכון בלבד — יש להגיש דרך המערכת הדיגיטלית.')
     L.push('• ניתן להגיש בקשה עד 30 יום מתאריך הלידה. לאחר מכן הבקשה לא תיקלט.')
+    L.push('')
+    L.push('‼️ שם התינוק — חובה לקרוא ‼️')
+    L.push('אם עדיין לא נתתם שם לתינוק, ו/או שעדיין לא הייתה ברית — כתבו בשדה "שם הנולד/ת" אך ורק את המילים:  עדיין אין שם')
+    L.push('כל דבר אחר שייכתב שם יגרום לדחיית הבקשה על הסף!')
   }
   if (type === 'silent_birth') {
     L.push('')

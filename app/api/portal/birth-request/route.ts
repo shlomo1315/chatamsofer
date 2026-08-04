@@ -232,6 +232,7 @@ export async function POST(request: NextRequest) {
     notes: notes ? String(notes).trim() : null,
     birth_type: isSilent ? 'silent' : 'live',
     status: 'pending',
+    source: 'portal',   // אופן הגשה — האתר (הממשק הדיגיטלי)
   })
 
   if (error) {
