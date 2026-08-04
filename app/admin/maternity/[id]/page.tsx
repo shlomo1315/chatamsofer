@@ -23,7 +23,7 @@ import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import SafeDocImage from '@/components/ui/SafeDocImage'
-import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { pathToRoot, NODE_SELECT, type TreeNodeRow, lineageCacheVersion } from '@/lib/lineageSync'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -82,16 +82,19 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
 // generation + status נדרשים לצביעת הצ'יפים (ירוק=מאומת / אדום=סוטה / כתום=נוסף),
 // בדיוק כמו בכרטסת הצאצא.
 type LineageNodeLite = { id: string; name: string; parent_id: string | null; generation: number; status: string; relation?: string | null }
-let _lineageCache: { at: number; map: Map<string, LineageNodeLite> } | null = null
+let _lineageCache: { at: number; version: number; map: Map<string, LineageNodeLite> } | null = null
 const LINEAGE_TTL_MS = 5 * 60_000
 async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   const now = Date.now()
-  if (_lineageCache && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
+  const version = lineageCacheVersion()
+  // ⚠️ TTL *וגם* גרסה: כל כתיבת status (approve-lineage וכו') מקדמת את הגרסה
+  // ומבטלת את המטמון מיד, גם אם עדיין בתוך חלון 5 הדקות. ראו lib/lineageSync.
+  if (_lineageCache && _lineageCache.version === version && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
   const supabase = await createClient()
   const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT)
   if (error) throw error
   const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
-  _lineageCache = { at: now, map }
+  _lineageCache = { at: now, version, map }
   return map
 }
 

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 
@@ -255,6 +255,7 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  invalidateLineageCache()
   return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries })
 }
 
@@ -274,5 +275,6 @@ export async function DELETE(request: NextRequest) {
   const { error } = await admin.from('lineage_nodes').delete().eq('id', id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateLineageCache()
   return NextResponse.json({ ok: true })
 }

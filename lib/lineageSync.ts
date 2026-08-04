@@ -31,6 +31,17 @@ export interface ChainEntry {
 
 export const NODE_SELECT = 'id, name, parent_id, generation, status, relation'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// גרסת המטמון של עץ הדורות. כרטסת הלידה (app/admin/maternity/[id]/page.tsx)
+// מחזיקה מטמון בזיכרון של lineage_nodes ל-5 דקות, כדי לא לסרוק את הטבלה בכל
+// טעינה. אבל כל מי שכותב status (אישור/דחיית יחוס — approve-lineage, מיזוג,
+// ייבוא) חייב לפסול אותו מיד: בלי זה, אישור יחוס בכרטסת צאצא לא היה מופיע
+// בכרטסת הלידה עד שהמטמון פג — הצ'יפים היו נשארים כתום למרות שהעץ כבר כחול.
+// ─────────────────────────────────────────────────────────────────────────────
+let _lineageCacheVersion = 0
+export function invalidateLineageCache(): void { _lineageCacheVersion++ }
+export function lineageCacheVersion(): number { return _lineageCacheVersion }
+
 /** המסלול מהשורש עד הצומת (כולל), לפי parent_id. ריק אם הצומת לא נמצא. */
 export function pathToRoot(nodes: TreeNodeRow[] | Map<string, TreeNodeRow>, nodeId?: string | null): TreeNodeRow[] {
   if (!nodeId) return []

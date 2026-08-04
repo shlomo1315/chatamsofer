@@ -3,6 +3,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
   if (!approved) {
     // החזרת הצומת של הנרשם בלבד ל"ממתין" (לא נוגעים באבות שעשויים להיות משותפים)
     await admin.from('lineage_nodes').update({ status: 'pending' }).eq('id', nodeId).then(undefined, () => {})
+    invalidateLineageCache()
     return NextResponse.json({ ok: true, updated: 1 })
   }
 
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
     updated++
     cur = (node.parent_id as string | null) ?? null
   }
+  if (updated) invalidateLineageCache()
 
   // ── הילדים שהמשפחה הזינה נכנסים לעץ כמאושרים ──
   // ⚠️ החיסכון האמיתי: היחוס של הילדים *הוא* היחוס של המשפחה שאושרה כעת, ואין

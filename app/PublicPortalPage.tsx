@@ -1166,48 +1166,77 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
         </div>
       )}
 
-      {/* ⚠️ חלונית אזהרה חוסמת — נפתחת בכל לחיצה על "הוספה ידנית", בכל דור מחדש.
-          אין כאן "אישור שנשמר": כל דור הוא בדיקה נפרדת, ודור כפול אחד פוסל
-          את הרישום כולו. לכן אין דרך לעקוף את החלונית ואין זיכרון בין הדורות. */}
+      {/* ⚠️ חלונית חוסמת — נפתחת בכל לחיצה על "הוספה ידנית", בכל דור מחדש.
+          אין כאן "אישור שנשמר": כל דור הוא בדיקה נפרדת, ואין זיכרון בין הדורות.
+          שני נוסחים לפי מצב הרשימה באותו דור:
+          • יש רשומות (options.length>0) — אזהרה אדומה: יש לבדוק ברשימה לפני הוספה,
+            ודור כפול פוסל את הרישום כולו.
+          • אין שום רשומה בדור הזה — אין מה לבדוק מולו, ולכן לא דורשים זאת. חלונית
+            מידע ניטרלית שמדגישה רק דיוק ומלאות השם (שם פרטי + שם משפחה, בלי תארים). */}
       {manualGate && (
         <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-red-300">
-            <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
-              <AlertTriangle size={22} className="text-white flex-shrink-0" />
-              <h3 className="text-base font-extrabold text-white">עצרו — בדקתם שהדור הזה באמת לא ברשימה?</h3>
-            </div>
-            <div className="px-5 py-4">
-              <p className="text-sm text-slate-800 font-bold leading-relaxed mb-3">
-                אתם עומדים להוסיף את <span className="text-red-700">דור {chain.length + 2}</span> באופן ידני.
-                הוספה ידנית מיועדת <span className="underline">אך ורק</span> לדור שאינו קיים כלל במערכת.
-              </p>
-              <ul className="text-sm text-slate-700 leading-relaxed space-y-2 mb-3">
-                <li className="flex gap-2">
-                  <span className="text-red-600 font-bold flex-shrink-0">•</span>
-                  <span>חזרו לרשימה שמעל וּודאו <span className="font-bold">בוודאות מלאה</span> שהשם שאתם רוצים להוסיף אינו מופיע בה.</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-red-600 font-bold flex-shrink-0">•</span>
-                  <span>שימו לב גם לשינויי כתיב קלים בשם (למשל: יצחק / איצק, ה״א בסוף השם וכדומה).</span>
-                </li>
-              </ul>
-              <div className="rounded-xl bg-red-50 border-2 border-red-300 px-4 py-3">
-                <p className="text-sm font-extrabold text-red-800 leading-relaxed">
-                  אם תוסיפו ידנית דור שכבר קיים במערכת — הרישום שלכם יידחה.
+          {options.length > 0 ? (
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-red-300">
+              <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
+                <AlertTriangle size={22} className="text-white flex-shrink-0" />
+                <h3 className="text-base font-extrabold text-white">עצרו — בדקתם שהדור הזה באמת לא ברשימה?</h3>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-slate-800 font-bold leading-relaxed mb-3">
+                  אתם עומדים להוסיף את <span className="text-red-700">דור {chain.length + 2}</span> באופן ידני.
+                  הוספה ידנית מיועדת <span className="underline">אך ורק</span> לדור שאינו קיים כלל במערכת.
                 </p>
+                <ul className="text-sm text-slate-700 leading-relaxed space-y-2 mb-3">
+                  <li className="flex gap-2">
+                    <span className="text-red-600 font-bold flex-shrink-0">•</span>
+                    <span>חזרו לרשימה שמעל וּודאו <span className="font-bold">בוודאות מלאה</span> שהשם שאתם רוצים להוסיף אינו מופיע בה.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="text-red-600 font-bold flex-shrink-0">•</span>
+                    <span>שימו לב גם לשינויי כתיב קלים בשם (למשל: יצחק / איצק, ה״א בסוף השם וכדומה).</span>
+                  </li>
+                </ul>
+                <div className="rounded-xl bg-red-50 border-2 border-red-300 px-4 py-3">
+                  <p className="text-sm font-extrabold text-red-800 leading-relaxed">
+                    אם תוסיפו ידנית דור שכבר קיים במערכת — הרישום שלכם יידחה.
+                  </p>
+                </div>
+              </div>
+              <div className="px-5 pb-5 flex flex-col gap-2">
+                <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
+                  className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
+                  <Check size={16} /> כן, בדקנו — הדור הזה אינו ברשימה, ממשיכים להוספה ידנית
+                </button>
+                <button type="button" onClick={() => setManualGate(false)}
+                  className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-slate-700 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl px-4 py-3 transition-all duration-150">
+                  <X size={16} /> נבדוק שוב ברשימה
+                </button>
               </div>
             </div>
-            <div className="px-5 pb-5 flex flex-col gap-2">
-              <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
-                className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
-                <Check size={16} /> כן, בדקנו — הדור הזה אינו ברשימה, ממשיכים להוספה ידנית
-              </button>
-              <button type="button" onClick={() => setManualGate(false)}
-                className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-slate-700 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl px-4 py-3 transition-all duration-150">
-                <X size={16} /> נבדוק שוב ברשימה
-              </button>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-indigo-300">
+              <div className="bg-indigo-600 px-5 py-4 flex items-center gap-2.5">
+                <AlertTriangle size={22} className="text-white flex-shrink-0" />
+                <h3 className="text-base font-extrabold text-white">שימו לב — אתם מזינים דור חדש במערכת</h3>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-sm text-slate-800 font-bold leading-relaxed mb-3">
+                  לא נמצאו עדיין רשומות מאושרות בדור {chain.length + 2} — לכן אין רשימה לבחור ממנה, ואתם מזינים את הפרטים ישירות.
+                </p>
+                <div className="rounded-xl bg-indigo-50 border-2 border-indigo-200 px-4 py-3">
+                  <p className="text-sm font-extrabold text-indigo-900 leading-relaxed">
+                    יש להזין שם פרטי ושם משפחה בנפרד, ואת שם האישה — בצורה מדויקת ומלאה, בדיוק לפי ההנחיות שמופיעות בטופס (שם פרטי בלבד, בלי תארים).
+                  </p>
+                </div>
+              </div>
+              <div className="px-5 pb-5">
+                <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
+                  className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
+                  <Check size={16} /> הבנתי, ממשיכים למילוי הפרטים
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </div>

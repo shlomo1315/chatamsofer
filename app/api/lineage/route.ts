@@ -53,6 +53,32 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const nodes = data ?? []
 
-  return NextResponse.json({ nodes: data ?? [] })
+  // ⚠️ במצב parent_id (רשימת הבחירה לדור הבא), מחזירים גם empty ואת מספר הדור
+  // המבוקש בצורה מפורשת — כדי שצרכן חיצוני (טופס נדרים פלוס, UI עצמאי משלהם)
+  // יוכל להבחין "דור קיים אך ריק מרשומות מאושרות" מכשל אחר, בלי לנחש
+  // מתוך nodes.length לבד. הדור מחושב יחסית לשורש (0-based), כמו בטופס הציבורי.
+  if (parentId) {
+    let requestedGeneration: number | null = null
+    const { data: parentNode } = await client
+      .from('lineage_nodes')
+      .select('generation')
+      .eq('id', parentId)
+      .maybeSingle()
+    if (parentNode?.generation != null) {
+      const { data: rootNode } = await client
+        .from('lineage_nodes')
+        .select('generation')
+        .is('parent_id', null)
+        .order('generation')
+        .limit(1)
+        .maybeSingle()
+      const minGen = rootNode?.generation ?? 0
+      requestedGeneration = Number(parentNode.generation) - Number(minGen) + 1
+    }
+    return NextResponse.json({ nodes, empty: nodes.length === 0, generation: requestedGeneration })
+  }
+
+  return NextResponse.json({ nodes })
 }

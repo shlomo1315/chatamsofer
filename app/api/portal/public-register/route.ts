@@ -11,6 +11,7 @@ import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registr
 import { verifyVerifyToken } from '@/lib/verifyToken'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { normalizeLineageNodeName } from '@/lib/lineageNameFormat'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 import { getStreets } from '@/lib/govData'
@@ -438,6 +439,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
               .contains('lineage_chain', [{ name: nm }])
             if ((count ?? 0) >= AUTO_VERIFY_THRESHOLD) {
               await admin.from('lineage_nodes').update({ status: 'verified' }).eq('name', nm).eq('status', 'pending')
+              invalidateLineageCache()
             }
           } catch { /* ספירה/אישור לא חוסמים את הרישום */ }
         }

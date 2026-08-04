@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { portalCookieName } from '@/app/api/portal/login/route'
 import { createRecoveryPortalToken, RECOVERY_PORTAL_MAX_AGE } from '@/lib/recoveryPortalAuth'
+import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
   ).replace(/\/$/, '')
 
-  const staff = await requireStaff()
+  const staff = await requireStaff(['admin', 'secretary'])
   if (!staff) {
-    // לא מחובר כצוות — להפניה לכניסת הניהול
+    // לא מחובר כצוות מורשה — להפניה לכניסת הניהול
     return NextResponse.redirect(new URL('/login', origin))
   }
   if (!home) {
@@ -40,6 +41,16 @@ export async function GET(request: NextRequest) {
         )
       }
     }
+  }
+
+  if (admin) {
+    await logActivity(admin, {
+      userId: staff.userId,
+      action: 'maternity_portal_quick_login',
+      entityType: 'recovery_home',
+      entityId: home,
+      details: { home, role: staff.role },
+    })
   }
 
   const res = NextResponse.redirect(new URL(`/portal/maternity/${encodeURIComponent(home)}`, origin))

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
-import { NODE_SELECT, resyncSubtree, approveVerifiedBeneficiaries, type TreeNodeRow } from '@/lib/lineageSync'
+import { NODE_SELECT, resyncSubtree, approveVerifiedBeneficiaries, invalidateLineageCache, type TreeNodeRow } from '@/lib/lineageSync'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from('lineage_nodes').update(restore).eq('id', nodeId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateLineageCache()
 
   // סנכרון מחדש לאגפים (הצומת חזר למצבו הקודם)
   try {

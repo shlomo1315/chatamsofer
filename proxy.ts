@@ -63,20 +63,33 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/admin/dashboard', request.url))
   }
 
-  // יוזרים "מייל בלבד": חסומים מכל המערכת חוץ מלשונית המייל.
+  // משתמש מאומת אך ללא פרופיל צוות פעיל: /admin חסום עבורו גם ב-RLS וב-API,
+  // אבל בלי הבדיקה כאן הוא עדיין מקבל את מסגרת הניהול (ריקה). נדחה כאן לפי
+  // אותו קריטריון בדיוק כמו requireStaff (lib/apiAuth.ts): פרופיל קיים, פעיל,
+  // ותפקיד מוכר — כולל נפילה-לאחור לפי אימייל לתמיכה בכניסת Google.
   if (isAdminRoute && user) {
     const path = request.nextUrl.pathname
     const isMailPath = path === '/admin/mail' || path.startsWith('/admin/mail/')
-    if (!isMailPath) {
-      // select('*') עמיד גם אם העמודה mail_only טרם נוספה במסד
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('mail_only, role')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (prof?.mail_only === true && prof.role !== 'admin') {
-        return NextResponse.redirect(new URL('/admin/mail', request.url))
-      }
+
+    let { data: prof } = await supabase
+      .from('profiles')
+      .select('mail_only, role, is_active')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!prof && user.email) {
+      const r = await supabase.from('profiles').select('mail_only, role, is_active').ilike('email', user.email).maybeSingle()
+      prof = r.data
+    }
+
+    const STAFF_ROLES = ['admin', 'secretary', 'reviewer', 'collections']
+    if (!prof || prof.is_active === false || !STAFF_ROLES.includes(prof.role)) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+
+    // יוזרים "מייל בלבד": חסומים מכל המערכת חוץ מלשונית המייל.
+    if (!isMailPath && prof.mail_only === true && prof.role !== 'admin') {
+      return NextResponse.redirect(new URL('/admin/mail', request.url))
     }
   }
 

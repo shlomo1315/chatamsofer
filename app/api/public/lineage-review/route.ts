@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, type TreeNodeRow } from '@/lib/lineageSync'
+import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, invalidateLineageCache, type TreeNodeRow } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { rateLimit } from '@/lib/rateLimit'
 import { clientIp } from '@/lib/rateLimit'
@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
 
   const { error } = await admin.from('lineage_nodes').update(update).eq('id', nodeId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  invalidateLineageCache()
 
   // סנכרון לכל האגפים — בדיוק כמו ב-PATCH האדמין:
   // דחיית מפל (צומת נדחה → כל צאצאיו נדחים), רענון lineage_chain, וקידום משפחות.
