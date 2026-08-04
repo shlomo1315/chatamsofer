@@ -2,13 +2,14 @@
 import { useState, useMemo } from 'react'
 import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { genColor, asGenStatus } from '@/lib/lineageDeviation'
 
 // דור בשרשרת: שם, מספר דור, סטטוס הצומת בעץ, ותגית בן/חתן.
 export interface ChainGen {
   generation: number
   name: string
-  // סטטוס הצומת המאושר התואם בעץ: 'verified'=כחול (מאושר) · 'pending'=כתום
-  // (ממתין) · 'rejected'=אדום (נדחה) · null=אין צומת תואם (נחשב ממתין).
+  // סטטוס הצומת המאושר התואם בעץ. null = לא נמצא צומת תואם — *חוסר ידיעה*,
+  // ולכן כתום (ממתין) ולא אדום. הצבע נגזר ב-lib/lineageDeviation.
   status?: 'verified' | 'pending' | 'rejected' | null
   relation?: 'son' | 'son_in_law' | null
 }
@@ -31,8 +32,9 @@ type Color = 'blue' | 'orange' | 'red'
 //   • "בחר צומת אחר" — בורר צמתים מאומתים מאותו דור; בחירה משייכת את הצאצא
 //     לצומת (lineage_node_id) והשרשרת נגזרת מחדש בשרת (/api/admin/lineage/assign).
 //   • "סמן ידנית" — צביעה ידנית (override), נשמר ב-/api/admin/lineage-marks.
-// צביעה אוטומטית לפי *סטטוס הצומת בעץ* (בכל דור, כולל מעל 5):
-//   verified=כחול · pending/אין=כתום · rejected=אדום.
+// צביעה אוטומטית לפי *סטטוס הצומת בעץ* (lib/lineageDeviation):
+//   verified=כחול · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
+//   לתוך הליבה המאושרת) · pending מעל 5 או "לא נמצא"=כתום.
 // ─────────────────────────────────────────────────────────────────────────────
 const STYLE: Record<Color, string> = {
   blue:   'bg-blue-600 text-white border-blue-700 font-semibold',
@@ -40,17 +42,11 @@ const STYLE: Record<Color, string> = {
   red:    'bg-red-600 text-white border-red-700 font-bold',
 }
 const GEN_TXT: Record<Color, string> = { blue: 'text-blue-100', orange: 'text-orange-100', red: 'text-red-100' }
-// מיפוי סטטוס+דור → צבע:
-//   • verified → כחול (מאושר) בכל דור.
-//   • rejected → אדום (חריג — בדיקה מעמיקה) בכל דור.
-//   • שאר (pending/אין): דור ≤5 → אדום (חריג! 5 הדורות הראשונים קריטיים),
-//     דור >5 → כתום (ממתין לאימות, מצב תקין-בהמתנה).
-const EARLY_DEPTH = 5
+// ⚠️ כלל הצבע מגיע מ-lib/lineageDeviation ואינו משוכפל כאן: הצ'יפים וחלונית
+// ההתראה חייבים לומר את אותו דבר. עותק שני היה נפרד מהראשון בתיקון הבא, ואז
+// ההתראה מדברת על דור שהצ'יפים מציגים כתקין.
 const statusColor = (s: ChainGen['status'], generation: number): Color =>
-  s === 'verified' ? 'blue'
-  : s === 'rejected' ? 'red'
-  : generation <= EARLY_DEPTH ? 'red'
-  : 'orange'
+  genColor(generation, asGenStatus(s))
 
 export default function LineageChainChips({
   beneficiaryId, gens, initialMarks, allNodes = [],
