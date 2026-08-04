@@ -98,10 +98,18 @@ async function computeLineageData(nodes: LineageNode[], nodeId?: string | null, 
   // במעט מהעותק השמור אצל הצאצא (למשל "רבי נתן יהודה סופר" מול "רבי נתן יהודה
   // (נטע)") לא נמצא — והדור הוצג כחריג אדום למרות שבעץ הוא ירוק ומאושר.
   if (out.pathNodes.length) {
+    // ⚠️ הסטטוס של כל דור נגזר ממצב *הדור בעץ*, לא מהצומת הספציפי שהצאצא משויך
+    // אליו: אם קיים ולו צומת אחד מאושר (verified) באותו דור — הדור מוצג כמאושר
+    // (כחול), בדיוק כפי שהעץ מראה אותו. צומת ה"ממתין" של הצאצא הזה לא צריך לצבוע
+    // את כל הדור כתום כשהדור עצמו כבר אושר בעץ. verified > pending > rejected.
+    const verifiedGens = new Set(nodes.filter(n => n.status === 'verified').map(n => n.generation))
+    const rejectedGens = new Set(nodes.filter(n => n.status === 'rejected').map(n => n.generation))
     for (const n of out.pathNodes) {
       const status: GenStatus =
-        n.status === 'verified' ? 'verified'
+        verifiedGens.has(n.generation) ? 'verified'
+        : n.status === 'verified' ? 'verified'
         : n.status === 'rejected' ? 'rejected'
+        : rejectedGens.has(n.generation) && !verifiedGens.has(n.generation) ? 'rejected'
         : 'pending'
       out.genStatus.set(n.generation, status)
     }
