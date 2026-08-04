@@ -267,6 +267,7 @@ export default function SharedDistributionsPage() {
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
+  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [countdown, setCountdown] = useState(10)
@@ -378,12 +379,29 @@ export default function SharedDistributionsPage() {
           </div>
         </div>
 
-        {/* ── פילוחים חיים — ערים · קהילות · מספר ילדים ── */}
-        <BreakdownPanels recipients={recipients} />
+        {/* ── טאבים ראשיים — שורה אחת למעלה, כמו צ'יפי סינון; לחיצה פותחת סקשן ── */}
+        <div className="flex items-center gap-2 flex-wrap border-b border-slate-200 pb-3">
+          {([
+            { key: 'distributions', label: 'חלוקות ונרשמים', icon: <Gift size={15} /> },
+            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={15} /> },
+            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={15} /> },
+          ] as const).map(t => (
+            <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition ${
+                activeTab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+              }`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
 
-        {/* ── עץ הדורות הוויזואלי המלא — לצפייה בלבד ── */}
-        <GenerationExplorer nodes={lineageNodes} />
+        {/* ── תוכן הטאב הפעיל ── */}
 
+        {activeTab === 'breakdown' && <BreakdownPanels recipients={recipients} />}
+
+        {activeTab === 'tree' && <GenerationExplorer nodes={lineageNodes} />}
+
+        {activeTab === 'distributions' && <>
         {/* חיפוש */}
         {distributions.length > 3 && (
           <div className="relative max-w-md">
@@ -465,6 +483,7 @@ export default function SharedDistributionsPage() {
             <p className="text-slate-500 font-medium">{query ? 'לא נמצאו חלוקות לחיפוש זה' : 'אין חלוקות להצגה'}</p>
           </div>
         )}
+        </>}
 
         <p className="text-center text-[11px] text-slate-400 pt-2">מתעדכן אוטומטית · כל הפרטים מוצפנים</p>
       </main>
