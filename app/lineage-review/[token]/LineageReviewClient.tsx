@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, List, Network } from 'lucide-react'
+import LineageTreeSvg from './LineageTreeSvg'
 
 interface Node {
   id: string
@@ -27,6 +28,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
+  const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -100,7 +102,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
 
   return (
     <main dir="rtl" className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-slate-100 px-4 py-8">
-      <div className="mx-auto max-w-2xl">
+      <div className={`mx-auto ${viewMode === 'tree' ? 'max-w-4xl' : 'max-w-2xl'}`}>
         <div className="text-center mb-6">
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100">
             <GitBranch size={28} className="text-indigo-600" />
@@ -170,17 +172,28 @@ export default function LineageReviewClient({ token }: { token: string }) {
           }
 
           if (viewMode === 'tree') {
-            // תצוגת עץ — כרטיסים עם קו חיבור אנכי לפי עומק ההיררכיה
+            // תצוגת עץ ויזואלי (SVG) — כמו עץ הדורות. לחיצה על צומת בוחרת אותו,
+            // ומתחת לעץ מופיע פאנל הפעולות שלו (אישור/דחייה/תיקון) — עריכה חיה.
+            const selectedNode = selectedTreeId ? nodes.find(n => n.id === selectedTreeId) ?? null : null
             return (
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 flex flex-col gap-2">
-                {ordered.map(({ node, depth }) => (
-                  <div key={node.id} className="flex items-stretch gap-0" style={{ marginRight: `${depth * 22}px` }}>
-                    {depth > 0 && <div className="w-4 border-r-2 border-b-2 border-slate-200 rounded-br-lg -mt-3 ml-2" />}
-                    <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 flex items-center justify-between gap-3 flex-wrap">
-                      {editing === node.id ? <NodeActions node={node} /> : <><NodeLabel node={node} /><NodeActions node={node} /></>}
-                    </div>
+              <div className="flex flex-col gap-3">
+                <LineageTreeSvg nodes={nodes} rootId={rootId} selectedId={selectedTreeId} onSelect={setSelectedTreeId} />
+                {/* מקרא צבעים */}
+                <div className="flex items-center justify-center gap-4 text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500" /> מאושר</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500" /> ממתין</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500" /> נדחה</span>
+                </div>
+                {/* פאנל פעולות לצומת הנבחר */}
+                {selectedNode ? (
+                  <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 shadow-sm px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                    {editing === selectedNode.id
+                      ? <NodeActions node={selectedNode} />
+                      : <><NodeLabel node={selectedNode} /><NodeActions node={selectedNode} /></>}
                   </div>
-                ))}
+                ) : (
+                  <p className="text-center text-xs text-slate-400 py-2">לחצו על שם בעץ כדי לאשר, לדחות או לתקן</p>
+                )}
               </div>
             )
           }
