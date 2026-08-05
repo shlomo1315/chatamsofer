@@ -92,22 +92,31 @@ export async function sendVerifyCode(
     }
   }
 
-  const ip = clientIp(request)
-  const perValue = channel === 'phone' ? 4 : 5
-  if (!rateLimit(`verify-send:${channel}:${value}`, perValue, 15 * 60 * 1000) ||
-      !rateLimit(`verify-send-ip:${ip}`, 3000, 15 * 60 * 1000)) {
-    return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
-  }
-
-  // תקרה גלובלית מוחלטת על סך השליחות בערוץ — בולמת call/email-bombing.
-  // ⚠️ הועלתה דרסטית לשחרור המוני (אלפי נרשמים לגיטימיים ב-15 דק'): התקרה
-  // הישנה (60 שיחות/15דק') נחסמה מיד בשיא וחסמה המונים מלקבל אימות. ההגנה
-  // האמיתית מפני bombing נשארת ב-per-value (4 לטלפון) + per-IP (20) שלמעלה —
-  // הן חוסמות תוקף בודד; התקרה הגלובלית רק גג-על מפני תקלה קיצונית.
-  const globalCap = channel === 'phone' ? 8000 : 8000
-  if (!rateLimit(`verify-send-global:${channel}`, globalCap, 15 * 60 * 1000)) {
-    console.error(`[verify/send] global ${channel} cap hit — possible flooding attack`)
-    return { status: 429, body: { error: 'השירות עמוס כעת. אנא נסו שוב מאוחר יותר.' } }
+  // ── הגבלת קצב במסלול המייל: אין. ──
+  //
+  // ⚠️ אל תחזירו לכאן תקרות IP או תקרה גלובלית. הן הוסרו אחרי שחסמו נרשמים
+  // לגיטימיים בהמונים, בכל שלב בשרשרת בתורו:
+  //   • IP אחד ≠ אדם אחד. הקהל גולש דרך סינון (NetFree/רימון) ודרך עמדות
+  //     משותפות, ולכן אלפי משפחות שונות מגיעות מאותה כתובת בדיוק.
+  //   • תקרה גלובלית על הערוץ פוגעת בכולם בבת אחת ברגע השיא — כלומר בדיוק
+  //     כשהמערכת אמורה לעבוד. היא בולמת תקלה נדירה במחיר השבתה ודאית.
+  //
+  // מה שמרסן את המייל בפועל הוא הקירור: שליחה אחת ל-120 שניות לכל כתובת,
+  // שנבדק למעלה מול חותמת sentAt בבסיס הנתונים. הוא חזק מכל תקרת חלון —
+  // הוא מונע הצפה של כתובת ספציפית, ואינו יכול לחסום אדם שממתין כנדרש.
+  //
+  // בטלפון המצב שונה ולכן התקרות נשארו: כל שליחה שם היא שיחה יוצאת בתשלום,
+  // אין עליה קירור, וללא רסן אפשר להפעיל חיוג אינסופי למספר של אדם אחר.
+  if (channel === 'phone') {
+    const ip = clientIp(request)
+    if (!rateLimit(`verify-send:phone:${value}`, 4, 15 * 60 * 1000) ||
+        !rateLimit(`verify-send-ip:${ip}`, 3000, 15 * 60 * 1000)) {
+      return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
+    }
+    if (!rateLimit('verify-send-global:phone', 8000, 15 * 60 * 1000)) {
+      console.error('[verify/send] global phone cap hit — possible flooding attack')
+      return { status: 429, body: { error: 'השירות עמוס כעת. אנא נסו שוב מאוחר יותר.' } }
+    }
   }
 
   if (channel === 'phone' && !yemotCallConfigured()) {
@@ -193,9 +202,17 @@ export async function confirmVerifyCode(
   const code = String(rawCode ?? '').replace(/\D/g, '')
   if (!raw || !code) return { status: 400, body: { error: 'חסרים פרטים' } }
 
-  if (!rateLimit(`verify-confirm-ip:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
-    return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
-  }
+  // ── הגבלת קצב על אימות הקוד: אין. ──
+  //
+  // ⚠️ אל תחזירו לכאן תקרת IP. עמדה כאן תקרה של 30 אימותים ל-IP ברבע שעה,
+  // והיא חסמה את השלב שאין ממנו דרך חזרה: הנרשם כבר קיבל את הקוד, הקליד
+  // אותו — וקיבל "יותר מדי ניסיונות". הרישום ההמוני מגיע מעמדות ומרשתות
+  // מסוננות שכל הפונים דרכן חולקים IP אחד, ולכן המאמת ה-31 נחסם לרבע שעה
+  // בלי שעשה דבר. אותה מסקנה כבר הוסקה בכל שאר שלבי השרשרת.
+  //
+  // ההגנה מפני ניחוש קוד אינה תלויה ב-IP ונשארת במלואה: חמישה ניסיונות
+  // שגויים לכל קוד מוחקים אותו (rec.attempts למטה), הקוד בן שש ספרות
+  // ותוקפו מוגבל. שם ניחוש עיוור נחסם — לא בתקרה שפוגעת בכל השאר.
 
   const value = normalizeVerifyValue(channel, raw)
   const admin = getServiceClient()
