@@ -22,11 +22,9 @@ export interface MailOptions {
   unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
   inReplyTo?: string   // שרשור: Message-ID של ההודעה שאליה זו תשובה
   references?: string  // שרשור: שרשרת ה-Message-IDs הקודמים בשיחה (מופרדים ברווח)
-  // עדיפות במסלול Gmail (ראו GMAIL ROUTING למטה):
-  //   'high'   — קוד אימות. חוסם הרשמה, ולכן מקבל את מרבית המכסה היומית.
-  //   'normal' — ברירת מחדל לכל מייל תפעולי אחר (אישורים, הודעות).
-  //   'never'  — דיוור המוני. לעולם לא דרך Workspace.
-  gmailPriority?: 'high' | 'normal' | 'never'
+  // ⚠️ ניתוב דרך Workspace — הפעלה מפורשת בלבד (ראו GMAIL ROUTING למטה).
+  // 'high' = קוד אימות. כל השאר ממשיך ב-Resend, וזו ברירת המחדל.
+  gmailPriority?: 'high'
 }
 
 // ─── GMAIL ROUTING ──────────────────────────────────────────────────────────
@@ -42,16 +40,17 @@ export interface MailOptions {
 // ⚠️ המסלול יכול רק להוסיף מסירות ולעולם לא לגרוע: כל כשל — תקרה, חשבון שאינו
 // מחובר, שגיאת API — נופל אוטומטית ל-Resend, שהוא ההתנהגות שהייתה קודם.
 //
-// ⚠️ דיוור המוני לעולם אינו עובר כאן. חשבון Workspace אינו כלי דיוור, ושליחת
-// ניוזלטר דרכו תמצה את המכסה ותסכן את החשבון עצמו. הזיהוי הוא לפי
-// unsubscribeUrl — קישור הסרה קיים בדיוור בלבד.
+// ⚠️ המסלול שמור לקוד האימות בלבד (gmailPriority: 'high'), ובכוונה:
+//   • המכסה קטנה. תקרת Workspace היא כ-2,000 ליום למשתמש ואינה ניתנת
+//     להעלאה. אישורי הרשמה והודעות בקשות הם הנפח הגדול — הם היו מחסלים
+//     אותה תוך שעה, וקוד האימות (היחיד שחוסם אדם מלהשלים הרשמה) היה נופל
+//     חזרה למסלול התקוע. אישור שמתעכב מעצבן; קוד שלא מגיע עוצר הכל.
+//   • חשבון Workspace אינו כלי דיוור. ככל שיוצא ממנו יותר דואר אוטומטי,
+//     כך גדל הסיכון לחשבון עצמו.
+// כל שאר הדואר — תפעולי ודיוור כאחד — ממשיך ב-Resend.
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
-// תקרות רכות, מתחת לתקרת Workspace האמיתית (~2,000 ליום למשתמש).
-// ⚠️ שתי מדרגות בכוונה: מייל תפעולי רגיל נעצר ב-800 כדי שתמיד תישאר מכסה
-// לקודי אימות. אחרת גל של אישורי הרשמה היה מחסל את המכסה, וקוד האימות —
-// היחיד שחוסם אדם מלהירשם — היה נופל חזרה למסלול התקוע.
+// תקרה רכה, מתחת לתקרת Workspace האמיתית, כדי להשאיר מרווח לדואר המשרד.
 const GMAIL_CAP_HIGH = 1500
-const GMAIL_CAP_NORMAL = 800
 
 function isGmailAddress(email: string): boolean {
   const at = email.lastIndexOf('@')
@@ -154,12 +153,11 @@ export async function deliverMail(
   const from = `${fromName} <${fromEmail}>`
 
   // ── ניתוב Gmail (ההסבר המלא ליד GMAIL ROUTING למעלה) ──
-  // דיוור המוני (unsubscribeUrl) ו-'never' לעולם אינם עוברים כאן.
-  const priority = options?.gmailPriority ?? 'normal'
-  if (priority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
+  // ⚠️ הפעלה מפורשת בלבד: רק קוד אימות מסומן 'high'. כל השאר — כולל דואר
+  // תפעולי אחר — ממשיך ב-Resend, כדי לא לחסל את המכסה היומית הקטנה.
+  if (options?.gmailPriority === 'high' && !options?.unsubscribeUrl && !options?.scheduledAt
       && !attachments?.length && isGmailAddress(to)) {
-    const cap = priority === 'high' ? GMAIL_CAP_HIGH : GMAIL_CAP_NORMAL
-    const okGmail = await trySendViaGmail(to, subject, html, fromEmail, fromName, cap)
+    const okGmail = await trySendViaGmail(to, subject, html, fromEmail, fromName, GMAIL_CAP_HIGH)
     if (okGmail) {
       // ⚠️ אין resendId במסלול הזה, ולכן אירועי המסירה של Resend לא יגיעו
       // להודעה הזו. התיעוד ב"דואר יוצא" נשמר כדי שההודעה בכל זאת תופיע שם.
