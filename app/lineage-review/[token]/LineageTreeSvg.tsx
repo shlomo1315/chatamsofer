@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useRef, useState, useCallback, useEffect } from 'react'
+import { useMemo, useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עץ יוחסין ויזואלי — העתק נאמן של מנוע עץ הדורות המלא (app/admin/lineage),
@@ -85,46 +85,66 @@ export default function LineageTreeSvg({
   }, [nodes, rootId])
 
   const [zoom, setZoom] = useState(0.7)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
+  const zoomAnchor = useRef<{ px: number; py: number; offX: number; offY: number } | null>(null)
 
+  // ⚠️ גלילה חלקה — *זהה לעץ בתוכנה* (LineageBranchView): ההזזה נעשית דרך
+  // scrollLeft/scrollTop של ה-container (גלילת דפדפן אמיתית), ולא דרך React
+  // state + transform. state בכל תזוזת עכבר גרם re-render של כל העץ (מאות
+  // צמתים) = "קפיצות". עכשיו ה-content בגודלו המלא בתוך container עם overflow
+  // auto, וה-drag מזיז scroll ישירות ב-DOM — חלק לגמרי.
   const onDown = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-lin-node]')) return
-    dragRef.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }
-  }, [pan])
+    const el = containerRef.current; if (!el) return
+    dragRef.current = { startX: e.clientX, startY: e.clientY, scrollX: el.scrollLeft, scrollY: el.scrollTop }
+  }, [])
   const onMove = useCallback((e: React.MouseEvent) => {
-    if (!dragRef.current) return
-    setPan({ x: dragRef.current.px + (e.clientX - dragRef.current.x), y: dragRef.current.py + (e.clientY - dragRef.current.y) })
+    const el = containerRef.current, d = dragRef.current
+    if (!el || !d) return
+    // dir=ltr: גרירה ימינה מזיזה את התוכן ימינה ⇒ scrollLeft יורד
+    el.scrollLeft = d.scrollX - (e.clientX - d.startX)
+    el.scrollTop = d.scrollY - (e.clientY - d.startY)
   }, [])
   const onUp = useCallback(() => { dragRef.current = null }, [])
 
-  // ⚠️ גלילה חלקה: onWheel של React הוא passive, ולכן preventDefault בו מתעלם
-  // והדפדפן מגלגל את העמוד במקביל — תחושת "קפיצות". רושמים listen ידני עם
-  // { passive: false } כדי שהגלגלת תזיז את העץ בלבד, חלק. גלגלת רגילה = pan
-  // אנכי/אופקי · Ctrl/⌘+גלגלת = זום סביב מרכז.
-  // ⚠️ זהה לעץ הדורות בתוכנה (LineageBranchView): גלגלת = זום (לא pan), כדי
-  // שהחוויה תהיה אותו דבר בדיוק. onWheel של React הוא passive ו-preventDefault
-  // בו מתעלם (הדפדפן מגלגל את העמוד = תחושת קפיצות), לכן listener ידני עם
-  // { passive: false }. ה-effect תלוי ב-positions.length כדי להירשם מחדש אחרי
-  // שהעץ נטען/הטאב נפתח — אחרת ה-container קיים אך ריק וה-listener לא נתפס.
+  // גלגלת = זום סביב הסמן (זהה לתוכנה). listener ידני עם passive:false כי
+  // preventDefault ב-onWheel של React מתעלם. נרשם מחדש עם positions.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const handler = (e: WheelEvent) => {
       e.preventDefault(); e.stopPropagation()
-      setZoom(z => Math.min(2.5, Math.max(0.3, +(z - e.deltaY * 0.0012).toFixed(3))))
+      setZoom(prev => {
+        const next = Math.min(2.5, Math.max(0.3, +(prev - e.deltaY * 0.0012).toFixed(3)))
+        if (next === prev) return prev
+        const rect = el.getBoundingClientRect()
+        const offX = e.clientX - rect.left, offY = e.clientY - rect.top
+        zoomAnchor.current = { px: (el.scrollLeft + offX) / prev, py: (el.scrollTop + offY) / prev, offX, offY }
+        return next
+      })
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
   }, [positions.length])
+
+  // אחרי שינוי זום — משמרים את נקודת העיגון תחת הסמן (כמו בתוכנה).
+  useLayoutEffect(() => {
+    const el = containerRef.current, a = zoomAnchor.current
+    if (!el || !a) return
+    el.scrollLeft = a.px * zoom - a.offX
+    el.scrollTop = a.py * zoom - a.offY
+    zoomAnchor.current = null
+  }, [zoom])
 
   // מרכוז ראשוני על השורש
   useEffect(() => {
     const el = containerRef.current
     if (!el || !positions.length) return
     const root = positions.find(p => p.node.id === rootId) ?? positions[0]
-    setPan({ x: el.clientWidth / 2 - root.cx * 0.7, y: 24 })
+    el.scrollLeft = root.cx * zoom - el.clientWidth / 2
+    el.scrollTop = 0
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions, rootId])
 
   return (
@@ -140,15 +160,16 @@ export default function LineageTreeSvg({
         </div>
       </div>
       <div ref={containerRef} dir="ltr" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-        className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{
+        className="relative overflow-auto cursor-grab active:cursor-grabbing" style={{
           height: 500,
-          touchAction: 'none',   // מונע מהדפדפן לחטוף גלגלת/מגע — הגלילה נשארת בעץ
           background:
             'radial-gradient(60% 50% at 50% 0%, rgba(198,158,45,0.05), transparent 70%),' +
             'repeating-linear-gradient(0deg, transparent 0 39px, rgba(27,50,86,0.025) 39px 40px),' +
             'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
         }}>
-        <div style={{ position: 'absolute', transform: `translate(${pan.x}px, ${pan.y}px)`, transformOrigin: '0 0' }}>
+        {/* ה-content בגודלו המלא (w*zoom × h*zoom) — הגלילה נעשית ע"י ה-container
+            עצמו (overflow-auto), לא ע"י transform. זה מה שהופך את ההזזה לחלקה. */}
+        <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
             {edges.map((e, i) => {
               const x1 = e.from.cx * zoom, y1 = (e.from.y + NH) * zoom, x2 = e.to.cx * zoom, y2 = e.to.y * zoom
