@@ -37,10 +37,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ path })
   }
 
+  // ⚠️ include_pending=1 — מציג גם דורות שממתינים לאישור, ולא רק מאושרים.
+  //
+  // הסיבה תפעולית: כשנרשם אינו מוצא במאגר את מי שכבר הוסיף נרשם אחר לפניו
+  // (רק משום שהרשומה טרם אושרה), הוא מזין את אותו אדם בעצמו — ונוצרת כפילות
+  // שמישהו יצטרך למזג ידנית. הצגת הממתינים מאפשרת לבחור ברשומה הקיימת
+  // במקום לשכפל אותה, וחוסכת את עבודת המיזוג מלכתחילה.
+  //
+  // 'rejected' לעולם אינו נכלל: רשומה שנדחתה נבדקה ונפסלה, ובחירה בה תחזיר
+  // בדיוק את השגיאה שכבר טופלה.
+  //
+  // ברירת המחדל נותרה 'verified' בלבד, כדי שמסכים אחרים שקוראים לנקודה הזו
+  // לא ישנו התנהגות בלי שהתבקשו.
+  const includePending = request.nextUrl.searchParams.get('include_pending') === '1'
+
   let query = client
     .from('lineage_nodes')
     .select('*')
-    .eq('status', 'verified')
+    .in('status', includePending ? ['verified', 'pending'] : ['verified'])
     .order('generation')
     .order('name')
 
