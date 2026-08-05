@@ -692,11 +692,9 @@ function LineageTreePicker({ initialNodeId, onSelect }: { initialNodeId?: string
   const zoomAnchor = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null)
 
   useEffect(() => {
-    // ⚠️ include_pending: גם דורות שממתינים לאישור ניתנים לבחירה. נרשם שאינו
-    // מוצא את מי שכבר הוזן לפניו מזין אותו שוב, ונוצרת כפילות שדורשת מיזוג ידני.
-    // 'rejected' עדיין מסונן — רשומה שנדחתה נבדקה ונפסלה.
-    fetch('/api/lineage?all=1&include_pending=1').then(r => r.json()).then(d => {
-      const raw = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') !== 'rejected')
+    // ⚠️ מאושרים בלבד — סדר הייחוס אינו נבנה על רשומה שטרם נבדקה.
+    fetch('/api/lineage?all=1').then(r => r.json()).then(d => {
+      const raw = (d.nodes ?? []).filter((n: LineageNode) => (n.status ?? 'verified') === 'verified')
       const minGen = raw.length ? Math.min(...raw.map((n: LineageNode) => n.generation)) : 0
       const nodes = raw.map((n: LineageNode) => ({ ...n, generation: n.generation - minGen }))
       setAllNodes(nodes)
@@ -869,9 +867,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   // כי כל דור הוא בדיקה נפרדת וכפילות באחד מהם פוסלת את הרישום כולו.
   const [manualGate, setManualGate] = useState(false)
 
-  // include_pending — ראו ההסבר ב-api/lineage: בחירה ברשומה שממתינה לאישור
-  // עדיפה על יצירת כפילות שתדרוש מיזוג ידני בהמשך.
-  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}&include_pending=1`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
+  const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
   useEffect(() => {
     (async () => {
@@ -1080,14 +1076,6 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                         <button type="button" onClick={() => pickVerified(node)}
                           className="flex-1 text-right text-sm px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:bg-indigo-50 transition-all duration-150">
                           {node.name}{node.relation ? <span className="text-[10px] text-slate-400 mr-1">({node.relation === 'son' ? 'בן' : 'חתן'})</span> : null}
-                          {/* ⚠️ רשומה שממתינה לאישור ניתנת לבחירה בכוונה — עדיף
-                              שייבחר בה מאשר שיזין את אותו אדם שוב וייווצר כפל
-                              שיידרש מיזוג. הסימון רק אומר שהיא טרם אושרה. */}
-                          {node.status === 'pending' && (
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 mr-1.5">
-                              ממתין לאישור
-                            </span>
-                          )}
                         </button>
                         {canMarkSelfHere && (
                           /* ⚠️ הכפתור בולט ומסומן בטקסט ולא באייקון מעומעם: מי
