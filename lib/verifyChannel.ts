@@ -6,8 +6,7 @@
 import { getServiceClient } from '@/lib/apiAuth'
 import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { generateCode, hashCode, verifyCode } from '@/lib/portalPassword'
-import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
+import { sendTransactionalMail } from '@/lib/transactionalMail'
 import { placeCodeCall, yemotCallConfigured } from '@/lib/yemotCall'
 import { createVerifyToken, normalizeVerifyValue, type VerifyChannel } from '@/lib/verifyToken'
 import { verifyCodeEmail } from '@/lib/emailTemplates'
@@ -142,15 +141,12 @@ export async function sendVerifyCode(
       return { status: 400, body: { error: 'כתובת המייל אינה תקינה. יש להזין כתובת באותיות לועזיות בלבד.' } }
     }
     const mail = verifyCodeEmail(code)
-    // ⚠️ transactional: בלי מעקב פתיחות/קליקים ובלי כותרות הסרה. פיקסל המעקב
-    // וקישורי ההפניה של Resend יוצאים מדומיין מעקב נפרד — שרשתות מסוננות
-    // (NetFree/רימון), שדרכן גולש כל הקהל שלנו, חוסמות — ו-List-Unsubscribe
-    // מסמן את ההודעה כדיוור המוני. שניהם פגעו דווקא במייל היחיד שחייב להגיע.
-    const res = await deliverMail(cleanEmail, mail.subject, mail.html, undefined, {
-      ...mailFor('igud'), skipLog: true, transactional: true,
-    })
-    if (!res || !res.ok) {
-      console.error('[verify/send] email failed:', res?.error)
+    // ⚠️ נמעני ג'ימייל יוצאים דרך חשבון ה-Workspace, והשאר דרך Resend.
+    // הרקע המלא ב-lib/transactionalMail: Gmail לבדו מאט את הדואר מהדומיין,
+    // ובאותה שנייה בדיוק הודעות לדומיינים אחרים נמסרות כרגיל.
+    const sent = await sendTransactionalMail(admin, cleanEmail, mail.subject, mail.html)
+    if (!sent.ok) {
+      console.error('[verify/send] email failed:', sent.error)
       // ⚠️ המייל לא יצא — מוחקים את הרשומה שנכתבה זה עתה. בלי זה חותמת ה-sentAt
       // הייתה נועלת את הכתובת לשתי דקות בגלל שליחה שכלל לא הגיעה: המשתמש מקבל
       // הודעת שגיאה, לוחץ "נסו שוב" כפי שנאמר לו — ונחסם.
@@ -160,7 +156,8 @@ export async function sendVerifyCode(
     // ⚠️ תיעוד ההצלחה: מייל קוד האימות נשלח עם skipLog (אינו נכנס ל"דואר יוצא"),
     // ולכן עד כה לא הייתה שום דרך לענות על "נשלח לו קוד או לא". בלי השורה הזו
     // תלונת "לא קיבלתי מייל" אינה ניתנת לבדיקה — לא ידוע אם השליחה בכלל יצאה.
-    console.log(`[verify/send] מייל קוד אימות נשלח אל ${cleanEmail} · resendId=${res.id ?? '—'}`)
+    // via= מציין באיזה מסלול יצא, כדי שאפשר יהיה להשוות מסירה בין השניים.
+    console.log(`[verify/send] מייל קוד אימות נשלח אל ${cleanEmail} · via=${sent.via} · id=${sent.id ?? '—'}`)
   } else {
     const r = await placeCodeCall(raw, code)
     // ⚠️ כשל בשיחה החזיר עד כה ok:true — המשתמש ראה "מתקשרים אליך כעת"
