@@ -244,8 +244,16 @@ export function parseMessage(msg: any): ParsedMessage {
 //
 // ⚠️ ההרשאה כאן היא gmail.send בלבד — הצרה ביותר שמאפשרת את המשימה. לחשבון
 // הזה אין שום סיבה לקרוא דואר, ולכן גם אין סיבה לבקש הרשאת קריאה.
+// ⚠️ מאגר חשבונות ולא חשבון יחיד: התקרה של Google היא לכל משתמש בנפרד ואינה
+// ניתנת להעלאה, ולכן הדרך היחידה להגדיל נפח היא להוסיף חשבונות. השליחה עוברת
+// לחשבון הבא ברשימה ברגע שהקודם מיצה את מכסתו היומית, ורק כשכולם מוצו היא
+// נופלת חזרה ל-Resend.
+const SEND_ACCOUNTS_KEY = 'gmail_send_accounts'
+// המפתחות הישנים (חשבון יחיד) — נקראים לצורך מעבר חלק ואינם נכתבים עוד.
 const SEND_TOKEN_KEY = 'gmail_send_refresh_token'
 const SEND_EMAIL_KEY = 'gmail_send_email'
+
+export interface SendAccount { email: string; refresh_token: string; addedAt?: string }
 
 export function getSendOAuthClient() {
   const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
@@ -264,33 +272,80 @@ export function getSendAuthUrl(): string {
   })
 }
 
-export async function saveSendAccount(token: string, email: string) {
+/**
+ * רשימת חשבונות השליחה, לפי סדר השימוש.
+ *
+ * ⚠️ כולל מעבר מהמבנה הישן (חשבון יחיד בשני מפתחות נפרדים). בלי זה, חשבון
+ * שכבר חובר היה נעלם ברגע המעבר למאגר — והשליחה הייתה נופלת חזרה ל-Resend
+ * בלי ששום דבר ייראה שבור.
+ */
+export async function listSendAccounts(): Promise<SendAccount[]> {
   const db = getAdminDb()
-  const now = new Date().toISOString()
-  await db.from('app_settings').upsert({ key: SEND_TOKEN_KEY, value: token, updated_at: now })
-  await db.from('app_settings').upsert({ key: SEND_EMAIL_KEY, value: email, updated_at: now })
+  const { data } = await db.from('app_settings').select('key, value')
+    .in('key', [SEND_ACCOUNTS_KEY, SEND_TOKEN_KEY, SEND_EMAIL_KEY])
+  const map = new Map((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]))
+
+  const raw = map.get(SEND_ACCOUNTS_KEY)
+  if (raw) {
+    try {
+      const list = JSON.parse(String(raw)) as SendAccount[]
+      if (Array.isArray(list)) return list.filter(a => a?.email && a?.refresh_token)
+    } catch { /* רשומה פגומה — ניפול למבנה הישן */ }
+  }
+
+  const legacyToken = map.get(SEND_TOKEN_KEY)
+  const legacyEmail = map.get(SEND_EMAIL_KEY)
+  if (legacyToken) {
+    return [{ email: String(legacyEmail ?? '(חשבון מחובר)'), refresh_token: String(legacyToken) }]
+  }
+  return []
 }
 
-/** כתובת חשבון השליחה המחובר, או null אם אין. */
-export async function getSendAccountEmail(): Promise<string | null> {
+async function writeSendAccounts(list: SendAccount[]) {
   const db = getAdminDb()
-  const { data } = await db.from('app_settings').select('value').eq('key', SEND_EMAIL_KEY).maybeSingle()
-  return (data?.value as string) || null
+  await db.from('app_settings').upsert(
+    { key: SEND_ACCOUNTS_KEY, value: JSON.stringify(list), updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  )
+}
+
+/** הוספת חשבון למאגר. חיבור חוזר של אותה כתובת מרענן את האסימון במקומו. */
+export async function addSendAccount(email: string, refreshToken: string) {
+  const list = await listSendAccounts()
+  const key = email.trim().toLowerCase()
+  const idx = list.findIndex(a => a.email.trim().toLowerCase() === key)
+  const entry: SendAccount = { email: key, refresh_token: refreshToken, addedAt: new Date().toISOString() }
+  if (idx >= 0) list[idx] = { ...entry, addedAt: list[idx].addedAt ?? entry.addedAt }
+  else list.push(entry)
+  await writeSendAccounts(list)
+}
+
+export async function removeSendAccount(email: string) {
+  const key = email.trim().toLowerCase()
+  await writeSendAccounts((await listSendAccounts()).filter(a => a.email.trim().toLowerCase() !== key))
+}
+
+/** לקוח Gmail לחשבון שליחה מסוים. */
+export function gmailClientForToken(refreshToken: string) {
+  const oauth = getSendOAuthClient()
+  oauth.setCredentials({ refresh_token: refreshToken })
+  return google.gmail({ version: 'v1', auth: oauth })
 }
 
 /**
- * לקוח Gmail לשליחה יוצאת.
+ * לקוח Gmail לשליחה יוצאת — החשבון הראשון במאגר.
+ *
+ * ⚠️ נשמר לתאימות בלבד. בחירת החשבון בפועל נעשית ב-lib/sendMail, שם היא
+ * מתחשבת במכסה היומית של כל חשבון ועוברת לבא בתור. אל תשתמשו בזה לשליחה
+ * המונית — היא תרוקן את מכסת החשבון הראשון ותתעלם מהשאר.
  *
  * ⚠️ נופל לחשבון הראשי כשאין חשבון שליחה מחובר. זו התנהגות מכוונת: המסלול
- * הזה נועד רק להוסיף מסירות, ואסור שהיעדר הגדרה חדשה ישבית שליחה שעבדה.
+ * נועד רק להוסיף מסירות, ואסור שהיעדר הגדרה חדשה ישבית שליחה שעבדה.
  */
 export async function getSendGmailClient() {
-  const db = getAdminDb()
-  const { data } = await db.from('app_settings').select('value').eq('key', SEND_TOKEN_KEY).maybeSingle()
-  if (!data?.value) return getGmailClient()
-  const oauth = getSendOAuthClient()
-  oauth.setCredentials({ refresh_token: data.value as string })
-  return google.gmail({ version: 'v1', auth: oauth })
+  const accounts = await listSendAccounts()
+  if (!accounts.length) return getGmailClient()
+  return gmailClientForToken(accounts[0].refresh_token)
 }
 
 const LEGACY_TOKEN_KEY = 'gmail_legacy_refresh_token'

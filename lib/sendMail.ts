@@ -49,53 +49,84 @@ export interface MailOptions {
 //     כך גדל הסיכון לחשבון עצמו.
 // כל שאר הדואר — תפעולי ודיוור כאחד — ממשיך ב-Resend.
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
-// תקרה רכה, מתחת לתקרת Workspace האמיתית, כדי להשאיר מרווח לדואר המשרד.
-const GMAIL_CAP_HIGH = 1500
+// תקרה רכה *לכל חשבון*, מתחת לתקרת Workspace האמיתית (כ-2,000), כדי להשאיר
+// מרווח לדואר אחר שיוצא מאותו חשבון ולא להיתקל בתקרה הקשיחה של Google.
+export const GMAIL_CAP_HIGH = 1500
 
 function isGmailAddress(email: string): boolean {
   const at = email.lastIndexOf('@')
   return at >= 0 && GMAIL_DOMAINS.has(email.slice(at + 1).trim().toLowerCase())
 }
 
-// מונה יומי לפי שעון ישראל, כדי שהאיפוס יקרה בחצות המקומית ולא באמצע היום.
-function gmailCounterKey(): string {
-  const d = new Intl.DateTimeFormat('en-CA', {
+// התאריך לפי שעון ישראל, כדי שהמונה יתאפס בחצות המקומית ולא באמצע יום העבודה.
+function todayKey(): string {
+  return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
-  return `gmail_daily_send:${d}`
 }
 
-// ניסיון שליחה דרך Workspace. מחזיר true רק בהצלחה מלאה; בכל מקרה אחר false,
-// והקורא ממשיך ל-Resend. אינו זורק לעולם.
+// מונה יומי *לכל חשבון בנפרד* — כי גם התקרה של Google היא לכל חשבון בנפרד.
+export function gmailCounterKey(email: string): string {
+  return `gmail_daily_send:${todayKey()}:${email.trim().toLowerCase()}`
+}
+
+// ניסיון שליחה דרך Workspace. מחזיר את כתובת החשבון ששלח, או null אם אף
+// חשבון לא היה זמין — ואז הקורא ממשיך ל-Resend. אינו זורק לעולם.
+//
+// ⚠️ סבב בין חשבונות: התקרה של Google היא לכל משתמש בנפרד ואינה ניתנת
+// להעלאה, ולכן הדרך היחידה להגדיל נפח היא להוסיף חשבונות. השליחה עוברת
+// לחשבון הבא ברשימה ברגע שהקודם מיצה את מכסתו, ורק כשכולם מוצו — ל-Resend.
 async function trySendViaGmail(
-  to: string, subject: string, html: string, from: string, fromName: string, cap: number,
-): Promise<boolean> {
+  to: string, subject: string, html: string, fallbackFrom: string, fromName: string, cap: number,
+): Promise<string | null> {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !key) return false
+    if (!url || !key) return null
     const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 
-    // ⚠️ אינו אטומי, ובכוונה: התקרה כאן רכה. חריגה קלה בתנאי מרוץ תיתקל
-    // ממילא בתקרה האמיתית של Google ותיפול חזרה ל-Resend.
-    const ck = gmailCounterKey()
-    const { data } = await admin.from('app_settings').select('value').eq('key', ck).maybeSingle()
-    const next = (Number(data?.value ?? 0) || 0) + 1
-    if (next > cap) return false
-    await admin.from('app_settings').upsert(
-      { key: ck, value: String(next), updated_at: new Date().toISOString() }, { onConflict: 'key' },
-    )
-
     // ייבוא דינמי — googleapis כבד, ואין סיבה לטעון אותו במסלול שאינו ג'ימייל.
-    // ⚠️ getSendGmailClient ולא getGmailClient: החשבון הייעודי לשליחה, אם חובר.
-    // בלעדיו הוא נופל לחשבון הראשי, כדי שהיעדר הגדרה לא ישבית שליחה שעבדה.
-    const { getSendGmailClient, sendGmailMessage } = await import('@/lib/gmail')
-    const gmail = await getSendGmailClient()
-    await sendGmailMessage(gmail, { to, subject, html, from, fromName })
-    return true
+    const { listSendAccounts, gmailClientForToken, getGmailClient, sendGmailMessage } = await import('@/lib/gmail')
+    const accounts = await listSendAccounts()
+
+    // אין חשבון ייעודי — נופלים לחשבון הראשי עם מונה משלו, כדי שהיעדר
+    // הגדרה חדשה לא ישבית שליחה שכבר עבדה.
+    const pool = accounts.length
+      ? accounts.map(a => ({ email: a.email, token: a.refresh_token }))
+      : [{ email: '(ראשי)', token: '' }]
+
+    for (const acc of pool) {
+      // ⚠️ המונה אינו אטומי, ובכוונה: התקרה כאן רכה ומתחת לתקרה האמיתית של
+      // Google. חריגה קלה בתנאי מרוץ תיתקל ממילא בתקרה האמיתית, והשליחה
+      // תעבור לחשבון הבא או ל-Resend.
+      const ck = gmailCounterKey(acc.email)
+      const { data } = await admin.from('app_settings').select('value').eq('key', ck).maybeSingle()
+      const next = (Number(data?.value ?? 0) || 0) + 1
+      if (next > cap) continue   // החשבון מיצה את מכסתו היום — לבא בתור
+
+      await admin.from('app_settings').upsert(
+        { key: ck, value: String(next), updated_at: new Date().toISOString() }, { onConflict: 'key' },
+      )
+
+      try {
+        const gmail = acc.token ? gmailClientForToken(acc.token) : await getGmailClient()
+        // ⚠️ השולח הוא החשבון עצמו ולא כתובת מוגדרת: Gmail מכבד כתובת "מאת"
+        // אחרת רק אם היא רשומה בחשבון כאליאס מאומת, ואחרת מתעלם ממנה בשקט.
+        // כתובת אמיתית מונעת פער בין מה שהוגדר למה שהנמען רואה בפועל.
+        const from = acc.token ? acc.email : fallbackFrom
+        await sendGmailMessage(gmail, { to, subject, html, from, fromName })
+        return acc.email
+      } catch (e) {
+        // כשל בחשבון מסוים — ממשיכים לבא בתור ולא מפילים את השליחה כולה.
+        console.error(`[mail] שליחה דרך ${acc.email} נכשלה, ממשיכים:`, e)
+      }
+    }
+
+    console.warn('[mail] כל חשבונות השליחה מוצו או נכשלו — ממשיכים ב-Resend')
+    return null
   } catch (e) {
     console.error('[mail] שליחה דרך Gmail נכשלה, נופלים ל-Resend:', e)
-    return false
+    return null
   }
 }
 
@@ -159,8 +190,9 @@ export async function deliverMail(
   // תפעולי אחר — ממשיך ב-Resend, כדי לא לחסל את המכסה היומית הקטנה.
   if (options?.gmailPriority === 'high' && !options?.unsubscribeUrl && !options?.scheduledAt
       && !attachments?.length && isGmailAddress(to)) {
-    const okGmail = await trySendViaGmail(to, subject, html, fromEmail, fromName, GMAIL_CAP_HIGH)
-    if (okGmail) {
+    const sentBy = await trySendViaGmail(to, subject, html, fromEmail, fromName, GMAIL_CAP_HIGH)
+    if (sentBy) {
+      console.log(`[mail] נשלח דרך Workspace · ${sentBy} → ${to}`)
       // ⚠️ אין resendId במסלול הזה, ולכן אירועי המסירה של Resend לא יגיעו
       // להודעה הזו. התיעוד ב"דואר יוצא" נשמר כדי שההודעה בכל זאת תופיע שם.
       if (!options?.skipLog) {
