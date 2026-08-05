@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
   // סנכרון מחדש לאגפים (הצומת חזר למצבו הקודם)
   try {
-    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT)).data as TreeNodeRow[] | null
+    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)).data as TreeNodeRow[] | null
     if (fresh) {
       await resyncSubtree(admin, fresh, nodeId)
       if (restore.status === 'verified') await approveVerifiedBeneficiaries(admin, fresh, nodeId)

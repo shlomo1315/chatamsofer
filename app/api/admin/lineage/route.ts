@@ -27,6 +27,7 @@ export async function GET() {
     .select('*')
     .order('generation')
     .order('name')
+    .limit(100000)   // ⚠️ בלי זה נקטע ל-1000 והעץ בכרטסת מציג ענפים חלקיים בעץ גדול
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
 
@@ -199,7 +200,7 @@ export async function PATCH(request: NextRequest) {
   // מאושר. (חזרה מדחייה אינה מפל: יש לאשר כל צאצא במפורש.)
   let rejectedBeneficiaries = 0
   if (updates.status === 'rejected') {
-    const { data: nodesForCascade } = await admin.from('lineage_nodes').select(NODE_SELECT)
+    const { data: nodesForCascade } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
     if (nodesForCascade) {
       const rejected = await cascadeRejectSubtree(admin, nodesForCascade as TreeNodeRow[], id)
       // ⚠️ דחייה בעץ → דחיית המשפחות המקושרות. בלי זה יחוס שנדחה במפורש
@@ -226,7 +227,7 @@ export async function PATCH(request: NextRequest) {
   // הצומת הזה. מרעננים להם את lineage_chain כדי שהמסכים והמיילים שקוראים את
   // העותק השמור לא יישארו עם השם או המבנה הישן.
   // (הצ'יפים בכרטסת נגזרים מהעץ בזמן אמת וממילא מעודכנים — זה עבור שאר הצרכנים.)
-  const { data: freshNodes } = await admin.from('lineage_nodes').select(NODE_SELECT)
+  const { data: freshNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
   let approved = 0
   if (freshNodes) {
     const synced = await resyncSubtree(admin, freshNodes as TreeNodeRow[], id)

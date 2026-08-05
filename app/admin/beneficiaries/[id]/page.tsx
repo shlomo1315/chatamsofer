@@ -70,7 +70,9 @@ async function getAllLineageNodes(): Promise<LineageNode[]> {
   const { getServiceClient } = await import('@/lib/apiAuth')
   const db = getServiceClient()
   if (!db) return []
-  const { data, error } = await db.from('lineage_nodes').select(NODE_SELECT)
+  // ⚠️ limit גבוה — בלי זה Supabase קוטע ל-1000 שורות והצ'יפים/העץ מציגים עץ
+  // חלקי בעצים גדולים (מעל 1000 צמתים).
+  const { data, error } = await db.from('lineage_nodes').select(NODE_SELECT).limit(100000)
   if (error) console.error('[getAllLineageNodes] load failed:', error.message)
   return (data ?? []) as LineageNode[]
 }

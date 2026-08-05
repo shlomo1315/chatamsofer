@@ -40,8 +40,11 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
-  // טעינת כל הצמתים (id, parent_id, generation) לאימות וחישוב דורות
-  const { data: all, error: allErr } = await admin.from('lineage_nodes').select('id, parent_id, generation')
+  // טעינת כל הצמתים (id, parent_id, generation) לאימות וחישוב דורות.
+  // ⚠️ limit גבוה: בלי זה Supabase מחזיר מקסימום 1000 שורות בשקט — עץ גדול
+  // מ-1000 צמתים נטען חלקית, ומיזוג ששרשרתו נוגעת בחלק החסר נכשל בשקט ("לא
+  // קורה כלום"). זה היה השורש של כשל מיזוג 3+ צמתים בעצים גדולים.
+  const { data: all, error: allErr } = await admin.from('lineage_nodes').select('id, parent_id, generation').limit(100000)
   if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
   const list = all ?? []
   const byId = new Map(list.map(n => [n.id, n]))

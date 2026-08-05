@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   const inv = await resolveInvite(admin, token)
   if (!inv) return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
 
-  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT)
+  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
   const nodes = (allNodes ?? []) as TreeNodeRow[]
   const ids = subtreeNodeIds(nodes, inv.root_node_id)
   // מחזירים רק את צמתי תת-העץ — שום דבר מחוץ ל-scope לא נחשף
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
   if (!nodeId || !action) return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
 
   // ⚠️ בדיקת ה-scope הקריטית: הצומת חייב להיות בתוך תת-העץ ששותף. אחרת — חסום.
-  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT)
+  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
   const nodes = (allNodes ?? []) as TreeNodeRow[]
   const ids = subtreeNodeIds(nodes, inv.root_node_id)
   if (!ids.has(nodeId)) return NextResponse.json({ error: 'הצומת מחוץ להרשאה' }, { status: 403 })
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
   // דחיית מפל (צומת נדחה → כל צאצאיו נדחים), רענון lineage_chain, וקידום משפחות.
   let cascaded: string[] = []
   try {
-    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT)).data as TreeNodeRow[] | null
+    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)).data as TreeNodeRow[] | null
     if (fresh) {
       // דחייה מפילה את כל תת-העץ (לא ייתכן דור נדחה ודור אחריו מאושר)
       if (newStatus === 'rejected') cascaded = await cascadeRejectSubtree(admin, fresh, nodeId)

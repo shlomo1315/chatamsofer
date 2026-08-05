@@ -97,7 +97,7 @@ async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   const { getServiceClient } = await import('@/lib/apiAuth')
   const supabase = getServiceClient()
   if (!supabase) return new Map()
-  const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT)
+  const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT).limit(100000)
   if (error) throw error
   const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
   _lineageCache = { at: now, version, map }

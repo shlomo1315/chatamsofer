@@ -51,20 +51,33 @@ export async function POST(request: NextRequest) {
   }
 
   let chain: ChainEntry[] = upChain
-  // עריכת דור מסוים: שומרים את הדורות שמתחת לצומת שנבחר (generation גדול משלו).
-  // כך בחירת צומת חדש לדור 5 לא מוחקת את דורות 6+ (הדורות החדשים).
+  // עריכת דור מסוים: שומרים את הדורות שמתחת ל*דור שתוקן* (atGeneration), לא לפי
+  // הדור של הצומת שנבחר.
+  //
+  // ⚠️ באג שתוקן: קודם ה-below נגזר מ-chosen.generation (הדור של הצומת החדש).
+  // אם הצומת שנבחר לתיקון דור 3 היה בעצם בדור אחר בעץ (למשל 2), כל הדורות
+  // 3,4,5… "נעלמו" — הם סוננו כי generation שלהם לא היה גדול מ-chosen.generation
+  // השגוי. עכשיו הסינון מתבסס על atGeneration שהמשתמש ביקש לתקן: כל הדורות
+  // *מעבר* לדור שתוקן נשמרים תמיד, בלי קשר לדור של הצומת החדש.
+  const cutGen = typeof atGeneration === 'number' ? atGeneration : chosen.generation
   if (typeof atGeneration === 'number') {
     const { data: ben } = await db
       .from('beneficiaries').select('lineage_chain').eq('id', String(beneficiaryId)).maybeSingle()
     const existing: ChainEntry[] = Array.isArray(ben?.lineage_chain) ? (ben!.lineage_chain as ChainEntry[]) : []
-    const below = existing.filter(e => e && typeof e.generation === 'number' && e.generation > chosen.generation)
-    // ממזגים: השרשרת החדשה עד הצומת + הדורות הישנים שמתחתיו, ממוין לפי דור
-    chain = [...upChain, ...below].sort((a, b) => a.generation - b.generation)
+    const below = existing.filter(e => e && typeof e.generation === 'number' && e.generation > cutGen)
+    // ממזגים: השרשרת החדשה עד הצומת + הדורות הישנים שמתחת לדור שתוקן. אם השרשרת
+    // החדשה מסתיימת לפני cutGen (הצומת רדוד), הדורות הישנים 1..cutGen שבין השניים
+    // עדיין נשמרים כדי לא ליצור "חור" בשרשרת.
+    const upMax = upChain.length ? Math.max(...upChain.map(e => e.generation)) : 0
+    const gapFill = existing.filter(e => e && typeof e.generation === 'number' && e.generation > upMax && e.generation <= cutGen)
+    chain = [...upChain, ...gapFill, ...below]
+      .filter((e, i, arr) => arr.findIndex(x => x.generation === e.generation) === i)  // דור ייחודי
+      .sort((a, b) => a.generation - b.generation)
   }
 
   // lineage_node_id: אם נשמרו דורות מתחת (הצומת אינו העלה) — משאירים את הקיים,
   // כי ה-leaf האמיתי עמוק יותר. אחרת הצומת שנבחר הוא העלה.
-  const hasBelow = chain.some(e => e.generation > chosen.generation)
+  const hasBelow = chain.some(e => e.generation > cutGen)
   const update: Record<string, unknown> = { lineage_chain: chain }
   if (!hasBelow) update.lineage_node_id = nodeId
 
@@ -79,7 +92,11 @@ export async function POST(request: NextRequest) {
       const nodesArr = (allNodes ?? []) as Node[]
       // כל דור ≤5 (למעט דור 1 = החתם סופר, תמיד מאושר) חייב צומת verified תואם
       const early = chain.filter(e => e.generation > 1 && e.generation <= 5)
-      const allEarlyVerified = early.every(e =>
+      // ⚠️ חייב לכסות את *כל* דורות 2–5 (לא רשימה חלקית): early.every על רשימה
+      // חסרה מחזיר true בטעות ומוריד מ-deep_review משפחה שעדיין חריגה. דורשים
+      // שכל דור 2..5 קיים בשרשרת *וגם* תואם לצומת verified.
+      const coversAllEarly = [2, 3, 4, 5].every(g => early.some(e => e.generation === g))
+      const allEarlyVerified = coversAllEarly && early.every(e =>
         nodesArr.some(n => n.status === 'verified' && n.generation === e.generation && namesMatch(n.name, e.name)),
       )
       if (allEarlyVerified) update.eligibility_status = 'pending'

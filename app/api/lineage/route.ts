@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const { data: allNodes } = await client
       .from('lineage_nodes')
       .select('id,name,parent_id,generation')
+      .limit(100000)
     const nodes: { id: string; name: string; parent_id: string | null; generation: number }[] = allNodes ?? []
     const map = Object.fromEntries(nodes.map(n => [n.id, n]))
 
@@ -44,7 +45,8 @@ export async function GET(request: NextRequest) {
     .order('name')
 
   if (all === '1') {
-    // return all verified nodes
+    // return all verified nodes — limit גבוה כדי לא להיקטע ל-1000 בעץ גדול
+    query = query.limit(100000)
   } else if (parentId) {
     query = query.eq('parent_id', parentId)
   } else {

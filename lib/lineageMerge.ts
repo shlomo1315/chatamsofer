@@ -323,7 +323,9 @@ export async function recalcGenerations(db: SupabaseClient, rootId: string): Pro
   const { data: root } = await db.from('lineage_nodes').select('generation').eq('id', rootId).maybeSingle()
   const baseGen = (root as { generation?: number } | null)?.generation ?? 1
 
-  const { data: all } = await db.from('lineage_nodes').select('id, parent_id')
+  // ⚠️ limit גבוה — אחרת Supabase קוטע ל-1000 שורות ו-recalcGenerations מדלג
+  // על צמתים מעבר לכך (חישוב דורות שגוי בעץ גדול).
+  const { data: all } = await db.from('lineage_nodes').select('id, parent_id').limit(100000)
   const childrenOf = new Map<string | null, string[]>()
   for (const n of all ?? []) {
     const arr = childrenOf.get(n.parent_id) ?? []
@@ -358,7 +360,9 @@ export async function loadCascadePlan(
   mergeIds: string[],
   opts: { up?: boolean; down?: boolean; upApprox?: boolean } = {},
 ): Promise<{ plan: CascadePlan; nodes: MergeNodeRow[] }> {
-  const { data } = await db.from('lineage_nodes').select(MERGE_NODE_SELECT)
+  // ⚠️ limit גבוה — טעינת *כל* העץ; בלי זה תקרת 1000 שורות של Supabase קוטעת
+  // אותו ומיזוג ששרשרתו בחלק החסר נכשל בשקט (השורש של כשל מיזוג 3+).
+  const { data } = await db.from('lineage_nodes').select(MERGE_NODE_SELECT).limit(100000)
   const nodes = (data ?? []) as MergeNodeRow[]
   return { plan: planCascade(nodes, keepId, mergeIds, opts), nodes }
 }
