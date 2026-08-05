@@ -159,10 +159,18 @@ export default function VerifyControl({
               className="w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-center text-base font-semibold tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
             {loading && <Loader2 size={18} className="animate-spin text-indigo-600 absolute left-3" />}
           </div>
-          <button type="button" onClick={send} disabled={loading || cooldown > 0}
-            className="text-xs text-slate-500 hover:text-slate-700 underline self-start disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed">
-            {cooldown > 0 ? `שליחת קוד מחדש תתאפשר בעוד ${fmtLeft(cooldown)}` : 'שליחת קוד מחדש'}
-          </button>
+          {/* ⚠️ הכפתור מוסתר לגמרי עד תום הקירור — לא רק מושבת. כפתור שנראה על
+              המסך מזמין לחיצה, וכל לחיצה מייצרת קוד חדש שמבטל את הקודם: גם המייל
+              שכן הגיע מפסיק לעבוד, והשליחות הכפולות מחריפות את עומס המסירה.
+              במקומו מוצגת ספירה, כדי שיהיה ברור שממתינים — ולא שנתקע. */}
+          {cooldown > 0 ? (
+            <p className="text-xs text-slate-500 self-start">
+              המייל בדרך. אפשר לבקש קוד חדש בעוד {fmtLeft(cooldown)}
+            </p>
+          ) : (
+            <button type="button" onClick={send} disabled={loading}
+              className="text-xs text-slate-500 hover:text-slate-700 underline self-start">שליחת קוד מחדש</button>
+          )}
         </div>
       )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
