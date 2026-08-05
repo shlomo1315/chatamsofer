@@ -233,6 +233,66 @@ export function parseMessage(msg: any): ParsedMessage {
   }
 }
 
+// ─── חשבון שליחה ייעודי ──────────────────────────────────────────────────────
+// חשבון Workspace נפרד (למשל code@) שממנו יוצאים המיילים התפעוליים.
+//
+// ⚠️ שתי סיבות נפרדות, ושתיהן חשובות:
+//   • מכסה — תקרת השליחה של Google היא *לכל משתמש בנפרד* (כ-2,000 ליום)
+//     ואינה ניתנת להעלאה. חשבון שליחה נפרד מוסיף מכסה משלו, במקום להתחלק
+//     באותה מכסה עם דואר המשרד.
+//   • בידוד — גל של קודי אימות לא ימצה את המכסה של התיבה המאוישת, ולהפך.
+//
+// ⚠️ ההרשאה כאן היא gmail.send בלבד — הצרה ביותר שמאפשרת את המשימה. לחשבון
+// הזה אין שום סיבה לקרוא דואר, ולכן גם אין סיבה לבקש הרשאת קריאה.
+const SEND_TOKEN_KEY = 'gmail_send_refresh_token'
+const SEND_EMAIL_KEY = 'gmail_send_email'
+
+export function getSendOAuthClient() {
+  const base = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+  return new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    `${base}/api/auth/gmail-send/callback`,
+  )
+}
+
+export function getSendAuthUrl(): string {
+  return getSendOAuthClient().generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: ['https://www.googleapis.com/auth/gmail.send'],
+  })
+}
+
+export async function saveSendAccount(token: string, email: string) {
+  const db = getAdminDb()
+  const now = new Date().toISOString()
+  await db.from('app_settings').upsert({ key: SEND_TOKEN_KEY, value: token, updated_at: now })
+  await db.from('app_settings').upsert({ key: SEND_EMAIL_KEY, value: email, updated_at: now })
+}
+
+/** כתובת חשבון השליחה המחובר, או null אם אין. */
+export async function getSendAccountEmail(): Promise<string | null> {
+  const db = getAdminDb()
+  const { data } = await db.from('app_settings').select('value').eq('key', SEND_EMAIL_KEY).maybeSingle()
+  return (data?.value as string) || null
+}
+
+/**
+ * לקוח Gmail לשליחה יוצאת.
+ *
+ * ⚠️ נופל לחשבון הראשי כשאין חשבון שליחה מחובר. זו התנהגות מכוונת: המסלול
+ * הזה נועד רק להוסיף מסירות, ואסור שהיעדר הגדרה חדשה ישבית שליחה שעבדה.
+ */
+export async function getSendGmailClient() {
+  const db = getAdminDb()
+  const { data } = await db.from('app_settings').select('value').eq('key', SEND_TOKEN_KEY).maybeSingle()
+  if (!data?.value) return getGmailClient()
+  const oauth = getSendOAuthClient()
+  oauth.setCredentials({ refresh_token: data.value as string })
+  return google.gmail({ version: 'v1', auth: oauth })
+}
+
 const LEGACY_TOKEN_KEY = 'gmail_legacy_refresh_token'
 
 // OAuth2 client לתיבה הישנה — עם ה-redirect הייעודי שלה (לא של office).
