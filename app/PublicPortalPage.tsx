@@ -1833,6 +1833,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // האם אימות המייל חובה לסיום רישום. ⚠️ ברירת המחדל true — אם הבקשה נכשלת
   // עדיף לדרוש אימות מאשר לכבות אותו בשקט בגלל תקלת רשת.
   const [emailVerifyRequired, setEmailVerifyRequired] = useState(true)
+  // מצב תקלת דואר (מתג בהגדרות) — מסתיר כל פעולה שתוצאתה "נשלח לך מייל".
+  // ⚠️ ברירת המחדל false: אם הבקשה נכשלת עדיף להציג ערוץ שעובד מאשר להסתיר אותו.
+  const [mailChannelOff, setMailChannelOff] = useState(false)
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('signup') ?? ''
     setSignupCode(code)
@@ -1840,6 +1843,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       .then(r => r.json()).then(d => {
         setRegistrationOpen(d.open !== false)
         if (typeof d.emailVerificationRequired === 'boolean') setEmailVerifyRequired(d.emailVerificationRequired)
+        if (typeof d.emailChannelDisabled === 'boolean') setMailChannelOff(d.emailChannelDisabled)
         if (typeof d.closedMessage === 'string' && d.closedMessage.trim()) {
           setRegistrationClosedMessage(d.closedMessage.trim())
         }
@@ -3542,6 +3546,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     באזור האישי אפשר להגיש את כל הבקשות ישירות, בלי להמתין למייל.
                   </p>
 
+                  {/* ⚠️ שתי האפשרויות שמסתיימות ב"נשלח לך מייל" מוסתרות במצב
+                      תקלת דואר (מתג בהגדרות): כשהמסירה מתעכבת הן מובילות
+                      לשומקום — הנרשם לוחץ, נאמר לו "נשלח", ושום דבר לא מגיע.
+                      הכניסה לאזור האישי שלמעלה אינה תלויה בדואר. */}
+                  {!mailChannelOff && (<>
                   {benefitsSentTo ? (
                     <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                       <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
@@ -3573,6 +3582,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       {statusErr && <p className="text-xs text-red-600">{statusErr}</p>}
                     </>
                   )}
+                  </>)}
 
                 </div>
                 ) : emailStep === 'code' ? (
@@ -3602,20 +3612,33 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 ) : (
                 <div className="flex flex-col gap-4">
                   <p className="text-sm text-slate-600 leading-relaxed text-center">
-                    לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני</span>. בחרו כיצד לקבל אותו:
+                    {mailChannelOff
+                      ? <>לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני בשיחה לטלפון</span>.</>
+                      : <>לכניסה לאזור האישי נשלח אליך <span className="font-semibold">קוד זמני</span>. בחרו כיצד לקבל אותו:</>}
                   </p>
                   {error && <ErrorBox message={error} />}
-                  <button type="button" onClick={handleSendCode} disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
-                    {loading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
-                    קבלת קוד זמני למייל
-                  </button>
+                  {/* ⚠️ הקוד למייל מוסתר במצב תקלת דואר: מסלול כניסה שתלוי
+                      בהודעה שלא מגיעה הוא מבוי סתום, ומי שיבחר בו יישאר בחוץ.
+                      הכניסה בשיחה לטלפון עובדת ואינה תלויה בדואר כלל. */}
+                  {!mailChannelOff && (
+                    <button type="button" onClick={handleSendCode} disabled={loading}
+                      className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
+                      {loading ? <Loader2 size={20} className="animate-spin" /> : <Mail size={20} />}
+                      קבלת קוד זמני למייל
+                    </button>
+                  )}
                   <button type="button" onClick={handleListPhones} disabled={loading}
-                    className="flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base">
+                    className={`flex items-center justify-center gap-2 font-semibold py-3 px-4 rounded-xl transition-all duration-150 text-base ${
+                      mailChannelOff
+                        ? 'bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:opacity-50'
+                        : 'border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50'
+                    }`}>
                     <Phone size={18} /> קבלת קוד זמני בשיחה לטלפון
                   </button>
                   <p className="text-xs text-slate-400 text-center leading-relaxed">
-                    הקוד תקף ל-10 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.
+                    {mailChannelOff
+                      ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
+                      : 'הקוד תקף ל-10 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
                   </p>
                 </div>
                 )
