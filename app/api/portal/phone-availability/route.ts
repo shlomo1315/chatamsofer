@@ -20,7 +20,10 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!rateLimit(`phone-avail:${clientIp(request)}`, 60, 60 * 1000)) {
+  // ⚠️ אותה סיבה כמו ב-lookup: עשרות נרשמים מאותה עמדה חולקים IP, וכל אחד
+  // מהם מפעיל את הבדיקה תוך כדי הקלדה. 60 לדקה נגמרו מהר, ואז — מכיוון שהבדיקה
+  // נכשלת-פתוח — האזהרה על טלפון כפול פשוט הפסיקה להופיע בלי ששום דבר נראה שבור.
+  if (!rateLimit(`phone-avail:${clientIp(request)}`, 1000, 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי בקשות' }, { status: 429 })
   }
 
