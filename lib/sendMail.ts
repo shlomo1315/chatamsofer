@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 import { createClient } from '@supabase/supabase-js'
-import { NOREPLY_FROM, BRAND_NAME, departmentByEmail } from './departments'
+import { NOREPLY_FROM, BRAND_NAME, DEPARTMENTS, departmentByEmail } from './departments'
 import { storagePath } from './docUrl'
 
 export interface MailAttachment { filename: string; mimeType: string; contentB64: string }
@@ -22,9 +22,12 @@ export interface MailOptions {
   unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
   inReplyTo?: string   // שרשור: Message-ID של ההודעה שאליה זו תשובה
   references?: string  // שרשור: שרשרת ה-Message-IDs הקודמים בשיחה (מופרדים ברווח)
-  // ⚠️ ניתוב דרך Workspace — הפעלה מפורשת בלבד (ראו GMAIL ROUTING למטה).
-  // 'high' = קוד אימות. כל השאר ממשיך ב-Resend, וזו ברירת המחדל.
-  gmailPriority?: 'high'
+  // ⚠️ עדיפות בניתוב דרך Workspace (ראו GMAIL ROUTING למטה):
+  //   'high'   — קוד אימות. רשאי לנצל את מלוא המכסה של החשבון.
+  //   'normal' — ברירת המחדל לכל מייל תפעולי אחר. נעצר מוקדם יותר, כדי
+  //              שגל אישורים לא יחסל את המכסה ויותיר את הקודים בלי מקום.
+  //   'never'  — דיוור המוני. לעולם לא דרך Workspace.
+  gmailPriority?: 'high' | 'normal' | 'never'
 }
 
 // ─── GMAIL ROUTING ──────────────────────────────────────────────────────────
@@ -40,15 +43,23 @@ export interface MailOptions {
 // ⚠️ המסלול יכול רק להוסיף מסירות ולעולם לא לגרוע: כל כשל — תקרה, חשבון שאינו
 // מחובר, שגיאת API — נופל אוטומטית ל-Resend, שהוא ההתנהגות שהייתה קודם.
 //
-// ⚠️ המסלול שמור לקוד האימות בלבד (gmailPriority: 'high'), ובכוונה:
-//   • המכסה קטנה. תקרת Workspace היא כ-2,000 ליום למשתמש ואינה ניתנת
-//     להעלאה. אישורי הרשמה והודעות בקשות הם הנפח הגדול — הם היו מחסלים
-//     אותה תוך שעה, וקוד האימות (היחיד שחוסם אדם מלהשלים הרשמה) היה נופל
-//     חזרה למסלול התקוע. אישור שמתעכב מעצבן; קוד שלא מגיע עוצר הכל.
-//   • חשבון Workspace אינו כלי דיוור. ככל שיוצא ממנו יותר דואר אוטומטי,
-//     כך גדל הסיכון לחשבון עצמו.
-// כל שאר הדואר — תפעולי ודיוור כאחד — ממשיך ב-Resend.
+// ⚠️ כל הדואר התפעולי עובר כאן, לא רק קודי האימות. בשלב מוקדם המסלול הוגבל
+// לקודים בלבד — היה חשבון שליחה אחד, והמכסה שלו נגמרה תוך שעה. עם מאגר
+// חשבונות (כל אחד ~1,900 ליום, והשליחה עוברת לבא בתור) הקיבולת גדלה, ואין
+// סיבה להשאיר את שאר הדואר במסלול שנחנק.
+//
+// ⚠️ שתי מדרגות מכסה נשמרות: קוד אימות רשאי לנצל את מלוא המכסה של החשבון,
+// ומייל תפעולי אחר נעצר מוקדם יותר. כך גל של אישורי הרשמה אינו יכול לחסל
+// את המכסה ולהותיר את קוד האימות — היחיד שחוסם אדם מלהשלים הרשמה — בלי מקום.
+// אישור שמתעכב מעצבן; קוד שלא מגיע עוצר את התהליך כולו.
+//
+// ⚠️ דיוור המוני לעולם אינו עובר כאן: חשבון Workspace אינו כלי דיוור, ושליחת
+// ניוזלטר דרכו תמצה את המכסה ותסכן את החשבון עצמו. הזיהוי לפי unsubscribeUrl,
+// שקיים בדיוור בלבד.
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
+// ⚠️ תשובות מופנות תמיד לתיבה המאוישת של המשרד. השולח בפועל הוא חשבון שליחה
+// ייעודי שאיש אינו קורא בו, ובלי Reply-To תשובה של נמען נעלמת.
+const REPLY_TO_FALLBACK = DEPARTMENTS.main.email
 // תקרה רכה *לכל חשבון*, מתחת לתקרת Workspace האמיתית (כ-2,000).
 //
 // ⚠️ המרווח שנשאר קטן (כ-100), וזה מכוון: חשבונות השליחה ייעודיים ולא יוצא
@@ -56,6 +67,8 @@ const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
 // Google — השליחה נכשלת, עוברת לחשבון הבא במאגר, ואם אין כזה נופלת ל-Resend.
 // כלומר חריגה עולה בהאטה ולא באובדן הודעה.
 export const GMAIL_CAP_HIGH = 1900
+// מייל תפעולי שאינו קוד אימות נעצר כאן — ההפרש שמור לקודים.
+export const GMAIL_CAP_NORMAL = 1600
 
 function isGmailAddress(email: string): boolean {
   const at = email.lastIndexOf('@')
@@ -82,6 +95,7 @@ export function gmailCounterKey(email: string): string {
 // לחשבון הבא ברשימה ברגע שהקודם מיצה את מכסתו, ורק כשכולם מוצו — ל-Resend.
 async function trySendViaGmail(
   to: string, subject: string, html: string, fallbackFrom: string, fromName: string, cap: number,
+  replyTo?: string,
 ): Promise<string | null> {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -118,7 +132,7 @@ async function trySendViaGmail(
         // אחרת רק אם היא רשומה בחשבון כאליאס מאומת, ואחרת מתעלם ממנה בשקט.
         // כתובת אמיתית מונעת פער בין מה שהוגדר למה שהנמען רואה בפועל.
         const from = acc.token ? acc.email : fallbackFrom
-        await sendGmailMessage(gmail, { to, subject, html, from, fromName })
+        await sendGmailMessage(gmail, { to, subject, html, from, fromName, replyTo })
         return acc.email
       } catch (e) {
         // כשל בחשבון מסוים — ממשיכים לבא בתור ולא מפילים את השליחה כולה.
@@ -192,9 +206,16 @@ export async function deliverMail(
   // ── ניתוב Gmail (ההסבר המלא ליד GMAIL ROUTING למעלה) ──
   // ⚠️ הפעלה מפורשת בלבד: רק קוד אימות מסומן 'high'. כל השאר — כולל דואר
   // תפעולי אחר — ממשיך ב-Resend, כדי לא לחסל את המכסה היומית הקטנה.
-  if (options?.gmailPriority === 'high' && !options?.unsubscribeUrl && !options?.scheduledAt
+  const gmailPriority = options?.gmailPriority ?? 'normal'
+  if (gmailPriority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
       && !attachments?.length && isGmailAddress(to)) {
-    const sentBy = await trySendViaGmail(to, subject, html, fromEmail, fromName, GMAIL_CAP_HIGH)
+    const cap = gmailPriority === 'high' ? GMAIL_CAP_HIGH : GMAIL_CAP_NORMAL
+    const sentBy = await trySendViaGmail(
+      to, subject, html, fromEmail, fromName, cap,
+      // ⚠️ תשובות מופנות לתיבה המאוישת. חשבונות השליחה ייעודיים ואיש אינו
+      // קורא בהם, ובלי הכותרת תשובה של נמען הייתה נעלמת.
+      options?.replyTo || REPLY_TO_FALLBACK,
+    )
     if (sentBy) {
       console.log(`[mail] נשלח דרך Workspace · ${sentBy} → ${to}`)
       // ⚠️ אין resendId במסלול הזה, ולכן אירועי המסירה של Resend לא יגיעו
