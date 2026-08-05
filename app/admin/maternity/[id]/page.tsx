@@ -369,8 +369,16 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     {idDocs.find(d => d.doc_type === 'id_husband') && (
                       <DocCard label="ת.ז. הבעל" person={motherName} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
                     )}
+                    {/* ספח ת"ז הבעל — קובץ נפרד ליד תעודת הזהות עצמה */}
+                    {idDocs.find(d => d.doc_type === 'id_husband_appx') && (
+                      <DocCard label="ספח ת.ז. הבעל" person={motherName} url={idDocs.find(d => d.doc_type === 'id_husband_appx')!.file_url ?? undefined} />
+                    )}
                     {idDocs.find(d => d.doc_type === 'id_wife') && (
                       <DocCard label="ת.ז. האישה" person={motherName} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+                    )}
+                    {/* ספח ת"ז האישה — קובץ נפרד ליד תעודת הזהות עצמה */}
+                    {idDocs.find(d => d.doc_type === 'id_wife_appx') && (
+                      <DocCard label="ספח ת.ז. האישה" person={motherName} url={idDocs.find(d => d.doc_type === 'id_wife_appx')!.file_url ?? undefined} />
                     )}
                     {aid.birth_certificate_url && (
                       <DocCard label="אישור לידה" person={motherName} url={aid.birth_certificate_url} />
