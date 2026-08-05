@@ -286,9 +286,16 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // בשאילתה *אחת* לכל השדות (id_number/spouse) ובשאילתה אחת ל-children — לכל
   // הילדים יחד. מוריד את עומס ה-DB דרסטית כשאלפי טפסים מגיעים במקביל.
   if (Array.isArray(children) && children.length) {
+    // ילד נשוי — 'נשוי' לבן, 'נשואה' לבת (ראו maritalFor ב-PublicPortalPage).
+    const childIsMarried = (s: unknown) => {
+      const v = String(s ?? '').trim()
+      return v === 'נשוי' || v === 'נשואה' || v === 'נשואים'
+    }
     const seen = new Set<string>()
     const childIds: string[] = []
-    for (const c of children as { name?: string; id_number?: string }[]) {
+    const childLabels: string[] = []
+    const childMarried: boolean[] = []
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string }[]) {
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       if (!cid) continue
       const childName = (c?.name ?? '').trim() || 'הילד/ה'
@@ -298,6 +305,8 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
       }
       seen.add(cid)
       childIds.push(cid)
+      childLabels.push(childName)
+      childMarried.push(childIsMarried(c?.marital_status))
     }
     if (childIds.length) {
       // שאילתה אחת: האם מי מת"ז הילדים כבר קיימת כבעל/אשה של רשומה קיימת.
@@ -316,7 +325,20 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
         const cid = childIds[i]
         const asChild = childHits[i]?.data
         if (takenAsBen.has(cid) || (asChild?.length)) {
-          return NextResponse.json({ error: `תעודת הזהות ${cid} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 409 })
+          // ⚠️ קיום ברשומה אחרת אינו בהכרח כפילות. צאצא נשוי *אמור* להופיע
+          // בשני מקומות: כמשפחה עצמאית משלו, וגם ברשימת הילדים של הוריו —
+          // ולעיתים גם אצל חמיו. חסימה גורפת עצרה כאן אב שרשם את ילדיו
+          // הנשואים, בלי שום דרך להתקדם ובלי להסביר לו מה הבעיה.
+          //
+          // ההוספה מותרת בתנאי אחד: הילד מסומן כנשוי. הסימון הוא ההצהרה
+          // שמדובר במשפחה עצמאית ולא ברישום כפול של אותו אדם — ילד שאינו
+          // נשוי אמור להופיע במשפחה אחת בלבד.
+          if (!childMarried[i]) {
+            return NextResponse.json({
+              error: `שים לב: ${childLabels[i]} כבר רשום/ה במערכת כמשפחה נפרדת. ניתן להוסיף אותו/ה תחת הילדים שלך במצב "נשוי/אה" בלבד — יש לסמן את המצב המשפחתי ולנסות שוב.`,
+              code: 'child_registered_separately',
+            }, { status: 409 })
+          }
         }
       }
     }
