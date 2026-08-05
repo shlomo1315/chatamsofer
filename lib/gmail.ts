@@ -55,6 +55,9 @@ export async function sendGmailMessage(gmail: any, opts: {
   // בחשבון כ-"Send mail as" ומאומתת. אחרת הוא מתעלם ושולח מהכתובת הראשית —
   // ולכן זו הגדרה שחייבת להיעשות גם בצד Gmail, לא רק כאן.
   from?: string; fromName?: string
+  // ⚠️ כתובת לתשובות. חיונית כשהשולח הוא חשבון שליחה ייעודי: בלעדיה תשובה
+  // של נמען נוחתת בתיבה שאיש אינו קורא. עם הכותרת היא מגיעה לתיבה מאוישת.
+  replyTo?: string
 }) {
   const from = opts.from || process.env.GMAIL_EMAIL || 'office@chasamsofer.info'
   const fromName = opts.fromName || 'היכל החתם סופר משרד ראשי'
@@ -62,6 +65,7 @@ export async function sendGmailMessage(gmail: any, opts: {
   const raw = [
     `From: ${_encodeHeader(fromName)} <${from}>`,
     `To: ${opts.to}`,
+    ...(opts.replyTo ? [`Reply-To: ${opts.replyTo}`] : []),
     `Subject: ${_encodeHeader(opts.subject)}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
