@@ -29,12 +29,20 @@ export async function POST(request: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { open?: boolean; regenerate?: boolean }
+  let body: { open?: boolean; regenerate?: boolean; closedMessage?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   if (typeof body.open === 'boolean') {
     await sb.from('app_settings').upsert(
       { key: 'public_registration_open', value: body.open ? 'true' : 'false', updated_at: new Date().toISOString() },
+      { onConflict: 'key' },
+    )
+  }
+  // סיבת הסגירה. נשמרת גם כשההרשמה נפתחת מחדש — כדי שהנוסח יהיה מוכן לפעם
+  // הבאה ולא יידרש להקליד אותו שוב תחת לחץ. ריק = חזרה לנוסח ברירת המחדל.
+  if (typeof body.closedMessage === 'string') {
+    await sb.from('app_settings').upsert(
+      { key: 'registration_closed_message', value: body.closedMessage.trim().slice(0, 600), updated_at: new Date().toISOString() },
       { onConflict: 'key' },
     )
   }

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
-import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
+import { getRegistrationGate, registrationAllowed, DEFAULT_CLOSED_MESSAGE } from '@/lib/registrationGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,11 +12,15 @@ function getAdminClient() {
 }
 
 // סטטוס ההרשמה הציבורית לפורטל. open=true אם פתוח לכולם, או אם הוצג קוד עוקף תקין (?signup=CODE).
+// כשסגור מוחזרת גם סיבת הסגירה שהוזנה בהגדרות, להצגה במקום הנוסח הקבוע.
 export async function GET(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ open: true }) // סביבת פיתוח ללא שרת — לא חוסמים
   const gate = await getRegistrationGate(admin)
   const code = new URL(request.url).searchParams.get('signup')
   const open = registrationAllowed(gate, code)
-  return NextResponse.json({ open }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json(
+    { open, ...(open ? {} : { closedMessage: gate.closedMessage || DEFAULT_CLOSED_MESSAGE }) },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
 }

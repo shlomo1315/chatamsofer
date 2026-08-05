@@ -27,6 +27,9 @@ export default function VerifyControl({
   // שניות שנותרו עד שמותר לבקש קוד חדש. מקור המספר הוא תמיד השרת (cooldown
   // בהצלחה, retryAfter בחסימה) — כאן רק סופרים אותו לאחור.
   const [cooldown, setCooldown] = useState(0)
+  // הכתובת שעבורה נספר הקירור. השרת אוכף לפי הערך עצמו, ולכן כתובת חדשה
+  // מתחילה נקייה — מי שמתקן שגיאת כתיב במייל לא ממתין שתי דקות על לא כלום.
+  const [cooldownFor, setCooldownFor] = useState('')
   const onTokenRef = useRef(onToken)
   onTokenRef.current = onToken
   // מונע אימות כפול כשמגיעים ל-6 ספרות תוך כדי אימות פעיל
@@ -42,10 +45,6 @@ export default function VerifyControl({
     }
   }, [value, verifiedValue])
 
-  // הקירור נשמר בשרת לפי הכתובת עצמה — ולכן כתובת חדשה מתחילה נקייה.
-  // בלי האיפוס הזה מי שמתקן שגיאת כתיב במייל היה ממתין שתי דקות על לא כלום.
-  useEffect(() => { setCooldown(0) }, [value])
-
   // ספירה לאחור. השרת הוא האוכף; אם הספירה כאן תסתיים מוקדם מדי, הבקשה תיענה
   // ב-429 עם retryAfter והשעון יסתנכרן מחדש.
   useEffect(() => {
@@ -53,6 +52,10 @@ export default function VerifyControl({
     const t = setTimeout(() => setCooldown(s => s - 1), 1000)
     return () => clearTimeout(t)
   }, [cooldown])
+
+  // הקירור תקף רק לכתובת שעבורה נמדד — נגזר בזמן רינדור, בלי אפקט שמאפס מצב.
+  const cooldownLeft = cooldownFor === value.trim() ? cooldown : 0
+  const startCooldown = (secs: number) => { setCooldown(Math.ceil(secs)); setCooldownFor(value.trim()) }
 
   async function send() {
     setError(''); setLoading(true)
@@ -66,7 +69,7 @@ export default function VerifyControl({
         // חסימת קירור מגיעה עם retryAfter — מסנכרנים אליו את הספירה, כך שגם
         // רענון דף או לשונית שנייה מציגים את הזמן האמיתי שנותר.
         if (typeof data.retryAfter === 'number' && data.retryAfter > 0) {
-          setCooldown(Math.ceil(data.retryAfter))
+          startCooldown(data.retryAfter)
           // הקוד הקודם עדיין בתוקף (10 דקות) — פותחים את שדה ההזנה כדי שישתמש
           // במייל שכבר נשלח אליו, במקום להמתין לשליחה חדשה שאינה נחוצה.
           setStep('sent')
@@ -75,7 +78,7 @@ export default function VerifyControl({
         return
       }
       setStep('sent'); setCode('')
-      if (typeof data.cooldown === 'number') setCooldown(Math.ceil(data.cooldown))
+      if (typeof data.cooldown === 'number') startCooldown(data.cooldown)
     } catch { setError('שגיאת רשת. נסו שוב.') }
     finally { setLoading(false) }
   }
@@ -130,10 +133,10 @@ export default function VerifyControl({
               {optionalHint}
             </p>
           )}
-          <button type="button" onClick={send} disabled={!valid || !value.trim() || loading || cooldown > 0}
+          <button type="button" onClick={send} disabled={!valid || !value.trim() || loading || cooldownLeft > 0}
             className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold py-2 px-3 rounded-lg transition-colors text-sm">
             {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}{' '}
-            {cooldown > 0 ? `אפשר לשלוח קוד חדש בעוד ${fmtLeft(cooldown)}` : sendLabel}
+            {cooldownLeft > 0 ? `אפשר לשלוח קוד חדש בעוד ${fmtLeft(cooldownLeft)}` : sendLabel}
           </button>
         </>
       ) : (
@@ -163,9 +166,9 @@ export default function VerifyControl({
               המסך מזמין לחיצה, וכל לחיצה מייצרת קוד חדש שמבטל את הקודם: גם המייל
               שכן הגיע מפסיק לעבוד, והשליחות הכפולות מחריפות את עומס המסירה.
               במקומו מוצגת ספירה, כדי שיהיה ברור שממתינים — ולא שנתקע. */}
-          {cooldown > 0 ? (
+          {cooldownLeft > 0 ? (
             <p className="text-xs text-slate-500 self-start">
-              המייל בדרך. אפשר לבקש קוד חדש בעוד {fmtLeft(cooldown)}
+              המייל בדרך. אפשר לבקש קוד חדש בעוד {fmtLeft(cooldownLeft)}
             </p>
           ) : (
             <button type="button" onClick={send} disabled={loading}

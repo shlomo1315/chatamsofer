@@ -1804,11 +1804,20 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // שער ההרשמה הציבורית — סגור/פתוח (+ קוד עוקף סודי ?signup=CODE לטסטים)
   const [registrationOpen, setRegistrationOpen] = useState(true)
   const [signupCode, setSignupCode] = useState('')
+  // סיבת הסגירה שהוזנה בהגדרות הניהול. השרת מחזיר אותה רק כשההרשמה סגורה,
+  // וכבר עם נוסח ברירת המחדל כשלא הוגדרה סיבה — כאן רק מציגים.
+  const [registrationClosedMessage, setRegistrationClosedMessage] =
+    useState('ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.')
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('signup') ?? ''
     setSignupCode(code)
     fetch(`/api/portal/registration-status${code ? `?signup=${encodeURIComponent(code)}` : ''}`)
-      .then(r => r.json()).then(d => setRegistrationOpen(d.open !== false)).catch(() => {})
+      .then(r => r.json()).then(d => {
+        setRegistrationOpen(d.open !== false)
+        if (typeof d.closedMessage === 'string' && d.closedMessage.trim()) {
+          setRegistrationClosedMessage(d.closedMessage.trim())
+        }
+      }).catch(() => {})
   }, [])
 
   // Loan request form
@@ -3658,8 +3667,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <EditableText k="notfound.register" />
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed">
-                    ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed whitespace-pre-line">
+                    {registrationClosedMessage}
                   </div>
                 )}
                 <button
@@ -3718,8 +3727,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     רישום מהיר
                   </button>
                 ) : (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed">
-                    ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 text-center leading-relaxed whitespace-pre-line">
+                    {registrationClosedMessage}
                   </div>
                 )}
                 <button onClick={backToHome}
