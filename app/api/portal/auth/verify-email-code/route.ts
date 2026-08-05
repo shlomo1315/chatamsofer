@@ -15,7 +15,7 @@ function getAdminClient() {
 }
 
 // אימות הקוד הזמני שנשלח למייל → כניסה אוטומטית (סשן פורטל), ללא סיסמה קבועה.
-// הקוד נשמר ע"י send-code בעמודות portal_reset_* ותקף ל-10 דקות בלבד.
+// הקוד נשמר ע"י send-code בעמודות portal_reset_* ותקף ל-30 דקות בלבד.
 export async function POST(request: NextRequest) {
   if (!rateLimit(`portal-verifyemail:${clientIp(request)}`, 15, 15 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   const invalid = () => NextResponse.json({ error: 'הקוד שגוי או שפג תוקפו. בקש קוד חדש.' }, { status: 400 })
 
-  // אכיפת תוקף: אין קוד / פג תוקף (מעל 10 דקות) → נכשל
+  // אכיפת תוקף: אין קוד / פג תוקף (מעל 30 דקות) → נכשל
   if (!data || !data.portal_reset_code_hash || !data.portal_reset_expires) return invalid()
   if (new Date(data.portal_reset_expires).getTime() < Date.now()) return invalid()
   if ((data.portal_reset_attempts ?? 0) >= 5) {

@@ -3600,7 +3600,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 ) : emailStep === 'code' ? (
                 <form onSubmit={handleVerifyEmailCode} className="flex flex-col gap-4">
                   <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
-                    שלחנו קוד זמני למייל שלך{authEmailHint ? <> <span className="font-semibold ltr-num" dir="ltr">{authEmailHint}</span></> : ''} · הקוד תקף ל-10 דקות בלבד
+                    שלחנו קוד זמני למייל שלך{authEmailHint ? <> <span className="font-semibold ltr-num" dir="ltr">{authEmailHint}</span></> : ''} · הקוד תקף ל-30 דקות בלבד
                   </div>
                   <Field label={<EditableText k="auth.emailcode.label" />} required hint={<EditableText k="auth.emailcode.hint" />}>
                     <TextInput value={authCode}
@@ -3659,7 +3659,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <p className="text-xs text-slate-400 text-center leading-relaxed">
                     {mailChannelOff
                       ? 'הקוד יוקרא בשיחה למספר טלפון מאומת שלך.'
-                      : 'הקוד תקף ל-10 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
+                      : 'הקוד תקף ל-30 דקות בלבד. הקוד למייל יישלח לכתובת הרשומה במערכת; הקוד בשיחה יוקרא למספר טלפון מאומת שלך.'}
                   </p>
                 </div>
                 )
@@ -3687,7 +3687,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ) : (
                     <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
                       <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center text-sm text-green-700">
-                        קוד נשלח אל <span dir="ltr" className="inline-block">{authEmailHint || 'המייל שלך'}</span> · תקף ל-10 דקות
+                        קוד נשלח אל <span dir="ltr" className="inline-block">{authEmailHint || 'המייל שלך'}</span> · תקף ל-30 דקות
                       </div>
                       <Field label="קוד אימות" required hint="6 ספרות שהתקבלו במייל">
                         <TextInput value={authCode}
