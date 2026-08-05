@@ -43,11 +43,17 @@ export async function sendVerifyCode(
     return { status: 400, body: { error: 'מספר טלפון לא תקין' } }
   }
 
-  // הגבלת קצב: לפי IP+ערך (טלפון מחמיר יותר כי שיחה עולה)
+  // הגבלת קצב:
+  //   • per-value — הגנה על מספר/מייל *ספציפי* מהצפה (אותו אדם מבקש שוב ושוב).
+  //     נשאר הדוק (4 לטלפון / 5 למייל) — זה בריא ואינו מפריע לרישום לגיטימי.
+  //   • per-IP — ⚠️ הועלה דרסטית (20→3000): הרישום המאסיבי נעשה גם *מעמדות /
+  //     מחשב מרכזי*, שכל הרישומים מהן יוצאים מ-IP אחד. תקרה נמוכה חסמה את
+  //     הנרשם ה-21 מאותה עמדה. ההגנה האמיתית מפני spam היא ה-per-value + אימות
+  //     הקוד עצמו, לא ה-IP.
   const ip = clientIp(request)
   const perValue = channel === 'phone' ? 4 : 5
   if (!rateLimit(`verify-send:${channel}:${value}`, perValue, 15 * 60 * 1000) ||
-      !rateLimit(`verify-send-ip:${ip}`, 20, 15 * 60 * 1000)) {
+      !rateLimit(`verify-send-ip:${ip}`, 3000, 15 * 60 * 1000)) {
     return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
   }
 

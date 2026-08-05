@@ -103,19 +103,21 @@ export default function LineageTreeSvg({
   // והדפדפן מגלגל את העמוד במקביל — תחושת "קפיצות". רושמים listen ידני עם
   // { passive: false } כדי שהגלגלת תזיז את העץ בלבד, חלק. גלגלת רגילה = pan
   // אנכי/אופקי · Ctrl/⌘+גלגלת = זום סביב מרכז.
+  // ⚠️ זהה לעץ הדורות בתוכנה (LineageBranchView): גלגלת = זום (לא pan), כדי
+  // שהחוויה תהיה אותו דבר בדיוק. onWheel של React הוא passive ו-preventDefault
+  // בו מתעלם (הדפדפן מגלגל את העמוד = תחושת קפיצות), לכן listener ידני עם
+  // { passive: false }. ה-effect תלוי ב-positions.length כדי להירשם מחדש אחרי
+  // שהעץ נטען/הטאב נפתח — אחרת ה-container קיים אך ריק וה-listener לא נתפס.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    // ⚠️ זהה לעץ הדורות בתוכנה (LineageBranchView): גלגלת = זום (לא pan), כדי
-    // שהחוויה תהיה אותו דבר בדיוק. שיפט/Ctrl אינם נדרשים — פשוט מגלגלים לזום,
-    // ואת ההזזה עושים בגרירה. זום עדין (0.0012) לתחושה חלקה.
     const handler = (e: WheelEvent) => {
-      e.preventDefault()
+      e.preventDefault(); e.stopPropagation()
       setZoom(z => Math.min(2.5, Math.max(0.3, +(z - e.deltaY * 0.0012).toFixed(3))))
     }
     el.addEventListener('wheel', handler, { passive: false })
     return () => el.removeEventListener('wheel', handler)
-  }, [])
+  }, [positions.length])
 
   // מרכוז ראשוני על השורש
   useEffect(() => {
@@ -140,6 +142,7 @@ export default function LineageTreeSvg({
       <div ref={containerRef} dir="ltr" onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
         className="relative overflow-hidden cursor-grab active:cursor-grabbing" style={{
           height: 500,
+          touchAction: 'none',   // מונע מהדפדפן לחטוף גלגלת/מגע — הגלילה נשארת בעץ
           background:
             'radial-gradient(60% 50% at 50% 0%, rgba(198,158,45,0.05), transparent 70%),' +
             'repeating-linear-gradient(0deg, transparent 0 39px, rgba(27,50,86,0.025) 39px 40px),' +
