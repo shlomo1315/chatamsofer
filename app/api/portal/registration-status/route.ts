@@ -20,7 +20,13 @@ export async function GET(request: NextRequest) {
   const code = new URL(request.url).searchParams.get('signup')
   const open = registrationAllowed(gate, code)
   return NextResponse.json(
-    { open, ...(open ? {} : { closedMessage: gate.closedMessage || DEFAULT_CLOSED_MESSAGE }) },
+    {
+      open,
+      // הטופס צריך לדעת אם לחסום סיום רישום בלי אימות מייל. השרת הוא האוכף
+      // (public-register בודק את אותו מתג) — כאן רק כדי שה-UI יתאים לו.
+      emailVerificationRequired: gate.emailVerificationRequired,
+      ...(open ? {} : { closedMessage: gate.closedMessage || DEFAULT_CLOSED_MESSAGE }),
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }
