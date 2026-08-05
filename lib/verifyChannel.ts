@@ -13,6 +13,15 @@ import { createVerifyToken, normalizeVerifyValue, type VerifyChannel } from '@/l
 import { verifyCodeEmail } from '@/lib/emailTemplates'
 
 const CODE_TTL_MS = 10 * 60 * 1000
+// ⚠️ קירור בין שליחה לשליחה של קוד במייל. אחרי שקוד נשלח בהצלחה אי אפשר לבקש
+// קוד חדש לאותה כתובת למשך שתי דקות. שתי סיבות:
+//   • מייל אינו מיידי — הוא עובר סינון וממתין בתור. משתמש שלא רואה אותו מיד
+//     לוחץ "שליחת קוד מחדש" שוב ושוב; כל לחיצה מייצרת קוד *חדש* ומבטלת את
+//     הקודם, ואז גם המייל שכן הגיע כבר לא תקף — והוא נתקע בלולאה.
+//   • רצף שליחות לאותה כתובת בתוך שניות הוא בדיוק החתימה שמורידה מוניטין
+//     דומיין אצל Gmail ומגדילה את הסיכוי שההודעה הבאה תיחסם.
+// נאכף בצד השרת (מקור-אמת) ומשוקף ל-UI דרך cooldown/retryAfter בתשובה.
+const EMAIL_RESEND_COOLDOWN_MS = 120 * 1000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // תוצאה ניטרלית ל-HTTP: ה-route ממיר ל-NextResponse (עם/בלי CORS).
@@ -50,6 +59,34 @@ export async function sendVerifyCode(
   //     מחשב מרכזי*, שכל הרישומים מהן יוצאים מ-IP אחד. תקרה נמוכה חסמה את
   //     הנרשם ה-21 מאותה עמדה. ההגנה האמיתית מפני spam היא ה-per-value + אימות
   //     הקוד עצמו, לא ה-IP.
+  const admin = getServiceClient()
+  if (!admin) return { status: 500, body: { error: 'שגיאת שרת' } }
+  const key = `verify:${channel}:${value}`
+
+  // קירור שליחה חוזרת במייל — נבדק *לפני* מוני הקצב בכוונה: ניסיון שנחסם
+  // בקירור אינו שליחה, ואסור שישרוף למשתמש את מכסת השליחות של הכתובת שלו.
+  // אחרת חמש לחיצות מהירות על "שליחה מחדש" היו נועלות אותו לרבע שעה.
+  if (channel === 'email') {
+    const { data: prev } = await admin.from('app_settings').select('value').eq('key', key).maybeSingle()
+    if (prev?.value) {
+      try {
+        const rec = JSON.parse(prev.value) as { sentAt?: number }
+        const elapsed = Date.now() - (rec.sentAt ?? 0)
+        // רשומה ישנה מלפני התכונה (בלי sentAt) אינה חוסמת.
+        if (rec.sentAt && elapsed >= 0 && elapsed < EMAIL_RESEND_COOLDOWN_MS) {
+          const retryAfter = Math.ceil((EMAIL_RESEND_COOLDOWN_MS - elapsed) / 1000)
+          return {
+            status: 429,
+            body: {
+              error: `כבר נשלח קוד לכתובת זו. אפשר לשלוח קוד חדש בעוד ${retryAfter} שניות.`,
+              retryAfter,
+            },
+          }
+        }
+      } catch { /* רשומה פגומה — לא חוסמים שליחה לגיטימית */ }
+    }
+  }
+
   const ip = clientIp(request)
   const perValue = channel === 'phone' ? 4 : 5
   if (!rateLimit(`verify-send:${channel}:${value}`, perValue, 15 * 60 * 1000) ||
@@ -72,20 +109,18 @@ export async function sendVerifyCode(
     return { status: 503, body: { error: 'אימות טלפוני אינו זמין כעת. אנא נסו שוב מאוחר יותר.' } }
   }
 
-  const admin = getServiceClient()
-  if (!admin) return { status: 500, body: { error: 'שגיאת שרת' } }
-
   const code = generateCode()
   const hash = await hashCode(code)
   // ⚠️ באימות טלפון נשמר גם הקוד הגלוי. הוובהוק של ימות מקריא לפי מספר
   // המתקשר: בכניסה הקוד נשלף מ-portal_phone_code_plain בטבלת המוטבים, אך
   // בהרשמה ובטופס נדרים אין עדיין רשומה שם — ובלי זה אין מה להקריא.
   // נמחק מיד עם ההקראה (חד-פעמי); ה-hash נשאר לאימות.
+  // sentAt — חותמת השליחה שעליה נשען הקירור של שתי הדקות. נשמרת בבסיס הנתונים
+  // ולא בזיכרון התהליך, כדי שתחזיק גם בין אינסטנסים וגם אחרי דיפלוי.
   const record = JSON.stringify({
-    hash, expires: Date.now() + CODE_TTL_MS, attempts: 0,
+    hash, expires: Date.now() + CODE_TTL_MS, attempts: 0, sentAt: Date.now(),
     ...(channel === 'phone' ? { plain: code } : {}),
   })
-  const key = `verify:${channel}:${value}`
   const { error: upErr } = await admin.from('app_settings').upsert(
     { key, value: record, updated_at: new Date().toISOString() }, { onConflict: 'key' },
   )
@@ -110,6 +145,10 @@ export async function sendVerifyCode(
     })
     if (!res || !res.ok) {
       console.error('[verify/send] email failed:', res?.error)
+      // ⚠️ המייל לא יצא — מוחקים את הרשומה שנכתבה זה עתה. בלי זה חותמת ה-sentAt
+      // הייתה נועלת את הכתובת לשתי דקות בגלל שליחה שכלל לא הגיעה: המשתמש מקבל
+      // הודעת שגיאה, לוחץ "נסו שוב" כפי שנאמר לו — ונחסם.
+      await admin.from('app_settings').delete().eq('key', key)
       return { status: 502, body: { error: 'שליחת המייל נכשלה. נסו שוב או פנו למזכירות.' } }
     }
     // ⚠️ תיעוד ההצלחה: מייל קוד האימות נשלח עם skipLog (אינו נכנס ל"דואר יוצא"),
@@ -129,7 +168,15 @@ export async function sendVerifyCode(
     }
   }
 
-  return { status: 200, body: { ok: true, sent: true } }
+  // cooldown — כמה שניות הכפתור צריך להישאר נעול ב-UI. מגיע מהשרת ולא מקבוע
+  // בצד הלקוח, כדי שהספירה שהמשתמש רואה תהיה בדיוק זו שתיאכף בבקשה הבאה.
+  return {
+    status: 200,
+    body: {
+      ok: true, sent: true,
+      ...(channel === 'email' ? { cooldown: EMAIL_RESEND_COOLDOWN_MS / 1000 } : {}),
+    },
+  }
 }
 
 // אימות קוד. בהצלחה מחזיר טוקן חתום. הלוגיקה זהה למקור (portal/verify/confirm).

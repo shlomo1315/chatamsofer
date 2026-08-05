@@ -7,6 +7,9 @@ import { Loader2, ShieldCheck, CheckCircle2 } from 'lucide-react'
 
 type Channel = 'email' | 'phone'
 
+// שניות → m:ss (למשל 118 → "1:58")
+const fmtLeft = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+
 export default function VerifyControl({
   channel, value, valid, onToken, optionalHint,
 }: {
@@ -21,6 +24,9 @@ export default function VerifyControl({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [verifiedValue, setVerifiedValue] = useState<string | null>(null)
+  // שניות שנותרו עד שמותר לבקש קוד חדש. מקור המספר הוא תמיד השרת (cooldown
+  // בהצלחה, retryAfter בחסימה) — כאן רק סופרים אותו לאחור.
+  const [cooldown, setCooldown] = useState(0)
   const onTokenRef = useRef(onToken)
   onTokenRef.current = onToken
   // מונע אימות כפול כשמגיעים ל-6 ספרות תוך כדי אימות פעיל
@@ -36,6 +42,18 @@ export default function VerifyControl({
     }
   }, [value, verifiedValue])
 
+  // הקירור נשמר בשרת לפי הכתובת עצמה — ולכן כתובת חדשה מתחילה נקייה.
+  // בלי האיפוס הזה מי שמתקן שגיאת כתיב במייל היה ממתין שתי דקות על לא כלום.
+  useEffect(() => { setCooldown(0) }, [value])
+
+  // ספירה לאחור. השרת הוא האוכף; אם הספירה כאן תסתיים מוקדם מדי, הבקשה תיענה
+  // ב-429 עם retryAfter והשעון יסתנכרן מחדש.
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(s => s - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
   async function send() {
     setError(''); setLoading(true)
     try {
@@ -44,8 +62,20 @@ export default function VerifyControl({
         body: JSON.stringify({ channel, value: value.trim() }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאה בשליחה'); return }
+      if (!res.ok) {
+        // חסימת קירור מגיעה עם retryAfter — מסנכרנים אליו את הספירה, כך שגם
+        // רענון דף או לשונית שנייה מציגים את הזמן האמיתי שנותר.
+        if (typeof data.retryAfter === 'number' && data.retryAfter > 0) {
+          setCooldown(Math.ceil(data.retryAfter))
+          // הקוד הקודם עדיין בתוקף (10 דקות) — פותחים את שדה ההזנה כדי שישתמש
+          // במייל שכבר נשלח אליו, במקום להמתין לשליחה חדשה שאינה נחוצה.
+          setStep('sent')
+        }
+        setError(data.error || 'שגיאה בשליחה')
+        return
+      }
       setStep('sent'); setCode('')
+      if (typeof data.cooldown === 'number') setCooldown(Math.ceil(data.cooldown))
     } catch { setError('שגיאת רשת. נסו שוב.') }
     finally { setLoading(false) }
   }
@@ -100,9 +130,10 @@ export default function VerifyControl({
               {optionalHint}
             </p>
           )}
-          <button type="button" onClick={send} disabled={!valid || !value.trim() || loading}
+          <button type="button" onClick={send} disabled={!valid || !value.trim() || loading || cooldown > 0}
             className="w-full flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed font-semibold py-2 px-3 rounded-lg transition-colors text-sm">
-            {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} {sendLabel}
+            {loading ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}{' '}
+            {cooldown > 0 ? `אפשר לשלוח קוד חדש בעוד ${fmtLeft(cooldown)}` : sendLabel}
           </button>
         </>
       ) : (
@@ -128,8 +159,10 @@ export default function VerifyControl({
               className="w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-center text-base font-semibold tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60" />
             {loading && <Loader2 size={18} className="animate-spin text-indigo-600 absolute left-3" />}
           </div>
-          <button type="button" onClick={send} disabled={loading}
-            className="text-xs text-slate-500 hover:text-slate-700 underline self-start">שליחת קוד מחדש</button>
+          <button type="button" onClick={send} disabled={loading || cooldown > 0}
+            className="text-xs text-slate-500 hover:text-slate-700 underline self-start disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed">
+            {cooldown > 0 ? `שליחת קוד מחדש תתאפשר בעוד ${fmtLeft(cooldown)}` : 'שליחת קוד מחדש'}
+          </button>
         </div>
       )}
       {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
