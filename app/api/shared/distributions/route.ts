@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPortalToken, DIST_PORTAL_COOKIE } from '@/lib/distributionsPortalAuth'
 import { createClient } from '@supabase/supabase-js'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — API לתצוגה בלבד (view-only).
@@ -30,28 +31,28 @@ export async function GET(req: NextRequest) {
     .limit(10000)
   if (distErr) return NextResponse.json({ error: distErr.message }, { status: 500 })
 
+  // ⚠️ שליפה בדפים ולא ב-limit: התקרה נאכפת בצד השרת (db-max-rows) ואינה
+  // ניתנת לעקיפה מהלקוח — .limit(100000) נוסה ולא עזר, הרשימה נחתכה ב-1,000
+  // בלי שגיאה. ראו lib/fetchAllRows.
   const ids = (distributions ?? []).map(d => d.id)
   let recipients: unknown[] = []
   if (ids.length) {
-    const { data: recs, error: recErr } = await admin
+    const { rows, error: recErr } = await fetchAllRows<unknown>((from, to) => admin
       .from('distribution_recipients')
       .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
       .in('distribution_id', ids)
       .order('registered_at', { ascending: false })
-      // ⚠️ limit מפורש: PostgREST מחזיר לכל היותר 1,000 שורות כברירת מחדל,
-      // ובלי השורה הזו הדף "נתקע על 1000" — הנרשמים מעבר לכך פשוט לא הגיעו,
-      // בלי שגיאה ובלי שום סימן שמשהו חסר.
-      .limit(100000)
-    if (recErr) return NextResponse.json({ error: recErr.message }, { status: 500 })
-    recipients = recs ?? []
+      .range(from, to))
+    if (recErr) return NextResponse.json({ error: recErr }, { status: 500 })
+    recipients = rows
   }
 
   // עץ הדורות — לעץ הוויזואלי בדף השיתוף. קל-משקל, מרונדר בצד הלקוח.
-  const { data: lineageNodes } = await admin
+  const { rows: lineageNodes } = await fetchAllRows<unknown>((from, to) => admin
     .from('lineage_nodes')
     .select('id, name, parent_id, generation, status')
-    // אותה סיבה — עץ הדורות חורג מ-1,000 צמתים ונקטע באמצע.
-    .limit(100000)
+    .order('id')
+    .range(from, to))
 
   // סה"כ צאצאים רשומים במערכת (לקוביית הסיכום בדשבורד) — ספירה בלבד, ללא נתונים.
   const { count: beneficiariesCount } = await admin
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
     .select('id', { count: 'exact', head: true })
 
   return NextResponse.json(
-    { distributions: distributions ?? [], recipients, lineageNodes: lineageNodes ?? [], beneficiariesCount: beneficiariesCount ?? 0 },
+    { distributions: distributions ?? [], recipients, lineageNodes, beneficiariesCount: beneficiariesCount ?? 0 },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

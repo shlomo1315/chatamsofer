@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPortalToken, PORTAL_COOKIE } from '@/lib/loansPortalAuth'
 import { createClient } from '@supabase/supabase-js'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -15,15 +16,15 @@ export async function GET(req: NextRequest) {
   }
 
   const admin = adminClient()
-  const { data, error } = await admin
+  // ⚠️ בדפים: תקרת השורות של PostgREST נאכפת בצד השרת ואינה ניתנת לעקיפה
+  // ב-limit — הרשימה נקטעה ב-1,000 בשקט. ראו lib/fetchAllRows.
+  const { rows, error } = await fetchAllRows<unknown>((from, to) => admin
     .from('loans')
     .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email)')
     .in('status', ['approved', 'active'])
     .order('created_at', { ascending: false })
-    // ⚠️ אותה תקרה כמו בדף החלוקות: PostgREST מחזיר 1,000 שורות כברירת מחדל,
-    // והרשימה נקטעת בשקט בלי שגיאה ובלי סימן שמשהו חסר.
-    .limit(100000)
+    .range(from, to))
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ loans: data ?? [] })
+  if (error) return NextResponse.json({ error }, { status: 500 })
+  return NextResponse.json({ loans: rows })
 }

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight, Gift, CalendarDays, Pencil } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 import type { Distribution } from '@/types'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { format, differenceInYears } from 'date-fns'
@@ -38,22 +39,26 @@ interface BenRow {
 async function getData(id: string) {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
+  // ⚠️ הנרשמים נשלפים בדפים: תקרת השורות של PostgREST נאכפת בצד השרת ואינה
+  // ניתנת לעקיפה ב-limit, ולכן הרשימה נחתכה ב-1,000 בלי שגיאה ובלי סימן.
+  // ראו lib/fetchAllRows.
   const [distRes, recRes] = await Promise.all([
     supabase.from('distributions').select('*').eq('id', id).single(),
-    supabase
+    fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
       .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
-      .order('registered_at', { ascending: false }),
+      .order('registered_at', { ascending: false })
+      .range(from, to)),
   ])
   if (distRes.error && distRes.error.code !== 'PGRST116' && distRes.error.code !== '22P02') throw distRes.error
   if (!distRes.data) return null
   if (recRes.error) {
     console.error(`[admin/distributions/${id}] recipients query failed:`, recRes.error)
-    throw recRes.error
+    throw new Error(recRes.error)
   }
 
-  const rows: RegistrationRow[] = (recRes.data ?? []).map(r => {
+  const rows: RegistrationRow[] = recRes.rows.map(r => {
     const b = (r as unknown as { beneficiary?: BenRow | null }).beneficiary ?? null
     // גיל — לפי תאריך הלידה של הבעל, ובהיעדרו של האישה
     const dob = b?.birth_date || b?.spouse_birth_date
