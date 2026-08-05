@@ -492,7 +492,7 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       { key: 'intro', label: 'פסקת פתיחה', default: 'קוד האימות לכתובת המייל שלך:', multiline: true },
       { key: 'ttl_note', label: 'הערת תוקף הקוד', default: 'הקוד תקף ל-<strong>30 דקות</strong>.', multiline: true },
       { key: 'ignore_note', label: 'הערת "לא ביקשת"', default: 'אם לא ביקשת קוד זה, ניתן להתעלם מהודעה זו.', multiline: true },
-      { key: 'footer', label: 'שורת התחתית', default: 'מייל זה נשלח ממערכת אוטומטית, אין להשיב למייל זה.', multiline: true },
+      { key: 'footer', label: 'שורת התחתית', default: 'הודעה זו נשלחה ממערכת אוטומטית. אין להשיב לכתובת זו — הודעות שנשלחות אליה אינן נקראות. לפניות: office@chasamsofer.info', multiline: true },
     ],
   },
   {
