@@ -8,13 +8,17 @@ export const DEFAULT_CLOSED_MESSAGE = 'ההרשמה למערכת סגורה כע
 //   registration_bypass_code:     קוד סודי שמאפשר הרשמה גם כשסגור (לטסטים)
 //   registration_closed_message:  סיבת הסגירה שתוצג לגולשים במקום הנוסח הקבוע
 //   email_verification_required:  האם חובה לאמת מייל ברישום (ברירת מחדל: כן)
+//   email_channel_disabled:       מצב תקלת דואר — מסתיר מהפורטל כל פעולה
+//                                 שתוצאתה "נשלח לך מייל" (ברירת מחדל: פעיל)
 export async function getRegistrationGate(admin: SupabaseClient): Promise<{
-  open: boolean; bypassCode: string; closedMessage: string; emailVerificationRequired: boolean
+  open: boolean; bypassCode: string; closedMessage: string
+  emailVerificationRequired: boolean; emailChannelDisabled: boolean
 }> {
   const { data } = await admin.from('app_settings').select('key, value')
     .in('key', [
       'public_registration_open', 'registration_bypass_code',
       'registration_closed_message', 'email_verification_required',
+      'email_channel_disabled',
     ])
   const map = new Map((data ?? []).map((r: { key: string; value: unknown }) => [r.key, r.value]))
   const raw = map.get('public_registration_open')
@@ -26,7 +30,11 @@ export async function getRegistrationGate(admin: SupabaseClient): Promise<{
   // לגלות: הרישום ימשיך לעבוד, ואיש לא ישים לב שהמיילים חדלו להיות מאומתים.
   const evr = map.get('email_verification_required')
   const emailVerificationRequired = !(evr === 'false' || evr === false)
-  return { open, bypassCode, closedMessage, emailVerificationRequired }
+  // ⚠️ ברירת המחדל היא שערוץ המייל *פעיל*. הסתרה בטעות בגלל ערך חסר הייתה
+  // מעלימה מהפורטל אפשרויות שעובדות, בלי שאיש ישים לב.
+  const ecd = map.get('email_channel_disabled')
+  const emailChannelDisabled = ecd === 'true' || ecd === true
+  return { open, bypassCode, closedMessage, emailVerificationRequired, emailChannelDisabled }
 }
 
 // האם מותר להירשם — פתוח לכולם, או סגור אך הוצג קוד עוקף תקין.

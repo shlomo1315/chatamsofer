@@ -16,16 +16,19 @@ export default function RegistrationGate() {
   const [msgSaved, setMsgSaved] = useState(false)
   // האם אימות המייל חובה ברישום. null = טרם נטען.
   const [emailReq, setEmailReq] = useState<boolean | null>(null)
+  // מצב תקלת דואר — מסתיר מהפורטל כל פעולה שתוצאתה "נשלח לך מייל".
+  const [mailOff, setMailOff] = useState<boolean | null>(null)
 
   const load = () => fetch('/api/admin/registration-settings').then(r => r.json()).then(d => {
     if (typeof d.open === 'boolean') setOpen(d.open)
     if (typeof d.bypassCode === 'string') setCode(d.bypassCode)
     if (typeof d.closedMessage === 'string') { setMsg(d.closedMessage); setSavedMsg(d.closedMessage) }
     if (typeof d.emailVerificationRequired === 'boolean') setEmailReq(d.emailVerificationRequired)
+    if (typeof d.emailChannelDisabled === 'boolean') setMailOff(d.emailChannelDisabled)
   }).catch(() => {})
   useEffect(() => { load() }, [])
 
-  const update = async (payload: { open?: boolean; regenerate?: boolean; closedMessage?: string; emailVerificationRequired?: boolean }) => {
+  const update = async (payload: { open?: boolean; regenerate?: boolean; closedMessage?: string; emailVerificationRequired?: boolean; emailChannelDisabled?: boolean }) => {
     setSaving(true)
     try {
       const r = await fetch('/api/admin/registration-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -34,6 +37,7 @@ export default function RegistrationGate() {
       if (typeof d.bypassCode === 'string') setCode(d.bypassCode)
       if (typeof d.closedMessage === 'string') { setMsg(d.closedMessage); setSavedMsg(d.closedMessage) }
       if (typeof d.emailVerificationRequired === 'boolean') setEmailReq(d.emailVerificationRequired)
+      if (typeof d.emailChannelDisabled === 'boolean') setMailOff(d.emailChannelDisabled)
     } catch { /* silent */ }
     setSaving(false)
   }
@@ -87,6 +91,31 @@ export default function RegistrationGate() {
           aria-label="הפעל/כבה אימות מייל ברישום"
         >
           <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${emailReq ? 'right-0.5' : 'right-5'}`} />
+        </button>
+      </div>
+
+      {/* מצב תקלת דואר — מתג חירום */}
+      <div className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors border-t border-slate-100 pt-3">
+        <div className="pl-3">
+          <p className="text-sm font-medium text-slate-800">מצב תקלת דואר</p>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            {mailOff === null ? 'טוען...' : mailOff
+              ? 'הפורטל מסתיר כל פעולה שתוצאתה "נשלח לך מייל" — קבלת קישור להטבות, סטטוס במייל, וקוד כניסה למייל. נשארת הכניסה בשיחה לטלפון.'
+              : 'כל אפשרויות המייל מוצגות כרגיל.'}
+          </p>
+          {mailOff === true && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-1.5 leading-relaxed">
+              ⚠️ להחזיר לפעיל ברגע שהמסירה מתייצבת — אחרת מסתירים ערוץ שעובד.
+            </p>
+          )}
+        </div>
+        <button
+          disabled={saving || mailOff === null}
+          onClick={() => update({ emailChannelDisabled: !mailOff })}
+          className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${mailOff ? 'bg-amber-500' : 'bg-slate-300'}`}
+          aria-label="הפעל/כבה מצב תקלת דואר"
+        >
+          <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${mailOff ? 'right-0.5' : 'right-5'}`} />
         </button>
       </div>
 

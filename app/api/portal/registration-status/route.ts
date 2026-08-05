@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
       // הטופס צריך לדעת אם לחסום סיום רישום בלי אימות מייל. השרת הוא האוכף
       // (public-register בודק את אותו מתג) — כאן רק כדי שה-UI יתאים לו.
       emailVerificationRequired: gate.emailVerificationRequired,
+      // מצב תקלת דואר — הפורטל מסתיר כל פעולה שתוצאתה "נשלח לך מייל".
+      emailChannelDisabled: gate.emailChannelDisabled,
       ...(open ? {} : { closedMessage: gate.closedMessage || DEFAULT_CLOSED_MESSAGE }),
     },
     { headers: { 'Cache-Control': 'no-store' } },
