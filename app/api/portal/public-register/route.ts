@@ -173,7 +173,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
   const emailToken = email ? emailTokenFor(String(email)) : undefined
 
-  if (!isNedarim) {
+  // ⚠️ גם כאן לפי registrationSource ולא לפי isNedarim, מאותה סיבה: בקשת נדרים
+  // שהגיעה בלי כותרת origin נפלה בדרישת אימות המייל — בזמן שבעמדות אין מייל
+  // לאמת כלל, וכל הרישום משם היה נכשל ב-400.
+  if (registrationSource !== 'nedarim') {
     if (!email || !verifyVerifyToken(emailToken, 'email', String(email))) {
       return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
     }
@@ -230,7 +233,15 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // ⚠️ טופס נדרים פלוס (matara.pro) פטור מהשער: הוא ערוץ רישום נפרד, ופתיחה
   // או סגירה של הטופס הראשי באתר אינה אמורה להשפיע עליו. בלי הפטור הזה,
   // סגירת הרישום הייתה משביתה להם את הטופס בלי שאיש ישים לב.
-  if (!isNedarim) {
+  // ⚠️ שער ההרשמה חל על האתר שלנו בלבד. סגירת ההרשמה בהגדרות היא מתג תפעולי
+  // של הפורטל — טופס נדרים הוא ערוץ נפרד, שרץ בעמדות ואינו אמור להיעצר כשאנחנו
+  // סוגרים את האתר לקהל.
+  //
+  // הבדיקה היא על registrationSource ולא על isNedarim: isNedarim נגזר מכותרת
+  // origin בלבד, וכשהיא חסרה (בקשה שאינה מדפדפן, או הקשר בלי CORS) טופס נדרים
+  // תקין נחסם ב-403 "ההרשמה סגורה". registrationSource מביא בחשבון גם את
+  // הערוץ שהראוט העביר במפורש — עובדה בשרת, שאינה תלויה בכותרת.
+  if (registrationSource !== 'nedarim') {
     const gate = await getRegistrationGate(admin)
     if (!registrationAllowed(gate, body.bypass as string | undefined)) {
       return NextResponse.json({ error: 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.' }, { status: 403 })
@@ -403,7 +414,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     try {
       const { data: justCreated } = await admin.from('beneficiaries').select('id').eq('id_number', cleanId).maybeSingle()
       if (justCreated?.id) {
-        const r = await registerToOpenDistribution(justCreated.id, isNedarim ? 'nedarim' : 'portal')
+        // גם התיוג לחלוקת החגים לפי הערוץ ולא לפי כותרת origin — אחרת רישום
+        // נדרים שהגיע בלי הכותרת נרשם בחלוקה כ"פורטל" ומעוות את הפילוח.
+        const r = await registerToOpenDistribution(justCreated.id, registrationSource)
         holidayRegistered = r.ok
         console.log(`[public-register] רישום לחלוקת חגים: ok=${r.ok} created=${r.created}${r.error ? ` (${r.error})` : ''}`)
       }
