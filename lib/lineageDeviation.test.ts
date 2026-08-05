@@ -13,10 +13,11 @@ describe('isDeviation', () => {
     expect(isDeviation(5, 'pending')).toBe(true)
   })
 
-  it('"לא נמצא צומת תואם" אינו חריגה — זה חוסר ידיעה ולא שינוי', () => {
-    // ⚠️ זה הבאג שגרם להתראה לקפוץ לכל מי שנרשם: כל דור ≤5 בלי התאמת שם נצבע
-    // אדום, למרות ש-5 הדורות הראשונים תקינים לחלוטין.
-    for (let g = 2; g <= EARLY_DEPTH; g++) expect(isDeviation(g, null)).toBe(false)
+  it('"לא נמצא צומת תואם" בתוך 5 הדורות הוא חריגה', () => {
+    // ⚠️ החלטה מודעת: כרטיס שנושא "בדיקה מעמיקה" בלי אף דור אדום משאיר את
+    // המזכיר עם התראה שאין לו במה להסתכל. בליבה המאושרת "לא מצאנו את האב הזה"
+    // הוא בדיוק המצב שדורש עין אנושית.
+    for (let g = 2; g <= EARLY_DEPTH; g++) expect(isDeviation(g, null)).toBe(true)
   })
 
   it('דור מאושר אינו חריגה', () => {
@@ -39,7 +40,8 @@ describe('isDeviation', () => {
 describe('genColor', () => {
   it('מאושר → כחול', () => expect(genColor(3, 'verified')).toBe('blue'))
   it('חריגה → אדום', () => expect(genColor(3, 'pending')).toBe('red'))
-  it('לא ידוע → כתום, גם בתוך 5 הדורות', () => expect(genColor(3, null)).toBe('orange'))
+  it('לא ידוע בתוך 5 הדורות → אדום', () => expect(genColor(3, null)).toBe('red'))
+  it('לא ידוע מעל 5 → כתום', () => expect(genColor(9, null)).toBe('orange'))
   it('הוספה מעל 5 → כתום', () => expect(genColor(7, 'pending')).toBe('orange'))
 })
 
@@ -49,14 +51,14 @@ describe('deviatingGens', () => {
       [1, 'verified'], [2, 'verified'], [4, 'pending'], [3, 'rejected'], [5, null],
       [6, 'pending'], [7, null],
     ])
-    expect(deviatingGens(map.entries())).toEqual([3, 4])
+    expect(deviatingGens(map.entries())).toEqual([3, 4, 5])
   })
 
-  it('שרשרת שלא נמצאה בעץ כלל אינה מקפיצה התראה', () => {
+  it('שרשרת שלא נמצאה בליבה המאושרת — רק דורות 2–5 חריגים, לא מה שמעליהם', () => {
     const map = new Map<number, 'verified' | 'pending' | 'rejected' | null>([
       [2, null], [3, null], [4, null], [5, null], [6, null], [7, null], [8, null],
     ])
-    expect(deviatingGens(map.entries())).toEqual([])
+    expect(deviatingGens(map.entries())).toEqual([2, 3, 4, 5])
   })
 
   it('נתיב מאושר במלואו אינו מקפיץ התראה', () => {
