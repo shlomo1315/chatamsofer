@@ -32,10 +32,17 @@ function codeEmailHtml(code: string): string {
   </body></html>`
 }
 
+const CODE_TTL_MS = 10 * 60 * 1000
+// קירור בין שליחות — זהה לזה שברישום (lib/verifyChannel).
+const RESEND_COOLDOWN_MS = 120 * 1000
+
 // "שכחתי סיסמה" / הגדרת סיסמה ראשונה: שולח קוד חד-פעמי בן 6 ספרות, תקף 10 דקות,
 // למייל הרשום של המוטב.
 export async function POST(request: NextRequest) {
-  if (!rateLimit(`portal-code:${clientIp(request)}`, 8, 15 * 60 * 1000)) {
+  // ⚠️ תקרת IP גבוהה בכוונה: הקהל גולש דרך סינון ועמדות משותפות, ולכן אלפי
+  // אנשים שונים מגיעים מאותה כתובת. תקרה נמוכה חסמה כאן את המשתמש ה-9 באותה
+  // עמדה. הריסון האמיתי הוא הקירור לפי המשתמש עצמו, מיד למטה.
+  if (!rateLimit(`portal-code:${clientIp(request)}`, 3000, 15 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי בקשות. נסה שוב בעוד מספר דקות.' }, { status: 429 })
   }
 
@@ -44,15 +51,40 @@ export async function POST(request: NextRequest) {
   if (!idNumber || idNumber.length < 5) {
     return NextResponse.json({ error: 'מספר תעודת זהות לא תקין' }, { status: 400 })
   }
-  // הגבלת קצב לפי מזהה — מונע הצפת מייל של משתמש אחר
-  if (!rateLimit(`portal-code-id:${idNumber}`, 4, 15 * 60 * 1000)) {
-    return NextResponse.json({ error: 'כבר נשלח קוד לאחרונה. בדוק את תיבת המייל או נסה שוב בעוד מספר דקות.' }, { status: 429 })
-  }
 
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null }>(admin, idNumber, 'id, email')
+  const data = await resolveBeneficiaryByEnteredId<{ id: string; email: string | null; portal_reset_expires: string | null }>(
+    admin, idNumber, 'id, email, portal_reset_expires',
+  )
+
+  // ── קירור: קוד חדש רק אחרי 120 שניות ──
+  //
+  // ⚠️ אותה סיבה כמו ברישום: מייל אינו מיידי. מי שלא רואה אותו מיד לוחץ
+  // "שלחו לי קוד חדש" שוב ושוב, וכל לחיצה מייצרת קוד חדש שמבטל את הקודם —
+  // כך שגם המייל שכן הגיע כבר לא תקף, והוא נתקע בלולאה. בנוסף, רצף שליחות
+  // לאותה כתובת הוא בדיוק החתימה שמורידה מוניטין דומיין אצל Gmail.
+  //
+  // מועד השליחה נגזר מ-portal_reset_expires פחות ה-TTL — כך אין צורך בעמודה
+  // חדשה ובמיגרציה.
+  if (data?.portal_reset_expires) {
+    const sentAt = new Date(data.portal_reset_expires).getTime() - CODE_TTL_MS
+    const elapsed = Date.now() - sentAt
+    if (elapsed >= 0 && elapsed < RESEND_COOLDOWN_MS) {
+      const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000)
+      return NextResponse.json(
+        { error: `כבר נשלח קוד. אפשר לבקש קוד חדש בעוד ${retryAfter} שניות.`, retryAfter },
+        { status: 429 },
+      )
+    }
+  }
+
+  // ⚠️ נבדק *אחרי* הקירור, כדי שניסיון שנחסם בקירור לא ישרוף את המכסה של
+  // המשתמש. התקרה עצמה רחבה מהקירור ומשמשת גג-על בלבד.
+  if (!rateLimit(`portal-code-id:${idNumber}`, 8, 15 * 60 * 1000)) {
+    return NextResponse.json({ error: 'כבר נשלח קוד לאחרונה. בדוק את תיבת המייל או נסה שוב בעוד מספר דקות.' }, { status: 429 })
+  }
 
   // לא חושפים אם הת"ז קיימת; אך אם אין מייל אין לאן לשלוח.
   if (!data) {
@@ -64,7 +96,7 @@ export async function POST(request: NextRequest) {
 
   const code = generateCode()
   const codeHash = await hashCode(code)
-  const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  const expires = new Date(Date.now() + CODE_TTL_MS).toISOString()
   const { error: upErr } = await admin
     .from('beneficiaries')
     .update({ portal_reset_code_hash: codeHash, portal_reset_expires: expires, portal_reset_attempts: 0 })
@@ -74,5 +106,10 @@ export async function POST(request: NextRequest) {
   const mail = await deliverMail(data.email, 'קוד אימות — אזור אישי היכל החתם סופר', codeEmailHtml(code))
   if (!mail.ok) return NextResponse.json({ error: 'שליחת המייל נכשלה. נסה שוב מאוחר יותר.' }, { status: 502 })
 
-  return NextResponse.json({ ok: true, sent: true, hasEmail: true, emailHint: maskEmail(data.email) })
+  // cooldown — כמה שניות הכפתור צריך להישאר נעול. מגיע מהשרת ולא מקבוע בלקוח,
+  // כדי שהספירה שהמשתמש רואה תהיה בדיוק זו שתיאכף בבקשה הבאה.
+  return NextResponse.json({
+    ok: true, sent: true, hasEmail: true,
+    emailHint: maskEmail(data.email), cooldown: RESEND_COOLDOWN_MS / 1000,
+  })
 }

@@ -1548,6 +1548,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [authPhoneHint, setAuthPhoneHint] = useState('')
   // כניסה עם קוד זמני למייל: '' = מסך בחירה (מייל/טלפון); 'code' = הזנת הקוד שנשלח למייל
   const [emailStep, setEmailStep] = useState<'' | 'code'>('')
+  // ספירה לאחור עד שמותר לבקש קוד כניסה חדש. המספר מגיע מהשרת (cooldown
+  // בהצלחה, retryAfter בחסימה) — כאן רק סופרים אותו לאחור.
+  const [codeCooldown, setCodeCooldown] = useState(0)
 
   // סטטוס הבקשות נשלח למייל הרשום (במקום הצגתן בפורטל — שמירה על פרטיות)
   const [statusSending, setStatusSending] = useState(false)
@@ -2072,6 +2075,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   // שליחת קוד זמני למייל → מסך הזנת קוד → כניסה (ללא סיסמה קבועה)
+  useEffect(() => {
+    if (codeCooldown <= 0) return
+    const t = setTimeout(() => setCodeCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [codeCooldown])
+
   const handleSendCode = async () => {
     if (!pendingAuth) return
     setError(''); setLoading(true)
@@ -2081,8 +2090,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         body: JSON.stringify({ idType: pendingAuth.idType, id: pendingAuth.id }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || 'שגיאת שרת'); setLoading(false); return }
+      if (!res.ok) {
+        // חסימת קירור מגיעה עם retryAfter — מסנכרנים אליו את הספירה, וגם
+        // פותחים את שדה הקוד: הקוד הקודם עדיין בתוקף והמשתמש יכול להשתמש בו.
+        if (typeof data.retryAfter === 'number' && data.retryAfter > 0) {
+          setCodeCooldown(Math.ceil(data.retryAfter)); setEmailStep('code')
+        }
+        setError(data.error || 'שגיאת שרת'); setLoading(false); return
+      }
       if (data.emailHint) setAuthEmailHint(data.emailHint)
+      if (typeof data.cooldown === 'number') setCodeCooldown(Math.ceil(data.cooldown))
       setAuthCode(''); setEmailStep('code')
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
@@ -3598,8 +3615,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     {loading ? 'מאמת...' : <EditableText k="auth.emailcode.submit" />}
                   </button>
                   <div className="flex items-center justify-center gap-4">
-                    <button type="button" onClick={handleSendCode} disabled={loading}
-                      className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.emailcode.again" /></button>
+                    {/* ⚠️ מוסתר עד תום הקירור ולא רק מושבת: קישור שנראה על המסך
+                        מזמין לחיצה, וכל לחיצה מייצרת קוד חדש שמבטל את הקודם —
+                        כך שגם המייל שכן הגיע מפסיק לעבוד. */}
+                    {codeCooldown > 0 ? (
+                      <span className="text-sm text-slate-400">
+                        אפשר לבקש קוד חדש בעוד {Math.floor(codeCooldown / 60)}:{String(codeCooldown % 60).padStart(2, '0')}
+                      </span>
+                    ) : (
+                      <button type="button" onClick={handleSendCode} disabled={loading}
+                        className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.emailcode.again" /></button>
+                    )}
                     <button type="button" onClick={() => { setError(''); setEmailStep('') }}
                       className="text-sm text-slate-500 hover:text-slate-700 underline"><EditableText k="auth.back" /></button>
                   </div>
