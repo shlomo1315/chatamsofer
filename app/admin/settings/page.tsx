@@ -26,6 +26,7 @@ import YemotHolidaySettings from './YemotHolidaySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import RegistrationGate from './RegistrationGate'
+import SendAccountSettings from './SendAccountSettings'
 import DepartmentGatesSettings from './DepartmentGatesSettings'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
@@ -258,6 +259,11 @@ export default async function SettingsPage() {
         {/* Public registration gate */}
         <Collapsible title="הרשמה ציבורית" icon={<UserPlus size={16} className="text-indigo-500" />}>
           <RegistrationGate />
+        </Collapsible>
+
+        {/* חשבון השליחה של קודי האימות */}
+        <Collapsible title="חשבון שליחה — קודי אימות" icon={<Mail size={16} className="text-emerald-500" />}>
+          <SendAccountSettings />
         </Collapsible>
 
         {/* Department gates — פתיחה/סגירה לפי מחלקה (עליית אוויר הדרגתית) */}
