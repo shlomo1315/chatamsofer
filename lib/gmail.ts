@@ -268,7 +268,15 @@ export function getSendAuthUrl(): string {
   return getSendOAuthClient().generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: ['https://www.googleapis.com/auth/gmail.send'],
+    // ⚠️ userinfo.email נדרש כדי לדעת *איזה* חשבון חובר. gmail.send לבדה אינה
+    // מתירה אפילו את users.getProfile, ולכן החיבור נכשל ב"לא ניתן לזהות את
+    // החשבון". הכתובת אינה נוחות בלבד — בלעדיה אין מונה יומי נפרד לחשבון,
+    // וכל המאגר מתערבב למונה אחד.
+    // ⚠️ ההרשאה חושפת את כתובת החשבון בלבד ואינה מקנה גישה לקרוא דואר.
+    scope: [
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
   })
 }
 
