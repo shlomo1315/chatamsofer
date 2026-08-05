@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     .from('distributions')
     .select('id, name, year, holiday, description, status, registration_open, amount_per_family, total_budget, distribution_date, created_at')
     .order('created_at', { ascending: false })
+    .limit(10000)
   if (distErr) return NextResponse.json({ error: distErr.message }, { status: 500 })
 
   const ids = (distributions ?? []).map(d => d.id)
@@ -37,6 +38,10 @@ export async function GET(req: NextRequest) {
       .select('id, distribution_id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, lineage_node_id)')
       .in('distribution_id', ids)
       .order('registered_at', { ascending: false })
+      // ⚠️ limit מפורש: PostgREST מחזיר לכל היותר 1,000 שורות כברירת מחדל,
+      // ובלי השורה הזו הדף "נתקע על 1000" — הנרשמים מעבר לכך פשוט לא הגיעו,
+      // בלי שגיאה ובלי שום סימן שמשהו חסר.
+      .limit(100000)
     if (recErr) return NextResponse.json({ error: recErr.message }, { status: 500 })
     recipients = recs ?? []
   }
@@ -45,6 +50,8 @@ export async function GET(req: NextRequest) {
   const { data: lineageNodes } = await admin
     .from('lineage_nodes')
     .select('id, name, parent_id, generation, status')
+    // אותה סיבה — עץ הדורות חורג מ-1,000 צמתים ונקטע באמצע.
+    .limit(100000)
 
   // סה"כ צאצאים רשומים במערכת (לקוביית הסיכום בדשבורד) — ספירה בלבד, ללא נתונים.
   const { count: beneficiariesCount } = await admin
