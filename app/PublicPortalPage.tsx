@@ -4813,7 +4813,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               )}
             </Card>
 
-            {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס) */}
+            {/* הודעת "כבר נרשמתם" + הפניה למייל האיגוד (ללא הצגת סטטוס)
+                ⚠️ הכרטיס כולו מוסתר במצב תקלת דואר: כל מה שהוא מציע מסתיים
+                ב"נשלח לך מייל", וכשהמסירה מתעכבת זה מבוי סתום. כפתורי הבקשות
+                שמתחת אינם תלויים בדואר וממשיכים לעבוד. */}
+            {!mailChannelOff && (
             <Card>
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -4849,6 +4853,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
               </div>
             </Card>
+            )}
 
             {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</div>}
 
@@ -4889,7 +4894,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
             )}
 
-            {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות) */}
+            {/* סטטוס הבקשות — נשלח למייל הרשום במערכת (לא מוצג כאן, לשמירה על פרטיות)
+                ⚠️ מוסתר במצב תקלת דואר, מאותה סיבה: הפעולה היחידה כאן היא
+                שליחת מייל, ובזמן תקלה היא מבטיחה משהו שלא יגיע. */}
+            {!mailChannelOff && (
             <Card>
               <div className="flex items-center gap-2 mb-3">
                 <FileText size={16} className="text-indigo-500" />
@@ -4914,6 +4922,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </>
               )}
             </Card>
+            )}
 
             {/* צאצא במעגל תיקונים (docs_pending) — כניסה מהדשבורד למסך ההשלמה/תיקון דורות.
                 הבלוק הכללי למטה מוסתר ב-docs_pending, ובלי הכרטיס הזה הצאצא היה תלוי
