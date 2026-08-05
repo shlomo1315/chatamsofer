@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
-import EmailVerifyPrompt from '@/components/EmailVerifyPrompt'
+import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
 // כדי לא להיכנס לבאנדל הראשוני של הדף הציבורי. HebrewDatePicker טוען את @hebcal/core הכבד.
@@ -1805,6 +1805,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // שער ההרשמה הציבורית — סגור/פתוח (+ קוד עוקף סודי ?signup=CODE לטסטים)
   const [registrationOpen, setRegistrationOpen] = useState(true)
   const [signupCode, setSignupCode] = useState('')
+  // מצב אימות המייל של המחובר. null = טרם נבדק. משמש גם לחיווי "לא מאומת"
+  // ליד הכתובת וגם להקפצת חלונית האימות בכניסה.
+  const [emailVerified, setEmailVerified] = useState<boolean | null>(null)
+  const [showEmailVerifyModal, setShowEmailVerifyModal] = useState(false)
+
   // סיבת הסגירה שהוזנה בהגדרות הניהול. השרת מחזיר אותה רק כשההרשמה סגורה,
   // וכבר עם נוסח ברירת המחדל כשלא הוגדרה סיבה — כאן רק מציגים.
   const [registrationClosedMessage, setRegistrationClosedMessage] =
@@ -1824,6 +1829,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         }
       }).catch(() => {})
   }, [])
+
+  // מצב אימות המייל — נטען בכניסה לאזור האישי. מי שטרם אימת מקבל חלונית.
+  // ⚠️ נכשל-"מאומת": אם הבדיקה נופלת לא מקפיצים כלום. עדיף לא לבקש מאשר
+  // להקפיץ חלונית אימות למי שהמייל שלו מאומת ועובד.
+  useEffect(() => {
+    if (step !== 'dashboard' || !beneficiary?.id) return
+    let cancelled = false
+    fetch('/api/portal/verify-email')
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled || typeof d?.verified !== 'boolean') return
+        setEmailVerified(d.verified)
+        if (!d.verified) setShowEmailVerifyModal(true)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [step, beneficiary?.id])
 
   // Loan request form
   const [loanForm, setLoanForm] = useState({
@@ -4619,11 +4641,19 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
         )}
 
+        {showEmailVerifyModal && beneficiary && (
+          <EmailVerifyModal
+            initialEmail={beneficiary.email ?? ''}
+            onClose={() => setShowEmailVerifyModal(false)}
+            onVerified={(addr) => {
+              setEmailVerified(true)
+              setBeneficiary(b => b ? { ...b, email: addr } : b)
+            }}
+          />
+        )}
+
         {step === 'dashboard' && beneficiary && !isRejected && (
           <div className="flex flex-col gap-4">
-
-            {/* בקשה לאמת מייל — מוצגת רק למי שנרשם בלי אימות, וניתנת לדילוג */}
-            <EmailVerifyPrompt />
 
             {/* User header */}
             <Card>
@@ -4653,7 +4683,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div><EditableText k="dash.field.phone" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
                 )}
                 {beneficiary.email && (
-                  <div className="col-span-2"><EditableText k="dash.field.email" className="text-slate-400 text-xs block" /><span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span></div>
+                  <div className="col-span-2">
+                    <EditableText k="dash.field.email" className="text-slate-400 text-xs block" />
+                    <span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span>
+                    {/* חיווי "לא מאומת" — מוצג כל עוד הכתובת לא אומתה, ומשמש גם
+                        כקיצור לפתיחת חלונית האימות מחדש אחרי שנסגרה. */}
+                    {emailVerified === false && (
+                      <button type="button" onClick={() => setShowEmailVerifyModal(true)}
+                        className="inline-flex items-center gap-1 mr-2 align-middle text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors">
+                        <AlertCircle size={11} /> לא מאומת · אמת עכשיו
+                      </button>
+                    )}
+                  </div>
                 )}
                 {beneficiary.marital_status && (
                   <div><EditableText k="dash.field.marital" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.marital_status}</span></div>
