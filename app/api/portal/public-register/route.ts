@@ -173,21 +173,16 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   }
   const emailToken = email ? emailTokenFor(String(email)) : undefined
 
-  // ⚠️ גם כאן לפי registrationSource ולא לפי isNedarim, מאותה סיבה: בקשת נדרים
-  // שהגיעה בלי כותרת origin נפלה בדרישת אימות המייל — בזמן שבעמדות אין מייל
-  // לאמת כלל, וכל הרישום משם היה נכשל ב-400.
-  if (registrationSource !== 'nedarim') {
-    if (!email || !verifyVerifyToken(emailToken, 'email', String(email))) {
-      return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
-    }
-  } else if (email && emailToken) {
-    // ⚠️ טופס נדרים: אימות המייל אינו חובה — בעמדות אין מייל לאמת, ודרישה
-    // גורפת הייתה חוסמת כל רישום משם. אבל *אם* נשלח אסימון, הוא חייב להיות
-    // תקף: אסימון פגום שמתקבל בשקט הוא הגרוע מכל העולמות — הטופס מציג "אומת"
-    // והמערכת שומרת מייל שלא אומת מעולם.
-    if (!verifyVerifyToken(emailToken, 'email', String(email))) {
-      return NextResponse.json({ error: 'אימות כתובת המייל אינו תקף. יש לשלוח קוד חדש ולאמת שוב.' }, { status: 400 })
-    }
+  // ⚠️ אסימון שנשלח — חייב להיות תקף. בכל ערוץ, ובלי קשר למתג בהגדרות:
+  // אסימון פגום שמתקבל בשקט הוא הגרוע מכל העולמות — הטופס מציג "אומת" והמערכת
+  // שומרת מייל שלא אומת מעולם.
+  //
+  // *הדרישה* לאמת נבדקת בהמשך, אחרי טעינת ההגדרות (getRegistrationGate) —
+  // היא תלויה במתג email_verification_required, ולכן זקוקה לחיבור לבסיס הנתונים
+  // שנוצר רק בהמשך הפונקציה.
+  const emailTokenValid = !!(email && emailToken && verifyVerifyToken(emailToken, 'email', String(email)))
+  if (email && emailToken && !emailTokenValid) {
+    return NextResponse.json({ error: 'אימות כתובת המייל אינו תקף. יש לשלוח קוד חדש ולאמת שוב.' }, { status: 400 })
   }
   // טלפונים — חובה לפחות מספר אחד מאומת. אוספים את כל המספרים המאומתים (verified_phones).
   const verifiedPhones: string[] = []
@@ -245,6 +240,12 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     const gate = await getRegistrationGate(admin)
     if (!registrationAllowed(gate, body.bypass as string | undefined)) {
       return NextResponse.json({ error: 'ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.' }, { status: 403 })
+    }
+    // אימות המייל — נדרש רק כשהמתג בהגדרות דלוק (ברירת המחדל: דלוק).
+    // כשהוא כבוי הרישום מסתיים בלי אימות, והנרשם יתבקש לאמת בכניסה הבאה
+    // לאזור האישי. אימות הטלפון בשיחה נשאר חובה בכל מצב — הוא נאכף למעלה.
+    if (gate.emailVerificationRequired && !emailTokenValid) {
+      return NextResponse.json({ error: 'יש לאמת את כתובת המייל בקוד שנשלח אליה לפני סיום הרישום.' }, { status: 400 })
     }
   }
 
@@ -350,6 +351,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     phone2: phone2 ? String(phone2).trim() : null,
     verified_phones: verifiedPhones.length ? verifiedPhones : null,
     email: email ? String(email).toLowerCase().trim() : null,
+    // מועד אימות המייל. NULL = נרשם בלי אימות (המתג בהגדרות כבוי, או נדרים) —
+    // ולכן יתבקש לאמת בכניסה הבאה לאזור האישי.
+    email_verified_at: emailTokenValid ? new Date().toISOString() : null,
     address: address ? String(address).trim() : null,
     city: city ? String(city).trim() : null,
     marital_status: marital_status ? String(marital_status) : null,
@@ -392,8 +396,8 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   if (error && error.message?.includes('column') && error.message?.includes('does not exist')) {
     console.error('[public-register] column missing, retrying without optional fields:', error.message)
     const stripped = records.map(r => {
-      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, verified_phones, signature, community_affiliation, registration_source, ...rest } = r as Record<string, unknown>
-      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits; void verified_phones; void signature; void community_affiliation; void registration_source
+      const { spouse_phone, spouse_birth_date, children, lineage_manual, lineage_chain, past_benefits, verified_phones, signature, community_affiliation, registration_source, email_verified_at, ...rest } = r as Record<string, unknown>
+      void spouse_phone; void spouse_birth_date; void children; void lineage_manual; void lineage_chain; void past_benefits; void verified_phones; void signature; void community_affiliation; void registration_source; void email_verified_at
       return rest
     })
     const retry = await admin.from('beneficiaries').insert(stripped)

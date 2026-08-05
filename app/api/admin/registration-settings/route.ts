@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { open?: boolean; regenerate?: boolean; closedMessage?: string }
+  let body: { open?: boolean; regenerate?: boolean; closedMessage?: string; emailVerificationRequired?: boolean }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   if (typeof body.open === 'boolean') {
@@ -45,6 +45,17 @@ export async function POST(request: NextRequest) {
       { key: 'registration_closed_message', value: body.closedMessage.trim().slice(0, 600), updated_at: new Date().toISOString() },
       { onConflict: 'key' },
     )
+  }
+  if (typeof body.emailVerificationRequired === 'boolean') {
+    await sb.from('app_settings').upsert(
+      {
+        key: 'email_verification_required',
+        value: body.emailVerificationRequired ? 'true' : 'false',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' },
+    )
+    console.log(`[registration-settings] אימות מייל ברישום: ${body.emailVerificationRequired ? 'חובה' : 'כבוי'}`)
   }
   if (body.regenerate) {
     const code = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6)

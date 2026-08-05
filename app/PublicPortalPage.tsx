@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
+import EmailVerifyPrompt from '@/components/EmailVerifyPrompt'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
 // כדי לא להיכנס לבאנדל הראשוני של הדף הציבורי. HebrewDatePicker טוען את @hebcal/core הכבד.
@@ -1808,12 +1809,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // וכבר עם נוסח ברירת המחדל כשלא הוגדרה סיבה — כאן רק מציגים.
   const [registrationClosedMessage, setRegistrationClosedMessage] =
     useState('ההרשמה למערכת סגורה כעת. לפרטים ניתן לפנות למזכירות.')
+  // האם אימות המייל חובה לסיום רישום. ⚠️ ברירת המחדל true — אם הבקשה נכשלת
+  // עדיף לדרוש אימות מאשר לכבות אותו בשקט בגלל תקלת רשת.
+  const [emailVerifyRequired, setEmailVerifyRequired] = useState(true)
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get('signup') ?? ''
     setSignupCode(code)
     fetch(`/api/portal/registration-status${code ? `?signup=${encodeURIComponent(code)}` : ''}`)
       .then(r => r.json()).then(d => {
         setRegistrationOpen(d.open !== false)
+        if (typeof d.emailVerificationRequired === 'boolean') setEmailVerifyRequired(d.emailVerificationRequired)
         if (typeof d.closedMessage === 'string' && d.closedMessage.trim()) {
           setRegistrationClosedMessage(d.closedMessage.trim())
         }
@@ -2297,7 +2302,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (regForm.email && !validateEmail(regForm.email)) {
       setEmailError('אנא הזן כתובת מייל תקינה'); setError('אנא תקן את שגיאות הטופס'); return
     }
-    if (!regEmailToken) { setError('יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").'); return }
+    // ⚠️ נחסם רק כשהמתג בהגדרות דורש אימות. כשהוא כבוי אפשר לסיים רישום בלי
+    // אימות מייל, והנרשם יתבקש לאמת בכניסה הבאה לאזור האישי. השרת אוכף את
+    // אותו מתג — כאן רק כדי שהטופס לא יחסום את מה שהשרת מתיר.
+    if (emailVerifyRequired && !regEmailToken) { setError('יש לאמת את כתובת המייל בקוד שנשלח אליה (כפתור "שליחת קוד אימות למייל").'); return }
     // טלפונים — חייב לפחות אחד ממולא, ולפחות אחד מאומת (המשתמש בוחר אילו לאמת)
     const regPhoneEntries = [
       { value: regForm.phone, token: regPhoneToken },
@@ -4008,7 +4016,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="col-span-2">
                     <Field label={<EditableText k="reg.email" />} required>
                       <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
-                      <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken} />
+                      <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken}
+                        optionalHint={emailVerifyRequired ? undefined : 'אימות המייל אינו חובה כעת — אפשר להשלים את הרישום גם בלעדיו, ולאמת בכניסה הבאה לאזור האישי.'} />
                     </Field>
                   </div>
                 </div>
@@ -4612,6 +4621,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
         {step === 'dashboard' && beneficiary && !isRejected && (
           <div className="flex flex-col gap-4">
+
+            {/* בקשה לאמת מייל — מוצגת רק למי שנרשם בלי אימות, וניתנת לדילוג */}
+            <EmailVerifyPrompt />
 
             {/* User header */}
             <Card>
