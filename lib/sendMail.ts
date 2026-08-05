@@ -87,8 +87,10 @@ async function trySendViaGmail(
     )
 
     // ייבוא דינמי — googleapis כבד, ואין סיבה לטעון אותו במסלול שאינו ג'ימייל.
-    const { getGmailClient, sendGmailMessage } = await import('@/lib/gmail')
-    const gmail = await getGmailClient()
+    // ⚠️ getSendGmailClient ולא getGmailClient: החשבון הייעודי לשליחה, אם חובר.
+    // בלעדיו הוא נופל לחשבון הראשי, כדי שהיעדר הגדרה לא ישבית שליחה שעבדה.
+    const { getSendGmailClient, sendGmailMessage } = await import('@/lib/gmail')
+    const gmail = await getSendGmailClient()
     await sendGmailMessage(gmail, { to, subject, html, from, fromName })
     return true
   } catch (e) {
