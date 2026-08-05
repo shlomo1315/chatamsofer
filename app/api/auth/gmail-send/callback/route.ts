@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { google } from 'googleapis'
-import { getSendOAuthClient, saveSendAccount } from '@/lib/gmail'
+import { getSendOAuthClient, addSendAccount } from '@/lib/gmail'
 import { requireStaff, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
@@ -45,12 +45,19 @@ export async function GET(request: NextRequest) {
     console.error('[gmail-send/callback] getProfile failed:', e)
   }
 
-  await saveSendAccount(tokens.refresh_token, email)
-  console.log(`[gmail-send] חשבון שליחה חובר: ${email || '(כתובת לא ידועה)'}`)
+  // ⚠️ בלי כתובת אין דרך לנהל מונה יומי נפרד לחשבון, וכל המאגר היה מתערבב
+  // למונה אחד. עדיף להיכשל כאן מאשר לספור שגוי ולמצות מכסות בלי לדעת.
+  if (!email) {
+    return page('לא ניתן לזהות את החשבון', 'Google לא החזיר את כתובת החשבון. נסו לחבר שוב.')
+  }
+
+  await addSendAccount(email, tokens.refresh_token)
+  console.log(`[gmail-send] חשבון שליחה נוסף למאגר: ${email}`)
 
   return page(
     'החשבון חובר בהצלחה',
-    `קודי האימות ייצאו מעתה מהחשבון <strong dir="ltr">${email || 'שחובר'}</strong>, עם מכסת השליחה היומית שלו.`,
+    `<strong dir="ltr">${email}</strong> נוסף למאגר חשבונות השליחה, עם מכסה יומית משלו.
+     כשמכסת חשבון אחד נגמרת, השליחה עוברת אוטומטית לחשבון הבא ברשימה.`,
     true,
   )
 }
