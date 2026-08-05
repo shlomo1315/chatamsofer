@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
+import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -608,6 +609,12 @@ function childIdValid(child: ChildEntry) {
   if (child.id_doc_type === 'passport') return raw.length >= 4
   return validateIsraeliId(raw.replace(/\D/g, ''))
 }
+// ⚠️ ילד נשוי *אמור* להופיע בשני מקומות — כמשפחה עצמאית וגם אצל הוריו.
+// לכן קיום ת"ז במערכת אינו כפילות כשהוא מסומן נשוי. זהה לכלל שבשרת
+// (public-register / update-details).
+const CHILD_MARRIED = new Set(['נשוי', 'נשואה', 'נשואים'])
+function childMarked(c: { marital_status?: string }) { return CHILD_MARRIED.has((c?.marital_status ?? '').trim()) }
+
 function maritalFor(g: string) {
   if (g === 'male')   return [{ v: 'נשוי', l: 'נשוי' }, { v: 'לא נשוי', l: 'לא נשוי' }]
   if (g === 'female') return [{ v: 'נשואה', l: 'נשואה' }, { v: 'לא נשואה', l: 'לא נשואה' }]
@@ -4247,8 +4254,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                                       const param = passport ? `passport=${encodeURIComponent(val)}` : `id=${val}`
                                       const r = await fetch(`/api/portal/lookup?${param}`)
                                       const d = await r.json()
-                                      if (d.found || d.foundAsChild) {
-                                        setChildIdErrors(e => ({ ...e, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))
+                                      // ילד שמסומן נשוי — מותר להוסיפו, וזו אינה כפילות.
+                                      if ((d.found || d.foundAsChild) && !childMarked(child)) {
+                                        setChildIdErrors(e => ({ ...e, [idx]: childRegisteredSeparatelyMessage(child.name?.trim() || 'הילד/ה', child) }))
                                       }
                                     } catch { /* בדיקת שרת תיתפס בעת השליחה */ }
                                   }
@@ -4282,7 +4290,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               <div className="flex gap-2 flex-wrap">
                                 {maritalFor(child.gender).map(({ v, l }) => (
                                   <button key={v} type="button"
-                                    onClick={() => setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                    onClick={() => {
+                                      setChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))
+                                      // ⚠️ בלי זה ההודעה נשארת על המסך אחרי שהמשתמש עשה בדיוק
+                                      // מה שהתבקש, והוא היה צריך לחזור לשדה הת"ז כדי לנקות אותה.
+                                      if (CHILD_MARRIED.has(v)) setChildIdErrors(e => ({ ...e, [idx]: '' }))
+                                    }}
                                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
                                       child.marital_status === v
                                         ? 'bg-indigo-600 text-white border-indigo-600'
@@ -6005,8 +6018,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                                       const param = passport ? `passport=${encodeURIComponent(val)}` : `id=${val}`
                                       const r = await fetch(`/api/portal/lookup?${param}`)
                                       const d = await r.json()
-                                      if (d.found || d.foundAsChild) {
-                                        setEditChildIdErrors(er => ({ ...er, [idx]: 'ילד/ה זה כבר רשום/ה במערכת — לא ניתן לרשום פעם נוספת' }))
+                                      if ((d.found || d.foundAsChild) && !childMarked(child)) {
+                                        setEditChildIdErrors(er => ({ ...er, [idx]: childRegisteredSeparatelyMessage(child.name?.trim() || 'הילד/ה', child) }))
                                       }
                                     } catch { /* בדיקת שרת תיתפס בעת השליחה */ }
                                   }
@@ -6041,7 +6054,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                               <div className="flex gap-2 flex-wrap">
                                 {maritalFor(child.gender).map(({ v, l }) => (
                                   <button key={v} type="button"
-                                    onClick={() => setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))}
+                                    onClick={() => {
+                                      setEditChildren(cs => cs.map((c, i) => i === idx ? { ...c, marital_status: v } : c))
+                                      if (CHILD_MARRIED.has(v)) setEditChildIdErrors(er => ({ ...er, [idx]: '' }))
+                                    }}
                                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-150 ${
                                       child.marital_status === v
                                         ? 'bg-indigo-600 text-white border-indigo-600'
