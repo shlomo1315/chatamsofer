@@ -59,41 +59,68 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 2. Search inside children JSONB array
-    const { data: rows, error: err2 } = await admin
-      .from('beneficiaries')
-      .select('id, full_name, family_name, children, lineage_node_id, lineage_chain')
-      .not('children', 'is', null)
-    if (err2) { console.error('[lookup] db error:', err2.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
+    // 2. האם הת"ז שייכת לילד הרשום אצל משפחה כלשהי.
+    //
+    // ⚠️ דרך RPC ולא בסריקה: הקוד כאן שלף בעבר את *כל* המשפחות שיש להן ילדים
+    // וסרק אותן בזיכרון — סריקת טבלה מלאה בכל חיפוש שאינו מוצא מוטב, כלומר
+    // בדיוק במקרה הנפוץ של נרשם חדש. ביום רישום המוני זה הכפיל את העומס על
+    // בסיס הנתונים פי מספר המשפחות במאגר.
+    // הפונקציה נשענת על אינדקס GIN (ראו מיגרציה 20260805_lookup_child_id_index).
+    type ChildHit = {
+      id: string; full_name: string | null; family_name: string | null
+      lineage_node_id: string | null; lineage_chain: unknown
+      child: Record<string, string> | null
+    }
+    let hit: ChildHit | null = null
 
-    if (rows) {
-      for (const row of rows) {
+    const rpc = await admin.rpc('lookup_beneficiary_by_child_id', { p_id: idParam })
+    if (rpc.error) {
+      // ⚠️ נפילה חיננית: כל עוד המיגרציה טרם הורצה בייצור, ממשיכים בסריקה
+      // הישנה. איטית — אבל עדיפה על שלב זיהוי שמפסיק לעבוד.
+      console.error('[lookup] RPC unavailable, falling back to scan:', rpc.error.message)
+      const { data: rows, error: err2 } = await admin
+        .from('beneficiaries')
+        .select('id, full_name, family_name, children, lineage_node_id, lineage_chain')
+        .not('children', 'is', null)
+      if (err2) { console.error('[lookup] db error:', err2.message); return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 }) }
+      for (const row of rows ?? []) {
         const kids: Record<string, string>[] = Array.isArray(row.children) ? row.children : []
         const match = kids.find((k) => (k.id_number ?? '').replace(/\D/g, '') === idParam)
         if (match) {
-          const parentName = [row.family_name, row.full_name].filter(Boolean).join(' ')
-          return NextResponse.json({
-            found: false,
-            foundAsChild: true,
-            parentName,
-            // מזהה המשפחה שהילד רשום אצלה — לבדיקה אם זו המשפחה המחוברת או אחרת
-            parentBeneficiaryId: row.id,
-            childData: {
-              name: match.name ?? '',
-              id_number: idParam,
-              birth_date: match.birth_date ?? '',
-              gender: match.gender ?? '',
-              marital_status: match.marital_status ?? '',
-            },
-            // ייחוס ההורה — לשיוך אוטומטי של הילד בסדר הדורות
-            parentLineage: {
-              parentName,
-              lineage_node_id: row.lineage_node_id ?? null,
-              lineage_chain: Array.isArray(row.lineage_chain) ? row.lineage_chain : null,
-            },
-          })
+          hit = {
+            id: row.id, full_name: row.full_name, family_name: row.family_name,
+            lineage_node_id: row.lineage_node_id, lineage_chain: row.lineage_chain, child: match,
+          }
+          break
         }
       }
+    } else {
+      hit = (rpc.data as ChildHit[] | null)?.[0] ?? null
+    }
+
+    if (hit) {
+      const match = hit.child ?? {}
+      const parentName = [hit.family_name, hit.full_name].filter(Boolean).join(' ')
+      return NextResponse.json({
+        found: false,
+        foundAsChild: true,
+        parentName,
+        // מזהה המשפחה שהילד רשום אצלה — לבדיקה אם זו המשפחה המחוברת או אחרת
+        parentBeneficiaryId: hit.id,
+        childData: {
+          name: match.name ?? '',
+          id_number: idParam,
+          birth_date: match.birth_date ?? '',
+          gender: match.gender ?? '',
+          marital_status: match.marital_status ?? '',
+        },
+        // ייחוס ההורה — לשיוך אוטומטי של הילד בסדר הדורות
+        parentLineage: {
+          parentName,
+          lineage_node_id: hit.lineage_node_id ?? null,
+          lineage_chain: Array.isArray(hit.lineage_chain) ? hit.lineage_chain : null,
+        },
+      })
     }
 
     return NextResponse.json({ found: false })
