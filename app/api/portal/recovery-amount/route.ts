@@ -42,8 +42,19 @@ export async function POST(request: NextRequest) {
   const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
   const todayMs = new Date(new Date().toISOString().slice(0, 10)).getTime()
   const windowStart = todayMs - 35 * 86400000
-  if (toMs < fromMs || fromMs < windowStart || toMs > todayMs) {
-    return NextResponse.json({ error: 'תאריכי השהייה מחוץ לחלון הזכאות (עד 5 שבועות אחורה)' }, { status: 400 })
+  // ⚠️ יום ההגעה חייב להיות בעבר (עד היום) — אי אפשר להצהיר על הגעה עתידית.
+  // אבל יום העזיבה *כן* רשאי ליפול בעתיד, וזה השינוי: מי שהגיעה היום זכאית
+  // ליומיים (או לארבעה), והנציג רושם את מלוא הזכאות מיד. עד כה נדרש
+  // toMs <= todayMs, ולכן סימון של היום התקבל כיום בודד בלבד.
+  //
+  // התקרה על יום העזיבה נשמרת בלי בדיקה נפרדת: הטווח חייב להתאים ל-nightsNum
+  // (מיד למטה), ו-nightsNum מוגבל לימי הזכאות של היולדת (בהמשך, אחרי שליפת
+  // הרשומה). כלומר to לעולם אינו חורג מיום ההגעה + ימי הזכאות.
+  if (toMs < fromMs || fromMs < windowStart || fromMs > todayMs) {
+    return NextResponse.json(
+      { error: 'תאריכי השהייה מחוץ לחלון הזכאות — יום ההגעה חייב להיות בחמשת השבועות האחרונים ולא בעתיד' },
+      { status: 400 },
+    )
   }
   // מספר הימים חייב להתאים לטווח (הפרש + 1, כולל יום ההגעה)
   if (Math.round((toMs - fromMs) / 86400000) + 1 !== nightsNum) {

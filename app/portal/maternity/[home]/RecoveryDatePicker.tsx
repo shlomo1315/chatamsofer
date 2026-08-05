@@ -6,6 +6,12 @@ import { ChevronRight, ChevronLeft, Check } from 'lucide-react'
 // המשתמש לוחץ על יום ההגעה, והמערכת משלימה אוטומטית את יום הסיום לפי מספר הלילות
 // שאושרו (maxNights). לא ניתן לחרוג ממספר הלילות, ולא לצאת מחלון 5 השבועות האחרונים.
 //
+// ⚠️ יום ההגעה מוגבל לעבר (עד היום) — אי אפשר להצהיר שיולדת "הגיעה" מחר.
+// אבל *ימי השהייה* שאחריו נמשכים קדימה, גם אל תוך העתיד: מי שמסמן שהיולדת
+// הגיעה היום עדיין זכאי ליומיים (או לארבעה) והם מסומנים מיד. עד כה יום
+// העזיבה נגזם ליום הנוכחי, ולכן סימון של היום נתן יום בודד — והנציג לא יכול
+// היה לרשום את הזכאות המלאה עד שהימים היו חולפים בפועל.
+//
 // טווח מוחזר כמחרוזות ISO (YYYY-MM-DD): from = יום ראשון, to = יום אחרון.
 
 const DAY_MS = 86400000
@@ -43,7 +49,8 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
   for (let i = 0; i < firstDow; i++) cells.push(null)
   for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d))
 
-  const inRange = (d: Date) => d.getTime() >= minDate.getTime() && d.getTime() <= today.getTime()
+  // ניתן ללחוץ רק על יום הגעה אפשרי: בתוך חלון הזכאות ולא בעתיד.
+  const canPick = (d: Date) => d.getTime() >= minDate.getTime() && d.getTime() <= today.getTime()
   const isSelected = (d: Date) => {
     if (!fromD) return false
     if (!toD) return d.getTime() === fromD.getTime()
@@ -51,17 +58,21 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
   }
 
   function pickDay(d: Date) {
-    if (!inRange(d)) return
+    if (!canPick(d)) return
     // לחיצה על יום ההגעה → המערכת מסמנת סה"כ maxDays ימים (כולל יום ההגעה).
     // זכאות של 2 ימים = 2 תאים בסך הכל (הגעה + יום נוסף), לא 3.
+    // יום העזיבה אינו נגזם ליום הנוכחי — הזכאות נמשכת קדימה גם אם טרם חלפה.
     const arrival = startOfDay(d)
-    let departure = new Date(arrival.getTime() + (maxDays - 1) * DAY_MS)
-    if (departure.getTime() > today.getTime()) departure = today   // לא חורגים מהיום
+    const departure = new Date(arrival.getTime() + (maxDays - 1) * DAY_MS)
     onChange(iso(arrival), iso(departure))
   }
 
+  // היום המרוחק ביותר שאפשר להגיע אליו בסימון — הגעה היום + מלוא הזכאות.
+  // משמש לניווט קדימה, כדי שטווח שנמשך לחודש הבא יהיה גלוי.
+  const maxSelectable = new Date(today.getTime() + (maxDays - 1) * DAY_MS)
+  const monthIdx = (d: Date) => d.getFullYear() * 12 + d.getMonth()
   const canGoBack = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getTime() > minDate.getTime()
-  const canGoFwd = viewMonth.getMonth() < today.getMonth() || viewMonth.getFullYear() < today.getFullYear()
+  const canGoFwd = monthIdx(viewMonth) < monthIdx(maxSelectable)
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 select-none" dir="rtl">
@@ -93,7 +104,7 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
       <div className="grid grid-cols-7 gap-1">
         {cells.map((d, i) => {
           if (!d) return <div key={`e${i}`} />
-          const enabled = inRange(d)
+          const pickable = canPick(d)
           const sel = isSelected(d)
           const isArrival = fromD && d.getTime() === fromD.getTime()
           return (
@@ -101,10 +112,13 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
               key={iso(d)}
               type="button"
               onClick={() => pickDay(d)}
-              disabled={!enabled}
+              disabled={!pickable}
+              // ⚠️ הסימון גובר על "אינו לחיץ": ימי הזכאות שאחרי ההגעה נופלים
+              // בעתיד ואינם ניתנים ללחיצה, אבל חייבים להיראות מסומנים — אחרת
+              // הנציג מסמן יום ורואה תא בודד, בלי שום חיווי לשאר הימים.
               className={`aspect-square rounded-lg text-xs font-semibold transition-colors relative
-                ${!enabled ? 'text-slate-300 cursor-not-allowed'
-                  : sel ? 'bg-pink-600 text-white'
+                ${sel ? `bg-pink-600 text-white${pickable ? '' : ' cursor-default'}`
+                  : !pickable ? 'text-slate-300 cursor-not-allowed'
                   : 'text-slate-700 hover:bg-pink-50'}`}
             >
               {d.getDate()}
@@ -119,6 +133,9 @@ export default function RecoveryDatePicker({ maxDays, from, to, onChange }: Prop
         {fromD && toD ? (
           <span className="font-semibold text-slate-700">
             {Math.round((toD.getTime() - fromD.getTime()) / DAY_MS) + 1} ימים · {fromD.toLocaleDateString('he-IL')} – {toD.toLocaleDateString('he-IL')}
+            {toD.getTime() > today.getTime() && (
+              <span className="block font-normal text-slate-400 mt-0.5">כולל ימי זכאות שטרם חלפו</span>
+            )}
           </span>
         ) : (
           <span>סמנו את יום ההגעה ({maxDays} ימי זכאות)</span>
