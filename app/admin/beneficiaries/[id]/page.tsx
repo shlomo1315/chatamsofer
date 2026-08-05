@@ -408,7 +408,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <div className="space-y-2.5">
             <DetailRow label="טלפון ראשי" value={beneficiary.phone ?? '—'} ltr icon={<Phone size={13} />} />
             <DetailRow label="טלפון משני" value={beneficiary.phone2 ?? '—'} ltr />
-            <EmailRow email={beneficiary.email} name={fullName} />
+            <EmailRow email={beneficiary.email} name={fullName} verifiedAt={beneficiary.email_verified_at} />
             <DetailRow label="כתובת" value={beneficiary.address ?? '—'} icon={<MapPin size={13} />} />
             <DetailRow label="עיר" value={beneficiary.city ?? '—'} />
           </div>

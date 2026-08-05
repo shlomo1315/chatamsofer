@@ -51,6 +51,10 @@ export interface Beneficiary {
   // רשימת המספרים שאומתו (יכולים לקבל קוד כניסה בעתיד)
   verified_phones?: string[]
   email?: string
+  // מועד אימות המייל בקוד חד-פעמי. null/undefined = טרם אומת.
+  // ⚠️ קיים מאז שאימות המייל ברישום ניתן לכיבוי מההגדרות — עד אז כל מייל
+  // רשום היה מאומת בהכרח, ולא היה מה לתעד.
+  email_verified_at?: string | null
   address?: string
   city?: string
   birth_date?: string
