@@ -13,6 +13,12 @@ export interface MailOptions {
   skipLog?: boolean    // דלג על תיעוד ב-sent_emails (כשהקורא מתעד בעצמו)
   scheduledAt?: string // ISO 8601 — תזמון שליחה דרך Resend (אם מוגדר, המייל יישלח במועד זה)
   tracking?: boolean   // מעקב פתיחות/קליקים (דיוור בלבד; מיילים תפעוליים ללא מעקב)
+  // מייל תפעולי חד-פעמי (קוד אימות): ללא מעקב וללא כותרות הסרה מרשימת תפוצה.
+  // ⚠️ שני אלה פוגעים דווקא במייל שחייב להגיע: פיקסל המעקב וקישורי ההפניה
+  // יוצאים מדומיין המעקב של Resend — שרשתות מסוננות (NetFree/רימון), שדרכן
+  // גולש כל הקהל שלנו, חוסמות; ו-List-Unsubscribe הוא סימן של דיוור המוני
+  // ומוריד את ציון המסירה של הודעה שאינה דיוור כלל.
+  transactional?: boolean
   unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
   inReplyTo?: string   // שרשור: Message-ID של ההודעה שאליה זו תשובה
   references?: string  // שרשור: שרשרת ה-Message-IDs הקודמים בשיחה (מופרדים ברווח)
@@ -84,12 +90,17 @@ export async function deliverMail(
 
   // כותרת הסרה מרשימת תפוצה. לדיוור המוני (ניוזלטר) מעבירים קישור One-Click —
   // דרישה של Gmail משולחים מסיביים; בלעדיה המיילים מסומנים כספאם.
-  const unsubHeaders: Record<string, string> = options?.unsubscribeUrl
-    ? {
-        'List-Unsubscribe': `<${options.unsubscribeUrl}>, <mailto:office@chasamsofer.info?subject=unsubscribe>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-      }
-    : { 'List-Unsubscribe': '<mailto:office@chasamsofer.info?subject=unsubscribe>' }
+  // ⚠️ מייל תפעולי (קוד אימות) יוצא *בלי* כותרות הסרה: הן מסמנות דיוור המוני,
+  // וקוד חד-פעמי אינו דיוור. אין ממה להסיר את הנמען, והסימון רק מוריד את סיכויי
+  // ההגעה לתיבה הראשית של הודעה שהמשתמש ממתין לה ברגע זה.
+  const unsubHeaders: Record<string, string> = options?.transactional
+    ? {}
+    : options?.unsubscribeUrl
+      ? {
+          'List-Unsubscribe': `<${options.unsubscribeUrl}>, <mailto:office@chasamsofer.info?subject=unsubscribe>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        }
+      : { 'List-Unsubscribe': '<mailto:office@chasamsofer.info?subject=unsubscribe>' }
 
   try {
     const resend = new Resend(apiKey)
@@ -109,7 +120,7 @@ export async function deliverMail(
       // מקבל אותו. בלעדיו Resend לא מזריק פיקסל ולא עוטף קישורים, ולכן
       // לא נשלחים אירועי email.opened / email.clicked ל-webhook.
       // (זו הייתה הסיבה ל"נפתחו 0".)
-      ...({ tracking: options?.tracking === false
+      ...({ tracking: (options?.tracking === false || options?.transactional)
         ? { open: false, click: false }
         : { open: true, click: true },
       } as Record<string, unknown>),

@@ -101,11 +101,21 @@ export async function sendVerifyCode(
       return { status: 400, body: { error: 'כתובת המייל אינה תקינה. יש להזין כתובת באותיות לועזיות בלבד.' } }
     }
     const mail = verifyCodeEmail(code)
-    const res = await deliverMail(cleanEmail, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+    // ⚠️ transactional: בלי מעקב פתיחות/קליקים ובלי כותרות הסרה. פיקסל המעקב
+    // וקישורי ההפניה של Resend יוצאים מדומיין מעקב נפרד — שרשתות מסוננות
+    // (NetFree/רימון), שדרכן גולש כל הקהל שלנו, חוסמות — ו-List-Unsubscribe
+    // מסמן את ההודעה כדיוור המוני. שניהם פגעו דווקא במייל היחיד שחייב להגיע.
+    const res = await deliverMail(cleanEmail, mail.subject, mail.html, undefined, {
+      ...mailFor('igud'), skipLog: true, transactional: true,
+    })
     if (!res || !res.ok) {
       console.error('[verify/send] email failed:', res?.error)
       return { status: 502, body: { error: 'שליחת המייל נכשלה. נסו שוב או פנו למזכירות.' } }
     }
+    // ⚠️ תיעוד ההצלחה: מייל קוד האימות נשלח עם skipLog (אינו נכנס ל"דואר יוצא"),
+    // ולכן עד כה לא הייתה שום דרך לענות על "נשלח לו קוד או לא". בלי השורה הזו
+    // תלונת "לא קיבלתי מייל" אינה ניתנת לבדיקה — לא ידוע אם השליחה בכלל יצאה.
+    console.log(`[verify/send] מייל קוד אימות נשלח אל ${cleanEmail} · resendId=${res.id ?? '—'}`)
   } else {
     const r = await placeCodeCall(raw, code)
     // ⚠️ כשל בשיחה החזיר עד כה ok:true — המשתמש ראה "מתקשרים אליך כעת"

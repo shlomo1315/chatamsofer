@@ -363,7 +363,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     if (c.marital_status === 'single') return c.gender === 'female' ? 'לא נשואה' : 'לא נשוי'
     return null
   }
-  const hasLineage = lineagePath.length > 0 || (Array.isArray(beneficiary.lineage_manual) && beneficiary.lineage_manual.length > 0)
+  // ⚠️ גם שרשרת מוקלדת (lineage_chain) היא שיוך לכל דבר. הבדיקה כאן שקלה רק את
+  // המסלול בעץ ואת lineage_manual, ולכן משפחה שמילאה את *כל* סדר הדורות בטופס
+  // אך אין לה צומת מזוהה בעץ (רישום מנדרים, או צומת שמוזג/נמחק מאז) קיבלה
+  // "לא הוגדר שיוך שושלת" — כרטיס ריק שנראה כאילו הנתונים אבדו, בזמן שהם
+  // שמורים אצלה במלואם. הרינדור למטה כבר יודע להציג את השרשרת (chainSorted),
+  // רק השער הזה לא נתן לו להגיע לשם.
+  const hasLineage = lineagePath.length > 0
+    || typedChain.length > 0
+    || (Array.isArray(beneficiary.lineage_manual) && beneficiary.lineage_manual.length > 0)
   // אדם חריג (אינו צאצא) — אין לו ייחוס. מסתירים טאב עץ הדורות ואת באנר
   // הבדיקה המעמיקה. (undefined לפני שהעמודה קיימת → falsy → התנהגות רגילה.)
   const isSpecial = (beneficiary as { is_special?: boolean }).is_special === true
