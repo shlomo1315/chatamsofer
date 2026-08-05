@@ -5,6 +5,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
+import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
@@ -295,7 +296,9 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     const childIds: string[] = []
     const childLabels: string[] = []
     const childMarried: boolean[] = []
-    for (const c of children as { name?: string; id_number?: string; marital_status?: string }[]) {
+    // נשמר לצורך לשון הפנייה בהודעת השגיאה (זכר/נקבה)
+    const childRows: { gender?: string; marital_status?: string }[] = []
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string }[]) {
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       if (!cid) continue
       const childName = (c?.name ?? '').trim() || 'הילד/ה'
@@ -307,6 +310,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
       childIds.push(cid)
       childLabels.push(childName)
       childMarried.push(childIsMarried(c?.marital_status))
+      childRows.push({ gender: c?.gender, marital_status: c?.marital_status })
     }
     if (childIds.length) {
       // שאילתה אחת: האם מי מת"ז הילדים כבר קיימת כבעל/אשה של רשומה קיימת.
@@ -335,7 +339,7 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
           // נשוי אמור להופיע במשפחה אחת בלבד.
           if (!childMarried[i]) {
             return NextResponse.json({
-              error: `שים לב: ${childLabels[i]} כבר רשום/ה במערכת כמשפחה נפרדת. ניתן להוסיף אותו/ה תחת הילדים שלך במצב "נשוי/אה" בלבד — יש לסמן את המצב המשפחתי ולנסות שוב.`,
+              error: childRegisteredSeparatelyMessage(childLabels[i], childRows[i]),
               code: 'child_registered_separately',
             }, { status: 409 })
           }

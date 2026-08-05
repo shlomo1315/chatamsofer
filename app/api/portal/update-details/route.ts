@@ -5,6 +5,7 @@ import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
 import { normalizePhone } from '@/lib/phone'
 import { validateIsraeliId } from '@/lib/validation'
 import { syncMaternityNamesFromChildren } from '@/lib/babyNames'
+import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
 
 export const dynamic = 'force-dynamic'
 
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
       return v === 'נשוי' || v === 'נשואה' || v === 'נשואים'
     }
     const seen = new Set<string>()
-    for (const c of children as { name?: string; id_number?: string; marital_status?: string }[]) {
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string }[]) {
       const name = (c?.name ?? '').trim()
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       const childLabel = name || 'הילד/ה'
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
         // ילד שאינו נשוי אמור להופיע במשפחה אחת בלבד.
         if (!isMarried(c?.marital_status)) {
           return NextResponse.json({
-            error: `שים לב: ${childLabel} כבר רשום/ה במערכת כמשפחה נפרדת. ניתן להוסיף אותו/ה תחת הילדים שלך במצב "נשוי/אה" בלבד — יש לסמן את המצב המשפחתי ולנסות שוב.`,
+            error: childRegisteredSeparatelyMessage(childLabel, c),
             code: 'child_registered_separately',
           }, { status: 400 })
         }
