@@ -49,9 +49,13 @@ export interface MailOptions {
 //     כך גדל הסיכון לחשבון עצמו.
 // כל שאר הדואר — תפעולי ודיוור כאחד — ממשיך ב-Resend.
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
-// תקרה רכה *לכל חשבון*, מתחת לתקרת Workspace האמיתית (כ-2,000), כדי להשאיר
-// מרווח לדואר אחר שיוצא מאותו חשבון ולא להיתקל בתקרה הקשיחה של Google.
-export const GMAIL_CAP_HIGH = 1500
+// תקרה רכה *לכל חשבון*, מתחת לתקרת Workspace האמיתית (כ-2,000).
+//
+// ⚠️ המרווח שנשאר קטן (כ-100), וזה מכוון: חשבונות השליחה ייעודיים ולא יוצא
+// מהם דואר אחר, ולכן אין מה לשמור עבורו. אם בכל זאת ייחצה הגבול האמיתי של
+// Google — השליחה נכשלת, עוברת לחשבון הבא במאגר, ואם אין כזה נופלת ל-Resend.
+// כלומר חריגה עולה בהאטה ולא באובדן הודעה.
+export const GMAIL_CAP_HIGH = 1900
 
 function isGmailAddress(email: string): boolean {
   const at = email.lastIndexOf('@')
