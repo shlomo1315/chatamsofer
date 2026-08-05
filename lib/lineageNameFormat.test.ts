@@ -10,10 +10,10 @@ import {
 describe('הרכבת השם האחיד', () => {
   it('בעל ואישה', () => {
     expect(composeLineageName({ husband: 'משה', wife: 'חיה', family: 'כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
   })
 
-  it('בלי אישה — אין "והרבנית"', () => {
+  it('בלי אישה — אין "ומרת"', () => {
     // ⚠️ יש דורות בעץ שהאישה בהם אינה ידועה. חיוב שם אישה היה מכריח המצאה.
     expect(composeLineageName({ husband: 'אשר שמואל', family: 'פנעט' }))
       .toBe('רבי אשר שמואל פנעט')
@@ -21,14 +21,14 @@ describe('הרכבת השם האחיד', () => {
 
   it('שם כפול נשמר', () => {
     expect(composeLineageName({ husband: 'יוסף חיים', wife: 'רחל לאה', family: 'לוי' }))
-      .toBe('רבי יוסף חיים והרבנית רחל לאה לוי')
+      .toBe('רבי יוסף חיים ומרת רחל לאה לוי')
   })
 
   it('תארים שהוזנו בטעות מנוקים', () => {
     expect(composeLineageName({ husband: "ר' משה", wife: 'מרת חיה', family: 'כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
     expect(composeLineageName({ husband: 'הרב משה שליט"א', wife: 'חיה תחי\'', family: 'כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
   })
 })
 
@@ -63,20 +63,20 @@ describe('זיהוי תארים להודעה למשתמש', () => {
 describe('נרמול בשרת (רישום ציבורי + נדרים פלוס)', () => {
   it('שדות מופרדים', () => {
     expect(normalizeLineageNodeName({ husband: 'משה', wife: 'חיה', family: 'כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
   })
 
   it('שם חופשי מפורק ומורכב מחדש', () => {
     // ⚠️ טופס נדרים פלוס חיצוני — אי אפשר לסמוך על ולידציה בצד הלקוח שלו
     expect(normalizeLineageNodeName({ name: 'משה וחיה כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
     expect(normalizeLineageNodeName({ name: "ר' משה וחיה כהן שליט\"א" }))
-      .toBe('רבי משה והרבנית חיה כהן')
+      .toBe('רבי משה ומרת חיה כהן')
   })
 
   it('שם שכבר בפורמט אינו מקבל תואר כפול', () => {
-    expect(normalizeLineageNodeName({ name: 'רבי משה והרבנית חיה כהן' }))
-      .toBe('רבי משה והרבנית חיה כהן')
+    expect(normalizeLineageNodeName({ name: 'רבי משה ומרת חיה כהן' }))
+      .toBe('רבי משה ומרת חיה כהן')
     expect(alreadyFormatted('רבי משה כהן')).toBe(true)
   })
 

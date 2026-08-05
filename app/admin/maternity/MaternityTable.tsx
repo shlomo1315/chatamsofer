@@ -235,7 +235,11 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+          {/* ⚠️ min-width גדול מ-w-full: עם 12–17 עמודות טבלת w-full לבדה נדחסת
+              לרוחב המסך, העמודות נעשות צרות מדי והתוכן "בורח" מתחת לכותרת. עכשיו
+              הטבלה שומרת רוחב מינימלי וגוללת אופקית *בתוך הכרטיס* — כל ערך עומד
+              מתחת לכותרת שלו. */}
+          <table className="w-full min-w-[1500px] text-sm text-right">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'הטבה', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', 'אופן הגשה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
@@ -252,7 +256,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   <tr key={aid.id}
                     onClick={() => router.push(`/admin/maternity/${aid.id}`)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
-                    <td className="px-2.5 py-3 align-top font-medium text-slate-800"><span className="block max-w-[160px] break-words">{motherName(m)}</span></td>
+                    <td className="px-2.5 py-3 align-middle font-medium text-slate-800 whitespace-nowrap">{motherName(m)}</td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-700 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
@@ -278,7 +282,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     </td>
                     <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
                     <td className="px-2.5 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
-                    <td className="px-2.5 py-3 align-top text-slate-600"><span className="block max-w-[150px] break-words">{aid.recovery_home ?? '—'}</span></td>
+                    <td className="px-2.5 py-3 align-middle text-slate-600 whitespace-nowrap">{aid.recovery_home ?? '—'}</td>
                     <td className="px-2.5 py-3 align-middle">
                       <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
                     </td>
