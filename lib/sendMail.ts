@@ -22,6 +22,80 @@ export interface MailOptions {
   unsubscribeUrl?: string // קישור הסרה — מפעיל One-Click unsubscribe (חובה בדיוור המוני)
   inReplyTo?: string   // שרשור: Message-ID של ההודעה שאליה זו תשובה
   references?: string  // שרשור: שרשרת ה-Message-IDs הקודמים בשיחה (מופרדים ברווח)
+  // עדיפות במסלול Gmail (ראו GMAIL ROUTING למטה):
+  //   'high'   — קוד אימות. חוסם הרשמה, ולכן מקבל את מרבית המכסה היומית.
+  //   'normal' — ברירת מחדל לכל מייל תפעולי אחר (אישורים, הודעות).
+  //   'never'  — דיוור המוני. לעולם לא דרך Workspace.
+  gmailPriority?: 'high' | 'normal' | 'never'
+}
+
+// ─── GMAIL ROUTING ──────────────────────────────────────────────────────────
+// ⚠️ [תקלת מסירה 05/08/2026] Resend קיבל 100% מהשליחות בלי שגיאה אחת, אבל
+// הודעות ל-@gmail.com נתקעו ב-"Sent" ולא נמסרו. ההוכחה הייתה בלוח של Resend:
+// באותה שנייה בדיוק הודעות לדומיינים אחרים הגיעו ל-"Delivered". כלומר הדומיין,
+// ה-DNS ו-Resend תקינים — Gmail לבדו מקצה מסירה במשורה אחרי קפיצת נפח חדה.
+//
+// לכן נמעני Gmail יוצאים דרך חשבון ה-Google Workspace של הארגון. זה עובד כאן
+// כי הדומיין מחזיק MX של smtp.google.com, רשומת google._domainkey ו-SPF ראשי
+// עם include:_spf.google.com — מייל מהחשבון עובר SPF ו-DKIM מיושרים מול Gmail.
+//
+// ⚠️ המסלול יכול רק להוסיף מסירות ולעולם לא לגרוע: כל כשל — תקרה, חשבון שאינו
+// מחובר, שגיאת API — נופל אוטומטית ל-Resend, שהוא ההתנהגות שהייתה קודם.
+//
+// ⚠️ דיוור המוני לעולם אינו עובר כאן. חשבון Workspace אינו כלי דיוור, ושליחת
+// ניוזלטר דרכו תמצה את המכסה ותסכן את החשבון עצמו. הזיהוי הוא לפי
+// unsubscribeUrl — קישור הסרה קיים בדיוור בלבד.
+const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
+// תקרות רכות, מתחת לתקרת Workspace האמיתית (~2,000 ליום למשתמש).
+// ⚠️ שתי מדרגות בכוונה: מייל תפעולי רגיל נעצר ב-800 כדי שתמיד תישאר מכסה
+// לקודי אימות. אחרת גל של אישורי הרשמה היה מחסל את המכסה, וקוד האימות —
+// היחיד שחוסם אדם מלהירשם — היה נופל חזרה למסלול התקוע.
+const GMAIL_CAP_HIGH = 1500
+const GMAIL_CAP_NORMAL = 800
+
+function isGmailAddress(email: string): boolean {
+  const at = email.lastIndexOf('@')
+  return at >= 0 && GMAIL_DOMAINS.has(email.slice(at + 1).trim().toLowerCase())
+}
+
+// מונה יומי לפי שעון ישראל, כדי שהאיפוס יקרה בחצות המקומית ולא באמצע היום.
+function gmailCounterKey(): string {
+  const d = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+  return `gmail_daily_send:${d}`
+}
+
+// ניסיון שליחה דרך Workspace. מחזיר true רק בהצלחה מלאה; בכל מקרה אחר false,
+// והקורא ממשיך ל-Resend. אינו זורק לעולם.
+async function trySendViaGmail(
+  to: string, subject: string, html: string, from: string, fromName: string, cap: number,
+): Promise<boolean> {
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!url || !key) return false
+    const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+
+    // ⚠️ אינו אטומי, ובכוונה: התקרה כאן רכה. חריגה קלה בתנאי מרוץ תיתקל
+    // ממילא בתקרה האמיתית של Google ותיפול חזרה ל-Resend.
+    const ck = gmailCounterKey()
+    const { data } = await admin.from('app_settings').select('value').eq('key', ck).maybeSingle()
+    const next = (Number(data?.value ?? 0) || 0) + 1
+    if (next > cap) return false
+    await admin.from('app_settings').upsert(
+      { key: ck, value: String(next), updated_at: new Date().toISOString() }, { onConflict: 'key' },
+    )
+
+    // ייבוא דינמי — googleapis כבד, ואין סיבה לטעון אותו במסלול שאינו ג'ימייל.
+    const { getGmailClient, sendGmailMessage } = await import('@/lib/gmail')
+    const gmail = await getGmailClient()
+    await sendGmailMessage(gmail, { to, subject, html, from, fromName })
+    return true
+  } catch (e) {
+    console.error('[mail] שליחה דרך Gmail נכשלה, נופלים ל-Resend:', e)
+    return false
+  }
 }
 
 // תיעוד מייל יוצא ב-Supabase כדי שיופיע בתיבת "דואר יוצא" של המחלקה. לא חוסם.
@@ -78,6 +152,23 @@ export async function deliverMail(
   const fromName = options?.fromName ?? BRAND_NAME
   const fromEmail = options?.fromEmail ?? NOREPLY_FROM
   const from = `${fromName} <${fromEmail}>`
+
+  // ── ניתוב Gmail (ההסבר המלא ליד GMAIL ROUTING למעלה) ──
+  // דיוור המוני (unsubscribeUrl) ו-'never' לעולם אינם עוברים כאן.
+  const priority = options?.gmailPriority ?? 'normal'
+  if (priority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
+      && !attachments?.length && isGmailAddress(to)) {
+    const cap = priority === 'high' ? GMAIL_CAP_HIGH : GMAIL_CAP_NORMAL
+    const okGmail = await trySendViaGmail(to, subject, html, fromEmail, fromName, cap)
+    if (okGmail) {
+      // ⚠️ אין resendId במסלול הזה, ולכן אירועי המסירה של Resend לא יגיעו
+      // להודעה הזו. התיעוד ב"דואר יוצא" נשמר כדי שההודעה בכל זאת תופיע שם.
+      if (!options?.skipLog) {
+        await logSentEmail(to, subject, html, attachments, options, fromName, null)
+      }
+      return { ok: true }
+    }
+  }
 
   // גרסת טקסט רגיל (multipart) — משפרת מסירה ומקטינה סיכוי לספאם
   const text = html
