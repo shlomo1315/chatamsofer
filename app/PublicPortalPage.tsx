@@ -1499,7 +1499,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   )
   const [beneficiary, setBeneficiary] = useState<FoundBeneficiary | null>(null)
   // שערי המחלקות (פתוח/סגור) — נטענים פעם אחת; חוסמים כפתורי בקשה של מחלקות סגורות.
-  const [deptGates, setDeptGates] = useState<Record<string, boolean>>({ maternity: true, gemach: true, financial_aid: true, widows: true })
+  // ⚠️ holidays נכלל בברירת המחדל, בהתאמה ל-DEFAULT_GATES בשרת. בלעדיו הערך
+  // undefined עד שהשערים נטענים, והשורה של חלוקת החגים לא הייתה מוצגת כלל
+  // אם הבקשה נכשלת — כלומר ערוץ פתוח היה נעלם בשקט.
+  const [deptGates, setDeptGates] = useState<Record<string, boolean>>({ maternity: true, gemach: true, financial_aid: true, widows: true, holidays: true })
   useEffect(() => {
     fetch('/api/portal/department-gates').then(r => r.json())
       .then(d => { if (d.gates) setDeptGates(d.gates) }).catch(() => {})
@@ -4609,9 +4612,46 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 ) : null
               })()}
 
+              {/* ── מה זמין להגשה עכשיו ──
+                  ⚠️ הנרשם סיים רישום ולא ידע שיש לו מה לעשות הלאה: הפופאפ הציג
+                  רק "חזרה לדף הכניסה", ומי שלא הכיר את המערכת פשוט סגר אותו.
+                  כאן הוא רואה מיד אילו מחלקות פתוחות לו.
+                  ⚠️ הכפתורים מובילים לכניסה ולא ישירות לטופס: בשלב הזה הנרשם
+                  עדיין אינו מזוהה בסשן, והגשה מחייבת זיהוי. */}
+              {(() => {
+                const openDepts = [
+                  { on: deptGates.holidays, icon: <Gift size={16} className="text-teal-600" />, label: 'רישום לחלוקת החגים', hint: 'הרשמה לחלוקה הפעילה' },
+                  { on: deptGates.maternity, icon: <Baby size={16} className="text-pink-600" />, label: 'בקשת הבראה ליולדת', hint: 'ימי החלמה וכרטיס מזון' },
+                  { on: deptGates.gemach, icon: <Landmark size={16} className="text-sky-600" />, label: 'בקשת הלוואה', hint: 'גמ״ח חתם סופר' },
+                  { on: deptGates.financial_aid, icon: <HandCoins size={16} className="text-emerald-600" />, label: 'בקשת סיוע רפואי', hint: 'סיוע רפואי או כספי' },
+                ].filter(d => d.on)
+                if (!openDepts.length) return null
+                return (
+                  <div className="mb-4 text-right">
+                    <p className="text-xs font-semibold text-slate-500 mb-2">זמין להגשה עכשיו:</p>
+                    <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                      {openDepts.map((d, i) => (
+                        <button key={i} onClick={backToHome}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-right hover:bg-slate-50 transition-colors">
+                          <span className="flex-shrink-0">{d.icon}</span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-medium text-slate-800">{d.label}</span>
+                            <span className="block text-[11px] text-slate-500">{d.hint}</span>
+                          </span>
+                          <ChevronLeft size={16} className="text-slate-300 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                      להגשה יש להיכנס לאזור האישי עם תעודת הזהות שנרשמה.
+                    </p>
+                  </div>
+                )
+              })()}
+
               <button onClick={backToHome}
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium rounded-xl py-3 text-sm transition-all duration-150">
-                <ArrowRight size={16} /> חזרה לדף הכניסה
+                <ArrowRight size={16} /> כניסה לאזור האישי
               </button>
             </div>
           </div>
@@ -4916,7 +4956,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 {/* ⚠️ הכפתור מוצג *תמיד*, וכשאי אפשר להגיש — מוצגת הסיבה על הכפתור
                     עצמו. הסתרה שקטה היא בדיוק מה שהשאיר את המשתמש בלי מושג למה
                     "ההגשה לא עובדת": הקישור מהמייל נחסם בשקט ולא היה שום רמז. */}
-                {arrivedFor === 'birth' && (() => {
+                {/* ⚠️ מוצג לכל מי שנכנס, ולא רק למי שהגיע מקישור ייעודי.
+                    התנאי היה arrivedFor==='birth' בלבד — כלומר מי שנכנס לאזור
+                    האישי בדרך הרגילה לא ראה שום דרך להגיש בקשה, גם כשהמחלקה
+                    פתוחה. התנאי עכשיו הוא מצב המחלקה: פתוחה → הכפתור שם. */}
+                {(deptGates.maternity || arrivedFor === 'birth') && (() => {
                   const blocked =
                     !deptGates.maternity ? 'המחלקה סגורה כעת — ההגשה תיפתח בקרוב'
                     : !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
@@ -4946,7 +4990,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   )
                 })()}
 
-                {arrivedFor === 'loan' && deptGates.gemach && (
+                {deptGates.gemach && (
                   <button
                     onClick={goToLoanForm}
                     className="flex items-center gap-4 bg-sky-50 rounded-2xl border-2 border-sky-200 p-5 hover:border-sky-400 transition-all duration-150 text-right shadow-sm group"
@@ -4962,7 +5006,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </button>
                 )}
 
-                {arrivedFor === 'aid' && deptGates.financial_aid && (
+                {deptGates.financial_aid && (
                   <button
                     onClick={goToAidForm}
                     className="flex items-center gap-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-400 transition-all duration-150 text-right shadow-sm group"
