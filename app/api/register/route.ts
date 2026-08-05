@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { verifySignature } from '@/lib/signedToken'
 import { sendEmail, templateRegistrationConfirmed } from '@/lib/email'
 import { mailFor } from '@/lib/departments'
-import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
 
@@ -27,10 +26,11 @@ function verifyNonce(nonce: string, email: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  // הגבלת קצב — מניעת רישומי ספאם
-  if (!rateLimit(`register:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
-    return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
-  }
+  // ── הגבלת קצב: אין. ──
+  // ⚠️ אל תחזירו לכאן תקרת IP — אותה סיבה בדיוק כמו ב-portal/public-register:
+  // IP אחד ≠ אדם אחד (סינון NetFree/רימון ורשתות משותפות), ותקרה של 10 לשעה
+  // חסמה משפחות לגיטימיות. ההגנה כאן היא ה-nonce החתום על המייל + ת"ז ייחודית
+  // במסד עם ספרת ביקורת.
 
   let body: unknown
   try {

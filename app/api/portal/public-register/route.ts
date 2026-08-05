@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { validateIsraeliId } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
@@ -49,17 +48,24 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   const isNedarim = request.headers.get('origin') === 'https://matara.pro'
   const registrationSource: RegisterSource = channel ?? (isNedarim ? 'nedarim' : 'portal')
 
-  // ── הגבלת קצב ──
-  // ⚠️ נדרים פלוס — *ללא הגבלה*: הערוץ מיועד לשחרור המוני של אלפי נרשמים
-  // בדקות (עמדות שירות רבות שיוצאות לעיתים מ-IP אחד), ותקרה כלשהי הייתה חוסמת
-  // את הנרשמים בדיוק ברגע השיא. ההגנה האמיתית שם היא אימות הטלפון בקוד (אסימון
-  // חתום שנבדק בהמשך) + אכיפת ת"ז ייחודית במסד — לא ה-IP. הטופס הציבורי שלנו
-  // נשאר בתקרה הדוקה (אין שם עמדות ואין סיבה לרישום המוני מאותו IP).
-  if (registrationSource !== 'nedarim') {
-    if (!rateLimit(`public-register:${registrationSource}:${clientIp(request)}`, 10, 60 * 60 * 1000)) {
-      return NextResponse.json({ error: 'יותר מדי ניסיונות רישום. נסה שוב מאוחר יותר.' }, { status: 429 })
-    }
-  }
+  // ── הגבלת קצב: אין. בשום ערוץ. ──
+  //
+  // ⚠️ אל תחזירו לכאן תקרת IP. עד כה עמדה כאן תקרה של 10 רישומים לשעה לכל IP,
+  // ונרשמים לגיטימיים נחסמו ב"יותר מדי ניסיונות רישום":
+  //   • IP אחד ≠ אדם אחד. הקהל גולש דרך סינון (NetFree/רימון) ודרך רשתות
+  //     משותפות, ולכן אלפי משפחות שונות מגיעות אלינו מאותה כתובת בדיוק.
+  //     המשפחה ה-11 באותו סינון נחסמה לשעה שלמה — בלי שעשתה דבר, ואחרי שכבר
+  //     מילאה טופס ארוך ואימתה מייל וטלפון.
+  //   • גם ניסיון שנכשל בוולידציה (רחוב שאינו ברשימת העיר, ת"ז כפולה, שדה
+  //     חסר) צרך מהמכסה — כך שמשפחה אחת שתיקנה טעויות מיצתה אותה לבדה.
+  //   • ההרשמה היא אירוע חד-פעמי בחיי משפחה, ומגיעה בגלים (שחרור המוני של
+  //     אלפי נרשמים בדקות). חסימה כאן פירושה משפחה שוויתרה — נזק גדול לאין
+  //     ערוך מרישום ספאם בודד, שממילא נמחק בשתי לחיצות מהניהול.
+  //
+  // ההגנה על המסלול אינה ה-IP אלא מה שאי אפשר לזייף בקנה מידה: אימות המייל
+  // בקוד + אימות טלפון בשיחה (אסימונים חתומים שנבדקים למטה), ת"ז ייחודית
+  // במסד עם ספרת ביקורת, רחוב מרשימת העיר הרשמית ושער ההרשמה. אותה מסקנה
+  // כבר הוסקה בערוץ נדרים ובערוץ האימות (lib/verifyChannel.ts).
 
   let body: Record<string, unknown>
   try {
