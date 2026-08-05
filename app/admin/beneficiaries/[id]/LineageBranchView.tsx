@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
+import { genColor, asGenStatus } from '@/lib/lineageDeviation'
 
 interface LineageNode {
   id: string
@@ -576,9 +577,20 @@ export default function LineageBranchView({ nodeId, self }: {
             const node = pos.node
             const genPal = pal(node.generation)
             const st = node.status ?? 'verified'
-            // צבע הצומת לפי סטטוס — אחיד עם עץ הניהול
-            const p = st === 'verified' ? genPal : st === 'rejected' ? STATUS_NODE.rejected : STATUS_NODE.pending
-            const badge = statusBadge(st)
+            // ⚠️ צבע הצומת נגזר מ-genColor (lib/lineageDeviation) — אותו כלל בדיוק
+            // כמו הצ'יפים בכרטסת: צומת pending בדורות 2–5 הוא *חריגה* וצבעו אדום,
+            // לא כתום. קודם העץ צבע לפי status בלבד ולכן הראה כתום בעוד הצ'יפ אדום —
+            // אותו צומת בשני צבעים. עכשיו מקור אמת אחד לצבע.
+            const gColor = genColor(node.generation, asGenStatus(node.status))
+            const p = st === 'rejected' || gColor === 'red'
+              ? STATUS_NODE.rejected
+              : gColor === 'orange'
+                ? STATUS_NODE.pending
+                : genPal
+            // התג: חריגה (אדום) מקבל ⚠ כמו בצ'יפים; שאר המצבים לפי הסטטוס
+            const badge = gColor === 'red' && st !== 'rejected'
+              ? { glyph: '⚠', bg: '#DC2626' }
+              : statusBadge(st)
             const isTarget = node.id === selfId
             const onChain = chainSet.has(node.id)
             // אותו עיקרון כמו בעץ הניהול: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
