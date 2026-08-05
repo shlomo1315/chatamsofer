@@ -39,8 +39,39 @@ export const NODE_SELECT = 'id, name, parent_id, generation, status, relation'
 // בכרטסת הלידה עד שהמטמון פג — הצ'יפים היו נשארים כתום למרות שהעץ כבר כחול.
 // ─────────────────────────────────────────────────────────────────────────────
 let _lineageCacheVersion = 0
-export function invalidateLineageCache(): void { _lineageCacheVersion++ }
+export function invalidateLineageCache(): void { _lineageCacheVersion++; _treeCache = null }
 export function lineageCacheVersion(): number { return _lineageCacheVersion }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מטמון משותף של *כל* עץ הדורות בזיכרון השרת.
+//
+// ⚠️ למה: כל טעינת עץ (GET /api/admin/lineage, getAllLineageNodes בכרטסת צאצא,
+// getLineageMap בכרטסת לידה) סרקה את כל ~5000 הצמתים מחדש — 6 סבבי רשת דרך
+// fetchAllRows בכל פתיחת מסך. העץ משתנה לעיתים נדירות (רק בכתיבה מפורשת), ולכן
+// מטמון בזיכרון עם TTL קצר + פסילה מיידית ב-invalidateLineageCache (שכבר נקרא
+// בכל approve/merge/import/PATCH) בטוח לחלוטין ומאיץ פתיחת כל כרטסת במערכת.
+//
+// שים לב: המטמון משותף בין בקשות באותו תהליך; ריבוי מכונות/עובדים → כל אחד
+// מטמון משלו, וזה תקין — TTL קצר וה-version מגבילים את חלון אי-העקביות.
+// ─────────────────────────────────────────────────────────────────────────────
+let _treeCache: { at: number; version: number; rows: TreeNodeRow[] } | null = null
+const TREE_CACHE_TTL_MS = 60_000
+
+/**
+ * טוען את כל צמתי העץ, עם מטמון. `loader` מבצע את השליפה בפועל (fetchAllRows).
+ * מוחזר עותק חדש בכל קריאה כדי שצרכנים שממיינים/משנים לא ידרסו את המטמון.
+ */
+export async function getCachedLineageTree(
+  loader: () => Promise<TreeNodeRow[]>,
+): Promise<TreeNodeRow[]> {
+  const now = Date.now()
+  if (_treeCache && _treeCache.version === _lineageCacheVersion && now - _treeCache.at < TREE_CACHE_TTL_MS) {
+    return _treeCache.rows.slice()
+  }
+  const rows = await loader()
+  _treeCache = { at: now, version: _lineageCacheVersion, rows }
+  return rows.slice()
+}
 
 /** המסלול מהשורש עד הצומת (כולל), לפי parent_id. ריק אם הצומת לא נמצא. */
 export function pathToRoot(nodes: TreeNodeRow[] | Map<string, TreeNodeRow>, nodeId?: string | null): TreeNodeRow[] {

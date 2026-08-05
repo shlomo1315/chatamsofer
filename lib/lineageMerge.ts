@@ -282,16 +282,18 @@ async function mergeOne(
   let beneficiaries = 0
 
   for (const mid of mergeIds) {
-    // ⚠️ קוראים את הצומת *לפני* המחיקה — אחרי המחיקה אין מה לשחזר ממנו.
-    const { data: node } = await db
-      .from('lineage_nodes')
-      .select('id, name, parent_id, generation, status, relation, notes')
-      .eq('id', mid).maybeSingle()
-
-    const { data: kids } = await db.from('lineage_nodes')
-      .update({ parent_id: keepId }).eq('parent_id', mid).select('id')
-    const { data: bens } = await db.from('beneficiaries')
-      .update({ lineage_node_id: keepId }).eq('lineage_node_id', mid).select('id')
+    // ⚡ שלוש הפעולות הראשונות עצמאיות זו מזו — רצות במקביל (Promise.all) במקום
+    // סדרתית. קוראים את הצומת *לפני* המחיקה, ומעבירים ילדים+משפחות ל-keepId.
+    // חוסך 2 סבבי רשת לכל צומת במפל.
+    const [{ data: node }, { data: kids }, { data: bens }] = await Promise.all([
+      db.from('lineage_nodes')
+        .select('id, name, parent_id, generation, status, relation, notes')
+        .eq('id', mid).maybeSingle(),
+      db.from('lineage_nodes')
+        .update({ parent_id: keepId }).eq('parent_id', mid).select('id'),
+      db.from('beneficiaries')
+        .update({ lineage_node_id: keepId }).eq('lineage_node_id', mid).select('id'),
+    ])
 
     children += kids?.length ?? 0
     beneficiaries += bens?.length ?? 0

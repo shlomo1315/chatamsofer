@@ -1491,12 +1491,16 @@ export default function LineagePage() {
       if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
       toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
       const keepName = nodes.find(n => n.id === effectiveKeepId)?.name ?? ''
-      // ⚠️ softRefresh ולא loadAll: loadAll מדליק loading=true, והמסך מחליף את
-      // העץ בספינר — כלומר TreeView מתפרק, וכל מצבו הפנימי (זום, גלילה, בחירה)
-      // נמחק. אחרי המיזוג הוא נבנה מחדש וממורכז על דור 1, והמשתמש איבד את
-      // המקום שבו עבד. עם softRefresh הרכיב חי, והנתונים מתעדכנים תחתיו.
-      await softRefresh()
+      // ⚡ עדכון אופטימי מיידי: הצמתים הממוזגים הישירים נמחקים מהתצוגה וילדיהם
+      // עוברים ל-keepId — כאן ועכשיו, בלי להמתין לשרת. קודם היה await softRefresh
+      // חוסם (טעינת כל ~5000 הצמתים מחדש) שגרם לעיכוב ~30ש' עד שהמסך הגיב.
+      // המפל המלא (דורות שמעל/מתחת) עשוי למזג עוד צמתים — softRefresh ברקע
+      // (בלי await) מיישר את התמונה המלאה תוך שנייה, בלי לחסום את המשתמש.
+      setNodes(prev => prev
+        .filter(n => !mergeIds.includes(n.id))
+        .map(n => mergeIds.includes(n.parent_id ?? '') ? { ...n, parent_id: effectiveKeepId } : n))
       exitMerge()
+      void softRefresh()
       // הצומת שנשאר — מרכזים עליו את המבט. הפריסה משתנה אחרי המיזוג (צומת ירד),
       // ולכן שמירת הגלילה בפיקסלים לבדה עדיין הייתה מזיזה את התמונה.
       setAnchor(a => ({ id: effectiveKeepId, n: (a?.n ?? 0) + 1 }))

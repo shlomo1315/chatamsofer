@@ -73,12 +73,18 @@ async function getAllLineageNodes(): Promise<LineageNode[]> {
   // ⚠️ שליפה בדפים — .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST,
   // וברשימה חלקית הצ'יפים/העץ הציגו עץ חלקי בעצים גדולים (מעל 1000 צמתים):
   // צאצא שצומתו מעבר לשורה 1000 הופיע כ"לא משויך בעץ". ראו lib/fetchAllRows.
+  // ⚡ עטוף ב-getCachedLineageTree: פתיחת כרטסת צאצא לא סורקת את כל ~5000 הצמתים
+  // מחדש בכל פעם — המטמון נפסל אוטומטית בכל כתיבה (invalidateLineageCache).
   const { fetchAllRows } = await import('@/lib/fetchAllRows')
-  const { rows, error } = await fetchAllRows<LineageNode>((from, to) =>
-    db.from('lineage_nodes').select(NODE_SELECT).range(from, to),
-  )
-  if (error) console.error('[getAllLineageNodes] load failed:', error)
-  return rows
+  const { getCachedLineageTree } = await import('@/lib/lineageSync')
+  const rows = await getCachedLineageTree(async () => {
+    const { rows, error } = await fetchAllRows<LineageNode>((from, to) =>
+      db.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    if (error) console.error('[getAllLineageNodes] load failed:', error)
+    return rows
+  })
+  return rows as LineageNode[]
 }
 
 // סטטוס דור לצביעה: verified=כחול (מאושר) · pending=כתום (ממתין) · rejected=אדום (נדחה).
