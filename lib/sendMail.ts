@@ -87,6 +87,33 @@ export function gmailCounterKey(email: string): string {
   return `gmail_daily_send:${todayKey()}:${email.trim().toLowerCase()}`
 }
 
+// הבהרת "מייל אוטומטי" שנוספת לכל הודעה שיוצאת מחשבון שליחה ייעודי.
+//
+// ⚠️ נדרשת דווקא כאן: השולח בפועל הוא חשבון כמו c1@ שאיש אינו קורא בו, והנמען
+// רואה אותו בשורת "מאת". בלי הבהרה מפורשת הוא משיב לשם בתום לב — והתשובה
+// יושבת בתיבה נטושה. הכותרת Reply-To מפנה לתיבת המשרד, אבל היא אינה נראית
+// למשתמש; ההבהרה הזו כן.
+function automatedNotice(replyTo: string): string {
+  return `<div style="max-width:480px;margin:12px auto 0;padding:12px 16px;border-radius:12px;`
+    + `background:#f8fafc;border:1px solid #e2e8f0;direction:rtl;text-align:center;`
+    + `font-family:Arial,sans-serif;font-size:12px;line-height:1.7;color:#64748b">`
+    + `<div style="font-weight:700;color:#475569;margin-bottom:2px">הודעה זו נשלחה ממערכת אוטומטית</div>`
+    + `<div>אין להשיב לכתובת זו — הודעות שנשלחות אליה אינן נקראות.</div>`
+    + `<div>לפניות ולתשובות: <a href="mailto:${replyTo}" style="color:#4f46e5;font-weight:700;text-decoration:none">${replyTo}</a></div>`
+    + `</div>`
+}
+
+// הוספת ההבהרה לגוף ההודעה, לפני סגירת body אם קיים.
+// ⚠️ מדלג כשההודעה כבר כוללת הבהרה משלה (תבניות שבהן היא חלק מהעיצוב),
+// כדי לא להציג לנמען את אותו משפט פעמיים.
+function withAutomatedNotice(html: string, replyTo: string): string {
+  if (/אין להשיב/.test(html)) return html
+  const notice = automatedNotice(replyTo)
+  return /<\/body>/i.test(html)
+    ? html.replace(/<\/body>/i, `${notice}</body>`)
+    : html + notice
+}
+
 // ניסיון שליחה דרך Workspace. מחזיר את כתובת החשבון ששלח, או null אם אף
 // חשבון לא היה זמין — ואז הקורא ממשיך ל-Resend. אינו זורק לעולם.
 //
@@ -132,7 +159,10 @@ async function trySendViaGmail(
         // אחרת רק אם היא רשומה בחשבון כאליאס מאומת, ואחרת מתעלם ממנה בשקט.
         // כתובת אמיתית מונעת פער בין מה שהוגדר למה שהנמען רואה בפועל.
         const from = acc.token ? acc.email : fallbackFrom
-        await sendGmailMessage(gmail, { to, subject, html, from, fromName, replyTo })
+        await sendGmailMessage(gmail, {
+          to, subject, from, fromName, replyTo,
+          html: withAutomatedNotice(html, replyTo || from),
+        })
         return acc.email
       } catch (e) {
         // כשל בחשבון מסוים — ממשיכים לבא בתור ולא מפילים את השליחה כולה.
