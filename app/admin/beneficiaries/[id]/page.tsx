@@ -441,7 +441,9 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />
           <p className="font-medium text-slate-600">תאריך רישום</p>
-          <p>{formatDate(beneficiary.created_at)}</p>
+          {/* גם השעה, לא רק התאריך — בימי רישום המוני "05/08/2026" לבדו אינו
+              מבחין בין נרשם ראשון לאחרון, ובבירור תקלה זה בדיוק מה שצריך. */}
+          <p className="ltr-num">{formatDateTime(beneficiary.created_at)}</p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-3">
           <Calendar size={16} className="mx-auto mb-1 text-slate-300" />
