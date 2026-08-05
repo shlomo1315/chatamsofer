@@ -20,7 +20,7 @@ const GOV_HEADERS: Record<string, string> = {
 const RESOURCES: { id: string; label: string }[] = [
   { id: '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba', label: 'מרשם יישובים' },
   { id: '55a24991-c3d3-4c5f-83bf-855db318d1b2', label: 'רשימת ישובים בישראל' },
-  { id: 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3', label: 'רחובות' },
+  { id: '9ad3862c-8391-4b2f-84a4-2d4c68625f4b', label: 'רחובות' },
 ]
 
 async function probe(resourceId: string, q: string) {

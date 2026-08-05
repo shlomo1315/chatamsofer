@@ -5,7 +5,12 @@ const CITIES_RESOURCE = '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba'
 // "רשימת ישובים בישראל" — המאגר הרשמי המקיף (~1,400 יישובים, כולל יו"ש).
 // המאגר הקודם (CITIES_RESOURCE) חלקי ולא כלל את יישובי יו"ש; זה משלים אותם.
 const SETTLEMENTS_RESOURCE = '55a24991-c3d3-4c5f-83bf-855db318d1b2'
-const STREETS_RESOURCE = 'a7296d1a-f8c9-4b70-96c2-6ebb4352f8e3'
+// ⚠️ מאגר הרחובות המעודכן והמלא של משרד הפנים. המאגר הקודם
+// (a7296d1a-…) היה ישן וחלקי — 51,497 רחובות בלבד, וחסרו בו רחובות חדשים
+// (למשל "הרב ישראל גרוסמן" בבית שמש). המאגר הזה מכיל 63,571 רחובות (+12K)
+// ומעודכן, עם אותם שדות (שם_ישוב, שם_רחוב). בכל בדיקת סנכרון מול data.gov.il
+// יש לוודא שזה ה-resource שבשימוש.
+const STREETS_RESOURCE = '9ad3862c-8391-4b2f-84a4-2d4c68625f4b'
 const GOV_URL = 'https://data.gov.il/api/3/action/datastore_search'
 const GOV_SQL_URL = 'https://data.gov.il/api/3/action/datastore_search_sql'
 
