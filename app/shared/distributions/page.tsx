@@ -260,6 +260,57 @@ function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
   )
 }
 
+// ── טבלת נרשמים לדף השיתוף — table-fixed + colgroup בפיקסלים ──────────────────
+// ✅ נבנתה מחדש נקי: table-fixed עם רוחב קבוע *מובטח* לכל עמודה (colgroup),
+// whitespace-nowrap + truncate על הטקסטואליות (מלל ארוך נחתך עם title, לא דוחף),
+// ומגלילה אופקית בתוך הכרטיס. 10 עמודות בלבד (בלי אישור/כרטיס/ערוץ/סכום).
+function SharedRecipientsTable({ rows }: { rows: Recipient[] }) {
+  if (!rows.length) return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
+  return (
+    <div className="w-full overflow-x-auto">
+      <table className="text-[12px] border-collapse table-fixed min-w-[1080px] w-full">
+        <colgroup>
+          <col className="w-[150px]" />{/* שם המשפחה */}
+          <col className="w-[95px]" />{/* ת"ז */}
+          <col className="w-[120px]" />{/* בן/בת זוג */}
+          <col className="w-[105px]" />{/* טלפון */}
+          <col className="w-[170px]" />{/* מייל */}
+          <col className="w-[150px]" />{/* כתובת */}
+          <col className="w-[85px]" />{/* עיר */}
+          <col className="w-[50px]" />{/* גיל */}
+          <col className="w-[55px]" />{/* ילדים */}
+          <col className="w-[140px]" />{/* תאריך רישום */}
+        </colgroup>
+        <thead className="bg-slate-50 text-slate-500">
+          <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+            <th>שם המשפחה</th><th>ת״ז</th><th>בן/בת זוג</th><th>טלפון</th><th>מייל</th>
+            <th>כתובת</th><th>עיר</th><th>גיל</th><th>ילדים</th><th>תאריך רישום</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {rows.map(r => {
+            const b = r.beneficiary
+            return (
+              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
+                <td className="font-semibold text-slate-800"><span className="block truncate" title={benName(b)}>{benName(b)}</span></td>
+                <td className="font-mono text-slate-600"><span className="block truncate ltr-num">{b?.id_number ?? '—'}</span></td>
+                <td className="text-slate-600"><span className="block truncate" title={b?.spouse_name ?? undefined}>{b?.spouse_name ?? '—'}</span></td>
+                <td className="font-mono text-slate-600"><span className="block truncate ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</span></td>
+                <td className="text-slate-600"><span className="block truncate" title={b?.email ?? undefined} dir="ltr">{b?.email ?? '—'}</span></td>
+                <td className="text-slate-600"><span className="block truncate" title={b?.address ?? undefined}>{b?.address ?? '—'}</span></td>
+                <td className="text-slate-600"><span className="block truncate" title={b?.city ?? undefined}>{b?.city ?? '—'}</span></td>
+                <td className="text-slate-600 ltr-num">{ageOf(b) ?? '—'}</td>
+                <td className="text-slate-600 ltr-num">{b?.children_count ?? '—'}</td>
+                <td className="text-slate-500 ltr-num text-[11px]">{fmtDateTime(r.registered_at)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Main ──
 export default function SharedDistributionsPage() {
   const [state, setState] = useState<'checking' | 'locked' | 'unlocked'>('checking')
@@ -468,24 +519,7 @@ export default function SharedDistributionsPage() {
                 {/* טבלת נרשמים — נפתחת בלחיצה */}
                 {isOpen && (
                   <div className="border-t border-slate-200 bg-white" onClick={e => e.stopPropagation()}>
-                    <HolidayRecipientsTable
-                      rows={rows.map(r => ({
-                        id: r.id, source: (r.source ?? 'admin') as RegisterSource,
-                        registered_at: r.registered_at ?? null, phone: r.phone ?? null,
-                        notified_at: null, notify_error: null, beneficiary_id: r.beneficiary?.id ?? null,
-                        approval_status: (r.approval_status ?? 'pending') as 'pending' | 'approved' | 'rejected',
-                        card_number: r.card_number ?? null, card_linked_at: r.card_linked_at ?? null,
-                        name: benName(r.beneficiary), id_number: r.beneficiary?.id_number ?? null,
-                        spouse_name: r.beneficiary?.spouse_name ?? null,
-                        ben_phone: r.beneficiary?.phone ?? r.beneficiary?.phone2 ?? r.phone ?? null,
-                        email: r.beneficiary?.email ?? null, address: r.beneficiary?.address ?? null,
-                        city: r.beneficiary?.city ?? null, age: ageOf(r.beneficiary),
-                        children_count: r.beneficiary?.children_count ?? null,
-                      }))}
-                      amountPerFamily={null}
-                      fmtDateTime={fmtDateTime} fmtCur={fmtCurNum}
-                      controls={{ hideApproval: true, hideCard: true, hideSource: true }}
-                    />
+                    <SharedRecipientsTable rows={rows} />
                   </div>
                 )}
               </button>
