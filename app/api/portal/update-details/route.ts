@@ -135,8 +135,13 @@ export async function POST(request: NextRequest) {
         : []
       ).map(c => (c?.id_number ?? '').replace(/\D/g, '')).filter(Boolean),
     )
+    // ילד נשוי — 'נשוי' לבן, 'נשואה' לבת (ראו maritalFor ב-PublicPortalPage).
+    const isMarried = (s: unknown) => {
+      const v = String(s ?? '').trim()
+      return v === 'נשוי' || v === 'נשואה' || v === 'נשואים'
+    }
     const seen = new Set<string>()
-    for (const c of children as { name?: string; id_number?: string }[]) {
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string }[]) {
       const name = (c?.name ?? '').trim()
       const cid = (c?.id_number ?? '').replace(/\D/g, '')
       const childLabel = name || 'הילד/ה'
@@ -159,7 +164,20 @@ export async function POST(request: NextRequest) {
       const { data: asChild } = await admin.from('beneficiaries').select('id')
         .contains('children', [{ id_number: cid }]).neq('id', String(beneficiary_id)).limit(1)
       if (asBen?.length || asChild?.length) {
-        return NextResponse.json({ error: `תעודת הזהות של ${childLabel} כבר קיימת במערכת. לא ניתן לרשום אותה פעם נוספת.` }, { status: 400 })
+        // ⚠️ קיום ברשומה אחרת אינו בהכרח כפילות. צאצא נשוי *אמור* להופיע
+        // בשני מקומות: כמשפחה עצמאית משלו, וגם ברשימת הילדים של הוריו —
+        // ולעיתים גם אצל חמיו. חסימה גורפת עצרה כאן אב שרשם את ילדיו
+        // הנשואים, בלי שום דרך להתקדם ובלי להסביר לו מה הבעיה.
+        //
+        // לכן ההוספה מותרת, בתנאי אחד: הילד מסומן כנשוי. הסימון הוא ההצהרה
+        // שמדובר במשפחה עצמאית ולא בניסיון לרשום את אותו אדם פעמיים —
+        // ילד שאינו נשוי אמור להופיע במשפחה אחת בלבד.
+        if (!isMarried(c?.marital_status)) {
+          return NextResponse.json({
+            error: `שים לב: ${childLabel} כבר רשום/ה במערכת כמשפחה נפרדת. ניתן להוסיף אותו/ה תחת הילדים שלך במצב "נשוי/אה" בלבד — יש לסמן את המצב המשפחתי ולנסות שוב.`,
+            code: 'child_registered_separately',
+          }, { status: 400 })
+        }
       }
     }
     update.children = children.length > 0 ? children : null
