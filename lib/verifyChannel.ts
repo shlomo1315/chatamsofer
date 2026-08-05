@@ -93,7 +93,11 @@ export async function sendVerifyCode(
   }
 
   const ip = clientIp(request)
-  const perValue = channel === 'phone' ? 4 : 5
+  // ⚠️ במייל הועלה מ-5 ל-8. הקירור כבר מגביל לשליחה אחת ל-120 שניות, כלומר
+  // לכל היותר 7 שליחות לגיטימיות ברבע שעה — ותקרה של 5 חסמה משתמש שסבלני
+  // והמתין כנדרש בין הניסיונות. בטלפון נשאר 4: שם כל שליחה היא שיחה בתשלום,
+  // ואין קירור שמרסן אותה.
+  const perValue = channel === 'phone' ? 4 : 8
   if (!rateLimit(`verify-send:${channel}:${value}`, perValue, 15 * 60 * 1000) ||
       !rateLimit(`verify-send-ip:${ip}`, 3000, 15 * 60 * 1000)) {
     return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
@@ -193,7 +197,17 @@ export async function confirmVerifyCode(
   const code = String(rawCode ?? '').replace(/\D/g, '')
   if (!raw || !code) return { status: 400, body: { error: 'חסרים פרטים' } }
 
-  if (!rateLimit(`verify-confirm-ip:${clientIp(request)}`, 30, 15 * 60 * 1000)) {
+  // ⚠️ תקרת ה-IP הועלתה דרסטית (30→3000): זו הייתה החסימה האחרונה שנשארה
+  // בשרשרת ההרשמה, והיא חסמה בדיוק את השלב שאין ממנו דרך חזרה — הזנת הקוד.
+  // הרישום ההמוני מגיע מעמדות ומרשתות מסוננות (NetFree/רימון), שכל הפונים
+  // דרכן חולקים IP אחד; עם 30, המאמת ה-31 קיבל "יותר מדי ניסיונות" אחרי
+  // שכבר קיבל את הקוד למייל. אותה מסקנה כבר הוסקה ב-verify/send (3000),
+  // ב-lookup (2000) ובמסלול הרישום עצמו — כאן היא פשוט לא הוחלה.
+  //
+  // ההגנה האמיתית מפני ניחוש קוד נשארת במקומה ואינה תלויה ב-IP: חמישה
+  // ניסיונות שגויים לכל קוד מוחקים אותו (rec.attempts למטה), הקוד בן שש
+  // ספרות ותוקפו מוגבל. ניחוש עיוור נחסם שם, לא כאן.
+  if (!rateLimit(`verify-confirm-ip:${clientIp(request)}`, 3000, 15 * 60 * 1000)) {
     return { status: 429, body: { error: 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.' } }
   }
 

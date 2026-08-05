@@ -49,9 +49,15 @@ function _encodeHeader(text: string): string {
   return `=?UTF-8?B?${Buffer.from(text, 'utf8').toString('base64')}?=`
 }
 
-export async function sendGmailMessage(gmail: any, opts: { to: string; subject: string; html: string; threadId?: string }) {
-  const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
-  const fromName = 'היכל החתם סופר משרד ראשי'
+export async function sendGmailMessage(gmail: any, opts: {
+  to: string; subject: string; html: string; threadId?: string
+  // כתובת/שם שולח חלופיים. ⚠️ Gmail ישלח בשם כתובת אחרת רק אם היא מוגדרת
+  // בחשבון כ-"Send mail as" ומאומתת. אחרת הוא מתעלם ושולח מהכתובת הראשית —
+  // ולכן זו הגדרה שחייבת להיעשות גם בצד Gmail, לא רק כאן.
+  from?: string; fromName?: string
+}) {
+  const from = opts.from || process.env.GMAIL_EMAIL || 'office@chasamsofer.info'
+  const fromName = opts.fromName || 'היכל החתם סופר משרד ראשי'
   const bodyB64 = Buffer.from(opts.html ?? '', 'utf8').toString('base64')
   const raw = [
     `From: ${_encodeHeader(fromName)} <${from}>`,

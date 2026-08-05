@@ -32,6 +32,14 @@ import { mailFor } from '@/lib/departments'
 // תפעוליים אחרים שיוצאים מאותו חשבון (מענה אוטומטי, אישורים).
 const GMAIL_DAILY_CAP = 1500
 
+// כתובת ושם השולח של מיילים תפעוליים. ניתנים להגדרה בלי שינוי קוד, כדי
+// שקודי האימות ייצאו מכתובת ייעודית שברור ממנה שאין להשיב אליה.
+//
+// ⚠️ במסלול Gmail זה עובד רק אם הכתובת מוגדרת בחשבון כ-"Send mail as"
+// ומאומתת. אחרת Gmail מתעלם ושולח מהכתובת הראשית — בלי להיכשל ובלי להתריע.
+const FROM_EMAIL = process.env.VERIFY_FROM_EMAIL || 'noreply@chasamsofer.info'
+const FROM_NAME = process.env.VERIFY_FROM_NAME || 'היכל החתם סופר'
+
 const GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com'])
 
 export function isGmailAddress(email: string): boolean {
@@ -81,7 +89,7 @@ export async function sendTransactionalMail(
         // ייבוא דינמי — googleapis כבד, ואין סיבה לטעון אותו במסלול שאינו ג'ימייל.
         const { getGmailClient, sendGmailMessage } = await import('@/lib/gmail')
         const gmail = await getGmailClient()
-        await sendGmailMessage(gmail, { to, subject, html })
+        await sendGmailMessage(gmail, { to, subject, html, from: FROM_EMAIL, fromName: FROM_NAME })
         return { ok: true, via: 'gmail' }
       }
       console.warn(`[transactional-mail] תקרת Gmail היומית (${GMAIL_DAILY_CAP}) נוצלה — ממשיכים ב-Resend`)
@@ -92,8 +100,12 @@ export async function sendTransactionalMail(
     }
   }
 
+  // ⚠️ אותה כתובת שולח בשני המסלולים. אחרת אותו נרשם היה מקבל קוד פעם
+  // מכתובת אחת ופעם מאחרת, לפי ספק הדואר שלו — מבלבל, ופוגע באמון.
+  // replyTo נשאר של המחלקה: מי שבכל זאת ישיב, יגיע לתיבה מאוישת ולא לחלל.
   const res = await deliverMail(to, subject, html, undefined, {
-    ...mailFor('igud'), skipLog: true, transactional: true,
+    ...mailFor('igud'), fromEmail: FROM_EMAIL, fromName: FROM_NAME,
+    skipLog: true, transactional: true,
   })
   if (!res || !res.ok) return { ok: false, via: 'resend', error: res?.error }
   return { ok: true, via: 'resend', id: res.id }
