@@ -4017,7 +4017,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <Field label={<EditableText k="reg.email" />} required>
                       <EmailInput value={regForm.email} onChange={v => setRegForm(f => ({ ...f, email: v }))} placeholder="your@email.com" required />
                       <VerifyControl channel="email" value={regForm.email} valid={validateEmail(regForm.email)} onToken={setRegEmailToken}
-                        optionalHint={emailVerifyRequired ? undefined : 'אימות המייל אינו חובה כעת — אפשר להשלים את הרישום גם בלעדיו, ולאמת בכניסה הבאה לאזור האישי.'} />
+                        optionalHint={emailVerifyRequired ? undefined : 'שימו לב: במידה והמערכת לא שלחה לכם קוד אימות למייל — ניתן להמשיך את תהליך הרישום ולאמת את המייל שלכם בהמשך.'} />
                     </Field>
                   </div>
                 </div>
