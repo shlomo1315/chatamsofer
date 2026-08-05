@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserPermissions, SectionKey } from '@/types'
 import { TABLES, tableByName, schemaFor, type TableSpec } from './schema'
 import { assessLineageReliability } from '../lineageReliability'
+import { fetchAllRows } from '../fetchAllRows'
 
 /** גיל בשנים מתאריך לידה (או null אם חסר/לא תקין). */
 function ageFromBirthDate(s: string | null | undefined): number | null {
@@ -122,12 +123,15 @@ async function lineageTree(db: SupabaseClient, rawName: string): Promise<unknown
   const term = String(rawName ?? '').trim()
   if (!term) return { error: 'יש לציין שם לחיפוש בעץ הדורות' }
 
-  const { data, error } = await db
-    .from('lineage_nodes')
-    .select('id, name, generation, parent_id, relation')
-    .eq('status', 'verified')
+  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
+  // בעץ של אלפי צמתים הרשימה נחתכת בשקט ל-1000 (ראו lib/fetchAllRows).
+  const { rows: nodes, error } = await fetchAllRows<LNode>((from, to) =>
+    db.from('lineage_nodes')
+      .select('id, name, generation, parent_id, relation')
+      .eq('status', 'verified')
+      .range(from, to),
+  )
   if (error) return { error: 'שגיאה בשליפת עץ הדורות' }
-  const nodes = (data ?? []) as LNode[]
   if (!nodes.length) return { message: 'עץ הדורות ריק' }
 
   const byId = new Map(nodes.map(n => [n.id, n]))

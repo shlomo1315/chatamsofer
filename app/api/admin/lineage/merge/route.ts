@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { mergeWithCascade } from '@/lib/lineageMerge'
 import { logActivity } from '@/lib/activityLog'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,12 +42,14 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
   // טעינת כל הצמתים (id, parent_id, generation) לאימות וחישוב דורות.
-  // ⚠️ limit גבוה: בלי זה Supabase מחזיר מקסימום 1000 שורות בשקט — עץ גדול
+  // ⚠️ שליפה בדפים: .limit() לבדו נחתך ל-1000 בשקט (db-max-rows) — עץ גדול
   // מ-1000 צמתים נטען חלקית, ומיזוג ששרשרתו נוגעת בחלק החסר נכשל בשקט ("לא
-  // קורה כלום"). זה היה השורש של כשל מיזוג 3+ צמתים בעצים גדולים.
-  const { data: all, error: allErr } = await admin.from('lineage_nodes').select('id, parent_id, generation').limit(100000)
-  if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
-  const list = all ?? []
+  // קורה כלום"). זה היה השורש של כשל מיזוג 3+/N צמתים בעצים גדולים. ראו lib/fetchAllRows.
+  const { rows: all, error: allErr } = await fetchAllRows<{ id: string; parent_id: string | null; generation: number }>((from, to) =>
+    admin.from('lineage_nodes').select('id, parent_id, generation').range(from, to),
+  )
+  if (allErr) return NextResponse.json({ error: allErr }, { status: 500 })
+  const list = all
   const byId = new Map(list.map(n => [n.id, n]))
 
   const keep = byId.get(keepId)

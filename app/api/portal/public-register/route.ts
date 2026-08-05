@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { validateIsraeliId } from '@/lib/validation'
+import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
@@ -350,7 +350,13 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
 
   const isMarried = String(marital_status) === 'נשואים'
   const cleanChildCount = Array.isArray(children) ? children.length : (typeof children_count === 'number' ? children_count : parseInt(String(children_count || '0'), 10))
-  const childrenJson = Array.isArray(children) && children.length > 0 ? children : null
+  // ⚠️ נרמול תאריך הלידה של הילדים ל-ISO (טופס נדרים שולח DDMMYYYY) — לעקביות
+  // עם הרשומה הראשית ולמניעת תאריכים פגומים ב-JSON.
+  const childrenJson = Array.isArray(children) && children.length > 0
+    ? children.map((c: Record<string, unknown>) => c && typeof c === 'object' && 'birth_date' in c
+        ? { ...c, birth_date: normalizeDateToISO(c.birth_date as string) }
+        : c)
+    : null
 
   // ── קביעת רמת הבדיקה לפי סדר הדורות ─────────────────────────────────────────
   // בדיקה מעמיקה (deep_review) כשהנרשם *סטה מהנתיב המאומת בתוך 5 הדורות
@@ -407,12 +413,14 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     id_doc_type: isPassport ? 'passport' : 'id',
     full_name: String(full_name).trim(),
     family_name: String(family_name).trim(),
-    birth_date: birth_date || null,
+    // ⚠️ נרמול תאריך ל-ISO: טופס נדרים החיצוני שולח DDMMYYYY, שהפיל את ה-INSERT
+    // עם 22008 (ראו lib/validation normalizeDateToISO). הפורטל שולח ISO ולא מושפע.
+    birth_date: normalizeDateToISO(birth_date as string | null | undefined),
     gender: isMarried ? 'male' : (gender || null),
     spouse_name: spouse_name ? String(spouse_name).trim() : null,
     spouse_id_number: cleanSpouseId || null,
     spouse_phone: spouse_phone ? String(spouse_phone).trim() : null,
-    spouse_birth_date: spouse_birth_date || null,
+    spouse_birth_date: normalizeDateToISO(spouse_birth_date as string | null | undefined),
     ...sharedFields,
   }]
 

@@ -70,11 +70,15 @@ async function getAllLineageNodes(): Promise<LineageNode[]> {
   const { getServiceClient } = await import('@/lib/apiAuth')
   const db = getServiceClient()
   if (!db) return []
-  // ⚠️ limit גבוה — בלי זה Supabase קוטע ל-1000 שורות והצ'יפים/העץ מציגים עץ
-  // חלקי בעצים גדולים (מעל 1000 צמתים).
-  const { data, error } = await db.from('lineage_nodes').select(NODE_SELECT).limit(100000)
-  if (error) console.error('[getAllLineageNodes] load failed:', error.message)
-  return (data ?? []) as LineageNode[]
+  // ⚠️ שליפה בדפים — .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST,
+  // וברשימה חלקית הצ'יפים/העץ הציגו עץ חלקי בעצים גדולים (מעל 1000 צמתים):
+  // צאצא שצומתו מעבר לשורה 1000 הופיע כ"לא משויך בעץ". ראו lib/fetchAllRows.
+  const { fetchAllRows } = await import('@/lib/fetchAllRows')
+  const { rows, error } = await fetchAllRows<LineageNode>((from, to) =>
+    db.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+  )
+  if (error) console.error('[getAllLineageNodes] load failed:', error)
+  return rows
 }
 
 // סטטוס דור לצביעה: verified=כחול (מאושר) · pending=כתום (ממתין) · rejected=אדום (נדחה).

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,11 +21,11 @@ export async function GET(request: NextRequest) {
 
   // node_id mode: return path from root to this node
   if (nodeId) {
-    const { data: allNodes } = await client
-      .from('lineage_nodes')
-      .select('id,name,parent_id,generation')
-      .limit(100000)
-    const nodes: { id: string; name: string; parent_id: string | null; generation: number }[] = allNodes ?? []
+    // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows), ואז המסלול
+    // לצומת מעבר לשורה 1000 לא נמצא. ראו lib/fetchAllRows.
+    const { rows: nodes } = await fetchAllRows<{ id: string; name: string; parent_id: string | null; generation: number }>((from, to) =>
+      client.from('lineage_nodes').select('id,name,parent_id,generation').range(from, to),
+    )
     const map = Object.fromEntries(nodes.map(n => [n.id, n]))
 
     // walk up from nodeId to root
@@ -40,25 +41,27 @@ export async function GET(request: NextRequest) {
   // ⚠️ מאושרים בלבד. הוצגו כאן לזמן קצר גם דורות שממתינים לאישור, כדי לצמצם
   // כפילויות (נרשם שאינו מוצא רשומה קיימת מזין אותה שוב) — אבל ההחלטה נסוגה:
   // סדר ייחוס אינו אמור להיבנות על רשומה שטרם נבדקה.
-  let query = client
-    .from('lineage_nodes')
-    .select('*')
-    .eq('status', 'verified')
-    .order('generation')
-    .order('name')
-
+  let nodes: Record<string, unknown>[] = []
   if (all === '1') {
-    // return all verified nodes — limit גבוה כדי לא להיקטע ל-1000 בעץ גדול
-    query = query.limit(100000)
-  } else if (parentId) {
-    query = query.eq('parent_id', parentId)
+    // ⚠️ כל המאושרים — שליפה בדפים. .limit() לבדו נחתך ל-1000 בעץ גדול. ראו lib/fetchAllRows.
+    const { rows, error } = await fetchAllRows<Record<string, unknown>>((from, to) =>
+      client.from('lineage_nodes').select('*').eq('status', 'verified').order('generation').order('name').range(from, to),
+    )
+    if (error) return NextResponse.json({ error }, { status: 500 })
+    nodes = rows
   } else {
-    query = query.is('parent_id', null)
+    // דור אחד בלבד (הורה נתון או שורשים) — קטן ממילא, שאילתה רגילה מספיקה.
+    let query = client
+      .from('lineage_nodes')
+      .select('*')
+      .eq('status', 'verified')
+      .order('generation')
+      .order('name')
+    query = parentId ? query.eq('parent_id', parentId) : query.is('parent_id', null)
+    const { data, error } = await query
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    nodes = data ?? []
   }
-
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const nodes = data ?? []
 
   // ⚠️ במצב parent_id (רשימת הבחירה לדור הבא), מחזירים גם empty ואת מספר הדור
   // המבוקש בצורה מפורשת — כדי שצרכן חיצוני (טופס נדרים פלוס, UI עצמאי משלהם)

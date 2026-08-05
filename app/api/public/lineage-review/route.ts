@@ -4,6 +4,7 @@ import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiarie
 import { logActivity } from '@/lib/activityLog'
 import { rateLimit } from '@/lib/rateLimit'
 import { clientIp } from '@/lib/rateLimit'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,8 +51,10 @@ export async function GET(request: NextRequest) {
   const inv = await resolveInvite(admin, token)
   if (!inv) return NextResponse.json({ error: 'הקישור אינו תקין, בוטל, או פג תוקפו' }, { status: 403 })
 
-  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
-  const nodes = (allNodes ?? []) as TreeNodeRow[]
+  // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).
+  const { rows: nodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
+    admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+  )
   const ids = subtreeNodeIds(nodes, inv.root_node_id)
   // מחזירים רק את צמתי תת-העץ — שום דבר מחוץ ל-scope לא נחשף
   const subtree = nodes.filter(n => ids.has(n.id))
@@ -82,8 +85,10 @@ export async function POST(request: NextRequest) {
   if (!nodeId || !action) return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
 
   // ⚠️ בדיקת ה-scope הקריטית: הצומת חייב להיות בתוך תת-העץ ששותף. אחרת — חסום.
-  const { data: allNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
-  const nodes = (allNodes ?? []) as TreeNodeRow[]
+  // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).
+  const { rows: nodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
+    admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+  )
   const ids = subtreeNodeIds(nodes, inv.root_node_id)
   if (!ids.has(nodeId)) return NextResponse.json({ error: 'הצומת מחוץ להרשאה' }, { status: 403 })
 
@@ -113,8 +118,11 @@ export async function POST(request: NextRequest) {
   // דחיית מפל (צומת נדחה → כל צאצאיו נדחים), רענון lineage_chain, וקידום משפחות.
   let cascaded: string[] = []
   try {
-    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)).data as TreeNodeRow[] | null
-    if (fresh) {
+    // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).
+    const { rows: fresh } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    if (fresh.length) {
       // דחייה מפילה את כל תת-העץ (לא ייתכן דור נדחה ודור אחריו מאושר)
       if (newStatus === 'rejected') cascaded = await cascadeRejectSubtree(admin, fresh, nodeId)
       await resyncSubtree(admin, fresh, nodeId)

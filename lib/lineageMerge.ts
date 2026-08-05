@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHebrewName } from './hebrewNames'
+import { fetchAllRows } from './fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מנוע המיזוג בעץ הדורות — כולל המפל.
@@ -323,9 +324,11 @@ export async function recalcGenerations(db: SupabaseClient, rootId: string): Pro
   const { data: root } = await db.from('lineage_nodes').select('generation').eq('id', rootId).maybeSingle()
   const baseGen = (root as { generation?: number } | null)?.generation ?? 1
 
-  // ⚠️ limit גבוה — אחרת Supabase קוטע ל-1000 שורות ו-recalcGenerations מדלג
-  // על צמתים מעבר לכך (חישוב דורות שגוי בעץ גדול).
-  const { data: all } = await db.from('lineage_nodes').select('id, parent_id').limit(100000)
+  // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows) ו-recalcGenerations
+  // דילג על צמתים מעבר לכך (חישוב דורות שגוי בעץ גדול). ראו lib/fetchAllRows.
+  const { rows: all } = await fetchAllRows<{ id: string; parent_id: string | null }>((from, to) =>
+    db.from('lineage_nodes').select('id, parent_id').range(from, to),
+  )
   const childrenOf = new Map<string | null, string[]>()
   for (const n of all ?? []) {
     const arr = childrenOf.get(n.parent_id) ?? []
@@ -360,10 +363,12 @@ export async function loadCascadePlan(
   mergeIds: string[],
   opts: { up?: boolean; down?: boolean; upApprox?: boolean } = {},
 ): Promise<{ plan: CascadePlan; nodes: MergeNodeRow[] }> {
-  // ⚠️ limit גבוה — טעינת *כל* העץ; בלי זה תקרת 1000 שורות של Supabase קוטעת
-  // אותו ומיזוג ששרשרתו בחלק החסר נכשל בשקט (השורש של כשל מיזוג 3+).
-  const { data } = await db.from('lineage_nodes').select(MERGE_NODE_SELECT).limit(100000)
-  const nodes = (data ?? []) as MergeNodeRow[]
+  // ⚠️ שליפה בדפים — טעינת *כל* העץ. .limit() לבדו נחתך ל-1000 (db-max-rows)
+  // ומיזוג ששרשרתו בחלק החסר נכשל בשקט (השורש של כשל מיזוג 3+). ראו lib/fetchAllRows.
+  const { rows } = await fetchAllRows<MergeNodeRow>((from, to) =>
+    db.from('lineage_nodes').select(MERGE_NODE_SELECT).range(from, to),
+  )
+  const nodes = rows
   return { plan: planCascade(nodes, keepId, mergeIds, opts), nodes }
 }
 

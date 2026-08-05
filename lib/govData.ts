@@ -254,6 +254,20 @@ export async function getCitiesMeta(admin: SupabaseClient): Promise<{ count: num
 }
 
 // ── רחובות ────────────────────────────────────────────────────────────────────
+
+// ⚠️ נרמול שם יישוב להשוואה. שם היישוב מאוחסן שונה בין המאגרים של data.gov.il:
+// מאגר הרחובות שומר גרש עברי ("כפר חב"ד", "בסמ"ה", "בני עי"ש", "יד רמב"ם"),
+// בעוד רשימת הערים (שממנה המשתמש בוחר) שומרת בלי הגרש ("כפר חבד"). גם רווחים
+// כפולים נפוצים ("אשדות יעקב  (איחוד)"). לכן .eq מדויק על השם הנבחר החזיר 0
+// רחובות ליישובים האלה — הרחובות "נעלמו" למרות שהם קיימים במאגר. הנרמול מסיר
+// גרשיים/מרכאות ומכווץ רווחים, כדי שהתאמה תתבצע על צורה אחידה.
+export function normalizeCityName(s: string): string {
+  return String(s ?? '')
+    .replace(/["'׳״`]/g, '')       // גרש/גרשיים עברי ולועזי
+    .replace(/\s+/g, ' ')          // כיווץ רווחים (כולל כפולים)
+    .trim()
+}
+
 // מטמון מודול: כל הרחובות מקובצים לפי יישוב (אחרי trim). נבנה בפנייה אחת מלאה
 // ומשרת כל יישוב מיידית — במקום למשוך את כל המאגר מחדש לכל עיר (שמות היישובים
 // במאגר מרופדים ברווחים, ולכן סינון מדויק מול ה-API נכשל ונפל למשיכה מלאה כל פעם).
@@ -279,7 +293,14 @@ export async function getAllStreetsByCity(force = false): Promise<Map<string, st
 
 export async function fetchStreetsFromGov(city: string): Promise<string[]> {
   const map = await getAllStreetsByCity()
-  return map.get(city.trim()) ?? []
+  const exact = map.get(city.trim())
+  if (exact && exact.length) return exact
+  // ⚠️ התאמה מנורמלת: שם היישוב שהמשתמש בחר (מרשימת הערים) עשוי להיכתב שונה
+  // מהשם במאגר הרחובות — גרש עברי ("כפר חב"ד" מול "כפר חבד"), רווחים כפולים.
+  // בלי זה ליישובים האלה הוחזרו 0 רחובות למרות שהם קיימים במקור.
+  const want = normalizeCityName(city)
+  for (const [c, streets] of map) if (normalizeCityName(c) === want) return streets
+  return []
 }
 
 export async function syncStreetsForCity(admin: SupabaseClient, city: string): Promise<number> {
@@ -332,7 +353,7 @@ export async function runGovSync(): Promise<{ cities: number; streetsCities: num
 // מחזיר רחובות לעיר מהמאגר המקומי; אם ריק/ישן — מסנכרן ומחזיר. מהיר ברוב הפעמים.
 // קוראים בדפדוף (קבוצות של 1000) — Supabase חוסם 1000 שורות לבקשה, ולירושלים יש
 // ~4,279 רחובות. בלי הלולאה חזרו רק ה-1000 הראשונים אלפביתית (כל ה"א'").
-async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{ street: string; synced_at: string }[]> {
+async function readAllStreetRowsExact(admin: SupabaseClient, city: string): Promise<{ street: string; synced_at: string }[]> {
   const all: { street: string; synced_at: string }[] = []
   const pageSize = 1000
   for (let from = 0; from < 200000; from += pageSize) {
@@ -347,6 +368,25 @@ async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{
     if (data.length < pageSize) break
   }
   return all
+}
+
+async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{ street: string; synced_at: string }[]> {
+  const exact = await readAllStreetRowsExact(admin, city)
+  if (exact.length) return exact
+  // ⚠️ fallback מנורמל: אם השם המדויק לא החזיר כלום, ייתכן שהשם ב-gov_streets
+  // נשמר בכתיב שונה (גרש/רווחים) מהשם שהמשתמש בחר. מאתרים את שם היישוב האמיתי
+  // בטבלה שהצורה המנורמלת שלו זהה, וקוראים לפיו. בלי זה יישובים עם גרש עברי
+  // ("כפר חב"ד") הראו 0 רחובות למרות שסונכרנו. (ILIKE לא מספיק — הגרש נשאר.)
+  const want = normalizeCityName(city)
+  const { data: distinctCities } = await admin.from('gov_streets').select('city').limit(100000)
+  const cities = new Set<string>((distinctCities ?? []).map(r => (r as { city: string }).city))
+  for (const c of cities) {
+    if (c !== city && normalizeCityName(c) === want) {
+      const rows = await readAllStreetRowsExact(admin, c)
+      if (rows.length) return rows
+    }
+  }
+  return exact
 }
 
 // ⚠️ מטמון בזיכרון לרשימת הרחובות של עיר.

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { namesMatch, normalizeName, stripTitles } from './hebrewName'
+import { fetchAllRows } from './fetchAllRows'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // סקירת יוחסין לנרשם — נתונים ומגמות בלבד. אינה קובעת ואינה משנה דבר במשפחה.
@@ -69,12 +70,13 @@ export async function assessLineageReliability(db: SupabaseClient, beneficiaryId
   const regName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || (ben.full_name ?? '—')
   const registrant = { name: regName, status: STATUS_HE[ben.eligibility_status ?? ''] ?? (ben.eligibility_status ?? '—') }
 
-  // כל צמתי העץ + מפת ילדים
-  const { data: nodeRows, error: nodeErr } = await db
-    .from('lineage_nodes')
-    .select('id, name, generation, parent_id, status')
+  // כל צמתי העץ + מפת ילדים.
+  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
+  // בעץ של אלפי צמתים הרשימה נחתכה בשקט ל-1000. ראו lib/fetchAllRows.
+  const { rows: nodes, error: nodeErr } = await fetchAllRows<LNode>((from, to) =>
+    db.from('lineage_nodes').select('id, name, generation, parent_id, status').range(from, to),
+  )
   if (nodeErr) return { ok: false, message: 'שגיאה בטעינת עץ הדורות' }
-  const nodes = (nodeRows ?? []) as LNode[]
   const byId = new Map(nodes.map(n => [n.id, n]))
   const childrenOf = new Map<string, LNode[]>()
   for (const n of nodes) {

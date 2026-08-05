@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { compareHebrewNames, type MatchLevel } from '@/lib/hebrewNames'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,11 +37,12 @@ export async function GET(request: NextRequest) {
 
   const minLevel = (request.nextUrl.searchParams.get('level') ?? 'possible') as MatchLevel
 
-  const { data, error } = await admin
-    .from('lineage_nodes')
-    .select('id, name, parent_id, generation, status, relation')
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const nodes = (data ?? []) as NodeRow[]
+  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
+  // סריקת כפילויות על עץ של אלפי צמתים נחתכה בשקט ל-1000. ראו lib/fetchAllRows.
+  const { rows: nodes, error } = await fetchAllRows<NodeRow>((from, to) =>
+    admin.from('lineage_nodes').select('id, name, parent_id, generation, status, relation').range(from, to),
+  )
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   // זוגות שכבר נדחו במפורש — לא מוצעים שוב
   const { data: notDup } = await admin.from('lineage_not_duplicates').select('node_a, node_b')

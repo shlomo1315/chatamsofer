@@ -4,6 +4,7 @@ import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -22,22 +23,21 @@ export async function GET() {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500, headers: NO_STORE })
 
-  const { data, error } = await admin
-    .from('lineage_nodes')
-    .select('*')
-    .order('generation')
-    .order('name')
-    .limit(100000)   // ⚠️ בלי זה נקטע ל-1000 והעץ בכרטסת מציג ענפים חלקיים בעץ גדול
+  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
+  // בעץ של אלפי צמתים הרשימה נחתכה בשקט ל-1000, והצמתים מעבר לכך "נעלמו"
+  // (צאצא שצומתו מעבר לשורה 1000 הופיע כ"לא משויך בעץ"). ראו lib/fetchAllRows.
+  const { rows: data, error } = await fetchAllRows<Record<string, unknown>>((from, to) =>
+    admin.from('lineage_nodes').select('*').order('generation').order('name').range(from, to),
+  )
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
+  if (error) return NextResponse.json({ error }, { status: 500, headers: NO_STORE })
 
   // ⚠️ המשפחות המקושרות לכל צומת — כדי שאפשר יהיה לקפוץ מהעץ ישירות לכרטסת.
   // בלי זה העץ יודע רק שמות, וכל מעבר לכרטסת דרש חיפוש ידני בשם.
-  // שאילתה אחת לכל העץ, ולא אחת לכל צומת.
-  const { data: bens } = await admin
-    .from('beneficiaries')
-    .select('id, full_name, family_name, spouse_name, lineage_node_id')
-    .not('lineage_node_id', 'is', null)
+  // שאילתה אחת לכל העץ, ולא אחת לכל צומת (גם כאן שליפה בדפים — הצאצאים עוברים 1000).
+  const { rows: bens } = await fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
+    admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to),
+  )
   const linked: Record<string, { id: string; name: string }[]> = {}
   for (const b of bens ?? []) {
     const row = b as { id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }
@@ -122,10 +122,10 @@ export async function PATCH(request: NextRequest) {
     if (newParent === id) {
       return NextResponse.json({ error: 'לא ניתן להפוך צומת להורה של עצמו' }, { status: 400 })
     }
-    const { data: all, error: allErr } = await admin
-      .from('lineage_nodes')
-      .select('id, parent_id, generation')
-    if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
+    const { rows: all, error: allErr } = await fetchAllRows<{ id: string; parent_id: string | null; generation: number }>((from, to) =>
+      admin.from('lineage_nodes').select('id, parent_id, generation').range(from, to),
+    )
+    if (allErr) return NextResponse.json({ error: allErr }, { status: 500 })
     const list = all ?? []
     const childrenOf = new Map<string | null, string[]>()
     for (const n of list) {
@@ -200,8 +200,10 @@ export async function PATCH(request: NextRequest) {
   // מאושר. (חזרה מדחייה אינה מפל: יש לאשר כל צאצא במפורש.)
   let rejectedBeneficiaries = 0
   if (updates.status === 'rejected') {
-    const { data: nodesForCascade } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
-    if (nodesForCascade) {
+    const { rows: nodesForCascade } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    if (nodesForCascade.length) {
       const rejected = await cascadeRejectSubtree(admin, nodesForCascade as TreeNodeRow[], id)
       // ⚠️ דחייה בעץ → דחיית המשפחות המקושרות. בלי זה יחוס שנדחה במפורש
       // השאיר את המשפחה "מאושרת" בצאצאים — הפער שהסטטוס בעץ אמור לסגור.
@@ -227,9 +229,11 @@ export async function PATCH(request: NextRequest) {
   // הצומת הזה. מרעננים להם את lineage_chain כדי שהמסכים והמיילים שקוראים את
   // העותק השמור לא יישארו עם השם או המבנה הישן.
   // (הצ'יפים בכרטסת נגזרים מהעץ בזמן אמת וממילא מעודכנים — זה עבור שאר הצרכנים.)
-  const { data: freshNodes } = await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)
+  const { rows: freshNodes } = await fetchAllRows<TreeNodeRow>((from, to) =>
+    admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+  )
   let approved = 0
-  if (freshNodes) {
+  if (freshNodes.length) {
     const synced = await resyncSubtree(admin, freshNodes as TreeNodeRow[], id)
     if (synced) console.log(`[lineage] node ${id} updated → synced ${synced} beneficiary chain(s)`)
 

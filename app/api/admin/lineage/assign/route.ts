@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,15 +29,18 @@ export async function POST(request: NextRequest) {
   if (!beneficiaryId) return NextResponse.json({ error: 'חסר מזהה נרשם' }, { status: 400 })
   if (!nodeId) return NextResponse.json({ error: 'חסר מזהה צומת' }, { status: 400 })
 
-  // כל צמתי העץ — לבניית השרשרת מהצומת הנבחר עד השורש
-  const { data: allNodes, error: nErr } = await db
-    .from('lineage_nodes')
-    .select('id, name, parent_id, generation, relation, status')
-  if (nErr) return NextResponse.json({ error: 'טעינת עץ הדורות נכשלה' }, { status: 500 })
-
   type Node = { id: string; name: string; parent_id: string | null; generation: number; relation: string | null; status: string }
   type ChainEntry = { generation: number; name: string; relation: string | null }
-  const map = new Map<string, Node>((allNodes ?? []).map(n => [n.id, n as Node]))
+
+  // כל צמתי העץ — לבניית השרשרת מהצומת הנבחר עד השורש.
+  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
+  // בעץ של אלפי צמתים הרשימה נחתכה בשקט ל-1000. ראו lib/fetchAllRows.
+  const { rows: allNodes, error: nErr } = await fetchAllRows<Node>((from, to) =>
+    db.from('lineage_nodes').select('id, name, parent_id, generation, relation, status').range(from, to),
+  )
+  if (nErr) return NextResponse.json({ error: 'טעינת עץ הדורות נכשלה' }, { status: 500 })
+
+  const map = new Map<string, Node>(allNodes.map(n => [n.id, n]))
   const chosen = map.get(nodeId)
   if (!chosen) return NextResponse.json({ error: 'הצומת שנבחר אינו קיים בעץ' }, { status: 404 })
 
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest) {
     const { data: ben } = await db.from('beneficiaries').select('eligibility_status').eq('id', String(beneficiaryId)).maybeSingle()
     if (ben?.eligibility_status === 'deep_review') {
       const { namesMatch } = await import('@/lib/hebrewName')
-      const nodesArr = (allNodes ?? []) as Node[]
+      const nodesArr = allNodes
       // כל דור ≤5 (למעט דור 1 = החתם סופר, תמיד מאושר) חייב צומת verified תואם
       const early = chain.filter(e => e.generation > 1 && e.generation <= 5)
       // ⚠️ חייב לכסות את *כל* דורות 2–5 (לא רשימה חלקית): early.every על רשימה

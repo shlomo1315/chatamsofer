@@ -97,9 +97,14 @@ async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
   const { getServiceClient } = await import('@/lib/apiAuth')
   const supabase = getServiceClient()
   if (!supabase) return new Map()
-  const { data, error } = await supabase.from('lineage_nodes').select(NODE_SELECT).limit(100000)
-  if (error) throw error
-  const map = new Map((data ?? []).map(n => [n.id, n as LineageNodeLite]))
+  // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows), והצ'יפים הציגו
+  // עץ חלקי בעצים גדולים. ראו lib/fetchAllRows.
+  const { fetchAllRows } = await import('@/lib/fetchAllRows')
+  const { rows, error } = await fetchAllRows<LineageNodeLite>((from, to) =>
+    supabase.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+  )
+  if (error) throw new Error(error)
+  const map = new Map(rows.map(n => [n.id, n]))
   _lineageCache = { at: now, version, map }
   return map
 }

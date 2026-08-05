@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { NODE_SELECT, resyncSubtree, approveVerifiedBeneficiaries, invalidateLineageCache, type TreeNodeRow } from '@/lib/lineageSync'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,8 +90,11 @@ export async function POST(request: NextRequest) {
 
   // סנכרון מחדש לאגפים (הצומת חזר למצבו הקודם)
   try {
-    const fresh = (await admin.from('lineage_nodes').select(NODE_SELECT).limit(100000)).data as TreeNodeRow[] | null
-    if (fresh) {
+    // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).
+    const { rows: fresh } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    if (fresh.length) {
       await resyncSubtree(admin, fresh, nodeId)
       if (restore.status === 'verified') await approveVerifiedBeneficiaries(admin, fresh, nodeId)
     }
