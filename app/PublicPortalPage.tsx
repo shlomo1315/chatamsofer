@@ -3525,6 +3525,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </div>
                   </div>
 
+                  {/* ─────────────────────────────────────────────────────────
+                      🔴 כניסה לאזור האישי — הפעולה הראשית, ומוצגת לכל מי שכבר רשום.
+                      עד כה הוצגה רק למי שהגיע מקישור פעולה שבמייל, מתוך הנחה
+                      שמי שכבר רשום "מקבל קישור/סטטוס למייל" ואינו מגיש מכאן.
+                      ⚠️ ההנחה הזו נשברה: כשמסירת המיילים מתעכבת, שני הכפתורים
+                      שמתחת מובילים לשום מקום — הנרשם לוחץ, נאמר לו "נשלח מייל",
+                      והמייל לא מגיע. הכניסה לאזור האישי אינה תלויה בדואר כלל,
+                      ובתוכה ממילא נמצאים כל כפתורי הבקשות של המחלקות הפתוחות.
+                      ───────────────────────────────────────────────────────── */}
+                  <button type="button" onClick={() => { setError(''); setAuthView('login') }}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 shadow-[0_6px_16px_-6px_rgba(16,185,129,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(16,185,129,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base">
+                    <Shield size={18} /> כניסה לאזור האישי והגשת בקשות
+                  </button>
+                  <p className="text-[11px] text-slate-400 text-center -mt-2 leading-relaxed">
+                    באזור האישי אפשר להגיש את כל הבקשות ישירות, בלי להמתין למייל.
+                  </p>
+
                   {benefitsSentTo ? (
                     <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                       <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
@@ -3555,20 +3572,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       </button>
                       {statusErr && <p className="text-xs text-red-600">{statusErr}</p>}
                     </>
-                  )}
-
-                  {/* ─────────────────────────────────────────────────────────
-                      🔴 כניסה לאזור האישי.
-                      מוצג רק למי שהגיע מקישור פעולה שבמייל (?action=birth/loan/…):
-                      הוא צריך להיכנס ולהגיש בקשה, ובלי הכפתור היה נתקע.
-                      למי שהגיע רגיל (כבר רשום) — לא מוצג: הוא אינו מגיש בקשות חדשות
-                      מכאן אלא מקבל קישור/סטטוס למייל (הכפתורים למעלה).
-                      ───────────────────────────────────────────────────────── */}
-                  {intendedAction.current && (
-                    <button type="button" onClick={() => { setError(''); setAuthView('login') }}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 shadow-[0_6px_16px_-6px_rgba(16,185,129,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(16,185,129,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base">
-                      <Shield size={18} /> כניסה לאזור האישי והגשת בקשה
-                    </button>
                   )}
 
                 </div>
