@@ -6,6 +6,7 @@ import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
+import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -921,12 +922,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   )}
                 </div>
 
-                {/* name */}
+                {/* name — ⚠️ הטקסט מתכווץ *יחד* עם הצומת: הגודל פרופורציונלי ל-zoom
+                    עם רצפה נמוכה (4px) במקום 9px. קודם הרצפה הגבוהה השאירה טקסט
+                    בגודל קבוע בעוד הצומת מתכווץ, ולכן השם גלש/נחתך בזום קטן. */}
                 <span style={{
                   color: '#fff', fontWeight: 700,
-                  fontSize: Math.max(9, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom),
+                  fontSize: Math.max(4, (pos.node.name.length > 14 ? 11 : pos.node.name.length > 10 ? 13 : 14) * zoom),
                   textAlign: 'center', direction: 'rtl',
-                  padding: `0 ${14 * zoom}px`, lineHeight: 1.35,
+                  padding: `0 ${14 * zoom}px`, lineHeight: 1.25,
                   textShadow: '0 1px 4px rgba(0,0,0,0.3)',
                   maxWidth: (NW - 16) * zoom,
                   overflow: 'hidden',
@@ -1369,6 +1372,10 @@ export default function LineagePage() {
   const [keepId, setKeepId] = useState<string | null>(null)
   const [mergeConfirm, setMergeConfirm] = useState(false)
   const [merging, setMerging] = useState(false)
+  // תצוגה מקדימה של המיזוג הידני — אותו מודאל של מרכז המיזוגים (חוויה אחת).
+  const [manualPlan, setManualPlan] = useState<MergePlanResp | null>(null)
+  const [manualNames, setManualNames] = useState<Record<string, string>>({})
+  const [manualPlanning, setManualPlanning] = useState(false)
   // ⚠️ מיזוג אחורנית גם כשהניסוח שונה — דלוק כברירת מחדל. השרשרת שהתפצלה
   // נרשמה בכל ענף בניסוח אחר ("רבי שמואל בנימין והרבנית חיה ליבא שישא" מול
   // "שמואל בנימין שישא"), ובלי זה מיזוג הבן השאיר את האב כפול — וכל מיזוג
@@ -1479,7 +1486,36 @@ export default function LineagePage() {
     ? keepId
     : (selectedNodes.find(n => (n.status ?? 'verified') === 'verified')?.id ?? selectedNodes[0]?.id ?? null)
 
-  async function handleMerge() {
+  // פתיחת תצוגה מקדימה של המיזוג הידני — קוראת ל-plan ומחשבת ברירת-מחדל לשם
+  // לכל דור (הניסוח העשיר ביותר), בדיוק כמו במרכז המיזוגים. אחריה המשתמש
+  // רואה מה בדיוק יקרה *לפני* הביצוע ובוחר שמות.
+  async function openManualPlan(approx = mergeUpApprox) {
+    const ids = [...mergeSel]
+    if (!effectiveKeepId || ids.length < 2) return
+    const mergeIds = ids.filter(id => id !== effectiveKeepId)
+    setManualPlanning(true)
+    try {
+      const r = await fetch('/api/admin/lineage/merge/plan', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds, cascadeUpApprox: approx }),
+      })
+      const d: MergePlanResp = await r.json()
+      if (!r.ok) { toast.error((d as unknown as { error?: string }).error || 'שגיאה בחישוב המיזוג'); setManualPlanning(false); return }
+      const names: Record<string, string> = {}
+      for (const s of d.steps) {
+        names[s.keepId] = [...s.names].sort((a, b) => {
+          const aw = a.trim().split(/\s+/).length, bw = b.trim().split(/\s+/).length
+          return aw !== bw ? bw - aw : b.trim().length - a.trim().length
+        })[0]
+      }
+      setManualNames(names)
+      setManualPlan(d)
+      setMergeConfirm(false)
+    } catch { toast.error('שגיאת רשת') }
+    setManualPlanning(false)
+  }
+
+  async function handleMerge(names?: Record<string, string>) {
     const ids = [...mergeSel]
     if (!effectiveKeepId || ids.length < 2) return
     const mergeIds = ids.filter(id => id !== effectiveKeepId)
@@ -1487,7 +1523,7 @@ export default function LineagePage() {
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds, cascadeUpApprox: mergeUpApprox }),
+        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds, cascadeUpApprox: mergeUpApprox, names }),
       })
       const d = await res.json()
       if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
@@ -1501,6 +1537,7 @@ export default function LineagePage() {
       setNodes(prev => prev
         .filter(n => !mergeIds.includes(n.id))
         .map(n => mergeIds.includes(n.parent_id ?? '') ? { ...n, parent_id: effectiveKeepId } : n))
+      setManualPlan(null)
       exitMerge()
       void softRefresh()
       // הצומת שנשאר — מרכזים עליו את המבט. הפריסה משתנה אחרי המיזוג (צומת ירד),
@@ -1750,7 +1787,14 @@ export default function LineagePage() {
 
       {showHealth && (
         <TreeHealthPanel
-          onLocate={(id) => handleLocate([id])}
+          onLocate={(id) => {
+            // לחיצה על צומת מבריאות העץ: לסגור את הפאנל, לעבור למצב עץ, ולגלול
+            // לצומת. בלי המעבר-לעץ + הסגירה הלחיצה "לא הגיבה" (הפאנל כיסה את העץ
+            // או שהיינו במצב טבלה, וה-anchor לא נראה).
+            setShowHealth(false)
+            setView('tree')
+            handleLocate([id])
+          }}
           onOpenDuplicates={() => { setShowHealth(false); setShowDups(true) }}
         />
       )}
@@ -2011,11 +2055,28 @@ export default function LineagePage() {
               ⚠ פעולה זו אינה הפיכה.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <MBtn label="מזג עכשיו" color="#9333EA" onClick={() => { setMergeConfirm(false); handleMerge() }} loading={merging} />
+              {/* "המשך לתצוגה מקדימה" — פותח את מודאל ה-plan (אותה חוויה כמו מרכז
+                  המיזוגים): המשתמש רואה בדיוק מה יקרה ובוחר שם לכל דור לפני הביצוע. */}
+              <MBtn label="המשך לתצוגה מקדימה" color="#9333EA" onClick={() => openManualPlan()} loading={manualPlanning} />
               <MBtn label="ביטול" color="#94A3B8" onClick={() => setMergeConfirm(false)} />
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* תצוגה מקדימה של המיזוג הידני — אותו מודאל של מרכז המיזוגים */}
+      {manualPlan && (
+        <MergePlanModal
+          data={manualPlan}
+          names={manualNames}
+          upApprox={mergeUpApprox}
+          busy={merging}
+          planning={manualPlanning}
+          onNameChange={(keepId, name) => setManualNames(prev => ({ ...prev, [keepId]: name }))}
+          onToggleApprox={(checked) => { setMergeUpApprox(checked); void openManualPlan(checked) }}
+          onConfirm={() => handleMerge(manualNames)}
+          onClose={() => setManualPlan(null)}
+        />
       )}
 
       {/* מודאל אישור ייחוס לאחר מיזוג */}
