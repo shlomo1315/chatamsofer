@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
+import SuggestionsInbox from './SuggestionsInbox'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -1784,6 +1785,9 @@ export default function LineagePage() {
           )}
         </div>
       </div>
+
+      {/* הצעות תיקון-ייחוס מצאצאים — באנר שמופיע רק כשיש ממתינות */}
+      {canEdit && <SuggestionsInbox onApplied={() => { void softRefresh() }} />}
 
       {showHealth && (
         <TreeHealthPanel

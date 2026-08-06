@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, List, Network } from 'lucide-react'
+import { Loader2, Check, X, Pencil, GitBranch, CheckCircle2, AlertTriangle, List, Network, UserPlus } from 'lucide-react'
 import LineageTreeSvg from './LineageTreeSvg'
 
 interface Node {
@@ -62,6 +62,28 @@ export default function LineageReviewClient({ token }: { token: string }) {
     return out
   }, [nodes, rootId])
 
+  // הצעת תיקון-מבנה — נשמרת כ"ממתינה לאישור" אצל המנהל, לא נכנסת לעץ מיד.
+  const [addUnder, setAddUnder] = useState<string | null>(null)   // צומת שמוסיפים תחתיו
+  const [addName, setAddName] = useState('')
+  const [addRelation, setAddRelation] = useState<'son' | 'son_in_law'>('son')
+  const [suggestSent, setSuggestSent] = useState(false)
+
+  const suggest = async (payload: Record<string, unknown>) => {
+    setBusy('suggest'); setError('')
+    try {
+      const res = await fetch('/api/public/lineage-review/suggest', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ...payload }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.ok === false) { setError(data.error || 'ההצעה נכשלה'); return false }
+      setSuggestSent(true)
+      setTimeout(() => setSuggestSent(false), 4000)
+      return true
+    } catch { setError('שגיאת רשת'); return false }
+    finally { setBusy(null) }
+  }
+
   const act = async (nodeId: string, action: 'verify' | 'reject' | 'rename', name?: string) => {
     setBusy(nodeId); setError('')
     try {
@@ -115,6 +137,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
         </div>
 
         {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
+        {suggestSent && <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle2 size={15} /> ההצעה נשלחה — היא תיבדק ותאושר על ידי הצוות. תודה!</div>}
 
         {/* מתג תצוגה: רשימה / עץ */}
         <div className="mb-3 flex justify-center">
@@ -145,14 +168,37 @@ export default function LineageReviewClient({ token }: { token: string }) {
                 </div>
               )
             }
+            // טופס הוספת דור חסר תחת הצומת — הצעה שממתינה לאישור המנהל
+            if (addUnder === node.id) {
+              return (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input value={addName} autoFocus placeholder="שם הבן/הבת החסר…"
+                    onChange={e => setAddName(e.target.value.replace(NON_HEBREW, ''))}
+                    className="flex-1 min-w-[140px] rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                  <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+                    {(['son', 'son_in_law'] as const).map(r => (
+                      <button key={r} onClick={() => setAddRelation(r)}
+                        className={`px-2.5 py-1.5 text-xs font-semibold ${addRelation === r ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                    ))}
+                  </div>
+                  <button disabled={isBusy || !addName.trim()}
+                    onClick={async () => { if (await suggest({ kind: 'add_child', parentId: node.id, name: addName.trim(), relation: addRelation })) { setAddUnder(null); setAddName('') } }}
+                    className="rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-2.5 py-1.5 text-white"><Check size={14} /></button>
+                  <button onClick={() => { setAddUnder(null); setAddName('') }} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-slate-500"><X size={14} /></button>
+                </div>
+              )
+            }
             return isBusy ? <Loader2 size={16} className="animate-spin text-slate-400" /> : (
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
                 <button onClick={() => act(node.id, 'verify')} title="אישור"
                   className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
                 <button onClick={() => act(node.id, 'reject')} title="דחייה"
                   className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
                 <button onClick={() => { setEditing(node.id); setEditName(node.name) }} title="תיקון שם"
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון</button>
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון שם</button>
+                {/* הצעת הוספת דור חסר — ממתינה לאישור המנהל */}
+                <button onClick={() => { setAddUnder(node.id); setAddName('') }} title="הצע דור חסר"
+                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold"><UserPlus size={13} /> הוסף דור</button>
               </div>
             )
           }
