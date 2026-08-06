@@ -305,20 +305,34 @@ ${mode === 'tree' ? `<div class="canvas"><div class="tree"><ul>${body}</ul></div
 </body></html>`
 }
 
-function subtreeW(n: TreeNode): number {
-  return n.children.length ? n.children.reduce((s, c) => s + subtreeW(c), 0) : NW + HGAP
+// ⚡ רוחב תת-העץ עם מטמון (Map לפי id): בלי המטמון subtreeW נקראה שוב ושוב על
+// אותם תת-עצים (פעם לכל אב-קדמון) — O(N²), ועל צומת עם 174 ילדים זה קפא את
+// הטעינה/מיזוג. חישוב פוסט-אורדר יחיד → O(N), אותה תוצאה בדיוק.
+function computeSubtreeWidths(roots: TreeNode[]): Map<string, number> {
+  const w = new Map<string, number>()
+  const visit = (n: TreeNode): number => {
+    const cached = w.get(n.id)
+    if (cached !== undefined) return cached
+    const width = n.children.length ? n.children.reduce((s, c) => s + visit(c), 0) : NW + HGAP
+    w.set(n.id, width)
+    return width
+  }
+  roots.forEach(visit)
+  return w
 }
 
 function layoutTree(roots: TreeNode[]): Positioned[] {
   const result: Positioned[] = []
+  const W = computeSubtreeWidths(roots)   // כל הרוחבים מחושבים פעם אחת
+  const sw = (n: TreeNode) => W.get(n.id) ?? (NW + HGAP)
   function place(n: TreeNode, x: number, y: number) {
-    const sw = subtreeW(n), cx = x + sw / 2
+    const cx = x + sw(n) / 2
     result.push({ node: n, x: cx - NW / 2, y, cx, cy: y + NH / 2 })
     let cx2 = x
-    n.children.forEach(c => { place(c, cx2, y + NH + VGAP); cx2 += subtreeW(c) })
+    n.children.forEach(c => { place(c, cx2, y + NH + VGAP); cx2 += sw(c) })
   }
   let sx = PAD
-  roots.forEach(r => { place(r, sx, PAD); sx += subtreeW(r) })
+  roots.forEach(r => { place(r, sx, PAD); sx += sw(r) })
   return result
 }
 
@@ -431,6 +445,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   const [showSearch, setShowSearch] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
+  // ⚡ Virtualization: החלון הנראה כרגע (במרחב הלא-מוקטן). מרנדרים רק צמתים בתוכו
+  // + מרווח. בלי זה כל ~5000 הצמתים מרונדרים כ-DOM (עשרות אלפי אלמנטים) והמסך קפא.
+  const [viewport, setViewport] = useState<{ x: number; y: number; w: number; h: number }>({ x: 0, y: 0, w: 2000, h: 1200 })
+  const vpRaf = useRef<number | null>(null)
   const didCenter = useRef(false)
   const dragRef = useRef<{ startX: number; startY: number; scrollX: number; scrollY: number } | null>(null)
   const draggedRef = useRef(false)
@@ -444,6 +462,51 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   const positions = useMemo(() => layoutTree(buildTree(nodes)), [nodes])
   const edges = useMemo(() => collectEdges(positions), [positions])
   const { w, h } = useMemo(() => canvasSize(positions), [positions])
+
+  // מדידת החלון הנראה מתוך ה-canvas (ממירים חזרה למרחב הלא-מוקטן ע"י חלוקה ב-zoom),
+  // עם throttle ב-rAF כדי שגלילה/גרירה לא יציפו setState.
+  const measureViewport = useCallback(() => {
+    const el = canvasRef.current
+    if (!el) return
+    if (vpRaf.current) cancelAnimationFrame(vpRaf.current)
+    vpRaf.current = requestAnimationFrame(() => {
+      setViewport({
+        x: el.scrollLeft / zoom,
+        y: el.scrollTop / zoom,
+        w: el.clientWidth / zoom,
+        h: el.clientHeight / zoom,
+      })
+    })
+  }, [zoom])
+
+  // עדכון על scroll (כולל גרירת pan שמזיזה scrollLeft/Top ישירות) ועל שינוי zoom/עץ.
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    el.addEventListener('scroll', measureViewport, { passive: true })
+    measureViewport()
+    return () => el.removeEventListener('scroll', measureViewport)
+  }, [measureViewport, positions.length])
+
+  // סינון לרינדור: רק צמתים/קווים בתוך החלון + מרווח נדיב (מסך שלם לכל צד),
+  // כדי שגלילה מהירה לא תחשוף אזור ריק. במרחב הלא-מוקטן.
+  const MARGIN = 1200
+  const inView = useCallback((px: number, py: number) =>
+    px + NW >= viewport.x - MARGIN && px <= viewport.x + viewport.w + MARGIN &&
+    py + NH >= viewport.y - MARGIN && py <= viewport.y + viewport.h + MARGIN,
+  [viewport])
+  // ⚠️ כשצומת נבחר, המסלול המיושר (alignedById) מזיז צמתים לטור מרכזי — לכן במצב
+  // 'selected' משביתים את הסינון לגמרי (מרנדרים הכל) כדי שהמסלול לא ייחתך. זה נדיר
+  // וקורה רק אחרי בחירה מפורשת. במצב הרגיל (בלי בחירה) מסננים לפי החלון הנראה.
+  const virtualizeOff = positions.length <= 400 || !!selected
+  const visiblePositions = useMemo(
+    () => virtualizeOff ? positions : positions.filter(p => inView(p.x, p.y)),
+    [positions, inView, virtualizeOff],
+  )
+  const visibleEdges = useMemo(
+    () => virtualizeOff ? edges : edges.filter(e => inView(e.from.x, e.from.y) || inView(e.to.x, e.to.y)),
+    [edges, inView, virtualizeOff],
+  )
 
   useEffect(() => {
     const el = canvasRef.current
@@ -789,7 +852,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
       >
         <div style={{ position: 'relative', width: w * zoom, height: (h + 60) * zoom, minWidth: '100%' }}>
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }} width={w * zoom} height={(h + 60) * zoom}>
-            {edges.map((e, i) => {
+            {visibleEdges.map((e, i) => {
               // כשיש מסלול מיושר — קצות הקו נלקחים מהמיקום המיושר (טור אנכי), אחרת המקורי
               const fa = alignedById.get(e.from.node.id), ta = alignedById.get(e.to.node.id)
               const fx = fa?.cx ?? e.from.cx, fy = fa?.y ?? e.from.y
@@ -814,7 +877,7 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             })}
           </svg>
 
-          {positions.map(pos => {
+          {visiblePositions.map(pos => {
             const nodeStatus = pos.node.status ?? 'verified'
             const genPal = pal(pos.node.generation)
             // הבדל בתוך צבע הדור בלי להחוויר: בן = צבע הדור המלא · חתן = אותו גוון, כהה יותר
