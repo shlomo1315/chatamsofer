@@ -283,20 +283,20 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
             {adjacent.prevId ? (
               <Link href={`/admin/maternity/${adjacent.prevId}`}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-l border-slate-200"
-                title="ליולדת הקודמת">
-                <ChevronRight size={15} /> הקודמת
+                title="ללידה הקודמת">
+                <ChevronRight size={15} /> ללידה הקודמת
               </Link>
             ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 border-l border-slate-200 cursor-default"><ChevronRight size={15} /> הקודמת</span>
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 border-l border-slate-200 cursor-default"><ChevronRight size={15} /> ללידה הקודמת</span>
             )}
             {adjacent.nextId ? (
               <Link href={`/admin/maternity/${adjacent.nextId}`}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                title="ליולדת הבאה">
-                הבאה <ChevronLeft size={15} />
+                title="ללידה הבאה">
+                ללידה הבאה <ChevronLeft size={15} />
               </Link>
             ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 cursor-default">הבאה <ChevronLeft size={15} /></span>
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 cursor-default">ללידה הבאה <ChevronLeft size={15} /></span>
             )}
           </div>
           <StatusControl aid={aid} advance familyApproved={beneficiary?.eligibility_status === 'approved'} />

@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
+import TreeHealthPanel from './TreeHealthPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -1431,6 +1432,7 @@ export default function LineagePage() {
   // בחירת סגנון ההדפסה — רשימה או תרשים עץ
   const [printPick, setPrintPick] = useState(false)
   const [showDups, setShowDups] = useState(false)
+  const [showHealth, setShowHealth] = useState(false)
   // צומת → המשפחות המקושרות אליו, לקפיצה ישירה מהעץ לכרטסת
   const [linked, setLinked] = useState<Record<string, { id: string; name: string }[]>>({})
   // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
@@ -1717,6 +1719,12 @@ export default function LineagePage() {
             style={{ background: showDups ? '#7C3AED' : '#fff', color: showDups ? '#fff' : '#5B21B6', border: '1px solid #DDD6FE' }}>
             <Users size={14} /> {showDups ? 'סגור מרכז מיזוגים' : 'מרכז מיזוגים'}
           </button>
+          {/* בריאות העץ — אבחון מלא של הבלאגן: יתומים, ריבוי-ילדים חריג, ת"ז כפולות */}
+          <button onClick={() => setShowHealth(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showHealth ? '#E11D48' : '#fff', color: showHealth ? '#fff' : '#BE123C', border: '1px solid #FECDD3' }}>
+            <Activity size={14} /> {showHealth ? 'סגור בריאות העץ' : 'בריאות העץ'}
+          </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
@@ -1739,6 +1747,13 @@ export default function LineagePage() {
           )}
         </div>
       </div>
+
+      {showHealth && (
+        <TreeHealthPanel
+          onLocate={(id) => handleLocate([id])}
+          onOpenDuplicates={() => { setShowHealth(false); setShowDups(true) }}
+        />
+      )}
 
       {showDups && (
         <DuplicatesPanel

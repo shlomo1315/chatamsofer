@@ -330,10 +330,11 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     )}
                     <td className="px-2 py-3 align-middle">
                       {aid.birth_certificate_url ? (
-                        <span className="inline-flex items-center gap-1 flex-wrap">
+                        <span className="inline-flex items-center gap-1" title="צפייה באישור הלידה">
+                          {/* אייקונים קומפקטיים (בלי טקסט) — נשארים בשורה אחת בעמודה צרה */}
                           <ViewDocButton url={aid.birth_certificate_url}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 px-2 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
-                            <FileText size={14} /> צפייה
+                            className="inline-flex items-center justify-center w-7 h-7 text-indigo-600 hover:text-indigo-700 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
+                            <FileText size={14} />
                           </ViewDocButton>
                           <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName(m)} name={aid.birth_certificate_url} variant="icon" />
                         </span>
@@ -396,10 +397,11 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     )}
                     <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
                     <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <Link href={`/admin/maternity/${aid.id}`}
-                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-indigo-600 px-2 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
-                          <Eye size={14} /> צפייה
+                      {/* אייקונים קומפקטיים בשורה אחת — עמודה צרה, בלי עומס */}
+                      <div className="flex items-center gap-1">
+                        <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק"
+                          className="inline-flex items-center justify-center w-7 h-7 text-slate-600 hover:text-indigo-600 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+                          <Eye size={14} />
                         </Link>
                         <DeleteAidButton aid={aid} />
                       </div>
