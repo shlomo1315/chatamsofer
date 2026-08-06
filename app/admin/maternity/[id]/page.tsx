@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle, ChevronRight, ChevronLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -61,6 +61,25 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     if (doc?.file_url) data.birth_certificate_url = doc.file_url
   }
   return data
+}
+
+// ניווט בין יולדות בלי לחזור לרשימה: מחזיר את מזהי היולדת הקודמת/הבאה לפי
+// אותו סדר של הרשימה הראשית (created_at יורד — חדש→ישן). "הבאה" = הישנה יותר
+// (הבאה למטה ברשימה), "הקודמת" = החדשה יותר. שתי שאילתות קלות מאונדקסות.
+async function getAdjacentAids(currentId: string, createdAt: string | null): Promise<{ prevId: string | null; nextId: string | null }> {
+  if (!isSupabaseConfigured() || !createdAt) return { prevId: null, nextId: null }
+  const supabase = await createClient()
+  // הבאה = created_at קטן יותר (ישנה יותר); הקודמת = created_at גדול יותר.
+  const [{ data: next }, { data: prev }] = await Promise.all([
+    supabase.from('maternity_aids').select('id').lt('created_at', createdAt)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('maternity_aids').select('id').gt('created_at', createdAt)
+      .order('created_at', { ascending: true }).limit(1).maybeSingle(),
+  ])
+  return {
+    prevId: (prev as { id: string } | null)?.id ?? null,
+    nextId: (next as { id: string } | null)?.id ?? null,
+  }
 }
 
 async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc[]> {
@@ -203,12 +222,14 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
   const typedChain = Array.isArray(ben?.lineage_chain)
     ? (ben.lineage_chain as { generation: number; name: string; relation?: string | null }[])
     : []
-  const [lineagePath, idDocs, genStatus, docTypeList] = await Promise.all([
+  const [lineagePath, idDocs, genStatus, docTypeList, adjacent] = await Promise.all([
     getLineagePath(ben?.lineage_node_id, typedChain),
     aid?.beneficiary_id ? getBeneficiaryDocs(aid.beneficiary_id) : Promise.resolve([]),
     computeGenStatus(typedChain, ben?.lineage_node_id),
     // לתוויות בבאנר "השלמת מסמכים" — כולל סוגים שנוספו בהגדרות
     getDocTypes(),
+    // ניווט הבאה/קודמת — לפי סדר הרשימה הראשית (created_at)
+    getAdjacentAids(id, (aid as { created_at?: string } | null)?.created_at ?? null),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
@@ -257,6 +278,27 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* ניווט בין יולדות בלי לחזור לרשימה — הבאה/קודמת לפי סדר הרשימה */}
+          <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden ml-1">
+            {adjacent.prevId ? (
+              <Link href={`/admin/maternity/${adjacent.prevId}`}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-l border-slate-200"
+                title="ליולדת הקודמת">
+                <ChevronRight size={15} /> הקודמת
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 border-l border-slate-200 cursor-default"><ChevronRight size={15} /> הקודמת</span>
+            )}
+            {adjacent.nextId ? (
+              <Link href={`/admin/maternity/${adjacent.nextId}`}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                title="ליולדת הבאה">
+                הבאה <ChevronLeft size={15} />
+              </Link>
+            ) : (
+              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 cursor-default">הבאה <ChevronLeft size={15} /></span>
+            )}
+          </div>
           <StatusControl aid={aid} advance familyApproved={beneficiary?.eligibility_status === 'approved'} />
           <MaternityActions aid={aid} />
         </div>
