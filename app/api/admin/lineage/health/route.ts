@@ -40,6 +40,12 @@ export async function GET() {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
+  // ⚠️ אבטחה: ת"ז כפולות = PII (תעודות זהות + שמות משפחה). 'lineage' ו-'beneficiaries'
+  // הן הרשאות נפרדות — איש צוות עם הרשאת עריכת-עץ בלבד אינו אמור לראות ת"ז של
+  // משפחות. לכן חושפים את סעיף ת"ז הכפולות רק למי שיש לו גם הרשאת צפייה במשפחות;
+  // לשאר — רק המספר (כמה כפילויות) בלי הפרטים. שאר הכלי (יתומים/כפילויות-שם) פתוח.
+  const canSeeBeneficiaries = !!(await requirePermission('beneficiaries', 'view'))
+
   // ⚠️ שליפה בדפים — עץ של אלפי צמתים; .limit() לבדו נחתך ל-1000. ראו lib/fetchAllRows.
   const [{ rows: nodes, error: nErr }, { rows: bens, error: bErr }] = await Promise.all([
     fetchAllRows<NodeRow>((from, to) =>
@@ -127,7 +133,10 @@ export async function GET() {
     scannedBeneficiaries: bens.length,
     orphans,
     manyChildren,
-    duplicateIds: dupIds,
+    // ת"ז + שמות רק למי שרשאי לצפות במשפחות; אחרת רק כמה כפילויות יש (בלי PII)
+    duplicateIds: canSeeBeneficiaries ? dupIds : [],
+    duplicateIdsCount: dupIds.length,
+    duplicateIdsRestricted: !canSeeBeneficiaries && dupIds.length > 0,
     duplicateNames: { exact: dupExact, strong: dupStrong, possible: dupPossible },
   })
 }

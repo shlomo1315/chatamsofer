@@ -17,6 +17,8 @@ interface HealthData {
   orphans: Orphan[]
   manyChildren: ManyChild[]
   duplicateIds: DupId[]
+  duplicateIdsCount: number            // הספירה המלאה (גם כשהפרטים חסומים בהרשאה)
+  duplicateIdsRestricted: boolean      // אין הרשאת צפייה במשפחות — הפרטים הוסתרו
   duplicateNames: { exact: number; strong: number; possible: number }
 }
 
@@ -71,8 +73,8 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
               tone={data.manyChildren.length ? 'orange' : 'green'} />
             <SummaryCard icon={<Trash2 size={15} />} label="צמתים יתומים" value={data.orphans.length}
               tone={data.orphans.length ? 'rose' : 'green'} />
-            <SummaryCard icon={<IdCard size={15} />} label="ת״ז כפולות" value={data.duplicateIds.length}
-              tone={data.duplicateIds.length ? 'red' : 'green'} />
+            <SummaryCard icon={<IdCard size={15} />} label="ת״ז כפולות" value={data.duplicateIdsCount}
+              tone={data.duplicateIdsCount ? 'red' : 'green'} />
           </div>
 
           {/* ריבוי ילדים חריג */}
@@ -105,7 +107,12 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
             </Section>
           )}
 
-          {/* ת"ז כפולות */}
+          {/* ת"ז כפולות — הפרטים (מספרי ת"ז ושמות) חסומים למי שאין לו הרשאת צפייה במשפחות */}
+          {data.duplicateIdsRestricted && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+              נמצאו <strong>{data.duplicateIdsCount}</strong> ת״ז כפולות במשפחות. הפרטים המלאים (מספרי ת״ז ושמות) מוצגים רק לבעלי הרשאת צפייה במשפחות.
+            </div>
+          )}
           {data.duplicateIds.length > 0 && (
             <Section title="ת״ז כפולות במשפחות" hint="אותה תעודת זהות מופיעה ביותר ממשפחה אחת — בדוק אם מדובר בכפילות רישום">
               {data.duplicateIds.map(d => (
@@ -128,7 +135,7 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
             </Section>
           )}
 
-          {data.orphans.length === 0 && data.manyChildren.length === 0 && data.duplicateIds.length === 0 && dupNamesTotal === 0 && (
+          {data.orphans.length === 0 && data.manyChildren.length === 0 && data.duplicateIdsCount === 0 && dupNamesTotal === 0 && (
             <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">🎉 העץ נקי — לא נמצאו תקלות מבניות.</p>
           )}
         </div>
