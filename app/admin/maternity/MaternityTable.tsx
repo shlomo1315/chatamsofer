@@ -242,24 +242,38 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
               לכותרת הלא-נכונה. עמודות קצרות (ת"ז, תגיות, תאריכים) נשארות nowrap.
               הרוחבים ב-colgroup מסתכמים ל-100% ומחולקים לפי חשיבות/אורך התוכן. */}
           <table className="w-full table-fixed text-sm text-right">
+            {/* ⚠️ הרוחבים מסתכמים בדיוק ל-100% בכל שילוב (בסיס / +showCard / +showArrived),
+                אחרת table-fixed דוחס והתוכן נחתך/חופף. עמודות טקסט (שמות, בית החלמה)
+                מקבלות wrap ולכן יכולות לקבל פחות; סטטוס ופעולות מקבלות מספיק רוחב
+                לתגית+חצים ולזוג האייקונים. חושב לכל מצב בנפרד. */}
             <colgroup>
-              <col style={{ width: '11%' }} /> {/* שם היולדת */}
-              <col style={{ width: '7%' }} />  {/* ת.ז. האישה */}
-              <col style={{ width: '10%' }} /> {/* שם התינוק */}
-              <col style={{ width: '8%' }} />  {/* הטבה */}
-              <col style={{ width: '7%' }} />  {/* ת.ז. התינוק */}
-              <col style={{ width: '7%' }} />  {/* תאריך לידה */}
-              <col style={{ width: '9%' }} />  {/* בית החלמה */}
-              <col style={{ width: '5%' }} />  {/* ימי זכאות */}
-              {showArrived && <col style={{ width: '6%' }} />}
-              {showArrived && <col style={{ width: '8%' }} />}
-              <col style={{ width: '8%' }} />  {/* אישור לידה */}
-              <col style={{ width: '6%' }} />  {/* אופן הגשה */}
-              {showCard && <col style={{ width: '7%' }} />}
-              {showCard && <col style={{ width: '8%' }} />}
-              {showCard && <col style={{ width: '6%' }} />}
-              <col style={{ width: '7%' }} />  {/* סטטוס */}
-              <col style={{ width: '7%' }} />  {/* פעולות */}
+              {(() => {
+                // רוחבים בסיסיים (12 עמודות: בלי showCard/showArrived) — סכום 100
+                const base: Record<string, number> = {
+                  mother: 12, wifeId: 8, baby: 11, benefit: 9, babyId: 8, birth: 7,
+                  recovery: 9, days: 5, cert: 8, source: 7, status: 8, actions: 8,
+                }
+                // כשמופיעות עמודות נוספות, מקטינים את הטקסט הארוך כדי לפנות להן מקום
+                const w = { ...base }
+                if (showCard) {
+                  Object.assign(w, { mother: 10, baby: 9, benefit: 7, recovery: 7, cert: 6, source: 5, status: 7, actions: 7 })
+                }
+                if (showArrived) {
+                  Object.assign(w, { mother: 9, baby: 8, benefit: 6, recovery: 7, babyId: 7, wifeId: 7, cert: 6, source: 5, status: 6, actions: 6 })
+                }
+                const cols: { key: string; w: number }[] = [
+                  { key: 'mother', w: w.mother }, { key: 'wifeId', w: w.wifeId }, { key: 'baby', w: w.baby },
+                  { key: 'benefit', w: w.benefit }, { key: 'babyId', w: w.babyId }, { key: 'birth', w: w.birth },
+                  { key: 'recovery', w: w.recovery }, { key: 'days', w: w.days },
+                  ...(showArrived ? [{ key: 'arrived', w: 6 }, { key: 'amount', w: 7 }] : []),
+                  { key: 'cert', w: w.cert }, { key: 'source', w: w.source },
+                  ...(showCard ? [{ key: 'loadStatus', w: 6 }, { key: 'loadDate', w: 7 }, { key: 'cardLink', w: 6 }] : []),
+                  { key: 'status', w: w.status }, { key: 'actions', w: w.actions },
+                ]
+                const total = cols.reduce((s, c) => s + c.w, 0)
+                // מנרמלים ל-100% בדיוק כדי שלא תהיה גלישה/דחיסה
+                return cols.map(c => <col key={c.key} style={{ width: `${(c.w / total) * 100}%` }} />)
+              })()}
             </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">

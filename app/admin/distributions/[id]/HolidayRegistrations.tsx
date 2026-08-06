@@ -289,7 +289,10 @@ export default function HolidayRegistrations({
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <p className="text-xs font-bold text-slate-500 mb-2">פילוח לפי ערוץ</p>
           <div className="flex flex-col gap-1">
-            {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => {
+            {/* ⚠️ nedarim חייב להיכלל — רוב הרישום המאסיבי לחגים מגיע דרך טופס
+                נדרים (matara.pro). בלעדיו הפילוח "בלע" את נרשמי נדרים בשקט
+                (סכום הערוצים המוצגים נמוך בהרבה מסך "נרשמו"). */}
+            {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => {
               const I = SOURCE_ICON[s]
               return (
                 <div key={s} className="flex items-center justify-between text-[12.5px]">
