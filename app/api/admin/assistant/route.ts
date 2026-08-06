@@ -185,8 +185,12 @@ export async function POST(request: NextRequest) {
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const res = await client.messages.create({
             model: MODEL,
-            max_tokens: 1500,
-            system,
+            max_tokens: 4000,   // הועלה מ-1500 — תשובות עשירות (סקירת יוחסין, רשימות) נחתכו
+            // ⚡ prompt caching: ה-system (schema+memory) וה-tools יציבים לאורך
+            // השיחה ובין שיחות. cache_control על הבלוק האחרון של system מקאשש
+            // גם את ה-tools (render order: tools→system→messages) — חוסך עלות
+            // ולטנציה בכל סבב, קריטי עם אלפי נרשמים ושימוש גובר.
+            system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
             tools: TOOL_DEFS,
             messages,
           })

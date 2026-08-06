@@ -476,17 +476,21 @@ export async function runTool(ctx: ToolCtx, name: string, input: Record<string, 
         if (!spec.columns.includes(groupBy)) {
           return { error: `העמודה "${groupBy}" אינה קיימת ב${spec.label}.` }
         }
-        // שולפים רק את עמודת הפילוח וסופרים בצד שלנו
-        const { data, error } = await buildQuery(ctx, spec, input, groupBy).limit(2000)
+        // ⚠️ שליפה בדפים: הפילוח נחתך קודם ב-2000 (ובאמת ב-1000 של PostgREST)
+        // והחזיר מספרים שגויים *בשקט* בטבלה עם אלפי שורות. עכשיו fetchAllRows
+        // סורק הכל בדפים. שולפים רק את עמודת הפילוח וסופרים בצד שלנו. ראו lib/fetchAllRows.
+        const { rows, error } = await fetchAllRows<Record<string, unknown>>((from, to) =>
+          buildQuery(ctx, spec, input, groupBy).range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>,
+        )
         if (error) return { error: 'שגיאה בשליפת הנתונים' }
 
         const counts: Record<string, number> = {}
-        for (const r of (data ?? []) as unknown as Record<string, unknown>[]) {
+        for (const r of rows) {
           const k = r[groupBy] == null || r[groupBy] === '' ? '(ריק)' : String(r[groupBy])
           counts[k] = (counts[k] ?? 0) + 1
         }
         const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
-        return { טבלה: spec.label, פילוח_לפי: groupBy, סהכ: data?.length ?? 0, תוצאות: Object.fromEntries(sorted) }
+        return { טבלה: spec.label, פילוח_לפי: groupBy, סהכ: rows.length, תוצאות: Object.fromEntries(sorted) }
       }
 
       const { count, error } = await buildQuery(ctx, spec, input, 'id', true)
