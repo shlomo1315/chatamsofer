@@ -20,6 +20,13 @@ function hebMonthsOrder(year: number): number[] {
 const WEEKDAYS = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'] // ראשון..שבת
 const pad = (n: number) => String(n).padStart(2, '0')
 const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+// ⚠️ פרסור תאריך *מקומי*: new Date('2004-01-16') מפרש חצות UTC, ובישראל (UTC+2/3)
+// זה מוצג כיום הקודם — הבאג של "יום לפני בתצוגה מקדימה". כאן בונים תאריך מקומי
+// מהרכיבים כך שהיום נשמר. לערכי ISO עם שעה (T...) נופלים ל-Date רגיל.
+const parseLocalDate = (v: string): Date => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v)
+}
 const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
 type Cell = { date: Date; label: string } | null
@@ -53,7 +60,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
     : minMonthsBack != null
       ? (() => { const d = new Date(today); d.setMonth(d.getMonth() - minMonthsBack); return d })()
       : null
-  const selected = value ? new Date(value) : null
+  const selected = value ? parseLocalDate(value) : null
   if (selected) selected.setHours(0, 0, 0, 0)
 
   const [open, setOpen] = useState(false)
@@ -72,7 +79,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   }, [])
   useEffect(() => {
     if (value) {
-      const d = new Date(value)
+      const d = parseLocalDate(value)
       if (!isNaN(d.getTime())) { setG(d); const h = new HDate(d); setHc({ hy: h.getFullYear(), hm: h.getMonth() }) }
     }
   }, [value])
