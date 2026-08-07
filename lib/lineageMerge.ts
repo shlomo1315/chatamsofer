@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { parseHebrewName } from './hebrewNames'
 import { fetchAllRows } from './fetchAllRows'
+import { getCachedLineageTree, type TreeNodeRow } from './lineageSync'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מנוע המיזוג בעץ הדורות — כולל המפל.
@@ -365,12 +366,17 @@ export async function loadCascadePlan(
   mergeIds: string[],
   opts: { up?: boolean; down?: boolean; upApprox?: boolean } = {},
 ): Promise<{ plan: CascadePlan; nodes: MergeNodeRow[] }> {
-  // ⚠️ שליפה בדפים — טעינת *כל* העץ. .limit() לבדו נחתך ל-1000 (db-max-rows)
-  // ומיזוג ששרשרתו בחלק החסר נכשל בשקט (השורש של כשל מיזוג 3+). ראו lib/fetchAllRows.
-  const { rows } = await fetchAllRows<MergeNodeRow>((from, to) =>
-    db.from('lineage_nodes').select(MERGE_NODE_SELECT).range(from, to),
-  )
-  const nodes = rows
+  // ⚡ מטמון משותף: תצוגת המקדימה של המיזוג ("עד שהוא חושב") סרקה את כל העץ
+  // בכל לחיצה. getCachedLineageTree מחזיר את אותו עץ מהמטמון (נפסל בכל כתיבה),
+  // כך שהתצוגה המקדימה מיידית. השדות של MERGE_NODE_SELECT ו-NODE_SELECT זהים.
+  // שליפה בדפים כי .limit() נחתך ל-1000 (db-max-rows). ראו lib/fetchAllRows.
+  const cached = await getCachedLineageTree(async () => {
+    const { rows } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      db.from('lineage_nodes').select(MERGE_NODE_SELECT).range(from, to),
+    )
+    return rows
+  })
+  const nodes = cached as unknown as MergeNodeRow[]
   return { plan: planCascade(nodes, keepId, mergeIds, opts), nodes }
 }
 
