@@ -298,8 +298,12 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     const childMarried: boolean[] = []
     // נשמר לצורך לשון הפנייה בהודעת השגיאה (זכר/נקבה)
     const childRows: { gender?: string; marital_status?: string }[] = []
-    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string }[]) {
-      const cid = (c?.id_number ?? '').replace(/\D/g, '')
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string; id_doc_type?: string }[]) {
+      // ⚠️ דרכון נשמר עם האותיות; רק ת"ז מפשיטים ל-ספרות. אחרת מפתח הכפילות
+      // ("123456" אחרי הפשטת אותיות) לא תואם לערך המאוחסן ("AA123456").
+      const cid = c?.id_doc_type === 'passport'
+        ? (c?.id_number ?? '').trim()
+        : (c?.id_number ?? '').replace(/\D/g, '')
       if (!cid) continue
       const childName = (c?.name ?? '').trim() || 'הילד/ה'
       if (seen.has(cid)) return NextResponse.json({ error: `תעודת הזהות של ${childName} מופיעה פעמיים ברשימת הילדים.` }, { status: 409 })

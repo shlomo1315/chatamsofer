@@ -4338,8 +4338,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           if (!child.name || !child.id_number || !child.birth_date || !child.gender || !child.marital_status) {
                             alert('אנא מלא את כל שדות הילד'); return
                           }
-                          if (!validateIsraeliId(child.id_number)) {
-                            setChildIdErrors(e => ({ ...e, [idx]: 'תעודת הזהות שהזנתם אינה תקינה' })); return
+                          // ⚠️ childIdValid ולא validateIsraeliId — ילד עם דרכון נחסם קודם כי
+                          // בדיקת ת"ז ישראלית נכשלה על מספר דרכון (אותיות), והשורה לא נסגרה.
+                          // childIdValid מטפל גם בדרכון (אורך ≥4). זה חסם רישום ילדים עם דרכון
+                          // (כולל ילדים נשואים שנולדו בחו"ל).
+                          if (!childIdValid(child)) {
+                            setChildIdErrors(e => ({ ...e, [idx]: child.id_doc_type === 'passport' ? 'מספר הדרכון שהזנתם אינו תקין' : 'תעודת הזהות שהזנתם אינה תקינה' })); return
                           }
                           setEditingChildIdx(null)
                         }}
