@@ -136,15 +136,15 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // סינון לפי ההטבה שהיולדת ביקשה (כרטיס / הבראה / שתיהן)
   const [benefit, setBenefit] = useState<BenefitFilter>('all')
 
-  // רענון תקופתי — פולינג בלבד. Supabase Realtime (WebSocket) הוסר: בתכנית החינמית הוא
-  // נכשל שוב ושוב (retry loop), חוסם את ה-main thread ומאט כל לחיצה. פולינג כל 90 שניות
-  // + רענון מיידי בחזרה ללשונית נותן עדכניות סבירה בלי העומס. (אם יעברו ל-Supabase Pro,
-  // אפשר להחזיר Realtime — שם ה-WebSocket יציב.)
+  // ⚡ רענון בחזרה ללשונית בלבד — הוסר הפולינג התקופתי (כל 90ש'): כל refresh
+  // מריץ מחדש את כל טעינת מסך היולדות (כל ה-maternity_aids + joins), ובכל טאב
+  // פתוח זה העמיס ברקע והאיט את האתר. refresh-on-focus נותן עדכניות כשחוזרים
+  // למסך, בלי הטעינה-מחדש הכבדה כל דקה וחצי. (Realtime הוסר קודם — retry loop
+  // בתכנית החינמית חסם את ה-main thread.)
   useEffect(() => {
-    const poll = setInterval(() => router.refresh(), 90000)
     const onFocus = () => router.refresh()
     window.addEventListener('focus', onFocus)
-    return () => { clearInterval(poll); window.removeEventListener('focus', onFocus) }
+    return () => window.removeEventListener('focus', onFocus)
   }, [router])
 
   // המונים תואמים ללוגיקת matchesFilter: "ממתין לאישור" לא כולל רשומות הממתינות
