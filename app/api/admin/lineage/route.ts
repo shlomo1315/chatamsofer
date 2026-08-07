@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, lineageCacheVersion, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -18,34 +18,46 @@ function getAdminClient() {
   return createClient(url, key)
 }
 
+// ⚡ מטמון של ה-payload המלא (nodes + linked) בזיכרון השרת. הטעינה סרקה בעבר
+// את כל העץ + כל המשפחות בכל פתיחת מסך (7-8 שניות בעץ גדול). המטמון נפסל
+// בכל כתיבה (invalidateLineageCache שכבר נקרא בכל approve/merge/import/PATCH),
+// כך שהוא בטוח — טעינה חוזרת מיידית, וטעינה אחרי שינוי טרייה.
+let _payloadCache: { at: number; version: number; body: { nodes: unknown[]; linked: Record<string, { id: string; name: string }[]> } } | null = null
+const PAYLOAD_TTL_MS = 60_000
+
 export async function GET() {
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500, headers: NO_STORE })
 
-  // ⚠️ שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 של PostgREST —
-  // בעץ של אלפי צמתים הרשימה נחתכה בשקט ל-1000, והצמתים מעבר לכך "נעלמו"
-  // (צאצא שצומתו מעבר לשורה 1000 הופיע כ"לא משויך בעץ"). ראו lib/fetchAllRows.
-  const { rows: data, error } = await fetchAllRows<Record<string, unknown>>((from, to) =>
-    admin.from('lineage_nodes').select('*').order('generation').order('name').range(from, to),
-  )
+  const now = Date.now()
+  const version = lineageCacheVersion()
+  if (_payloadCache && _payloadCache.version === version && now - _payloadCache.at < PAYLOAD_TTL_MS) {
+    return NextResponse.json(_payloadCache.body, { headers: NO_STORE })
+  }
 
-  if (error) return NextResponse.json({ error }, { status: 500, headers: NO_STORE })
+  // ⚡ שתי השאילתות עצמאיות — רצות במקביל (Promise.all) במקום סדרתית, חצי מזמן
+  // סבבי הרשת. שליפה בדפים כי .limit() לא עוקף את db-max-rows=1000. ראו lib/fetchAllRows.
+  const [nodesRes, bensRes] = await Promise.all([
+    fetchAllRows<Record<string, unknown>>((from, to) =>
+      admin.from('lineage_nodes').select('*').order('generation').order('name').range(from, to)),
+    fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
+      admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to)),
+  ])
 
-  // ⚠️ המשפחות המקושרות לכל צומת — כדי שאפשר יהיה לקפוץ מהעץ ישירות לכרטסת.
-  // בלי זה העץ יודע רק שמות, וכל מעבר לכרטסת דרש חיפוש ידני בשם.
-  // שאילתה אחת לכל העץ, ולא אחת לכל צומת (גם כאן שליפה בדפים — הצאצאים עוברים 1000).
-  const { rows: bens } = await fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
-    admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to),
-  )
+  if (nodesRes.error) return NextResponse.json({ error: nodesRes.error }, { status: 500, headers: NO_STORE })
+
+  // המשפחות המקושרות לכל צומת — כדי לקפוץ מהעץ ישירות לכרטסת.
   const linked: Record<string, { id: string; name: string }[]> = {}
-  for (const b of bens ?? []) {
+  for (const b of bensRes.rows ?? []) {
     const row = b as { id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }
     const name = [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'ללא שם'
     ;(linked[row.lineage_node_id] ??= []).push({ id: row.id, name })
   }
 
-  return NextResponse.json({ nodes: data ?? [], linked }, { headers: NO_STORE })
+  const body = { nodes: nodesRes.rows ?? [], linked }
+  _payloadCache = { at: now, version, body }
+  return NextResponse.json(body, { headers: NO_STORE })
 }
 
 export async function POST(request: NextRequest) {
