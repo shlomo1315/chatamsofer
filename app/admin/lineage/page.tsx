@@ -1042,11 +1042,14 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                     background: '#fff', borderRadius: 16, padding: '8px 10px',
                     boxShadow: '0 8px 24px rgba(0,0,0,0.16)', border: '1px solid #E2E8F0',
                   }}>
-                    {/* כפתור מיזוג כפילים — מופיע רק לצומת ששמו כפול באותו גזע */}
-                    {isDup && (
-                      <button onClick={() => onMergeGroup(pos.node.id)} title="מזג את הכפילויות של שם זה באותו גזע"
+                    {/* כפתור מיזוג מהיר — לצומת כפול (שם זהה באותו גזע) *או* מועמד
+                        מסריקה מקורבת. לחיצה = מיזוג מיידי בלייב, בלי תצוגה מקדימה
+                        (isDup: ממזג את כל הקבוצה מיד; מועמד-מקורב בלי קבוצה מדויקת:
+                        נכנס למצב מיזוג לבחירה ידנית). */}
+                    {(isDup || inScan) && (
+                      <button onClick={() => onMergeGroup(pos.node.id)} title="מזג מיד את הכפילויות של שם זה באותו גזע"
                         style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
-                        ⚯ מזג כפילים
+                        ⚯ מזג מיד
                       </button>
                     )}
                     {/* ── פתיחת הכרטסת המקושרת ──
@@ -1579,40 +1582,75 @@ export default function LineagePage() {
     setManualPlanning(false)
   }
 
-  async function handleMerge(names?: Record<string, string>) {
-    const ids = [...mergeSel]
-    if (!effectiveKeepId || ids.length < 2) return
-    const mergeIds = ids.filter(id => id !== effectiveKeepId)
+  // ── ליבת המיזוג — אופטימית ומיידית ──
+  // מקבלת keepId + mergeIds ישירות (לא דרך state), כדי שגם מיזוג-hover מיידי
+  // וגם המסלול הידני (mergeSel) ישתמשו באותו נתיב "לייב מיד": הצמתים נעלמים
+  // מהתצוגה כאן ועכשיו, השרת רץ ברקע, softRefresh מיישר את התמונה בלי await.
+  async function mergeByIds(keepId: string, mergeIds: string[], names?: Record<string, string>) {
+    if (!keepId || !mergeIds.length) return
     setMerging(true)
+    // ⚡ עדכון אופטימי מיידי — לפני קריאת הרשת: הצמתים הממוזגים הישירים נמחקים
+    // מהתצוגה וילדיהם עוברים ל-keepId. כך הלחיצה נראית "מיד ממוזגת" בלי המתנה.
+    const keepName = nodes.find(n => n.id === keepId)?.name ?? ''
+    setNodes(prev => prev
+      .filter(n => !mergeIds.includes(n.id))
+      .map(n => mergeIds.includes(n.parent_id ?? '') ? { ...n, parent_id: keepId } : n))
+    setManualPlan(null)
+    exitMerge()
+    setAnchor(a => ({ id: keepId, n: (a?.n ?? 0) + 1 }))
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId: effectiveKeepId, mergeIds, cascadeUpApprox: mergeUpApprox, names }),
+        body: JSON.stringify({ keepId, mergeIds, cascadeUpApprox: mergeUpApprox, names }),
       })
       const d = await res.json()
-      if (!res.ok) { toast.error(d.error || 'שגיאה במיזוג'); setMerging(false); return }
+      if (!res.ok) {
+        toast.error(d.error || 'שגיאה במיזוג')
+        // המיזוג נכשל בשרת — מחזירים את התמונה האמיתית (מבטלים את האופטימי)
+        void softRefresh()
+        setMerging(false); return
+      }
       toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
-      const keepName = nodes.find(n => n.id === effectiveKeepId)?.name ?? ''
-      // ⚡ עדכון אופטימי מיידי: הצמתים הממוזגים הישירים נמחקים מהתצוגה וילדיהם
-      // עוברים ל-keepId — כאן ועכשיו, בלי להמתין לשרת. קודם היה await softRefresh
-      // חוסם (טעינת כל ~5000 הצמתים מחדש) שגרם לעיכוב ~30ש' עד שהמסך הגיב.
       // המפל המלא (דורות שמעל/מתחת) עשוי למזג עוד צמתים — softRefresh ברקע
       // (בלי await) מיישר את התמונה המלאה תוך שנייה, בלי לחסום את המשתמש.
-      setNodes(prev => prev
-        .filter(n => !mergeIds.includes(n.id))
-        .map(n => mergeIds.includes(n.parent_id ?? '') ? { ...n, parent_id: effectiveKeepId } : n))
-      setManualPlan(null)
-      exitMerge()
       void softRefresh()
-      // הצומת שנשאר — מרכזים עליו את המבט. הפריסה משתנה אחרי המיזוג (צומת ירד),
-      // ולכן שמירת הגלילה בפיקסלים לבדה עדיין הייתה מזיזה את התמונה.
-      setAnchor(a => ({ id: effectiveKeepId, n: (a?.n ?? 0) + 1 }))
       // לאחר מיזוג — להציע לאשר את הייחוס של הצומת שנשאר
-      setApprovePrompt({ keepId: effectiveKeepId, keepName })
+      setApprovePrompt({ keepId, keepName })
       setApproveDesc(true)
-    } catch { toast.error('שגיאת רשת') }
+    } catch {
+      toast.error('שגיאת רשת')
+      void softRefresh()
+    }
     setMerging(false)
   }
+
+  async function handleMerge(names?: Record<string, string>) {
+    const ids = [...mergeSel]
+    if (!effectiveKeepId || ids.length < 2) return
+    await mergeByIds(effectiveKeepId, ids.filter(id => id !== effectiveKeepId), names)
+  }
+
+  // ── מיזוג מהיר מ-hover — לחיצה אחת = מיזוג מיידי, בלי תצוגה מקדימה ──
+  // ⚠️ בקשת המנהל: על צומת כפול/מועמד-למיזוג, לחיצה על הכפתור ממזגת מיד את כל
+  // קבוצת הכפילות (אותו אב+דור+שם) לתוך הצומת שנלחץ, בלייב, בלי מסך ביניים.
+  // בוחר שם אוטומטית לכל צומת (המפורט ביותר בקבוצה), כמו openManualPlan.
+  const quickMergeGroup = useCallback((id: string) => {
+    const group = dupGroupOf(id)
+    // אין קבוצת כפילות מדויקת (למשל מועמד מסריקה מקורבת בלבד) — נופלים למצב
+    // המיזוג הידני, שם אפשר לבחור ידנית את הצמתים הקרובים למיזוג.
+    if (group.length < 2) { startGroupMerge(id); return }
+    // שם הצומת שנשאר — המפורט ביותר בקבוצה (הכי הרבה מילים / הכי ארוך)
+    const chosen = group
+      .map(gid => nodes.find(n => n.id === gid)?.name ?? '')
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aw = a.trim().split(/\s+/).length, bw = b.trim().split(/\s+/).length
+        return aw !== bw ? bw - aw : b.trim().length - a.trim().length
+      })[0]
+    const names = chosen ? { [id]: chosen } : undefined
+    void mergeByIds(id, group.filter(g => g !== id), names)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dupGroupOf, nodes, mergeUpApprox, startGroupMerge])
 
   // כל הצאצאים (המשורשרים) של צומת — לפי קשרי האב במצב הנוכחי
   const descendantsOf = useCallback((rootId: string): string[] => {
@@ -1993,7 +2031,7 @@ export default function LineagePage() {
       ) : view === 'tree' ? (
         /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
            וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
-        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={startGroupMerge} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
       ) : (
         <TableView
           nodes={visibleNodes}
@@ -2005,7 +2043,7 @@ export default function LineagePage() {
           dupIds={dupIds}
           onToggleMerge={toggleMerge}
           dupFilter={dupFilter}
-          onMergeGroup={startGroupMerge}
+          onMergeGroup={quickMergeGroup}
           onAdd={(parentId, parentName) => { setFormName(''); setModal({ type: 'add', parentId, parentName }) }}
           onEdit={node => { setFormName(node.name); setFormRelation(node.relation ?? null); setModal({ type: 'edit', node }) }}
           onDelete={node => setModal({ type: 'delete', node: { ...node, children: buildTree(nodes).find(n => n.id === node.id)?.children ?? [] } })}
@@ -2122,9 +2160,11 @@ export default function LineagePage() {
               ⚠ פעולה זו אינה הפיכה.
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              {/* "המשך לתצוגה מקדימה" — פותח את מודאל ה-plan (אותה חוויה כמו מרכז
-                  המיזוגים): המשתמש רואה בדיוק מה יקרה ובוחר שם לכל דור לפני הביצוע. */}
-              <MBtn label="המשך לתצוגה מקדימה" color="#9333EA" onClick={() => openManualPlan()} loading={manualPlanning} />
+              {/* "מזג מיד" — מיזוג מיידי בלייב בלי תצוגה מקדימה (השרת בוחר את השם
+                  המפורט לכל דור). זו הדרך המהירה שהמנהל ביקש — לחיצה אחת וזהו. */}
+              <MBtn label="מזג מיד" color="#16A34A" onClick={() => handleMerge()} loading={merging} />
+              {/* "תצוגה מקדימה" — למי שרוצה לראות ולבחור שם לכל דור לפני הביצוע. */}
+              <MBtn label="תצוגה מקדימה" color="#9333EA" onClick={() => openManualPlan()} loading={manualPlanning} />
               <MBtn label="ביטול" color="#94A3B8" onClick={() => setMergeConfirm(false)} />
             </div>
           </div>
