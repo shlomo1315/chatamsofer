@@ -1497,20 +1497,25 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ⚠️ holidays נכלל בברירת המחדל, בהתאמה ל-DEFAULT_GATES בשרת. בלעדיו הערך
   // undefined עד שהשערים נטענים, והשורה של חלוקת החגים לא הייתה מוצגת כלל
   // אם הבקשה נכשלת — כלומר ערוץ פתוח היה נעלם בשקט.
-  const [deptGates, setDeptGates] = useState<Record<string, boolean>>({ maternity: true, gemach: true, financial_aid: true, widows: true, holidays: true })
+  // ⚠️ ברירת מחדל *סגור* (false) עד שהשערים נטענים מהשרת: בקשת המנהל היא
+  // ששום מחלקה סגורה לא תופיע — עדיף להסתיר לרגע מלהבהב מחלקה סגורה כפתוחה.
+  // אם ה-fetch נכשל, נשארים מוסתרים (בטוח) עד רענון.
+  const [deptGates, setDeptGates] = useState<Record<string, boolean>>({ maternity: false, gemach: false, financial_aid: false, widows: false, holidays: false })
+  // האם השערים כבר נטענו מהשרת. משמש כדי לא "לנקות" כוונת deep-link (?action=)
+  // לפני שידוע מצב המחלקה — אחרת קישור לגיטימי למחלקה פתוחה היה מפוספס בזמן
+  // שברירת המחדל עדיין סגורה.
+  const [gatesLoaded, setGatesLoaded] = useState(false)
   useEffect(() => {
     fetch('/api/portal/department-gates').then(r => r.json())
-      .then(d => { if (d.gates) setDeptGates(d.gates) }).catch(() => {})
+      .then(d => { if (d.gates) setDeptGates(d.gates) })
+      .catch(() => {})
+      .finally(() => setGatesLoaded(true))
   }, [])
-  // חלונית "המערכת בפיתוח" — נפתחת כשמנסים לגשת לבקשה של מחלקה סגורה (מקישור
-  // במייל או מכפתור). מציגה שם מחלקה. מקור האמת: ההגדרות בדף הניהול.
-  const [closedDeptModal, setClosedDeptModal] = useState<string | null>(null)
-  // בודק אם מחלקה פתוחה; אם סגורה — פותח חלונית ומחזיר false (חוסם).
-  const gateAllows = (dept: string, label: string): boolean => {
-    if (deptGates[dept]) return true
-    setClosedDeptModal(label)
-    return false
-  }
+  // בודק אם מחלקה פתוחה; אם סגורה — חוסם בשקט (מחזיר false) בלי להזכיר את
+  // המחלקה כלל. ⚠️ בקשת המנהל: מחלקה סגורה לא מוזכרת בשום מקום. הקוראים
+  // מטפלים ב-false ע"י חזרה/הישארות באזור האישי הרגיל (בלי טופס, בלי מודל).
+  // ה-label נשמר בחתימה לתאימות הקריאות הקיימות אך אינו מוצג.
+  const gateAllows = (dept: string, _label?: string): boolean => !!deptGates[dept]
   const [childMatch, setChildMatch] = useState<ChildMatchData | null>(null)
   // רישום כילד רשום — השיוך נקבע אוטומטית מההורה
   const [childParentLineage, setChildParentLineage] = useState<ParentLineage | null>(null)
@@ -2898,7 +2903,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // לתמיד והמשתמש נשאר באזור האישי בלי שהטופס ייפתח, בלי הסבר ובלי ניסיון
     // חוזר. עכשיו ה-effect רץ שוב כששערי המחלקות נטענים ומנסה שנית.
     let opened = true
-    if (a === 'birth') opened = goToBirthForm()
+    // ⚠️ פעולות התלויות בשער מחלקה — לא מנקים את הכוונה עד שהשערים נטענו
+    // (gatesLoaded), אחרת קישור למחלקה פתוחה יאבד בזמן שברירת המחדל סגורה.
+    // אחרי הטעינה: אם המחלקה סגורה gateAllows חוסם בשקט והכוונה מנוקה (חזרה
+    // לדשבורד בלי להזכיר מחלקה סגורה), ואם פתוחה — הטופס נפתח.
+    if ((a === 'birth' || a === 'loan' || a === 'aid') && !gatesLoaded) opened = false
+    else if (a === 'birth') opened = goToBirthForm()
     else if (a === 'loan') goToLoanForm()
     else if (a === 'aid') goToAidForm()
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
@@ -2925,7 +2935,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     if (opened) intendedAction.current = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, beneficiary, deptGates, holiday])
+  }, [step, beneficiary, deptGates, gatesLoaded, holiday])
 
   // משפחה בהשלמת מסמכים — התראה מיידית בכניסה לאזור האישי, פעם אחת.
   useEffect(() => {
@@ -3251,27 +3261,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </div>
       )}
 
-      {/* חלונית "המערכת בפיתוח" — מחלקה סגורה (מקישור במייל/כפתור). מקור האמת: ההגדרות. */}
-      {closedDeptModal && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
-          onClick={() => setClosedDeptModal(null)}>
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 text-center"
-            style={{ animation: 'pop-in 0.25s ease-out' }} onClick={e => e.stopPropagation()}>
-            <div className="w-16 h-16 mx-auto bg-amber-100 rounded-2xl flex items-center justify-center mb-4">
-              <Clock size={30} className="text-amber-600" />
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900 mb-2">המערכת בפיתוח</h2>
-            <p className="text-sm text-slate-600 mb-1 leading-relaxed">
-              הגשת בקשות ל<strong>{closedDeptModal}</strong> אינה זמינה עדיין במערכת האוטומטית.
-            </p>
-            <p className="text-sm text-amber-700 font-semibold mb-5">אפשרות זו תיפתח בעזרת השם בימים הקרובים.</p>
-            <button type="button" onClick={() => setClosedDeptModal(null)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl py-2.5 transition-colors">
-              הבנתי
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ⚠️ הוסר: חלונית "המערכת בפיתוח" למחלקה סגורה. לפי בקשת המנהל, מחלקה
+          סגורה אינה מוזכרת כלל — קישור ישן למחלקה סגורה פשוט חוזר לאזור האישי
+          בשקט (gateAllows מחזיר false בלי מודל). */}
 
       {/* תזכורת השלמת שם — נפתחת בהגשת לידה כשלא מולא שם. לא חוסמת. */}
       {nameReminderOpen && (
@@ -5029,10 +5021,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     התנאי היה arrivedFor==='birth' בלבד — כלומר מי שנכנס לאזור
                     האישי בדרך הרגילה לא ראה שום דרך להגיש בקשה, גם כשהמחלקה
                     פתוחה. התנאי עכשיו הוא מצב המחלקה: פתוחה → הכפתור שם. */}
-                {(deptGates.maternity || arrivedFor === 'birth') && (() => {
+                {/* ⚠️ מחלקה סגורה — לא מוזכרת כלל (לא כפתור, לא "תיפתח בקרוב"):
+                    בקשת המנהל היא ששום מחלקה סגורה לא תופיע באתר. כשפתוחה,
+                    הכפתור מוצג ומסביר על הכפתור אם יש חסם אחר (מצב משפחתי/מסמכים). */}
+                {deptGates.maternity && (() => {
                   const blocked =
-                    !deptGates.maternity ? 'המחלקה סגורה כעת — ההגשה תיפתח בקרוב'
-                    : !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
+                    !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
                     : isDocsPending ? 'יש להשלים תחילה את המסמכים הנדרשים'
                     : ''
                   return (

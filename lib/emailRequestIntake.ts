@@ -8,6 +8,14 @@ import {
   detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
   draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
+import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
+
+// מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
+// משמש גם את חסימת הקליטה (מחלקה סגורה) וגם את בניית קישורי הטיוטה.
+const REQ_TO_DEPT: Partial<Record<ReqType, GatedDepartment>> = {
+  birth: 'maternity', silent_birth: 'maternity',
+  loan: 'gemach', financial_aid: 'financial_aid', widow: 'widows',
+}
 
 type InAttachment = { filename: string; url?: string; mimeType?: string }
 type Msg = { fromEmail: string; subject: string; body: string; attachments: InAttachment[] }
@@ -141,6 +149,20 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 
   const from = (msg.fromEmail || '').toLowerCase()
   if (!from || from.endsWith('@chasamsofer.info') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return true
+
+  // ⚠️ שער המחלקה — מחלקה סגורה לא קולטת בקשות באף ערוץ, כולל מייל. בלי הבדיקה
+  // הזו נקלטו בקשות הלוואה (גמ״ח) למרות שהמחלקה סגורה — הטופס הציבורי חסום אך
+  // ערוץ המייל דילג על השער. משיבים הודעת "לא זמין" ידידותית ולא יוצרים בקשה.
+  const gateDept = REQ_TO_DEPT[type]
+  if (gateDept && !(await isDepartmentOpen(gateDept, admin))) {
+    console.log(`[emailRequestIntake] ${type} blocked — ${gateDept} department closed (from=${from})`)
+    await deliverMail(
+      from, 'לגבי פנייתכם',
+      `<div dir="rtl" style="font-family:Arial;font-size:15px;color:#334155;line-height:1.7">שלום רב,<br/><br/>${departmentClosedMessage(gateDept)}<br/><br/>בברכה,<br/>מזכירות היכל החתם סופר</div>`,
+      undefined, { ...mailFor('igud'), skipLog: true },
+    ).catch(() => {})
+    return true
+  }
 
   // זיהוי לפי ת"ז מלאה (9 ספרות) בנושא
   const idM = String(msg.subject).match(/\d{9}/)
@@ -347,12 +369,6 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 // משמש את ה-webhook לבדיקה מהירה אם זו בקשה (לפי הנושא)
 export function isRequestSubject(subject: string): boolean {
   return detectReqType(subject) !== null
-}
-
-// מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
-const REQ_TO_DEPT: Partial<Record<ReqType, import('./departmentGates').GatedDepartment>> = {
-  birth: 'maternity', silent_birth: 'maternity',
-  loan: 'gemach', financial_aid: 'financial_aid', widow: 'widows',
 }
 
 // בונה קישורי mailto לטיוטות הגשה במייל (לחסומים) — לכל סוג בקשה, עם הת"ז בנושא.
