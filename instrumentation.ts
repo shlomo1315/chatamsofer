@@ -191,12 +191,18 @@ export async function register() {
     let lastBackupCheckDate = ''
     const checkBackup = async () => {
       const { date, hour } = israelParts()
-      if (hour !== 0 || date === lastBackupCheckDate) return
-      lastBackupCheckDate = date
+      if (date === lastBackupCheckDate) return
       try {
-        const { runDailyBackup, checkBackupFreshness } = await import('@/lib/dailyBackup')
+        const { runDailyBackup, checkBackupFreshness, backupDoneToday } = await import('@/lib/dailyBackup')
+        // חלון חצות (שעה 0) — הרצה רגילה. מחוץ לחלון — catch-up: רק אם
+        // הגיבוי של היום עוד לא בוצע (למשל deploy שנפל בדיוק על חצות
+        // "בלע" את חלון ההרצה). runDailyBackup אידמפוטנטי, אז אין כפילות.
+        if (hour !== 0 && (await backupDoneToday())) return
         const res = await runDailyBackup()
-        console.log(`[daily-backup] daily run · ok=${res.ok}` + (res.skipped ? ' (skipped)' : '') + (res.filename ? ` file=${res.filename} ${res.sizeMB}MB` : '') + (res.error ? ` error=${res.error}` : ''))
+        // מעדכנים את סמן היום רק כשהצליח/דולג — כך אחרי כשל, ה-catch-up
+        // (ההרצה בעוד שעה) ינסה שוב באותו יום במקום להיכנע עד מחר.
+        if (res.ok) lastBackupCheckDate = date
+        console.log(`[daily-backup] ${hour === 0 ? 'daily' : 'catch-up'} run · ok=${res.ok}` + (res.skipped ? ' (skipped)' : '') + (res.filename ? ` file=${res.filename} ${res.sizeMB}MB` : '') + (res.error ? ` error=${res.error}` : ''))
         // שומר סף — מתריע אם משום מה הגיבוי לא התעדכן
         await checkBackupFreshness()
       } catch (err) { console.error('[daily-backup] daily run failed', err) }

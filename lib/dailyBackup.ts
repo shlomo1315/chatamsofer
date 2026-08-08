@@ -28,6 +28,16 @@ export interface BackupResult {
   error?: string
 }
 
+// בדיקה זולה: האם הגיבוי של היום כבר בוצע (שורה יחידה מ-app_settings).
+// משמש את ה-scheduler ל-catch-up — לרוץ גם מחוץ לחלון חצות אם דילגנו על היום
+// (למשל deploy שנפל בדיוק על חצות). זול מספיק להרצה כל שעה.
+export async function backupDoneToday(): Promise<boolean> {
+  const admin = getServiceClient()
+  if (!admin) return true // בלי admin ממילא לא נגבה — לא לגרום לניסיונות חוזרים
+  const { data } = await admin.from('app_settings').select('value').eq('key', 'backup_last_run_date').maybeSingle()
+  return data?.value === dayKey(new Date())
+}
+
 // מבצע גיבוי אם עוד לא בוצע היום. best-effort — לא זורק.
 export async function runDailyBackup(force = false): Promise<BackupResult> {
   const admin = getServiceClient()

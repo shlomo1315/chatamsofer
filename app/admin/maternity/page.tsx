@@ -11,14 +11,20 @@ import ExportExcelButton from '@/components/admin/ExportExcelButton'
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
+  // ⚡ עמודות מפורשות במקום select('*'): הרשימה משכה שדות כבדים שאינם בשימוש
+  // בטבלה (children JSON, notes, deep_review_reason וכו') לכל אלפי השורות. כאן
+  // רק העמודות שהטבלה באמת מציגה — מקטין דרסטית את ה-payload בכל טעינה.
   const { data, error } = await supabase
     .from('maternity_aids')
-    .select('*, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status), card_center:card_centers(name)')
+    .select('id, beneficiary_id, birth_date, baby_name, baby_id_number, is_twins, recovery_home, recovery_nights, recovery_arrived, recovery_amount, recovery_amount_status, wants_food_card, wants_recovery, card_status, card_number, card_load_amount, card_loaded_at, card_tlush_id, card_picked_up_at, birth_certificate_url, six_weeks_end, source, status, birth_type, created_at, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children_count, eligibility_status), card_center:card_centers(name)')
     // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
     .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })
   if (error) throw error
-  const aids = (data ?? []) as MaternityAid[]
+  // ⚡ select מצומצם לעמודות שהטבלה מציגה בלבד — לכן ה-cast דרך unknown:
+  // שדות כבדים שאינם בשימוש בטבלה (card_balance, weekly_amount, total_weeks,
+  // updated_at) הושמטו מהשליפה בכוונה כדי לצמצם את ה-payload.
+  const aids = (data ?? []) as unknown as MaternityAid[]
   // נפילה-לאחור: רשומות שאין בהן birth_certificate_url — שליפת אישור הלידה מטבלת המסמכים
   const missing = aids.filter(a => !a.birth_certificate_url && a.beneficiary_id)
   if (missing.length) {

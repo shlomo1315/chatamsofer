@@ -68,7 +68,13 @@ export async function generateBackup(admin: SupabaseClient): Promise<{ buffer: B
   await addStorageFiles(admin, zip, manifest)
 
   zip.file('manifest.json', JSON.stringify(manifest, null, 2))
-  const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } })
+  // ⚡ זיכרון: streamFiles מזרים כל קובץ תוך כדי הדחיסה במקום להחזיק את כל
+  // התוכן הדחוס בזיכרון בבת אחת; level 1 (במקום 6) — הקבצים ב-Storage
+  // (תמונות/PDF) כבר דחוסים, אז דחיסה כבדה מבזבזת CPU/זיכרון בלי תועלת.
+  // צמצם דרסטית את קפיצת הזיכרון בזמן הגיבוי (היה עד ~7GB).
+  const buffer = await zip.generateAsync({
+    type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 1 }, streamFiles: true,
+  })
   return { buffer, manifest }
 }
 
