@@ -29,6 +29,12 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [editName, setEditName] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'tree'>('list')
   const [selectedTreeId, setSelectedTreeId] = useState<string | null>(null)
+  // ── הזמנה אישית (נשלחה מכרטסת הצאצא) ──
+  // mode='order': הדף ממוקד בתיקון סדר הדורות, ומציג לנמען את פרטיו ואת
+  // שרשרת האבות שלו — במקום ענף צאצאים שאינו קשור לשאלה שנשאל.
+  const [recipient, setRecipient] = useState<{ name: string; idMasked: string | null; phone: string | null; address: string | null } | null>(null)
+  const [chain, setChain] = useState<Node[]>([])
+  const [mode, setMode] = useState<'full' | 'order'>('full')
 
   const load = useCallback(async () => {
     try {
@@ -37,6 +43,9 @@ export default function LineageReviewClient({ token }: { token: string }) {
       if (!res.ok) { setError(data.error || 'שגיאה'); setLoading(false); return }
       setNodes(data.nodes ?? [])
       setRootId(data.rootNodeId ?? null)
+      setRecipient(data.recipient ?? null)
+      setChain(data.chain ?? [])
+      setMode(data.mode === 'order' ? 'order' : 'full')
     } catch { setError('שגיאת רשת') }
     finally { setLoading(false) }
   }, [token])
@@ -129,12 +138,47 @@ export default function LineageReviewClient({ token }: { token: string }) {
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100">
             <GitBranch size={28} className="text-indigo-600" />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>אישור סדר היוחסין</h1>
+          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>{mode === 'order' ? 'בדיקת סדר הדורות' : 'אישור סדר היוחסין'}</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
-            עברו על סדר היוחסין של ענף המשפחה. לכל שם ניתן לאשר, לדחות, או לתקן.
-            הגישה מוגבלת לענף זה בלבד.
+            {mode === 'order'
+              ? 'לפניכם סדר הדורות הרשום אצלנו במאגר. עברו עליו וּודאו שהוא מדויק — אם נפלה טעות, ניתן לתקן.'
+              : 'עברו על סדר היוחסין של ענף המשפחה. לכל שם ניתן לאשר, לדחות, או לתקן. הגישה מוגבלת לענף זה בלבד.'}
           </p>
         </div>
+
+        {/* כרטיס הפרטים של הנמען — כדי שיזהה מיד שזו אכן הכרטסת שלו */}
+        {recipient && (
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">הפרטים שלכם במאגר</div>
+            <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-sm">
+              <div><span className="text-slate-400">שם: </span><span className="font-bold text-slate-800">{recipient.name}</span></div>
+              {recipient.idMasked && <div><span className="text-slate-400">ת.ז.: </span><span className="font-semibold text-slate-700 ltr-num">{recipient.idMasked}</span></div>}
+              {recipient.phone && <div><span className="text-slate-400">טלפון: </span><span className="font-semibold text-slate-700 ltr-num">{recipient.phone}</span></div>}
+              {recipient.address && <div><span className="text-slate-400">כתובת: </span><span className="font-semibold text-slate-700">{recipient.address}</span></div>}
+            </div>
+            <p className="mt-2.5 text-[11px] text-slate-400">אם אחד הפרטים אינו נכון — נא ליצור קשר עם המשרד. בדף זה ניתן לתקן את סדר הדורות בלבד.</p>
+          </div>
+        )}
+
+        {/* שרשרת הדורות — מהחתם סופר זי"ע ועד אליכם */}
+        {chain.length > 0 && (
+          <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">סדר הדורות הרשום</div>
+            <div className="flex flex-col gap-1.5">
+              {chain.map((g, i) => (
+                <div key={g.id} className="flex items-center gap-2.5 rounded-xl bg-white border border-indigo-100 px-3 py-2">
+                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
+                  <span className="flex-1 text-sm font-bold text-slate-800">{g.name}</span>
+                  {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
+                  {i === chain.length - 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-indigo-500">
+              נפלה טעות בסדר? בחרו את הדור השגוי ברשימה שלמטה והציעו את התיקון. ההצעה נבדקת ומאושרת על ידי הצוות לפני שהיא נכנסת למאגר.
+            </p>
+          </div>
+        )}
 
         {error && <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{error}</div>}
         {suggestSent && <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5 text-sm text-emerald-700 flex items-center gap-2"><CheckCircle2 size={15} /> ההצעה נשלחה — היא תיבדק ותאושר על ידי הצוות. תודה!</div>}
@@ -190,10 +234,18 @@ export default function LineageReviewClient({ token }: { token: string }) {
             }
             return isBusy ? <Loader2 size={16} className="animate-spin text-slate-400" /> : (
               <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
-                <button onClick={() => act(node.id, 'verify')} title="אישור"
-                  className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
-                <button onClick={() => act(node.id, 'reject')} title="דחייה"
-                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
+                {/* ⚠️ במצב 'order' (קישור אישי מהכרטסת) מוצגות רק פעולות התיקון.
+                    אישור/דחייה של צמתים *כותבים ישירות לעץ* — פעולה שמתאימה
+                    לבעל ענף שהוזמן לאמת אותו, לא לצאצא שהתבקש לבדוק את סדר
+                    הדורות שלו. תיקון שם והוספת דור נכנסים לתור אישור ממילא. */}
+                {mode !== 'order' && (
+                  <>
+                    <button onClick={() => act(node.id, 'verify')} title="אישור"
+                      className="inline-flex items-center gap-1 rounded-lg border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 px-2.5 py-1.5 text-xs font-semibold"><Check size={13} /> אישור</button>
+                    <button onClick={() => act(node.id, 'reject')} title="דחייה"
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-2.5 py-1.5 text-xs font-semibold"><X size={13} /> דחייה</button>
+                  </>
+                )}
                 <button onClick={() => { setEditing(node.id); setEditName(node.name) }} title="תיקון שם"
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 px-2.5 py-1.5 text-xs font-semibold"><Pencil size={13} /> תיקון שם</button>
                 {/* הצעת הוספת דור חסר — ממתינה לאישור המנהל */}

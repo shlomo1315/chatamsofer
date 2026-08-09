@@ -1377,6 +1377,39 @@ export function recoveryRealizedEmail(opts: {
   }
 }
 
+// ─── קישור אישי לתיקון סדר הדורות (נשלח לצאצא מהכרטסת) ──────────────────────
+export function lineageOrderFixEmail(opts: {
+  recipientName: string
+  link: string
+}): { subject: string; html: string } {
+  // ⚠️ escapeHtml על שם הנמען: shell() אינו מנקה את body, ושם משפחה עם תו
+  // מיוחד היה נשבר או נפתח להזרקה. (נתיב השיתוף הישן משרשר שם גולמי.)
+  const body = `
+    <p style="margin:0 0 14px;color:#0f172a;font-size:18px;font-weight:800;">לכבוד משפחת ${escapeHtml(opts.recipientName)},</p>
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
+      במסגרת עדכון מאגר צאצאי מרן החתם סופר זי"ע, נבקשכם לעבור על <strong>סדר הדורות</strong> הרשום אצלנו
+      ולוודא שהוא מדויק. בקישור שלהלן יופיעו פרטיכם ושרשרת הדורות כפי שהיא במערכת,
+      ותוכלו לתקן את הסדר במידת הצורך.
+    </p>
+    <div style="text-align:center;margin:0 0 18px;">
+      <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
+        לבדיקת סדר הדורות
+      </a>
+    </div>
+    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף 30 יום. התיקון נבדק ומאושר על ידי הצוות לפני שהוא נכנס למאגר.</p>
+  `
+  return {
+    subject: 'בדיקת סדר הדורות — איגוד צאצאי החתם סופר',
+    html: shell({
+      preheader: 'נא לעבור על סדר הדורות הרשום במאגר',
+      accent: '#4f46e5',
+      title: 'בדיקת סדר הדורות',
+      subtitle: 'איגוד צאצאי החתם סופר',
+      body,
+    }),
+  }
+}
+
 // ─── התראה: תשלום משלים מבית ההחלמה (קבלה נוספת לרשומה שכבר הוגשה) ──────────
 export function recoveryTopupEmail(opts: {
   home: string

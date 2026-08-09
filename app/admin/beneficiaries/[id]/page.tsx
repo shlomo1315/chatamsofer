@@ -21,6 +21,7 @@ import DocumentsManager from './DocumentsManager'
 import LineageBranchView from './LineageBranchView'
 import LineageReliabilityPanel from './LineageReliabilityPanel'
 import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
+import SendLineageLinkButton from '../SendLineageLinkButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { ViewDocButton } from '@/components/ui/DocViewer'
@@ -760,6 +761,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         </div>
         <div className="flex items-center gap-3">
           <LineageReliabilityHeaderButton beneficiaryId={id} />
+          <SendLineageLinkButton beneficiaryId={id} name={fullName} email={beneficiary.email} />
           <StatusControl id={id} status={beneficiary.eligibility_status} advance />
           <BeneficiaryActions id={id} name={fullName} />
         </div>

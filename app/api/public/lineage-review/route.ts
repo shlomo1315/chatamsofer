@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, invalidateLineageCache, type TreeNodeRow } from '@/lib/lineageSync'
+import { NODE_SELECT, subtreeNodeIds, resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, invalidateLineageCache, pathToRoot, type TreeNodeRow } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { rateLimit } from '@/lib/rateLimit'
 import { clientIp } from '@/lib/rateLimit'
@@ -26,14 +26,14 @@ function getAdmin(): SupabaseClient | null {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-interface InviteRow { token: string; root_node_id: string; revoked_at: string | null; expires_at: string; recipient_name: string | null }
+interface InviteRow { token: string; root_node_id: string; revoked_at: string | null; expires_at: string; recipient_name: string | null; beneficiary_id?: string | null; mode?: string | null }
 
 // אימות ההזמנה — מחזיר את שורת ההזמנה או null (מבוטלת/פגה/לא קיימת).
 async function resolveInvite(admin: SupabaseClient, token: string | null): Promise<InviteRow | null> {
   if (!token) return null
   const { data } = await admin
     .from('lineage_share_invites')
-    .select('token, root_node_id, revoked_at, expires_at, recipient_name')
+    .select('token, root_node_id, revoked_at, expires_at, recipient_name, beneficiary_id, mode')
     .eq('token', token)
     .maybeSingle()
   if (!data) return null
@@ -62,7 +62,34 @@ export async function GET(request: NextRequest) {
   // עדכון last_used_at (best-effort)
   admin.from('lineage_share_invites').update({ last_used_at: new Date().toISOString() }).eq('token', inv.token).then(() => {}, () => {})
 
-  return NextResponse.json({ rootNodeId: inv.root_node_id, recipientName: inv.recipient_name, nodes: subtree })
+  // ── הזמנה המשויכת לצאצא: פרטיו + שרשרת הדורות שמעליו ──
+  // ⚠️ תת-העץ למעלה הוא *צאצאי* הצומת, ואילו "סדר הדורות" של הנרשם הוא
+  // המסלול *כלפי מעלה* אל מרן החתם סופר. בלי זה הנמען רואה ענף שאינו קשור
+  // לשאלה שנשאל. pathToRoot מחזיר את המסלול המלא מהשורש ועד הצומת שלו.
+  let recipient: Record<string, unknown> | null = null
+  let chain: TreeNodeRow[] = []
+  if (inv.beneficiary_id) {
+    const { data: ben } = await admin.from('beneficiaries')
+      .select('full_name, family_name, spouse_name, id_number, phone, address, city, lineage_node_id')
+      .eq('id', inv.beneficiary_id).maybeSingle()
+    if (ben) {
+      // ⚠️ ת"ז מוסתרת חלקית: הדף ציבורי ונפתח מקישור במייל, ואין סיבה לחשוף
+      // מספר מלא כדי שהנמען יזהה שזו הכרטסת שלו.
+      const idNum = typeof ben.id_number === 'string' && ben.id_number.length > 4
+        ? `••••${ben.id_number.slice(-4)}` : null
+      recipient = {
+        name: [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' '),
+        idMasked: idNum, phone: ben.phone ?? null,
+        address: [ben.address, ben.city].filter(Boolean).join(', ') || null,
+      }
+      if (ben.lineage_node_id) chain = pathToRoot(nodes, ben.lineage_node_id as string)
+    }
+  }
+
+  return NextResponse.json({
+    rootNodeId: inv.root_node_id, recipientName: inv.recipient_name,
+    mode: inv.mode ?? 'full', recipient, chain, nodes: subtree,
+  })
 }
 
 // POST { token, nodeId, action, name? } → אישור/דחייה/תיקון-שם של צומת בתוך ה-scope
@@ -83,6 +110,13 @@ export async function POST(request: NextRequest) {
 
   const { nodeId, action } = body
   if (!nodeId || !action) return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
+
+  // ⚠️ אכיפת mode='order' בשרת ולא רק בממשק: verify/reject כותבים *ישירות*
+  // לעץ (כולל דחייה שמדרדרת לכל הצאצאים), והסתרת הכפתורים בלקוח אינה הגבלה.
+  // בקישור אישי שנשלח מכרטסת הצאצא מותרות רק פעולות שנכנסות לתור אישור.
+  if (inv.mode === 'order' && (action === 'verify' || action === 'reject')) {
+    return NextResponse.json({ error: 'בקישור זה ניתן להציע תיקונים בלבד' }, { status: 403 })
+  }
 
   // ⚠️ בדיקת ה-scope הקריטית: הצומת חייב להיות בתוך תת-העץ ששותף. אחרת — חסום.
   // שליפה בדפים: .limit() לבדו לא עוקף את db-max-rows=1000 (ראו lib/fetchAllRows).

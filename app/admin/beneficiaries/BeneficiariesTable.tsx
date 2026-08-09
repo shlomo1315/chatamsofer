@@ -6,6 +6,7 @@ import DataTable, { Column } from '@/components/ui/DataTable'
 import SortButtons, { SortMode } from '@/components/ui/SortButtons'
 import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
+import SendLineageLinkButton from './SendLineageLinkButton'
 import { useListParams } from '@/lib/useListParams'
 import { Beneficiary, ELIGIBILITY_LABELS } from '@/types'
 import { registrationSourceLabel, registrationSourceOf } from '@/lib/distributionSources'
@@ -376,12 +377,18 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
         serverMode
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
         actions={(row) => (
-          <Link href={`/admin/beneficiaries/${row.id}`}>
-            <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">
-              <Eye size={14} />
-              צפייה
-            </button>
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <Link href={`/admin/beneficiaries/${row.id}`}>
+              <button className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 transition-colors px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50">
+                <Eye size={14} />
+                צפייה
+              </button>
+            </Link>
+            {/* שליחת קישור תיקון סדר הדורות ישירות מהשורה — בלי להיכנס לכרטסת */}
+            <span className="inline-flex px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+              <SendLineageLinkButton beneficiaryId={row.id} name={row.full_name ?? row.family_name ?? ''} email={row.email} variant="icon" />
+            </span>
+          </div>
         )}
       />
 

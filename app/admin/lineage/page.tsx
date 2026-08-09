@@ -436,6 +436,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   const [rejectNode, setRejectNode] = useState<TreeNode | null>(null)
   // הצומת שתפריט "פתיחת הכרטסת" שלו פתוח כרגע
   const [openCardFor, setOpenCardFor] = useState<string | null>(null)
+  // רשימת הילדים הפתוחה (מזהה הצומת) + טיימר סגירה מושהה, כדי שהמעבר עם
+  // העכבר מהצ'יפ אל החלונית לא יסגור אותה באמצע הדרך.
+  const [kidsFor, setKidsFor] = useState<string | null>(null)
+  const kidsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [formName, setFormName] = useState('')
   const [formRelation, setFormRelation] = useState<'son' | 'son_in_law' | null>(null)
   const [saving, setSaving] = useState(false)
@@ -1015,16 +1019,74 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   WebkitBoxOrient: 'vertical' as const,
                 }}>{pos.node.name}</span>
 
-                {/* children count chip */}
+                {/* children count chip — מעבר עכבר פותח את רשימת הילדים עם הסטטוס
+                    של כל אחד. עד כה הצ'יפ הראה מספר בלבד, וכדי לדעת מי הילדים
+                    ומה מצבם היה צריך לגלול בעץ ולבדוק אחד-אחד. */}
                 {pos.node.children.length > 0 && zoom >= 0.6 && (
-                  <div style={{
+                  <div
+                    onMouseEnter={() => { if (kidsTimer.current) clearTimeout(kidsTimer.current); setKidsFor(pos.node.id) }}
+                    onMouseLeave={() => { kidsTimer.current = setTimeout(() => setKidsFor(null), 220) }}
+                    onClick={e => { e.stopPropagation(); setKidsFor(cur => cur === pos.node.id ? null : pos.node.id) }}
+                    style={{
                     position: 'absolute', bottom: -11 * zoom, left: 6 * zoom,
-                    background: '#fff',
+                    background: kidsFor === pos.node.id ? p.ring : '#fff',
                     border: `1.5px solid ${p.ring}44`,
-                    color: p.ring, fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
+                    color: kidsFor === pos.node.id ? '#fff' : p.ring,
+                    fontSize: Math.max(8, 9 * zoom), fontWeight: 800,
                     padding: `${1 * zoom}px ${6 * zoom}px`, borderRadius: 20,
                     boxShadow: `0 1px 4px ${p.shadow}`, direction: 'rtl',
+                    cursor: 'pointer', zIndex: kidsFor === pos.node.id ? 61 : 'auto',
                   }}>{pos.node.children.length} ילדים</div>
+                )}
+
+                {/* רשימת הילדים — נפתחת ממעבר עכבר על הצ'יפ */}
+                {kidsFor === pos.node.id && (
+                  <div
+                    onMouseEnter={() => { if (kidsTimer.current) clearTimeout(kidsTimer.current) }}
+                    onMouseLeave={() => { kidsTimer.current = setTimeout(() => setKidsFor(null), 220) }}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      position: 'absolute', top: '100%', left: 0, marginTop: 8,
+                      background: '#fff', borderRadius: 14, border: '1px solid #E2E8F0',
+                      boxShadow: '0 12px 32px rgba(0,0,0,0.18)', padding: '10px 12px',
+                      // ⚠️ רוחב ותצוגה בפיקסלים קבועים, בלי כפל ב-zoom: זו חלונית
+                      // מידע ולא חלק מציור העץ, וכיווץ שלה בזום קטן היה הופך אותה
+                      // לבלתי קריאה בדיוק כשצריך אותה — במבט-על על עץ גדול.
+                      width: 260, maxHeight: 320, overflowY: 'auto', zIndex: 60,
+                      direction: 'rtl', textAlign: 'right', cursor: 'default',
+                    }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 8 }}>
+                      {pos.node.children.length} ילדים · {pos.node.name}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {[...pos.node.children]
+                        .sort((a, b) => a.name.localeCompare(b.name, 'he'))
+                        .map(kid => {
+                          const ks = (kid.status ?? 'verified') as 'verified' | 'pending' | 'rejected'
+                          const meta = ks === 'verified'
+                            ? { bg: '#DCFCE7', fg: '#166534', label: 'מאושר' }
+                            : ks === 'rejected'
+                              ? { bg: '#FEE2E2', fg: '#991B1B', label: 'נדחה' }
+                              : { bg: '#FEF3C7', fg: '#92400E', label: 'ממתין' }
+                          return (
+                            <button key={kid.id}
+                              onClick={() => { setKidsFor(null); onFocusNode(kid.id) }}
+                              title="הצג את הענף של צאצא זה"
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                                background: '#F8FAFC', border: '1px solid #F1F5F9', borderRadius: 9,
+                                padding: '6px 9px', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'right',
+                              }}>
+                              <span style={{ background: meta.bg, color: meta.fg, fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 20, flexShrink: 0 }}>{meta.label}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{kid.name}</span>
+                              {kid.children.length > 0 && (
+                                <span style={{ fontSize: 9, color: '#94A3B8', fontWeight: 700, flexShrink: 0 }}>{kid.children.length}</span>
+                              )}
+                            </button>
+                          )
+                        })}
+                    </div>
+                  </div>
                 )}
 
                 {/* בן/חתן badge — קשר הצומת להורה (מקור אחד: lineage_nodes.relation) */}
