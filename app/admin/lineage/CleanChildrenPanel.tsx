@@ -17,13 +17,17 @@ export interface CleanNode { id: string; name: string; generation: number; child
 // המנהל *מאשר* כל אשכול — המערכת רק מציעה. אשכול שאינו נכון פשוט מדלגים.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CleanChildrenPanel({
-  parentName, children, busyId, onMerge, onMergeAll, onClose,
+  parentName, nodes: children, busyId, onMerge, onMergeAll, onReview, onClose,
 }: {
   parentName: string
-  children: CleanNode[]
+  // ⚠️ nodes ולא children: prop בשם children מתנגש עם ה-children של React
+  // (react/no-children-prop) — הקורא נראה כאילו הוא מקנן תוכן ולא מעביר נתונים.
+  nodes: CleanNode[]
   busyId: string | null
   onMerge: (keepId: string, mergeIds: string[], finalName: string) => void
   onMergeAll?: (groups: { keepId: string; mergeIds: string[]; finalName: string }[]) => void
+  // בדיקה על העץ לפני מיזוג — סוגר את הפאנל וצובע את האשכול בעץ עצמו
+  onReview?: (g: { ids: string[]; keepId: string; finalName: string; index: number; total: number }) => void
   onClose: () => void
 }) {
   const [minLevel, setMinLevel] = useState<'strong' | 'possible'>('strong')
@@ -181,6 +185,21 @@ export default function CleanChildrenPanel({
                   <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">{g.length} כפילויות</span>
+                      <div className="flex-1" />
+                      {/* 👁 בדיקה על העץ — סוגר את הפאנל, צובע את האשכול על
+                          העץ עצמו ומאפשר להוציא צמתים בלחיצה לפני המיזוג.
+                          זו הדרך היחידה להכריע באמת אם שני צמתים באותו שם הם
+                          אותו אדם: צריך לראות איפה הם יושבים ומי ההורה שלהם. */}
+                      {onReview && (
+                        <button
+                          onClick={() => onReview({
+                            ids: g.map(x => x.id), keepId: keep.id, finalName,
+                            index: clusters.indexOf(g), total: clusters.length,
+                          })}
+                          className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100">
+                          👁 בדוק בעץ
+                        </button>
+                      )}
                       <button disabled={isBusy}
                         onClick={() => {
                           onMerge(keep.id, g.filter(x => x.id !== keep.id).map(x => x.id), finalName)

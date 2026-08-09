@@ -414,7 +414,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
   const toast = useToast()
   const router = useRouter()
   const canAdd = useCan('lineage', 'add')
@@ -909,6 +909,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             const isDup = dupIds.has(pos.node.id)
             const inScan = scanIds.has(pos.node.id)
             const inLocate = locateIds.has(pos.node.id)
+            // צומת שהוצא ידנית מהאשכול שנבדק — חייב להיראות אחרת לגמרי,
+            // אחרת אין דרך לדעת מה בפנים ומה בחוץ.
+            const isExcluded = !!reviewExcluded?.has(pos.node.id)
             // ⚠️ כשמאתרים קבוצה מהפאנל, כל השאר מעומעם — אחרת שני צמתים
             // מודגשים בתוך עץ של 500 פשוט נבלעים ואי אפשר למצוא אותם.
             const isDimmed = mergeMode
@@ -935,6 +938,9 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 onMouseLeave={scheduleHideHover}
                 onClick={e => {
                   e.stopPropagation()
+                  // 👁 מצב בדיקת אשכול — לחיצה על כרטיס בקבוצה מוציאה/מחזירה
+                  // אותו מהמיזוג. זו הפעולה הראשית במצב הזה, ולכן היא קודמת.
+                  if (onReviewToggle && onReviewToggle(pos.node.id)) return
                   // ⚡ Ctrl/Cmd+לחיצה = סימון מהיר למיזוג, מכל מקום ובלי להיכנס
                   // קודם למצב מיוחד. זו הדרך המהירה לסמן ידנית קבוצת כפילויות
                   // (למשל שבעה "רבי ישראל שטערן" באותו דור): לחיצה לכל צומת.
@@ -951,7 +957,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   boxShadow: inMerge
                     ? `0 0 0 3px #fff, 0 0 0 6px #16A34A, 0 12px 32px rgba(22,163,74,0.4)`
                     // הקבוצה שאותרה מהפאנל — טבעת סגולה עבה ובולטת
-                    : inLocate
+                    : isExcluded
+                      // הוצא מהמיזוג — טבעת אפורה דקה, בלי הבלטה
+                      ? `0 0 0 2px #fff, 0 0 0 4px #94A3B8, 0 4px 14px rgba(100,116,139,0.3)`
+                      : inLocate
                       ? `0 0 0 3px #fff, 0 0 0 7px #7C3AED, 0 14px 36px rgba(124,58,237,0.55)`
                       : isSel
                         ? `0 0 0 3px #fff, 0 0 0 5.5px ${p.ring}, 0 12px 32px ${p.shadow}`
@@ -965,7 +974,8 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   transform: isSel ? 'scale(1.07) translateY(-2px)' : 'scale(1)',
                   // ללא אנימציה על left/top — היא גרמה לקפיצות בזום ובגלילה. המיקום משתנה מיד.
                   transition: 'box-shadow .2s, transform .2s, opacity .2s',
-                  opacity: isDimmed ? 0.25 : 1,
+                  opacity: isExcluded ? 0.4 : isDimmed ? 0.25 : 1,
+                  filter: isExcluded ? 'grayscale(0.85)' : undefined,
                   zIndex: (isSel || hovered === pos.node.id) ? 50 : 2, userSelect: 'none',
                 }}>
 
@@ -986,6 +996,15 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 {(isDup || inScan) && zoom >= 0.5 && (
                   <div style={{ position: 'absolute', bottom: -10 * zoom, left: '50%', transform: 'translateX(-50%)', background: inScan ? '#7C3AED' : '#9333EA', color: '#fff', fontSize: Math.max(7, 8 * zoom), fontWeight: 800, padding: `${1 * zoom}px ${7 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap', zIndex: 26 }}>
                     {inScan ? 'מועמד למיזוג' : 'כפול'}
+                  </div>
+                )}
+
+                {/* תג "לא במיזוג" — לצומת שהוצא ידנית מהאשכול שנבדק */}
+                {isExcluded && zoom >= 0.4 && (
+                  <div style={{ position: 'absolute', inset: 0, borderRadius: 16 * zoom, background: 'rgba(100,116,139,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 25 }}>
+                    <span style={{ background: '#475569', color: '#fff', fontSize: Math.max(8, 9 * zoom), fontWeight: 800, padding: `${2 * zoom}px ${8 * zoom}px`, borderRadius: 20, border: '1.5px solid #fff', whiteSpace: 'nowrap' }}>
+                      ✕ לא במיזוג
+                    </span>
                   </div>
                 )}
 
@@ -1582,6 +1601,23 @@ export default function LineagePage() {
   const [cleanParentId, setCleanParentId] = useState<string | null>(null)
   // הצומת שנשאר במיזוג שרץ כרגע מתוך פאנל הניקוי — לחיווי טעינה על הכפתור
   const [busyMergeKeep, setBusyMergeKeep] = useState<string | null>(null)
+
+  // ─── בדיקת אשכול על העץ לפני מיזוג ───────────────────────────────────────
+  // ⚠️ הדרישה: לראות *על העץ הוויזואלי* מה עומד להתמזג, ולהוציא ידנית צמתים
+  // שאינם שייכים — לא רק רשימת טקסט בפאנל צדדי. האשכולות מזוהים אוטומטית
+  // ולעולם אינם מושלמים (שני אנשים באותו שם), ולכן ההכרעה חייבת להיות
+  // ויזואלית: הכרטיסים נצבעים בעץ, לחיצה מוציאה מהקבוצה, ורק אז ממזגים.
+  const [review, setReview] = useState<{
+    ids: string[]            // הצמתים שנשארו בקבוצה (הניתנים למיזוג)
+    excluded: Set<string>    // מה שהמשתמש הוציא ידנית
+    keepId: string
+    finalName: string
+    gen: number
+    index: number            // מיקום ברשימת האשכולות של הדור
+    total: number
+  } | null>(null)
+  // תוצאת המיזוג האחרון — נשארת על המסך עם כפתור מעבר לקבוצה הבאה
+  const [reviewDone, setReviewDone] = useState<{ text: string; gen: number; index: number; total: number } | null>(null)
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
   const [dupFilter, setDupFilter] = useState(false)
   // לאחר מיזוג — הצעה לאשר את הייחוס
@@ -2113,9 +2149,60 @@ export default function LineagePage() {
         />
       )}
 
+      {/* ── בדיקת אשכול על העץ: מה עומד להתמזג, עם הוצאה ידנית ── */}
+      {review && (() => {
+        const active = review.ids.filter(id => !review.excluded.has(id))
+        const keepNode = nodes.find(n => n.id === review.keepId)
+        const canMerge = active.length >= 2 && active.includes(review.keepId)
+        return (
+          <div style={{ background: '#F5F3FF', border: '2px solid #C4B5FD', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ background: '#7C3AED', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 800 }}>
+                קבוצה {review.index + 1}/{review.total}
+              </span>
+              <span style={{ flex: 1, minWidth: 220, fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
+                {active.length} צמתים יתמזגו אל <span style={{ color: '#166534' }}>{keepNode?.name ?? review.finalName}</span>
+                {review.excluded.size > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}> · {review.excluded.size} הוצאו</span>}
+              </span>
+              <button onClick={() => { setReview(null); setLocateIds(new Set()) }}
+                style={{ background: '#F1F5F9', color: '#64748B', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
+              <button disabled={!canMerge || merging}
+                onClick={() => {
+                  const ids = review.ids.filter(id => !review.excluded.has(id) && id !== review.keepId)
+                  const info = { text: `${ids.length + 1} צמתים → ${review.finalName}`, gen: review.gen, index: review.index, total: review.total }
+                  void mergeByIds(review.keepId, ids, { [review.keepId]: review.finalName }, true)
+                    .then(() => { setReview(null); setLocateIds(new Set()); setReviewDone(info) })
+                }}
+                style={{ background: (!canMerge || merging) ? '#C4B5FD' : '#7C3AED', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 15px', fontSize: 12.5, fontWeight: 800, cursor: (!canMerge || merging) ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                {merging ? 'ממזג…' : `⚯ מזג ${active.length} צמתים`}
+              </button>
+            </div>
+            <p style={{ margin: '7px 0 0', fontSize: 11, color: '#7C3AED', lineHeight: 1.6 }}>
+              הצמתים מסומנים בעץ. <strong>לחיצה על כרטיס מוציאה אותו מהמיזוג</strong> (ולחיצה חוזרת מחזירה) — כך אפשר להשאיר בחוץ מי שאינו אותו אדם.
+            </p>
+          </div>
+        )
+      })()}
+
+      {/* תוצאת המיזוג האחרון + מעבר לקבוצה הבאה */}
+      {reviewDone && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '2px solid #A7F3D0', borderRadius: 12, padding: '9px 14px', marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 15 }}>✅</span>
+          <span style={{ flex: 1, minWidth: 200, fontSize: 13, fontWeight: 700, color: '#166534' }}>
+            המיזוג בוצע — {reviewDone.text}
+          </span>
+          <button onClick={() => { setReviewDone(null); setCleanParentId(`gen:${reviewDone.gen}`) }}
+            style={{ background: '#16A34A', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 15px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            לקבוצה הבאה ←
+          </button>
+          <button onClick={() => setReviewDone(null)}
+            style={{ background: 'none', color: '#64748B', border: 'none', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>סגור</button>
+        </div>
+      )}
+
       {/* ⚠️ באנר יציאה מהדגשת הקבוצה: ההדגשה מעמעמת את כל שאר העץ, ובלי דרך
           יציאה ברורה המשתמש נתקע עם מסך חיוור בלי להבין למה. */}
-      {locateIds.size > 0 && (
+      {!review && locateIds.size > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#F5F3FF', border: '2px solid #DDD6FE', borderRadius: 12, padding: '9px 14px', marginBottom: 12, flexWrap: 'wrap' }}>
           <MapPin size={15} color="#7C3AED" />
           <span style={{ flex: 1, minWidth: 180, fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
@@ -2243,7 +2330,21 @@ export default function LineagePage() {
       ) : view === 'tree' ? (
         /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
            וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
-        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onCleanChildren={setCleanParentId} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onCleanChildren={setCleanParentId}
+          onReviewToggle={(id) => {
+            // מחזיר true רק אם הצומת שייך לאשכול שנבדק — כך שאר הלחיצות
+            // בעץ (בחירה/פופאפ) ממשיכות לעבוד כרגיל מחוץ למצב הבדיקה.
+            if (!review || !review.ids.includes(id)) return false
+            setReview(r => {
+              if (!r) return r
+              const ex = new Set(r.excluded)
+              if (ex.has(id)) ex.delete(id); else ex.add(id)
+              return { ...r, excluded: ex }
+            })
+            return true
+          }}
+          reviewExcluded={review?.excluded}
+          onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
       ) : (
         <TableView
           nodes={visibleNodes}
@@ -2333,7 +2434,7 @@ export default function LineagePage() {
         return (
           <CleanChildrenPanel
             parentName={genMatch ? `דור ${genMatch[1]}` : parent!.name}
-            children={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
+            nodes={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
             // ⚠️ busyId הושווה ל-cleanParentId (שהוא "gen:6" בניקוי דור),
             // ולעולם לא תאם ל-keep.id — ולכן הכפתור לא הראה טעינה והלחיצה
             // נראתה כאילו "לא קרה כלום". עכשיו מועבר מזהה המיזוג הפעיל.
@@ -2347,6 +2448,18 @@ export default function LineagePage() {
                 .finally(() => setBusyMergeKeep(null))
             }}
             onMergeAll={groups => { void mergeSequential(groups) }}
+            onReview={g => {
+              // סוגרים את הפאנל, מדגישים את האשכול על העץ ומעמעמים את השאר
+              setCleanParentId(null)
+              setReviewDone(null)
+              setLocateIds(new Set(g.ids))
+              setReview({
+                ids: g.ids, excluded: new Set(), keepId: g.keepId, finalName: g.finalName,
+                gen: genMatch ? Number(genMatch[1]) : 0, index: g.index, total: g.total,
+              })
+              // ממקדים את המבט על הצומת שנשאר, כדי לא לחפש אותו בעץ
+              setAnchor(a => ({ id: g.keepId, n: (a?.n ?? 0) + 1 }))
+            }}
             onClose={() => setCleanParentId(null)}
           />
         )
