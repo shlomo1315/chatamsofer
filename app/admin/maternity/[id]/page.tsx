@@ -43,7 +43,16 @@ async function getAid(id: string): Promise<MaternityAid | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('maternity_aids')
-    .select('*, beneficiary:beneficiaries(*), card_center:card_centers(id, name)')
+    // ⚡ עמודות מפורשות למוטב במקום beneficiaries(*): השליפה משכה את החתימה
+    // (data-URL בבסיס64, 20-80KB) ואת 8 עמודות ה-portal_* — בהן portal_phone_code_plain,
+    // קוד SMS בטקסט גלוי — שאין להן שום שימוש בכרטסת הלידה.
+    //
+    // ⚠️ שלושה שדות נדרשים ע"י צרכנים שאינם נראים בקריאת הדף:
+    //   children      → StatusControl/syncBabyStatusInFamily. בלעדיו אישור לידה
+    //                   דורס את רשימת הילדים של המשפחה (אותו באג שתוקן ברשימה).
+    //   is_special    → FamilyApprovalGate
+    //   required_docs → מוצג בדף עצמו
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, id_number, spouse_name, spouse_id_number, spouse_birth_date, phone, phone2, email, address, city, marital_status, children, children_count, eligibility_status, community_affiliation, registration_source, required_docs, is_special, lineage_node_id, lineage_chain, lineage_manual, lineage_manual_marks), card_center:card_centers(id, name)')
     .eq('id', id)
     .single()
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה

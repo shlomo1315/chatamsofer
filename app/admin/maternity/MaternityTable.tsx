@@ -15,6 +15,7 @@ import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButton
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
 import { babyNameLabel, isNamePending, type AidNameFields } from '@/lib/babyNames'
 import { recoveryDaysOf } from '@/lib/maternity'
+import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -171,6 +172,10 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       a => a.created_at,
     ), [filtered, sort])
 
+  // ⚡ גלילה אינסופית — הטבלה רינדרה את כל השורות המסוננות בבת אחת (עד ~1000
+  // שורות × 15 עמודות = ~15,000 תאים), וכל סינון/מיון/הקלדה בנה אותן מחדש.
+  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards — 6 כרטיסים → 6 עמודות במסך רחב, מצומצמים כדי שייכנסו בשורה אחת */}
@@ -285,7 +290,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
                 <tr><td colSpan={12 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
-              ) : visible.map(aid => {
+              ) : visibleRows.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
                   <tr key={aid.id}
@@ -423,6 +428,15 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   </tr>
                 )
               })}
+              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
+              {hasMore && (
+                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
+                  <td colSpan={20} className="px-3 py-4 text-center text-slate-400 text-[11px] font-medium">
+                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
+                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -8,9 +8,11 @@
 // רוחב המסך, ה-div העוטף (overflow-x-auto) גולל בתוך עצמו — הדף אינו גולל.
 // זה מה ש-table-fixed+אחוזים/min-width לא הצליחו לעשות: הם נדחסו ושברו תוכן.
 // ─────────────────────────────────────────────────────────────────────────────
+'use client'
 import Link from 'next/link'
 import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
+import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
 export interface HolidayRow {
   id: string
@@ -75,6 +77,12 @@ export default function HolidayRecipientsTable({
     busyId, setApprovalFor, clearCard, showMessage = false,
     hideApproval = false, hideCard = false, hideSource = false } = controls
 
+  // ⚡ גלילה אינסופית: בחלוקת חג יש אלפי נרשמים, ורינדור כולם בבת אחת בנה
+  // עשרות אלפי תאים ב-DOM והקפיא את הדפדפן — גם בכל סינון/מיון מחדש. מרנדרים
+  // מנה ומוסיפים בגלילה. הנתונים כבר בזיכרון; אין כאן שאילתות נוספות.
+  // ⚠️ הקריאה חייבת להיות לפני כל return מוקדם (חוקי ה-hooks).
+  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(rows)
+
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
   }
@@ -108,7 +116,7 @@ export default function HolidayRecipientsTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map(r => {
+          {visibleRows.map(r => {
             const I = SOURCE_ICON[r.source] ?? Pencil
             return (
               <tr key={r.id} className="hover:bg-indigo-50/40 [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-nowrap [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 align-middle">
@@ -198,6 +206,16 @@ export default function HolidayRecipientsTable({
               </tr>
             )
           })}
+          {/* זקיף הגלילה — כשהוא נכנס לתצוגה נטענת המנה הבאה. colSpan נדיב
+              במכוון: מספר העמודות משתנה לפי controls, ועודף אינו מזיק. */}
+          {hasMore && (
+            <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
+              <td colSpan={20} className="px-3 py-4 text-center text-slate-400 text-[11px] font-medium">
+                <Loader2 size={14} className="inline animate-spin ml-1.5" />
+                טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

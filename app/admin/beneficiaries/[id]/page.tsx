@@ -36,19 +36,59 @@ async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
   finally { console.log(`[perf][beneficiary] ${label}: ${Math.round(performance.now() - t)}ms`) }
 }
 
+// ⚡ עמודות מפורשות במקום select('*'). שתי סיבות:
+//
+// 1. ביצועים — signature היא data-URL בבסיס64 (20-80KB) שנמשך בכל טעינת כרטסת.
+//    היא מוגשת עכשיו דרך /api/admin/beneficiaries/[id]/signature, ולכן נשלף כאן
+//    רק דגל בוליאני (signature IS NOT NULL) שקובע אם להציג את הכרטיס בכלל.
+// 2. אבטחה — select('*') משך גם את 8 עמודות ה-portal_* (גיבובי סיסמה, קודי
+//    איפוס, וגם portal_phone_code_plain — קוד SMS בטקסט גלוי). לכרטסת אין בהן
+//    שום שימוש, ואין סיבה שיעברו בשרת.
+//
+// ⚠️ בתחזוקה: שדה חדש שהכרטסת מציגה חייב להתווסף כאן, אחרת הוא פשוט ייעלם
+// מהמסך בלי שגיאה. חמשת שדות מעגל התיקונים (docs_sent_at, docs_returned_at,
+// lineage_chain_before_fix, lineage_fixed_at, lineage_fix_note) נצרכים ע"י
+// ReturnedFixesBanner שמקבל את האובייקט כולו — לא ברור מקריאת הדף עצמו.
+const SELECT_COLUMNS =
+  'id, created_at, updated_at, is_active, ' +
+  'id_number, id_doc_type, full_name, family_name, birth_date, gender, marital_status, ' +
+  'children_count, children, nedarim_id, community_affiliation, registration_source, ' +
+  'phone, phone2, email, email_verified_at, address, city, ' +
+  'spouse_name, spouse_id_number, spouse_doc_type, spouse_birth_date, ' +
+  'notes, past_benefits, eligibility_status, rejection_reason, rejected_at, ' +
+  'deep_review_reason, is_special, required_docs, ' +
+  'lineage_node_id, lineage_chain, lineage_manual, lineage_manual_marks, ' +
+  'docs_sent_at, docs_returned_at, lineage_chain_before_fix, lineage_fixed_at, lineage_fix_note, ' +
+  'signature'
+
 async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
   // rejecter:profiles — שם המשתמש שדחה, להצגת "מי דחה" בבאנר הדחייה.
   // ⚠️ עמיד: אם ה-FK/עמודה rejected_by עדיין לא קיימים (המיגרציה טרם רצה),
-  // ה-join נכשל — נופלים חזרה ל-select('*') כדי שהכרטסת לא תקרוס.
-  const withJoin = await supabase.from('beneficiaries').select('*, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)').eq('id', id).single()
-  if (!withJoin.error) return withJoin.data
+  // ה-join נכשל — נופלים חזרה לאותן עמודות בלי ה-join, כדי שהכרטסת לא תקרוס.
+  const withJoin = await supabase
+    .from('beneficiaries')
+    .select(`${SELECT_COLUMNS}, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)`)
+    .eq('id', id).single()
+  if (!withJoin.error) return trimSignature(withJoin.data)
   if (withJoin.error.code === 'PGRST116' || withJoin.error.code === '22P02') return null
 
-  const { data, error } = await supabase.from('beneficiaries').select('*').eq('id', id).single()
+  const { data, error } = await supabase.from('beneficiaries').select(SELECT_COLUMNS).eq('id', id).single()
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
-  return data
+  return trimSignature(data)
+}
+
+// הבסיס64 של החתימה משמש רק כדי לדעת *אם* קיימת חתימה; התמונה עצמה נטענת
+// מהנתיב הייעודי. מחליפים אותו במחרוזת סמלית קצרה כדי שלא ייכנס ל-HTML.
+//
+// ה-cast דרך unknown: ב-select מפורש PostgREST אינו מסיק את טיפוס השורה, ולכן
+// הטיפוס המוחזר אינו מזוהה אוטומטית כ-Beneficiary.
+function trimSignature(row: unknown): Beneficiary | null {
+  if (!row) return null
+  const r = row as { signature?: string | null }
+  if (typeof r.signature === 'string' && r.signature) r.signature = '1'
+  return row as Beneficiary
 }
 
 
@@ -443,8 +483,12 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       {beneficiary.signature && (
         <Card>
           <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">חתימת ההצהרה</h2>
+          {/* ⚡ הבסיס64 של החתימה (20-80KB) אינו מוטמע יותר ב-HTML של הדף:
+              הוא הוגש בכל טעינת כרטסת גם למי שלא פתח את הטאב. עכשיו הדפדפן
+              מושך אותה בעצמו, במקביל, ומטמן. loading="lazy" — רק כשנגללים אליה. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={beneficiary.signature} alt="חתימה" className="max-h-32 bg-white border border-slate-200 rounded-lg" />
+          <img src={`/api/admin/beneficiaries/${id}/signature`} alt="חתימה" loading="lazy"
+            className="max-h-32 bg-white border border-slate-200 rounded-lg" />
         </Card>
       )}
       <div className="grid grid-cols-3 gap-3 text-center text-xs text-slate-400">

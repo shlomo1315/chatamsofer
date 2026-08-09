@@ -8,9 +8,12 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
   if (!isSupabaseConfigured()) return { widows: [], requests: [], payments: [], error: null }
   const supabase = await createClient()
   const [widowsRes, requestsRes, paymentsRes] = await Promise.all([
+    // ⚡ רק העמודות שהלוח מציג (WidowsDashboard). קודם select('*') משך לכל אלמנה
+    // את החתימה בבסיס64 (20-80KB), את children/lineage_chain, ואת עמודות
+    // ה-portal_* הרגישות — פי כמה מונים יותר מהנדרש, כפול מספר השורות.
     supabase
       .from('beneficiaries')
-      .select('*')
+      .select('id, full_name, family_name, id_number, city, children_count, monthly_support, created_at')
       .in('marital_status', ['אלמן', 'אלמנה'])
       .order('created_at', { ascending: false }),
     supabase

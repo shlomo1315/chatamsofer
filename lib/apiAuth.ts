@@ -33,11 +33,17 @@ export function allowedMailboxKeys(staff: StaffContext): string[] | null {
 }
 
 // לקוח service-role. נכשל סגור: אם המפתח חסר מחזירים null ולא נופלים ל-anon.
+//
+// ⚡ מופע יחיד למודול: הלקוח חסר-מצב (autoRefreshToken/persistSession כבויים),
+// ולכן יצירה מחדש בכל אחת ממאות הקריאות בטעינת מסך הייתה בזבוז נטו.
+let _serviceClient: SupabaseClient | null = null
 export function getServiceClient(): SupabaseClient | null {
+  if (_serviceClient) return _serviceClient
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return null
-  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  _serviceClient = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
+  return _serviceClient
 }
 
 // ⚠️ ממוזג ל-cache: נתיב API בודד קורא ל-requirePermission/requireStaff יותר
@@ -69,26 +75,43 @@ const getSessionUser = cache(async () => {
   }
 })
 
+// ⚡ שליפת הפרופיל, ממוזגת לכל בקשה.
+//
+// ⚠️ למה זה קריטי: טעינת מסך ניהול אחד יורה 8-9 קריאות API במקביל, וכל נתיב
+// קורא ל-requireStaff (לעיתים פעמיים, דרך requirePermission) — כלומר עד ~20
+// שאילתות profiles זהות לכל טעינת מסך, ולמשתמשי Google אף כפול, כי הנפילה-
+// לאחור לפי אימייל נורית בכל אחת מהן מחדש. cache() של React ממזג את כולן
+// לשאילתה אחת לכל בקשה.
+//
+// ⚠️ המיזוג הוא על *שליפת הפרופיל בלבד*, לא על requireStaff עצמו: בדיקת
+// allowedRoles שונה בין קוראים, ומיזוג התוצאה הסופית היה מחזיר לקורא אחד את
+// הכרעת ההרשאות של קורא אחר.
+const getStaffProfile = cache(async (userId: string, email: string | null) => {
+  const admin = getServiceClient()
+  if (!admin) return null
+
+  // select('*') בכוונה — עמיד גם אם עמודות חדשות (mail_only/allowed_mailboxes) טרם נוספו במסד
+  const { data: byId } = await admin
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle()
+  if (byId) return byId
+
+  // נפילה-לאחור לפי אימייל — תמיכה בכניסה עם Google כאשר זהות ה-auth אינה מקושרת לאותו id
+  if (email) {
+    const r = await admin.from('profiles').select('*').ilike('email', email).maybeSingle()
+    return r.data
+  }
+  return null
+})
+
 // מאמת שהקורא הוא איש צוות פעיל (פרופיל קיים עם תפקיד מוכר). מחזיר null אם לא.
 export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffContext | null> {
   const user = await getSessionUser()
   if (!user) return null
 
-  const admin = getServiceClient()
-  if (!admin) return null
-
-  // select('*') בכוונה — עמיד גם אם עמודות חדשות (mail_only/allowed_mailboxes) טרם נוספו במסד
-  let { data: profile } = await admin
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  // נפילה-לאחור לפי אימייל — תמיכה בכניסה עם Google כאשר זהות ה-auth אינה מקושרת לאותו id
-  if (!profile && user.email) {
-    const r = await admin.from('profiles').select('*').ilike('email', user.email).maybeSingle()
-    profile = r.data
-  }
+  const profile = await getStaffProfile(user.id, user.email ?? null)
 
   if (!profile || profile.is_active === false) return null
   if (!STAFF_ROLES.includes(profile.role as StaffRole)) return null
