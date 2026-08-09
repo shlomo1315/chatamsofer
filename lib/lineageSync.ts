@@ -56,21 +56,45 @@ export function lineageCacheVersion(): number { return _lineageCacheVersion }
 // ─────────────────────────────────────────────────────────────────────────────
 let _treeCache: { at: number; version: number; rows: TreeNodeRow[] } | null = null
 const TREE_CACHE_TTL_MS = 60_000
+// גיל מרבי להגשת עותק *מיושן* בזמן רענון ברקע. מעבר לו ממתינים לשליפה אמיתית.
+const TREE_STALE_MAX_MS = 10 * 60_000
+// שליפה שכבר רצה — כדי ששתי בקשות במקביל לא יסרקו את העץ פעמיים (single-flight).
+let _treeInflight: Promise<TreeNodeRow[]> | null = null
 
 /**
  * טוען את כל צמתי העץ, עם מטמון. `loader` מבצע את השליפה בפועל (fetchAllRows).
  * מוחזר עותק חדש בכל קריאה כדי שצרכנים שממיינים/משנים לא ידרסו את המטמון.
+ *
+ * ⚡ stale-while-revalidate: כשהעותק פג או נפסל, הוא עדיין מוגש *מיד* והרענון
+ * רץ ברקע. הסיבה: invalidateLineageCache נקרא גם מנתיב הרישום הציבורי
+ * (public-register — אישור אוטומטי של שם), ובגל רישום המוני הוא נקרא כל כמה
+ * שניות. בלי זה כל פתיחת כרטסת בממשק הניהול נפלה על סריקה מלאה של ~5000 צמתים
+ * (6 סבבי רשת סדרתיים) — ולכן הפורטל הציבורי בפועל *הקפיא את ממשק הניהול*.
+ * חלון אי-העקביות הוא עד סיום רענון אחד ברקע, ועל נתוני עץ זה בטוח לחלוטין.
  */
 export async function getCachedLineageTree(
   loader: () => Promise<TreeNodeRow[]>,
 ): Promise<TreeNodeRow[]> {
   const now = Date.now()
-  if (_treeCache && _treeCache.version === _lineageCacheVersion && now - _treeCache.at < TREE_CACHE_TTL_MS) {
+  const fresh = _treeCache && _treeCache.version === _lineageCacheVersion && now - _treeCache.at < TREE_CACHE_TTL_MS
+  if (fresh) return _treeCache!.rows.slice()
+
+  const refresh = (): Promise<TreeNodeRow[]> => {
+    if (_treeInflight) return _treeInflight
+    const version = _lineageCacheVersion
+    _treeInflight = loader()
+      .then(rows => { _treeCache = { at: Date.now(), version, rows }; return rows })
+      .finally(() => { _treeInflight = null })
+    return _treeInflight
+  }
+
+  // עותק מיושן אך שמיש — מגישים אותו מיד ומרעננים ברקע.
+  if (_treeCache && now - _treeCache.at < TREE_STALE_MAX_MS) {
+    void refresh().catch(e => console.error('[lineage] רענון מטמון ברקע נכשל:', e))
     return _treeCache.rows.slice()
   }
-  const rows = await loader()
-  _treeCache = { at: now, version: _lineageCacheVersion, rows }
-  return rows.slice()
+
+  return (await refresh()).slice()
 }
 
 /** המסלול מהשורש עד הצומת (כולל), לפי parent_id. ריק אם הצומת לא נמצא. */

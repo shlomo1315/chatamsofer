@@ -114,6 +114,45 @@ function withAutomatedNotice(html: string, replyTo: string): string {
     : html + notice
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// חשבונות שגוגל חסם זמנית (429 · "User-rate limit exceeded").
+//
+// ⚠️ למה: המונה היומי שלנו הוא תקרה *רכה* משלנו, אבל לגוגל יש תקרות נוספות
+// (בין השאר לפי קצב) שאינן נספרות אצלנו. כשחשבון נחסם, הוא נשאר ראשון ברשימה
+// וכל מייל המשיך לנסות אותו, להמתין לתשובת הרשת, לקבל 429 — ורק אז לעבור
+// לחשבון הבא. בגל רישום המוני זה הוסיף המתנה מיותרת לכל בקשה. גוגל מחזיר
+// בהודעת השגיאה את הזמן המדויק שבו החסימה פגה ("Retry after <ISO>"), ואנחנו
+// מכבדים אותו: החשבון מדולג עד אז, ואז חוזר לסבב מעצמו.
+//
+// הזיכרון הוא בתהליך (לא ב-DB) בכוונה: הוא רק אופטימיזציה, ואיבודו ב-deploy
+// גורם לכל היותר לניסיון כושל אחד נוסף שממילא מטופל.
+// ─────────────────────────────────────────────────────────────────────────────
+const _rateLimitedUntil = new Map<string, number>()
+const RATE_LIMIT_FALLBACK_MS = 15 * 60_000   // אם גוגל לא ציין זמן — 15 דקות
+
+function isRateLimited(email: string): boolean {
+  const until = _rateLimitedUntil.get(email)
+  if (until == null) return false
+  if (Date.now() >= until) { _rateLimitedUntil.delete(email); return false }
+  return true
+}
+
+// רישום חסימה מתוך שגיאת גוגל. מחזיר true אם זו אכן שגיאת מכסה (429).
+function noteIfRateLimited(email: string, e: unknown): boolean {
+  const err = e as { code?: number; status?: number; message?: string }
+  const code = err?.code ?? err?.status
+  const msg = String(err?.message ?? '')
+  if (code !== 429 && !/rate limit|RESOURCE_EXHAUSTED/i.test(msg)) return false
+
+  // "Retry after 2026-08-09T10:14:20.134Z" — הזמן המדויק שגוגל נקב בו.
+  const m = msg.match(/Retry after (\S+)/)
+  const parsed = m ? Date.parse(m[1]) : NaN
+  const until = Number.isFinite(parsed) ? parsed : Date.now() + RATE_LIMIT_FALLBACK_MS
+  _rateLimitedUntil.set(email, until)
+  console.warn(`[mail] ${email} חסום ע"י Gmail עד ${new Date(until).toISOString()} — מדלגים עליו עד אז`)
+  return true
+}
+
 // ניסיון שליחה דרך Workspace. מחזיר את כתובת החשבון ששלח, או null אם אף
 // חשבון לא היה זמין — ואז הקורא ממשיך ל-Resend. אינו זורק לעולם.
 //
@@ -141,6 +180,10 @@ async function trySendViaGmail(
       : [{ email: '(ראשי)', token: '' }]
 
     for (const acc of pool) {
+      // חשבון שגוגל חסם זמנית — מדלגים בלי לשלם על ניסיון רשת כושל.
+      // ⚡ בלי זה, חשבון חסום נוסה מחדש בכל מייל והוסיף המתנה לכל בקשה.
+      if (isRateLimited(acc.email)) continue
+
       // ⚠️ המונה אינו אטומי, ובכוונה: התקרה כאן רכה ומתחת לתקרה האמיתית של
       // Google. חריגה קלה בתנאי מרוץ תיתקל ממילא בתקרה האמיתית, והשליחה
       // תעבור לחשבון הבא או ל-Resend.
@@ -166,7 +209,11 @@ async function trySendViaGmail(
         return acc.email
       } catch (e) {
         // כשל בחשבון מסוים — ממשיכים לבא בתור ולא מפילים את השליחה כולה.
-        console.error(`[mail] שליחה דרך ${acc.email} נכשלה, ממשיכים:`, e)
+        // חסימת מכסה (429) נרשמת כדי שהחשבון ידולג עד שהיא פגה. הלוג מקוצר
+        // במכוון: אובייקט השגיאה של googleapis מכיל את גוף המייל כולו בבסיס64,
+        // ובגל שליחות הוא הציף את לוג השרת במאות שורות לכל כישלון.
+        if (noteIfRateLimited(acc.email, e)) continue
+        console.error(`[mail] שליחה דרך ${acc.email} נכשלה, ממשיכים:`, (e as Error)?.message ?? e)
       }
     }
 

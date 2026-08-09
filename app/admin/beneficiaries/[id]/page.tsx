@@ -578,12 +578,10 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           // ואישורו נעשה בנפרד; צביעתו כחול (verified) הייתה מטעה כאילו אושר.
           gens.push({ generation: lastGen + 1, name: selfName, status: 'pending', relation: null })
         }
-        // relation מגיע מהמסד כטקסט חופשי — מצמצמים לערכים שהרכיב מכיר
-        const pickerNodes: import('./LineageChainChips').TreeNode[] = allNodes.map(n => ({
-          id: n.id, name: n.name, generation: n.generation, parent_id: n.parent_id, status: n.status,
-          relation: n.relation === 'son' || n.relation === 'son_in_law' ? n.relation : null,
-        }))
-        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} allNodes={pickerNodes} />
+        // ⚡ הצמתים לבורר *אינם* נשלחים יותר כ-prop: קודם כל ~5000 צמתי העץ עברו
+        // סריאליזציה ל-HTML ולפיילואד בכל טעינת כרטסת, גם כשהמשתמש בטאב אחר.
+        // הבורר מושך עכשיו לבדו את הדור שהוא צריך (/api/admin/lineage/generation).
+        return <LineageChainChips beneficiaryId={id} gens={gens} initialMarks={manualMarks} />
       })()}
 
       {/* עריכת שיוך ידנית — בחירת צומת העלה בעץ (השרשרת נגזרת אוטומטית).

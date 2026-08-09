@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChevronLeft, Loader2, GitBranch, Palette, Check, X, Search } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { genColor, asGenStatus } from '@/lib/lineageDeviation'
@@ -49,12 +49,11 @@ const statusColor = (s: ChainGen['status'], generation: number): Color =>
   genColor(generation, asGenStatus(s))
 
 export default function LineageChainChips({
-  beneficiaryId, gens, initialMarks, allNodes = [],
+  beneficiaryId, gens, initialMarks,
 }: {
   beneficiaryId: string
   gens: ChainGen[]
   initialMarks: Record<string, 'red' | 'green'>
-  allNodes?: TreeNode[]
 }) {
   const router = useRouter()
   const [marks, setMarks] = useState<Record<string, 'red' | 'green'>>(initialMarks)
@@ -64,6 +63,29 @@ export default function LineageChainChips({
   const [q, setQ] = useState('')
   const [assigning, setAssigning] = useState(false)
   const [err, setErr] = useState('')
+
+  // ── צמתי הבורר — נטענים *לפי דרישה*, רק כשנפתח בורר לדור מסוים ──
+  //
+  // ⚠️ ביצועים: קודם כל ~5000 צמתי העץ הגיעו כ-prop מהשרת (allNodes) — כלומר
+  // עברו סריאליזציה ל-HTML ולפיילואד ב*כל* פתיחת כרטסת, גם כשהמשתמש בטאב
+  // "פרטים אישיים" ולא נגע בבורר. זו הייתה הסיבה המרכזית לכך שכרטסת בודדת
+  // נטענה עשרות שניות. הבורר נפתח לעיתים רחוקות — לכן הוא מושך עכשיו רק את
+  // שני הדורות שהוא באמת צריך (הנבחר + שמעליו) מ-/api/admin/lineage/generation.
+  const [pickerNodes, setPickerNodes] = useState<TreeNode[]>([])
+  const [loadingNodes, setLoadingNodes] = useState(false)
+
+  useEffect(() => {
+    if (pickerGen == null) return
+    let cancelled = false
+    setLoadingNodes(true)
+    setPickerNodes([])
+    fetch(`/api/admin/lineage/generation?gen=${pickerGen}`)
+      .then(r => r.ok ? r.json() : { nodes: [] })
+      .then(d => { if (!cancelled) setPickerNodes(d.nodes ?? []) })
+      .catch(() => { if (!cancelled) setPickerNodes([]) })
+      .finally(() => { if (!cancelled) setLoadingNodes(false) })
+    return () => { cancelled = true }
+  }, [pickerGen])
 
   // צבע אוטומטי לפי סטטוס הצומת בעץ — בכל דור (כולל מעל 5). דור 1 (חתם סופר)
   // תמיד מאושר. override ידני ('green'→כחול, 'red'→אדום) גובר.
@@ -105,28 +127,30 @@ export default function LineageChainChips({
     const prevGen = pickerGen - 1
     const prevChip = gens.find(g => g.generation === prevGen)
     if (!prevChip) return null
-    const ids = allNodes
+    const ids = pickerNodes
       .filter(n => n.generation === prevGen && n.status === 'verified' && norm(n.name) === norm(prevChip.name))
       .map(n => n.id)
     return ids.length ? new Set(ids) : null
-  }, [pickerGen, gens, allNodes])
+  }, [pickerGen, gens, pickerNodes])
 
   // ⚠️ הדור הקודם אינו מסודר: קיים בשרשרת אך הצומת שלו אינו מאושר בעץ.
   // במקרה כזה אי אפשר לסנן את הדור הנוכחי לפי ההורה — ולכן חוסמים את הבורר
   // ומורים לתקן קודם את הדור הקודם. חייבים לסדר דור-אחר-דור לפי הרצף.
   // (דור 2 פטור — ההורה שלו הוא חתם סופר, תמיד מזוהה.)
-  const prevGenUnresolved = pickerGen != null && pickerGen > 2 && prevGenNodeIds == null
+  // ⚠️ !loadingNodes — בזמן טעינת הצמתים הרשימה ריקה ו-prevGenNodeIds הוא null,
+  // וללא התנאי הזה הבורר היה מציג לרגע "הדור הקודם אינו מסודר" בכל פתיחה.
+  const prevGenUnresolved = !loadingNodes && pickerGen != null && pickerGen > 2 && prevGenNodeIds == null
 
   // צמתים מאומתים באותו דור — מסוננים לפי הורה (הדור הקודם ברצף).
   const pickerOptions = useMemo(() => {
     if (pickerGen == null || prevGenUnresolved) return []
     const term = q.trim()
-    return allNodes
+    return pickerNodes
       .filter(n => n.generation === pickerGen && (n.status === 'verified' || !n.status))
       .filter(n => !prevGenNodeIds || (n.parent_id != null && prevGenNodeIds.has(n.parent_id)))
       .filter(n => !term || n.name.includes(term))
       .slice(0, 60)
-  }, [pickerGen, q, allNodes, prevGenNodeIds, prevGenUnresolved])
+  }, [pickerGen, q, pickerNodes, prevGenNodeIds, prevGenUnresolved])
 
   // שיוך הצאצא לצומת שנבחר לדור מסוים — מחליף את הדור הזה ומעלה, ושומר את
   // הדורות שמתחת (atGeneration). השרשרת ממוזגת ונגזרת מחדש בשרת.
@@ -229,7 +253,11 @@ export default function LineageChainChips({
             {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">{err}</p>}
 
             <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
-              {pickerOptions.length === 0 ? (
+              {loadingNodes ? (
+                <p className="text-sm text-slate-400 py-4 text-center flex items-center justify-center gap-2">
+                  <Loader2 size={14} className="animate-spin" /> טוען צמתים…
+                </p>
+              ) : pickerOptions.length === 0 ? (
                 <p className="text-sm text-slate-400 py-4 text-center">
                   {q.trim() ? 'לא נמצאו צמתים תואמים' : `אין צמתים מאומתים בדור ${pickerGen}`}
                 </p>

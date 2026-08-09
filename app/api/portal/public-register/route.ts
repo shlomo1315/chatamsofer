@@ -81,13 +81,18 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     spouse_name, spouse_id_number, spouse_id_doc_type, spouse_phone, spouse_birth_date, children, children_count, notes, community_affiliation, lineage_node_id, lineage_manual, lineage_chain, lineage_new_nodes, past_benefits, signature,
     email_verify_token, phone_verify_token, phone_tokens, email_tokens,
   } = body
-  // ⚠️ רישום לחלוקת החגים *באמצע ההרשמה*: טופס נדרים פלוס (וגם הטופס שלנו)
-  // מסמנים תיבה בתוך הרישום עצמו, ולא שולחים בקשה נפרדת אחר כך. מתקבלים כמה
-  // שמות כי לכל טופס חופש בשם השדה שלו.
-  const wantsHoliday =
-    body.holiday_register === true || body.holiday_register === 'true' || body.holiday_register === 1 || body.holiday_register === '1' ||
-    body.holiday === true || body.holiday === 'true' || body.holiday === 1 || body.holiday === '1' ||
-    body.register_holiday === true || body.register_holiday === 'true' || body.register_holiday === 1 || body.register_holiday === '1'
+  // ─────────────────────────────────────────────────────────────────────────
+  // רישום לחלוקת החגים *באמצע ההרשמה*: הטופס מסמן תיבה בתוך הרישום עצמו,
+  // ולא שולח בקשה נפרדת אחר כך.
+  //
+  // ⚠️ השם `holiday` הוסר מהרשימה במכוון. הוא היה גנרי מדי: כל שדה בטופס חיצוני
+  // ששמו במקרה `holiday` (למשל בחירת חג, סוג פנייה) וערכו 1/true צירף את הנרשם
+  // לחלוקה בלי שביקש — וזה בדיוק מה שנרשמים דרך נדרים פלוס התלוננו עליו. הם גם
+  // לא קיבלו מייל אישור על הצירוף, ולכן גילו זאת רק בדיעבד.
+  // נשארו רק שני שמות מפורשים וחד-משמעיים, ששניהם אומרים "רשום אותי לחג".
+  // ─────────────────────────────────────────────────────────────────────────
+  const isTruthyFlag = (v: unknown) => v === true || v === 'true' || v === 1 || v === '1'
+  const wantsHoliday = isTruthyFlag(body.holiday_register) || isTruthyFlag(body.register_holiday)
 
   if (!id_number || !full_name || !family_name) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
@@ -460,7 +465,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
         // נדרים שהגיע בלי הכותרת נרשם בחלוקה כ"פורטל" ומעוות את הפילוח.
         const r = await registerToOpenDistribution(justCreated.id, registrationSource)
         holidayRegistered = r.ok
-        console.log(`[public-register] רישום לחלוקת חגים: ok=${r.ok} created=${r.created}${r.error ? ` (${r.error})` : ''}`)
+        // ⚠️ מתועד גם *איזה* שדה הפעיל את הצירוף ומאיזה ערוץ — בלי זה לא היה
+        // אפשר לברר תלונות על "צירפו אותנו בלי שביקשנו" מתוך הלוגים.
+        const flag = isTruthyFlag(body.holiday_register) ? 'holiday_register' : 'register_holiday'
+        console.log(`[public-register] רישום לחלוקת חגים: ok=${r.ok} created=${r.created} src=${registrationSource} flag=${flag}${r.error ? ` (${r.error})` : ''}`)
       }
     } catch (e) { console.error('[public-register] holiday register failed:', e) }
   }

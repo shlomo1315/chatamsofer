@@ -469,13 +469,10 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
                     if (!gens.some(g => g.generation === 1)) {
                       gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
                     }
-                    // relation מגיע כטקסט חופשי מהמסד — מצמצמים לערכים שהרכיב מכיר
-                    const pickerNodes: import('@/app/admin/beneficiaries/[id]/LineageChainChips').TreeNode[] =
-                      lineageNodesArr.map(n => ({
-                        id: n.id, name: n.name, generation: n.generation, parent_id: n.parent_id, status: n.status,
-                        relation: n.relation === 'son' || n.relation === 'son_in_law' ? n.relation : null,
-                      }))
-                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} allNodes={pickerNodes} />
+                    // ⚡ הצמתים לבורר *אינם* נשלחים כ-prop: קודם כל ~5000 צמתי העץ
+                    // עברו סריאליזציה ל-HTML ולפיילואד בכל טעינת כרטסת. הבורר מושך
+                    // לבדו את הדור שהוא צריך (/api/admin/lineage/generation).
+                    return <LineageChainChips beneficiaryId={ben.id} gens={gens} initialMarks={manualMarks} />
                   })()}
                   {ben.lineage_node_id && (
                     <div className="mt-3">
