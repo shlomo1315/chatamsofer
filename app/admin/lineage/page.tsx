@@ -1943,7 +1943,11 @@ export default function LineagePage() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
+      // ⚠️ גם כאן fresh=1. הטעינה הראשונה רצה גם אחרי רענון דף/חזרה למסך,
+      // ובלי הדגל היא קיבלה את ה-payload המוטמן מלפני המיזוג והחזירה את
+      // הצמתים שנמחקו — אותו תסמין בדיוק של "המיזוג קפץ בחזרה", רק במסלול
+      // אחר מ-softRefresh (שכבר תוקן).
+      const r = await fetch('/api/admin/lineage?fresh=1', { cache: 'no-store' })
       const d = await r.json()
       const raw: LineageNode[] = d.nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0

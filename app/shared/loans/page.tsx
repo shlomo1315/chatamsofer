@@ -246,30 +246,16 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     done: 'בוצעו',
   }
 
-  // ייצוא ההלוואות המסוננות לקובץ אקסל (CSV עם BOM — נפתח ישירות באקסל בעברית)
+  // ייצוא ההלוואות המסוננות לקובץ אקסל אמיתי (.xlsx) — מעוצב, RTL, כותרת קפואה.
+  //
+  // ⚠️ הקובץ נבנה בשרת ולא כאן. הגרסה הקודמת בנתה CSV בדפדפן, ומכאן שתי תקלות
+  // שנעלמות עכשיו: (א) הטלפון נאלץ להיעטף ב-="05..." כדי שאקסל לא יבלע את
+  // האפס המוביל; (ב) המערך שנבנה החזיק 10 ערכים מול 11 כותרות — עמודת "רחוב"
+  // קיבלה את העיר, "עיר" את הטלפון, וכל השאר הוזז. השרת בונה את שתי הרשימות
+  // מאותו מקום ולכן אינן יכולות להיפרד שוב.
   const exportExcel = () => {
-    const headers = ['שם משפחה', 'שם פרטי', 'ת.ז.', 'רחוב', 'עיר', 'טלפון', 'מייל', 'סכום מאושר', 'מספר תשלומים', 'סטטוס', 'תאריך ביצוע']
-    const rows = visibleLoans.map(l => [
-      l.beneficiary?.family_name ?? '',
-      l.beneficiary?.full_name ?? '',
-      l.beneficiary?.id_number ?? '',
-      l.beneficiary?.city ?? '',
-      l.beneficiary?.phone ? `="${l.beneficiary.phone}"` : '',
-      l.beneficiary?.email ?? '',
-      shownAmount(l),
-      l.installments ?? '',
-      l.disbursed_at ? 'בוצעה' : 'ממתינה לביצוע',
-      fmtDate(l.disbursed_at),
-    ])
-    const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-    const csv = '﻿' + [headers, ...rows].map(row => row.map(esc).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `הלוואות-${filterLabel[filter]}-${new Date().toLocaleDateString('he-IL').replace(/\//g, '-')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    // קישור הורדה רגיל: הדפדפן מטפל בו בעצמו ואין צורך ב-blob זמני.
+    window.location.href = `/api/shared/loans/xlsx?filter=${filter}`
   }
 
   const statCards: { key: FilterMode; label: string; value: number; numCls: string; dotCls: string; activeCls: string }[] = [

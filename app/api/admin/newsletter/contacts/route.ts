@@ -13,6 +13,10 @@ export async function GET(request: NextRequest) {
   if (!ctx || ctx instanceof NextResponse) return forbidden()
 
   if (request.nextUrl.searchParams.get('template') === '1') {
+    // ⚠️ זה נשאר CSV בכוונה, ולא הומר ל-xlsx כמו שאר ההורדות במערכת. זו אינה
+    // הורדת נתונים אלא תבנית למילוי וטעינה בחזרה, וה-POST שלמטה קורא את הקובץ
+    // כטקסט (file.text() + parseCsvLine). המרה ל-xlsx הייתה שוברת את ההעלאה,
+    // כי xlsx הוא ארכיון zip בינארי ולא טקסט.
     // BOM — בלעדיו Excel מציג עברית כג'יבריש
     const csv = '﻿' + [
       'מייל,שם משפחה,שם פרטי,עיר,טלפון',

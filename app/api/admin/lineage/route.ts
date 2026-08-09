@@ -47,7 +47,10 @@ export async function GET(request: NextRequest) {
   const forceFresh = request.nextUrl.searchParams.get('fresh') === '1'
   if (forceFresh) {
     try {
-      const body = await buildPayload(admin)
+      // ⚠️ פסילת המטמון המשותף *לפני* הבנייה: אחרת כרטסות הצאצא/היולדת
+      // ימשיכו להציג את העץ הישן גם אחרי שמסך העץ כבר מעודכן.
+      invalidateLineageCache()
+      const body = await buildPayload(admin, true)
       return NextResponse.json(body, { headers: NO_STORE })
     } catch (e) {
       return NextResponse.json({ error: String(e) }, { status: 500, headers: NO_STORE })
@@ -77,8 +80,13 @@ export async function GET(request: NextRequest) {
 }
 
 // בניית ה-payload בפועל, עם single-flight.
-async function buildPayload(admin: ReturnType<typeof getAdminClient>): Promise<LineagePayload> {
-  if (_payloadInflight) return _payloadInflight
+// ⚠️ force=true עוקף גם את ה-single-flight וגם את מטמון העץ המשותף, ושולף
+// מהמסד. בלי זה `fresh=1` עדיין קיבל נתונים ישנים: הוא אמנם דילג על
+// _payloadCache, אבל getCachedLineageTree שמתחתיו החזיר את *העותק שלו* —
+// וזו הסיבה שהמיזוג עדיין "קפץ בחזרה" לפעמים. שתי שכבות, שתיהן חייבות
+// להיעקף כשמבקשים את האמת אחרי כתיבה.
+async function buildPayload(admin: ReturnType<typeof getAdminClient>, force = false): Promise<LineagePayload> {
+  if (_payloadInflight && !force) return _payloadInflight
   const version = lineageCacheVersion()
   _payloadInflight = (async () => {
     // ⚡ שתי השאילתות עצמאיות — רצות במקביל (Promise.all) במקום סדרתית, חצי מזמן
@@ -90,13 +98,15 @@ async function buildPayload(admin: ReturnType<typeof getAdminClient>): Promise<L
     //
     // ⚡ NODE_SELECT במקום select('*'): notes ו-id_number אינם בשימוש בעץ ונשלחו
     // לכל אחד מ-~5000 הצמתים בכל טעינה.
+    const loadNodes = async () => {
+      const { rows, error } = await fetchAllRows<TreeNodeRow>((from, to) =>
+        admin!.from('lineage_nodes').select(NODE_SELECT).order('generation').order('name').range(from, to))
+      if (error) throw new Error(error)
+      return rows
+    }
     const [nodes, bensRes] = await Promise.all([
-      getCachedLineageTree(async () => {
-        const { rows, error } = await fetchAllRows<TreeNodeRow>((from, to) =>
-          admin!.from('lineage_nodes').select(NODE_SELECT).order('generation').order('name').range(from, to))
-        if (error) throw new Error(error)
-        return rows
-      }),
+      // force → שליפה ישירה מהמסד, בלי לעבור דרך המטמון המשותף
+      force ? loadNodes() : getCachedLineageTree(loadNodes),
       fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
         admin!.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to)),
     ])

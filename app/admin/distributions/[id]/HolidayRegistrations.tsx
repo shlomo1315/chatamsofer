@@ -8,6 +8,7 @@ import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
+import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
 
@@ -231,21 +232,36 @@ export default function HolidayRegistrations({
     return next
   })
 
-  const exportCsv = () => {
-    const head = ['שם', 'ת"ז', 'בן/בת זוג', 'טלפון', 'מייל', 'כתובת', 'עיר', 'קהילה', 'גיל', 'ילדים', 'ערוץ', 'תאריך רישום', 'סכום מתוכנן', 'אישור', 'מספר כרטיס', 'שויך בתאריך']
-    const lines = filtered.map(r => [
-      r.name, r.id_number ?? '', r.spouse_name ?? '', r.ben_phone ?? r.phone ?? '', r.email ?? '',
-      r.address ?? '', r.city ?? '', r.community ?? '', r.age ?? '', r.children_count ?? '',
-      SOURCE_LABEL[r.source], fmtDateTime(r.registered_at), amountPerFamily || '',
-      APPROVAL_LABEL[r.approval_status], r.card_number ?? '', fmtDateTime(r.card_linked_at),
-    ])
-    const csv = [head, ...lines].map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${distributionName || 'חלוקה'} — נרשמים.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  // ⚠️ ת"ז/טלפון/מספר כרטיס מוגדרים 'id' (טקסט) ולא מספר: כמספר הם מאבדים
+  // אפס מוביל ומקבלים פסיקי אלפים. גיל/ילדים/סכום הם מספרים אמיתיים, כדי
+  // שאפשר יהיה לסכם ולמיין אותם באקסל.
+  const XLSX_COLUMNS: XlsxColumn[] = [
+    { header: 'שם' }, { header: 'ת"ז', kind: 'id' }, { header: 'בן/בת זוג' },
+    { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'כתובת' }, { header: 'עיר' },
+    { header: 'קהילה' }, { header: 'גיל', kind: 'number' }, { header: 'ילדים', kind: 'number' },
+    { header: 'ערוץ' }, { header: 'תאריך רישום', kind: 'date' }, { header: 'סכום מתוכנן', kind: 'number' },
+    { header: 'אישור' }, { header: 'מספר כרטיס', kind: 'id' }, { header: 'שויך בתאריך', kind: 'date' },
+  ]
+
+  const [exporting, setExporting] = useState(false)
+  const exportExcel = async () => {
+    setExporting(true)
+    try {
+      await downloadXlsx({
+        filename: `${distributionName || 'חלוקה'} — נרשמים`,
+        sheetName: 'נרשמים',
+        columns: XLSX_COLUMNS,
+        rows: filtered.map(r => [
+          r.name, r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
+          r.address, r.city, r.community, r.age, r.children_count,
+          SOURCE_LABEL[r.source], r.registered_at, amountPerFamily || null,
+          APPROVAL_LABEL[r.approval_status], r.card_number, r.card_linked_at,
+        ]),
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'הייצוא נכשל')
+    }
+    setExporting(false)
   }
 
   const chip = (active: boolean) =>
@@ -388,9 +404,9 @@ export default function HolidayRegistrations({
             הודעת אישור לכל המאושרים
           </button>
         )}
-        <button type="button" onClick={exportCsv}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-          <Download size={14} /> ייצוא לאקסל
+        <button type="button" onClick={() => void exportExcel()} disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} ייצוא לאקסל
         </button>
       </div>
 

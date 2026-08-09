@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, FileBarChart } from 'lucide-react'
+import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
 
 type Row = {
   id: string; motherName: string; motherId: string; city: string; babyName: string
@@ -65,24 +66,36 @@ export default function ReportBuilder() {
     balance: filtered.reduce((s, r) => s + (Number(r.cardBalance) || 0), 0),
   }), [filtered])
 
-  function exportCsv() {
-    const headers = ['שם היולדת', 'ת.ז', 'עיר', 'תינוק', 'תאריך לידה', 'סטטוס לידה', 'בית החלמה', 'הגעה', 'סכום שמומש', 'לילות', 'סטטוס כרטיס', 'יתרת כרטיס']
-    const lines = filtered.map(r => [
-      r.motherName, r.motherId, r.city, r.babyName, fmtD(r.birthDate),
-      BIRTH_STATUS[r.status] ?? r.status, r.recoveryHome,
-      r.arrived === true ? 'הגיעה' : r.arrived === false ? 'לא הגיעה' : '',
-      r.recoveryAmount != null ? r.recoveryAmount : '', r.recoveryNights ?? '',
-      CARD_STATUS[r.cardStatus] ?? r.cardStatus, r.cardBalance ?? 0,
-    ])
-    const esc = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-    const csv = '﻿' + [headers, ...lines].map(row => row.map(esc).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `דוח-יולדות-${new Date().toLocaleDateString('he-IL').replace(/\//g, '-')}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  // ⚠️ העמודות מוגדרות עם kind ולא כרשימת כותרות: זה מה שקובע שהסכומים
+  // והלילות יגיעו לאקסל כמספרים לסכימה, ולא כטקסט. ת"ז נשארת טקסט במפורש
+  // כדי לא לאבד אפס מוביל.
+  const XLSX_COLUMNS: XlsxColumn[] = [
+    { header: 'שם היולדת' }, { header: 'ת.ז', kind: 'id' }, { header: 'עיר' }, { header: 'תינוק' },
+    { header: 'תאריך לידה', kind: 'date' }, { header: 'סטטוס לידה' }, { header: 'בית החלמה' },
+    { header: 'הגעה' }, { header: 'סכום שמומש', kind: 'number' }, { header: 'לילות', kind: 'number' },
+    { header: 'סטטוס כרטיס' }, { header: 'יתרת כרטיס', kind: 'number' },
+  ]
+
+  const [exporting, setExporting] = useState(false)
+  async function exportExcel() {
+    setExporting(true)
+    try {
+      await downloadXlsx({
+        filename: `דוח-יולדות-${todayStamp()}`,
+        sheetName: 'דוח יולדות',
+        columns: XLSX_COLUMNS,
+        rows: filtered.map(r => [
+          r.motherName, r.motherId, r.city, r.babyName, r.birthDate || null,
+          BIRTH_STATUS[r.status] ?? r.status, r.recoveryHome,
+          r.arrived === true ? 'הגיעה' : r.arrived === false ? 'לא הגיעה' : '',
+          r.recoveryAmount, r.recoveryNights,
+          CARD_STATUS[r.cardStatus] ?? r.cardStatus, r.cardBalance ?? 0,
+        ]),
+      })
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'הייצוא נכשל')
+    }
+    setExporting(false)
   }
 
   const selCls = 'rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300'
@@ -94,9 +107,9 @@ export default function ReportBuilder() {
           <FileBarChart size={18} className="text-indigo-600" />
           <h2 className="font-semibold text-slate-900">בונה דוחות — יולדות</h2>
         </div>
-        <button onClick={exportCsv} disabled={loading || filtered.length === 0}
+        <button onClick={() => void exportExcel()} disabled={loading || exporting || filtered.length === 0}
           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-semibold px-4 py-2 rounded-lg">
-          <Download size={16} /> הורד דוח (CSV)
+          {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} הורד דוח (אקסל)
         </button>
       </div>
 
