@@ -16,13 +16,20 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
       .select('id, full_name, family_name, id_number, city, children_count, monthly_support, created_at')
       .in('marital_status', ['אלמן', 'אלמנה'])
       .order('created_at', { ascending: false }),
+    // ⚠️ הבקשות משמשות בלוח *רק לספירה מצטברת* — pendingByFamily (תג "N בקשות"
+    // ליד שם המשפחה) והמונה העליון. אין תצוגת שורת בקשה, ולכן description,
+    // notes, amount, request_type והנתמך המקושר נשלפו לחינם. פרטי הבקשה
+    // נשלפים ממילא בדף התיק הבודד (/admin/widows/[id]).
     supabase
       .from('widow_requests')
-      .select('*, beneficiary:beneficiaries(full_name,family_name,id_number)')
+      .select('beneficiary_id, status')
       .order('created_at', { ascending: false }),
+    // ⚠️ אותו סיפור בתמיכות: totalsByFamily ו"סך תמיכות כללי" סוכמים amount
+    // לפי beneficiary_id בלבד. note/type/paid_at/id אינם מוצגים בלוח.
+    // (ה-order לפי paid_at נשמר — לא משנה לסכימה, אך שומר על סדר עקבי.)
     supabase
       .from('widow_support_payments')
-      .select('*')
+      .select('beneficiary_id, amount')
       .order('paid_at', { ascending: false }),
   ])
   // לא מקריסים את כל הדף על שגיאה — מציגים מה שכן נטען + הודעה. טבלאות
@@ -40,10 +47,11 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
     console.error('[widows] widow_support_payments query failed:', JSON.stringify(paymentsRes.error))
     error ??= `שגיאה בטעינת התמיכות: ${paymentsRes.error.message}`
   }
+  // ⚡ ה-selects מצומצמים בכוונה (ראו למעלה) ולכן ה-casts דרך unknown
   return {
-    widows: (widowsRes.data as Beneficiary[]) ?? [],
-    requests: (requestsRes.data as WidowRequest[]) ?? [],
-    payments: (paymentsRes.data as WidowSupportPayment[]) ?? [],
+    widows: (widowsRes.data ?? []) as unknown as Beneficiary[],
+    requests: (requestsRes.data ?? []) as unknown as WidowRequest[],
+    payments: (paymentsRes.data ?? []) as unknown as WidowSupportPayment[],
     error,
   }
 }

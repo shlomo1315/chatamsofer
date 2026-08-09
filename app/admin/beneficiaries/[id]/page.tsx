@@ -29,13 +29,6 @@ import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
 
-// ⏱️ עזר מדידה זמני — מודד כמה כל שאילתה לוקחת ומדפיס ללוג השרת.
-async function timed<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  const t = performance.now()
-  try { return await fn() }
-  finally { console.log(`[perf][beneficiary] ${label}: ${Math.round(performance.now() - t)}ms`) }
-}
-
 // ⚡ עמודות מפורשות במקום select('*'). שתי סיבות:
 //
 // 1. ביצועים — signature היא data-URL בבסיס64 (20-80KB) שנמשך בכל טעינת כרטסת.
@@ -317,20 +310,17 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // ⚠️ ביצועים: כל השאילתות במקביל, כולל עץ הדורות (lineage_nodes אינו תלוי
   // ב-beneficiary — רק העיבוד שלו). קודם עץ הדורות נשלף *אחרי* ה-Promise.all
   // = סבב רשת נוסף שהאיט את פתיחת הכרטסת. עכשיו הכל בסבב אחד.
-  // ⏱️ מדידת ביצועים זמנית — לאבחון האיטיות בטעינת הכרטסת (מופיע בלוגי השרת).
-  const _t0 = performance.now()
   const [beneficiary, birthCerts, activity, allNodes, docsFixHistory, docTypeOpts, birthKids] = await Promise.all([
-    timed('getBeneficiary', () => getBeneficiary(id)),
-    timed('getBirthCertificates', () => getBirthCertificates(id)),
-    timed('getActivity', () => getActivity(id)),
-    timed('getAllLineageNodes', () => getAllLineageNodes()),
-    timed('getDocsFixHistory', () => getDocsFixHistory(id)),
-    timed('getDocTypes', () => getDocTypes()),
-    timed('getBirthRequestChildren', () => getBirthRequestChildren(id)),
+    getBeneficiary(id),
+    getBirthCertificates(id),
+    getActivity(id),
+    getAllLineageNodes(),
+    getDocsFixHistory(id),
+    getDocTypes(),
+    getBirthRequestChildren(id),
   ])
   // מפת מפתח→תווית להמרת required_docs לשמות קריאים בבאנר
   const docLabelMap: Record<string, string> = Object.fromEntries(docTypeOpts.map(o => [o.value, o.label]))
-  console.log(`[perf][beneficiary/${id}] all queries: ${Math.round(performance.now() - _t0)}ms · nodes=${allNodes.length}`)
   const typedChain = Array.isArray(beneficiary?.lineage_chain)
     ? (beneficiary!.lineage_chain as { generation: number; name: string }[])
     : []

@@ -2,12 +2,13 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
+import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare, Loader2 } from 'lucide-react'
 import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
+import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // סמל השקל אחרי המספר — "₪5,000" נקרא הפוך בעברית
@@ -92,6 +93,12 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
       l => l.created_at,
     ), [filtered, sort])
 
+  // ⚡ גלילה אינסופית — הטבלה רינדרה את *כל* ההלוואות המסוננות בבת אחת (10
+  // עמודות לשורה, כולל LoanStatusControl שהוא קומפוננטת state מלאה לכל שורה),
+  // וכל הקלדה בחיפוש/מיון בנתה הכל מחדש. שום שורה לא נעלמת — היא רק נטענת
+  // כשמגיעים אליה בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
+  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+
   return (
     <div className="flex flex-col gap-5">
       {/* Filter cards */}
@@ -161,7 +168,7 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
-              ) : visible.map(loan => {
+              ) : visibleRows.map(loan => {
                 const b = loan.beneficiary as BenRef | undefined
                 return (
                   <tr key={loan.id}
@@ -208,6 +215,15 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                   </tr>
                 )
               })}
+              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
+              {hasMore && (
+                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
+                  <td colSpan={10} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
+                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

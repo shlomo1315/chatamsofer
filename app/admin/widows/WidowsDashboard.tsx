@@ -1,9 +1,10 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock } from 'lucide-react'
+import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock, Loader2 } from 'lucide-react'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
+import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
 const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
@@ -49,6 +50,12 @@ export default function WidowsDashboard({
       w => fullName(w),
       w => w.created_at,
     ), [filtered, sort])
+
+  // ⚡ גלילה אינסופית — במקום לרנדר את כל תיקי המשפחות בבת אחת. שום תיק לא
+  // נחתך: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגים מתוך הכל.
+  // ⚠️ הסטטיסטיקות למעלה נספרות מ-widows/payments המלאים ולא מ-visibleRows —
+  // הן חייבות להישאר סכום כללי ולא להשתנות עם הגלילה.
+  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
 
   return (
     <div className="flex flex-col gap-4">
@@ -103,7 +110,7 @@ export default function WidowsDashboard({
               {visible.length === 0 && (
                 <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
               )}
-              {visible.map(w => {
+              {visibleRows.map(w => {
                 const pend = pendingByFamily[w.id] ?? 0
                 return (
                   <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">
@@ -122,6 +129,15 @@ export default function WidowsDashboard({
                   </tr>
                 )
               })}
+              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
+              {hasMore && (
+                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
+                  <td colSpan={7} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
+                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

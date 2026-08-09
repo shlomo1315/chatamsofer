@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
+import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -131,6 +132,10 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
       r => r.created_at,
     ), [filtered, sort])
 
+  // ⚡ גלילה אינסופית — במקום לרנדר את כל הבקשות המסוננות בבת אחת. שום בקשה
+  // לא נחתכת: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
+  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+
   return (
     <div className="flex flex-col gap-4">
       {/* הגדרת מייל גורם מאשר */}
@@ -204,7 +209,7 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-              ) : visible.map(r => {
+              ) : visibleRows.map(r => {
                 const b = r.beneficiary as Ben | undefined
                 return (
                   <tr key={r.id} onClick={() => router.push(`/admin/financial-aid/${r.id}`)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
@@ -224,6 +229,15 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
                   </tr>
                 )
               })}
+              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
+              {hasMore && (
+                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
+                  <td colSpan={6} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
+                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

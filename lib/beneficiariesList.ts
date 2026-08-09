@@ -62,6 +62,101 @@ function hasSpecialColumn(supabase: { from: (t: string) => { select: (c: string)
   return specialColProbe
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ספירות כרטיסי הסטטוס — שאילתה אחת במקום שמונה.
+//
+// ⚠️ הכרטיסים אינם חלוקה זרה, וזו הנקודה הקריטית: 'pending' *כולל* את
+// docs_pending/docs_returned/review, וכל אחד מהם נספר גם בכרטיס שלו עצמו
+// (וגם all סופר את כולם). לכן ה-RPC מחזיר ספירה *גולמית* לכל סטטוס, והקיבוץ
+// נעשה כאן. GROUP BY שהיה מחזיר ישירות את הכרטיסים היה נותן חלוקה זרה —
+// כלומר מספרים אחרים מאלה שהמסך מציג היום.
+// ─────────────────────────────────────────────────────────────────────────────
+// הזקיף שה-RPC מחזיר עבור eligibility_status שהוא NULL. ⚠️ חייב להישאר זהה
+// לזה שבמיגרציה 20260809_beneficiaries_counts_rpc.sql.
+const NULL_STATUS = '__null__'
+
+function bucketsFromRaw(raw: Map<string, number>): Record<string, number> {
+  const counts: Record<string, number> = { all: 0 }
+  for (const k of STATUS_KEYS) counts[k] = 0
+  for (const [status, n] of raw) {
+    counts.all += n
+    // ⚠️ NULL (רשומות ותיקות) נופל ל'ממתין' בלבד ואין לו כרטיס משלו — בדיוק כמו
+    // eligibility_status.is.null ב-PENDING_OR. לעומתו סטטוס לא-מוכר (או מחרוזת
+    // ריקה) נספר ב-all בלבד: גם קודם אף .eq() לא תפס אותו ו-is.null לא חל עליו.
+    if (status === NULL_STATUS) { counts.pending += n; continue }
+    // הכרטיס של הסטטוס עצמו.
+    if (status in counts) counts[status] += n
+    // ⚠️ ובנוסף לכרטיס 'ממתין', *אלא אם* הסטטוס הוא 'pending' עצמו — הוא כבר
+    // נספר בשורה הקודמת, וספירה כפולה כאן ניפחה את הכרטיס.
+    if (status !== 'pending' && (PENDING_GROUP as readonly string[]).includes(status)) counts.pending += n
+  }
+  return counts
+}
+
+// ⚠️ הנפילה-לאחור אינה קישוט: המיגרציות כאן מורצות ידנית, ולכן יש חלון שבו הקוד
+// כבר בפרודקשן וה-RPC עדיין לא קיים. בלי מסלול חלופי המסך היה מציג אפסים בכל
+// הכרטיסים. הבדיקה נשמרת ברמת המודול כדי לא לשלם על ניסיון כושל בכל טעינת דף.
+let countsRpcMissing = false
+
+type CountsCtx = {
+  special: boolean
+  hasSpecialCol: boolean
+  maritalValues: string[]
+  q: string
+  applySpecial: <T extends { eq: (c: string, v: unknown) => T; or: (f: string) => T }>(q: T) => T
+}
+
+async function getStatusCounts(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ctx: CountsCtx,
+): Promise<Record<string, number>> {
+  // ⚠️ אם עמודת is_special עדיין לא קיימת, ה-RPC (שמסנן עליה תמיד) אינו יכול
+  // לשחזר את ההתנהגות הקיימת — שם "אין עמודה" פירושו *בלי סינון כלל*. מקרה קצה
+  // תיאורטי (המיגרציה רצה מזמן), אבל הנפילה-לאחור זולה מספירה שגויה.
+  if (!countsRpcMissing && ctx.hasSpecialCol) {
+    try {
+      const { data, error } = await supabase.rpc('beneficiaries_status_counts', {
+        p_special: ctx.special,
+        // ⚠️ null ולא מערך ריק — ה-RPC מבדיל בין "בלי סינון" ל"סינון לרשימה ריקה".
+        p_marital: ctx.maritalValues.length ? ctx.maritalValues : null,
+        p_q: ctx.q || null,
+      })
+      if (!error && data) {
+        const rows = data as { status: string | null; cnt: number | string }[]
+        // r.status לעולם אינו null (ה-RPC ממיר ל-NULL_STATUS) — ה-?? הוא רק חגורת ביטחון.
+        return bucketsFromRaw(new Map(rows.map((r) => [r.status ?? NULL_STATUS, Number(r.cnt) || 0])))
+      }
+      // PGRST202 = הפונקציה אינה קיימת בסכימה. כל שגיאה אחרת היא תקלת ריצה
+      // חולפת ואין סיבה לוותר בגללה על ה-RPC לשארית חיי התהליך.
+      if (error?.code === 'PGRST202') {
+        countsRpcMissing = true
+        console.error('[beneficiaries] RPC beneficiaries_status_counts חסר — נופל ל-8 ספירות. יש להריץ את המיגרציה 20260809_beneficiaries_counts_rpc.sql')
+      } else if (error) {
+        console.error('[beneficiaries] counts RPC failed:', error.message)
+      }
+    } catch (e) {
+      console.error('[beneficiaries] counts RPC threw:', e)
+    }
+  }
+
+  // ── מסלול חלופי: השיטה הישנה, שמונה ספירות במקביל. ──
+  const countFor = async (status: string): Promise<[string, number]> => {
+    try {
+      let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
+      q = ctx.applySpecial(q)
+      if (status === 'pending') q = q.or(PENDING_OR)
+      else if (status !== 'all') q = q.eq('eligibility_status', status)
+      if (ctx.maritalValues.length) q = q.in('marital_status', ctx.maritalValues)
+      if (ctx.q) q = q.or(searchOr(ctx.q))
+      const { count: c, error: cErr } = await q
+      if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }
+      return [status, c ?? 0]
+    } catch { return [status, 0] }
+  }
+  const countPairs = await Promise.all(['all', ...STATUS_KEYS].map(countFor))
+  return Object.fromEntries(countPairs) as Record<string, number>
+}
+
 // special: true = דף האישורים החריגים (is_special=true); false = הרשימה
 // הראשית (הצאצאים הרגילים, is_special=false/null — החריגים לא מופיעים שם).
 export async function getBeneficiaries(p: ReturnType<typeof readListParams>, special = false): Promise<ListResult> {
@@ -108,23 +203,14 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
     throw new Error(`שאילתת נתמכים נכשלה: ${error.message}`)
   }
 
-  // ── ספירות לכרטיסים (וגם total) — count:'exact',head:true לכל סטטוס, במקביל. ──
+  // ── ספירות לכרטיסים (וגם total) ─────────────────────────────────────────────
+  // ⚠️ בעבר רצו כאן שמונה שאילתות count:'exact' נפרדות (all + 7 סטטוסים) בכל
+  // טעינת דף *ובכל לחיצה על פילטר*. count:'exact' אינו מונה שמור אלא סריקה
+  // בפועל, ולכן כל צפייה במסך סרקה את הטבלה הגדולה במערכת שמונה פעמים — עם
+  // בדיוק אותם פילטרים, ורק ממד הסטטוס שונה. עכשיו RPC אחד מקבץ במעבר יחיד.
+  //
   // כשל בספירה אינו מפיל את הדף — נופל ל-0 (הרשימה עצמה חשובה יותר).
-  const countFor = async (status: string): Promise<[string, number]> => {
-    try {
-      let q = supabase.from('beneficiaries').select('id', { count: 'exact', head: true })
-      q = applySpecial(q)
-      if (status === 'pending') q = q.or(PENDING_OR)
-      else if (status !== 'all') q = q.eq('eligibility_status', status)
-      if (maritalValues.length) q = q.in('marital_status', maritalValues)
-      if (p.q) q = q.or(searchOr(p.q))
-      const { count: c, error: cErr } = await q
-      if (cErr) { console.error(`[beneficiaries] count(${status}) failed:`, cErr.message); return [status, 0] }
-      return [status, c ?? 0]
-    } catch { return [status, 0] }
-  }
-  const countPairs = await Promise.all(['all', ...STATUS_KEYS].map(countFor))
-  const counts = Object.fromEntries(countPairs) as Record<string, number>
+  const counts = await getStatusCounts(supabase, { special, hasSpecialCol, maritalValues, q: p.q, applySpecial })
 
   // total = ספירת הפילטר הפעיל (all אם אין סטטוס נבחר)
   const total = p.status !== 'all' ? (counts[p.status] ?? 0) : (counts.all ?? 0)

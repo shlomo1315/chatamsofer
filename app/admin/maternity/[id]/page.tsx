@@ -23,7 +23,7 @@ import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import SafeDocImage from '@/components/ui/SafeDocImage'
-import { pathToRoot, NODE_SELECT, type TreeNodeRow, lineageCacheVersion } from '@/lib/lineageSync'
+import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -111,30 +111,33 @@ async function getBeneficiaryDocs(beneficiaryId: string): Promise<BeneficiaryDoc
 // generation + status נדרשים לצביעת הצ'יפים (ירוק=מאומת / אדום=סוטה / כתום=נוסף),
 // בדיוק כמו בכרטסת הצאצא.
 type LineageNodeLite = { id: string; name: string; parent_id: string | null; generation: number; status: string; relation?: string | null }
-let _lineageCache: { at: number; version: number; map: Map<string, LineageNodeLite> } | null = null
-const LINEAGE_TTL_MS = 5 * 60_000
+
+// ⚡ מטמון *משותף* (getCachedLineageTree) ולא מטמון פרטי לדף הזה.
+//
+// ⚠️ עד כה היה כאן מטמון נפרד משלו עם אותן שורות בדיוק (אותו NODE_SELECT)
+// שכרטסת הצאצא כבר טוענת — כלומר כפל זיכרון על ~5000 צמתים, ובלי שתי
+// התכונות שיש למטמון המשותף: single-flight (שתי כרטסות שנפתחות יחד סרקו
+// את העץ פעמיים במקביל) ו-stale-while-revalidate (אחרי כל רישום ציבורי
+// המטמון נפסל, והפתיחה הבאה נחסמה על סריקה מלאה במקום לקבל עותק מיושן מיד).
 async function getLineageMap(): Promise<Map<string, LineageNodeLite>> {
-  const now = Date.now()
-  const version = lineageCacheVersion()
-  // ⚠️ TTL *וגם* גרסה: כל כתיבת status (approve-lineage וכו') מקדמת את הגרסה
-  // ומבטלת את המטמון מיד, גם אם עדיין בתוך חלון 5 הדקות. ראו lib/lineageSync.
-  if (_lineageCache && _lineageCache.version === version && now - _lineageCache.at < LINEAGE_TTL_MS) return _lineageCache.map
   // ⚠️ service client (ולא createClient מבוסס-הסשן): RLS על lineage_nodes חוסם
   // את המשתמש המחובר ומחזיר 0 שורות בשקט, וכל הצ'יפים נצבעים כתום. זהה לתיקון
   // ב-getAllLineageNodes בכרטסת הצאצא.
   const { getServiceClient } = await import('@/lib/apiAuth')
   const supabase = getServiceClient()
   if (!supabase) return new Map()
-  // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows), והצ'יפים הציגו
-  // עץ חלקי בעצים גדולים. ראו lib/fetchAllRows.
-  const { fetchAllRows } = await import('@/lib/fetchAllRows')
-  const { rows, error } = await fetchAllRows<LineageNodeLite>((from, to) =>
-    supabase.from('lineage_nodes').select(NODE_SELECT).range(from, to),
-  )
-  if (error) throw new Error(error)
-  const map = new Map(rows.map(n => [n.id, n]))
-  _lineageCache = { at: now, version, map }
-  return map
+  const { getCachedLineageTree } = await import('@/lib/lineageSync')
+  const rows = await getCachedLineageTree(async () => {
+    // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows), והצ'יפים הציגו
+    // עץ חלקי בעצים גדולים. ראו lib/fetchAllRows.
+    const { fetchAllRows } = await import('@/lib/fetchAllRows')
+    const { rows, error } = await fetchAllRows<TreeNodeRow>((from, to) =>
+      supabase.from('lineage_nodes').select(NODE_SELECT).range(from, to),
+    )
+    if (error) throw new Error(error)
+    return rows
+  })
+  return new Map((rows as unknown as LineageNodeLite[]).map(n => [n.id, n]))
 }
 
 type GenStatus = 'verified' | 'pending' | 'rejected' | null

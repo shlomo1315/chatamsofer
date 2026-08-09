@@ -12,12 +12,22 @@ import { AdminOnly } from '@/components/StaffPermissions'
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
+  // ⚡ עמודות מפורשות במקום select('*'): הרשימה משכה לכל הלוואה שדות טקסט
+  // כבדים שאינם מוצגים בטבלה — declaration (נוסח ההצהרה המלא), purpose_details,
+  // notes ו-document_urls (JSON של כל הקבצים) — כפול כל השורות בכל טעינת דף.
   const { data, error } = await supabase
     .from('loans')
-    .select('*, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
+    // ⚠️ status + amount + approved_amount: לא רק לתצוגה — LoanStatusControl
+    // (LoanControls.tsx) מקבל את אובייקט ה-loan ומשתמש בהם בפועל: amount הוא
+    // תקרת "הסכום שאושר" במודל האישור, approved_amount הוא ערך ברירת המחדל בו,
+    // ו-status הוא מצב הפתיחה + הגלגול-לאחור בכשל עדכון.
+    // ⚠️ id: גם למפתח השורה, גם לניווט, וגם ל-DeleteLoanButton ולקריאות ה-API.
+    .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data ?? []
+  // ⚡ ה-select מצומצם בכוונה (ראו למעלה) ולכן ה-cast דרך unknown: שדות שאינם
+  // בשימוש בטבלה הושמטו מהשליפה כדי לצמצם את ה-payload.
+  return (data ?? []) as unknown as Loan[]
 }
 
 /**
@@ -25,13 +35,18 @@ async function getLoans(): Promise<Loan[]> {
  * ההודעה האחרונה בשרשור קובעת: 'staff' = ממתינים לתשובתו, 'applicant' = הוא
  * השיב וממתין לטיפולנו. זה מה שמפריד את שתי הקבוצות בקובייה "בתהליך בירור".
  */
-async function getReplied(loanIds: string[]): Promise<string[]> {
-  if (!loanIds.length || !isSupabaseConfigured()) return []
+async function getReplied(): Promise<string[]> {
+  if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
+  // ⚡ אין יותר תלות ברשימת ה-IDs מ-getLoans — הסינון ל"בבירור" נעשה ב-DB דרך
+  // join פנימי על ההלוואה (loans!inner). כך שתי השאילתות רצות ב-Promise.all
+  // במקבץ אחד במקום בטור, ומחצית מזמן ההמתנה של הדף נחסכת.
+  // ⚠️ created_at לא נשלף אלא רק ממיין: ה-JS קורא רק loan_id+direction, וה-Map
+  // שומר את האחרון בסדר העולה — כלומר את ההודעה האחרונה בשרשור.
   const { data } = await supabase
     .from('loan_messages')
-    .select('loan_id, direction, created_at')
-    .in('loan_id', loanIds)
+    .select('loan_id, direction, loans!inner(status)')
+    .eq('loans.status', 'inquiry')
     .order('created_at', { ascending: true })
 
   const last = new Map<string, string>()
@@ -40,10 +55,8 @@ async function getReplied(loanIds: string[]): Promise<string[]> {
 }
 
 export default async function LoansPage() {
-  const loans = await getLoans()
-  const replied = await getReplied(
-    loans.filter(l => l.status === 'inquiry').map(l => String(l.id)),
-  )
+  // ⚡ במקביל ולא בטור — getReplied כבר לא צריך את ה-IDs מ-getLoans (ראו שם)
+  const [loans, replied] = await Promise.all([getLoans(), getReplied()])
 
   return (
     <div className="flex flex-col gap-6">
