@@ -28,9 +28,35 @@ export default function LoansPortalSettings() {
   const [sendingNow, setSendingNow] = useState(false)
   const [emailResult, setEmailResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
+  // קוד הבדיקה הנסתר (עוקף את שער המחלקה). מנהל בלבד — השרת אינו מחזיר
+  // אותו לאיש צוות רגיל, ולכן ריק אצלו והבלוק מציג הודעה במקום.
+  const [previewCode, setPreviewCode] = useState('')
+  const [pvCopied, setPvCopied] = useState(false)
+  const [pvBusy, setPvBusy] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/department-gates').then(r => r.json())
+      .then(d => { if (typeof d.previewCode === 'string') setPreviewCode(d.previewCode) })
+      .catch(() => {})
+  }, [])
+
+  const regeneratePreview = async () => {
+    setPvBusy(true)
+    try {
+      const r = await fetch('/api/admin/department-gates', { method: 'PUT' })
+      const d = await r.json()
+      if (d.previewCode) setPreviewCode(d.previewCode)
+    } catch { /* שקט */ }
+    setPvBusy(false)
+  }
+
   const portalUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/shared/loans`
     : ''
+  // ⚠️ ?preview= על הדף הציבורי (הטופס שהלווה ממלא) — לא על /shared/loans,
+  // שהוא פורטל הביצוע לגורם חיצוני. שני קישורים שונים לגמרי.
+  const previewLink = typeof window !== 'undefined' && previewCode
+    ? `${window.location.origin}/?preview=${previewCode}` : ''
 
   useEffect(() => {
     fetch('/api/admin/portal/report-email')
@@ -131,6 +157,46 @@ export default function LoansPortalSettings() {
           <AlertCircle size={11} />
           כל מי שיש לו את הסיסמה יוכל לסמן הלוואות כבוצעות
         </p>
+      </div>
+
+      {/* ── קישור בדיקה נסתר — הגשת בקשת הלוואה כשהמחלקה סגורה ──
+          ⚠️ שני קישורים שונים לגמרי באותו מסך, ולכן ההפרדה הוויזואלית:
+          זה שלמעלה הוא פורטל *הביצוע* (גורם חיצוני מסמן הלוואות כבוצעות),
+          וזה כאן הוא הצד *הציבורי* — הטופס שהלווה ממלא.
+          מחלקה סגורה חסומה בשרת, ולכן אי אפשר לבדוק את הזרימה לפני
+          הפתיחה לציבור; פתיחה זמנית "רק כדי לבדוק" חושפת את הטופס לכולם. */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+        <p className="text-xs font-bold text-amber-900">🔒 קישור בדיקה נסתר — הגשת בקשה כשהגמ״ח סגור</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
+          פותח את טופס בקשת ההלוואה גם כשמתג המחלקה סגור, למי שנכנס דרך הקישור בלבד.
+          כך אפשר לעבור על כל הזרימה — טופס, שליחה, מייל וכרטסת — לפני הפתיחה לציבור.
+        </p>
+        {previewCode ? (
+          <>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <input readOnly value={previewLink} dir="ltr" onFocus={e => e.currentTarget.select()}
+                className="flex-1 min-w-[200px] rounded-lg border border-amber-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-700" />
+              <button type="button" onClick={() => { void navigator.clipboard?.writeText(previewLink); setPvCopied(true); setTimeout(() => setPvCopied(false), 1800) }}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700">
+                {pvCopied ? '✓ הועתק' : 'העתקה'}
+              </button>
+              <a href={previewLink} target="_blank" rel="noopener noreferrer"
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-bold text-amber-800 hover:bg-amber-100">
+                פתח לבדיקה ↗
+              </a>
+              <button type="button" onClick={regeneratePreview} disabled={pvBusy}
+                title="יצירת קוד חדש — מבטלת מיידית כל קישור שהופץ"
+                className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                {pvBusy ? '…' : '↻ קוד חדש'}
+              </button>
+            </div>
+            <p className="mt-2 text-[10px] text-amber-600">
+              ⚠️ כל מי שהקישור מגיע לידיו יוכל להגיש בקשה גם כשהמחלקה סגורה. הופץ בטעות? לחצו ״קוד חדש״.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-[11px] text-amber-600">הקוד זמין למנהל בלבד.</p>
+        )}
       </div>
 
       {/* Password form */}
