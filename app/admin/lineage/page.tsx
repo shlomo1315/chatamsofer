@@ -1580,6 +1580,8 @@ export default function LineagePage() {
   const refreshSeq = useRef(0)
   // הצומת שפאנל ניקוי הכפילויות פתוח עליו
   const [cleanParentId, setCleanParentId] = useState<string | null>(null)
+  // הצומת שנשאר במיזוג שרץ כרגע מתוך פאנל הניקוי — לחיווי טעינה על הכפתור
+  const [busyMergeKeep, setBusyMergeKeep] = useState<string | null>(null)
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
   const [dupFilter, setDupFilter] = useState(false)
   // לאחר מיזוג — הצעה לאשר את הייחוס
@@ -1729,7 +1731,7 @@ export default function LineagePage() {
   // מקבלת keepId + mergeIds ישירות (לא דרך state), כדי שגם מיזוג-hover מיידי
   // וגם המסלול הידני (mergeSel) ישתמשו באותו נתיב "לייב מיד": הצמתים נעלמים
   // מהתצוגה כאן ועכשיו, השרת רץ ברקע, softRefresh מיישר את התמונה בלי await.
-  async function mergeByIds(keepId: string, mergeIds: string[], names?: Record<string, string>) {
+  async function mergeByIds(keepId: string, mergeIds: string[], names?: Record<string, string>, noCascade = false) {
     if (!keepId || !mergeIds.length) return
     setMerging(true)
     // ⚡ עדכון אופטימי מיידי — לפני קריאת הרשת: הצמתים הממוזגים הישירים נמחקים
@@ -1745,7 +1747,11 @@ export default function LineagePage() {
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keepId, mergeIds, cascadeUpApprox: mergeUpApprox, names }),
+        body: JSON.stringify({
+          keepId, mergeIds, names,
+          cascadeUpApprox: noCascade ? false : mergeUpApprox,
+          ...(noCascade ? { cascadeUp: false } : {}),
+        }),
       })
       const d = await res.json()
       if (!res.ok) {
@@ -2328,8 +2334,18 @@ export default function LineagePage() {
           <CleanChildrenPanel
             parentName={genMatch ? `דור ${genMatch[1]}` : parent!.name}
             children={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
-            busyId={merging ? cleanParentId : null}
-            onMerge={(keepId, mergeIds, finalName) => { void mergeByIds(keepId, mergeIds, { [keepId]: finalName }) }}
+            // ⚠️ busyId הושווה ל-cleanParentId (שהוא "gen:6" בניקוי דור),
+            // ולעולם לא תאם ל-keep.id — ולכן הכפתור לא הראה טעינה והלחיצה
+            // נראתה כאילו "לא קרה כלום". עכשיו מועבר מזהה המיזוג הפעיל.
+            busyId={busyMergeKeep}
+            onMerge={(keepId, mergeIds, finalName) => {
+              setBusyMergeKeep(keepId)
+              // ⚠️ בלי מפל כלפי מעלה (noCascade): בניקוי דור המשתמש בוחר
+              // קבוצה מפורשת, והמפל היה ממזג גם אבות שלא נבחרו — ומשנה את
+              // העץ מתחת לקבוצות הבאות ברשימה. זהה למיזוג ההמוני.
+              void mergeByIds(keepId, mergeIds, { [keepId]: finalName }, true)
+                .finally(() => setBusyMergeKeep(null))
+            }}
             onMergeAll={groups => { void mergeSequential(groups) }}
             onClose={() => setCleanParentId(null)}
           />

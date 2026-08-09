@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
-import { getDepartmentGates, saveDepartmentGates, GATED_DEPARTMENTS, DEFAULT_GATES, type DepartmentGates } from '@/lib/departmentGates'
+import { getDepartmentGates, saveDepartmentGates, getDepartmentPreviewCode, regenerateDepartmentPreviewCode, GATED_DEPARTMENTS, DEFAULT_GATES, type DepartmentGates } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,22 @@ export async function GET() {
   if (!(await requireStaff())) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
   const admin = getServiceClient()
   const gates = await getDepartmentGates(admin ?? undefined)
-  return NextResponse.json({ gates }, { headers: { 'Cache-Control': 'no-store' } })
+  // ⚠️ קוד התצוגה המוקדמת מוחזר למנהל בלבד. הוא עוקף את שערי המחלקות,
+  // ולכן חשיפתו לכל איש צוות שקולה לפתיחת המחלקות הסגורות עבורו.
+  const previewCode = (await requireAdmin())
+    ? await getDepartmentPreviewCode(admin ?? undefined)
+    : undefined
+  return NextResponse.json({ gates, previewCode }, { headers: { 'Cache-Control': 'no-store' } })
+}
+
+// PUT — יצירת קוד תצוגה מוקדמת חדש (מבטל מיידית כל קישור שהופץ). מנהל בלבד.
+export async function PUT() {
+  if (!(await requireAdmin())) return forbidden()
+  const admin = getServiceClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+  const previewCode = await regenerateDepartmentPreviewCode(admin)
+  if (!previewCode) return NextResponse.json({ error: 'יצירת הקוד נכשלה' }, { status: 500 })
+  return NextResponse.json({ previewCode })
 }
 
 // POST — עדכון מצב המחלקות. מנהל בלבד (שינוי מהותי שמשפיע על כל המערכת הציבורית).

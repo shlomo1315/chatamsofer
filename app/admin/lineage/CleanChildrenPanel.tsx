@@ -32,6 +32,8 @@ export default function CleanChildrenPanel({
   const [chosenName, setChosenName] = useState<Record<string, string>>({})
   // הקבוצה שפתוחה לעריכת שם
   const [nameOpen, setNameOpen] = useState<string | null>(null)
+  // רשימת המיזוגים שבוצעו במהלך הפתיחה הנוכחית — חיווי בתוך הפאנל
+  const [merged, setMerged] = useState<string[]>([])
 
   // איחוד למחלקות שקילות (union-find פשוט) לפי רמת ההתאמה שנבחרה.
   const clusters = useMemo(() => {
@@ -180,7 +182,14 @@ export default function CleanChildrenPanel({
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">{g.length} כפילויות</span>
                       <button disabled={isBusy}
-                        onClick={() => { onMerge(keep.id, g.filter(x => x.id !== keep.id).map(x => x.id), finalName); setDone(s => new Set(s).add(key)) }}
+                        onClick={() => {
+                          onMerge(keep.id, g.filter(x => x.id !== keep.id).map(x => x.id), finalName)
+                          setDone(s => new Set(s).add(key))
+                          // ⚠️ חיווי בתוך הפאנל עצמו. הבאנר הצדדי מוסתר מאחורי
+                          // שכבת הרקע המטושטשת של הפאנל, ולכן לחיצה על "מזג"
+                          // נראתה כאילו לא קרה כלום — הקבוצה פשוט נעלמה.
+                          setMerged(m => [...m, `${g.length} צמתים → ${finalName}`])
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-purple-700 disabled:opacity-50">
                         {isBusy ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} מזג
                       </button>
@@ -227,6 +236,16 @@ export default function CleanChildrenPanel({
         </div>
 
         <div className="border-t border-slate-100 px-5 py-3">
+          {merged.length > 0 && (
+            <div className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+              <p className="text-[11px] font-bold text-emerald-800">✅ בוצעו {merged.length} מיזוגים:</p>
+              <div className="mt-1 max-h-24 overflow-y-auto">
+                {merged.map((m, i) => (
+                  <p key={i} className="text-[10px] leading-relaxed text-emerald-700">· {m}</p>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-[11px] leading-relaxed text-slate-400">
             כל מיזוג מתבצע מיד. הילדים והנרשמים של הכפילויות עוברים לצומת שנשאר, וניתן לבטל מסרגל הכלים.
           </p>

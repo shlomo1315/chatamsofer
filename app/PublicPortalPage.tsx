@@ -1508,8 +1508,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // לפני שידוע מצב המחלקה — אחרת קישור לגיטימי למחלקה פתוחה היה מפוספס בזמן
   // שברירת המחדל עדיין סגורה.
   const [gatesLoaded, setGatesLoaded] = useState(false)
+  // ⚠️ קוד תצוגה מוקדמת (?preview=) — נשלח לשרת, והוא מחזיר את השערים כאילו
+  // המחלקות פתוחות. כך אפשר לעבור על הזרימה של מחלקה סגורה מקצה לקצה לפני
+  // הפתיחה לציבור, בלי לפתוח אותה לכל מי שנכנס לאתר באותן דקות.
+  // נקרא פעם אחת מ-window.location כדי לא לחייב Suspense של useSearchParams.
+  const [previewCode, setPreviewCode] = useState('')
   useEffect(() => {
-    fetch('/api/portal/department-gates').then(r => r.json())
+    const code = new URLSearchParams(window.location.search).get('preview') ?? ''
+    setPreviewCode(code)
+    const url = code ? `/api/portal/department-gates?preview=${encodeURIComponent(code)}` : '/api/portal/department-gates'
+    fetch(url).then(r => r.json())
       .then(d => { if (d.gates) setDeptGates(d.gates) })
       .catch(() => {})
       .finally(() => setGatesLoaded(true))
@@ -2680,7 +2688,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         if (!wRes.ok || !wData.url) { setError('שגיאה בהעלאת המסמך. אנא נסה שוב.'); setLoading(false); return }
         documentUrls.push({ url: wData.url, name: fileToUpload.name })
       }
-      const res = await fetch('/api/portal/loan-request', {
+      // ⚠️ קוד התצוגה המוקדמת נגרר גם להגשה עצמה. בלעדיו הטופס היה נפתח
+      // (השערים הוחזרו כפתוחים) אבל השליחה נחסמה בשרת — בדיקה חלקית שאינה
+      // מוכיחה שהזרימה עובדת.
+      const res = await fetch(`/api/portal/loan-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm, document_urls: documentUrls }),

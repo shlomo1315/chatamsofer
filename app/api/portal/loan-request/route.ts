@@ -8,7 +8,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
-import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
+import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,8 +20,12 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
-  // שער המחלקה — גמ"ח הלוואות סגור → לא מקבלים בקשות (נחסם גם בקריאה ישירה ל-API)
-  if (!(await isDepartmentOpen('gemach'))) {
+  // שער המחלקה — גמ"ח הלוואות סגור → לא מקבלים בקשות (נחסם גם בקריאה ישירה ל-API).
+  // ⚠️ קוד תצוגה מוקדמת (?preview=) עוקף את השער לבקשה זו בלבד — כדי שאפשר
+  // יהיה לבדוק את כל הזרימה לפני הפתיחה לציבור, בלי לפתוח את המחלקה לכולם.
+  // הוא אינו מדלג על אימות, ולידציה או הרשאות — רק על השער עצמו.
+  const previewCode = request.nextUrl.searchParams.get('preview')
+  if (!(await isDepartmentAccessible('gemach', previewCode))) {
     return NextResponse.json({ error: departmentClosedMessage('gemach'), departmentClosed: true }, { status: 403 })
   }
   let body: Record<string, unknown>
