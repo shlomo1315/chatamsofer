@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } fr
 import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
-import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
+import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -612,8 +612,11 @@ function childIdValid(child: ChildEntry) {
 // ⚠️ ילד נשוי *אמור* להופיע בשני מקומות — כמשפחה עצמאית וגם אצל הוריו.
 // לכן קיום ת"ז במערכת אינו כפילות כשהוא מסומן נשוי. זהה לכלל שבשרת
 // (public-register / update-details).
-const CHILD_MARRIED = new Set(['נשוי', 'נשואה', 'נשואים'])
-function childMarked(c: { marital_status?: string }) { return CHILD_MARRIED.has((c?.marital_status ?? '').trim()) }
+// ⚠️ isChildMarried המשותף ולא קבוצה מקומית: הצד הזה הכיר עברית בלבד,
+// והמשרד שומר 'married' באנגלית — ילד שסומן נשוי בכרטסת נחסם בפורטל.
+// ראו lib/childDuplicateMessage (מקור אחד ללקוח ולשני מסלולי השרת).
+const CHILD_MARRIED = { has: (v: string) => isChildMarried(v) }
+function childMarked(c: { marital_status?: string }) { return isChildMarried(c?.marital_status) }
 
 function maritalFor(g: string) {
   if (g === 'male')   return [{ v: 'נשוי', l: 'נשוי' }, { v: 'לא נשוי', l: 'לא נשוי' }]
