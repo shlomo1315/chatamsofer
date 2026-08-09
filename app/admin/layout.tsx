@@ -6,7 +6,8 @@ import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
 import { ToastProvider } from '@/components/ui/Toast'
 import { StaffPermissionsProvider } from '@/components/StaffPermissions'
-import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { getStaffProfileForLayout } from '@/lib/apiAuth'
 import AssistantWidget from '@/components/admin/AssistantWidget'
 import { Profile } from '@/types'
 
@@ -19,17 +20,10 @@ export default async function DashboardLayout({
 
   if (isSupabaseConfigured()) {
     try {
-      const supabase = await createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // עמודות ספציפיות בלבד (במקום *) — מקטין את המטען בכל טעינת מסך ניהול
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, full_name, email, role, permissions, mail_only, allowed_mailboxes, department')
-          .eq('id', user.id)
-          .single()
-        profile = data as Profile | null
-      }
+      // ⚡ אותה שליפה שכבר בוצעה לצורך האימות — ממוזגת ב-cache() לכל בקשה.
+      // קודם היו כאן getUser() + שאילתת profiles *נוספות*, זהות לאלה שה-proxy
+      // כבר הריץ שורות ספורות קודם: 2 סבבי רשת סדרתיים כפולים לפני כל מסך ניהול.
+      profile = await getStaffProfileForLayout()
     } catch {
       // Supabase not available
     }

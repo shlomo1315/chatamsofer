@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, lineageCacheVersion, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, lineageCacheVersion, getCachedLineageTree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -19,11 +19,18 @@ function getAdminClient() {
 }
 
 // ⚡ מטמון של ה-payload המלא (nodes + linked) בזיכרון השרת. הטעינה סרקה בעבר
-// את כל העץ + כל המשפחות בכל פתיחת מסך (7-8 שניות בעץ גדול). המטמון נפסל
-// בכל כתיבה (invalidateLineageCache שכבר נקרא בכל approve/merge/import/PATCH),
-// כך שהוא בטוח — טעינה חוזרת מיידית, וטעינה אחרי שינוי טרייה.
-let _payloadCache: { at: number; version: number; body: { nodes: unknown[]; linked: Record<string, { id: string; name: string }[]> } } | null = null
+// את כל העץ + כל המשפחות בכל פתיחת מסך (7-8 שניות בעץ גדול).
+//
+// ⚠️ stale-while-revalidate: המטמון נפסל בכל כתיבה — כולל מנתיב הרישום הציבורי
+// (אישור אוטומטי של שם), שבגל רישום המוני נורה כל כמה שניות. פסילה שמאלצת
+// בנייה מלאה מחדש הפכה את מסך העץ ל"טוען נתונים…" ממושך בדיוק בשעות העומס.
+// עכשיו עותק מיושן מוגש מיד והבנייה רצה ברקע, עם single-flight כדי ששתי
+// טעינות מקבילות לא יבנו את אותו payload פעמיים.
+type LineagePayload = { nodes: Record<string, unknown>[]; linked: Record<string, { id: string; name: string }[]> }
+let _payloadCache: { at: number; version: number; body: LineagePayload } | null = null
 const PAYLOAD_TTL_MS = 60_000
+const PAYLOAD_STALE_MAX_MS = 10 * 60_000
+let _payloadInflight: Promise<LineagePayload> | null = null
 
 export async function GET() {
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
@@ -36,28 +43,63 @@ export async function GET() {
     return NextResponse.json(_payloadCache.body, { headers: NO_STORE })
   }
 
-  // ⚡ שתי השאילתות עצמאיות — רצות במקביל (Promise.all) במקום סדרתית, חצי מזמן
-  // סבבי הרשת. שליפה בדפים כי .limit() לא עוקף את db-max-rows=1000. ראו lib/fetchAllRows.
-  const [nodesRes, bensRes] = await Promise.all([
-    fetchAllRows<Record<string, unknown>>((from, to) =>
-      admin.from('lineage_nodes').select('*').order('generation').order('name').range(from, to)),
-    fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
-      admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to)),
-  ])
-
-  if (nodesRes.error) return NextResponse.json({ error: nodesRes.error }, { status: 500, headers: NO_STORE })
-
-  // המשפחות המקושרות לכל צומת — כדי לקפוץ מהעץ ישירות לכרטסת.
-  const linked: Record<string, { id: string; name: string }[]> = {}
-  for (const b of bensRes.rows ?? []) {
-    const row = b as { id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }
-    const name = [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'ללא שם'
-    ;(linked[row.lineage_node_id] ??= []).push({ id: row.id, name })
+  // עותק מיושן אך שמיש — מגישים מיד, מרעננים ברקע.
+  if (_payloadCache && now - _payloadCache.at < PAYLOAD_STALE_MAX_MS) {
+    void buildPayload(admin).catch(e => console.error('[lineage] רענון payload ברקע נכשל:', e))
+    return NextResponse.json(_payloadCache.body, { headers: NO_STORE })
   }
 
-  const body = { nodes: nodesRes.rows ?? [], linked }
-  _payloadCache = { at: now, version, body }
-  return NextResponse.json(body, { headers: NO_STORE })
+  try {
+    const body = await buildPayload(admin)
+    return NextResponse.json(body, { headers: NO_STORE })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500, headers: NO_STORE })
+  }
+}
+
+// בניית ה-payload בפועל, עם single-flight.
+async function buildPayload(admin: ReturnType<typeof getAdminClient>): Promise<LineagePayload> {
+  if (_payloadInflight) return _payloadInflight
+  const version = lineageCacheVersion()
+  _payloadInflight = (async () => {
+    // ⚡ שתי השאילתות עצמאיות — רצות במקביל (Promise.all) במקום סדרתית, חצי מזמן
+    // סבבי הרשת. שליפה בדפים כי .limit() לא עוקף את db-max-rows=1000. ראו lib/fetchAllRows.
+    //
+    // ⚡ הצמתים עוברים דרך getCachedLineageTree — אותו מטמון משותף שמשמש את
+    // הכרטסות. קודם היה כאן מטמון נפרד, ולכן פסילה אחת (כל רישום ציבורי) הפילה
+    // את שניהם והעץ נסרק מחדש משתי דלתות שונות. עכשיו: מקור אחד.
+    //
+    // ⚡ NODE_SELECT במקום select('*'): notes ו-id_number אינם בשימוש בעץ ונשלחו
+    // לכל אחד מ-~5000 הצמתים בכל טעינה.
+    const [nodes, bensRes] = await Promise.all([
+      getCachedLineageTree(async () => {
+        const { rows, error } = await fetchAllRows<TreeNodeRow>((from, to) =>
+          admin!.from('lineage_nodes').select(NODE_SELECT).order('generation').order('name').range(from, to))
+        if (error) throw new Error(error)
+        return rows
+      }),
+      fetchAllRows<{ id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }>((from, to) =>
+        admin!.from('beneficiaries').select('id, full_name, family_name, spouse_name, lineage_node_id').not('lineage_node_id', 'is', null).range(from, to)),
+    ])
+
+    // המשפחות המקושרות לכל צומת — כדי לקפוץ מהעץ ישירות לכרטסת.
+    const linked: Record<string, { id: string; name: string }[]> = {}
+    for (const b of bensRes.rows ?? []) {
+      const row = b as { id: string; full_name?: string; family_name?: string; spouse_name?: string; lineage_node_id: string }
+      const name = [row.family_name, row.spouse_name || row.full_name].filter(Boolean).join(' ') || 'ללא שם'
+      ;(linked[row.lineage_node_id] ??= []).push({ id: row.id, name })
+    }
+
+    const body: LineagePayload = { nodes: nodes as unknown as Record<string, unknown>[], linked }
+    _payloadCache = { at: Date.now(), version, body }
+    return body
+  })()
+
+  try {
+    return await _payloadInflight
+  } finally {
+    _payloadInflight = null
+  }
 }
 
 export async function POST(request: NextRequest) {

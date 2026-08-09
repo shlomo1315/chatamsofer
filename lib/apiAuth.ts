@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { cache } from 'react'
 import { NextResponse } from 'next/server'
-import type { SectionKey } from '@/types'
+import type { SectionKey, Profile } from '@/types'
 import { roleAllows, type PermAction } from '@/lib/permissions'
 
 // תשתית אימות אחידה לכל נתיבי ה-API.
@@ -105,6 +105,21 @@ const getStaffProfile = cache(async (userId: string, email: string | null) => {
   }
   return null
 })
+
+// ⚡ הפרופיל עבור מסגרת הניהול (app/admin/layout.tsx) — סרגל הצד וההרשאות.
+//
+// ⚠️ למה זה כאן ולא שאילתה משלו: ה-layout הריץ getUser() + שאילתת profiles
+// נוספות בכל טעינת מסך, זהות לאלה שה-proxy כבר הריץ. שתיהן ממוזגות עכשיו עם
+// שאר הקריאות של אותה בקשה, כך שהמסגרת אינה עולה אף סבב רשת נוסף.
+//
+// אין כאן החלטת הרשאה — ה-proxy כבר חסם מי שאינו איש צוות פעיל לפני שהגענו
+// לכאן. הפונקציה רק מספקת את נתוני התצוגה.
+export async function getStaffProfileForLayout(): Promise<Profile | null> {
+  const user = await getSessionUser()
+  if (!user) return null
+  const profile = await getStaffProfile(user.id, user.email ?? null)
+  return (profile as Profile | null) ?? null
+}
 
 // מאמת שהקורא הוא איש צוות פעיל (פרופיל קיים עם תפקיד מוכר). מחזיר null אם לא.
 export async function requireStaff(allowedRoles?: StaffRole[]): Promise<StaffContext | null> {
