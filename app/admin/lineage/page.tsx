@@ -610,8 +610,20 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
     const p = positions.find(pp => pp.node.id === anchor.id)
     if (!el || !p) return
     lastAnchor.current = anchor.n
-    el.scrollLeft = p.cx * zoom - el.clientWidth / 2
-    el.scrollTop = Math.max(0, p.cy * zoom - el.clientHeight / 2)
+    // ⚠️ גלילה *רק אם* הצומת יצא מהמסך. מרכוז כפוי אחרי כל מיזוג הקפיץ את
+    // התצוגה הצידה גם כשהצומת כבר היה מול העיניים — וזה הרס עבודה רצופה:
+    // אחרי כל מיזוג המשתמש נאלץ לאתר מחדש איפה הוא נמצא. כשהצומת גלוי,
+    // המקום נשאר בדיוק כפי שהוא והמיזוג פשוט קורה לנגד העיניים.
+    const x = p.cx * zoom, y = p.cy * zoom
+    const pad = 80
+    const visX = x > el.scrollLeft + pad && x < el.scrollLeft + el.clientWidth - pad
+    const visY = y > el.scrollTop + pad && y < el.scrollTop + el.clientHeight - pad
+    if (visX && visY) return
+    el.scrollTo({
+      left: x - el.clientWidth / 2,
+      top: Math.max(0, y - el.clientHeight / 2),
+      behavior: 'smooth',
+    })
   }, [anchor, positions, zoom])
 
   function close() { setModal(null); setSaveErr(''); setFormRelation(null) }
@@ -1722,13 +1734,14 @@ export default function LineagePage() {
         void softRefresh()
         setMerging(false); return
       }
-      toast.success(`מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
+      toast.success(`✓ ${keepName} · מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
       // המפל המלא (דורות שמעל/מתחת) עשוי למזג עוד צמתים — softRefresh ברקע
       // (בלי await) מיישר את התמונה המלאה תוך שנייה, בלי לחסום את המשתמש.
       void softRefresh()
-      // לאחר מיזוג — להציע לאשר את הייחוס של הצומת שנשאר
-      setApprovePrompt({ keepId, keepName })
-      setApproveDesc(true)
+      // ⚠️ אין כאן יותר חלונית "לאשר את הייחוס?". היא נפתחה אחרי *כל* מיזוג
+      // ועצרה את העבודה: המיזוג עצמו כבר בוצע, והאישור הוא החלטה נפרדת
+      // שנעשית בנפרד (כפתורי הסטטוס בפופאפ של הצומת, או אישור מרוכז).
+      // מיזוג רצוף של עשרות כפילויות חייב להיות לחיצה אחת לכל אחד.
     } catch {
       toast.error('שגיאת רשת')
       void softRefresh()
