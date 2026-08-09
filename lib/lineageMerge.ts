@@ -313,10 +313,20 @@ async function mergeOne(
     })
     if (logErr) {
       console.error('[lineageMerge] רישום הביטול נכשל — המיזוג נעצר:', logErr.message)
-      throw new Error('לא ניתן לרשום את המיזוג ביומן — הפעולה בוטלה כדי שלא תיווצר מחיקה בלתי הפיכה')
+      // ⚠️ הודעת השגיאה כוללת את סיבת ה-DB. בלעדיה כשל כאן הגיע למשתמש
+      // כטקסט כללי, והמיזוג "פשוט לא קרה" בלי שום דרך לדעת למה — למשל
+      // כשטבלת היומן חסרה (מיגרציה שלא הורצה) או שעמודה שונתה.
+      throw new Error(`לא ניתן לרשום את המיזוג ביומן — הפעולה בוטלה. סיבה: ${logErr.message}`)
     }
 
-    await db.from('lineage_nodes').delete().eq('id', mid)
+    // ⚠️ כשל מחיקה נבדק במפורש. בלי הבדיקה הזו כשל כאן חזר כ"הצלחה": הצומת
+    // נשאר בעץ, הספירה דיווחה על מיזוג, והרענון החזיר אותו למסך — בדיוק
+    // התסמין של "עשיתי מיזוג והכל נשאר אותו דבר".
+    const { error: delErr } = await db.from('lineage_nodes').delete().eq('id', mid)
+    if (delErr) {
+      console.error('[lineageMerge] מחיקת הצומת נכשלה:', delErr.message)
+      throw new Error(`מחיקת הצומת הממוזג נכשלה: ${delErr.message}`)
+    }
   }
 
   return { children, beneficiaries }

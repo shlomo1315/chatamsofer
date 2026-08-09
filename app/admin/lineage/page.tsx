@@ -8,6 +8,7 @@ import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import SuggestionsInbox from './SuggestionsInbox'
+import CleanChildrenPanel from './CleanChildrenPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 
@@ -413,7 +414,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
   const toast = useToast()
   const router = useRouter()
   const canAdd = useCan('lineage', 'add')
@@ -1145,6 +1146,16 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                       style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: inMerge ? '#16A34A' : '#F1F5F9', color: inMerge ? '#fff' : '#334155', border: `1px solid ${inMerge ? '#16A34A' : '#CBD5E1'}`, cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
                       {inMerge ? '✓ מסומן למיזוג' : '+ סמן למיזוג'}
                     </button>
+                    {/* ניקוי כפילויות בין הילדים — הפתרון לצומת עם עשרות
+                        "ילדים" שרובם אותו אדם בכתיבים שונים. הזיהוי בעץ תופס
+                        רק שם זהה בדיוק, ולכן וריאציות נשארות בלתי נראות. */}
+                    {pos.node.children.length > 3 && (
+                      <button onClick={() => onCleanChildren(pos.node.id)}
+                        title="איתור וניקוי כפילויות בין הילדים של הצומת"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#FDF4FF', color: '#86198F', border: '1px solid #F5D0FE', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                        🧹 נקה כפילויות ({pos.node.children.length})
+                      </button>
+                    )}
                     {/* קיצור-דרך אוטומטי — נפרד ומסומן ככזה. הכיתוב מציין כמה
                         צמתים ייבלעו, כדי שלא יתבלבל עם "מזג את מה שסימנתי". */}
                     {(isDup || inScan) && (() => {
@@ -1561,6 +1572,12 @@ export default function LineagePage() {
   const [mergeUpApprox, setMergeUpApprox] = useState(true)
   // השם הסופי בבר המיזוג המהיר. ריק = השתמש בברירת המחדל (fullestSelName).
   const [quickName, setQuickName] = useState('')
+  // חיווי צדי קבוע לתוצאת המיזוג האחרון (הצלחה או כשל). n = מונה שמאלץ
+  // הצגה מחדש גם כשהטקסט זהה, כדי שמיזוגים רצופים ייראו כל אחד בנפרד.
+  const [mergeFlash, setMergeFlash] = useState<{ ok: boolean; text: string; n: number } | null>(null)
+  const flashSeq = useRef(0)
+  // הצומת שפאנל ניקוי הכפילויות פתוח עליו
+  const [cleanParentId, setCleanParentId] = useState<string | null>(null)
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
   const [dupFilter, setDupFilter] = useState(false)
   // לאחר מיזוג — הצעה לאשר את הייחוס
@@ -1721,7 +1738,8 @@ export default function LineagePage() {
       .map(n => mergeIds.includes(n.parent_id ?? '') ? { ...n, parent_id: keepId } : n))
     setManualPlan(null)
     exitMerge()
-    setAnchor(a => ({ id: keepId, n: (a?.n ?? 0) + 1 }))
+    // ⚠️ אין יותר setAnchor אוטומטי. הצומת שנשאר כבר נמצא מול העיניים —
+    // הוא זה שנלחץ. הזזת המבט אליו רק הקפיצה את התצוגה ממקום העבודה.
     try {
       const res = await fetch('/api/admin/lineage/merge', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1729,12 +1747,18 @@ export default function LineagePage() {
       })
       const d = await res.json()
       if (!res.ok) {
+        // ⚠️ גם באנר קבוע ולא רק toast: toast נעלם אחרי כמה שניות, ובעבודה
+        // רצופה מהירה כשל נבלע בשקט והמשתמש חשב ש"המיזוג פשוט לא עובד".
+        setMergeFlash({ ok: false, text: d.error || 'שגיאה במיזוג', n: flashSeq.current++ })
         toast.error(d.error || 'שגיאה במיזוג')
         // המיזוג נכשל בשרת — מחזירים את התמונה האמיתית (מבטלים את האופטימי)
         void softRefresh()
         setMerging(false); return
       }
-      toast.success(`✓ ${keepName} · מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`)
+      setMergeFlash({
+        ok: true, n: flashSeq.current++,
+        text: `${keepName} — מוזגו ${d.mergedCount} צמתים · ${d.reassignedChildren} ילדים · ${d.reassignedBeneficiaries} נרשמים`,
+      })
       // המפל המלא (דורות שמעל/מתחת) עשוי למזג עוד צמתים — softRefresh ברקע
       // (בלי await) מיישר את התמונה המלאה תוך שנייה, בלי לחסום את המשתמש.
       void softRefresh()
@@ -1743,6 +1767,7 @@ export default function LineagePage() {
       // שנעשית בנפרד (כפתורי הסטטוס בפופאפ של הצומת, או אישור מרוכז).
       // מיזוג רצוף של עשרות כפילויות חייב להיות לחיצה אחת לכל אחד.
     } catch {
+      setMergeFlash({ ok: false, text: 'שגיאת רשת — המיזוג לא נשמר', n: flashSeq.current++ })
       toast.error('שגיאת רשת')
       void softRefresh()
     }
@@ -2156,7 +2181,7 @@ export default function LineagePage() {
       ) : view === 'tree' ? (
         /* ⚠️ key מתחלף רק בכניסה/יציאה ממוקד — ואז מרצוננו הרכיב נבנה מחדש
            וממורכז על הענף. במיזוג ה-key אינו משתנה, ולכן המיקום נשמר. */
-        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
+        <TreeView key={focusId ?? 'all'} nodes={visibleNodes} onRefresh={softRefresh} onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))} onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))} onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }} statusFilter={statusFilter} generationFilter={generationFilter} mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge} dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onCleanChildren={setCleanParentId} onFocusNode={setFocusId} focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
       ) : (
         <TableView
           nodes={visibleNodes}
@@ -2228,6 +2253,50 @@ export default function LineagePage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* פאנל ניקוי כפילויות בין הילדים של צומת */}
+      {cleanParentId && (() => {
+        const parent = nodes.find(n => n.id === cleanParentId)
+        if (!parent) return null
+        const kids = nodes.filter(n => n.parent_id === cleanParentId)
+        const kidCount = (id: string) => nodes.filter(n => n.parent_id === id).length
+        return (
+          <CleanChildrenPanel
+            parentName={parent.name}
+            children={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
+            busyId={merging ? cleanParentId : null}
+            onMerge={(keepId, mergeIds, finalName) => { void mergeByIds(keepId, mergeIds, { [keepId]: finalName }) }}
+            onClose={() => setCleanParentId(null)}
+          />
+        )
+      })()}
+
+      {/* ── חיווי צדי לתוצאת המיזוג ──
+          נשאר על המסך עד שסוגרים אותו או עד המיזוג הבא, בצד ולא באמצע, כדי
+          שאפשר להמשיך לעבוד באותו מקום בלי שום לחיצת אישור. */}
+      {mergeFlash && (
+        <div key={mergeFlash.n}
+          style={{
+            position: 'fixed', top: 88, left: 20, zIndex: 130, maxWidth: 340,
+            background: '#fff', borderRadius: 14,
+            border: `1.5px solid ${mergeFlash.ok ? '#A7F3D0' : '#FECACA'}`,
+            borderRight: `5px solid ${mergeFlash.ok ? '#16A34A' : '#DC2626'}`,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.16)', padding: '12px 14px',
+            direction: 'rtl', animation: 'pop-in .18s ease-out',
+          }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+            <span style={{ fontSize: 15, lineHeight: 1.2, flexShrink: 0 }}>{mergeFlash.ok ? '✅' : '⚠️'}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: mergeFlash.ok ? '#166534' : '#991B1B' }}>
+                {mergeFlash.ok ? 'המיזוג בוצע' : 'המיזוג נכשל'}
+              </p>
+              <p style={{ margin: '3px 0 0', fontSize: 11.5, color: '#475569', lineHeight: 1.6 }}>{mergeFlash.text}</p>
+            </div>
+            <button onClick={() => setMergeFlash(null)}
+              style={{ background: 'none', border: 'none', color: '#CBD5E1', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+          </div>
+        </div>
       )}
 
       {/* באנר הדרכה במצב מיזוג */}
