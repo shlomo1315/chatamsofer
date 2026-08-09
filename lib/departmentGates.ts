@@ -85,3 +85,56 @@ export async function saveDepartmentGates(admin: SupabaseClient, gates: Departme
 export function departmentClosedMessage(dept: GatedDepartment): string {
   return `הגשת בקשות ל${DEPARTMENT_LABELS[dept]} אינה זמינה כעת במערכת. לפרטים ניתן לפנות למזכירות.`
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// קוד תצוגה מוקדמת — בדיקת מחלקה סגורה "מאחורי הקלעים".
+//
+// ⚠️ למה זה נדרש: מחלקה סגורה חסומה *בשרת*, ולכן אי אפשר לבדוק את הזרימה
+// מקצה לקצה לפני הפתיחה לציבור — בדיוק ברגע שבו הבדיקה הכי חשובה. פתיחה
+// זמנית "רק כדי לבדוק" חושפת את הטופס לכל מי שנכנס לאתר באותן דקות.
+//
+// הקוד מתנהג כמו bypassCode של ההרשמה (ראו lib/registrationGate): מחרוזת
+// אקראית שנשמרת ב-app_settings, מועברת ב-?preview=<code>, ומדלגת על השער
+// לאותה בקשה בלבד. הוא אינו מדלג על אימות, הרשאות או ולידציה — רק על השער.
+// ─────────────────────────────────────────────────────────────────────────────
+const PREVIEW_KEY = 'department_preview_code'
+
+/** קוד התצוגה המוקדמת הנוכחי. נוצר בפעם הראשונה שמבקשים אותו. */
+export async function getDepartmentPreviewCode(admin?: SupabaseClient): Promise<string> {
+  const client = admin ?? getServiceClient()
+  if (!client) return ''
+  const { data } = await client.from('app_settings').select('value').eq('key', PREVIEW_KEY).maybeSingle()
+  if (data?.value) return String(data.value)
+  return (await regenerateDepartmentPreviewCode(client)) ?? ''
+}
+
+/** יצירת קוד חדש (מבטלת מיידית כל קישור שהופץ). */
+export async function regenerateDepartmentPreviewCode(admin?: SupabaseClient): Promise<string | null> {
+  const client = admin ?? getServiceClient()
+  if (!client) return null
+  // 24 תווים — ארוך דיו שלא ינוחש, קצר דיו להעתקה נוחה.
+  const code = Array.from({ length: 24 }, () =>
+    'abcdefghijkmnpqrstuvwxyz23456789'[Math.floor(Math.random() * 32)]).join('')
+  const { error } = await client.from('app_settings').upsert(
+    { key: PREVIEW_KEY, value: code, updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  )
+  return error ? null : code
+}
+
+/**
+ * האם המחלקה זמינה לבקשה זו — פתוחה, או סגורה עם קוד תצוגה מוקדמת תקין.
+ * ⚠️ השוואה באורך קבוע כדי לא לדלוף את הקוד דרך זמן התגובה.
+ */
+export async function isDepartmentAccessible(
+  dept: GatedDepartment, previewCode?: string | null, admin?: SupabaseClient,
+): Promise<boolean> {
+  if (await isDepartmentOpen(dept, admin)) return true
+  const supplied = (previewCode ?? '').trim()
+  if (!supplied) return false
+  const expected = await getDepartmentPreviewCode(admin)
+  if (!expected || supplied.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < expected.length; i++) diff |= supplied.charCodeAt(i) ^ expected.charCodeAt(i)
+  return diff === 0
+}

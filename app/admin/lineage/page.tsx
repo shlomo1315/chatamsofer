@@ -2202,17 +2202,28 @@ export default function LineagePage() {
       {nodes.length > 0 && !loading && !focusNode && (
         <div className="flex gap-2 flex-wrap mb-4">
           {Array.from({ length: maxGen }, (_, i) => i + 1).map(g => (
-            <button key={g} onClick={() => { setStatusFilter(null); setGenerationFilter(f => f === g ? null : g) }}
-              className="flex items-center px-3 py-1 rounded-full text-xs font-bold border transition-all"
+            <span key={g} className="inline-flex items-center rounded-full border transition-all"
               style={{
                 background: generationFilter === g ? pal(g).ring : pal(g).light,
                 borderColor: generationFilter === g ? pal(g).ring : `${pal(g).ring}33`,
-                color: generationFilter === g ? '#fff' : pal(g).text,
-                cursor: 'pointer',
                 boxShadow: generationFilter === g ? `0 2px 8px ${pal(g).shadow}` : 'none',
               }}>
-              דור {g} · {genCounts[g] ?? 0}
-            </button>
+              <button onClick={() => { setStatusFilter(null); setGenerationFilter(f => f === g ? null : g) }}
+                className="px-3 py-1 text-xs font-bold"
+                style={{ color: generationFilter === g ? '#fff' : pal(g).text, cursor: 'pointer', background: 'none', border: 'none', fontFamily: 'inherit' }}>
+                דור {g} · {genCounts[g] ?? 0}
+              </button>
+              {/* 🧹 ניקוי כפילויות בדור שלם — כאן הן באמת נמצאות.
+                  כל משפחה שנרשמה מילאה את שרשרת האבות שלה, והמערכת יצרה
+                  לכל שרשרת צמתים משלה. התוצאה: אותו סבא קיים עשרות פעמים
+                  באותו דור, תחת הורים שונים. ניקוי לפי אב בודד לא נוגע בזה. */}
+              <button onClick={() => setCleanParentId(`gen:${g}`)}
+                title={`איתור וניקוי כפילויות בדור ${g}`}
+                className="px-2 py-1 text-xs"
+                style={{ color: generationFilter === g ? '#fff' : pal(g).text, cursor: 'pointer', background: 'none', border: 'none', opacity: 0.75, borderRight: `1px solid ${generationFilter === g ? 'rgba(255,255,255,0.35)' : `${pal(g).ring}33`}` }}>
+                🧹
+              </button>
+            </span>
           ))}
         </div>
       )}
@@ -2300,15 +2311,22 @@ export default function LineagePage() {
         </Modal>
       )}
 
-      {/* פאנל ניקוי כפילויות בין הילדים של צומת */}
+      {/* פאנל ניקוי כפילויות — של ילדי צומת, או של דור שלם */}
       {cleanParentId && (() => {
-        const parent = nodes.find(n => n.id === cleanParentId)
-        if (!parent) return null
-        const kids = nodes.filter(n => n.parent_id === cleanParentId)
+        // ⚠️ "gen:N" = ניקוי דור שלם ולא ילדי צומת. זה מה שנדרש בפועל:
+        // הכפילויות אינן תחת אב אחד אלא פזורות בכל הדור — כל משפחה
+        // שנרשמה יצרה עותק משלה לשרשרת האבות, ולכן יש 41 עותקים של אותו
+        // שם בדור 6 תחת 41 הורים שונים. ניקוי לפי אב אחד לא נוגע בזה.
+        const genMatch = /^gen:(\d+)$/.exec(cleanParentId)
         const kidCount = (id: string) => nodes.filter(n => n.parent_id === id).length
+        const parent = genMatch ? null : nodes.find(n => n.id === cleanParentId)
+        if (!genMatch && !parent) return null
+        const kids = genMatch
+          ? nodes.filter(n => n.generation === Number(genMatch[1]))
+          : nodes.filter(n => n.parent_id === cleanParentId)
         return (
           <CleanChildrenPanel
-            parentName={parent.name}
+            parentName={genMatch ? `דור ${genMatch[1]}` : parent!.name}
             children={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
             busyId={merging ? cleanParentId : null}
             onMerge={(keepId, mergeIds, finalName) => { void mergeByIds(keepId, mergeIds, { [keepId]: finalName }) }}

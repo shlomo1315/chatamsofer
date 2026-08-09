@@ -36,9 +36,28 @@ export default function CleanChildrenPanel({
     const find = (x: string): string => { const p = parent.get(x); if (!p || p === x) return x; const r = find(p); parent.set(x, r); return r }
     const union = (a: string, b: string) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb) }
     children.forEach(c => parent.set(c.id, c.id))
-    for (let i = 0; i < children.length; i++) {
-      for (let j = i + 1; j < children.length; j++) {
-        if (ok(compareHebrewNames(children[i].name, children[j].name).level)) union(children[i].id, children[j].id)
+
+    // ⚠️ קיבוץ מקדים לפי שם המשפחה (המילה האחרונה) לפני ההשוואה המלאה.
+    // בדור שלם יש אלפי צמתים, והשוואת כל-זוג היא מיליוני קריאות ל-
+    // compareHebrewNames — הדפדפן היה נתקע לדקות. compareHebrewNames ממילא
+    // מחזירה 'none' כששמות המשפחה שונים (זה העוגן שלה), ולכן חלוקה מוקדמת
+    // לדליים לפי שם משפחה אינה משנה אף תוצאה — רק חוסכת את ההשוואות שידוע
+    // מראש שייכשלו. השוואה מלאה נעשית בתוך כל דלי בנפרד.
+    const familyKey = (name: string) => {
+      const w = name.trim().replace(/\s+/g, ' ').split(' ')
+      return w.length > 1 ? w[w.length - 1] : (w[0] ?? '')
+    }
+    const buckets = new Map<string, CleanNode[]>()
+    for (const c of children) {
+      const k = familyKey(c.name)
+      const arr = buckets.get(k) ?? []; arr.push(c); buckets.set(k, arr)
+    }
+    for (const bucket of buckets.values()) {
+      if (bucket.length < 2) continue
+      for (let i = 0; i < bucket.length; i++) {
+        for (let j = i + 1; j < bucket.length; j++) {
+          if (ok(compareHebrewNames(bucket[i].name, bucket[j].name).level)) union(bucket[i].id, bucket[j].id)
+        }
       }
     }
     const byRoot = new Map<string, CleanNode[]>()
@@ -88,6 +107,17 @@ export default function CleanChildrenPanel({
           ))}
           <span className="mr-auto text-[10px] text-slate-400">״מקורב״ מציג גם התאמות פחות ודאיות — בדקו לפני מיזוג</span>
         </div>
+
+        {/* ⚠️ אזהרה בניקוי דור שלם: כאן ממזגים צמתים מ*הורים שונים*, ולא
+            אחים תחת אב אחד. שני אנשים שונים באמת יכולים לשאת אותו שם באותו
+            דור — ולכן ההמלצה היא להתחיל ברמת "בטוח" ולעבור על הרשימה. */}
+        {parentName.startsWith('דור ') && (
+          <div className="border-b border-amber-100 bg-amber-50 px-5 py-2.5 text-[11px] leading-relaxed text-amber-800">
+            ⚠️ ניקוי דור שלם ממזג צמתים גם מהורים שונים. כך נוצרו הכפילויות
+            (כל משפחה שנרשמה יצרה עותק לשרשרת האבות שלה), אבל ייתכנו גם שני
+            אנשים שונים באותו שם — עברו על כל קבוצה לפני המיזוג.
+          </div>
+        )}
 
         {/* מיזוג כל האשכולות בלחיצה אחת — הפתרון לצומת עם עשרות כפילויות,
             שבו מיזוג אשכול-אחר-אשכול הוא עשרות לחיצות. */}
