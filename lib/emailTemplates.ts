@@ -1393,17 +1393,21 @@ export function lineageOrderFixEmail(opts: {
     </p>
     <div style="text-align:center;margin:0 0 18px;">
       <a href="${escapeHtml(opts.link)}" style="display:inline-block;background:#4f46e5;color:#fff;font-size:16px;font-weight:800;text-decoration:none;border-radius:12px;padding:14px 32px;">
-        לבדיקת סדר הדורות
+        לתיקון סדר הדורות
       </a>
     </div>
-    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף 30 יום. התיקון נבדק ומאושר על ידי הצוות לפני שהוא נכנס למאגר.</p>
+    <p style="margin:0;color:#94a3b8;font-size:12px;">הקישור אישי ותקף 7 ימים. לאחר התיקון יועבר לאישור המזכירות.</p>
+    <!-- ⚠️ המשפט "אין להשיב" נכלל כאן בכוונה: sendMail מוסיף אוטומטית בלוק
+         "הודעה זו נשלחה ממערכת אוטומטית" לכל מייל, ומדלג עליו כשהטקסט הזה
+         כבר קיים. במייל אישי לצאצא הבלוק ההוא היה צורם, ודי בשורה אחת. -->
+    <p style="margin:10px 0 0;color:#cbd5e1;font-size:11px;">אין להשיב למייל זה. לפניות: <a href="mailto:igud@chasamsofer.info" style="color:#a5b4fc;text-decoration:none;">igud@chasamsofer.info</a></p>
   `
   return {
-    subject: 'בדיקת סדר הדורות — איגוד צאצאי החתם סופר',
+    subject: 'תיקון סדר הדורות — איגוד צאצאי החתם סופר',
     html: shell({
       preheader: 'נא לעבור על סדר הדורות הרשום במאגר',
       accent: '#4f46e5',
-      title: 'בדיקת סדר הדורות',
+      title: 'תיקון סדר הדורות',
       subtitle: 'איגוד צאצאי החתם סופר',
       body,
     }),

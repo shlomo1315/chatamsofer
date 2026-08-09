@@ -19,13 +19,13 @@ function getAdmin(): SupabaseClient | null {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-interface InviteRow { token: string; root_node_id: string; revoked_at: string | null; expires_at: string; recipient_name: string | null }
+interface InviteRow { token: string; root_node_id: string; revoked_at: string | null; expires_at: string; recipient_name: string | null; beneficiary_id?: string | null; mode?: string | null }
 
 async function resolveInvite(admin: SupabaseClient, token: string | null): Promise<InviteRow | null> {
   if (!token) return null
   const { data } = await admin
     .from('lineage_share_invites')
-    .select('token, root_node_id, revoked_at, expires_at, recipient_name')
+    .select('token, root_node_id, revoked_at, expires_at, recipient_name, beneficiary_id, mode')
     .eq('token', token).maybeSingle()
   if (!data || data.revoked_at || new Date(data.expires_at) < new Date()) return null
   return data as InviteRow
@@ -61,7 +61,15 @@ export async function POST(request: NextRequest) {
   )
   const scope = subtreeNodeIds(nodes, inv.root_node_id)
   const inScope = (id?: string) => !id || scope.has(id)
-  if (!inScope(body.nodeId) || !inScope(body.parentId)) {
+  // ⚠️ בקישור אישי לתיקון סדר הדורות (mode='order') ההורה המוצע רשאי להיות
+  // *כל* צומת בעץ, ולא רק בתוך הענף ששותף. זו כל מהות התיקון: "אינני צאצא
+  // של זה אלא של זה" — והצומת הנכון נמצא בהכרח מחוץ לענף השגוי. הצומת
+  // המתוקן עצמו (nodeId) עדיין חייב להיות בתחום, כדי שלא יוכל להזיז צמתים
+  // אחרים בעץ. ההצעה ממילא נכנסת לתור ואינה נכתבת ישירות.
+  const parentAnywhere = inv.mode === 'order' && kind === 'reparent'
+  const allIds = new Set(nodes.map(n => n.id))
+  const parentOk = parentAnywhere ? (!body.parentId || allIds.has(body.parentId)) : inScope(body.parentId)
+  if (!inScope(body.nodeId) || !parentOk) {
     return NextResponse.json({ error: 'הצומת אינו בתוך הענף המשותף' }, { status: 403 })
   }
 

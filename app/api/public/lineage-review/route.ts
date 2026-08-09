@@ -86,9 +86,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ⚠️ בקישור תיקון סדר הדורות נשלח *כל* העץ, ולא רק תת-העץ ששותף. הסיבה:
+  // התיקון הוא בחירת אב אחר, והאב הנכון נמצא בהכרח מחוץ לענף השגוי — בלי
+  // העץ המלא אין במה לבחור. נשלחות עמודות התצוגה בלבד (שם/הורה/דור), בלי
+  // שום מידע אישי על נרשמים, ולכן אין כאן חשיפה מעבר לשמות האבות.
+  const fullTree = inv.mode === 'order'
+    ? nodes.map(n => ({ id: n.id, name: n.name, parent_id: n.parent_id, generation: n.generation, relation: n.relation ?? null }))
+    : undefined
+
   return NextResponse.json({
     rootNodeId: inv.root_node_id, recipientName: inv.recipient_name,
-    mode: inv.mode ?? 'full', recipient, chain, nodes: subtree,
+    mode: inv.mode ?? 'full', recipient, chain, nodes: subtree, fullTree,
   })
 }
 

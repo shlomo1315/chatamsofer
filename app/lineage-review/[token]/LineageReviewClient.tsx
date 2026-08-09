@@ -35,6 +35,12 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [recipient, setRecipient] = useState<{ name: string; idMasked: string | null; phone: string | null; address: string | null } | null>(null)
   const [chain, setChain] = useState<Node[]>([])
   const [mode, setMode] = useState<'full' | 'order'>('full')
+  // כל העץ — לבחירת אב אחר בעת תיקון הסדר
+  const [fullTree, setFullTree] = useState<Node[]>([])
+  // הדור שנפתח לתיקון + חיפוש בבורר
+  const [fixGen, setFixGen] = useState<{ node: Node; action: 'replace' | 'insert' } | null>(null)
+  const [pickQuery, setPickQuery] = useState('')
+  const [sentGens, setSentGens] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     try {
@@ -46,12 +52,26 @@ export default function LineageReviewClient({ token }: { token: string }) {
       setRecipient(data.recipient ?? null)
       setChain(data.chain ?? [])
       setMode(data.mode === 'order' ? 'order' : 'full')
+      setFullTree(data.fullTree ?? [])
     } catch { setError('שגיאת רשת') }
     finally { setLoading(false) }
   }, [token])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
+
+  // ── תוצאות החיפוש בבורר האב ──
+  // ⚠️ מחייב 2 תווים ומוגבל ל-40 תוצאות: העץ מכיל אלפי צמתים, ורשימה מלאה
+  // הייתה גם חסרת תועלת וגם כבדה לרינדור במכשיר נייד.
+  const pickOptions = useMemo(() => {
+    const q = pickQuery.trim()
+    if (q.length < 2 || !fixGen) return []
+    const exclude = fixGen.node.id
+    return fullTree
+      .filter(n => n.id !== exclude && n.name.includes(q))
+      .sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
+      .slice(0, 40)
+  }, [pickQuery, fullTree, fixGen])
 
   // מיון היררכי — שורש, ואז ילדים בהזחה לפי דור
   const ordered = useMemo(() => {
@@ -138,7 +158,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100">
             <GitBranch size={28} className="text-indigo-600" />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>{mode === 'order' ? 'בדיקת סדר הדורות' : 'אישור סדר היוחסין'}</h1>
+          <h1 className="text-xl font-bold" style={{ color: '#1B3256' }}>{mode === 'order' ? 'תיקון סדר הדורות' : 'אישור סדר היוחסין'}</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             {mode === 'order'
               ? 'לפניכם סדר הדורות הרשום אצלנו במאגר. עברו עליו וּודאו שהוא מדויק — אם נפלה טעות, ניתן לתקן.'
@@ -166,16 +186,104 @@ export default function LineageReviewClient({ token }: { token: string }) {
             <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 mb-2.5">סדר הדורות הרשום</div>
             <div className="flex flex-col gap-1.5">
               {chain.map((g, i) => (
-                <div key={g.id} className="flex items-center gap-2.5 rounded-xl bg-white border border-indigo-100 px-3 py-2">
-                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
-                  <span className="flex-1 text-sm font-bold text-slate-800">{g.name}</span>
-                  {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
-                  {i === chain.length - 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
+                <div key={g.id} className="rounded-xl bg-white border border-indigo-100 overflow-hidden">
+                  <div className="flex items-center gap-2.5 px-3 py-2 flex-wrap">
+                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
+                    <span className="flex-1 min-w-[120px] text-sm font-bold text-slate-800">{g.name}</span>
+                    {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
+                    {i === chain.length - 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
+                    {sentGens.has(g.id) ? (
+                      <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"><CheckCircle2 size={11} /> נשלח לאישור</span>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        {/* ⚠️ החלפת דור אפשרית מדור 2 ומעלה: דור 1 הוא מרן
+                            החתם סופר זי"ע — שורש העץ, ואין לו אב להחליף. */}
+                        {g.generation > 1 && (
+                          <button onClick={() => { setFixGen({ node: g, action: 'replace' }); setPickQuery('') }}
+                            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">
+                            החלף דור
+                          </button>
+                        )}
+                        <button onClick={() => { setFixGen({ node: g, action: 'insert' }); setPickQuery('') }}
+                          title="חסר דור בין זה לדור שאחריו"
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
+                          + דור חסר
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* בורר האב החדש / הוספת דור חסר */}
+                  {fixGen?.node.id === g.id && (
+                    <div className="border-t border-indigo-100 bg-slate-50 px-3 py-3">
+                      {fixGen.action === 'replace' ? (
+                        <>
+                          <p className="mb-2 text-[11px] font-bold text-slate-600">
+                            במקום <span className="text-rose-600">{g.name}</span> — בחרו את השם הנכון מהעץ:
+                          </p>
+                          <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
+                            placeholder="חיפוש שם בעץ הדורות…"
+                            className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
+                            {pickOptions.length === 0 && (
+                              <p className="py-3 text-center text-[11px] text-slate-400">
+                                {pickQuery.trim().length < 2 ? 'הקלידו לפחות 2 תווים לחיפוש' : 'לא נמצאו תוצאות'}
+                              </p>
+                            )}
+                            {pickOptions.map(o => (
+                              <button key={o.id} disabled={busy === g.id}
+                                onClick={async () => {
+                                  // ⚠️ ההצעה היא לשנות את האב של *הדור הבא* בשרשרת,
+                                  // ולא של הדור שנלחץ: "במקום X יבוא Y" פירושו
+                                  // שהבן של X צריך להיות תלוי ב-Y. בדור האחרון
+                                  // (האב שלכם) מציעים לשנות את האב שלו עצמו.
+                                  const target = chain[i + 1] ?? g
+                                  setBusy(g.id)
+                                  const ok = await suggest({ kind: 'reparent', nodeId: target.id, parentId: o.id })
+                                  setBusy(null)
+                                  if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null) }
+                                }}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-50">
+                                <span className="font-bold text-slate-800">{o.name}</span>
+                                <span className="mr-2 text-[10px] text-slate-400">דור {o.generation}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mb-2 text-[11px] font-bold text-slate-600">
+                            הוספת דור חסר אחרי <span className="text-indigo-600">{g.name}</span>:
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input value={addName} onChange={e => setAddName(e.target.value.replace(NON_HEBREW, ''))} autoFocus
+                              placeholder="שם הדור החסר…"
+                              className="min-w-[150px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                            <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
+                              {(['son', 'son_in_law'] as const).map(r => (
+                                <button key={r} onClick={() => setAddRelation(r)}
+                                  className={`px-2.5 py-2 text-xs font-semibold ${addRelation === r ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
+                              ))}
+                            </div>
+                            <button disabled={!addName.trim() || busy === g.id}
+                              onClick={async () => {
+                                setBusy(g.id)
+                                const ok = await suggest({ kind: 'add_child', parentId: g.id, name: addName.trim(), relation: addRelation })
+                                setBusy(null)
+                                if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null); setAddName('') }
+                              }}
+                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">שליחה</button>
+                          </div>
+                        </>
+                      )}
+                      <button onClick={() => setFixGen(null)} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
             <p className="mt-2.5 text-[11px] leading-relaxed text-indigo-500">
-              נפלה טעות בסדר? בחרו את הדור השגוי ברשימה שלמטה והציעו את התיקון. ההצעה נבדקת ומאושרת על ידי הצוות לפני שהיא נכנסת למאגר.
+              נפלה טעות בסדר? לחצו על <strong>החלף דור</strong> ובחרו את השם הנכון מהעץ, או על <strong>+ דור חסר</strong> אם חסר דור באמצע. לאחר התיקון יועבר לאישור המזכירות.
             </p>
           </div>
         )}

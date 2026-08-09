@@ -53,11 +53,16 @@ export async function POST(request: NextRequest) {
   const token = randomBytes(16).toString('base64url')
   const recipientName = [ben.family_name, ben.spouse_name || ben.full_name].filter(Boolean).join(' ') || 'משפחה יקרה'
 
+  // ⚠️ 7 ימים ולא 30 (ברירת המחדל של הטבלה) — וזה נאכף כאן בפועל ולא רק
+  // נכתב במייל. קישור אישי שנשאר פתוח חודש הוא חשיפה מיותרת.
+  const expiresAt = new Date(Date.now() + 7 * 86400_000).toISOString()
+
   const { error } = await admin.from('lineage_share_invites').insert({
     token,
     root_node_id: ben.lineage_node_id,
     beneficiary_id: ben.id,
     mode: 'order',
+    expires_at: expiresAt,
     recipient_name: recipientName,
     recipient_email: email,
     created_by: staff.userId,
