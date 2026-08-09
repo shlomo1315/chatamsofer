@@ -82,7 +82,13 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         .then(d => { if (!d.error) setUnreadCounts({ byDepartment: d.byDepartment ?? {}, total: d.total ?? 0 }) })
         .catch(() => {})
     fetchCounts()
-    const interval = setInterval(fetchCounts, 60_000)
+    // ⚠️ הסקר רץ בכל לשונית פתוחה של כל מנהל, וכל קריאה מריצה 11 שאילתות
+    // ספירה בשרת. ב-60 שניות זה עומס רקע קבוע שמתחרה ברינדור של הדפים
+    // עצמם. שלוש דקות, ורק כשהלשונית גלויה — כשחוזרים אליה מרעננים מיד.
+    const tick = () => { if (!document.hidden) fetchCounts() }
+    const interval = setInterval(tick, 180_000)
+    const onVisible = () => { if (!document.hidden) fetchCounts() }
+    document.addEventListener('visibilitychange', onVisible)
     // סנכרון מיידי של תג ה"לא נקראו" כשמסמנים מייל כנקרא / מוחקים / נכנס מייל חדש במסך המייל
     const onRefresh = (e: Event) => {
       const detail = (e as CustomEvent).detail as { byDepartment?: Record<string, number>; total?: number } | undefined
@@ -90,7 +96,11 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
       else fetchCounts()
     }
     window.addEventListener('mail-unread-refresh', onRefresh)
-    return () => { clearInterval(interval); window.removeEventListener('mail-unread-refresh', onRefresh) }
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('mail-unread-refresh', onRefresh)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   // מחלקות בתפריט המייל: מנהל רואה הכל; משתמש מוגבל רק את התיבות שהוקצו לו.

@@ -189,6 +189,8 @@ export async function POST(request: NextRequest) {
   // אינו נשמר כמות שהוא: הוא נמשך כאן בשרת ומאוחסן אצלנו, כדי שהקבלה תהיה
   // בכרטסת הלידה ולא תלויה בשרת חיצוני שעלול להימחק או להיחסם.
   const link = String(form.get('link') ?? '').trim()
+  // תשלום משלים: הקבלה מתווספת לרשומה נעולה בלי לדרוס את הקבלה המקורית.
+  const isTopup = String(form.get('topup') ?? '') === '1'
   if (!home || !aidId || (!(file instanceof File) && !link)) {
     return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   }
@@ -224,7 +226,12 @@ export async function POST(request: NextRequest) {
   if (!aid || aid.recovery_home !== home) {
     return NextResponse.json({ error: 'הרשומה לא נמצאה בבית החלמה זה' }, { status: 404 })
   }
-  if (aid.recovery_locked) return NextResponse.json({ error: 'הרשומה נעולה' }, { status: 403 })
+  // ⚠️ רשומה נעולה חסומה להעלאה *רגילה* בלבד. במצב תשלום משלים (topup) הקבלה
+  // אינה דורסת את הקיימת — היא נשמרת כשורה נוספת ב-recovery_receipts דרך
+  // /api/portal/recovery-topup, ולכן ההעלאה עצמה מותרת גם כשהרשומה נעולה.
+  if (aid.recovery_locked && !isTopup) {
+    return NextResponse.json({ error: 'הרשומה נעולה' }, { status: 403 })
+  }
 
   const path = `${aid.beneficiary_id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
   const { error: upErr } = await admin.storage.from(BUCKET).upload(path, bytes, { contentType, upsert: false })
@@ -232,9 +239,13 @@ export async function POST(request: NextRequest) {
   const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path)
   const url = urlData.publicUrl
 
-  const { error } = await admin.from('maternity_aids')
-    .update({ recovery_receipt_url: url, updated_at: new Date().toISOString() }).eq('id', aidId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // בתשלום משלים לא נוגעים ב-recovery_receipt_url: הקבלה המקורית נשארת
+  // במקומה, והחדשה נרשמת בטבלת הקבלות בשלב הבא (recovery-topup).
+  if (!isTopup) {
+    const { error } = await admin.from('maternity_aids')
+      .update({ recovery_receipt_url: url, updated_at: new Date().toISOString() }).eq('id', aidId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true, url })
 }

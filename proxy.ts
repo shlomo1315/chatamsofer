@@ -2,9 +2,34 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 function noCache(res: NextResponse) {
-  // Stop NetFree / browser from serving stale admin pages (incl. cached 404s)
-  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  // Stop NetFree / browser from serving stale admin pages (incl. cached 404s).
+  // ⚠️ no-cache ולא no-store — ראו ההסבר ב-next.config.ts. no-store ביטל את
+  // ה-Router Cache של Next וגרם לכל ניווט פנימי לרנדר מחדש מהשרת.
+  res.headers.set('Cache-Control', 'private, no-cache, must-revalidate, max-age=0')
   return res
+}
+
+// ─── מטמון פרופיל הצוות ──────────────────────────────────────────────────────
+// ה-proxy רץ על *כל* בקשה ל-/admin, וכל ריצה עשתה 1-2 שאילתות profiles מעל
+// getUser. זה מס קבוע לפני שהדף בכלל מתחיל לרנדר. הפרופיל (תפקיד/פעיל/
+// mail_only) כמעט אינו משתנה, ולכן נשמר כאן ל-60 שניות לפי מזהה המשתמש.
+// שינוי הרשאות נכנס לתוקף תוך דקה לכל היותר — וה-RLS וה-API חוסמים בכל מקרה.
+type StaffProfile = { mail_only: boolean | null; role: string; is_active: boolean | null }
+const PROFILE_TTL = 60_000
+const profileCache = new Map<string, { at: number; prof: StaffProfile | null }>()
+
+function cachedProfile(userId: string) {
+  const hit = profileCache.get(userId)
+  if (hit && Date.now() - hit.at < PROFILE_TTL) return hit.prof
+  return undefined // undefined = אין במטמון · null = נבדק ואין פרופיל
+}
+
+function rememberProfile(userId: string, prof: StaffProfile | null) {
+  // גיזום עצל — המפה לא תגדל בלי גבול בתהליך ארוך־חיים
+  if (profileCache.size > 500) {
+    for (const [k, v] of profileCache) if (Date.now() - v.at > PROFILE_TTL) profileCache.delete(k)
+  }
+  profileCache.set(userId, { at: Date.now(), prof })
 }
 
 export async function proxy(request: NextRequest) {
@@ -71,15 +96,25 @@ export async function proxy(request: NextRequest) {
     const path = request.nextUrl.pathname
     const isMailPath = path === '/admin/mail' || path.startsWith('/admin/mail/')
 
-    let { data: prof } = await supabase
-      .from('profiles')
-      .select('mail_only, role, is_active')
-      .eq('id', user.id)
-      .maybeSingle()
+    let prof = cachedProfile(user.id) as StaffProfile | null | undefined
+    if (prof === undefined) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('mail_only, role, is_active')
+        .eq('id', user.id)
+        .maybeSingle()
+      prof = data
 
-    if (!prof && user.email) {
-      const r = await supabase.from('profiles').select('mail_only, role, is_active').ilike('email', user.email).maybeSingle()
-      prof = r.data
+      if (!prof && user.email) {
+        // ⚠️ נשאר ilike (התאמה חסרת רישיות — אימיילים נשמרים בטבלה כפי
+        // שהוזנו). האינדקס profiles_email_lower_idx במיגרציה 20260809 הופך
+        // אותו מסריקת טבלה מלאה לחיפוש אינדקס.
+        const r = await supabase.from('profiles')
+          .select('mail_only, role, is_active')
+          .ilike('email', user.email).maybeSingle()
+        prof = r.data
+      }
+      rememberProfile(user.id, prof ?? null)
     }
 
     const STAFF_ROLES = ['admin', 'secretary', 'reviewer', 'collections']

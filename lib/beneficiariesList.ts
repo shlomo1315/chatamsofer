@@ -50,6 +50,18 @@ export interface ListResult {
   counts: Record<string, number>
 }
 
+// בדיקה חד-פעמית לכל תהליך: האם עמודת is_special קיימת. סכימה אינה משתנה
+// בזמן ריצה, ולכן אין טעם לשלם על שאילתת בדיקה בכל טעינת דף. התוצאה נשמרת
+// כ-Promise כדי שגם בקשות מקבילות בעלייה הראשונה יחלקו שאילתה אחת.
+let specialColProbe: Promise<boolean> | null = null
+function hasSpecialColumn(supabase: { from: (t: string) => { select: (c: string) => { limit: (n: number) => PromiseLike<{ error: unknown }> } } }) {
+  specialColProbe ??= (async () => {
+    const { error } = await supabase.from('beneficiaries').select('is_special').limit(1)
+    return !error
+  })()
+  return specialColProbe
+}
+
 // special: true = דף האישורים החריגים (is_special=true); false = הרשימה
 // הראשית (הצאצאים הרגילים, is_special=false/null — החריגים לא מופיעים שם).
 export async function getBeneficiaries(p: ReturnType<typeof readListParams>, special = false): Promise<ListResult> {
@@ -67,13 +79,11 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
     ? p.marital.split(',').map(s => s.trim()).filter(Boolean)
     : []
 
-  // ⚠️ העמודה is_special נוספת במיגרציה שמורצת ידנית. עד שהיא רצה — סינון
-  // עליה מפיל את כל הרשימה (עמודה לא קיימת = שגיאת PostgREST). לכן בודקים
-  // תחילה אם העמודה קיימת, ורק אז מסננים; אם לא — מדלגים על הסינון בבטחה.
-  const hasSpecialCol = await (async () => {
-    const { error } = await supabase.from('beneficiaries').select('is_special').limit(1)
-    return !error
-  })()
+  // ⚠️ בעבר נבדק כאן בכל טעינת דף אם העמודה is_special קיימת — שאילתת בדיקה
+  // *חוסמת* שכל שאר השאילתות המתינו לה. המיגרציה 20260728_special_approvals
+  // כבר רצה מזמן, והבדיקה נשמרת עכשיו במטמון ברמת המודול: היא רצה פעם אחת
+  // לכל תהליך במקום פעם אחת לכל צפייה בדף.
+  const hasSpecialCol = await hasSpecialColumn(supabase)
 
   // סינון החריגים: הרשימה הראשית מציגה רק לא-חריגים; דף החריגים רק חריגים.
   // בהרשמה הראשית תופסים גם null (תאימות לפני שהעמודה קיבלה ערך). אם העמודה

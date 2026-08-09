@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { Plus, Share2 } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { fetchAllRows } from '@/lib/fetchAllRows'
 import { Distribution } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
@@ -23,20 +22,20 @@ async function getDistributions(): Promise<Distribution[]> {
 async function getRegistrationCounts(ids: string[]): Promise<Record<string, number>> {
   if (!isSupabaseConfigured() || !ids.length) return {}
   const supabase = await createClient()
-  // ⚠️ בדפים: תקרת השורות של PostgREST חתכה את הספירה ב-1,000, כלומר כל
-  // חלוקה עם יותר נרשמים הציגה מספר שגוי — בלי שום סימן שהוא חלקי.
-  const { rows: data, error } = await fetchAllRows<{ distribution_id: string }>((from, to) => supabase
-    .from('distribution_recipients')
-    .select('distribution_id')
-    .in('distribution_id', ids)
-    .order('id')
-    .range(from, to))
-  if (error) { console.error('[distributions] count query failed:', error); return {} }
-  const counts: Record<string, number> = {}
-  for (const r of data) {
-    counts[r.distribution_id] = (counts[r.distribution_id] ?? 0) + 1
-  }
-  return counts
+  // ⚠️ בעבר נשלפו *כל* שורות הנרשמים בדפים של 1,000 רק כדי לספור אותן —
+  // עשרות סבבי רשת סדרתיים לפני שהדף בכלל התרנדר, בחלוקות של אלפי משפחות.
+  // (המעבר ל-fetchAllRows נעשה מסיבה נכונה: תקרת 1,000 חתכה את הספירה בשקט.)
+  // כאן במקום זאת count:'exact' עם head:true — הספירה נעשית בשרת ולא מוחזרת
+  // אף שורה, וכל החלוקות נספרות במקביל.
+  const pairs = await Promise.all(ids.map(async (id): Promise<[string, number]> => {
+    const { count, error } = await supabase
+      .from('distribution_recipients')
+      .select('id', { count: 'exact', head: true })
+      .eq('distribution_id', id)
+    if (error) { console.error('[distributions] count failed:', id, error.message); return [id, 0] }
+    return [id, count ?? 0]
+  }))
+  return Object.fromEntries(pairs)
 }
 
 export default async function DistributionsPage() {

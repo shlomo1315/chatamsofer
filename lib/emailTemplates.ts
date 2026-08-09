@@ -1377,6 +1377,40 @@ export function recoveryRealizedEmail(opts: {
   }
 }
 
+// ─── התראה: תשלום משלים מבית ההחלמה (קבלה נוספת לרשומה שכבר הוגשה) ──────────
+export function recoveryTopupEmail(opts: {
+  home: string
+  motherName: string
+  amount: number
+  total: number
+  nights: number | null
+  note: string
+  receiptUrl: string
+}): { subject: string; html: string } {
+  const rows =
+    detailRow('בית החלמה', opts.home) +
+    detailRow('יולדת', opts.motherName) +
+    detailRow('תוספת לגבייה', '₪' + opts.amount.toLocaleString('he-IL')) +
+    detailRow('סה״כ מצטבר', '₪' + opts.total.toLocaleString('he-IL')) +
+    detailRow('לילות נוספים', opts.nights != null ? String(opts.nights) : '—') +
+    (opts.note ? detailRow('הערת בית ההחלמה', opts.note) : '')
+  const body = `
+    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">בית החלמה <b>${escapeHtml(opts.home)}</b> הגיש תשלום משלים עבור <b>${escapeHtml(opts.motherName)}</b>. הסכום כבר נצבר לחשבון היולדת והקבלה נשמרה בכרטסת.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${rows}</table>
+    <p style="margin:16px 0 0;"><a href="${escapeHtml(opts.receiptUrl)}" style="color:#0369a1;font-size:14px;">צפייה בקבלה המשלימה</a></p>
+  `
+  return {
+    subject: `תשלום משלים · ${opts.motherName} · ${opts.home}`,
+    html: shell({
+      preheader: `תוספת ₪${opts.amount.toLocaleString('he-IL')} מ${opts.home}`,
+      accent: '#0891b2',
+      title: 'תשלום משלים מבית החלמה',
+      subtitle: 'קבלה נוספת נקלטה והסכום עודכן',
+      body,
+    }),
+  }
+}
+
 // ─── התראה: בית החלמה ביקש לתקן רשומה נעולה ─────────────────────────────────
 export function recoveryEditRequestEmail(opts: {
   home: string

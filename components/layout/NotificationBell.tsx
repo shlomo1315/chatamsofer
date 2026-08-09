@@ -58,7 +58,10 @@ export default function NotificationBell() {
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 60_000)
+    // ⚠️ כמו במוני המייל: הסקר רץ בכל לשונית פתוחה ומריץ אימות + שאילתת
+    // צירוף בכל טיק. שלוש דקות, ורק כשהלשונית גלויה — הרענון בחזרה ללשונית
+    // (onFocus למטה) כבר מכסה את המקרה שבו המנהל באמת מסתכל.
+    const t = setInterval(() => { if (!document.hidden) load() }, 180_000)
     // רענון מיידי כשחוזרים ללשונית — אחרת ההתראה מתעכבת עד לטיק הבא
     const onFocus = () => load()
     window.addEventListener('focus', onFocus)

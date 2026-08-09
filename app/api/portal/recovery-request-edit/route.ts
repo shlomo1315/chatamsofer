@@ -4,6 +4,7 @@ import { cookies } from 'next/headers'
 import { portalCookieName } from '../login/route'
 import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { deliverMail } from '@/lib/sendMail'
+import { mailFor } from '@/lib/departments'
 import { recoveryEditRequestEmail } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -42,13 +43,14 @@ export async function POST(request: NextRequest) {
   await admin.from('maternity_aids')
     .update({ recovery_edit_requested_at: new Date().toISOString() }).eq('id', aidId)
 
+  // ⚠️ ההתראה נשלחת למחלקת יולדות — לא לבית ההחלמה. עד כה היא נשלחה ל-
+  // recovery_homes.report_email, כלומר לכתובת של המבקש עצמו, ולכן בקשות
+  // תיקון פשוט לא הגיעו למשרד ובית ההחלמה נשאר נעול בלי מענה.
   try {
-    const { data: rh } = await admin.from('recovery_homes').select('report_email').eq('name', home).maybeSingle()
-    if (rh?.report_email) {
-      const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
-      const mail = recoveryEditRequestEmail({ home, motherName: motherName(ben) })
-      await deliverMail(rh.report_email, mail.subject, mail.html)
-    }
+    const ben = Array.isArray(aid.beneficiaries) ? aid.beneficiaries[0] : aid.beneficiaries
+    const mail = recoveryEditRequestEmail({ home, motherName: motherName(ben) })
+    const dept = mailFor('maternity')
+    await deliverMail(dept.fromEmail, mail.subject, mail.html, undefined, dept)
   } catch { /* כשל מייל לא חוסם */ }
 
   return NextResponse.json({ ok: true })

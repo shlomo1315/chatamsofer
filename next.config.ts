@@ -7,8 +7,13 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ['lucide-react', 'date-fns', 'recharts'],
   },
   async headers() {
+    // ⚠️ no-cache ולא no-store. ההבדל מכריע לביצועים: no-store אוסר על
+    // הדפדפן לשמור את התגובה בכלל, ולכן גם ה-Router Cache של Next נפסל —
+    // כל לחיצה בתפריט וכל "חזור" הריצה מחדש את כל רינדור השרת. no-cache
+    // *כן* מאחסן, אך מחייב אימות מול השרת לפני שימוש. פריסות עדיין נראות
+    // מיד (זו הייתה הכוונה המקורית), אבל הניווט הפנימי מפסיק לשלם על זה.
     const noStore = [
-      { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+      { key: "Cache-Control", value: "private, no-cache, must-revalidate, max-age=0" },
     ]
 
     // כותרות אבטחה בסיסיות לכל האתר.

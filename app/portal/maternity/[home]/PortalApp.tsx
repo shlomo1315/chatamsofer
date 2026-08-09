@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
 import {
   Building2, Baby, CalendarDays, Search, Eye, EyeOff, Check,
-  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut, Clock
+  AlertCircle, Lock, X, User, Phone, MapPin, ChevronLeft, LogOut, Clock, Plus
 } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { recoveryWindowEnd } from '@/lib/maternity'
@@ -47,7 +47,21 @@ interface Aid {
   recovery_receipt_url?: string | null
   recovery_locked?: boolean | null
   recovery_edit_requested_at?: string | null
+  recovery_topup_at?: string | null
+  receipts?: Receipt[]
   beneficiary?: Mother
+}
+
+// קבלה בודדת. רשומה שהוגשה נושאת קבלה ראשונה (is_initial), וכל תשלום משלים
+// מוסיף שורה נוספת. הסכום בכרטסת הוא סך כל הקבלות.
+interface Receipt {
+  id: string
+  url: string
+  amount: number
+  nights?: number | null
+  note?: string | null
+  is_initial?: boolean
+  created_at: string
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -305,6 +319,20 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
   const [confirmAid, setConfirmAid] = useState<string | null>(null)
   const [missingModal, setMissingModal] = useState<{ id: string; fields: string[] } | null>(null)
   const [requesting, setRequesting] = useState<string | null>(null)
+  // ─── תשלום משלים ───────────────────────────────────────────────────────────
+  // המקרה: יולדת תכננה לילה אחד, נגבו 1,220₪, ובפועל נשארה שני לילות. עד כה
+  // הרשומה הייתה נעולה והקבלה נדרסת, ולכן לא הייתה דרך לגבות את ההפרש.
+  const [topupAid, setTopupAid] = useState<string | null>(null)
+  const [topupAmount, setTopupAmount] = useState('')
+  const [topupNights, setTopupNights] = useState('')
+  const [topupNote, setTopupNote] = useState('')
+  const [topupFileUrl, setTopupFileUrl] = useState<string | null>(null)
+  const [topupLink, setTopupLink] = useState('')
+  const [topupBusy, setTopupBusy] = useState(false)
+  const [topupErr, setTopupErr] = useState('')
+  const [receipts, setReceipts] = useState<Record<string, Receipt[]>>(
+    () => Object.fromEntries(aids.map(a => [a.id, a.receipts ?? []])),
+  )
 
   const uploadReceipt = async (aidId: string, file: File) => {
     setUploadingReceipt(aidId)
@@ -413,6 +441,70 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     } catch { /* התעלם */ }
     setRequesting(null)
   }
+
+  // פתיחת חלונית התשלום המשלים — מאפסת את השדות מהפעם הקודמת
+  const openTopup = (aidId: string) => {
+    setTopupAid(aidId); setTopupAmount(''); setTopupNights(''); setTopupNote('')
+    setTopupFileUrl(null); setTopupLink(''); setTopupErr('')
+  }
+
+  // העלאת הקבלה המשלימה. topup=1 מונע מהשרת לדרוס את הקבלה המקורית.
+  const uploadTopupReceipt = async (aidId: string, source: File | string) => {
+    setTopupBusy(true); setTopupErr('')
+    try {
+      const fd = new FormData()
+      fd.append('home', home); fd.append('aidId', aidId); fd.append('topup', '1')
+      if (typeof source === 'string') fd.append('link', source); else fd.append('file', source)
+      const r = await fetch('/api/portal/recovery-receipt', { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.url) { setTopupFileUrl(d.url); return d.url as string }
+      setTopupErr(d.error || 'העלאת הקבלה נכשלה — נסו שוב')
+      return null
+    } catch {
+      setTopupErr('שגיאת רשת בהעלאת הקבלה')
+      return null
+    } finally { setTopupBusy(false) }
+  }
+
+  const sendTopup = async (aidId: string) => {
+    const amt = Number(topupAmount)
+    if (!Number.isFinite(amt) || amt <= 0) { setTopupErr('יש להזין את סכום ההפרש'); return }
+    // קישור שהודבק ועדיין לא יובא — מייבאים כאן, לפני השליחה
+    let url = topupFileUrl
+    if (!url) {
+      const typed = extractUrl(topupLink)
+      if (/^https?:\/\//i.test(typed)) url = await uploadTopupReceipt(aidId, typed)
+    }
+    if (!url) { setTopupErr('יש לצרף קובץ קבלה עבור התשלום המשלים'); return }
+
+    setTopupBusy(true); setTopupErr('')
+    try {
+      const r = await fetch('/api/portal/recovery-topup', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          home, aidId, amount: amt,
+          nights: topupNights === '' ? null : Number(topupNights),
+          note: topupNote, receiptUrl: url,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setTopupErr(d.error || 'שמירת התשלום המשלים נכשלה'); return }
+      // עדכון מיידי בממשק — הסכום המצטבר שהשרת החזיר
+      setAmountInput(m => ({ ...m, [aidId]: String(d.total) }))
+      if (d.nights) setNightsInput(m => ({ ...m, [aidId]: String(d.nights) }))
+      setReceipts(m => ({
+        ...m,
+        [aidId]: [...(m[aidId] ?? []), {
+          id: `tmp-${Date.now()}`, url: url!, amount: amt,
+          nights: topupNights === '' ? null : Number(topupNights),
+          note: topupNote || null, created_at: new Date().toISOString(),
+        }],
+      }))
+      setTopupAid(null)
+    } catch {
+      setTopupErr('שגיאת רשת — נסו שוב')
+    } finally { setTopupBusy(false) }
+  }
   const markArrived = async (aidId: string, value: boolean | null) => {
     const prev = arrived[aidId] ?? null
     // סימון "הגיעה" פותח אוטומטית את הטופס (סכום/לוח/קבלה) — כדי שאפשר למלא מיד
@@ -506,6 +598,99 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
           </div>
         </div>
       )}
+
+      {/* חלונית תשלום משלים — הוספת קבלה לרשומה שכבר הוגשה ונעולה.
+          הסכום מצטבר לחשבון היולדת מיד, והמשרד מקבל התראה. */}
+      {topupAid && (() => {
+        const a = aids.find(x => x.id === topupAid); if (!a) return null
+        const current = Number(amountInput[a.id]) || 0
+        const add = Number(topupAmount) || 0
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => !topupBusy && setTopupAid(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto"
+              style={{ animation: 'pop-in 0.2s ease-out' }} onClick={e => e.stopPropagation()}>
+              <div className="bg-cyan-600 px-5 py-4 text-white flex items-start gap-3">
+                <Plus size={22} className="flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-base">תשלום משלים</p>
+                  <p className="text-cyan-50 text-xs mt-1 leading-relaxed">
+                    השהייה התארכה או נגבה סכום חסר? הוסיפו כאן את ההפרש בצירוף קבלה. הסכום יצטבר לחשבון היולדת.
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-1.5">
+                  <div className="flex justify-between"><span className="text-slate-500">יולדת</span><span className="font-semibold text-slate-800">{motherName(a.beneficiary)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">נגבה עד כה</span><span className="font-semibold text-slate-800">₪{current.toLocaleString('he-IL')}</span></div>
+                  {add > 0 && (
+                    <div className="flex justify-between border-t border-slate-200 pt-1.5 mt-1.5">
+                      <span className="text-cyan-700 font-semibold">סה״כ אחרי התוספת</span>
+                      <span className="font-bold text-cyan-700">₪{(current + add).toLocaleString('he-IL')}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">סכום ההפרש לגבייה <span className="text-rose-500">*</span></label>
+                  <input type="text" inputMode="decimal" value={topupAmount}
+                    onChange={e => setTopupAmount(e.target.value.replace(/[^\d.]/g, ''))}
+                    placeholder="לדוגמה: 220"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">לילות נוספים <span className="text-slate-400 font-normal">(אם התווספו)</span></label>
+                  <input type="text" inputMode="numeric" value={topupNights}
+                    onChange={e => setTopupNights(e.target.value.replace(/[^\d]/g, ''))}
+                    placeholder="לדוגמה: 1"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">קובץ קבלה <span className="text-rose-500">*</span></label>
+                  {topupFileUrl ? (
+                    <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2.5">
+                      <Check size={16} className="text-emerald-600" />
+                      <span className="text-sm text-emerald-800 font-medium flex-1">הקבלה צורפה</span>
+                      <button type="button" onClick={() => { setTopupFileUrl(null); setTopupLink('') }}
+                        className="text-xs text-slate-500 hover:text-rose-600 underline">החלף</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input type="file" accept="image/*,application/pdf" disabled={topupBusy}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadTopupReceipt(a.id, f) }}
+                        className="w-full text-sm file:ml-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-cyan-50 file:text-cyan-700 file:font-semibold file:text-xs" />
+                      <p className="text-[11px] text-slate-400 text-center">או הדביקו קישור ישיר לקבלה</p>
+                      <textarea value={topupLink} onChange={e => setTopupLink(e.target.value)} rows={2}
+                        placeholder="הדביקו כאן קישור..." disabled={topupBusy}
+                        className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">הערה למשרד <span className="text-slate-400 font-normal">(לא חובה)</span></label>
+                  <textarea value={topupNote} onChange={e => setTopupNote(e.target.value)} rows={2}
+                    placeholder="לדוגמה: היולדת האריכה את השהייה ללילה נוסף"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" />
+                </div>
+
+                {topupErr && (
+                  <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{topupErr}</p>
+                )}
+              </div>
+              <div className="flex gap-2 p-4 border-t border-slate-100 sticky bottom-0 bg-white">
+                <button onClick={() => setTopupAid(null)} disabled={topupBusy}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 disabled:opacity-40">ביטול</button>
+                <button onClick={() => sendTopup(a.id)} disabled={topupBusy}
+                  className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-sm disabled:opacity-40">
+                  {topupBusy ? '...' : 'שליחת התשלום המשלים'}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* חלונית אימות סופי — "בדוק פעמיים לפני שליחה". לאחר אישור הרשומה ננעלת. */}
       {confirmAid && (() => {
@@ -669,18 +854,42 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                                   היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
                                 </span>
                               </div>
+                              {/* פירוט הקבלות — מוצג רק כשיש יותר מאחת, כלומר אחרי
+                                  תשלום משלים. אחרת זה רעש על רשומה רגילה. */}
+                              {(receipts[aid.id]?.length ?? 0) > 1 && (
+                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 max-w-xs">
+                                  {receipts[aid.id].map((r, i) => (
+                                    <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
+                                      className="hover:text-indigo-600 underline decoration-dotted">
+                                      קבלה {i + 1}: ₪{Number(r.amount).toLocaleString('he-IL')}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                               <div className="flex items-center gap-2">
                                 {status === 'rejected'
                                   ? <span className="text-xs font-medium text-red-600">נדחה</span>
                                   : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
+                                {/* ⚠️ הפעולה הראשית על רשומה נעולה היא "תיקון / תשלום
+                                    משלים" — הוספת קבלה שמצטברת לחשבון. זה מחליף את
+                                    "בקש תיקון", שרק שלח מייל והשאיר את בית ההחלמה נעול
+                                    בלי דרך לגבות הפרש (המקרה: לילה שני שלא נגבה). */}
                                 {locked[aid.id]
-                                  ? (editRequested[aid.id] || requesting === aid.id
-                                      ? <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600"><Lock size={12} /> בקשת תיקון נשלחה</span>
-                                      : <button type="button" onClick={() => requestEdit(aid.id)}
-                                          className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">בקש תיקון</button>)
+                                  ? <button type="button" onClick={() => openTopup(aid.id)}
+                                      className="inline-flex items-center gap-1 text-xs font-bold text-cyan-700 hover:text-cyan-900 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 rounded-lg px-2.5 py-1 transition-colors">
+                                      <Plus size={12} /> תיקון / תשלום משלים
+                                    </button>
                                   : <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
                                       className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>}
                               </div>
+                              {/* בקשת תיקון מלאה (שינוי הנתונים עצמם, לא הוספת סכום) —
+                                  נשארת כמסלול משני למקרים שדורשים התערבות המשרד. */}
+                              {locked[aid.id] && (
+                                editRequested[aid.id] || requesting === aid.id
+                                  ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600"><Lock size={11} /> בקשת תיקון נשלחה למשרד</span>
+                                  : <button type="button" onClick={() => requestEdit(aid.id)}
+                                      className="text-[11px] text-slate-400 hover:text-slate-600 underline">צריך לתקן פרטים אחרים?</button>
+                              )}
                             </div>
                           ) : (
                             <div className={`flex flex-col items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>

@@ -51,7 +51,13 @@ async function getRecoveryHomes(): Promise<{ name: string; availability: string 
   const [homesTable, maternity] = await Promise.all([
     // select('*') — עמיד גם אם עמודת availability טרם נוספה
     supabase.from('recovery_homes').select('*').order('name'),
-    supabase.from('maternity_aids').select('recovery_home').not('recovery_home', 'is', null),
+    // ⚠️ מוגבל ל-2,000 השורות האחרונות. מטרת השאילתה היא רק ללקט שמות בתי
+    // החלמה שנעשה בהם שימוש ואינם רשומים בטבלה — כ-5 ערכים ייחודיים. סריקה
+    // של כל טבלת הלידות בשביל זה הייתה מס כבד על מסך ההגדרות, ובלי הגבלה
+    // ממילא נחתכה ב-1,000 שורות שרירותיות.
+    supabase.from('maternity_aids').select('recovery_home')
+      .not('recovery_home', 'is', null)
+      .order('created_at', { ascending: false }).limit(2000),
   ])
   // טבלת recovery_homes עשויה שלא להתקיים בסביבת פיתוח — מתעלמים רק מ"טבלה לא קיימת"
   if (homesTable.error && homesTable.error.code !== '42P01') throw homesTable.error
