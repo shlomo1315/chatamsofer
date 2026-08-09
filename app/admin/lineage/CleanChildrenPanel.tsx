@@ -17,12 +17,13 @@ export interface CleanNode { id: string; name: string; generation: number; child
 // המנהל *מאשר* כל אשכול — המערכת רק מציעה. אשכול שאינו נכון פשוט מדלגים.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function CleanChildrenPanel({
-  parentName, children, busyId, onMerge, onClose,
+  parentName, children, busyId, onMerge, onMergeAll, onClose,
 }: {
   parentName: string
   children: CleanNode[]
   busyId: string | null
   onMerge: (keepId: string, mergeIds: string[], finalName: string) => void
+  onMergeAll?: (groups: { keepId: string; mergeIds: string[]; finalName: string }[]) => void
   onClose: () => void
 }) {
   const [minLevel, setMinLevel] = useState<'strong' | 'possible'>('strong')
@@ -87,6 +88,26 @@ export default function CleanChildrenPanel({
           ))}
           <span className="mr-auto text-[10px] text-slate-400">״מקורב״ מציג גם התאמות פחות ודאיות — בדקו לפני מיזוג</span>
         </div>
+
+        {/* מיזוג כל האשכולות בלחיצה אחת — הפתרון לצומת עם עשרות כפילויות,
+            שבו מיזוג אשכול-אחר-אשכול הוא עשרות לחיצות. */}
+        {onMergeAll && clusters.length > 1 && (
+          <div className="flex items-center gap-2 border-b border-purple-100 bg-purple-50 px-5 py-2.5">
+            <button disabled={!!busyId}
+              onClick={() => {
+                const all = clusters.map(g => {
+                  const keep = pickKeep(g)
+                  return { keepId: keep.id, mergeIds: g.filter(x => x.id !== keep.id).map(x => x.id), finalName: pickName(g) }
+                })
+                setDone(s => { const n = new Set(s); clusters.forEach(g => n.add(g.map(x => x.id).sort().join('|'))); return n })
+                onMergeAll(all)
+              }}
+              className="rounded-lg bg-purple-700 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-purple-800 disabled:opacity-50">
+              ⚯ מזג את כל {clusters.length} הקבוצות ({totalDup} צמתים)
+            </button>
+            <span className="text-[10px] text-purple-600">כל קבוצה ממוזגת לצומת המסומן ★ — עברו על הרשימה לפני</span>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-4">
           {clusters.length === 0 ? (

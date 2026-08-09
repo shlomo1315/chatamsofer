@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { mergeWithCascade } from '@/lib/lineageMerge'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 
@@ -95,6 +96,14 @@ export async function POST(request: NextRequest) {
   }
 
   // (השמות נכתבים בתוך mergeWithCascade — אחרי כל שלב במפל בנפרד)
+
+  // 🔴 השורש ל"המיזוג בוצע אבל אחרי שנייה הכל חוזר":
+  // המיזוג מחק את הצמתים במסד, אבל מטמון העץ (getCachedLineageTree, TTL 60ש'
+  // עם stale-while-revalidate) לא נפסל — ולכן הרענון שרץ מיד אחרי המיזוג קיבל
+  // את העותק *מלפני* המחיקה והחזיר את הצמתים למסך. המסד היה נקי כל הזמן.
+  // כל שאר מסלולי הכתיבה בעץ (PATCH/DELETE/import/approve) כבר קוראים לזה —
+  // המיזוג היה היחיד שדילג.
+  invalidateLineageCache()
 
   await logActivity(admin, {
     userId: staff.userId,

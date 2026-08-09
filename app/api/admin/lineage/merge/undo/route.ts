@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { undoMergeBatch, recalcGenerations } from '@/lib/lineageMerge'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -78,6 +79,10 @@ export async function POST(request: NextRequest) {
     entityType: 'lineage_node', entityId: keepId ?? batchId,
     details: { batchId, restored },
   }).catch(() => {})
+
+  // ⚠️ אותה תקלה כמו במיזוג עצמו: בלי פסילת המטמון הצמתים ששוחזרו לא
+  // מופיעים חזרה במסך עד שה-TTL פג.
+  invalidateLineageCache()
 
   return NextResponse.json({ ok: true, restored })
 }

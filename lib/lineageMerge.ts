@@ -322,10 +322,21 @@ async function mergeOne(
     // ⚠️ כשל מחיקה נבדק במפורש. בלי הבדיקה הזו כשל כאן חזר כ"הצלחה": הצומת
     // נשאר בעץ, הספירה דיווחה על מיזוג, והרענון החזיר אותו למסך — בדיוק
     // התסמין של "עשיתי מיזוג והכל נשאר אותו דבר".
-    const { error: delErr } = await db.from('lineage_nodes').delete().eq('id', mid)
+    // ⚠️ select() אחרי delete כדי לקבל את השורות שנמחקו *בפועל*. בלי זה
+    // מחיקה שלא נגעה בכלום חוזרת בלי שגיאה, והמיזוג דיווח "בוצע" בעוד
+    // הצומת נשאר במסד — ואז הרענון מהשרת החזיר אותו למסך. זה בדיוק
+    // התסמין "התמזג ואחרי כמה שניות קפץ בחזרה".
+    // הסיבה השכיחה: RLS. הנתיב חייב לרוץ ב-service role; מפתח anon עובר
+    // את ה-SELECT אך שקט ב-DELETE.
+    const { data: gone, error: delErr } = await db.from('lineage_nodes')
+      .delete().eq('id', mid).select('id')
     if (delErr) {
       console.error('[lineageMerge] מחיקת הצומת נכשלה:', delErr.message)
       throw new Error(`מחיקת הצומת הממוזג נכשלה: ${delErr.message}`)
+    }
+    if (!gone || gone.length === 0) {
+      console.error('[lineageMerge] המחיקה לא הסירה דבר — צומת:', mid)
+      throw new Error('המיזוג לא בוצע: מחיקת הצומת לא הסירה שום שורה (בדוק הרשאות service role / RLS על lineage_nodes)')
     }
   }
 

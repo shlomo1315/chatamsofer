@@ -1780,6 +1780,41 @@ export default function LineagePage() {
     await mergeByIds(effectiveKeepId, ids.filter(id => id !== effectiveKeepId), names)
   }
 
+  // ── מיזוג מרוכז של כמה קבוצות ברצף ──
+  // ⚠️ סדרתי ולא במקביל: כל מיזוג משנה את העץ (מעביר ילדים, מוחק צמתים),
+  // ושתי בקשות שרצות יחד על אזורים חופפים דורסות זו את זו. הרענון נעשה
+  // *פעם אחת* בסוף — לא אחרי כל קבוצה — אחרת התצוגה מהבהבת עשרות פעמים
+  // וכל רענון מחזיר תמונה חלקית באמצע הרצף.
+  async function mergeSequential(groups: { keepId: string; mergeIds: string[]; finalName: string }[]) {
+    if (!groups.length) return
+    setMerging(true)
+    let okCount = 0, nodeCount = 0
+    const failures: string[] = []
+    for (const g of groups) {
+      try {
+        const res = await fetch('/api/admin/lineage/merge', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            keepId: g.keepId, mergeIds: g.mergeIds,
+            // ⚠️ בלי מפל כלפי מעלה במיזוג המוני: המפל ממזג גם אבות שלא
+            // נבחרו, ובריצה על עשרות קבוצות הוא משנה את העץ מתחת לרגליים
+            // של הקבוצות הבאות ברשימה.
+            cascadeUpApprox: false, cascadeUp: false,
+            names: { [g.keepId]: g.finalName },
+          }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (res.ok) { okCount++; nodeCount += d.mergedCount ?? g.mergeIds.length }
+        else failures.push(d.error || 'שגיאה')
+      } catch { failures.push('שגיאת רשת') }
+    }
+    await softRefresh()
+    setMerging(false)
+    setMergeFlash(failures.length
+      ? { ok: false, n: flashSeq.current++, text: `מוזגו ${okCount} מתוך ${groups.length} קבוצות · ${failures.length} נכשלו: ${failures[0]}` }
+      : { ok: true, n: flashSeq.current++, text: `מוזגו ${okCount} קבוצות · ${nodeCount} צמתים הוסרו` })
+  }
+
   // ── מיזוג מהיר מ-hover — לחיצה אחת = מיזוג מיידי, בלי תצוגה מקדימה ──
   // ⚠️ בקשת המנהל: על צומת כפול/מועמד-למיזוג, לחיצה על הכפתור ממזגת מיד את כל
   // קבוצת הכפילות (אותו אב+דור+שם) לתוך הצומת שנלחץ, בלייב, בלי מסך ביניים.
@@ -2267,6 +2302,7 @@ export default function LineagePage() {
             children={kids.map(k => ({ id: k.id, name: k.name, generation: k.generation, status: k.status, childCount: kidCount(k.id) }))}
             busyId={merging ? cleanParentId : null}
             onMerge={(keepId, mergeIds, finalName) => { void mergeByIds(keepId, mergeIds, { [keepId]: finalName }) }}
+            onMergeAll={groups => { void mergeSequential(groups) }}
             onClose={() => setCleanParentId(null)}
           />
         )
