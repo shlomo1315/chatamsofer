@@ -885,7 +885,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
               ? 'linear-gradient(rgba(0,0,0,0.30),rgba(0,0,0,0.30)), '
               : ''
             const isSel = selected === pos.node.id
-            const inMerge = mergeMode && mergeSel.has(pos.node.id)
+            // ⚠️ לא מותנה יותר ב-mergeMode: Ctrl+לחיצה מסמנת גם מחוץ למצב
+            // המיזוג, והסימון חייב להיראות על הכרטיס גם אז — אחרת המשתמש מסמן
+            // שבעה צמתים ולא רואה שום חיווי שמשהו נבחר.
+            const inMerge = mergeSel.has(pos.node.id)
             const isDup = dupIds.has(pos.node.id)
             const inScan = scanIds.has(pos.node.id)
             const inLocate = locateIds.has(pos.node.id)
@@ -913,7 +916,17 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                 data-lin-node="1"
                 onMouseEnter={() => showHover(pos.node.id)}
                 onMouseLeave={scheduleHideHover}
-                onClick={e => { e.stopPropagation(); if (mergeMode) { onToggleMerge(pos.node.id); return } setSelected(prev => prev === pos.node.id ? null : pos.node.id) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  // ⚡ Ctrl/Cmd+לחיצה = סימון מהיר למיזוג, מכל מקום ובלי להיכנס
+                  // קודם למצב מיוחד. זו הדרך המהירה לסמן ידנית קבוצת כפילויות
+                  // (למשל שבעה "רבי ישראל שטערן" באותו דור): לחיצה לכל צומת.
+                  // ⚠️ הבחירה נשמרת ב-mergeSel ולא ב-selected — selected מכבה את
+                  // הווירטואליזציה (ראו virtualizeOff), ובעץ גדול זה היה מקפיא.
+                  if (e.ctrlKey || e.metaKey) { onToggleMerge(pos.node.id); return }
+                  if (mergeMode) { onToggleMerge(pos.node.id); return }
+                  setSelected(prev => prev === pos.node.id ? null : pos.node.id)
+                }}
                 style={{
                   position: 'absolute', left: rx * zoom, top: ry * zoom,
                   width: NW * zoom, height: NH * zoom, borderRadius: 16 * zoom,
@@ -1027,8 +1040,11 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                   }}>{pos.node.relation === 'son' ? 'בן' : 'חתן'}</div>
                 )}
 
-                {/* actions strip — מתחת לקובייה, גם בלחיצה וגם במעבר עכבר (hover) */}
-                {!mergeMode && (isSel || hovered === pos.node.id) && (
+                {/* actions strip — מתחת לקובייה, גם בלחיצה וגם במעבר עכבר (hover).
+                    ⚠️ מוצג גם במצב מיזוג. עד כה הוא הוסתר שם לגמרי, וברגע
+                    שנכנסו למצב המיזוג נעלמו *כל* הפעולות על הצומת — כולל
+                    "סמן למיזוג" עצמו ופתיחת הכרטסת לבדיקה מי הצומת הזה. */}
+                {(isSel || hovered === pos.node.id) && (
                   <div onClick={e => e.stopPropagation()}
                     onMouseEnter={() => showHover(pos.node.id)}
                     onMouseLeave={scheduleHideHover}
@@ -1046,12 +1062,33 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                         מסריקה מקורבת. לחיצה = מיזוג מיידי בלייב, בלי תצוגה מקדימה
                         (isDup: ממזג את כל הקבוצה מיד; מועמד-מקורב בלי קבוצה מדויקת:
                         נכנס למצב מיזוג לבחירה ידנית). */}
-                    {(isDup || inScan) && (
-                      <button onClick={() => onMergeGroup(pos.node.id)} title="מזג מיד את הכפילויות של שם זה באותו גזע"
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
-                        ⚯ מזג מיד
-                      </button>
-                    )}
+                    {/* ⚡ סימון ידני — הפעולה הראשית. המשתמש בוחר בעצמו מי מתמזג
+                        עם מי, במקום שהמערכת תחליט לפי שם זהה. מופיע על *כל*
+                        צומת (לא רק על כפילויות שזוהו), כי בדיוק שם היה החסר:
+                        צמתים שהזיהוי האוטומטי לא תפס לא היו ניתנים לסימון. */}
+                    <button onClick={() => onToggleMerge(pos.node.id)}
+                      title={inMerge ? 'הסר מהבחירה' : 'סמן צומת זה למיזוג (קיצור: Ctrl+לחיצה על הכרטיס)'}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: inMerge ? '#16A34A' : '#F1F5F9', color: inMerge ? '#fff' : '#334155', border: `1px solid ${inMerge ? '#16A34A' : '#CBD5E1'}`, cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                      {inMerge ? '✓ מסומן למיזוג' : '+ סמן למיזוג'}
+                    </button>
+                    {/* קיצור-דרך אוטומטי — נפרד ומסומן ככזה. הכיתוב מציין כמה
+                        צמתים ייבלעו, כדי שלא יתבלבל עם "מזג את מה שסימנתי". */}
+                    {(isDup || inScan) && (() => {
+                      // ספירת הקבוצה מחושבת כאן מקומית (אותו כלל בדיוק כמו
+                      // dupIds בדף האב: אותו הורה + אותו דור + שם זהה אחרי נרמול
+                      // רווחים) — רק כדי להציג מספר בכיתוב, לא כדי למזג.
+                      const nm = pos.node.name.trim().replace(/\s+/g, ' ')
+                      const gs = nodes.filter(n =>
+                        (n.parent_id ?? 'root') === (pos.node.parent_id ?? 'root') &&
+                        n.generation === pos.node.generation &&
+                        n.name.trim().replace(/\s+/g, ' ') === nm).length
+                      return (
+                        <button onClick={() => onMergeGroup(pos.node.id)} title="קיצור: מזג אוטומטית את כל הכפילויות בעלות שם זהה באותו גזע"
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#9333EA', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+                          ⚯ {gs > 1 ? `מזג את כל ה-${gs} הכפולים` : 'מזג מיד'}
+                        </button>
+                      )
+                    })()}
                     {/* ── פתיחת הכרטסת המקושרת ──
                         ⚠️ העץ ידע עד כה רק שמות, וכל מעבר לכרטסת דרש לחפש את
                         המשפחה ידנית לפי שם. הכפתור מופיע רק כשיש משפחה מקושרת,
@@ -1448,6 +1485,8 @@ export default function LineagePage() {
   // "שמואל בנימין שישא"), ובלי זה מיזוג הבן השאיר את האב כפול — וכל מיזוג
   // הותיר זנב ידני לתקן.
   const [mergeUpApprox, setMergeUpApprox] = useState(true)
+  // השם הסופי בבר המיזוג המהיר. ריק = השתמש בברירת המחדל (fullestSelName).
+  const [quickName, setQuickName] = useState('')
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
   const [dupFilter, setDupFilter] = useState(false)
   // לאחר מיזוג — הצעה לאשר את הייחוס
@@ -1522,7 +1561,7 @@ export default function LineagePage() {
     if (ids[0]) setAnchor(a => ({ id: ids[0], n: (a?.n ?? 0) + 1 }))
   }, [])
 
-  function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false) }
+  function exitMerge() { setMergeMode(false); setMergeSel(new Set()); setKeepId(null); setMergeConfirm(false); setQuickName('') }
   function enterMerge() { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false); setMergeMode(true); setMergeSel(new Set()); setKeepId(null) }
 
   // התחלת מיזוג ממוקד מצומת כפול — מסמן אוטומטית את כל הקבוצה (אותו גזע + שם), הצומת שנלחץ נשאר
@@ -1552,6 +1591,17 @@ export default function LineagePage() {
   const effectiveKeepId = keepId && mergeSel.has(keepId)
     ? keepId
     : (selectedNodes.find(n => (n.status ?? 'verified') === 'verified')?.id ?? selectedNodes[0]?.id ?? null)
+
+  // השם המנוסח בעושר הרב ביותר מבין הנבחרים — ברירת המחדל לשם הסופי.
+  // ⚠️ הכי הרבה מילים ואז הכי ארוך, ולא "השם של הצומת שנשאר": הצומת שנשאר
+  // נבחר לפי אימות/ילדים, ולעיתים קרובות דווקא הוא נושא את הגרסה המקוצרת
+  // ("רבי ישראל שטערן" מול "רבי ישראל וביילא שטערן").
+  const fullestSelName = useMemo(() => {
+    const names = selectedNodes.map(n => n.name).filter(Boolean)
+    if (!names.length) return ''
+    return names.slice().sort((a, b) =>
+      b.trim().split(/\s+/).length - a.trim().split(/\s+/).length || b.length - a.length)[0]
+  }, [selectedNodes])
 
   // פתיחת תצוגה מקדימה של המיזוג הידני — קוראת ל-plan ומחשבת ברירת-מחדל לשם
   // לכל דור (הניסוח העשיר ביותר), בדיוק כמו במרכז המיזוגים. אחריה המשתמש
@@ -2108,12 +2158,14 @@ export default function LineagePage() {
       {/* באנר הדרכה במצב מיזוג */}
       {mergeMode && mergeSel.size === 0 && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 120, background: '#FAF5FF', border: '1.5px solid #E9D5FF', color: '#7C2D92', borderRadius: 14, padding: '10px 18px', fontSize: 13, fontWeight: 700, boxShadow: '0 8px 24px rgba(124,58,237,0.18)' }}>
-          מצב מיזוג: סמן 2 צמתים או יותר (אותו אדם) למיזוג · <button onClick={exitMerge} style={{ color: '#9333EA', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>סיום</button>
+          מצב מיזוג: סמן 2 צמתים או יותר (אותו אדם) · קיצור: <kbd style={{ background: '#fff', border: '1px solid #E9D5FF', borderRadius: 5, padding: '1px 6px', fontFamily: 'inherit', fontWeight: 800 }}>Ctrl</kbd> + לחיצה על כרטיס · <button onClick={exitMerge} style={{ color: '#9333EA', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>סיום</button>
         </div>
       )}
 
-      {/* בר מיזוג צף — נבחרו צמתים */}
-      {mergeMode && mergeSel.size > 0 && (
+      {/* בר מיזוג צף — נבחרו צמתים.
+          ⚠️ לא מותנה ב-mergeMode: Ctrl+לחיצה מסמנת בלי להיכנס למצב, והבר
+          חייב להופיע גם אז — אחרת אין שום דרך לראות מה נבחר או למזג. */}
+      {mergeSel.size > 0 && (
         <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 120, background: '#fff', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: '12px 16px', boxShadow: '0 12px 32px rgba(0,0,0,0.18)', maxWidth: '92vw', direction: 'rtl' }}>
           <div style={{ fontSize: 12, fontWeight: 800, color: '#64748B', marginBottom: 8 }}>נבחרו {mergeSel.size} צמתים — בחר איזה <span style={{ color: '#16A34A' }}>נשאר</span>:</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', maxWidth: 720 }}>
@@ -2128,11 +2180,29 @@ export default function LineagePage() {
                 </button>
               )
             })}
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setMergeConfirm(true)} disabled={mergeSel.size < 2}
-              style={{ background: mergeSel.size < 2 ? '#C4B5FD' : '#9333EA', color: '#fff', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 13, fontWeight: 800, cursor: mergeSel.size < 2 ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-              מזג {mergeSel.size} צמתים
+            <div style={{ flex: 1 }} /></div>
+          {/* ── שורה שנייה: השם הסופי + מיזוג ──
+              המיזוג מיידי (בלי חלונית אישור), אבל השם הסופי ניתן לעריכה כאן
+              במקום — כי דווקא הוא מה שצריך תיקון לעיתים קרובות: הצומת שנשאר
+              אינו בהכרח זה שנושא את השם המלא ביותר. ברירת המחדל היא השם הארוך
+              ביותר בקבוצה, וזה בדרך כלל הנכון. */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid #F1F5F9', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#64748B', whiteSpace: 'nowrap' }}>השם הסופי:</span>
+            <input value={quickName} onChange={e => setQuickName(e.target.value)}
+              placeholder={fullestSelName}
+              style={{ flex: 1, minWidth: 220, padding: '7px 12px', borderRadius: 10, border: '1.5px solid #E2E8F0', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', color: '#0F172A' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={mergeUpApprox} onChange={e => setMergeUpApprox(e.target.checked)} style={{ width: 15, height: 15, accentColor: '#9333EA', cursor: 'pointer' }} />
+              מזג גם את האבות שמעל
+            </label>
+            <button onClick={() => void handleMerge(effectiveKeepId ? { [effectiveKeepId]: (quickName.trim() || fullestSelName) } : undefined)}
+              disabled={mergeSel.size < 2 || merging}
+              style={{ background: (mergeSel.size < 2 || merging) ? '#C4B5FD' : '#9333EA', color: '#fff', border: 'none', borderRadius: 11, padding: '9px 18px', fontSize: 13, fontWeight: 800, cursor: (mergeSel.size < 2 || merging) ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              {merging ? 'ממזג…' : `⚯ מזג ${mergeSel.size} צמתים`}
             </button>
+            <button onClick={() => setMergeConfirm(true)} disabled={mergeSel.size < 2}
+              title="הצגת תצוגה מקדימה מלאה של המיזוג לפני ביצוע"
+              style={{ background: '#F1F5F9', color: '#475569', border: '1px solid #E2E8F0', borderRadius: 11, padding: '9px 14px', fontSize: 12, fontWeight: 700, cursor: mergeSel.size < 2 ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>תצוגה מקדימה</button>
             <button onClick={exitMerge} style={{ background: '#F1F5F9', color: '#64748B', border: 'none', borderRadius: 11, padding: '9px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
           </div>
         </div>
