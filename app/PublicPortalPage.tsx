@@ -1307,7 +1307,10 @@ function WidowPortal({ beneficiary, onBack }: { beneficiary: FoundBeneficiary; o
     if (!reqType) { setError('בחר סוג בקשה'); return }
     setSubmitting(true); setError('')
     try {
-      const res = await fetch('/api/portal/widow-request', {
+      // ⚠️ קוד הבדיקה נקרא מהכתובת ולא מ-prop: WidowPortal הוא רכיב נפרד,
+      // והשרשור של prop דרך כל שרשרת הרכיבים היה רועש מהערך שהוא נושא.
+      const pv = new URLSearchParams(window.location.search).get('preview')
+      const res = await fetch(`/api/portal/widow-request${pv ? `?preview=${encodeURIComponent(pv)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, request_type: reqType, description: reqDesc, amount: reqAmount ? Number(reqAmount) : undefined }),
@@ -2625,7 +2628,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         { name: birthForm.baby_name, gender: birthForm.baby_gender, id_type: birthForm.baby_id_type, id_number: birthForm.baby_id_number },
         ...(isTwins ? [{ name: baby2.baby_name, gender: baby2.baby_gender, id_type: baby2.baby_id_type, id_number: baby2.baby_id_number }] : []),
       ]
-      const res = await fetch('/api/portal/birth-request', {
+      const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, ...birthForm, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, is_twins: isTwins, babies, birth_certificate_url: certUrl, baby_name_pending: noBabyName }),
@@ -2735,7 +2738,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       fd.append('beneficiary_id', beneficiary.id)
       fd.append('reason', aidReason.trim())
       fd.append('file', aidFile)
-      const res = await fetch('/api/portal/financial-aid-request', { method: 'POST', body: fd })
+      const res = await fetch(`/api/portal/financial-aid-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשליחת הבקשה'); return }
       setAidModalOpen(false); setAidReason(''); setAidFile(null)
@@ -2872,7 +2875,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         setLoading(false); return
       }
 
-      const res = await fetch('/api/portal/birth-request', {
+      const res = await fetch(`/api/portal/birth-request${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ beneficiary_id: beneficiary.id, birth_type: 'silent', birth_date: silentForm.birth_date, recovery_home: silentForm.recovery_home, wants_food_card: wantsFoodCard, wants_recovery: wantsRecovery, notes: silentForm.notes, birth_certificate_url: certUrl }),
       })

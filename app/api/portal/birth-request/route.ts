@@ -10,7 +10,7 @@ import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { defaultRecoveryDays, type BabyEntry } from '@/lib/maternity'
 import { rateLimit } from '@/lib/rateLimit'
 import { MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
-import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
+import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
 
   // ⚠️ שער המחלקה — אם עזר יולדות סגור כרגע, לא מקבלים בקשות חדשות.
   // נבדק לפני כל עיבוד, כדי שגם בקשה שנשלחת ישירות ל-API (עוקפת את הטופס) תיחסם.
-  if (!(await isDepartmentOpen('maternity'))) {
+  // ⚠️ ?preview= עוקף את השער לבקשה זו בלבד (ראו lib/departmentGates).
+  if (!(await isDepartmentAccessible('maternity', request.nextUrl.searchParams.get('preview')))) {
     return NextResponse.json({ error: departmentClosedMessage('maternity'), departmentClosed: true }, { status: 403 })
   }
 

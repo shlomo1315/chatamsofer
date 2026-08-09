@@ -6,7 +6,7 @@ import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
-import { isDepartmentOpen, departmentClosedMessage } from '@/lib/departmentGates'
+import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +21,8 @@ function getAdmin() {
 
 export async function POST(request: NextRequest) {
   // שער המחלקה — אלמנות ויתומים סגור → לא מקבלים בקשות
-  if (!(await isDepartmentOpen('widows'))) {
+  // ⚠️ ?preview= עוקף את השער לבקשה זו בלבד (ראו lib/departmentGates).
+  if (!(await isDepartmentAccessible('widows', request.nextUrl.searchParams.get('preview')))) {
     return NextResponse.json({ error: departmentClosedMessage('widows'), departmentClosed: true }, { status: 403 })
   }
   let body: Record<string, unknown>
