@@ -28,6 +28,10 @@ export default function CleanChildrenPanel({
 }) {
   const [minLevel, setMinLevel] = useState<'strong' | 'possible'>('strong')
   const [done, setDone] = useState<Set<string>>(new Set())
+  // בחירת שם ידנית לכל קבוצה (מפתח הקבוצה → השם שנבחר). ריק = ברירת המחדל.
+  const [chosenName, setChosenName] = useState<Record<string, string>>({})
+  // הקבוצה שפתוחה לעריכת שם
+  const [nameOpen, setNameOpen] = useState<string | null>(null)
 
   // איחוד למחלקות שקילות (union-find פשוט) לפי רמת ההתאמה שנבחרה.
   const clusters = useMemo(() => {
@@ -52,12 +56,19 @@ export default function CleanChildrenPanel({
       const k = familyKey(c.name)
       const arr = buckets.get(k) ?? []; arr.push(c); buckets.set(k, arr)
     }
+    // ⚠️ עוגן ולא שרשור. union-find מקשר בשרשרת: אם A דומה ל-B ו-B דומה
+    // ל-C, גם A ו-C נכנסים לאותה קבוצה — גם כשהם שונים לגמרי. כך אשכול
+    // אחד בלע "רבי שלמה אלכסנדרי שרייבר", "רבי שלמה בנימין שרייבר"
+    // ו"רבי שלמה זלמן אולמן" יחד (77 עותקים של שלושה אנשים שונים).
+    // כאן כל צומת מצורף רק לעוגן שהוא דומה לו *ישירות* — הצומת הראשון
+    // בדלי שנמצא לו דומה. אין מעבר טרנזיטיבי.
     for (const bucket of buckets.values()) {
       if (bucket.length < 2) continue
-      for (let i = 0; i < bucket.length; i++) {
-        for (let j = i + 1; j < bucket.length; j++) {
-          if (ok(compareHebrewNames(bucket[i].name, bucket[j].name).level)) union(bucket[i].id, bucket[j].id)
-        }
+      const anchors: CleanNode[] = []
+      for (const c of bucket) {
+        const hit = anchors.find(a => ok(compareHebrewNames(a.name, c.name).level))
+        if (hit) union(hit.id, c.id)
+        else anchors.push(c)
       }
     }
     const byRoot = new Map<string, CleanNode[]>()
@@ -76,10 +87,20 @@ export default function CleanChildrenPanel({
     g.find(n => (n.status ?? 'verified') === 'verified') ??
     [...g].sort((a, b) => b.childCount - a.childCount)[0]
 
-  // השם שיישאר: המפורט ביותר (הכי הרבה מילים, ואז הכי ארוך)
-  const pickName = (g: CleanNode[]) =>
-    [...g].map(n => n.name).sort((a, b) =>
-      b.trim().split(/\s+/).length - a.trim().split(/\s+/).length || b.length - a.length)[0]
+  // השם שיישאר: הניסוח *הנפוץ ביותר* בקבוצה, ובתיקו — הארוך יותר.
+  //
+  // ⚠️ לא "הכי הרבה מילים" כפי שהיה. באשכול של 77 עותקים, שורה חריגה אחת
+  // ("רבי שלמה זלמן אולמן בר ישראל גם חתן רבי א.ח.דוד שרייבר") ניצחה את
+  // 40 המופעים של הניסוח הנכון רק מפני שהייתה ארוכה — וכל 77 הצמתים היו
+  // מקבלים שם של אדם אחר. רוב קובע: הניסוח שחוזר הכי הרבה פעמים הוא הנכון.
+  const pickName = (g: CleanNode[]) => {
+    const tally = new Map<string, number>()
+    for (const n of g) {
+      const nm = n.name.trim().replace(/\s+/g, ' ')
+      tally.set(nm, (tally.get(nm) ?? 0) + 1)
+    }
+    return [...tally.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0]
+  }
 
   const totalDup = clusters.reduce((s, g) => s + g.length - 1, 0)
 
@@ -127,7 +148,9 @@ export default function CleanChildrenPanel({
               onClick={() => {
                 const all = clusters.map(g => {
                   const keep = pickKeep(g)
-                  return { keepId: keep.id, mergeIds: g.filter(x => x.id !== keep.id).map(x => x.id), finalName: pickName(g) }
+                  // גם במיזוג ההמוני — בחירה ידנית לקבוצה מסוימת נשמרת
+                  const k = g.map(x => x.id).sort().join('|')
+                  return { keepId: keep.id, mergeIds: g.filter(x => x.id !== keep.id).map(x => x.id), finalName: chosenName[k] ?? pickName(g) }
                 })
                 setDone(s => { const n = new Set(s); clusters.forEach(g => n.add(g.map(x => x.id).sort().join('|'))); return n })
                 onMergeAll(all)
@@ -148,8 +171,9 @@ export default function CleanChildrenPanel({
             <div className="flex flex-col gap-2.5">
               {clusters.map(g => {
                 const keep = pickKeep(g)
-                const finalName = pickName(g)
                 const key = g.map(x => x.id).sort().join('|')
+                // בחירה ידנית גוברת על ברירת המחדל
+                const finalName = chosenName[key] ?? pickName(g)
                 const isBusy = busyId === keep.id
                 return (
                   <div key={key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -170,7 +194,31 @@ export default function CleanChildrenPanel({
                         </div>
                       ))}
                     </div>
-                    <p className="mt-1.5 text-[10px] text-slate-400">שם סופי: <span className="font-semibold text-slate-600">{finalName}</span></p>
+                    {/* בורר השם הסופי — לחיצה פותחת את כל הניסוחים בקבוצה.
+                        ⚠️ נדרש: ברירת המחדל היא הניסוח הנפוץ ביותר, אבל היא
+                        לא תמיד הנכונה — ובקבוצה של 77 צמתים שם שגוי נכתב על
+                        כולם בבת אחת. */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400">שם סופי:</span>
+                      <button onClick={() => setNameOpen(o => o === key ? null : key)}
+                        className="text-[11px] font-semibold text-indigo-700 underline decoration-dotted hover:text-indigo-900 text-right">
+                        {finalName}
+                      </button>
+                      <span className="text-[10px] text-slate-300">(לחצו לשינוי)</span>
+                    </div>
+                    {nameOpen === key && (
+                      <div className="mt-1.5 max-h-40 overflow-y-auto rounded-lg border border-indigo-100 bg-white p-1.5">
+                        {[...new Set(g.map(n => n.name.trim().replace(/\s+/g, ' ')))]
+                          .sort((a, b) => a.localeCompare(b, 'he'))
+                          .map(nm => (
+                            <button key={nm}
+                              onClick={() => { setChosenName(c => ({ ...c, [key]: nm })); setNameOpen(null) }}
+                              className={`block w-full rounded px-2 py-1 text-right text-[11px] hover:bg-indigo-50 ${nm === finalName ? 'font-bold text-indigo-700' : 'text-slate-600'}`}>
+                              {nm === finalName ? '✓ ' : ''}{nm}
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )
               })}
