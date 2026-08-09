@@ -5,7 +5,7 @@ import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
-import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
+import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
 import { getRegistrationCallText, getRegistrationCallAudio } from '@/lib/registrationCallMessage'
 import { verifyVerifyToken } from '@/lib/verifyToken'
@@ -292,11 +292,10 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // בשאילתה *אחת* לכל השדות (id_number/spouse) ובשאילתה אחת ל-children — לכל
   // הילדים יחד. מוריד את עומס ה-DB דרסטית כשאלפי טפסים מגיעים במקביל.
   if (Array.isArray(children) && children.length) {
-    // ילד נשוי — 'נשוי' לבן, 'נשואה' לבת (ראו maritalFor ב-PublicPortalPage).
-    const childIsMarried = (s: unknown) => {
-      const v = String(s ?? '').trim()
-      return v === 'נשוי' || v === 'נשואה' || v === 'נשואים'
-    }
+    // ⚠️ isChildMarried המשותף ולא בדיקה עברית מקומית: טופס הניהול שומר
+    // 'married' באנגלית, ולכן ילד שסומן נשוי מהמשרד לא זוהה ככזה ונחסם —
+    // "אי אפשר לרשום ילדים נשואים". ראו lib/childDuplicateMessage.
+    const childIsMarried = isChildMarried
     const seen = new Set<string>()
     const childIds: string[] = []
     const childLabels: string[] = []

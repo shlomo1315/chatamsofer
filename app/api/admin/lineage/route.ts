@@ -32,10 +32,27 @@ const PAYLOAD_TTL_MS = 60_000
 const PAYLOAD_STALE_MAX_MS = 10 * 60_000
 let _payloadInflight: Promise<LineagePayload> | null = null
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500, headers: NO_STORE })
+
+  // 🔴 ?fresh=1 — עוקף את המטמון לחלוטין ובונה מחדש מהמסד.
+  //
+  // זה מטמון *שני*, נפרד מ-getCachedLineageTree, והוא זה שהחזיר את הצמתים
+  // אחרי מיזוג: גם כשהגרסה נפסלה, הענף "עותק מיושן" למטה הגיש את ה-payload
+  // הישן *מיד* ורק רענן ברקע. כלומר הרענון שרץ שנייה אחרי המיזוג קיבל
+  // תמיד את התמונה שלפניו. ה-SWR נכון לטעינה רגילה (הוא מונע "טוען…" ארוך
+  // בשעות עומס), אבל אחרי כתיבה חייבים את האמת — ולשם כך הדגל.
+  const forceFresh = request.nextUrl.searchParams.get('fresh') === '1'
+  if (forceFresh) {
+    try {
+      const body = await buildPayload(admin)
+      return NextResponse.json(body, { headers: NO_STORE })
+    } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500, headers: NO_STORE })
+    }
+  }
 
   const now = Date.now()
   const version = lineageCacheVersion()
@@ -44,7 +61,9 @@ export async function GET() {
   }
 
   // עותק מיושן אך שמיש — מגישים מיד, מרעננים ברקע.
-  if (_payloadCache && now - _payloadCache.at < PAYLOAD_STALE_MAX_MS) {
+  // ⚠️ רק כשהגרסה לא נפסלה. קודם התנאי לא בדק את הגרסה כלל, ולכן עותק
+  // מיושן הוגש גם אחרי כתיבה מפורשת שפסלה את המטמון.
+  if (_payloadCache && _payloadCache.version === version && now - _payloadCache.at < PAYLOAD_STALE_MAX_MS) {
     void buildPayload(admin).catch(e => console.error('[lineage] רענון payload ברקע נכשל:', e))
     return NextResponse.json(_payloadCache.body, { headers: NO_STORE })
   }

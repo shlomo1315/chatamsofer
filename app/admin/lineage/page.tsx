@@ -1576,6 +1576,8 @@ export default function LineagePage() {
   // הצגה מחדש גם כשהטקסט זהה, כדי שמיזוגים רצופים ייראו כל אחד בנפרד.
   const [mergeFlash, setMergeFlash] = useState<{ ok: boolean; text: string; n: number } | null>(null)
   const flashSeq = useRef(0)
+  // מונה רענונים — מבטיח שרק תשובת הרענון האחרון נכתבת (ראו softRefresh)
+  const refreshSeq = useRef(0)
   // הצומת שפאנל ניקוי הכפילויות פתוח עליו
   const [cleanParentId, setCleanParentId] = useState<string | null>(null)
   // סינון "הצג רק כפולים" (לחיצה על תג השמות הכפולים)
@@ -1910,10 +1912,18 @@ export default function LineagePage() {
     setLoading(false)
   }, [])
 
+  // ⚠️ fresh=1 — עוקף את מטמון ה-payload בשרת. softRefresh רץ מיד אחרי
+  // כתיבה (מיזוג/מחיקה), ובלי הדגל הוא קיבל את העותק המיושן שה-SWR מגיש
+  // ומחזיר את הצמתים שנמחקו למסך. זה השורש ל"המיזוג קופץ בחזרה".
   const softRefresh = useCallback(async () => {
+    // ⚠️ מונה גרסאות: מיזוגים רצופים ומהירים משגרים כמה רענונים במקביל,
+    // ותשובה איטית של רענון *ישן* שמגיעה אחרי חדש הייתה דורסת את התמונה
+    // המעודכנת ומחזירה צמתים שכבר מוזגו. רק התשובה של הרענון האחרון נכתבת.
+    const myTicket = ++refreshSeq.current
     try {
-      const r = await fetch('/api/admin/lineage', { cache: 'no-store' })
+      const r = await fetch('/api/admin/lineage?fresh=1', { cache: 'no-store' })
       const d = await r.json()
+      if (myTicket !== refreshSeq.current) return
       const raw: LineageNode[] = d.nodes ?? []
       const minGen = raw.length ? Math.min(...raw.map(n => n.generation)) : 0
       setNodes(raw.map(n => ({ ...n, generation: n.generation - minGen + 1 })))

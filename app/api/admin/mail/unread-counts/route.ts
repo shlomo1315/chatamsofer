@@ -20,7 +20,12 @@ export async function GET() {
 
   // משתמש מוגבל רואה ספירות רק לתיבות שהוקצו לו
   const allowed = allowedMailboxKeys(staff)
-  const deps = Object.values(DEPARTMENTS).filter(dep => allowed === null || allowed.includes(dep.key))
+  // ⚠️ תיבות noReply מדולגות לגמרי: הן אוטומטיות ואיש אינו עונה בהן, ואלפי
+  // ההודעות שנצברו בהן ניפחו את "כל המחלקות" והסתירו את מה שבאמת ממתין.
+  // גם חוסך שאילתת count אחת בכל סקר (רץ כל 3 דקות לכל מנהל מחובר).
+  const deps = Object.values(DEPARTMENTS)
+    .filter(dep => !dep.noReply)
+    .filter(dep => allowed === null || allowed.includes(dep.key))
 
   // ספירה בצד ה-DB לכל תיבה במקביל (head:true — מחזיר count בלבד, בלי להעביר שורות).
   // מחליף משיכה של כל השורות הלא-נקראות וספירתן ב-JS — חוסך העברת מאות/אלפי שורות בכל קריאה.

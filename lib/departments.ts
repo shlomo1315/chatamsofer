@@ -21,11 +21,17 @@ export interface Department {
   email: string
   color: string   // צבע התווית להצגה בתיבת המייל המאוחדת
   mailboxOnly?: boolean  // תיבת דואר בלבד — לא מחלקה ארגונית שניתן לשייך אליה איש צוות
+  // ⚠️ תיבה אוטומטית שאיש אינו עונה בה (אישורי רישום, קישורים אישיים).
+  // המיילים הנכנסים אליה אינם משימה, ולכן אינם נספרים ב"לא נקראו" — לא
+  // בתיבה עצמה ולא בסכום "כל המחלקות". בלי זה 1,913 הודעות אוטומטיות
+  // ניפחו את המונה ל-2,909 והסתירו את המיילים שבאמת ממתינים למענה.
+  // התיבה עצמה נשארת נגישה לצפייה; רק המונה מושתק.
+  noReply?: boolean
 }
 
 export const DEPARTMENTS: Record<DepartmentKey, Department> = {
   main:      { key: 'main',      label: 'משרד ראשי',        email: 'office@chasamsofer.info', color: '#64748b' },
-  igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info',   color: '#6366f1' },
+  igud:      { key: 'igud',      label: 'איגוד הצאצאים',     email: 'igud@chasamsofer.info',   color: '#6366f1', noReply: true },
   gemach:    { key: 'gemach',    label: 'גמ"ח',             email: 'g@chasamsofer.info',      color: '#10b981' },
   maternity: { key: 'maternity', label: 'עזר יולדות',        email: 'y@chasamsofer.info',      color: '#ec4899' },
   widows:    { key: 'widows',    label: 'אלמנות ויתומים',    email: 'a@chasamsofer.info',      color: '#8b5cf6' },

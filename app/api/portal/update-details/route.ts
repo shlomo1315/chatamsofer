@@ -5,7 +5,7 @@ import { verifyVerifyToken, normalizeVerifyValue } from '@/lib/verifyToken'
 import { normalizePhone } from '@/lib/phone'
 import { validateIsraeliId } from '@/lib/validation'
 import { syncMaternityNamesFromChildren } from '@/lib/babyNames'
-import { childRegisteredSeparatelyMessage } from '@/lib/childDuplicateMessage'
+import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 
 export const dynamic = 'force-dynamic'
 
@@ -136,22 +136,27 @@ export async function POST(request: NextRequest) {
         : []
       ).map(c => (c?.id_number ?? '').replace(/\D/g, '')).filter(Boolean),
     )
-    // ילד נשוי — 'נשוי' לבן, 'נשואה' לבת (ראו maritalFor ב-PublicPortalPage).
-    const isMarried = (s: unknown) => {
-      const v = String(s ?? '').trim()
-      return v === 'נשוי' || v === 'נשואה' || v === 'נשואים'
-    }
+    // ⚠️ המקור המשותף — ראו ההערה ב-public-register. שני המסלולים חייבים
+    // לזהות את אותם ערכים, אחרת ילד עובר באחד ונחסם בשני.
+    const isMarried = isChildMarried
     const seen = new Set<string>()
-    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string }[]) {
+    for (const c of children as { name?: string; id_number?: string; marital_status?: string; gender?: string; id_doc_type?: string }[]) {
       const name = (c?.name ?? '').trim()
-      const cid = (c?.id_number ?? '').replace(/\D/g, '')
+      // ⚠️ דרכון נשמר עם האותיות; רק ת"ז מפשיטים לספרות. התיקון הזה הוחל
+      // על public-register אך לא כאן, ולכן ילד עם דרכון (בפרט ילד נשוי
+      // מחו"ל) נדחה כאן ב"תעודת הזהות אינה תקינה" גם כשהרישום עצמו עבר.
+      const isPassport = c?.id_doc_type === 'passport'
+      const cid = isPassport
+        ? (c?.id_number ?? '').trim()
+        : (c?.id_number ?? '').replace(/\D/g, '')
       const childLabel = name || 'הילד/ה'
       // ⚠️ שם אינו חובה — ילד מבקשת לידה שטרם נקרא בשם הוא רשומה תקינה
       // שממתינה להשלמה, ואין למחוק אותה או לחסום בגללה את השמירה.
       if (!cid) {
         return NextResponse.json({ error: `יש להזין תעודת זהות עבור ${childLabel}` }, { status: 400 })
       }
-      if (!validateIsraeliId(cid)) {
+      // ביקורת ספרת ביקורת חלה על ת"ז ישראלית בלבד — לדרכון אין אלגוריתם כזה.
+      if (!isPassport && !validateIsraeliId(cid)) {
         return NextResponse.json({ error: `תעודת הזהות של ${childLabel} אינה תקינה` }, { status: 400 })
       }
       if (seen.has(cid)) {

@@ -29,6 +29,7 @@ import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
+import { isChildMarried, isChildSingle } from '@/lib/childDuplicateMessage'
 
 // ⚡ עמודות מפורשות במקום select('*'). שתי סיבות:
 //
@@ -399,9 +400,12 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
       maternity_aid_id: b.maternity_aid_id,
     }))
   const kids = [...registeredKids, ...extraFromBirths]
+  // ⚠️ דרך isChildMarried/isChildSingle ולא השוואה ל-'married'/'single': השדה
+  // נכתב בעברית מהפורטל הציבורי ובאנגלית מטופס הניהול, ולכן משפחה שנרשמה
+  // בפורטל הציגה מקף בכל שורה. ראו lib/childDuplicateMessage.
   const maritalLabel = (c: { gender?: string; marital_status?: string }) => {
-    if (c.marital_status === 'married') return c.gender === 'female' ? 'נשואה' : 'נשוי'
-    if (c.marital_status === 'single') return c.gender === 'female' ? 'לא נשואה' : 'לא נשוי'
+    if (isChildMarried(c.marital_status)) return c.gender === 'female' ? 'נשואה' : 'נשוי'
+    if (isChildSingle(c.marital_status)) return c.gender === 'female' ? 'לא נשואה' : 'לא נשוי'
     return null
   }
   // ⚠️ גם שרשרת מוקלדת (lineage_chain) היא שיוך לכל דבר. הבדיקה כאן שקלה רק את
@@ -515,8 +519,15 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           <h2 className="text-xs font-semibold text-slate-500 uppercase">ילדים ({kids.length})</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">נשואים: {kids.filter(c => c.marital_status === 'married').length}</span>
-          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">לא נשואים: {kids.filter(c => c.marital_status === 'single').length}</span>
+          {/* ⚠️ הצ'יפים ספרו רק את הערכים באנגלית והציגו 0 למשפחה שנרשמה
+              בפורטל. נוסף גם צ'יפ "לא צוין" — שני הראשונים אינם מסתכמים
+              ל-kids.length (ילדים מבקשות לידה נשמרים בלי מצב משפחתי),
+              וסכום שלא מסתדר נראה כמו באג. */}
+          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">נשואים: {kids.filter(c => isChildMarried(c.marital_status)).length}</span>
+          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">לא נשואים: {kids.filter(c => isChildSingle(c.marital_status)).length}</span>
+          {kids.some(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)) && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">לא צוין: {kids.filter(c => !isChildMarried(c.marital_status) && !isChildSingle(c.marital_status)).length}</span>
+          )}
         </div>
       </div>
       <div className="overflow-x-auto">
