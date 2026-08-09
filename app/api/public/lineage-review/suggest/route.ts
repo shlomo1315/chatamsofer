@@ -66,11 +66,21 @@ export async function POST(request: NextRequest) {
   // של זה אלא של זה" — והצומת הנכון נמצא בהכרח מחוץ לענף השגוי. הצומת
   // המתוקן עצמו (nodeId) עדיין חייב להיות בתחום, כדי שלא יוכל להזיז צמתים
   // אחרים בעץ. ההצעה ממילא נכנסת לתור ואינה נכתבת ישירות.
+  // ⚠️ ההורה המוצע חייב להיות *אח* של הצומת המתוקן — כלומר ילד של אותו סב.
+  // זו כל מהות התיקון ("אינני צאצא של הבן הזה אלא של אחיו"), וזו גם ההגבלה
+  // שמונעת שרשרת בלתי אפשרית: בחירת אב מדור אחר יוצרת קפיצת דורות או לולאה.
+  // נאכף בשרת ולא רק בבורר, כי הבורר הוא ממשק וההגבלה היא כלל.
   const parentAnywhere = inv.mode === 'order' && kind === 'reparent'
-  const allIds = new Set(nodes.map(n => n.id))
-  const parentOk = parentAnywhere ? (!body.parentId || allIds.has(body.parentId)) : inScope(body.parentId)
+  const nodeRow = body.nodeId ? nodes.find(n => n.id === body.nodeId) : null
+  const grandparentId = nodeRow?.parent_id ?? null
+  const parentOk = parentAnywhere
+    ? (!!body.parentId && nodes.some(n => n.id === body.parentId && (n.parent_id ?? null) === grandparentId))
+    : inScope(body.parentId)
   if (!inScope(body.nodeId) || !parentOk) {
-    return NextResponse.json({ error: 'הצומת אינו בתוך הענף המשותף' }, { status: 403 })
+    return NextResponse.json(
+      { error: parentAnywhere ? 'ניתן לבחור רק מבין הדורות של אותו שלב בשרשרת' : 'הצומת אינו בתוך הענף המשותף' },
+      { status: 403 },
+    )
   }
 
   // ── ולידציה לפי סוג ──

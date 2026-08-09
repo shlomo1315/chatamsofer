@@ -63,15 +63,25 @@ export default function LineageReviewClient({ token }: { token: string }) {
   // ── תוצאות החיפוש בבורר האב ──
   // ⚠️ מחייב 2 תווים ומוגבל ל-40 תוצאות: העץ מכיל אלפי צמתים, ורשימה מלאה
   // הייתה גם חסרת תועלת וגם כבדה לרינדור במכשיר נייד.
+  // ⚠️ רק האחים בדור הזה — כלומר ילדיו של הדור שלפניו בשרשרת.
+  //
+  // קודם הבורר הציג את *כל* העץ בחיפוש חופשי, ואפשר היה לבחור אב מדור אחר
+  // לגמרי — מה שיוצר שרשרת בלתי אפשרית (קפיצת דורות או לולאה). התיקון האמיתי
+  // תמיד נמצא בין הילדים של אותו אב: "אינני צאצא של הבן הזה אלא של אחיו".
+  // כשמתקנים את הדור הראשון שאחרי השורש, האפשרויות הן ילדי השורש.
   const pickOptions = useMemo(() => {
+    if (!fixGen) return []
+    const idx = chain.findIndex(c => c.id === fixGen.node.id)
+    if (idx < 0) return []
+    // ההורה בשרשרת: הדור שלפניו. בדור הראשון — שורש העץ עצמו.
+    const parentId = idx > 0 ? chain[idx - 1].id : (fullTree.find(n => !n.parent_id)?.id ?? null)
+    if (!parentId) return []
+    const siblings = fullTree.filter(n => n.parent_id === parentId && n.id !== fixGen.node.id)
     const q = pickQuery.trim()
-    if (q.length < 2 || !fixGen) return []
-    const exclude = fixGen.node.id
-    return fullTree
-      .filter(n => n.id !== exclude && n.name.includes(q))
-      .sort((a, b) => a.generation - b.generation || a.name.localeCompare(b.name, 'he'))
-      .slice(0, 40)
-  }, [pickQuery, fullTree, fixGen])
+    return siblings
+      .filter(n => !q || n.name.includes(q))
+      .sort((a, b) => a.name.localeCompare(b.name, 'he'))
+  }, [pickQuery, fullTree, fixGen, chain])
 
   // מיון היררכי — שורש, ואז ילדים בהזחה לפי דור
   const ordered = useMemo(() => {
@@ -218,16 +228,25 @@ export default function LineageReviewClient({ token }: { token: string }) {
                     <div className="border-t border-indigo-100 bg-slate-50 px-3 py-3">
                       {fixGen.action === 'replace' ? (
                         <>
-                          <p className="mb-2 text-[11px] font-bold text-slate-600">
-                            במקום <span className="text-rose-600">{g.name}</span> — בחרו את השם הנכון מהעץ:
+                          <p className="mb-1 text-[11px] font-bold text-slate-600">
+                            במקום <span className="text-rose-600">{g.name}</span> — בחרו מבין
+                            {i > 0 ? <> ילדיו של <span className="text-indigo-700">{chain[i - 1].name}</span></> : <> צאצאי מרן החתם סופר זי&quot;ע</>}:
                           </p>
-                          <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
-                            placeholder="חיפוש שם בעץ הדורות…"
-                            className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          <p className="mb-2 text-[10px] text-slate-400">
+                            מוצגים רק השמות ששייכים לדור זה — כך השרשרת נשארת תקינה.
+                          </p>
+                          {/* תיבת החיפוש רק כשיש הרבה אפשרויות; ברשימה קצרה היא מיותרת */}
+                          {pickOptions.length > 8 && (
+                            <input value={pickQuery} onChange={e => setPickQuery(e.target.value)} autoFocus
+                              placeholder="סינון לפי שם…"
+                              className="mb-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          )}
                           <div className="max-h-56 overflow-y-auto flex flex-col gap-1">
                             {pickOptions.length === 0 && (
                               <p className="py-3 text-center text-[11px] text-slate-400">
-                                {pickQuery.trim().length < 2 ? 'הקלידו לפחות 2 תווים לחיפוש' : 'לא נמצאו תוצאות'}
+                                {pickQuery.trim()
+                                  ? 'לא נמצאו תוצאות לסינון זה'
+                                  : 'אין דורות אחרים לבחירה בשלב זה — ניתן לפנות למשרד'}
                               </p>
                             )}
                             {pickOptions.map(o => (

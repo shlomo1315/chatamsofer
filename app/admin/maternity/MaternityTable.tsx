@@ -95,9 +95,14 @@ function DeleteAidButton({ aid }: { aid: MaternityAid }) {
 
   return (
     <>
-    <button onClick={handleDelete} disabled={deleting}
-      className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-white hover:bg-red-600 px-2.5 py-1.5 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
-      {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} מחיקה
+    {/* ⚠️ אייקון בלבד, בגודל זהה לכפתור הצפייה. הכיתוב "מחיקה" הרחיב את
+        הכפתור מעבר לעמודה הצרה, ושני הכפתורים נדחסו/ירדו שורה — במיוחד
+        במסך צר או כשעמודות "כרטיס"/"הגעה" מוצגות. הכותרת (title) שומרת
+        על הנגישות ומסבירה מה הכפתור עושה. */}
+    <button onClick={handleDelete} disabled={deleting} title="מחיקת התיק"
+      aria-label="מחיקת התיק"
+      className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0 text-red-600 hover:text-white hover:bg-red-600 rounded-lg border border-red-200 hover:border-red-600 transition-colors disabled:opacity-50">
+      {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
     </button>
     {confirmDialog}
     </>
@@ -416,10 +421,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                     )}
                     <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
                     <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}>
-                      {/* אייקונים קומפקטיים בשורה אחת — עמודה צרה, בלי עומס */}
-                      <div className="flex items-center gap-1">
-                        <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק"
-                          className="inline-flex items-center justify-center w-7 h-7 text-slate-600 hover:text-indigo-600 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+                      {/* אייקונים קומפקטיים בשורה אחת — עמודה צרה, בלי עומס.
+                          ⚠️ flex-nowrap + flex-shrink-0: בלעדיהם הכפתורים ירדו
+                          שורה או נדחסו כשהעמודה מצטמצמת (מסך צר / עמודות נוספות). */}
+                      <div className="flex flex-nowrap items-center justify-center gap-1">
+                        <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק" aria-label="צפייה בתיק"
+                          className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0 text-slate-600 hover:text-indigo-600 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
                           <Eye size={14} />
                         </Link>
                         <DeleteAidButton aid={aid} />

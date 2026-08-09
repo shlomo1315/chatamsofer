@@ -2152,7 +2152,6 @@ export default function LineagePage() {
       {/* ── בדיקת אשכול על העץ: מה עומד להתמזג, עם הוצאה ידנית ── */}
       {review && (() => {
         const active = review.ids.filter(id => !review.excluded.has(id))
-        const keepNode = nodes.find(n => n.id === review.keepId)
         const canMerge = active.length >= 2 && active.includes(review.keepId)
         return (
           <div style={{ background: '#F5F3FF', border: '2px solid #C4B5FD', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
@@ -2160,10 +2159,22 @@ export default function LineagePage() {
               <span style={{ background: '#7C3AED', color: '#fff', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 800 }}>
                 קבוצה {review.index + 1}/{review.total}
               </span>
-              <span style={{ flex: 1, minWidth: 220, fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
-                {active.length} צמתים יתמזגו אל <span style={{ color: '#166534' }}>{keepNode?.name ?? review.finalName}</span>
-                {review.excluded.size > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}> · {review.excluded.size} הוצאו</span>}
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#5B21B6', whiteSpace: 'nowrap' }}>
+                {active.length} צמתים יתמזגו אל:
+                {review.excluded.size > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}> ({review.excluded.size} הוצאו)</span>}
               </span>
+              {/* ⚠️ בורר השם הסופי — כאן, על העץ. הוא היה קיים רק בפאנל
+                  הצדדי, וכשעובדים מהעץ (כפי שנדרש) הוא לא נראה כלל — כך
+                  שהמיזוג התבצע בלי שנשאלה השאלה מי השם שנשאר. */}
+              <select value={review.finalName}
+                onChange={e => setReview(r => r ? { ...r, finalName: e.target.value } : r)}
+                style={{ flex: 1, minWidth: 200, maxWidth: 420, padding: '5px 9px', borderRadius: 8, border: '1.5px solid #16A34A', background: '#F0FDF4', color: '#166534', fontSize: 12.5, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>
+                {[...new Set(review.ids.filter(id => !review.excluded.has(id))
+                  .map(id => nodes.find(n => n.id === id)?.name.trim().replace(/\s+/g, ' ') ?? '')
+                  .filter(Boolean))]
+                  .sort((a, b) => a.localeCompare(b, 'he'))
+                  .map(nm => <option key={nm} value={nm}>{nm}</option>)}
+              </select>
               <button onClick={() => { setReview(null); setLocateIds(new Set()) }}
                 style={{ background: '#F1F5F9', color: '#64748B', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>ביטול</button>
               <button disabled={!canMerge || merging}

@@ -350,8 +350,9 @@ export async function recalcGenerations(db: SupabaseClient, rootId: string): Pro
 
   // ⚠️ שליפה בדפים — .limit() לבדו נחתך ל-1000 (db-max-rows) ו-recalcGenerations
   // דילג על צמתים מעבר לכך (חישוב דורות שגוי בעץ גדול). ראו lib/fetchAllRows.
-  const { rows: all } = await fetchAllRows<{ id: string; parent_id: string | null }>((from, to) =>
-    db.from('lineage_nodes').select('id, parent_id').range(from, to),
+  // ⚠️ generation נשלף גם הוא — כדי לכתוב רק את מה שבאמת השתנה (ראו למטה).
+  const { rows: all } = await fetchAllRows<{ id: string; parent_id: string | null; generation: number }>((from, to) =>
+    db.from('lineage_nodes').select('id, parent_id, generation').range(from, to),
   )
   const childrenOf = new Map<string | null, string[]>()
   for (const n of all ?? []) {
@@ -373,9 +374,19 @@ export async function recalcGenerations(db: SupabaseClient, rootId: string): Pro
     genOf.set(it.gen, arr)
     for (const c of childrenOf.get(it.id) ?? []) queue.push({ id: c, gen: it.gen + 1 })
   }
+  // ⚠️ רק דורות שבאמת השתנו, ובמקביל.
+  //
+  // הפונקציה רצה אחרי *כל* מיזוג, וקודם היא כתבה מחדש את מספר הדור לכל
+  // צומת בתת-העץ — עשרות אלפי שורות בעדכונים סדרתיים, גם כשאף דור לא זז.
+  // זו הייתה הסיבה שמיזוג בודד לקח שניות ארוכות. עכשיו משווים למצב הקיים
+  // וכותבים רק את ההפרש, וכל הדורות שכן השתנו נכתבים במקביל.
+  const currentGen = new Map((all ?? []).map(n => [n.id, n.generation]))
+  const writes: Promise<unknown>[] = []
   for (const [gen, ids] of genOf) {
-    await db.from('lineage_nodes').update({ generation: gen }).in('id', ids)
+    const changed = ids.filter(id => currentGen.get(id) !== gen)
+    if (changed.length) writes.push(Promise.resolve(db.from('lineage_nodes').update({ generation: gen }).in('id', changed)))
   }
+  await Promise.all(writes)
 }
 
 export const MERGE_NODE_SELECT = 'id, name, parent_id, generation, status, relation'
