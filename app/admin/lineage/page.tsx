@@ -2586,7 +2586,7 @@ export default function LineagePage() {
               <span>
                 למזג גם את הדורות שמעל — <strong>גם כשהניסוח שונה</strong>
                 <span style={{ display: 'block', fontSize: 11.5, color: '#7E22CE', marginTop: 3, lineHeight: 1.5 }}>
-                  אם אלו אותו אדם, גם אבותיהם אותו אדם. כך &quot;שמואל בנימין שישא&quot; ו&quot;רבי שמואל בנימין והרבנית חיה ליבא שישא&quot; ימוזגו יחד — והניסוח המפורט הוא שיישאר.
+                  אם אלו אותו אדם, גם אבותיהם אותו אדם. כך &quot;שמואל בנימין שישא&quot; ו&quot;רבי שמואל בנימין ומרת חיה ליבא שישא&quot; ימוזגו יחד — והניסוח המפורט הוא שיישאר.
                 </span>
               </span>
             </label>

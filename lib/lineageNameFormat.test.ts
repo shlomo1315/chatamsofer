@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   composeLineageName, stripTitles, findTitles, normalizeLineageNodeName, alreadyFormatted,
+  normalizeWifeTitle,
 } from './lineageNameFormat'
 
 // ⚠️ הבעיה שזה פותר: בשדה שם חופשי כל נרשם כתב אחרת — "רבי", "ר'", "הרב",
@@ -78,6 +79,20 @@ describe('נרמול בשרת (רישום ציבורי + נדרים פלוס)', 
     expect(normalizeLineageNodeName({ name: 'רבי משה ומרת חיה כהן' }))
       .toBe('רבי משה ומרת חיה כהן')
     expect(alreadyFormatted('רבי משה כהן')).toBe(true)
+  })
+
+  it('"והרבנית" בשם מנוסח מומר ל"ומרת"', () => {
+    // ⚠️ שם מנוסח עוקף את ההרכבה, ולכן התואר הישן היה נכנס לעץ גם אחרי
+    // המיגרציה שהמירה את כל השאר — ואותו אדם היה מופיע בשני ניסוחים.
+    expect(normalizeLineageNodeName({ name: 'רבי משה והרבנית חיה כהן' }))
+      .toBe('רבי משה ומרת חיה כהן')
+  })
+
+  it('שם משפחה שמכיל "הרבנית" אינו נפגע', () => {
+    // ההחלפה דורשת רווחים משני הצדדים ואת ו' החיבור, ולכן אינה נוגעת בשם
+    // שמתחיל במילה או במופע שאינו תואר האישה.
+    expect(normalizeWifeTitle('הרבנית חיה כהן')).toBe('הרבנית חיה כהן')
+    expect(normalizeWifeTitle('רבי משה ומרת חיה כהן')).toBe('רבי משה ומרת חיה כהן')
   })
 
   it('שם בודד מוחזר כמות שהוא ולא הופך ל"רבי" ריק', () => {
