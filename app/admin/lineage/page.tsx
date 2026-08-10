@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
+import SafeMergePanel from './SafeMergePanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import SuggestionsInbox from './SuggestionsInbox'
 import CleanChildrenPanel from './CleanChildrenPanel'
@@ -1677,6 +1678,7 @@ export default function LineagePage() {
   const [printPick, setPrintPick] = useState(false)
   const [showDups, setShowDups] = useState(false)
   const [showHealth, setShowHealth] = useState(false)
+  const [showSafeMerge, setShowSafeMerge] = useState(false)
   // צומת → המשפחות המקושרות אליו, לקפיצה ישירה מהעץ לכרטסת
   const [linked, setLinked] = useState<Record<string, { id: string; name: string }[]>>({})
   // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
@@ -2105,6 +2107,14 @@ export default function LineagePage() {
             style={{ background: showHealth ? '#E11D48' : '#fff', color: showHealth ? '#fff' : '#BE123C', border: '1px solid #FECDD3' }}>
             <Activity size={14} /> {showHealth ? 'סגור בריאות העץ' : 'בריאות העץ'}
           </button>
+          {/* מיזוג בטוח — שם זהה בדיוק, אותו אב, אותו דור. נפרד במסך מהמיזוג
+              הרגיל בכוונה: זו הפעולה היחידה שאפשר להריץ על מאות קבוצות בלי
+              לעבור עליהן, וההפרדה מונעת בלבול בין "בוודאות" לבין "מקורב". */}
+          <button onClick={() => setShowSafeMerge(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showSafeMerge ? '#059669' : '#fff', color: showSafeMerge ? '#fff' : '#047857', border: '1px solid #A7F3D0' }}>
+            <ShieldCheck size={14} /> {showSafeMerge ? 'סגור מיזוג בטוח' : 'מיזוג בטוח'}
+          </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
@@ -2130,6 +2140,8 @@ export default function LineagePage() {
 
       {/* הצעות תיקון-ייחוס מצאצאים — באנר שמופיע רק כשיש ממתינות */}
       {canEdit && <SuggestionsInbox onApplied={() => { void softRefresh() }} />}
+
+      {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
 
       {showHealth && (
         <TreeHealthPanel
