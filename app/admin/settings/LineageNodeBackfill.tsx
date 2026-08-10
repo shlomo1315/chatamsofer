@@ -2,7 +2,7 @@
 
 // השלמה למפרע: צומת בעץ הדורות לכל נרשם שאין לו.
 import { useState } from 'react'
-import { Loader2, Search, TreePine, CheckCircle2, AlertTriangle, Play } from 'lucide-react'
+import { Loader2, Search, TreePine, CheckCircle2, AlertTriangle, Play, FlaskConical } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
@@ -43,15 +43,16 @@ export default function LineageNodeBackfill() {
     finally { setLoading(false) }
   }
 
-  async function run() {
-    if (!confirm(
+  async function run(limit?: number) {
+    if (!limit && !confirm(
       `ליצור צומת בעץ ל-${he(stats?.buildable ?? 0)} נרשמים?\n\n` +
       'כולם ייכנסו בסטטוס "ממתין לאישור". אין כאן אישור אוטומטי של אף אחד.\n' +
       'הפעולה בטוחה להרצה חוזרת — מי שכבר קיבל צומת לא יקבל כפילות.',
     )) return
     setRunning(true)
     try {
-      const res = await fetch('/api/admin/lineage/backfill-nodes', { method: 'POST' })
+      const url = limit ? `/api/admin/lineage/backfill-nodes?limit=${limit}` : '/api/admin/lineage/backfill-nodes'
+      const res = await fetch(url, { method: 'POST' })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שגיאה')
       setDone(d.summary)
@@ -110,10 +111,18 @@ export default function LineageNodeBackfill() {
               <CheckCircle2 size={16} /> {done}
             </div>
           ) : stats.buildable > 0 ? (
-            <Button onClick={run} disabled={running}>
-              {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-              צור צומת ל-{he(stats.buildable)} נרשמים
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* ⚠️ הרצת ניסיון לפני התחייבות: יצירת צמתים אינה ניתנת לביטול
+                  בלחיצה, ולכן עדיף לבדוק 100 בעץ ורק אז להריץ על הכל. */}
+              <Button variant="outline" onClick={() => run(100)} disabled={running}>
+                {running ? <Loader2 size={16} className="animate-spin" /> : <FlaskConical size={16} />}
+                נסה על 100 ראשונים
+              </Button>
+              <Button onClick={() => run()} disabled={running}>
+                {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                צור צומת ל-{he(stats.buildable)} נרשמים
+              </Button>
+            </div>
           ) : (
             <div className="flex items-center gap-2 rounded-lg border border-green-100 bg-green-50 p-3 text-sm text-green-800">
               <TreePine size={16} /> כל הנרשמים מופיעים בעץ.

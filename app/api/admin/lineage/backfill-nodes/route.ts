@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -95,14 +95,19 @@ export async function GET() {
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const staff = await requireAdmin()
   if (!staff) return forbidden()
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // ⚠️ ?limit=N — הרצת ניסיון על מנה קטנה, כדי לבדוק בעץ שהתוצאה נכונה לפני
+  // שמחייבים אלפי שורות. אין דרך לבטל יצירת צמתים בלחיצה, ולכן הצעד הזה.
+  const limit = Math.max(0, Number(request.nextUrl.searchParams.get('limit') ?? 0)) || 0
+
   const { linked } = await loadCandidates(admin)
   if (linked.error) return NextResponse.json({ error: linked.error }, { status: 500 })
+  const targets = limit ? linked.rows.slice(0, limit) : linked.rows
 
   let created = 0, adopted = 0, claimed = 0, skipped = 0
   const failures: { name: string; reason: string }[] = []
@@ -110,7 +115,7 @@ export async function POST() {
   // ⚠️ סדרתי ולא במקביל: כל יצירה קוראת את צומת האב ואת אחיו, ושתי יצירות
   // מקבילות תחת אותו אב היו יוצרות שני צמתים לאותו אדם — בדיוק הכפילות
   // שהפונקציה נועדה למנוע.
-  for (const ben of linked.rows) {
+  for (const ben of targets) {
     const res = await ensureBeneficiaryNode(admin, ben)
     if (!res.ok) {
       if (res.reason === 'אין שם לבניית צומת' || res.reason === 'אין שיוך לעץ') skipped++
@@ -129,14 +134,15 @@ export async function POST() {
     userId: staff.userId,
     action: 'lineage_backfill_beneficiary_nodes',
     entityType: 'lineage_node',
-    details: { created, adopted, claimed, skipped, failed: failures.length },
+    details: { created, adopted, claimed, skipped, failed: failures.length, limit: limit || null },
   }).catch(() => {})
 
   console.log(`[lineage-backfill] נוצרו ${created} · סומנו ${claimed} · אומצו ${adopted} · דולגו ${skipped} · כשלים ${failures.length}`)
   return NextResponse.json({
     created, adopted, claimed, skipped, failed: failures.length,
     failures: failures.slice(0, 20),
-    summary: `נוצרו ${created} צמתים חדשים בעץ` +
+    limit: limit || null,
+    summary: (limit ? `הרצת ניסיון (${limit} ראשונים): ` : '') + `נוצרו ${created} צמתים חדשים בעץ` +
       (claimed ? ` · ${claimed} צמתים קיימים סומנו כשלהם (היו בעץ כבר)` : '') +
       (adopted ? ` · ${adopted} קושרו לצומת קיים` : '') +
       (skipped ? ` · ${skipped} דולגו` : '') +
