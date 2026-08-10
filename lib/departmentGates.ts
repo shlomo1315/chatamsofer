@@ -99,6 +99,24 @@ export function departmentClosedMessage(dept: GatedDepartment): string {
 // ─────────────────────────────────────────────────────────────────────────────
 const PREVIEW_KEY = 'department_preview_code'
 
+/**
+ * השערים שיוחזרו לקישור בדיקה תקין.
+ *
+ * ⚠️ `only` מצמצם למחלקה אחת. בלי צמצום, קישור הבדיקה של הגמ"ח פתח *את כל*
+ * המחלקות, והבודק נחת באזור האישי עם יולדות וסיוע רפואי לצדן — כל האפשרויות,
+ * במקום זו שהוא בא לבדוק.
+ *
+ * ⚠️ ערך לא מוכר (שם מחלקה שהשתנה, טעות הקלדה) נופל בכוונה ל"הכל פתוח" ולא
+ * ל"הכל סגור": קישור בדיקה שמציג יותר מהנדרש הוא תקלה קוסמטית, וקישור שמציג
+ * מסך ריק נראה כמו תקלה במערכת ושולח לחפש באג שאינו קיים.
+ */
+export function previewGates(only?: string | null): DepartmentGates {
+  const scoped = GATED_DEPARTMENTS.includes(only as GatedDepartment) ? (only as GatedDepartment) : null
+  return Object.fromEntries(
+    GATED_DEPARTMENTS.map(d => [d, scoped ? d === scoped : true]),
+  ) as DepartmentGates
+}
+
 /** קוד התצוגה המוקדמת הנוכחי. נוצר בפעם הראשונה שמבקשים אותו. */
 export async function getDepartmentPreviewCode(admin?: SupabaseClient): Promise<string> {
   const client = admin ?? getServiceClient()
