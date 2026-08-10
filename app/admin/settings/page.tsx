@@ -27,6 +27,7 @@ import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import LineageRejectionRepair from './LineageRejectionRepair'
 import EmailVerificationManager from './EmailVerificationManager'
+import LineageNodeBackfill from './LineageNodeBackfill'
 import RegistrationGate from './RegistrationGate'
 import SendAccountSettings from './SendAccountSettings'
 import DepartmentGatesSettings from './DepartmentGatesSettings'
@@ -247,6 +248,11 @@ export default async function SettingsPage() {
         {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
         <Collapsible title="אולפן קול — טקסט חופשי (ElevenLabs)" icon={<Sparkles size={16} className="text-indigo-500" />}>
           <ElevenLabsStudio />
+        </Collapsible>
+
+        {/* השלמת צמתים בעץ לכל נרשם שאין לו */}
+        <Collapsible title="השלמת נרשמים לעץ הדורות" icon={<GitBranch size={16} className="text-emerald-600" />}>
+          <LineageNodeBackfill />
         </Collapsible>
 
         {/* אימות כתובות מייל — מי אימת, מי לא, ושליחת בקשה לאמת */}
