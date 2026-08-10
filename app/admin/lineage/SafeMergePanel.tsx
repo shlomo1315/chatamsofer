@@ -23,12 +23,14 @@ type Group = {
   children: number
   families: number
 }
+type GenRow = { generation: number; groups: number; copies: number }
 
 const he = (n: number) => n.toLocaleString('he-IL')
 
 export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
+  const [byGen, setByGen] = useState<GenRow[]>([])
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<string | null>(null)
@@ -40,7 +42,7 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
       const res = await fetch('/api/admin/lineage/safe-merge', { cache: 'no-store' })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שגיאה בסריקה')
-      setStats(d.stats); setGroups(d.groups ?? [])
+      setStats(d.stats); setGroups(d.groups ?? []); setByGen(d.byGeneration ?? [])
     } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה'); setStats(null) }
     finally { setLoading(false) }
   }, [])
@@ -57,7 +59,7 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
       setDone(d.summary)
-      setStats(null); setGroups([])
+      setStats(null); setGroups([]); setByGen([])
       onDone()
     } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה') }
     finally { setRunning(false) }
@@ -112,6 +114,38 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
             <Box label="ילדים שיעברו" value={he(stats.childrenMoved)} />
             <Box label="משפחות שיעברו" value={he(stats.familiesMoved)} />
           </div>
+
+          {/* 🔴 פילוח לפי דור — הבדיקה שמפרידה בין "ניקוי היסטורי" לבין "תקלה".
+              הטבלה שמתחת ממוינת לפי דור, ולכן העמוד הראשון שלה לעולם אינו
+              מייצג את הפיזור. כאן רואים את התמונה כולה בשורה אחת. */}
+          {byGen.length > 0 && (
+            <div className="rounded-lg border border-emerald-200 bg-white p-3 mb-3">
+              <p className="text-[11px] font-bold text-slate-600 mb-2">פיזור הקבוצות לפי דור</p>
+              <div className="flex items-end gap-1 overflow-x-auto pb-1">
+                {byGen.map(g => {
+                  const max = Math.max(...byGen.map(x => x.groups))
+                  const h = Math.max(4, Math.round((g.groups / max) * 56))
+                  const deep = g.generation >= 7
+                  return (
+                    <div key={g.generation} className="flex flex-col items-center gap-1 min-w-[34px]"
+                      title={`דור ${g.generation}: ${he(g.groups)} קבוצות · ${he(g.copies)} עותקים יוסרו`}>
+                      <span className="text-[9px] font-bold text-slate-500">{he(g.groups)}</span>
+                      <div style={{ height: h }}
+                        className={`w-full rounded-t ${deep ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                      <span className="text-[9px] text-slate-400">{g.generation}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] leading-relaxed text-slate-500 mt-2">
+                <span className="inline-block w-2 h-2 rounded-sm bg-emerald-400 align-middle" /> דורות האבות —
+                כפילויות היסטוריות, בדיוק מה שהמיזוג נועד לנקות.
+                {' '}
+                <span className="inline-block w-2 h-2 rounded-sm bg-amber-400 align-middle" /> דורות הנרשמים (7+) —
+                אם רוב הקבוצות כאן, כדאי לבדוק את מקור הכפילות לפני מיזוג ולא אחריו.
+              </p>
+            </div>
+          )}
 
           <div className="max-h-72 overflow-y-auto rounded-lg border border-emerald-200 bg-white mb-3">
             <table className="w-full text-right text-sm">

@@ -67,7 +67,27 @@ export async function GET() {
 
   const sum = (ids: string[], m: Map<string, number>) => ids.reduce((t, id) => t + (m.get(id) ?? 0), 0)
 
+  // 🔴 פילוח לפי דור — לא קישוט.
+  //
+  // מספר הקבוצות לבדו אינו אומר אם המצב תקין. אותו סך הכל יכול להיות "כפילויות
+  // היסטוריות באבות הקדמונים", שזה בדיוק מה שהמיזוג נועד לנקות, או "ההשלמה
+  // האחרונה יצרה עותק לכל נרשם", שזו תקלה שאסור למזג מעליה אלא לתקן במקור.
+  // הדורות העמוקים הם דורות הנרשמים; הרדודים הם האבות. הפילוח מפריד ביניהם.
+  //
+  // הטבלה ממוינת לפי דור, ולכן העמודים הראשונים לעולם אינם מייצגים את הפיזור.
+  const perGen = new Map<number, { groups: number; copies: number }>()
+  for (const g of groups) {
+    const cur = perGen.get(g[0].generation) ?? { groups: 0, copies: 0 }
+    cur.groups++
+    cur.copies += g.length - 1
+    perGen.set(g[0].generation, cur)
+  }
+  const byGeneration = [...perGen.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([generation, v]) => ({ generation, ...v }))
+
   return NextResponse.json({
+    byGeneration,
     stats: {
       groups: groups.length,
       nodesInGroups: groups.reduce((t, g) => t + g.length, 0),
