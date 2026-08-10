@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import SafeMergePanel from './SafeMergePanel'
+import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import SuggestionsInbox from './SuggestionsInbox'
 import CleanChildrenPanel from './CleanChildrenPanel'
@@ -1679,6 +1680,7 @@ export default function LineagePage() {
   const [showDups, setShowDups] = useState(false)
   const [showHealth, setShowHealth] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
+  const [showUnlinked, setShowUnlinked] = useState(false)
   // צומת → המשפחות המקושרות אליו, לקפיצה ישירה מהעץ לכרטסת
   const [linked, setLinked] = useState<Record<string, { id: string; name: string }[]>>({})
   // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
@@ -2115,6 +2117,13 @@ export default function LineagePage() {
             style={{ background: showSafeMerge ? '#059669' : '#fff', color: showSafeMerge ? '#fff' : '#047857', border: '1px solid #A7F3D0' }}>
             <ShieldCheck size={14} /> {showSafeMerge ? 'סגור מיזוג בטוח' : 'מיזוג בטוח'}
           </button>
+          {/* נרשמים ללא שיוך לעץ — הקבוצה שההשלמה האוטומטית אינה יכולה לגעת בה,
+              ולכן היא לא נסגרת מעצמה ודורשת מסך משלה. */}
+          <button onClick={() => setShowUnlinked(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showUnlinked ? '#D97706' : '#fff', color: showUnlinked ? '#fff' : '#B45309', border: '1px solid #FDE68A' }}>
+            <Link2 size={14} /> {showUnlinked ? 'סגור ללא שיוך' : 'ללא שיוך לעץ'}
+          </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
@@ -2142,6 +2151,8 @@ export default function LineagePage() {
       {canEdit && <SuggestionsInbox onApplied={() => { void softRefresh() }} />}
 
       {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
+
+      {showUnlinked && <UnlinkedPanel onDone={() => { void softRefresh() }} />}
 
       {showHealth && (
         <TreeHealthPanel
