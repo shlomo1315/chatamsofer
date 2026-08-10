@@ -51,8 +51,10 @@ const MAX_TRIES = 4
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // פותח סשן העלאה ומחזיר את כתובת הסשן (ה-Location שגוגל מחזירה).
+// ⚠️ size=null כשהגודל אינו ידוע מראש (העלאה מזרם) — אז לא שולחים
+// X-Upload-Content-Length כלל, וגוגל לומדת את הגודל מהמנה האחרונה.
 async function openUploadSession(
-  token: string, filename: string, folderId: string, mimeType: string, size: number,
+  token: string, filename: string, folderId: string, mimeType: string, size: number | null,
 ): Promise<string> {
   const res = await fetch(`${UPLOAD_ROOT}?uploadType=resumable&supportsAllDrives=true&fields=id`, {
     method: 'POST',
@@ -60,7 +62,7 @@ async function openUploadSession(
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json; charset=UTF-8',
       'X-Upload-Content-Type': mimeType,
-      'X-Upload-Content-Length': String(size),
+      ...(size == null ? {} : { 'X-Upload-Content-Length': String(size) }),
     },
     body: JSON.stringify({ name: filename, parents: [folderId] }),
   })
@@ -73,10 +75,11 @@ async function openUploadSession(
 // שואל את גוגל כמה בייטים כבר נקלטו בסשן — כדי להמשיך מהנקודה הנכונה אחרי
 // כשל, במקום לשלוח שוב מנה שכבר התקבלה.
 // מחזיר את ההיסט הבא לשליחה, או -1 אם ההעלאה כבר הושלמה.
-async function committedOffset(sessionUrl: string, total: number): Promise<number> {
+// ⚠️ total=null (גודל לא ידוע) → "bytes */*".
+async function committedOffset(sessionUrl: string, total: number | null): Promise<number> {
   const res = await fetch(sessionUrl, {
     method: 'PUT',
-    headers: { 'Content-Range': `bytes */${total}` },
+    headers: { 'Content-Range': `bytes */${total ?? '*'}` },
   })
   if (res.status === 200 || res.status === 201) return -1
   if (res.status !== 308) throw new Error(`בירור מצב ההעלאה נכשל (${res.status})`)
@@ -86,74 +89,126 @@ async function committedOffset(sessionUrl: string, total: number): Promise<numbe
   return Number.isFinite(last) ? last + 1 : 0
 }
 
-// מעלה את הקובץ במנות אל סשן פתוח. מיוצא לצורך בדיקות (הסשן עצמו נפתח
-// מול גוגל, וכאן מתחילה כל הלוגיקה שיכולה להישבר).
-// retryWaitMs — 0 בבדיקות, כדי לא להמתין באמת בין ניסיונות.
-export async function uploadToSession(
-  sessionUrl: string, data: Buffer, retryWaitMs = 2500,
-): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const total = data.length
-  let offset = 0
-  let tries = 0
+type ChunkOutcome = { done: false } | { done: true; id?: string }
 
-  while (offset < total) {
-    const end = Math.min(offset + CHUNK_BYTES, total)
+// שולח מנה אחת, עם ניסיונות חוזרים על כשלי רשת/5xx.
+// ⚠️ המנה מוחזקת בזיכרון של הקורא, ולכן ניסיון חוזר אפשרי גם בהעלאה מזרם:
+// שואלים את גוגל כמה נקלט ושולחים רק את היתרה, בלי לחזור למקור הנתונים
+// (שאינו ניתן להרצה מחדש).
+async function putChunk(
+  sessionUrl: string, chunk: Buffer, offset: number, total: number | null, retryWaitMs: number,
+): Promise<ChunkOutcome> {
+  let tries = 0
+  let start = offset
+  for (;;) {
+    const rel = start - offset
+    const end = offset + chunk.length - 1
+    const isFinalizer = chunk.length === 0
     try {
-      // ⚠️ בלי כותרת Authorization: כתובת הסשן היא בעצמה ההרשאה, וכך
-      // ההעלאה אינה נשברת אם האסימון פג באמצע קובץ גדול.
-      // ⚠️ בלי Content-Length ידני — undici קובע אותו מהגוף, וקביעה
-      // כפולה עלולה לסתור את האורך האמיתי של המנה.
-      // תצוגה (view) על אותו זיכרון ולא העתק — מנה של 8MB לא מוכפלת בזיכרון.
-      // ההמרה ל-ArrayBuffer בטוחה: Buffer של Node לעולם אינו SharedArrayBuffer.
-      const chunk = new Uint8Array(data.buffer as ArrayBuffer, data.byteOffset + offset, end - offset)
-      const res = await fetch(sessionUrl, {
-        method: 'PUT',
-        headers: { 'Content-Range': `bytes ${offset}-${end - 1}/${total}` },
-        body: chunk,
-      })
+      const body = isFinalizer ? undefined : new Uint8Array(
+        chunk.buffer as ArrayBuffer, chunk.byteOffset + rel, chunk.length - rel,
+      )
+      const range = isFinalizer
+        // סגירת העלאה שנגמרה בדיוק על גבול מנה — בלי גוף, רק הצהרת הגודל.
+        ? `bytes */${total}`
+        : `bytes ${start}-${end}/${total ?? '*'}`
+      const res = await fetch(sessionUrl, { method: 'PUT', headers: { 'Content-Range': range }, body })
 
       if (res.status === 200 || res.status === 201) {
-        const body = await res.json().catch(() => ({})) as { id?: string }
-        return { ok: true, id: body?.id }
+        const parsed = await res.json().catch(() => ({})) as { id?: string }
+        return { done: true, id: parsed?.id }
       }
-      if (res.status === 308) { offset = end; tries = 0; continue }
+      if (res.status === 308) return { done: false }
 
-      // 5xx — צד גוגל, שווה ניסיון חוזר. כל השאר (הרשאה/מכסה) סופי.
       const text = (await res.text()).slice(0, 300)
-      if (res.status < 500) return { ok: false, error: `ההעלאה נדחתה (${res.status}): ${text}` }
+      if (res.status < 500) throw new Error(`ההעלאה נדחתה (${res.status}): ${text}`)
       throw new Error(`שגיאת שרת בגוגל (${res.status}): ${text}`)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (!RETRYABLE.test(msg) && !/שגיאת שרת בגוגל/.test(msg)) return { ok: false, error: msg }
-      if (++tries >= MAX_TRIES) return { ok: false, error: `המנה שמהיסט ${offset} נכשלה ${MAX_TRIES} פעמים: ${msg}` }
+      const retryable = RETRYABLE.test(msg) || /שגיאת שרת בגוגל/.test(msg)
+      if (!retryable || ++tries >= MAX_TRIES) throw e
       await sleep(tries * retryWaitMs)
-      // מסתנכרנים מול גוגל לפני הניסיון החוזר — ייתכן שהמנה כן נקלטה
-      // ורק התשובה אבדה, ושליחה חוזרת שלה הייתה שוברת את הרצף.
-      const at = await committedOffset(sessionUrl, total).catch(() => offset)
-      if (at === -1) return { ok: true }
-      offset = at
-      console.warn(`[googleDrive] ניסיון ${tries} — ממשיך מהיסט ${offset}/${total} (${msg})`)
+      const at = await committedOffset(sessionUrl, total).catch(() => start)
+      if (at === -1) return { done: true }
+      if (at >= offset + chunk.length) return { done: false } // המנה כן נקלטה במלואה
+      start = Math.max(at, offset)
+      console.warn(`[googleDrive] ניסיון ${tries} — ממשיך מהיסט ${start} (${msg})`)
     }
   }
-  return { ok: false, error: 'ההעלאה הסתיימה בלי אישור מגוגל' }
 }
 
-export async function uploadBackup(
-  filename: string, data: Buffer, mimeType = 'application/zip',
-): Promise<{ ok: boolean; id?: string; error?: string }> {
+/**
+ * מעלה גיבוי ישירות מזרם — בלי להחזיק את הקובץ כולו בזיכרון.
+ *
+ * 🔴 זו הדרך שבה הגיבוי היומי עובד. הדרך הקודמת בנתה Buffer של 3.7GB
+ * (ובזיכרון בפועל ~16GB) בתוך התהליך שמגיש את האתר, כך שחריגה הייתה מפילה
+ * את האתר ולא רק את הגיבוי.
+ *
+ * ⚠️ הגודל אינו ידוע מראש, ולכן המנות נשלחות עם "/*" ורק המנה האחרונה
+ * מצהירה על הגודל האמיתי. אם הזרם נגמר בדיוק על גבול מנה — נשלחת בקשת
+ * סגירה בלי גוף ("bytes *&#47;total"), אחרת גוגל תמתין להמשך שלא יגיע.
+ *
+ * ⚠️ שיא הזיכרון כאן הוא מנה אחת (8MB) ולא גודל הגיבוי — וזה כל העניין.
+ * מיוצא לצורך בדיקות (retryWaitMs=0 כדי לא להמתין באמת).
+ */
+export async function uploadStreamToSession(
+  sessionUrl: string, source: AsyncIterable<Buffer | Uint8Array>, retryWaitMs = 2500,
+): Promise<{ ok: boolean; id?: string; bytes: number; error?: string }> {
+  let offset = 0
+  let pending: Buffer[] = []
+  let pendingLen = 0
+
+  const flush = async (total: number | null): Promise<ChunkOutcome> => {
+    const buf = pendingLen ? Buffer.concat(pending, pendingLen) : Buffer.alloc(0)
+    const take = total == null ? CHUNK_BYTES : buf.length
+    const chunk = buf.subarray(0, take)
+    const rest = buf.subarray(take)
+    pending = rest.length ? [rest] : []
+    pendingLen = rest.length
+    const out = await putChunk(sessionUrl, chunk, offset, total, retryWaitMs)
+    offset += chunk.length
+    return out
+  }
+
+  try {
+    for await (const piece of source) {
+      pending.push(Buffer.isBuffer(piece) ? piece : Buffer.from(piece))
+      pendingLen += piece.length
+      // ⚠️ מנות ביניים חייבות להיות כפולה של 256KiB, ולכן שולחים בדיוק
+      // CHUNK_BYTES ומשאירים את העודף לסבב הבא.
+      while (pendingLen >= CHUNK_BYTES) {
+        const out = await flush(null)
+        if (out.done) return { ok: true, id: out.id, bytes: offset }
+      }
+    }
+    // המנה האחרונה — כאן הגודל הכולל נודע. גם אם היא ריקה (הזרם נגמר על
+    // גבול מנה) חייבים לשלוח אותה, כהצהרת סיום.
+    const total = offset + pendingLen
+    if (total === 0) return { ok: false, bytes: 0, error: 'הגיבוי יצא ריק — לא הועלה' }
+    const out = await flush(total)
+    if (out.done) return { ok: true, id: out.id, bytes: offset }
+    return { ok: false, bytes: offset, error: 'ההעלאה הסתיימה בלי אישור מגוגל' }
+  } catch (e) {
+    return { ok: false, bytes: offset, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+export async function uploadBackupStream(
+  filename: string, source: AsyncIterable<Buffer | Uint8Array>, mimeType = 'application/zip',
+): Promise<{ ok: boolean; id?: string; sizeMB?: number; error?: string }> {
   const oauth = await driveAuth()
   const folderId = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
   if (!oauth || !folderId) return { ok: false, error: 'Google Drive אינו מחובר' }
-  if (data.length === 0) return { ok: false, error: 'קובץ הגיבוי ריק — לא הועלה' }
 
   try {
     const { token } = await oauth.getAccessToken()
     if (!token) return { ok: false, error: 'קבלת אסימון גישה מגוגל נכשלה' }
 
-    const sessionUrl = await openUploadSession(token, filename, folderId, mimeType, data.length)
-    const res = await uploadToSession(sessionUrl, data)
-    if (res.ok) console.log(`[googleDrive] הגיבוי הועלה · ${filename} · ${Math.round(data.length / 1048576)}MB`)
-    return res
+    const sessionUrl = await openUploadSession(token, filename, folderId, mimeType, null)
+    const res = await uploadStreamToSession(sessionUrl, source)
+    const sizeMB = Math.round(res.bytes / 1048576 * 10) / 10
+    if (res.ok) console.log(`[googleDrive] הגיבוי הועלה · ${filename} · ${sizeMB}MB`)
+    return { ok: res.ok, id: res.id, sizeMB, error: res.error }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }

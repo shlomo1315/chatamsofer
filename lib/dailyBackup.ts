@@ -4,8 +4,8 @@
 // אידמפוטנטי: גיבוי אחד ליום (app_settings.backup_last_run_date). כל קריאה
 // לפני חצות שכבר גובתה — מדולגת. כולל התראת מייל אם עבר יום בלי גיבוי מוצלח.
 import { getServiceClient } from '@/lib/apiAuth'
-import { generateBackup, backupFilename } from '@/lib/backup'
-import { uploadBackup, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
+import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
+import { uploadBackupStream, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
 
 const REPORT_TO = 'office@chasamsofer.info'
@@ -57,9 +57,17 @@ export async function runDailyBackup(force = false): Promise<BackupResult> {
   }
 
   try {
-    const { buffer } = await generateBackup(admin)
+    // ⚠️ הגיבוי נבנה ונשלח כזרם, ולא נאסף ל-Buffer. שיא הזיכרון הוא מנה אחת
+    // (8MB) ולא גודל הגיבוי — ראו lib/backupArchive.
     const filename = backupFilename(now)
-    const up = await uploadBackup(filename, buffer)
+    const { stream, done } = createBackupArchive(admin)
+    // ⚠️ תופסים את הדחייה מיד: אם הבנייה נכשלת באמצע, ההעלאה תיפול ממילא על
+    // הזרם, ובלי catch כאן זו הייתה unhandled rejection שמפילה את התהליך.
+    let buildError: unknown = null
+    const built = done.catch((e: unknown) => { buildError = e; return null })
+    const up = await uploadBackupStream(filename, stream)
+    await built
+    if (buildError) throw buildError
     if (!up.ok) throw new Error(up.error || 'העלאה ל-Drive נכשלה')
 
     await admin.from('app_settings').upsert({ key: 'backup_last_run_date', value: today }, { onConflict: 'key' }).then(undefined, () => {})
@@ -79,8 +87,7 @@ export async function runDailyBackup(force = false): Promise<BackupResult> {
       }
     } catch { /* ניקוי best-effort */ }
 
-    const sizeMB = Math.round(buffer.length / 1048576 * 10) / 10
-    return { ok: true, filename, sizeMB }
+    return { ok: true, filename, sizeMB: up.sizeMB }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     deliverMail(REPORT_TO, 'כשל בגיבוי היומי',
