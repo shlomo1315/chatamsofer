@@ -3,7 +3,7 @@ import { requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { invalidateLineageCache } from '@/lib/lineageSync'
-import { ensureBeneficiaryNode, beneficiaryNodeName, type BeneficiaryForNode } from '@/lib/beneficiaryNode'
+import { ensureBeneficiaryNode, beneficiaryNodeName, nodeIsSelf, type BeneficiaryForNode } from '@/lib/beneficiaryNode'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -23,7 +23,7 @@ export const maxDuration = 300
 
 type Row = BeneficiaryForNode & { id_number: string | null }
 
-const COLS = 'id, id_number, full_name, spouse_name, family_name, gender, lineage_node_id'
+const COLS = 'id, id_number, full_name, spouse_name, family_name, gender, lineage_node_id, lineage_chain'
 
 async function loadCandidates(admin: NonNullable<ReturnType<typeof getServiceClient>>) {
   // כל מי שמשויך לצומת בעץ. מי שאינו משויך כלל אינו ניתן למיקום, ומדווח בנפרד.
@@ -42,21 +42,35 @@ export async function GET() {
   const { linked, unlinked } = await loadCandidates(admin)
   if (linked.error) return NextResponse.json({ error: linked.error }, { status: 500 })
 
-  // ⚠️ הבדיקה "האם יש לו צומת משלו" נעשית מול הצומת שהוא מקושר אליו: אם הת"ז
-  // על אותו צומת היא שלו — הצומת הוא שלו. אחרת הוא מקושר לאב, ולכן חסר.
+  // ⚠️ "האם יש לו צומת משלו" נבדק מול הצומת שהוא מקושר אליו, בשני סימנים:
+  //
+  //  • ת"ז זהה על אותו צומת.
+  //  • 🔴 *או* שם הצומת הוא שמו (nodeIsSelf). זה הסימן הקריטי: הרישום בפורטל
+  //    יוצר צומת לנרשם אך **בלי id_number**, ולכן זיהוי לפי ת"ז בלבד סימן
+  //    אלפי נרשמים שכן נמצאים בעץ כ"חסרים" — וההשלמה הייתה יוצרת להם עותק
+  //    שני כילד של הצומת של עצמם, דור אחד עמוק מדי.
   const nodeIds = [...new Set(linked.rows.map(r => r.lineage_node_id!).filter(Boolean))]
-  const owners = new Map<string, string>()
+  const nodeById = new Map<string, { idNumber: string; name: string }>()
   for (let i = 0; i < nodeIds.length; i += 500) {
     const { data } = await admin.from('lineage_nodes')
-      .select('id, id_number').in('id', nodeIds.slice(i, i + 500))
+      .select('id, name, id_number').in('id', nodeIds.slice(i, i + 500))
     for (const n of data ?? []) {
-      const idn = String((n as { id_number?: string | null }).id_number ?? '').replace(/\D/g, '')
-      if (idn) owners.set((n as { id: string }).id, idn)
+      const row = n as { id: string; name?: string | null; id_number?: string | null }
+      nodeById.set(row.id, {
+        idNumber: String(row.id_number ?? '').replace(/\D/g, ''),
+        name: String(row.name ?? ''),
+      })
     }
   }
   const clean = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+  const hasOwn = (r: Row) => {
+    const node = nodeById.get(r.lineage_node_id!)
+    if (!node) return false
+    if (node.idNumber && node.idNumber === clean(r.id_number)) return true
+    return nodeIsSelf(r, node.name)
+  }
 
-  const missing = linked.rows.filter(r => owners.get(r.lineage_node_id!) !== clean(r.id_number) || !clean(r.id_number))
+  const missing = linked.rows.filter(r => !hasOwn(r))
   const noName = missing.filter(r => !beneficiaryNodeName(r))
 
   return NextResponse.json({
@@ -86,7 +100,7 @@ export async function POST() {
   const { linked } = await loadCandidates(admin)
   if (linked.error) return NextResponse.json({ error: linked.error }, { status: 500 })
 
-  let created = 0, adopted = 0, skipped = 0
+  let created = 0, adopted = 0, claimed = 0, skipped = 0
   const failures: { name: string; reason: string }[] = []
 
   // ⚠️ סדרתי ולא במקביל: כל יצירה קוראת את צומת האב ואת אחיו, ושתי יצירות
@@ -101,6 +115,7 @@ export async function POST() {
     }
     if (res.created) created++
     else if (res.adopted) adopted++
+    else if (res.claimed) claimed++
     else skipped++
   }
 
@@ -110,14 +125,15 @@ export async function POST() {
     userId: staff.userId,
     action: 'lineage_backfill_beneficiary_nodes',
     entityType: 'lineage_node',
-    details: { created, adopted, skipped, failed: failures.length },
+    details: { created, adopted, claimed, skipped, failed: failures.length },
   }).catch(() => {})
 
-  console.log(`[lineage-backfill] נוצרו ${created} צמתים · אומצו ${adopted} · דולגו ${skipped} · כשלים ${failures.length}`)
+  console.log(`[lineage-backfill] נוצרו ${created} · סומנו ${claimed} · אומצו ${adopted} · דולגו ${skipped} · כשלים ${failures.length}`)
   return NextResponse.json({
-    created, adopted, skipped, failed: failures.length,
+    created, adopted, claimed, skipped, failed: failures.length,
     failures: failures.slice(0, 20),
     summary: `נוצרו ${created} צמתים חדשים בעץ` +
+      (claimed ? ` · ${claimed} צמתים קיימים סומנו כשלהם (היו בעץ כבר)` : '') +
       (adopted ? ` · ${adopted} קושרו לצומת קיים` : '') +
       (skipped ? ` · ${skipped} דולגו` : '') +
       (failures.length ? ` · ${failures.length} נכשלו` : ''),

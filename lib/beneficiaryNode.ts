@@ -24,13 +24,42 @@ export interface BeneficiaryForNode {
   family_name?: string | null
   gender?: string | null
   lineage_node_id?: string | null
+  /** שרשרת הייחוס השמורה. האיבר האחרון הוא מקומו של הנרשם עצמו. */
+  lineage_chain?: unknown
 }
 
 export type EnsureResult =
-  | { ok: true; nodeId: string; created: boolean; adopted: boolean }
+  | { ok: true; nodeId: string; created: boolean; adopted: boolean; claimed: boolean }
   | { ok: false; reason: string }
 
 const cleanId = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+const nameKey = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ')
+
+/** שם האיבר האחרון בשרשרת הייחוס — מקומו של הנרשם עצמו. */
+function lastChainName(chain: unknown): string {
+  if (!Array.isArray(chain) || !chain.length) return ''
+  const last = chain[chain.length - 1] as { name?: unknown }
+  return nameKey(last?.name)
+}
+
+/**
+ * 🔴 האם הצומת שהנרשם מקושר אליו הוא *הוא עצמו*, ולא אביו.
+ *
+ * זו הבדיקה שמונעת את הכפילות הגרועה מכולן. הרישום בפורטל יוצר צומת לנרשם
+ * (הוא נכלל ב-lineage_new_nodes), אבל **בלי id_number** — ולכן זיהוי בעלות
+ * לפי ת"ז בלבד ראה אותו כ"חסר צומת", והיה יוצר לו עותק שני *כילד של עצמו*,
+ * דור אחד עמוק מדי. על אלפי משפחות.
+ *
+ * שני סימנים, וכל אחד מספיק:
+ *  • שם הצומת זהה לשם המחושב שלו — הרישום משתמש באותה composeLineageName.
+ *  • שם הצומת זהה לאיבר האחרון בשרשרת הייחוס השמורה — מכסה גם את המקרה שבו
+ *    הנרשם סימן "זה אני" על צומת קיים שנוסח אחרת.
+ */
+export function nodeIsSelf(ben: BeneficiaryForNode, nodeName: string): boolean {
+  const node = nameKey(nodeName)
+  if (!node) return false
+  return node === nameKey(beneficiaryNodeName(ben)) || node === lastChainName(ben.lineage_chain)
+}
 
 /** שם הצומת של הנרשם, בניסוח האחיד של העץ ("רבי X ומרת Y שם-משפחה"). */
 export function beneficiaryNodeName(ben: BeneficiaryForNode): string {
@@ -70,13 +99,27 @@ export async function ensureBeneficiaryNode(
   if (!name) return { ok: false, reason: 'אין שם לבניית צומת' }
 
   const { data: parent } = await db.from('lineage_nodes')
-    .select('id, generation, id_number').eq('id', parentId).maybeSingle()
+    .select('id, name, generation, id_number').eq('id', parentId).maybeSingle()
   if (!parent) return { ok: false, reason: 'צומת האב אינו קיים' }
 
-  // 1) הצומת שהוא מקושר אליו הוא כבר שלו — אידמפוטנטי, וזה המצב אחרי הרצה
-  //    ראשונה או אחרי רישום שכן הוסיף דורות ידנית.
+  // 1) הצומת שהוא מקושר אליו הוא כבר שלו לפי ת"ז — אידמפוטנטי.
   if (myId && cleanId((parent as { id_number?: string | null }).id_number) === myId) {
-    return { ok: true, nodeId: parent.id as string, created: false, adopted: false }
+    return { ok: true, nodeId: parent.id as string, created: false, adopted: false, claimed: false }
+  }
+
+  // 🔴 1b) הצומת הוא שלו לפי *שם*, גם בלי ת"ז.
+  //
+  // זה המצב של רוב הנרשמים: הרישום יצר להם צומת (הם נכללים ב-lineage_new_nodes)
+  // אך בלי id_number. בלי הבדיקה הזאת ההשלמה הייתה מסמנת אותם כ"חסרי צומת"
+  // ויוצרת עותק שני *כילד של הצומת שלהם עצמם*, דור אחד עמוק מדי — אלפי
+  // כפילויות, בדיוק ההיפך ממה שההשלמה נועדה לעשות.
+  //
+  // מסמנים את הת"ז על הצומת הקיים, כך שמכאן ואילך הבעלות מזוהה מיד.
+  if (nodeIsSelf(ben, String((parent as { name?: string }).name ?? ''))) {
+    if (myId && !cleanId((parent as { id_number?: string | null }).id_number)) {
+      await db.from('lineage_nodes').update({ id_number: myId }).eq('id', parent.id)
+    }
+    return { ok: true, nodeId: parent.id as string, created: false, adopted: false, claimed: true }
   }
 
   // 2) הת"ז שלו קיימת כבר בעץ במקום אחר
@@ -85,7 +128,7 @@ export async function ensureBeneficiaryNode(
       .select('id').eq('id_number', myId).limit(1).maybeSingle()
     if (mine?.id) {
       await db.from('beneficiaries').update({ lineage_node_id: mine.id }).eq('id', ben.id)
-      return { ok: true, nodeId: mine.id as string, created: false, adopted: true }
+      return { ok: true, nodeId: mine.id as string, created: false, adopted: true, claimed: false }
     }
   }
 
@@ -101,7 +144,7 @@ export async function ensureBeneficiaryNode(
         await db.from('lineage_nodes').update({ id_number: myId }).eq('id', tid)
       }
       await db.from('beneficiaries').update({ lineage_node_id: tid }).eq('id', ben.id)
-      return { ok: true, nodeId: tid, created: false, adopted: true }
+      return { ok: true, nodeId: tid, created: false, adopted: true, claimed: false }
     }
   }
 
@@ -117,5 +160,5 @@ export async function ensureBeneficiaryNode(
   if (error || !node?.id) return { ok: false, reason: error?.message ?? 'יצירת הצומת נכשלה' }
 
   await db.from('beneficiaries').update({ lineage_node_id: node.id }).eq('id', ben.id)
-  return { ok: true, nodeId: node.id as string, created: true, adopted: false }
+  return { ok: true, nodeId: node.id as string, created: true, adopted: false, claimed: false }
 }
