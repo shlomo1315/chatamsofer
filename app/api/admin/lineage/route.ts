@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
-import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, rejectLinkedBeneficiaries, invalidateLineageCache, lineageCacheVersion, getCachedLineageTree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { resyncSubtree, approveVerifiedBeneficiaries, cascadeRejectSubtree, invalidateLineageCache, lineageCacheVersion, getCachedLineageTree, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { syncChildrenOfBeneficiary } from '@/lib/lineageFamilyChildren'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -278,25 +278,22 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // ── דחיית מפל ──
+  // ── דחיית מפל בעץ בלבד ──
   // צומת שנדחה מפיל אוטומטית את כל צאצאיו לדחייה — לא ייתכן שדור נדחה ודור אחריו
   // מאושר. (חזרה מדחייה אינה מפל: יש לאשר כל צאצא במפורש.)
-  let rejectedBeneficiaries = 0
+  //
+  // 🔴 המפל עוצר בעץ ואינו נוגע בסטטוס הזכאות של המשפחות.
+  // עד כה דחיית צומת כתבה eligibility_status='rejected' לכל הכרטסות בתת-העץ
+  // (rejectLinkedBeneficiaries). בעץ שבו מאות משפחות תלויות באב משותף, לחיצה
+  // אחת דחתה משפחות שאיש לא הכריע לגביהן — והן גילו זאת רק בכרטסת שלהן.
+  // סטטוס זכאות נקבע אך ורק בהחלטה מפורשת בכרטסת. אין דרך אוטומטית לדחות
+  // משפחה, גם לא דרך העץ.
   if (updates.status === 'rejected') {
     const { rows: nodesForCascade } = await fetchAllRows<TreeNodeRow>((from, to) =>
       admin.from('lineage_nodes').select(NODE_SELECT).range(from, to),
     )
     if (nodesForCascade.length) {
       const rejected = await cascadeRejectSubtree(admin, nodesForCascade as TreeNodeRow[], id)
-      // ⚠️ דחייה בעץ → דחיית המשפחות המקושרות. בלי זה יחוס שנדחה במפורש
-      // השאיר את המשפחה "מאושרת" בצאצאים — הפער שהסטטוס בעץ אמור לסגור.
-      rejectedBeneficiaries = await rejectLinkedBeneficiaries(admin, nodesForCascade as TreeNodeRow[], id)
-      if (rejectedBeneficiaries) {
-        await logActivity(admin, {
-          userId: staff.userId, action: 'beneficiaries_rejected_from_lineage',
-          entityType: 'lineage_node', entityId: id, details: { count: rejectedBeneficiaries },
-        }).catch(() => {})
-      }
       if (rejected.length > 1) {
         console.log(`[lineage] node ${id} rejected → cascaded ${rejected.length - 1} descendant(s)`)
         await logActivity(admin, {
@@ -344,7 +341,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   invalidateLineageCache()
-  return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries })
+  return NextResponse.json({ node: data, approvedBeneficiaries: approved, rejectedBeneficiaries: 0 })
 }
 
 export async function DELETE(request: NextRequest) {
