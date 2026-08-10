@@ -2,11 +2,12 @@
 
 // ניהול גיבויים: הורדת גיבוי מלא למחשב, גיבוי מיידי ל-Google Drive, ורשימת הגיבויים ב-Drive.
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Loader2, Download, UploadCloud, RefreshCw, ShieldCheck, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Loader2, Download, UploadCloud, RefreshCw, ShieldCheck, AlertTriangle, RotateCcw, AtSign, LogIn, Unlink } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 
 type Backup = { id: string; name: string; createdTime: string; size: number }
+type Account = { connected: boolean; email: string | null; dedicated: boolean; folderConfigured: boolean }
 type RestoreResult = { ok: boolean; tables: { table: string; restored: number; error?: string }[]; filesRestored: number; fileErrors: number }
 
 export default function BackupSettings() {
@@ -15,6 +16,7 @@ export default function BackupSettings() {
   const [uploading, setUploading] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
   const [driveConfigured, setDriveConfigured] = useState(false)
+  const [account, setAccount] = useState<Account | null>(null)
   const [backups, setBackups] = useState<Backup[]>([])
   const [restoring, setRestoring] = useState(false)
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null)
@@ -25,12 +27,27 @@ export default function BackupSettings() {
     try {
       const res = await fetch('/api/admin/backup?list=1')
       const d = await res.json()
-      if (res.ok) { setDriveConfigured(!!d.driveConfigured); setBackups(d.backups ?? []) }
+      if (res.ok) { setDriveConfigured(!!d.driveConfigured); setBackups(d.backups ?? []); setAccount(d.account ?? null) }
     } catch { /* ignore */ }
     finally { setLoadingList(false) }
   }, [])
 
   useEffect(() => { loadList() }, [loadList])
+
+  const [disconnecting, setDisconnecting] = useState(false)
+  async function disconnectAccount() {
+    if (!confirm('לנתק את חשבון הגיבוי הנפרד?\n\nהגיבוי יחזור לעלות ל-Drive של חשבון הדואר.')) return
+    setDisconnecting(true)
+    try {
+      const res = await fetch('/api/admin/backup?disconnectAccount=1')
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'שגיאה')
+      setAccount(d.account ?? null)
+      toast.success('הגיבוי חזר לחשבון הדואר')
+      loadList()
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה') }
+    finally { setDisconnecting(false) }
+  }
 
   async function downloadNow() {
     setDownloading(true)
@@ -106,6 +123,34 @@ export default function BackupSettings() {
         <Button onClick={loadList} disabled={loadingList} variant="ghost" size="sm">
           {loadingList ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
         </Button>
+      </div>
+
+      {/* ── לאיזה חשבון Google הגיבוי הולך ──
+          ⚠️ עד כה הגיבוי השתמש תמיד בחשבון הדואר, ולא היה כתוב בשום מקום לאן
+          הקבצים עולים. עכשיו זה מוצג, וניתן לחבר חשבון נפרד. */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-wrap items-center gap-2">
+        <AtSign size={15} className="text-indigo-500 shrink-0" />
+        <div className="flex-1 min-w-[180px]">
+          <p className="text-[12px] font-bold text-slate-700">חשבון הגיבוי</p>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            {account?.email
+              ? <>הקבצים עולים ל-Drive של <span dir="ltr" className="font-semibold text-slate-700">{account.email}</span>{account.dedicated ? ' (חשבון נפרד לגיבוי)' : ' — חשבון הדואר'}</>
+              : account?.connected
+                ? 'מחובר, אך כתובת החשבון אינה זמינה'
+                : 'לא מחובר חשבון'}
+          </p>
+        </div>
+        <a href="/api/auth/gmail?target=backup"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-50">
+          <LogIn size={13} /> {account?.dedicated ? 'החלף חשבון' : 'בחר חשבון אחר לגיבוי'}
+        </a>
+        {account?.dedicated && (
+          <button type="button" onClick={disconnectAccount} disabled={disconnecting}
+            title="הגיבוי יחזור לחשבון הדואר"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+            {disconnecting ? <Loader2 size={13} className="animate-spin" /> : <Unlink size={13} />} חזור לחשבון הדואר
+          </button>
+        )}
       </div>
 
       {driveConfigured ? (
