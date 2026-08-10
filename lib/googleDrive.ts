@@ -10,16 +10,55 @@ export function driveConfigured(): boolean {
   return !!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
 }
 
-// לקוח OAuth מוכן לשימוש (או null אם Drive אינו מחובר/מוגדר).
+// מפתח האסימון של חשבון הגיבוי. נפרד מ-gmail_refresh_token בכוונה — ראו למטה.
+export const DRIVE_TOKEN_KEY = 'drive_backup_refresh_token'
+/** הכתובת של חשבון הגיבוי, נשמרת לתצוגה בהגדרות. */
+export const DRIVE_ACCOUNT_KEY = 'drive_backup_account_email'
+
+/**
+ * לקוח OAuth לגיבוי (או null אם Drive אינו מחובר/מוגדר).
+ *
+ * ⚠️ חשבון הגיבוי יכול להיות נפרד מחשבון הדואר. עד כה הגיבוי השתמש תמיד
+ * ב-gmail_refresh_token, כלומר הקבצים עלו ל-Drive של חשבון הדואר — בלי שום
+ * דרך לבחור אחר, ובלי שיהיה כתוב בשום מקום לאיזה חשבון הם הולכים.
+ *
+ * ⚠️ נפילה חזרה לחשבון הדואר במכוון: התקנה קיימת שלא חיברה חשבון גיבוי נפרד
+ * חייבת להמשיך לגבות בדיוק כמו קודם. בלי הנפילה הזו, הפריסה הייתה מכבה את
+ * הגיבוי בשקט — התקלה הגרועה ביותר האפשרית כאן.
+ */
 async function driveAuth() {
   if (!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID) return null
   const admin = getServiceClient()
   if (!admin) return null
-  const { data } = await admin.from('app_settings').select('value').eq('key', 'gmail_refresh_token').maybeSingle()
-  if (!data?.value) return null
+  const { data } = await admin.from('app_settings').select('key, value')
+    .in('key', [DRIVE_TOKEN_KEY, 'gmail_refresh_token'])
+  const byKey = new Map((data ?? []).map(r => [r.key as string, r.value as string]))
+  const token = byKey.get(DRIVE_TOKEN_KEY) || byKey.get('gmail_refresh_token')
+  if (!token) return null
   const oauth = getOAuthClient()
-  oauth.setCredentials({ refresh_token: data.value })
+  oauth.setCredentials({ refresh_token: token })
   return oauth
+}
+
+/** מי מחובר לגיבוי בפועל, ומאיזה מקור. לתצוגה בהגדרות. */
+export async function driveAccountInfo(): Promise<{
+  connected: boolean; email: string | null; dedicated: boolean; folderConfigured: boolean
+}> {
+  const folderConfigured = !!process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID
+  const admin = getServiceClient()
+  if (!admin) return { connected: false, email: null, dedicated: false, folderConfigured }
+  const { data } = await admin.from('app_settings').select('key, value')
+    .in('key', [DRIVE_TOKEN_KEY, DRIVE_ACCOUNT_KEY, 'gmail_refresh_token', 'gmail_account_email'])
+  const byKey = new Map((data ?? []).map(r => [r.key as string, r.value as string]))
+  const dedicated = !!byKey.get(DRIVE_TOKEN_KEY)
+  return {
+    connected: !!(byKey.get(DRIVE_TOKEN_KEY) || byKey.get('gmail_refresh_token')),
+    email: dedicated
+      ? (byKey.get(DRIVE_ACCOUNT_KEY) ?? null)
+      : (byKey.get('gmail_account_email') ?? process.env.GMAIL_EMAIL ?? null),
+    dedicated,
+    folderConfigured,
+  }
 }
 
 async function driveClient() {

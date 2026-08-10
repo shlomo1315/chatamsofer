@@ -15,11 +15,14 @@ export function getOAuthClient() {
   )
 }
 
-export function getAuthUrl() {
+// target='backup' — החיבור מיועד לחשבון הגיבוי (Drive) ולא לחשבון הדואר.
+// ⚠️ עובר ב-state, כי כתובת ההפניה רשומה אחת ב-Google Cloud ואינה משתנה.
+export function getAuthUrl(target: 'mail' | 'backup' = 'mail') {
   const client = getOAuthClient()
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
+    state: target,
     scope: [
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/gmail.send',

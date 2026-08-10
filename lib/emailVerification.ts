@@ -16,9 +16,28 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // מהתאריך הזה ואילך התיעוד אמיתי, ורק הוא נספר כהתקדמות.
 export const VERIFY_TRACKING_SINCE = '2026-08-05T00:00:00.000Z'
 
+/**
+ * האם ניתן *לשלוח* לכתובת בפועל (אחרי גזירת רווחים).
+ *
+ * ⚠️ נפרד מ-emailProblem בכוונה, ולא כפילות: emailProblem מדווח גם על תקלות
+ * קוסמטיות (רווחים בקצוות) שאינן מונעות שליחה, וכאן נשאלת שאלה אחת — האם
+ * ההודעה תצא. אם השתיים היו נחשבות זהות, כתובת עם רווח מיותר לא הייתה מקבלת
+ * בקשה לאמת לנצח, למרות שהכתובת עצמה תקינה לגמרי.
+ *
+ * ⚠️ תווים לא-ASCII נדחים: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ לבדו מקבל
+ * "ישראל@gmail.com" (אותיות עבריות אינן רווח ואינן @), הספק דוחה אותה,
+ * וכל "שלח לכולם" היה מנסה אותה שוב ונכשל.
+ */
 export function isValidEmail(email: string | null | undefined): boolean {
   const e = (email ?? '').trim()
-  return !!e && EMAIL_RE.test(e)
+  if (!e || !EMAIL_RE.test(e)) return false
+  // תווים מחוץ ל-ASCII מודפס (אותיות עבריות וכו') — הספק דוחה.
+  if (!/^[\x20-\x7E]+$/.test(e)) return false
+  // ⚠️ נקודה בקצה הדומיין או נקודה כפולה עוברות את הרגקס ("a@b.co." תקין
+  // מבחינתו, כי "co." הוא רצף שאינו רווח ואינו @) אך אינן ניתנות למשלוח.
+  const domain = e.slice(e.indexOf('@') + 1)
+  if (domain.startsWith('.') || domain.endsWith('.') || e.includes('..')) return false
+  return true
 }
 
 /**
@@ -50,7 +69,10 @@ export type UnverifiedRow = {
   phone: string | null
   createdAt: string | null
   requestedAt: string | null
+  /** תיאור התקלה לתצוגה (כולל תקלות קוסמטיות). null = הכתובת נקייה. */
   problem: string | null
+  /** האם ניתן לשלוח בפועל. ⚠️ זה מה שקובע שליחה — לא problem. */
+  sendable: boolean
 }
 
 export type VerificationStats = {
@@ -116,6 +138,7 @@ export async function listUnverified(admin: SupabaseClient): Promise<{ rows: Unv
     createdAt: r.created_at ?? null,
     requestedAt: r.email_verify_requested_at ?? null,
     problem: emailProblem(r.email),
+    sendable: isValidEmail(r.email),
   }))
   return { rows, error: null }
 }
@@ -143,8 +166,10 @@ export async function verificationStats(
     base(admin).gte('email_verified_at', weekAgo),
   ].map(async q => (await q).count ?? 0))
 
-  const invalid = unverified.filter(r => r.problem).length
-  const sendable = unverified.length - invalid
+  // ⚠️ "פגומות" נספר לפי מה שחוסם שליחה, ולא לפי כל הערה: כתובת עם רווח
+  // מיותר מסומנת לתיקון אך כן מקבלת בקשה, ולכן אינה נספרת כפגומה.
+  const invalid = unverified.filter(r => !r.sendable).length
+  const sendable = unverified.filter(r => r.sendable).length
   const requested = unverified.filter(r => r.requestedAt).length
 
   return {
@@ -156,7 +181,7 @@ export async function verificationStats(
     invalid,
     sendable,
     requested,
-    neverAsked: sendable - unverified.filter(r => r.requestedAt && !r.problem).length,
+    neverAsked: unverified.filter(r => r.sendable && !r.requestedAt).length,
     verifiedSinceTracking,
     verifiedLast7Days,
     // ⚠️ מתוך מי שיש לו מייל בכלל — אחוז מתוך *כל* הנרשמים היה מעורב עם מי

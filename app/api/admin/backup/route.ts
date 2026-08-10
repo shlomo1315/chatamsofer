@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
 import { restoreBackup } from '@/lib/restore'
-import { uploadBackupStream, listBackups, driveReady } from '@/lib/googleDrive'
+import { uploadBackupStream, listBackups, driveReady, driveAccountInfo, DRIVE_TOKEN_KEY, DRIVE_ACCOUNT_KEY } from '@/lib/googleDrive'
 import { Readable } from 'stream'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,20 @@ export async function GET(request: NextRequest) {
   if (!(await requireStaff(['admin']))) return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
 
   if (request.nextUrl.searchParams.get('list') === '1') {
-    return NextResponse.json({ driveConfigured: await driveReady(), backups: await listBackups() }, { headers: { 'Cache-Control': 'no-store' } })
+    return NextResponse.json({
+      driveConfigured: await driveReady(),
+      backups: await listBackups(),
+      // לאיזה חשבון Google הגיבוי הולך — כדי שזה יהיה כתוב ולא ינוחש.
+      account: await driveAccountInfo(),
+    }, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
+  // ניתוק חשבון הגיבוי הנפרד — הגיבוי חוזר לחשבון הדואר.
+  if (request.nextUrl.searchParams.get('disconnectAccount') === '1') {
+    const db = getServiceClient()
+    if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+    await db.from('app_settings').delete().in('key', [DRIVE_TOKEN_KEY, DRIVE_ACCOUNT_KEY])
+    return NextResponse.json({ ok: true, account: await driveAccountInfo() })
   }
 
   const admin = getServiceClient()
