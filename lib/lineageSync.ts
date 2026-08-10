@@ -220,43 +220,18 @@ export async function cascadeRejectSubtree(
   return toReject
 }
 
-/**
- * דחייה בעץ → דחיית המשפחות המקושרות.
- *
- * ⚠️ המראה של approveVerifiedBeneficiaries. עד כה דחיית צומת צבעה את העץ בלבד,
- * והמשפחה המקושרת נשארה "מאושרת" בצאצאים — כלומר יחוס שנדחה במפורש והמשך
- * זכאות מלאה, בלי שום דבר שסוגר את הפער.
- *
- * חל על הצומת שנדחה *וכל צאצאיו* (הם נדחו איתו במפל), על כל סטטוס שאינו כבר
- * 'rejected'. אינו שולח מייל — דחייה בעץ היא פעולה פנימית, והמייל נשלח
- * מהדחייה הידנית בכרטסת, שם היא מכוונת.
- *
- * מחזיר את מספר המשפחות שנדחו. best-effort — כשל נרשם ואינו מפיל את הפעולה.
- */
-export async function rejectLinkedBeneficiaries(
-  db: SupabaseClient,
-  nodes: TreeNodeRow[],
-  rejectedNodeId: string,
-  reason = 'היחוס נדחה בעץ הדורות',
-): Promise<number> {
-  const ids = [...subtreeNodeIds(nodes, rejectedNodeId)]
-  if (!ids.length) return 0
-  const { data, error } = await db
-    .from('beneficiaries')
-    .update({
-      eligibility_status: 'rejected',
-      rejection_reason: reason,
-      updated_at: new Date().toISOString(),
-    })
-    .in('lineage_node_id', ids)
-    .neq('eligibility_status', 'rejected')
-    .select('id')
-  if (error) {
-    console.error('[lineageSync] rejectLinkedBeneficiaries:', error.message)
-    return 0
-  }
-  return (data ?? []).length
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 אין — ובכוונה — פונקציה שדוחה משפחות מהעץ.
+//
+// כאן ישבה rejectLinkedBeneficiaries: דחיית צומת כתבה eligibility_status='rejected'
+// לכל כרטסת בתת-העץ. בעץ שבו מאות משפחות תלויות באב משותף, לחיצה אחת דחתה
+// משפחות שאיש לא הכריע לגביהן, בלי מייל ובלי סימן במסך — הן גילו זאת רק
+// בכרטסת. בימי ניקוי הכפילויות, שבהם נדחו צמתים בהמוניהם, זה התפשט רחב.
+//
+// הכלל: סטטוס זכאות נקבע אך ורק בהחלטה מפורשת בכרטסת של אותה משפחה.
+// מצב הצומת בעץ הוא מידע ליחוס — הוא צובע את העץ ומרענן את lineage_chain,
+// ולעולם אינו כותב סטטוס לכרטסת. ⚠️ אל תחזירו כאן קיצור דרך "לסגירת הפער".
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // אישור בעץ הדורות → אישור המשפחה בצאצאים.
