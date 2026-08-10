@@ -5,10 +5,10 @@
 // הבדיקות מתמקדות בכל מסלול שבו הצומת *כבר קיים* בצורה אחרת.
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { ensureBeneficiaryNode, beneficiaryNodeName } from './beneficiaryNode'
+import { ensureBeneficiaryNode, beneficiaryNodeName, nodeIsSelf } from './beneficiaryNode'
 
 type Node = { id: string; name: string; parent_id: string | null; generation: number; status: string | null; id_number: string | null; relation?: string | null }
-type Ben = { id: string; id_number: string | null; full_name: string | null; spouse_name: string | null; family_name: string | null; gender: string | null; lineage_node_id: string | null }
+type Ben = { id: string; id_number: string | null; full_name: string | null; spouse_name: string | null; family_name: string | null; gender: string | null; lineage_node_id: string | null; lineage_chain?: unknown }
 
 // מסד מדומה מינימלי שמכסה בדיוק את הקריאות שהפונקציה עושה.
 function fakeDb(nodes: Node[], bens: Ben[]) {
@@ -189,5 +189,68 @@ describe('ensureBeneficiaryNode', () => {
     const bens = [ben({ gender: 'female' })]
     await ensureBeneficiaryNode(fakeDb(nodes, bens), bens[0])
     expect(nodes.find(n => n.id !== 'father')!.relation).toBe('son_in_law')
+  })
+})
+
+describe('🔴 nodeIsSelf — הבדיקה שמונעת אלפי כפילויות', () => {
+  // הרישום בפורטל יוצר צומת לנרשם (הוא נכלל ב-lineage_new_nodes) אבל **בלי
+  // id_number**. זיהוי בעלות לפי ת"ז בלבד ראה אותו כ"חסר צומת", וההשלמה הייתה
+  // יוצרת עותק שני *כילד של הצומת של עצמו*, דור אחד עמוק מדי.
+  it('שם הצומת זהה לשם המחושב → הצומת הוא שלו', () => {
+    expect(nodeIsSelf(ben(), 'רבי יצחק ומרת שרה דויטש')).toBe(true)
+    expect(nodeIsSelf(ben(), 'רבי יצחק  ומרת שרה דויטש')).toBe(true) // רווח כפול
+  })
+
+  it('שם האב אינו שמו → אינו שלו', () => {
+    expect(nodeIsSelf(ben(), 'רבי אברהם ניסן ומרת רבקה דויטש')).toBe(false)
+  })
+
+  it('⚠️ "זה אני" על צומת קיים שנוסח אחרת — מזוהה דרך שרשרת הייחוס', () => {
+    // הנרשם סימן צומת קיים כ"זה אני", והניסוח שם שונה מהשם המחושב שלו.
+    // בלי הסימן הזה היה נוצר לו עותק שני.
+    const b = ben({ lineage_chain: [
+      { generation: 6, name: 'רבי אברהם ניסן דויטש' },
+      { generation: 7, name: 'רבי יצחק דויטש' },
+    ] })
+    expect(nodeIsSelf(b, 'רבי יצחק דויטש')).toBe(true)
+  })
+
+  it('שרשרת ריקה או חסרה אינה מפילה את הבדיקה', () => {
+    expect(nodeIsSelf(ben({ lineage_chain: [] }), 'משהו אחר')).toBe(false)
+    expect(nodeIsSelf(ben({ lineage_chain: null }), 'משהו אחר')).toBe(false)
+    expect(nodeIsSelf(ben(), '')).toBe(false)
+  })
+})
+
+describe('🔴 ensureBeneficiaryNode — הצומת שלו קיים בלי ת"ז', () => {
+  it('מסמן את הת"ז על הצומת הקיים ואינו יוצר כפילות', async () => {
+    // זה המצב של רוב הנרשמים בפועל: הצומת שלהם נוצר ברישום, בלי id_number,
+    // ו-lineage_node_id מצביע עליו.
+    const own = { id: 'own', name: 'רבי יצחק ומרת שרה דויטש', parent_id: 'father', generation: 8, status: 'pending', id_number: null }
+    const nodes = [{ ...father }, own]
+    const bens = [ben({ lineage_node_id: 'own' })]
+    const db = fakeDb(nodes, bens)
+
+    const res = await ensureBeneficiaryNode(db, bens[0])
+
+    expect(res).toMatchObject({ ok: true, nodeId: 'own', created: false, claimed: true })
+    // ⚠️ העיקר: לא נוצר צומת חדש
+    expect(nodes.length).toBe(2)
+    // והת"ז נחתמה, כך שהזיהוי יהיה מיידי מכאן והלאה
+    expect(nodes[1].id_number).toBe('123456789')
+    // הכרטסת נשארת על הצומת שלו
+    expect(bens[0].lineage_node_id).toBe('own')
+  })
+
+  it('הרצה שנייה על אותו מצב — אידמפוטנטית', async () => {
+    const own = { id: 'own', name: 'רבי יצחק ומרת שרה דויטש', parent_id: 'father', generation: 8, status: 'pending', id_number: null }
+    const nodes = [{ ...father }, own]
+    const bens = [ben({ lineage_node_id: 'own' })]
+    const db = fakeDb(nodes, bens)
+
+    await ensureBeneficiaryNode(db, bens[0])
+    await ensureBeneficiaryNode(db, bens[0])
+
+    expect(nodes.length).toBe(2)
   })
 })
