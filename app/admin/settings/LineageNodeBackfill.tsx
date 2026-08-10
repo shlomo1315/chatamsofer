@@ -15,6 +15,8 @@ type Stats = {
   notLinkedToTree: number
 }
 type Family = { id: string; name: string; idNumber: string | null; buildable: boolean }
+// אבחון — מסביר מספר חריג במקום לדרוש חפירה בלוגים
+type Diag = { treeNodes: number; matchedById: number; matchedByName: number; linkedToMissingNode: number }
 
 const he = (n: number) => n.toLocaleString('he-IL')
 
@@ -23,6 +25,7 @@ export default function LineageNodeBackfill() {
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
   const [families, setFamilies] = useState<Family[]>([])
+  const [diag, setDiag] = useState<Diag | null>(null)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<string | null>(null)
 
@@ -34,6 +37,7 @@ export default function LineageNodeBackfill() {
       if (!res.ok) throw new Error(d.error || 'שגיאה')
       setStats(d.stats)
       setFamilies(d.families ?? [])
+      setDiag(d.diag ?? null)
       setDone(null)
     } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה') }
     finally { setLoading(false) }
@@ -83,6 +87,13 @@ export default function LineageNodeBackfill() {
             <Box label="בלי שם לבניית צומת" value={he(stats.noName)} tone={stats.noName ? 'red' : 'green'}
               sub="דורש תיקון שם בכרטסת" />
           </div>
+
+          {diag && (
+            <p className="text-[10px] text-slate-400 leading-relaxed" dir="rtl">
+              אבחון: {he(diag.treeNodes)} צמתים בעץ · זוהו לפי ת&quot;ז {he(diag.matchedById)} · לפי שם {he(diag.matchedByName)}
+              {diag.linkedToMissingNode > 0 && <> · ⚠️ {he(diag.linkedToMissingNode)} מקושרים לצומת שאינו קיים</>}
+            </p>
+          )}
 
           {!!stats.notLinkedToTree && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

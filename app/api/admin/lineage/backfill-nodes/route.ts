@@ -49,25 +49,27 @@ export async function GET() {
   //    יוצר צומת לנרשם אך **בלי id_number**, ולכן זיהוי לפי ת"ז בלבד סימן
   //    אלפי נרשמים שכן נמצאים בעץ כ"חסרים" — וההשלמה הייתה יוצרת להם עותק
   //    שני כילד של הצומת של עצמם, דור אחד עמוק מדי.
-  const nodeIds = [...new Set(linked.rows.map(r => r.lineage_node_id!).filter(Boolean))]
-  const nodeById = new Map<string, { idNumber: string; name: string }>()
-  for (let i = 0; i < nodeIds.length; i += 500) {
-    const { data } = await admin.from('lineage_nodes')
-      .select('id, name, id_number').in('id', nodeIds.slice(i, i + 500))
-    for (const n of data ?? []) {
-      const row = n as { id: string; name?: string | null; id_number?: string | null }
-      nodeById.set(row.id, {
-        idNumber: String(row.id_number ?? '').replace(/\D/g, ''),
-        name: String(row.name ?? ''),
-      })
-    }
-  }
+  //
+  // ⚠️ נטען בשליפה מלאה בדפים ולא ב-.in() על מזהים: רשימת 500 מזהי UUID בונה
+  // כתובת של ~18KB, וכשהיא נדחית בשקט המפה יוצאת ריקה — ואז *כל* הנרשמים
+  // נראים כחסרי צומת. זה בדיוק מה שקרה, והשגיאה נבלעה כי לא נבדקה.
+  const allNodes = await fetchAllRows<{ id: string; name: string | null; id_number: string | null }>((from, to) =>
+    admin.from('lineage_nodes').select('id, name, id_number').range(from, to))
+  if (allNodes.error) return NextResponse.json({ error: `טעינת העץ נכשלה: ${allNodes.error}` }, { status: 500 })
+
+  const nodeById = new Map(allNodes.rows.map(n => [n.id, {
+    idNumber: String(n.id_number ?? '').replace(/\D/g, ''),
+    name: String(n.name ?? ''),
+  }]))
+
   const clean = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+  let byId = 0, byName = 0, noNode = 0
   const hasOwn = (r: Row) => {
     const node = nodeById.get(r.lineage_node_id!)
-    if (!node) return false
-    if (node.idNumber && node.idNumber === clean(r.id_number)) return true
-    return nodeIsSelf(r, node.name)
+    if (!node) { noNode++; return false }
+    if (node.idNumber && node.idNumber === clean(r.id_number)) { byId++; return true }
+    if (nodeIsSelf(r, node.name)) { byName++; return true }
+    return false
   }
 
   const missing = linked.rows.filter(r => !hasOwn(r))
@@ -82,6 +84,8 @@ export async function GET() {
       noName: noName.length,
       notLinkedToTree: unlinked.rows.length,
     },
+    // אבחון — כדי שמספר חריג יסביר את עצמו במקום לדרוש חפירה בלוגים
+    diag: { treeNodes: allNodes.rows.length, matchedById: byId, matchedByName: byName, linkedToMissingNode: noNode },
     families: missing.slice(0, 500).map(r => ({
       id: r.id,
       name: beneficiaryNodeName(r) || '(אין שם לבניית צומת)',
