@@ -11,6 +11,7 @@ import SuggestionsInbox from './SuggestionsInbox'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
+import { buildForest } from '@/lib/lineageForest'
 
 // ─── Types ───
 
@@ -50,16 +51,15 @@ interface Positioned {
 
 const NW = 172, NH = 58, HGAP = 48, VGAP = 96, PAD = 72
 
+// 🔴 עבר ל-lib/lineageForest, שמבטיח שכל צומת מופיע בעץ.
+//
+// הגרסה שהייתה כאן צירפה כל צומת להורה שלו והוסיפה לשורשים רק צמתים בלי הורה.
+// צומת בתוך *מעגל* (או שהוא ההורה של עצמו) צורף להורה ולעולם לא הגיע לשורשים,
+// ולכן הוא וכל תת-העץ שמתחתיו לא צויירו בשום מקום — כלומר צאצאים שרשומים
+// במערכת ואינם מופיעים בעץ באף מקום. מעגלים נוצרים ממיזוג כפילויות, שמסיט
+// הורות בהמוניה (מיזוג אב אל צאצא שלו סוגר מעגל).
 function buildTree(flat: LineageNode[]): TreeNode[] {
-  const map = new Map<string, TreeNode>()
-  flat.forEach(n => map.set(n.id, { ...n, children: [] }))
-  const roots: TreeNode[] = []
-  flat.forEach(n => {
-    const node = map.get(n.id)!
-    if (n.parent_id && map.has(n.parent_id)) map.get(n.parent_id)!.children.push(node)
-    else roots.push(node)
-  })
-  return roots
+  return buildForest(flat).roots as TreeNode[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
