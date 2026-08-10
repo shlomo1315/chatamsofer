@@ -887,6 +887,30 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
   // כי כל דור הוא בדיקה נפרדת וכפילות באחד מהם פוסלת את הרישום כולו.
   const [manualGate, setManualGate] = useState(false)
 
+  // ⚠️ חלונית שנייה — ברגע הכניסה לשדה השם עצמו.
+  //
+  // האזהרה על התארים יושבת מעל השדות, ובפועל אנשים מתחילים להקליד בלי לקרוא
+  // אותה, ואז נכנס לעץ שם חלקי או כינוי ("איצק" במקום "יצחק אייזיק"). שם לא
+  // מדויק אינו ניתן לזיהוי מול העץ, והרישום נפסל. לכן ההתראה נעצרת בדרך
+  // לשדה במקום להיות עוד טקסט לידו.
+  //
+  // פעם אחת לכל פתיחת טופס — לא בכל focus. אחרת מעבר בין שדה הבעל לשדה
+  // האישה היה פותח אותה שוב ושוב והמשתמש היה לומד לסגור אותה בלי לקרוא.
+  const [nameGate, setNameGate] = useState(false)
+  const [nameGateSeen, setNameGateSeen] = useState(false)
+  const husbandRef = useRef<HTMLInputElement>(null)
+  const wifeRef = useRef<HTMLInputElement>(null)
+  const gateFrom = useRef<'husband' | 'wife'>('husband')
+
+  // ⚠️ ה-blur מיידי: בלי זה המקלדת בנייד נשארת פתוחה מעל החלונית, והמשתמש
+  // מקליד לתוך שדה מוסתר בזמן שהאזהרה על המסך.
+  const openNameGate = (which: 'husband' | 'wife') => {
+    if (nameGateSeen) return
+    gateFrom.current = which
+    ;(which === 'husband' ? husbandRef : wifeRef).current?.blur()
+    setNameGate(true)
+  }
+
   const fetchChildren = async (parentId: string) => { try { const r = await fetch(`/api/lineage?parent_id=${parentId}`); const d = await r.json(); return (d.nodes ?? []) as LineageNode[] } catch { return [] } }
 
   useEffect(() => {
@@ -1152,11 +1176,13 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-slate-600">שם הבעל (פרטי בלבד) *</span>
-                  <TextInput value={newHusband} onChange={e => { setNewHusband(e.target.value); setNewErr('') }} placeholder="משה" />
+                  <TextInput ref={husbandRef} value={newHusband} onFocus={() => openNameGate('husband')}
+                    onChange={e => { setNewHusband(e.target.value); setNewErr('') }} placeholder="משה" />
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold text-slate-600">שם האישה (פרטי בלבד)</span>
-                  <TextInput value={newWife} onChange={e => { setNewWife(e.target.value); setNewErr('') }} placeholder="חיה" />
+                  <TextInput ref={wifeRef} value={newWife} onFocus={() => openNameGate('wife')}
+                    onChange={e => { setNewWife(e.target.value); setNewErr('') }} placeholder="חיה" />
                 </label>
               </div>
               <label className="flex flex-col gap-1">
@@ -1195,6 +1221,67 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
             ודור כפול פוסל את הרישום כולו.
           • אין שום רשומה בדור הזה — אין מה לבדוק מולו, ולכן לא דורשים זאת. חלונית
             מידע ניטרלית שמדגישה רק דיוק ומלאות השם (שם פרטי + שם משפחה, בלי תארים). */}
+      {/* ⚠️ חלונית חוסמת בכניסה לשדה השם — נפתחת מחדש בכל הוספה ידנית.
+          שם חלקי או כינוי ("איצק" במקום "יצחק אייזיק") אינו ניתן להצלבה מול
+          העץ, והרישום נפסל. הדרישה הזאת חייבת לעצור את המשתמש בדרך לשדה, כי
+          כטקסט לצד השדה היא נקראה רק אחרי שכבר הקליד. */}
+      {nameGate && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-4 border-red-500">
+            <div className="bg-red-600 px-5 py-4 flex items-center gap-2.5">
+              <AlertTriangle size={24} className="text-white flex-shrink-0" />
+              <h3 className="text-lg font-black text-white">עצרו! השם חייב להיות מדויק ומלא</h3>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-base text-slate-900 font-extrabold leading-relaxed mb-3">
+                יש להזין את <span className="text-red-700 underline">השם המלא במדויק</span>, בדיוק כפי שקראו לו —
+                כולל כל השמות, ולא כינוי או קיצור.
+              </p>
+
+              <div className="rounded-xl bg-slate-50 border-2 border-slate-200 px-4 py-3 mb-3 space-y-2">
+                <div className="flex gap-2 items-start">
+                  <span className="text-green-600 font-black flex-shrink-0 text-lg leading-none mt-0.5">✓</span>
+                  <p className="text-sm text-slate-800 leading-relaxed">
+                    <span className="font-extrabold text-green-800">יצחק אייזיק</span> · <span className="font-extrabold text-green-800">משה יהודה לייב</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">כל השמות, במלואם</span>
+                  </p>
+                </div>
+                <div className="flex gap-2 items-start">
+                  <span className="text-red-600 font-black flex-shrink-0 text-lg leading-none mt-0.5">✗</span>
+                  <p className="text-sm text-slate-800 leading-relaxed">
+                    <span className="font-extrabold text-red-700">איצק</span> · <span className="font-extrabold text-red-700">לייבל</span> · <span className="font-extrabold text-red-700">משה י.</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">כינוי, קיצור או ראשי תיבות</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-red-600 px-4 py-3.5 shadow-inner">
+                <p className="text-base font-black text-white leading-relaxed text-center">
+                  שם שאינו מדויק — הרישום לא ייקלט במערכת.
+                </p>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed mt-3">
+                אנחנו מצליבים כל שם מול עץ הדורות. שם חלקי או כינוי אינו ניתן לזיהוי,
+                ולכן הרישום נדחה ואי אפשר לשייך אתכם למשפחה.
+              </p>
+            </div>
+            <div className="px-5 pb-5">
+              <button type="button" autoFocus
+                onClick={() => {
+                  setNameGate(false); setNameGateSeen(true)
+                  // מחזירים את הסמן לשדה שממנו נכנסו — אחרת המשתמש סוגר
+                  // את החלונית ונשאר בלי מיקוד, וצריך ללחוץ פעמיים.
+                  setTimeout(() => (gateFrom.current === 'husband' ? husbandRef : wifeRef).current?.focus(), 0)
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 text-base font-black text-white bg-gradient-to-b from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl px-4 py-3.5 shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-150">
+                <Check size={18} /> הבנתי — אזין את השם המלא במדויק
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {manualGate && (
         <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
           {options.length > 0 ? (
@@ -1225,7 +1312,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                 </div>
               </div>
               <div className="px-5 pb-5 flex flex-col gap-2">
-                <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
+                <button type="button" onClick={() => { setManualGate(false); setNameGateSeen(false); setAddOpen(true) }}
                   className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
                   <Check size={16} /> כן, בדקנו — הדור הזה אינו ברשימה, ממשיכים להוספה ידנית
                 </button>
@@ -1252,7 +1339,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                 </div>
               </div>
               <div className="px-5 pb-5">
-                <button type="button" onClick={() => { setManualGate(false); setAddOpen(true) }}
+                <button type="button" onClick={() => { setManualGate(false); setNameGateSeen(false); setAddOpen(true) }}
                   className="w-full inline-flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-b from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 rounded-xl px-4 py-3 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-150">
                   <Check size={16} /> הבנתי, ממשיכים למילוי הפרטים
                 </button>
