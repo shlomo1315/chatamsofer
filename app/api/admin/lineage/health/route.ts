@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { compareHebrewNames } from '@/lib/hebrewNames'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { buildForest, type Forest } from '@/lib/lineageForest'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,6 +35,29 @@ interface BenRow {
 // סף "חריג ילדים": צומת עם יותר מזה ילדים ישירים חשוד ככפילות לא-ממוזגת
 // (כל צאצא שרשם את אותו אב הוסיף עותק-ילד תחתיו). לא שגיאה ודאית — דגל לבדיקה.
 const MANY_CHILDREN = 15
+
+// גודל תת-העץ של צומת ביער שנבנה — "כמה צאצאים היו נעלמים איתו".
+function subtreeSize(forest: Forest<NodeRow>, id: string): number {
+  const find = (nodes: Forest<NodeRow>['roots']): Forest<NodeRow>['roots'][number] | null => {
+    const stack = [...nodes]
+    while (stack.length) {
+      const n = stack.pop()!
+      if (n.id === id) return n
+      for (const c of n.children) stack.push(c)
+    }
+    return null
+  }
+  const node = find(forest.roots)
+  if (!node) return 0
+  let count = 0
+  const stack = [...node.children]
+  while (stack.length) {
+    const n = stack.pop()!
+    count++
+    for (const c of n.children) stack.push(c)
+  }
+  return count
+}
 
 export async function GET() {
   if (!(await requirePermission('lineage', 'edit'))) return forbidden()
@@ -67,6 +91,32 @@ export async function GET() {
   for (const b of bens) {
     if (b.lineage_node_id) benCount.set(b.lineage_node_id, (benCount.get(b.lineage_node_id) ?? 0) + 1)
   }
+
+  // ── 0) 🔴 צמתים שאינם מגיעים לעץ כלל ──
+  //
+  // התקלה החמורה מכולן, כי היא *בלתי נראית*: צומת בתוך מעגל הורות (או צומת
+  // שהוא ההורה של עצמו) אינו נגיש מאף שורש, ולכן הוא וכל תת-העץ שמתחתיו לא
+  // מצויירים בשום מקום. צאצאים שרשומים במערכת ופשוט אינם בעץ.
+  //
+  // ⚠️ מעגלים נוצרים ממיזוג כפילויות, שמסיט הורות בהמוניה — מיזוג אב אל צאצא
+  // שלו סוגר מעגל. שאר הסעיפים כאן מדווחים על צמתים שרואים; זה על מה שלא.
+  const forest = buildForest(nodes)
+  const detachedSet = new Set(forest.detached)
+  const selfSet = new Set(forest.selfParented)
+  const danglingSet = new Set(forest.danglingParent)
+  const describe = (n: NodeRow) => ({
+    id: n.id, name: n.name, generation: n.generation, status: n.status,
+    parentName: n.parent_id ? (nameById.get(n.parent_id) ?? '(הורה שאינו קיים)') : '—',
+    reason: selfSet.has(n.id) ? 'ההורה של עצמו'
+      : detachedSet.has(n.id) ? 'מעגל הורות'
+      : 'ההורה נמחק',
+    // כמה צאצאים היו נעלמים איתו
+    descendants: subtreeSize(forest, n.id),
+  })
+  const invisible = nodes
+    .filter(n => detachedSet.has(n.id) || selfSet.has(n.id))
+    .map(describe)
+  const dangling = nodes.filter(n => danglingSet.has(n.id)).map(describe)
 
   // ── 1) צמתים יתומים: בלי ילדים ובלי מוטב מקושר, ואינם שורש/דור מוקדם ──
   // צומת כזה הוא לרוב שארית ממיזוג שנכשל, או דור-ביניים שנוצר ונשכח. דור ≤5
@@ -131,6 +181,9 @@ export async function GET() {
   return NextResponse.json({
     scannedNodes: nodes.length,
     scannedBeneficiaries: bens.length,
+    // 🔴 צמתים שלא היו מצויירים בעץ כלל לפני התיקון
+    invisible,
+    dangling,
     orphans,
     manyChildren,
     // ת"ז + שמות רק למי שרשאי לצפות במשפחות; אחרת רק כמה כפילויות יש (בלי PII)

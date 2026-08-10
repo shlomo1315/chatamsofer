@@ -1,6 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { Activity, Loader2, RefreshCw, AlertTriangle, Users, Trash2, GitMerge, IdCard, ChevronLeft } from 'lucide-react'
+import { Activity, Loader2, RefreshCw, AlertTriangle, Users, Trash2, GitMerge, IdCard, ChevronLeft, EyeOff } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "בריאות העץ" — פאנל אבחון שמציג את כל התקלות המבניות בעץ הדורות במקום אחד:
@@ -9,11 +9,14 @@ import { Activity, Loader2, RefreshCw, AlertTriangle, Users, Trash2, GitMerge, I
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Orphan { id: string; name: string; generation: number; status: string | null; parentName: string }
+interface Invisible extends Orphan { reason: string; descendants: number }
 interface ManyChild { id: string; name: string; generation: number; children: number }
 interface DupId { idNumber: string; owners: { benId: string; name: string; field: 'בעל' | 'אשה' }[] }
 interface HealthData {
   scannedNodes: number
   scannedBeneficiaries: number
+  invisible: Invisible[]
+  dangling: Invisible[]
   orphans: Orphan[]
   manyChildren: ManyChild[]
   duplicateIds: DupId[]
@@ -42,6 +45,9 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
   }, [])
 
   const dupNamesTotal = data ? data.duplicateNames.exact + data.duplicateNames.strong + data.duplicateNames.possible : 0
+  // 🔴 צמתים שלא צויירו בעץ כלל לפני התיקון — מעגל הורות או הורה שנמחק.
+  const invisibleList = data ? [...(data.invisible ?? []), ...(data.dangling ?? [])] : []
+  const invisibleTotal = invisibleList.length
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 mb-4" dir="rtl">
@@ -67,6 +73,8 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
         <div className="flex flex-col gap-4">
           {/* כרטיסי סיכום */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <SummaryCard icon={<EyeOff size={15} />} label="לא הופיעו בעץ" value={invisibleTotal}
+              tone={invisibleTotal ? 'red' : 'green'} />
             <SummaryCard icon={<GitMerge size={15} />} label="כפילויות שם" value={dupNamesTotal}
               tone={dupNamesTotal ? 'amber' : 'green'} onClick={dupNamesTotal ? onOpenDuplicates : undefined} />
             <SummaryCard icon={<Users size={15} />} label="ריבוי ילדים חריג" value={data.manyChildren.length}
@@ -76,6 +84,27 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
             <SummaryCard icon={<IdCard size={15} />} label="ת״ז כפולות" value={data.duplicateIdsCount}
               tone={data.duplicateIdsCount ? 'red' : 'green'} />
           </div>
+
+          {/* 🔴 צמתים שלא הופיעו בעץ — התקלה החמורה, כי היא בלתי נראית */}
+          {invisibleTotal > 0 && (
+            <Section title="צמתים שלא הופיעו בעץ"
+              hint="מעגל הורות או הורה שנמחק. הם מוצגים כעת כשורש נפרד בעץ — יש לחבר אותם לאב הנכון. לחץ לצפייה">
+              {invisibleList.slice(0, 100).map(n => (
+                <Row key={n.id} onClick={() => onLocate(n.id)}>
+                  <span className="font-medium text-slate-800">{n.name}</span>
+                  <span className="text-xs text-slate-400">דור {n.generation} · תחת {n.parentName}</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                    <EyeOff size={11} /> {n.reason}
+                  </span>
+                  {n.descendants > 0 && (
+                    <span className="text-xs font-bold text-red-600">+{n.descendants} צאצאים</span>
+                  )}
+                  <ChevronLeft size={14} className="text-slate-300 mr-auto" />
+                </Row>
+              ))}
+              {invisibleTotal > 100 && <p className="text-xs text-slate-400 px-2 py-1">מוצגים 100 מתוך {invisibleTotal}</p>}
+            </Section>
+          )}
 
           {/* ריבוי ילדים חריג */}
           {data.manyChildren.length > 0 && (
