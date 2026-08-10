@@ -974,7 +974,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
     // לא ילמד את הכלל וימשיך להזין תארים בכל דור.
     const bad = [...findTitles(h), ...findTitles(w), ...findTitles(f)]
     if (bad.length) {
-      setNewErr(`אין להזין תארים — הסירו «${bad.join('», «')}». המערכת מוסיפה "רבי" ו"הרבנית" לבד.`)
+      setNewErr(`אין להזין תארים — הסירו «${bad.join('», «')}». המערכת מוסיפה "רבי" ו"מרת" לבד.`)
       return
     }
     if (!newRel) { setNewErr('יש לסמן בן או חתן'); return }
@@ -1169,7 +1169,7 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
                   <li>✓ לדוגמה: לכתוב רק <span className="font-bold">משה</span> ורק <span className="font-bold">חיה</span></li>
                 </ul>
                 <p className="text-[11px] font-bold text-red-900 mt-1.5">
-                  המערכת מוסיפה «רבי» ו«הרבנית» אוטומטית.
+                  המערכת מוסיפה «רבי» ו«מרת» אוטומטית.
                 </p>
               </div>
 
@@ -2337,7 +2337,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const anyPhoneVerified = Boolean(regPhoneToken || regSpousePhoneToken || regPhone2Token)
   const phoneOptionalHint = 'אימות מספר זה אינו חובה — אימתם כבר מספר טלפון אחד, ודי בכך להשלמת הרישום. אמתו מספר זה רק אם תרצו שגם באמצעותו ניתן יהיה לקבל בעתיד קוד כניסה למערכת.'
 
-  // ⚠️ אותו ניסוח אחיד כמו בהוספה ידנית: «רבי משה והרבנית חיה כהן». בלי זה
+  // ⚠️ אותו ניסוח אחיד כמו בהוספה ידנית: «רבי משה ומרת חיה כהן». בלי זה
   // הנרשם עצמו היה נכנס לעץ בפורמט אחר מכל שאר הדורות, ונראה כמו חריג.
   const selfDisplayName = composeLineageName({
     husband: regForm.full_name || '',
