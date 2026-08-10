@@ -698,6 +698,30 @@ export const EMAIL_CATALOG: EmailSpec[] = [
       },
     ],
   },
+  {
+    id: 'email_verify_request',
+    group: 'registration',
+    title: 'בקשה לאימות כתובת המייל',
+    trigger: 'בשליחה יזומה ממסך ההגדרות, לנרשמים שכתובת המייל שלהם טרם אומתה',
+    recipient: 'המוטב',
+    department: 'igud',
+    wired: true,
+    fields: [
+      { key: 'subject', label: 'שורת הנושא', default: 'אימות כתובת המייל — היכל החתם סופר' },
+      { key: 'preheader', label: 'שורת התצוגה המקדימה', default: 'רגע אחד לאימות הכתובת, כדי שההודעות שלנו יגיעו אליך.' },
+      { key: 'title', label: 'כותרת ראשית', default: 'אימות כתובת המייל' },
+      { key: 'subtitle', label: 'כותרת משנה', default: 'איגוד הצאצאים' },
+      { key: 'kicker', label: 'תווית קטנה מעל הפתיח', default: 'פעולה קצרה' },
+      { key: 'greeting', label: 'פתיח', default: 'שלום {שם},', vars: ['{שם}'], hint: '{שם} יוחלף בשם המשפחה' },
+      { key: 'intro', label: 'פסקת פתיחה', default: 'כתובת המייל הרשומה אצלנו <strong>טרם אומתה</strong>. אימות הכתובת הוא פעולה חד-פעמית שלוקחת פחות מדקה.', multiline: true, hint: 'תגיות HTML פשוטות (strong) נתמכות' },
+      { key: 'why_title', label: 'כותרת "למה זה חשוב"', default: 'למה זה חשוב?' },
+      { key: 'why_text', label: 'גוף "למה זה חשוב"', default: 'כל ההודעות שלנו — אישור בקשה, דרישת מסמכים וקוד כניסה — נשלחות לכתובת הזו. כל עוד היא אינה מאומתת, ייתכן שהודעות לא יגיעו אליך.', multiline: true },
+      { key: 'how_title', label: 'כותרת "איך מאמתים"', default: 'איך מאמתים?' },
+      { key: 'how_text', label: 'גוף "איך מאמתים"', default: 'נכנסים לאזור האישי, וחלונית האימות תיפתח אוטומטית. שולחים קוד לכתובת, מקישים אותו — וזה הכל.', multiline: true },
+      { key: 'button', label: 'טקסט הכפתור', default: 'לאימות כתובת המייל' },
+      { key: 'footnote', label: 'הערה בתחתית', default: 'אם הכתובת הזו אינה שלך, או שאינך מעוניין/ת לקבל אלינו הודעות — נא להשיב למייל זה ונעדכן.', multiline: true },
+    ],
+  },
 ]
 
 /** מפתח ה-app_settings שבו נשמרות העריכות. */

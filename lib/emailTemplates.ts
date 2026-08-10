@@ -1864,3 +1864,46 @@ export function holidayApprovedEmail(opts: {
     }),
   }
 }
+
+// ─── בקשה לאמת את כתובת המייל ────────────────────────────────────────────────
+// נשלחת יזומה ממסך ההגדרות לנרשמים שכתובתם טרם אומתה (email_verified_at ריק).
+//
+// ⚠️ אין כאן קוד ואין קישור אימות חד-פעמי, בכוונה: אימות מייל מחייב סשן פורטל
+// תקף (ראו app/api/portal/verify-email) — אחרת מי שיודע ת"ז של אדם אחר היה
+// משייך לרשומתו כתובת בשליטתו ומשם נכנס לחשבון. לכן הכפתור מוביל לכניסה
+// רגילה לאזור האישי, וחלונית האימות נפתחת שם אוטומטית.
+export function emailVerifyRequestEmail(
+  familyName: string,
+  portalBase = PORTAL_BASE_DEFAULT,
+): BuiltEmail {
+  const t = (k: string) => textFor('email_verify_request', k)
+  const base = portalBase.replace(/\/$/, '')
+  const body = `
+    ${autoReplyNote()}
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(t('kicker'))}</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${escapeHtml(t('greeting').replace(/\{שם\}/g, familyName || ''))}</h2>
+    <p style="margin:0 0 24px;color:#475569;font-size:15px;line-height:1.8;">${t('intro')}</p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="background:#fefce8;border-right:4px solid #eab308;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 6px;color:#854d0e;font-size:14px;font-weight:800;">${escapeHtml(t('why_title'))}</p>
+        <p style="margin:0;color:#713f12;font-size:13px;line-height:1.7;">${t('why_text')}</p>
+      </td></tr>
+    </table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
+      <tr><td style="background:#eef2ff;border-right:4px solid #6366f1;border-radius:0 12px 12px 0;padding:18px 20px;">
+        <p style="margin:0 0 6px;color:#3730a3;font-size:14px;font-weight:800;">${escapeHtml(t('how_title'))}</p>
+        <p style="margin:0;color:#4338ca;font-size:13px;line-height:1.6;">${t('how_text')}</p>
+      </td></tr>
+    </table>
+
+    <div style="margin:0 0 12px;">${btn(`${base}/`, t('button'), '#4f46e5')}</div>
+
+    <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">${t('footnote')}</p>
+  `
+  return {
+    subject: t('subject'),
+    html: shell({ preheader: t('preheader'), accent: '#6366f1', title: t('title'), subtitle: t('subtitle'), body }),
+  }
+}
