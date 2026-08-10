@@ -24,6 +24,13 @@ type Group = {
   families: number
 }
 type GenRow = { generation: number; groups: number; copies: number }
+type Failure = { name: string; reason: string }
+type Result = {
+  merged: number; removed: number; children: number; families: number
+  failed: number; batchId: string; failures: Failure[]
+  /** ההרצה נקטעה — ההודעה שמסבירה למה. null = הושלמה. */
+  aborted: string | null
+}
 
 const he = (n: number) => n.toLocaleString('he-IL')
 
@@ -33,6 +40,8 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
   const [byGen, setByGen] = useState<GenRow[]>([])
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [err, setErr] = useState('')
 
@@ -47,25 +56,128 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
     finally { setLoading(false) }
   }, [])
 
+  // ⚠️ תשובת השרת חייבת לעבור כאן ולא ב-res.json() ישיר: כשהנתיב חורג מהזמן,
+  // או כשפריסה חדשה מחליפה את הקונטיינר באמצע, מוחזר דף HTML — ו-JSON.parse
+  // זרק "Unexpected token '<'", הודעה שלא אומרת למנהל דבר.
+  async function readJson(res: Response) {
+    const text = await res.text()
+    try { return JSON.parse(text) } catch {
+      throw new Error(res.status === 504 || /timeout|gateway/i.test(text)
+        ? 'הבקשה נקטעה באמצע (חריגת זמן או פריסה חדשה). מה שכבר מוזג נשמר — סרוק שוב והמשך.'
+        : `השרת החזיר תשובה לא צפויה (${res.status}).`)
+    }
+  }
+
+  // 🔴 לולאת מנות בצד הלקוח, ולא בקשה אחת ארוכה.
+  //
+  // הרצה על 1,501 קבוצות לא חזרה כלל: כל מיזוג הוא כמה פניות למסד, והסדרה
+  // חרגה מתקרת הזמן. גרוע מזה — פריסה חדשה באמצע הרגה את הקונטיינר, והמסך
+  // פשוט הסתובב ונעצר בלי לומר דבר. מנה של 150 חוזרת תמיד בזמן.
+  //
+  // ⚠️ batchId אחד נשלח לכל המנות, כדי שכל ההרצה תישאר ניתנת לביטול אחד.
   async function run() {
+    const total = stats?.groups ?? 0
     if (!confirm(
-      `למזג ${he(stats?.groups ?? 0)} קבוצות?\n\n` +
+      `למזג ${he(total)} קבוצות?\n\n` +
       `יוסרו ${he(stats?.nodesRemoved ?? 0)} עותקים כפולים. הילדים והמשפחות שלהם יעברו לצומת שנשאר.\n\n` +
-      'כל הקבוצות האלה הן שם זהה בדיוק, תחת אותו אב, באותו דור. אפשר לבטל את כל ההרצה.',
+      'כל הקבוצות האלה הן שם זהה בדיוק, תחת אותו אב, באותו דור.\n' +
+      'הפעולה רצה במנות ומציגה התקדמות, וניתנת לביטול במלואה.',
     )) return
-    setRunning(true); setErr('')
+
+    setRunning(true); setErr(''); setProgress(null)
+    const batchId = crypto.randomUUID()
+    const tot = { merged: 0, removed: 0, children: 0, families: 0, failed: 0 }
+    const failures: Failure[] = []
     try {
-      const res = await fetch('/api/admin/lineage/safe-merge', { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
-      setDone(d.summary)
+      // ⚠️ תקרת סבבים: הגנה מפני לולאה שאינה מתקדמת (למשל כשכל הקבוצות
+      // הנותרות נכשלות). 40 × 150 מכסה בנוחות כל סריקה סבירה.
+      for (let round = 0; round < 40; round++) {
+        const res = await fetch(`/api/admin/lineage/safe-merge?limit=150&batch=${batchId}`, { method: 'POST' })
+        const d = await readJson(res)
+        if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
+        tot.merged += d.merged; tot.removed += d.removed
+        tot.children += d.children ?? 0; tot.families += d.families ?? 0
+        tot.failed += d.failed ?? 0
+        if (d.failures?.length) failures.push(...d.failures)
+        setProgress(`מוזגו ${he(tot.merged)} · נותרו ${he(d.remaining)}`)
+        if (d.remaining === 0 || (d.merged === 0 && d.failed === 0)) break
+      }
+      setResult({ ...tot, batchId, failures: failures.slice(0, 20), aborted: null })
       setStats(null); setGroups([]); setByGen([])
       onDone()
-    } catch (e) { setErr(e instanceof Error ? e.message : 'שגיאה') }
-    finally { setRunning(false) }
+    } catch (e) {
+      // ⚠️ גם כישלון נכנס לחלונית ועם המספרים שכבר הושגו: הרצה שנקטעה אחרי
+      // 600 מיזוגים אינה "נכשלה", והצגתה כשגיאה בלבד גורמת להרצה חוזרת
+      // מיותרת ולחוסר אמון במה שכן בוצע.
+      setResult({ ...tot, batchId, failures: failures.slice(0, 20), aborted: e instanceof Error ? e.message : 'שגיאה' })
+      onDone()
+    }
+    finally { setRunning(false); setProgress(null) }
   }
 
   return (
+    <>
+    {/* 🔴 חלונית תוצאה — נפתחת תמיד בסוף ההרצה, גם בהצלחה וגם בקטיעה.
+        קודם התוצאה הופיעה כשורת טקסט קטנה בתוך הפאנל, ובהרצה שנקטעה באמצע
+        המסך פשוט הפסיק להסתובב בלי לומר דבר: המנהל לא ידע אם מוזג משהו, אם
+        אפשר להריץ שוב, ומה בכלל קרה. */}
+    {result && (
+      <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+        <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-4 ${result.aborted ? 'border-amber-400' : 'border-emerald-500'}`}>
+          <div className={`px-5 py-4 flex items-center gap-2.5 ${result.aborted ? 'bg-amber-500' : 'bg-emerald-600'}`}>
+            {result.aborted ? <AlertTriangle size={22} className="text-white shrink-0" /> : <CheckCircle2 size={22} className="text-white shrink-0" />}
+            <h3 className="text-base font-black text-white">
+              {result.aborted ? 'ההרצה נעצרה באמצע' : 'המיזוג הושלם'}
+            </h3>
+          </div>
+          <div className="px-5 py-4">
+            {result.aborted && (
+              <div className="rounded-xl bg-amber-50 border-2 border-amber-300 px-4 py-3 mb-3">
+                <p className="text-sm font-bold text-amber-900 leading-relaxed">{result.aborted}</p>
+                <p className="text-xs text-amber-800 mt-1.5 leading-relaxed">
+                  מה שמוזג עד לרגע העצירה <strong>נשמר</strong>. אפשר לסרוק שוב ולהמשיך מאותה נקודה.
+                </p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <Box label="קבוצות שמוזגו" value={he(result.merged)} />
+              <Box label="עותקים שהוסרו" value={he(result.removed)} />
+              <Box label="ילדים שהועברו" value={he(result.children)} />
+              <Box label="משפחות שהועברו" value={he(result.families)} />
+            </div>
+            {result.failed > 0 && (
+              <div className="rounded-xl bg-red-50 border-2 border-red-200 px-4 py-3 mb-3">
+                <p className="text-sm font-bold text-red-800 mb-1">{he(result.failed)} קבוצות נכשלו</p>
+                <ul className="text-[11px] text-red-700 space-y-0.5 max-h-32 overflow-y-auto">
+                  {result.failures.map((f, i) => <li key={i}>{f.name} — {f.reason}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              כל ההרצה נרשמה תחת מזהה אחד וניתנת לביטול במלואה במרכז המיזוגים.
+              <span className="block font-mono text-[10px] text-slate-400 mt-0.5" dir="ltr">{result.batchId}</span>
+            </p>
+            {!result.aborted && (
+              <p className="text-[11px] text-slate-600 leading-relaxed mt-2">
+                ⚠️ <strong>סרוק שוב.</strong> אחרי איחוד אב, הילדים שלו מתאחדים תחת הורה אחד ונוצרות
+                קבוצות זהות חדשות דור אחד למטה. חזרו עד שהסריקה מחזירה 0.
+              </p>
+            )}
+          </div>
+          <div className="px-5 pb-5 flex gap-2">
+            <button type="button" autoFocus onClick={() => { setResult(null); void scan() }}
+              className="flex-1 inline-flex items-center justify-center gap-2 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl px-4 py-3 transition-colors">
+              <Search size={16} /> סרוק שוב
+            </button>
+            <button type="button" onClick={() => setResult(null)}
+              className="inline-flex items-center justify-center text-sm font-bold text-slate-600 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl px-4 py-3 transition-colors">
+              סגור
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4 mb-4" dir="rtl">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -189,14 +301,26 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
               {running ? <Loader2 size={15} className="animate-spin" /> : <GitMerge size={15} />}
               מזג את כל {he(stats.groups)} הקבוצות
             </button>
+            {progress && (
+              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded-lg px-2.5 py-1.5">
+                {progress}
+              </span>
+            )}
             <span className="inline-flex items-start gap-1.5 text-[11px] text-slate-500 max-w-md">
               <AlertTriangle size={12} className="mt-0.5 shrink-0 text-amber-500" />
               ההרצה נרשמת כפעולה אחת וניתנת לביטול במלואה. אין מיזוג של אבות ואין התאמות מקורבות.
             </span>
           </div>
+          {running && (
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              רץ במנות. השאירו את הדף פתוח — כל מנה נשמרת בפני עצמה, וגם אם ההרצה תיקטע
+              אפשר להמשיך מאותה נקודה.
+            </p>
+          )}
         </>
       )}
     </div>
+    </>
   )
 }
 

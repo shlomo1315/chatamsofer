@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { mergeWithCascade, pickKeepId } from '@/lib/lineageMerge'
 import { invalidateLineageCache } from '@/lib/lineageSync'
@@ -106,7 +106,9 @@ export async function GET() {
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-export async function POST() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export async function POST(request: NextRequest) {
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
   const admin = getAdminClient()
@@ -114,17 +116,35 @@ export async function POST() {
 
   const { error, groups, childCount } = await loadTree(admin)
   if (error) return NextResponse.json({ error }, { status: 500 })
-  if (!groups.length) return NextResponse.json({ merged: 0, removed: 0, summary: 'לא נמצאו קבוצות בטוחות למיזוג.' })
+  if (!groups.length) {
+    return NextResponse.json({
+      merged: 0, removed: 0, children: 0, families: 0, remaining: 0,
+      failed: 0, failures: [], summary: 'לא נמצאו קבוצות בטוחות למיזוג.',
+    })
+  }
 
-  // ⚠️ batchId אחד לכל ההרצה: מיזוג של מאות קבוצות הוא פעולה אחת מבחינת
-  // המשתמש, וביטול צריך להחזיר את כולה ולא קבוצה בודדת.
-  const batchId = randomUUID()
+  // 🔴 מנה חסומה בגודלה, וברירת מחדל של 150.
+  //
+  // הרצה על כל 1,501 הקבוצות לא חזרה בכלל: כל מיזוג הוא כמה פניות למסד, וסדרה
+  // של אלף וחצי חורגת מתקרת הזמן של הנתיב. גרוע מזה — פריסה חדשה באמצע הורגת
+  // את הקונטיינר, והבקשה נקטעת בלי שום סימן במסך. מנה קטנה חוזרת תמיד בזמן,
+  // והלקוח חוזר עליה עד הסוף.
+  const asked = Number(request.nextUrl.searchParams.get('limit') ?? 0)
+  const batch = Math.min(Math.max(asked || 150, 1), 500)
+
+  // ⚠️ batchId משותף לכל המנות, ומגיע מהלקוח: מיזוג הוא פעולה אחת מבחינת
+  // המשתמש, וביטול צריך להחזיר את כולה. חלוקה למנות לא הייתה מצדיקה איבוד
+  // של התכונה הזאת — עשר מנות עם עשרה מזהים היו דורשות עשרה ביטולים.
+  const askedBatchId = request.nextUrl.searchParams.get('batch') ?? ''
+  const batchId = UUID_RE.test(askedBatchId) ? askedBatchId : randomUUID()
+
+  const targets = groups.slice(0, batch)
   let merged = 0, removed = 0, children = 0, families = 0
   const failures: { name: string; reason: string }[] = []
 
   // ⚠️ סדרתי: כל מיזוג משנה את העץ (הורות של ילדים מוסבת), ושתי הרצות מקבילות
   // על אותו אב היו קוראות מצב מיושן.
-  for (const group of groups) {
+  for (const group of targets) {
     const keepId = pickKeepId(
       group.map(g => ({ id: g.id, name: g.name, parent_id: g.parent_id, generation: g.generation, status: g.status ?? null })),
       childCount,
@@ -150,16 +170,21 @@ export async function POST() {
 
   invalidateLineageCache()
 
+  // ⚠️ נמדד מול הקבוצות שנסרקו בתחילת המנה הזאת. מיזוג יוצר קבוצות *חדשות*
+  // דור אחד למטה (ילדים שמתאחדים תחת הורה אחד), ואלה יתגלו רק בסריקה הבאה —
+  // ולכן remaining=0 אינו מבטיח שהעץ נקי, אלא רק שהסבב הנוכחי הושלם.
+  const remaining = Math.max(0, groups.length - targets.length)
+
   await logActivity(admin, {
     userId: staff.userId,
     action: 'lineage_safe_merge_bulk',
     entityType: 'lineage_node',
-    details: { batchId, groups: merged, removed, children, families, failed: failures.length },
+    details: { batchId, groups: merged, removed, children, families, failed: failures.length, remaining },
   }).catch(() => {})
 
-  console.log(`[safe-merge] ${merged} קבוצות · הוסרו ${removed} צמתים · ${children} ילדים · ${families} משפחות · כשלים ${failures.length}`)
+  console.log(`[safe-merge] ${merged} קבוצות · הוסרו ${removed} צמתים · ${children} ילדים · ${families} משפחות · כשלים ${failures.length} · נותרו ${remaining}`)
   return NextResponse.json({
-    merged, removed, children, families, batchId,
+    merged, removed, children, families, batchId, remaining,
     failed: failures.length, failures: failures.slice(0, 20),
     summary: `מוזגו ${merged} קבוצות · הוסרו ${removed} עותקים כפולים` +
       (children ? ` · ${children} ילדים הועברו` : '') +
