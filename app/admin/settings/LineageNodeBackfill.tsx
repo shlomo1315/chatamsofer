@@ -28,12 +28,25 @@ export default function LineageNodeBackfill() {
   const [diag, setDiag] = useState<Diag | null>(null)
   const [running, setRunning] = useState(false)
   const [done, setDone] = useState<string | null>(null)
+  const [progress, setProgress] = useState<string | null>(null)
+
+  // ⚠️ תשובת השרת חייבת לעבור כאן ולא ב-res.json() ישיר: כשהנתיב חורג מתקרת
+  // הזמן, הפלטפורמה מחזירה דף HTML, ו-JSON.parse זרק
+  // "Unexpected token '<'" — הודעה שלא אומרת למנהל כלום.
+  async function readJson(res: Response) {
+    const text = await res.text()
+    try { return JSON.parse(text) } catch {
+      throw new Error(res.status === 504 || /timeout|gateway/i.test(text)
+        ? 'הפעולה חרגה מזמן התגובה של השרת. מה שכבר נוצר נשמר — לחץ שוב כדי להמשיך.'
+        : `השרת החזיר תשובה לא צפויה (${res.status}).`)
+    }
+  }
 
   async function check() {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/lineage/backfill-nodes')
-      const d = await res.json()
+      const res = await fetch('/api/admin/lineage/backfill-nodes', { cache: 'no-store' })
+      const d = await readJson(res)
       if (!res.ok) throw new Error(d.error || 'שגיאה')
       setStats(d.stats)
       setFamilies(d.families ?? [])
@@ -43,23 +56,48 @@ export default function LineageNodeBackfill() {
     finally { setLoading(false) }
   }
 
+  async function runBatch(limit: number) {
+    const res = await fetch(`/api/admin/lineage/backfill-nodes?limit=${limit}`, { method: 'POST' })
+    const d = await readJson(res)
+    if (!res.ok) throw new Error(d.error || 'שגיאה')
+    return d as { created: number; adopted: number; claimed: number; skipped: number
+      failed: number; remaining: number; processed: number; summary: string }
+  }
+
+  // 🔴 לולאת מנות בצד הלקוח, ולא בקשה אחת ארוכה.
+  //
+  // הרצה אחת על 3,281 נרשמים חרגה מתקרת חמש הדקות של הנתיב, והמסך הציג
+  // שגיאת JSON סתומה בזמן שהעבודה בפועל כן התקדמה. מנה של 400 חוזרת תמיד
+  // בזמן; המונה על המסך מראה שהתהליך חי, ואם הדפדפן נסגר באמצע — כל מה
+  // שהושלם כבר נשמר, ולחיצה חוזרת ממשיכה מאותה נקודה.
   async function run(limit?: number) {
     if (!limit && !confirm(
       `ליצור צומת בעץ ל-${he(stats?.buildable ?? 0)} נרשמים?\n\n` +
       'כולם ייכנסו בסטטוס "ממתין לאישור". אין כאן אישור אוטומטי של אף אחד.\n' +
-      'הפעולה בטוחה להרצה חוזרת — מי שכבר קיבל צומת לא יקבל כפילות.',
+      'הפעולה רצה במנות ומציגה התקדמות, ובטוחה להרצה חוזרת — מי שכבר קיבל צומת לא יקבל כפילות.',
     )) return
     setRunning(true)
+    setProgress(null)
+    const tot = { created: 0, adopted: 0, claimed: 0, skipped: 0, failed: 0, processed: 0 }
     try {
-      const url = limit ? `/api/admin/lineage/backfill-nodes?limit=${limit}` : '/api/admin/lineage/backfill-nodes'
-      const res = await fetch(url, { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שגיאה')
-      setDone(d.summary)
-      toast.success(d.summary)
+      // ⚠️ תקרת סבבים: הגנה מפני לולאה אינסופית אם מנה מחזירה remaining קבוע
+      // (למשל כשכל הנותרים נכשלים). 40 × 400 מכסה בנוחות את כל המאגר.
+      for (let round = 0; round < 40; round++) {
+        const d = await runBatch(limit ?? 400)
+        tot.created += d.created; tot.adopted += d.adopted; tot.claimed += d.claimed
+        tot.skipped += d.skipped; tot.failed += d.failed; tot.processed += d.processed
+        setProgress(`נוצרו ${he(tot.created)} · נותרו ${he(d.remaining)}`)
+        if (limit || d.remaining === 0 || d.processed === 0) break
+      }
+      const summary = `נוצרו ${he(tot.created)} צמתים` +
+        (tot.claimed ? ` · ${he(tot.claimed)} כבר היו בעץ וסומנו` : '') +
+        (tot.adopted ? ` · ${he(tot.adopted)} קושרו לצומת קיים` : '') +
+        (tot.failed ? ` · ${he(tot.failed)} נכשלו` : '')
+      setDone(summary)
+      toast.success(summary)
       await check()
-    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה') }
-    finally { setRunning(false) }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה'); await check() }
+    finally { setRunning(false); setProgress(null) }
   }
 
   return (
@@ -111,6 +149,7 @@ export default function LineageNodeBackfill() {
               <CheckCircle2 size={16} /> {done}
             </div>
           ) : stats.buildable > 0 ? (
+            <>
             <div className="flex flex-wrap items-center gap-2">
               {/* ⚠️ הרצת ניסיון לפני התחייבות: יצירת צמתים אינה ניתנת לביטול
                   בלחיצה, ולכן עדיף לבדוק 100 בעץ ורק אז להריץ על הכל. */}
@@ -122,6 +161,28 @@ export default function LineageNodeBackfill() {
                 {running ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
                 צור צומת ל-{he(stats.buildable)} נרשמים
               </Button>
+              {progress && (
+                <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 py-1.5">
+                  {progress}
+                </span>
+              )}
+            </div>
+            {running && (
+              <p className="text-[11px] text-slate-500">
+                רץ במנות. אפשר להשאיר את הדף פתוח — מה שכבר נוצר נשמר, וגם אם תיסגר החלון
+                אפשר להמשיך מאותה נקודה בלחיצה חוזרת.
+              </p>
+            )}
+            </>
+          ) : stats.noName > 0 ? (
+            // ⚠️ לא "הכל תקין": אלה נשארו מחוץ לעץ ולא ייבנו לעולם אוטומטית,
+            // ומסך ירוק כאן היה מסתיר מהמנהל עבודה ידנית שנותרה.
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                הושלם כל מי שאפשר. נותרו <strong>{he(stats.noName)}</strong> נרשמים בלי שם שאפשר
+                לבנות ממנו צומת — הם דורשים תיקון שם בכרטסת, ורק אז יופיעו בעץ.
+              </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-lg border border-green-100 bg-green-50 p-3 text-sm text-green-800">

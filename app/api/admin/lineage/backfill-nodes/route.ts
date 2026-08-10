@@ -34,34 +34,22 @@ async function loadCandidates(admin: NonNullable<ReturnType<typeof getServiceCli
   return { linked, unlinked }
 }
 
-export async function GET() {
-  if (!(await requireAdmin())) return forbidden()
-  const admin = getServiceClient()
-  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
-
+// מי באמת חסר צומת. משותף ל-GET ול-POST כדי ששניהם יראו בדיוק את אותה
+// רשימה — אחרת התצוגה המקדימה והביצוע יכולים להסתמך על כללים שונים.
+async function computeMissing(admin: NonNullable<ReturnType<typeof getServiceClient>>) {
   const { linked, unlinked } = await loadCandidates(admin)
-  if (linked.error) return NextResponse.json({ error: linked.error }, { status: 500 })
+  if (linked.error) return { error: linked.error, missing: [], linked, unlinked, diag: null }
 
-  // ⚠️ "האם יש לו צומת משלו" נבדק מול הצומת שהוא מקושר אליו, בשני סימנים:
-  //
-  //  • ת"ז זהה על אותו צומת.
-  //  • 🔴 *או* שם הצומת הוא שמו (nodeIsSelf). זה הסימן הקריטי: הרישום בפורטל
-  //    יוצר צומת לנרשם אך **בלי id_number**, ולכן זיהוי לפי ת"ז בלבד סימן
-  //    אלפי נרשמים שכן נמצאים בעץ כ"חסרים" — וההשלמה הייתה יוצרת להם עותק
-  //    שני כילד של הצומת של עצמם, דור אחד עמוק מדי.
-  //
-  // ⚠️ נטען בשליפה מלאה בדפים ולא ב-.in() על מזהים: רשימת 500 מזהי UUID בונה
-  // כתובת של ~18KB, וכשהיא נדחית בשקט המפה יוצאת ריקה — ואז *כל* הנרשמים
-  // נראים כחסרי צומת. זה בדיוק מה שקרה, והשגיאה נבלעה כי לא נבדקה.
+  // ⚠️ שליפה מלאה בדפים ולא .in() על מזהים: רשימת 500 UUID בונה כתובת של
+  // ~18KB, וכשהיא נדחית בשקט המפה יוצאת ריקה וכל הנרשמים נראים כחסרים.
   const allNodes = await fetchAllRows<{ id: string; name: string | null; id_number: string | null }>((from, to) =>
     admin.from('lineage_nodes').select('id, name, id_number').range(from, to))
-  if (allNodes.error) return NextResponse.json({ error: `טעינת העץ נכשלה: ${allNodes.error}` }, { status: 500 })
+  if (allNodes.error) return { error: `טעינת העץ נכשלה: ${allNodes.error}`, missing: [], linked, unlinked, diag: null }
 
   const nodeById = new Map(allNodes.rows.map(n => [n.id, {
     idNumber: String(n.id_number ?? '').replace(/\D/g, ''),
     name: String(n.name ?? ''),
   }]))
-
   const clean = (v: unknown) => String(v ?? '').replace(/\D/g, '')
   let byId = 0, byName = 0, noNode = 0
   const hasOwn = (r: Row) => {
@@ -71,8 +59,20 @@ export async function GET() {
     if (nodeIsSelf(r, node.name)) { byName++; return true }
     return false
   }
-
   const missing = linked.rows.filter(r => !hasOwn(r))
+  return {
+    error: null, missing, linked, unlinked,
+    diag: { treeNodes: allNodes.rows.length, matchedById: byId, matchedByName: byName, linkedToMissingNode: noNode },
+  }
+}
+
+export async function GET() {
+  if (!(await requireAdmin())) return forbidden()
+  const admin = getServiceClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const { error, missing, linked, unlinked, diag } = await computeMissing(admin)
+  if (error) return NextResponse.json({ error }, { status: 500 })
   const noName = missing.filter(r => !beneficiaryNodeName(r))
 
   return NextResponse.json({
@@ -84,8 +84,7 @@ export async function GET() {
       noName: noName.length,
       notLinkedToTree: unlinked.rows.length,
     },
-    // אבחון — כדי שמספר חריג יסביר את עצמו במקום לדרוש חפירה בלוגים
-    diag: { treeNodes: allNodes.rows.length, matchedById: byId, matchedByName: byName, linkedToMissingNode: noNode },
+    diag,
     families: missing.slice(0, 500).map(r => ({
       id: r.id,
       name: beneficiaryNodeName(r) || '(אין שם לבניית צומת)',
@@ -101,20 +100,29 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  // ⚠️ ?limit=N — הרצת ניסיון על מנה קטנה, כדי לבדוק בעץ שהתוצאה נכונה לפני
-  // שמחייבים אלפי שורות. אין דרך לבטל יצירת צמתים בלחיצה, ולכן הצעד הזה.
-  const limit = Math.max(0, Number(request.nextUrl.searchParams.get('limit') ?? 0)) || 0
+  // ⚠️ מנה חסומה בגודלה, וברירת מחדל של 400.
+  //
+  // ההרצה על כל 3,281 חרגה מתקרת 5 הדקות של הנתיב, השרת החזיר דף שגיאה
+  // במקום JSON, והמסך הציג "Unexpected token '<'". העבודה שכבר בוצעה נשמרה,
+  // אבל המשתמש לא ידע את זה. מנה קטנה חוזרת תמיד בזמן, והלקוח חוזר עליה.
+  const asked = Number(request.nextUrl.searchParams.get('limit') ?? 0)
+  const batch = Math.min(Math.max(asked || 400, 1), 1000)
 
-  const { linked } = await loadCandidates(admin)
-  if (linked.error) return NextResponse.json({ error: linked.error }, { status: 500 })
-  const targets = limit ? linked.rows.slice(0, limit) : linked.rows
+  const { error, missing } = await computeMissing(admin)
+  if (error) return NextResponse.json({ error }, { status: 500 })
+
+  // ⚠️ רק מי שבאמת חסר, ולא ראש הרשימה הכללית. קודם המנה נחתכה מכל הנרשמים,
+  // ולכן הרצה חוזרת טיפלה שוב באותם אנשים שכבר תוקנו במקום להתקדם.
+  //
+  // ⚠️ ומי שאין לו שם לבניית צומת מסונן החוצה לפני החיתוך: הוא לעולם לא ייבנה,
+  // וכשהוא נשאר בראש הרשימה כל מנה חוזרת מבזבזת את עצמה עליו ו-remaining נתקע.
+  const buildable = missing.filter(r => beneficiaryNodeName(r))
+  const targets = buildable.slice(0, batch)
 
   let created = 0, adopted = 0, claimed = 0, skipped = 0
   const failures: { name: string; reason: string }[] = []
 
-  // ⚠️ סדרתי ולא במקביל: כל יצירה קוראת את צומת האב ואת אחיו, ושתי יצירות
-  // מקבילות תחת אותו אב היו יוצרות שני צמתים לאותו אדם — בדיוק הכפילות
-  // שהפונקציה נועדה למנוע.
+  // ⚠️ סדרתי: שתי יצירות מקבילות תחת אותו אב היו יוצרות שני צמתים לאותו אדם.
   for (const ben of targets) {
     const res = await ensureBeneficiaryNode(admin, ben)
     if (!res.ok) {
@@ -128,24 +136,26 @@ export async function POST(request: NextRequest) {
     else skipped++
   }
 
-  if (created || adopted) invalidateLineageCache()
+  if (created || adopted || claimed) invalidateLineageCache()
+
+  const remaining = Math.max(0, buildable.length - targets.length)
 
   await logActivity(admin, {
     userId: staff.userId,
     action: 'lineage_backfill_beneficiary_nodes',
     entityType: 'lineage_node',
-    details: { created, adopted, claimed, skipped, failed: failures.length, limit: limit || null },
+    details: { created, adopted, claimed, skipped, failed: failures.length, remaining },
   }).catch(() => {})
 
-  console.log(`[lineage-backfill] נוצרו ${created} · סומנו ${claimed} · אומצו ${adopted} · דולגו ${skipped} · כשלים ${failures.length}`)
+  console.log(`[lineage-backfill] נוצרו ${created} · סומנו ${claimed} · אומצו ${adopted} · דולגו ${skipped} · כשלים ${failures.length} · נותרו ${remaining}`)
   return NextResponse.json({
-    created, adopted, claimed, skipped, failed: failures.length,
+    created, adopted, claimed, skipped, failed: failures.length, remaining,
+    processed: targets.length,
     failures: failures.slice(0, 20),
-    limit: limit || null,
-    summary: (limit ? `הרצת ניסיון (${limit} ראשונים): ` : '') + `נוצרו ${created} צמתים חדשים בעץ` +
-      (claimed ? ` · ${claimed} צמתים קיימים סומנו כשלהם (היו בעץ כבר)` : '') +
+    summary: `נוצרו ${created} צמתים` +
+      (claimed ? ` · ${claimed} כבר היו בעץ וסומנו` : '') +
       (adopted ? ` · ${adopted} קושרו לצומת קיים` : '') +
-      (skipped ? ` · ${skipped} דולגו` : '') +
-      (failures.length ? ` · ${failures.length} נכשלו` : ''),
+      (failures.length ? ` · ${failures.length} נכשלו` : '') +
+      (remaining ? ` · נותרו ${remaining}` : ' · הושלם'),
   })
 }
