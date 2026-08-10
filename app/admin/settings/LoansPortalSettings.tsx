@@ -55,8 +55,13 @@ export default function LoansPortalSettings() {
     : ''
   // ⚠️ ?preview= על הדף הציבורי (הטופס שהלווה ממלא) — לא על /shared/loans,
   // שהוא פורטל הביצוע לגורם חיצוני. שני קישורים שונים לגמרי.
+  //
+  // ⚠️ &action=loan — הקישור הזה הוא של הגמ"ח, ולכן הוא נוגע *רק* בהלוואות:
+  // מיד אחרי הזיהוי נפתחת חלונית בקשת ההלוואה, ואף מחלקה אחרת אינה מוצגת
+  // (השרת מצמצם את השערים לפי ה-action). קודם הוא פתח את כל המחלקות והנחית
+  // את הבודק באזור האישי עם כל האפשרויות, בלי לפתוח את הטופס שבא לבדוק.
   const previewLink = typeof window !== 'undefined' && previewCode
-    ? `${window.location.origin}/?preview=${previewCode}` : ''
+    ? `${window.location.origin}/?preview=${previewCode}&action=loan` : ''
 
   useEffect(() => {
     fetch('/api/admin/portal/report-email')
@@ -170,6 +175,8 @@ export default function LoansPortalSettings() {
         <p className="mt-1 text-[11px] leading-relaxed text-amber-700">
           פותח את טופס בקשת ההלוואה גם כשמתג המחלקה סגור, למי שנכנס דרך הקישור בלבד.
           כך אפשר לעבור על כל הזרימה — טופס, שליחה, מייל וכרטסת — לפני הפתיחה לציבור.
+          <br />
+          מיד לאחר הזיהוי נפתחת חלונית בקשת ההלוואה. הקישור נוגע בהלוואות בלבד — אף מחלקה אחרת אינה מוצגת בו.
         </p>
         {previewCode ? (
           <>

@@ -147,6 +147,16 @@ const DOC_LABELS: Record<string, string> = {
   other:         'מסמך נוסף',
 }
 
+// איזו מחלקה (שער) עומדת מאחורי כל ?action= שבקישור. משמש לצמצום קישור
+// הבדיקה (?preview=) למחלקה שהוא נועד לבדוק, כדי שלא יוצגו כל האפשרויות.
+// ⚠️ 'docs' ו-'details' אינם כאן בכוונה — הם אינם הגשת בקשה למחלקה.
+const ACTION_DEPARTMENT: Record<string, string | undefined> = {
+  loan: 'gemach',
+  birth: 'maternity',
+  aid: 'financial_aid',
+  holiday: 'holidays',
+}
+
 // ─── Shared helpers ───
 
 function Field({ label, required, children, hint }: {
@@ -1517,9 +1527,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // נקרא פעם אחת מ-window.location כדי לא לחייב Suspense של useSearchParams.
   const [previewCode, setPreviewCode] = useState('')
   useEffect(() => {
-    const code = new URLSearchParams(window.location.search).get('preview') ?? ''
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('preview') ?? ''
     setPreviewCode(code)
-    const url = code ? `/api/portal/department-gates?preview=${encodeURIComponent(code)}` : '/api/portal/department-gates'
+    // ⚠️ קישור בדיקה מצומצם למחלקה אחת. קודם ?preview= פתח *את כל* המחלקות,
+    // ולכן קישור הבדיקה של הגמ"ח הציב מול הבודק גם יולדות וסיוע רפואי — כל
+    // האפשרויות, במקום זו שהוא בא לבדוק. המחלקה נגזרת מה-?action= שבקישור,
+    // כך שאין פרמטר נוסף לתחזק והקישור מצמצם את עצמו למה שהוא פותח.
+    const scope = ACTION_DEPARTMENT[params.get('action') ?? '']
+    const qs = new URLSearchParams()
+    if (code) qs.set('preview', code)
+    if (code && scope) qs.set('only', scope)
+    const url = qs.size ? `/api/portal/department-gates?${qs}` : '/api/portal/department-gates'
     fetch(url).then(r => r.json())
       .then(d => { if (d.gates) setDeptGates(d.gates) })
       .catch(() => {})
