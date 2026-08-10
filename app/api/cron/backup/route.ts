@@ -2,8 +2,8 @@
 // מוגן ב-CRON_SECRET. הרצה: GET עם ?token=<CRON_SECRET> או Authorization: Bearer.
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServiceClient, verifyCronSecret } from '@/lib/apiAuth'
-import { generateBackup, backupFilename } from '@/lib/backup'
-import { uploadBackup, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
+import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
+import { uploadBackupStream, listBackups, deleteBackup, driveReady } from '@/lib/googleDrive'
 import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
@@ -51,9 +51,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { buffer, manifest } = await generateBackup(admin)
+    // ⚠️ נבנה ונשלח כזרם — ראו lib/backupArchive. שיא הזיכרון הוא מנה אחת
+    // ולא גודל הגיבוי.
     const filename = backupFilename(now)
-    const up = await uploadBackup(filename, buffer)
+    const { stream, done } = createBackupArchive(admin)
+    let buildError: unknown = null
+    const built = done.catch((e: unknown) => { buildError = e; return null })
+    const up = await uploadBackupStream(filename, stream)
+    const manifest = await built
+    if (buildError) throw buildError
     if (!up.ok) throw new Error(up.error || 'העלאה ל-Drive נכשלה')
 
     // סימון שהיום כבר גובה (לאידמפוטנטיות — גיבוי אחד ליום)
@@ -79,7 +85,7 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ניקוי best-effort */ }
 
-    const sizeMB = Math.round(buffer.length / 1048576 * 10) / 10
+    const sizeMB = up.sizeMB
     // לא שולחים מייל על כל גיבוי יומי מוצלח (מיותר). שולחים מייל רק כשמתבצע
     // הניקוי החודשי (פעם בחודש) — כסיכום קצר, וכן במקרה כשל (ב-catch).
     if (purged) {

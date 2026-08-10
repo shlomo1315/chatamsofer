@@ -1,9 +1,10 @@
 // גיבוי ידני: הורדת ZIP למחשב (GET), העלאה ל-Drive (POST), רשימת גיבויים (GET ?list=1).
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, getServiceClient } from '@/lib/apiAuth'
-import { generateBackup, backupFilename } from '@/lib/backup'
+import { createBackupArchive, backupFilename } from '@/lib/backupArchive'
 import { restoreBackup } from '@/lib/restore'
-import { uploadBackup, listBackups, driveReady } from '@/lib/googleDrive'
+import { uploadBackupStream, listBackups, driveReady } from '@/lib/googleDrive'
+import { Readable } from 'stream'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -17,9 +18,12 @@ export async function GET(request: NextRequest) {
 
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
-  const { buffer } = await generateBackup(admin)
   const filename = backupFilename(new Date())
-  return new NextResponse(new Uint8Array(buffer), {
+  // ⚠️ מוזרם ישירות לתגובה ולא נאסף ל-Buffer: גיבוי של כמה ג'יגה בזיכרון
+  // השרת מסכן את כל התהליך, ולא רק את ההורדה הזו.
+  const { stream, done } = createBackupArchive(admin)
+  done.catch(e => console.error('[backup] בניית הגיבוי להורדה נכשלה:', e))
+  return new NextResponse(Readable.toWeb(stream) as ReadableStream, {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -35,11 +39,17 @@ export async function POST() {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { buffer, manifest } = await generateBackup(admin)
   const filename = backupFilename(new Date())
-  const up = await uploadBackup(filename, buffer)
+  const { stream, done } = createBackupArchive(admin)
+  let buildError: unknown = null
+  const built = done.catch((e: unknown) => { buildError = e; return null })
+  const up = await uploadBackupStream(filename, stream)
+  const manifest = await built
+  if (buildError) {
+    return NextResponse.json({ error: buildError instanceof Error ? buildError.message : String(buildError) }, { status: 500 })
+  }
   if (!up.ok) return NextResponse.json({ error: up.error }, { status: 502 })
-  return NextResponse.json({ ok: true, filename, id: up.id, sizeMB: Math.round(buffer.length / 1048576 * 10) / 10, manifest })
+  return NextResponse.json({ ok: true, filename, id: up.id, sizeMB: up.sizeMB, manifest })
 }
 
 // שחזור: העלאת קובץ ZIP של גיבוי מלא והטענתו חזרה למערכת (DB + קבצים).
