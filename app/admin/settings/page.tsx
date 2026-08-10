@@ -25,6 +25,7 @@ import YemotMaternitySettings from './YemotMaternitySettings'
 import YemotHolidaySettings from './YemotHolidaySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
+import LineageRejectionRepair from './LineageRejectionRepair'
 import RegistrationGate from './RegistrationGate'
 import SendAccountSettings from './SendAccountSettings'
 import DepartmentGatesSettings from './DepartmentGatesSettings'
@@ -245,6 +246,11 @@ export default async function SettingsPage() {
         {/* אולפן ElevenLabs — יצירת קול מטקסט חופשי, בלי שיוך */}
         <Collapsible title="אולפן קול — טקסט חופשי (ElevenLabs)" icon={<Sparkles size={16} className="text-indigo-500" />}>
           <ElevenLabsStudio />
+        </Collapsible>
+
+        {/* תיקון חד-פעמי: משפחות שנדחו אוטומטית מעץ הדורות (04/08-10/08) */}
+        <Collapsible title="תיקון דחיות אוטומטיות מעץ הדורות" icon={<Wrench size={16} className="text-amber-600" />}>
+          <LineageRejectionRepair />
         </Collapsible>
 
         {/* Full system backup (DB + files) to Google Drive */}
