@@ -537,6 +537,36 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     console.error('[public-register] lineage nodes insert failed:', e)
   }
 
+  // ── 🔴 הנרשם עצמו מקבל צומת בעץ, מיד ──
+  //
+  // הבלוק שמעל מכניס לעץ רק דורות שהנרשם הוסיף *ידנית*. מי שמצא את אביו כבר
+  // מאומת ולא הוסיף כלום לא קיבל צומת בכלל, ולכן לא היה לו שום ייצוג בעץ —
+  // עומדים על האב ורואים "פתיחת הכרטסת" במקום את הצאצא. זו הסיבה ש"יש
+  // צאצאים שרשומים ולא מופיעים בעץ".
+  //
+  // ⚠️ רץ תמיד, ולא רק כשהוסיפו דורות. אידמפוטנטי (מזהה לפי ת"ז), ולכן מי
+  // שכבר קיבל צומת בבלוק שמעל לא יקבל כפילות.
+  // ⚠️ אינו תלוי באישור: הצומת נוצר בסטטוס 'pending', כמו כל צומת שממתין
+  // לאימות. האישור נשאר החלטה של הצוות.
+  try {
+    const { data: fresh } = await admin.from('beneficiaries')
+      .select('id, id_number, full_name, spouse_name, family_name, gender, lineage_node_id')
+      .eq('id_number', cleanId).maybeSingle()
+    if (fresh) {
+      const { ensureBeneficiaryNode } = await import('@/lib/beneficiaryNode')
+      const res = await ensureBeneficiaryNode(admin, fresh)
+      if (res.ok && (res.created || res.adopted)) {
+        invalidateLineageCache()
+        console.log(`[public-register] צומת לנרשם ${res.created ? 'נוצר' : 'אומץ'} · ${res.nodeId}`)
+      } else if (!res.ok) {
+        console.warn(`[public-register] לא נוצר צומת לנרשם: ${res.reason}`)
+      }
+    }
+  } catch (e) {
+    // ⚠️ best-effort: רישום לא נכשל בגלל העץ. השלמה יזומה קיימת בהגדרות.
+    console.error('[public-register] ensureBeneficiaryNode failed:', e)
+  }
+
   // Send confirmation email (non-blocking) — מעוצב עם כל פרטי הרישום + קישור לפורטל
   if (email) {
     // קישורי טיוטה מוכנה (mailto) — כדי שנרשם שחסום לגלישה יוכל להגיש בקשה
