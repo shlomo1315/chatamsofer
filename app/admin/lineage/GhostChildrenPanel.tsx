@@ -17,7 +17,7 @@
 import { useState, useCallback } from 'react'
 import {
   Ghost, Loader2, Search, ChevronLeft, ExternalLink, ShieldQuestion,
-  UserRoundX, UserRoundSearch, CopyX, Info,
+  UserRoundX, UserRoundSearch, CopyX, Info, Copy, ShieldCheck,
 } from 'lucide-react'
 
 type GhostGroup = 'no_card' | 'card_unlinked' | 'card_elsewhere'
@@ -37,6 +37,21 @@ interface Row {
   cardBenId: string | null
   cardBenName: string | null
   cardNodeId: string | null
+  twinNodeId: string | null
+  twinName: string | null
+  nameLooksLikeChildRow: boolean
+}
+
+/** צומת שעמד בכלל הת"ז אך מוגן — מוצג עם הסיבה, ולא רק נספר. */
+interface ProtectedRow {
+  nodeId: string
+  nodeName: string
+  generation: number
+  status: string | null
+  idNumber: string
+  parentNodeId: string
+  parentNodeName: string
+  guard: string
 }
 
 interface ScanData {
@@ -44,6 +59,8 @@ interface ScanData {
   counts: Record<GhostGroup, number>
   total: number
   skipped: { withChildren: number; withCard: number }
+  protectedRows: ProtectedRow[]
+  protectedTotal: number
   scannedNodes: number
   scannedBeneficiaries: number
   truncated: boolean
@@ -90,6 +107,8 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
   // הקבוצה הפתוחה. אחת בלבד — שלוש רשימות פתוחות יחד הופכות את המסך לגלילה
   // אינסופית שאי אפשר להתמצא בה.
   const [open, setOpen] = useState<GhostGroup | null>(null)
+  // הצמתים המוגנים — קטע נפרד, כי הם *לא* פריטי טיפול אלא ההסבר למספר.
+  const [openProtected, setOpenProtected] = useState(false)
 
   const scan = useCallback(async () => {
     setLoading(true); setErr('')
@@ -97,7 +116,7 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
       const res = await fetch('/api/admin/lineage/ghost-children', { cache: 'no-store' })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'שגיאה בסריקה'); setData(null) }
-      else { setData(d); setOpen(null) }
+      else { setData(d); setOpen(null); setOpenProtected(false) }
     } catch { setErr('שגיאת רשת') }
     setLoading(false)
   }, [])
@@ -162,13 +181,57 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
           {/* ⚠️ הצמתים שהוחרגו מוצגים במפורש. בלי זה המספר על המסך אינו בר-הסבר:
               נראה כאילו הסריקה פספסה צמתים שברור לעין שעומדים בכלל הת"ז. */}
           {(data.skipped.withChildren > 0 || data.skipped.withCard > 0) && (
-            <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-              עוד <strong>{he(data.skipped.withChildren + data.skipped.withCard)}</strong> צמתים עומדים בכלל הת״ז
-              והושארו בחוץ במכוון:{' '}
-              {data.skipped.withChildren > 0 && <>{he(data.skipped.withChildren)} כי יש להם ילדים בעץ</>}
-              {data.skipped.withChildren > 0 && data.skipped.withCard > 0 && ' · '}
-              {data.skipped.withCard > 0 && <>{he(data.skipped.withCard)} כי יש להם כרטסת משלהם</>}.
-            </p>
+            <div>
+              <button onClick={() => setOpenProtected(o => !o)}
+                className="flex w-full items-start gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-right text-[11px] leading-relaxed text-slate-500 transition-colors hover:bg-slate-50">
+                <ShieldCheck size={13} className="mt-0.5 shrink-0 text-emerald-600" />
+                <span>
+                  עוד <strong>{he(data.skipped.withChildren + data.skipped.withCard)}</strong> צמתים עומדים בכלל הת״ז
+                  והושארו בחוץ במכוון:{' '}
+                  {data.skipped.withChildren > 0 && <>{he(data.skipped.withChildren)} כי יש להם ילדים בעץ</>}
+                  {data.skipped.withChildren > 0 && data.skipped.withCard > 0 && ' · '}
+                  {data.skipped.withCard > 0 && <>{he(data.skipped.withCard)} כי יש להם כרטסת משלהם</>}.
+                </span>
+                <ChevronLeft size={13}
+                  className={`mr-auto mt-0.5 shrink-0 text-slate-300 transition-transform ${openProtected ? '-rotate-90' : ''}`} />
+              </button>
+              {openProtected && (
+                <div className="mt-1 rounded-lg border border-slate-200 bg-white">
+                  <div className="max-h-[20rem] overflow-y-auto">
+                    <table className="w-full text-right text-sm">
+                      <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">שם הצומת</th>
+                          <th className="px-3 py-2 font-medium">דור</th>
+                          <th className="px-3 py-2 font-medium">תחת</th>
+                          <th className="px-3 py-2 font-medium">למה לא נוגעים</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {data.protectedRows.map(r => (
+                          <tr key={r.nodeId} className="hover:bg-slate-50">
+                            <td className="px-3 py-2">
+                              <button onClick={() => onLocate(r.nodeId)}
+                                className="text-right font-medium text-slate-800 hover:text-violet-700">
+                                {r.nodeName || '(ללא שם)'}
+                              </button>
+                            </td>
+                            <td className="px-3 py-2 text-xs text-slate-400">{r.generation}</td>
+                            <td className="max-w-[200px] truncate px-3 py-2 text-xs text-slate-600">{r.parentNodeName}</td>
+                            <td className="px-3 py-2 text-xs text-emerald-700">{r.guard}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {data.protectedTotal > data.protectedRows.length && (
+                    <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-400">
+                      מוצגות {he(data.protectedRows.length)} מתוך {he(data.protectedTotal)} — הספירה למעלה מלאה.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {data.total === 0 && (
@@ -219,6 +282,17 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
                                   <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>
                                     {st.txt}
                                   </span>
+                                  {/* ציר התאום — אח שהשם המלא שלו מכיל את שמו.
+                                      הסימן החזק ביותר לכך שזה אותו אדם פעמיים,
+                                      והוא בלתי תלוי בשאלה איפה הכרטסת. */}
+                                  {r.twinName && (
+                                    <button onClick={() => r.twinNodeId && onLocate(r.twinNodeId)}
+                                      title="אח שהשם המלא שלו מכיל את שמו של הצומת — ככל הנראה אותו אדם"
+                                      className="mt-1 flex items-start gap-1 text-right text-[10px] leading-tight text-rose-600 hover:text-rose-800">
+                                      <Copy size={10} className="mt-0.5 shrink-0" />
+                                      <span>עותק של: {r.twinName}</span>
+                                    </button>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2 text-xs text-slate-400">{r.generation}</td>
                                 <td className="ltr-num px-3 py-2 font-mono text-xs text-slate-500">{r.idNumber || '—'}</td>

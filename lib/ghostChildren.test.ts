@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { findGhostChildren, normalizeIdNumber, type GhostNodeRow, type GhostBenRow } from './ghostChildren'
+import {
+  findGhostChildren, normalizeIdNumber, containedInName, looksLikeChildName,
+  type GhostNodeRow, type GhostBenRow,
+} from './ghostChildren'
 
 const node = (over: Partial<GhostNodeRow> & { id: string }): GhostNodeRow => ({
   name: 'צומת', parent_id: null, generation: 7, status: 'pending', id_number: null, ...over,
@@ -215,5 +218,117 @@ describe('findGhostChildren — סיכום ומיון', () => {
   it('עץ ריק מחזיר סריקה ריקה ולא נופל', () => {
     const scan = findGhostChildren([], [])
     expect(scan).toMatchObject({ total: 0, counts: { no_card: 0, card_unlinked: 0, card_elsewhere: 0 } })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ציר התאום — הבדיקות שהגיעו עם לוגיקת הכלת-השם, ונשמרו במלואן.
+// ⚠️ כלי שמסמן צמתים כעותקים חייב להיות מוכח ולא מקורב. הבדיקות כאן נועלות
+// את שני הדברים שאסור להם להישבר: ההוכחה (ת"ז מכרטסת ההורה), וההגנה על צומת
+// שצבר ילדים או כרטסת.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('הכלה בשם', () => {
+  it('שם פרטי מוכל בניסוח המלא', () => {
+    expect(containedInName('רחל לאה מרים', 'רבי דוד ומרת רחל לאה מרים סינצבנג')).toBe(true)
+  })
+
+  it('🔴 "חנה" אינו "חנה רחל" — שתי נשים שונות', () => {
+    // השוואת מילים ולא מחרוזת. אילו הושוותה מחרוזת, סימון כעותק היה נופל על אדם אחר.
+    expect(containedInName('חנה רחל', 'רבי X ומרת חנה Y')).toBe(false)
+  })
+
+  it('שם זהה אינו "מוכל" — אין מה למזג לתוך עצמו', () => {
+    expect(containedInName('משה', 'משה')).toBe(false)
+  })
+
+  it('רווחים כפולים אינם משנים את התוצאה', () => {
+    expect(containedInName('  רחל   לאה ', 'רבי דוד ומרת רחל לאה סינצבנג')).toBe(true)
+  })
+
+  it('זיהוי שם בסגנון שדה הילדים', () => {
+    expect(looksLikeChildName('חנה רחל')).toBe(true)
+    expect(looksLikeChildName('רבי דוד ומרת חנה רחל לוי')).toBe(false)
+    expect(looksLikeChildName('')).toBe(false)
+  })
+})
+
+describe('findGhostChildren — ציר התאום', () => {
+  it('אח שהשם המלא שלו מכיל את שמו → מסומן כתאום', () => {
+    const scan = scenario({
+      nodeId: 'g',
+      extraNodes: [node({ id: 'twin', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'p', generation: 7 })],
+    })
+    expect(scan.rows[0].twinNodeId).toBe('twin')
+    expect(scan.rows[0].twinName).toBe('רבי דוד ומרת משה סינצבנג')
+  })
+
+  it('בלי אח מתאים — אין תאום, והשורה עדיין מדווחת', () => {
+    const scan = scenario()
+    expect(scan.total).toBe(1)
+    expect(scan.rows[0].twinNodeId).toBeNull()
+    expect(scan.rows[0].twinName).toBeNull()
+  })
+
+  it('🔴 התאום מחפש באחים בלבד — צומת בענף אחר אינו תאום', () => {
+    const scan = scenario({
+      extraNodes: [
+        node({ id: 'elsewhere-parent', name: 'הורה אחר', generation: 6 }),
+        node({ id: 'far', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'elsewhere-parent', generation: 7 }),
+      ],
+    })
+    expect(scan.rows[0].twinNodeId).toBeNull()
+  })
+
+  it('התאום אינו מחליף את הסיווג — שני הצירים מדווחים יחד', () => {
+    const scan = scenario({
+      extraNodes: [node({ id: 'twin', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'p', generation: 7 })],
+      extraBens: [ben({ id: 'his', id_number: '123456789', lineage_node_id: null })],
+    })
+    expect(scan.rows[0].group).toBe('card_unlinked')
+    expect(scan.rows[0].twinNodeId).toBe('twin')
+  })
+
+  it('nameLooksLikeChildRow מסמן שם בסגנון שדה הילדים', () => {
+    expect(scenario().rows[0].nameLooksLikeChildRow).toBe(true)
+    const full = scenario({ nodeId: 'g' })
+    expect(full.rows[0].nodeName).toBe('משה')
+  })
+})
+
+describe('🔴 findGhostChildren — מה שאסור לגעת בו', () => {
+  it('צומת עם כרטסת מקושרת — מוגן, עם סיבה', () => {
+    const scan = scenario({ extraBens: [ben({ id: 'own', lineage_node_id: 'g', id_number: '123456789' })] })
+    expect(scan.total).toBe(0)
+    expect(scan.protectedRows).toHaveLength(1)
+    expect(scan.protectedRows[0].nodeId).toBe('g')
+    expect(scan.protectedRows[0].guard).toContain('כרטסת')
+  })
+
+  it('צומת שצבר ילדים — מוגן, גם כשהוא כפילות מובהקת', () => {
+    // מישהו נרשם והתחבר אליו מאז. טיפול בו היה מנתק רשומות אמיתיות.
+    const scan = scenario({
+      extraNodes: [
+        node({ id: 'twin', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'p', generation: 7 }),
+        node({ id: 'kid', name: 'ילד', parent_id: 'g', generation: 8 }),
+      ],
+    })
+    expect(scan.total).toBe(0)
+    expect(scan.protectedRows[0].guard).toContain('ילדים')
+  })
+
+  it('כשיש גם כרטסת וגם ילדים — הכרטסת היא הסיבה המדווחת', () => {
+    const scan = scenario({
+      extraNodes: [node({ id: 'kid', parent_id: 'g', generation: 8 })],
+      extraBens: [ben({ id: 'own', lineage_node_id: 'g' })],
+    })
+    expect(scan.skipped).toEqual({ withCard: 1, withChildren: 0 })
+    expect(scan.protectedRows[0].guard).toContain('כרטסת')
+  })
+
+  it('צומת מוגן אינו מופיע ברשימה הפעילה', () => {
+    const scan = scenario({ extraNodes: [node({ id: 'kid', parent_id: 'g', generation: 8 })] })
+    expect(scan.rows.map(r => r.nodeId)).not.toContain('g')
+    expect(scan.protectedRows.map(r => r.nodeId)).toContain('g')
   })
 })

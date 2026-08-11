@@ -12,17 +12,30 @@
 //   2. אין כרטסת המקושרת אליו.
 //   3. אותה ת"ז מופיעה בשדה הילדים של כרטסת ההורה שלו.
 //
-// תנאי 3 הוא מה שמבדיל בין "צומת שטרם נרשם" לבין צומת שנוצר אוטומטית: בלעדיו
-// היינו סופרים גם כל צומת היסטורי או ידני שאין לו כרטסת.
+// תנאי 3 הוא ההוכחה — הצומת נוצר *מתוך* הרשומה הזאת. בלעדיו זו הייתה
+// היוריסטיקה על שמות, וכלי שנשען על היוריסטיקה אינו כלי אלא סיכון: היינו
+// סופרים גם כל צומת היסטורי או ידני שאין לו כרטסת.
+//
+// ─── שני צירים, ולא אחד ──────────────────────────────────────────────────────
+// המודול הזה מאחד שתי עבודות שנעשו במקביל על אותה בעיה, ומשמר את שתי הזוויות
+// מפני שהן אורתוגונליות — אותו צומת יכול להיות בשתיהן בבת אחת:
+//
+//   · ציר הכרטסת — *איפה הכרטסת של אותה ת"ז*. זה מה שקובע את הטיפול, ולכן
+//     הוא הסיווג הראשי (שלוש הקבוצות שלמטה).
+//   · ציר התאום — *האם יש אח שהשם המלא שלו מכיל את שמו*. זו ההוכחה שמדובר
+//     באותו אדם פעמיים: "רחל לאה מרים" מול "רבי דוד ומרת רחל לאה מרים
+//     סינצבנג". הציר הזה מדווח בכל שורה ואינו מחליף את הסיווג.
 //
 // 🔴 שני סייגים שאין לעבור עליהם, והם *לא* אופטימיזציה אלא הגנה:
-//   • צומת שיש לו ילדים בעץ — לא נוגעים. מתחתיו תלוי ענף שלם, וכל טיפול בו
-//     מנתק צאצאים אמיתיים.
 //   • צומת שיש לו כרטסת — לא נוגעים. הוא כבר אדם רשום במערכת, גם אם הת"ז
 //     שלו מופיעה במקביל בשדה הילדים של הוריו (וזה המצב הנפוץ אחרי שהילד
 //     נרשם בעצמו).
+//   • צומת שיש לו ילדים בעץ — לא נוגעים. מתחתיו תלוי ענף שלם, וכל טיפול בו
+//     מנתק צאצאים אמיתיים. זה נכון גם כשהוא כפילות מובהקת: מישהו נרשם
+//     והתחבר אליו מאז.
 // שני הסייגים נאכפים כאן, בשכבת הזיהוי, ולא בממשק — כך שאף קורא של המודול
-// לא יכול לקבל בטעות רשימה שכוללת אותם.
+// לא יכול לקבל בטעות רשימה שכוללת אותם. הם *גם* מוחזרים בנפרד (protectedRows)
+// עם סיבת ההגנה, כי "למה הצומת הזה לא ברשימה" היא שאלה שחייבת תשובה.
 //
 // המודול טהור: מקבל שורות ומחזיר סיווג. אין בו גישה לבסיס הנתונים ואין בו
 // שום פעולת כתיבה — הוא משמש מסך אבחון בקריאה בלבד.
@@ -82,6 +95,31 @@ export interface GhostRow {
   cardBenName: string | null
   /** הצומת שאליו הכרטסת הזו כבר משויכת — רק ב-card_elsewhere. */
   cardNodeId: string | null
+  /**
+   * ציר התאום: אח שהשם המלא שלו מכיל את שמו של הצומת — כלומר אותו אדם, פעם
+   * בשם פרטי כפי שההורה הקליד ופעם בניסוח המלא של העץ. הסימן החזק ביותר לכך
+   * שהצומת הזה הוא עותק, והוא בלתי תלוי בשאלה איפה הכרטסת.
+   */
+  twinNodeId: string | null
+  twinName: string | null
+  /**
+   * האם השם עצמו נראה כמו שורה בשדה הילדים (שם פרטי בלי התארים שהעץ מוסיף).
+   * ⚠️ סימן תומך בלבד — ההוכחה היא הת"ז, ולעולם לא השם.
+   */
+  nameLooksLikeChildRow: boolean
+}
+
+/** צומת שעמד בכלל הת"ז אך מוגן — מוחזר עם הסיבה, ולא רק נספר. */
+export interface GhostProtectedRow {
+  nodeId: string
+  nodeName: string
+  generation: number
+  status: string | null
+  idNumber: string
+  parentNodeId: string
+  parentNodeName: string
+  /** למה לא נוגעים בו. */
+  guard: string
 }
 
 export interface GhostScan {
@@ -94,6 +132,8 @@ export interface GhostScan {
    * כאילו הסריקה פשוט פספסה אותם.
    */
   skipped: { withChildren: number; withCard: number }
+  /** אותם צמתים מוחרגים, עם סיבת ההגנה לכל אחד. */
+  protectedRows: GhostProtectedRow[]
   scannedNodes: number
   scannedBeneficiaries: number
 }
@@ -117,6 +157,39 @@ export function benDisplayName(b: GhostBenRow): string {
   return [b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ').trim() || 'ללא שם'
 }
 
+const normName = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim()
+
+/**
+ * האם השם הזה נראה כמו שם פרטי בודד כפי שנשמר בשדה הילדים — כלומר בלי
+ * התארים שהעץ מוסיף.
+ *
+ * ⚠️ סימן תומך בלבד; ההוכחה היא הת"ז. שם יכול להיראות "תמים" לגמרי ובכל זאת
+ * להיות של אדם אמיתי שנרשם.
+ */
+export function looksLikeChildName(name: string): boolean {
+  const n = normName(name)
+  if (!n) return false
+  return !/^רבי\s/.test(n) && !n.includes(' ומרת ') && !n.includes(' והרבנית ')
+}
+
+/**
+ * האם שמו של הצומת *מוכל* בשם המלא של אח — כלומר אותו אדם, פעם בשם פרטי
+ * ופעם בניסוח המלא.
+ *
+ * ⚠️ השוואת מילים ולא מחרוזת: "חנה" מוכל ב"חנה רחל" כמחרוזת, אבל אלו שתי
+ * נשים שונות. כאן כל מילות השם הקצר חייבות להופיע *ברצף* בשם הארוך. השוואת
+ * מחרוזות הייתה מסמנת אדם אחר כעותק.
+ */
+export function containedInName(shortName: string, fullName: string): boolean {
+  const s = normName(shortName).split(' ').filter(Boolean)
+  const f = normName(fullName).split(' ').filter(Boolean)
+  if (!s.length || f.length <= s.length) return false
+  for (let i = 0; i + s.length <= f.length; i++) {
+    if (s.every((w, j) => f[i + j] === w)) return true
+  }
+  return false
+}
+
 /** ת"ז הילדים בכרטסת, ממופות לשם שנכתב לצידן. */
 function childIdsOf(children: unknown): Map<string, string> {
   const out = new Map<string, string>()
@@ -131,22 +204,28 @@ function childIdsOf(children: unknown): Map<string, string> {
 }
 
 /**
- * סורק את העץ ואת הכרטסות ומחזיר את צמתי-הרפאים, מסווגים לשלוש קבוצות.
+ * סורק את העץ ואת הכרטסות ומחזיר את צמתי-הרפאים, מסווגים לשלוש קבוצות
+ * ומסומנים בתאום שלהם אם יש.
  *
  * O(n) בצמתים ובכרטסות — נבנות מפות מקדימות ואין השוואת כל-זוג. חשוב: העץ
  * מגיע לאלפי צמתים ולאלפי כרטסות, וסריקה ריבועית כאן הייתה חונקת את הבקשה.
+ * ⚠️ חיפוש התאום מוגבל לאחים בלבד (אותו הורה), ולכן הוא O(אחים) ולא O(עץ).
  */
 export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): GhostScan {
-  // כמה ילדים יש לכל צומת בעץ — הסייג הראשון.
+  // כמה ילדים יש לכל צומת בעץ, ומי האחים של כל צומת — שני הסייגים וציר התאום.
   const childCount = new Map<string, number>()
+  const siblings = new Map<string, GhostNodeRow[]>()
   for (const n of nodes) {
     if (!n.parent_id) continue
     childCount.set(n.parent_id, (childCount.get(n.parent_id) ?? 0) + 1)
+    const arr = siblings.get(n.parent_id) ?? []
+    arr.push(n)
+    siblings.set(n.parent_id, arr)
   }
 
   const nameById = new Map(nodes.map(n => [n.id, n.name]))
 
-  // צומת → האם יש כרטסת המקושרת אליו (הסייג השני).
+  // צומת → האם יש כרטסת המקושרת אליו (הסייג הראשון).
   const hasCard = new Set<string>()
   // צומת הורה → { ת"ז הילד : פרטי הכרטסת שבה הוא רשום }.
   const childrenOfNode = new Map<string, Map<string, { benId: string; benName: string; childName: string }>>()
@@ -180,6 +259,7 @@ export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): G
   }
 
   const rows: GhostRow[] = []
+  const protectedRows: GhostProtectedRow[] = []
   const skipped = { withChildren: 0, withCard: 0 }
 
   for (const n of nodes) {
@@ -190,10 +270,24 @@ export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): G
     const entry = childrenOfNode.get(n.parent_id)?.get(id)
     if (!entry) continue
 
+    const parentNodeName = nameById.get(n.parent_id) ?? '—'
+
     // 🔴 הסייגים. נבדקים *אחרי* התנאי המזהה כדי שהספירה תשקף רק צמתים
-    // שהיו נכנסים לרשימה, ולא כל צומת בעץ.
-    if ((childCount.get(n.id) ?? 0) > 0) { skipped.withChildren++; continue }
-    if (hasCard.has(n.id)) { skipped.withCard++; continue }
+    // שהיו נכנסים לרשימה, ולא כל צומת בעץ. הכרטסת נבדקת ראשונה: כשיש גם
+    // כרטסת וגם ילדים, "הוא כבר אדם רשום" היא הסיבה החזקה יותר.
+    const kidCount = childCount.get(n.id) ?? 0
+    const guard = hasCard.has(n.id) ? 'יש לו כרטסת מקושרת'
+      : kidCount > 0 ? `יש לו ${kidCount} ילדים בעץ`
+      : null
+    if (guard) {
+      if (hasCard.has(n.id)) skipped.withCard++
+      else skipped.withChildren++
+      protectedRows.push({
+        nodeId: n.id, nodeName: n.name, generation: n.generation, status: n.status,
+        idNumber: id, parentNodeId: n.parent_id, parentNodeName, guard,
+      })
+      continue
+    }
 
     const owners = cardsByPerson.get(id) ?? []
     // כרטסת שכבר יושבת על צומת אחר גוברת: אם האדם קיים בעץ במקום אחר, הצומת
@@ -203,6 +297,10 @@ export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): G
     const card = linked ?? unlinked ?? null
     const group: GhostGroup = linked ? 'card_elsewhere' : unlinked ? 'card_unlinked' : 'no_card'
 
+    // ציר התאום — אח שהשם המלא שלו מכיל את שמו.
+    const twin = (siblings.get(n.parent_id) ?? [])
+      .find(s => s.id !== n.id && containedInName(n.name, s.name)) ?? null
+
     rows.push({
       nodeId: n.id,
       nodeName: n.name,
@@ -211,20 +309,27 @@ export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): G
       idNumber: id,
       group,
       parentNodeId: n.parent_id,
-      parentNodeName: nameById.get(n.parent_id) ?? '—',
+      parentNodeName,
       parentBenId: entry.benId,
       parentBenName: entry.benName,
       childNameInCard: entry.childName,
       cardBenId: card ? card.id : null,
       cardBenName: card ? benDisplayName(card) : null,
       cardNodeId: linked ? linked.lineage_node_id : null,
+      twinNodeId: twin ? twin.id : null,
+      twinName: twin ? twin.name : null,
+      nameLooksLikeChildRow: looksLikeChildName(n.name),
     })
   }
 
-  rows.sort((a, b) =>
+  const bySort = (a: { generation: number; parentNodeName: string; nodeName: string },
+                  b: { generation: number; parentNodeName: string; nodeName: string }) =>
     a.generation - b.generation ||
     a.parentNodeName.localeCompare(b.parentNodeName, 'he') ||
-    a.nodeName.localeCompare(b.nodeName, 'he'))
+    a.nodeName.localeCompare(b.nodeName, 'he')
+
+  rows.sort(bySort)
+  protectedRows.sort(bySort)
 
   const counts: Record<GhostGroup, number> = { no_card: 0, card_unlinked: 0, card_elsewhere: 0 }
   for (const r of rows) counts[r.group]++
@@ -234,6 +339,7 @@ export function findGhostChildren(nodes: GhostNodeRow[], bens: GhostBenRow[]): G
     counts,
     total: rows.length,
     skipped,
+    protectedRows,
     scannedNodes: nodes.length,
     scannedBeneficiaries: bens.length,
   }

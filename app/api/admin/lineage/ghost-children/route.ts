@@ -57,7 +57,8 @@ export async function GET() {
   const rows = scan.rows
     .filter(r => ++perGroup[r.group] <= MAX_ROWS_PER_GROUP)
     // הסתרת PII למי שאינו רשאי לצפות במשפחות: הת"ז והמעברים לכרטסות יורדים,
-    // שמות הצמתים נשארים — הם נתוני עץ, וזו ההרשאה שכבר יש לו.
+    // שמות הצמתים נשארים — הם נתוני עץ, וזו ההרשאה שכבר יש לו. שם התאום הוא
+    // שם צומת ולכן נשאר, מאותה סיבה בדיוק.
     .map(r => canSeeBeneficiaries ? r : {
       ...r,
       idNumber: '',
@@ -68,11 +69,19 @@ export async function GET() {
       cardBenName: null,
     })
 
+  // הצמתים המוגנים — מוחזרים כדי ש"למה הצומת הזה לא ברשימה" תהיה שאלה עם
+  // תשובה, ולא רק מספר. מקוצצים באותה מכסה ועוברים אותו מיסוך.
+  const protectedRows = scan.protectedRows
+    .slice(0, MAX_ROWS_PER_GROUP)
+    .map(r => canSeeBeneficiaries ? r : { ...r, idNumber: '' })
+
   return NextResponse.json({
     rows,
     counts: scan.counts,
     total: scan.total,
     skipped: scan.skipped,
+    protectedRows,
+    protectedTotal: scan.protectedRows.length,
     scannedNodes: scan.scannedNodes,
     scannedBeneficiaries: scan.scannedBeneficiaries,
     truncated: scan.total > rows.length,
