@@ -139,13 +139,21 @@ export async function POST(request: NextRequest) {
   let removed = 0
   const failures: { name: string; reason: string }[] = []
 
-  // ⚠️ סדרתי: מחיקות מקבילות תחת אותו אב הן בדיוק המצב שבו ספירת הילדים
-  // שנקראה מראש כבר אינה נכונה.
-  for (const id of targets) {
-    const row = eligible.get(id)!
-    const { error } = await admin.from('lineage_nodes').delete().eq('id', id)
-    if (error) failures.push({ name: row.nodeName, reason: error.message })
-    else removed++
+  // ⚡ מחיקה במנות ולא שורה-אחר-שורה. מחיקה סדרתית של עשרות צמתים היא עשרות
+  // סבבי רשת רצופים, ובמסך המקביל הדפדפן כבר ניתק אחרי 30 שניות והציג
+  // "שגיאת רשת" בזמן שהשרת דווקא סיים — תיקון שנראה כאילו נכשל והצליח.
+  //
+  // ⚠️ בטוח *בזכות* הסייגים: כל צומת ברשימה הוכח כעלה בלי כרטסת. לכן אף צומת
+  // ברשימה אינו האב של אחר, ואין שתי מחיקות שמשפיעות זו על תקפותה של זו.
+  const CHUNK = 50
+  for (let i = 0; i < targets.length; i += CHUNK) {
+    const batch = targets.slice(i, i + CHUNK)
+    const { error } = await admin.from('lineage_nodes').delete().in('id', batch)
+    if (error) {
+      for (const id of batch) failures.push({ name: eligible.get(id)!.nodeName, reason: error.message })
+    } else {
+      removed += batch.length
+    }
   }
 
   if (removed) invalidateLineageCache()
