@@ -75,12 +75,17 @@ export interface ChildSyncResult {
 }
 
 /**
- * מכניס/מאשר בעץ את ילדי המשפחה שאושרה.
+ * מכניס לעץ את ילדי המשפחה שאושרה — בסטטוס "ממתין לאישור".
  *
  * לכל ילד:
- *  • קיים צומת עם אותה ת"ז        → מוודאים שהוא מאומת.
- *  • קיים צומת בשם זהה תחת ההורה → מסמנים עליו את הת"ז ומאמתים (בלי כפילות).
- *  • אחרת                         → נוצר צומת חדש, מאומת.
+ *  • קיים צומת עם אותה ת"ז        → אין מה לעשות.
+ *  • קיים צומת בשם זהה תחת ההורה → מסמנים עליו את הת"ז בלבד (בלי כפילות).
+ *  • אחרת                         → נוצר צומת חדש, ממתין לאישור.
+ *
+ * 🔴 אינו קובע ואינו משנה סטטוס. עד כה אישור משפחה יצר את כל ילדיה כמאומתים
+ * *וגם* קידם ילדים קיימים ל"מאומת" — אישור של אדם אחד שינה בשקט את הסטטוס של
+ * שבעה אחרים, כולל כאלה שהושארו ב"ממתין" בכוונה. הסטטוס הוא החלטה של הצוות
+ * בלבד, ואין שום פעולה שקובעת אותו מאליה.
  *
  * best-effort לחלוטין: כשל כאן אינו מפיל את אישור המשפחה עצמו.
  */
@@ -131,23 +136,35 @@ export async function syncApprovedFamilyChildren(
       ?? byName.get(autoMergeKey(child.name))
 
     if (existing) {
-      const updates: Record<string, unknown> = {}
-      if ((existing.status ?? 'verified') !== 'verified') updates.status = 'verified'
-      if (!byIdNumber.has(child.idNumber)) updates.id_number = child.idNumber
-      if (!Object.keys(updates).length) continue
-      const { error } = await db.from('lineage_nodes').update(updates).eq('id', existing.id)
+      // 🔴 הסטטוס של צומת קיים אינו נגוע כאן.
+      //
+      // קודם אישור משפחה *קידם* כל ילד שלה ל"מאומת" — כולל צמתים שהמנהל
+      // השאיר בכוונה ב"ממתין", וכולל צומת שהילד עצמו יצר כשנרשם והמתין
+      // לבדיקה. אישור של אדם אחד שינה בשקט את הסטטוס של שבעה אחרים.
+      //
+      // רק שיוך הת"ז נשמר — הוא עובדה מזהה ולא החלטה.
+      if (byIdNumber.has(child.idNumber)) continue
+      const { error } = await db.from('lineage_nodes')
+        .update({ id_number: child.idNumber }).eq('id', existing.id)
       if (error) { console.error('[lineageFamilyChildren] update child node:', error.message); continue }
-      if (updates.status) result.verified++
-      if (updates.id_number) result.linked++
+      result.linked++
       continue
     }
 
+    // 🔴 'pending' ולא 'verified'.
+    //
+    // אישור משפחה יצר את כל ילדיה כצמתים *מאומתים*, בלי שאיש אישר אותם. המנהל
+    // אישר אדם אחד וקיבל שבעה שמות ירוקים חדשים בעץ — שמות שהוקלדו בשדה
+    // הילדים של הטופס, בלי שם משפחה ובלי בדיקה.
+    //
+    // הם עדיין נכנסים לעץ, כדי שלא ייעלמו — אבל כ"ממתין לאישור", כמו כל צומת
+    // אחר שטרם נבדק. הסטטוס הוא החלטה של הצוות בלבד.
     const { error } = await db.from('lineage_nodes').insert({
       name: child.name,
       parent_id: parentNodeId,
       generation: childGen,
       relation: child.relation,
-      status: 'verified',
+      status: 'pending',
       id_number: child.idNumber,
     })
     if (error) { console.error('[lineageFamilyChildren] insert child node:', error.message); continue }
