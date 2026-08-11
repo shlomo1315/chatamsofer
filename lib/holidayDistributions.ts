@@ -24,6 +24,34 @@ export interface ActiveDistribution {
   year: string | null
   amount_per_family: number | null
   registration_open: boolean
+  registration_opens_at?: string | null
+  registration_closes_at?: string | null
+}
+
+/**
+ * למה הרישום סגור — לערוצים שרוצים להסביר למשתמש מה קרה ("נסגר אתמול
+ * ב-20:00") במקום "אין חלוקה פתוחה".
+ *
+ * ⚠️ שאילתה נפרדת ולא משתנה-מודול ששומר את הסיבה האחרונה: השרת מטפל בבקשות
+ * במקביל (ובגלי רישום — בעשרות בו-זמנית), ומצב משותף ברמת המודול היה מחזיר
+ * למשתמש אחד את הסיבה של משתמש אחר. נקראת רק במסלול הכשל, ולכן העלות
+ * זניחה — אין כאן שאילתה נוספת במסלול המהיר.
+ */
+export async function getRegistrationClosedMessage(): Promise<string> {
+  const db = getServiceClient()
+  if (!db) return 'אין כרגע חלוקה שהרישום אליה פתוח'
+  const { data } = await db
+    .from('distributions')
+    .select('registration_open, registration_opens_at, registration_closes_at')
+    .eq('registration_open', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return 'אין כרגע חלוקה שהרישום אליה פתוח'
+  const { getScheduleState, closedMessage } = await import('@/lib/distributionSchedule')
+  const { registration_open, registration_opens_at, registration_closes_at } =
+    data as { registration_open: boolean | null; registration_opens_at: string | null; registration_closes_at: string | null }
+  return closedMessage(getScheduleState({ registration_open, registration_opens_at, registration_closes_at }))
 }
 
 /**
@@ -42,15 +70,30 @@ export async function getOpenDistribution(): Promise<ActiveDistribution | null> 
   if (!deptOpen) { console.log('[getOpenDistribution] closed=DEPARTMENT_GATE (holidays סגור בהגדרות)'); return null }
   const { data, error } = await db
     .from('distributions')
-    .select('id, name, year, amount_per_family, registration_open')
+    .select('id, name, year, amount_per_family, registration_open, registration_opens_at, registration_closes_at')
     .eq('registration_open', true)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (error) { console.error('[getOpenDistribution] query error:', error.message); return null }
-  if (!data) { console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)') }
-  else { console.log(`[getOpenDistribution] OPEN dist=${(data as ActiveDistribution).id} name=${(data as ActiveDistribution).name}`) }
-  return (data as ActiveDistribution | null) ?? null
+  if (!data) {
+    console.log('[getOpenDistribution] closed=NO_OPEN_DISTRIBUTION (אין חלוקה עם registration_open=true)')
+    return null
+  }
+  const dist = data as ActiveDistribution
+
+  // ⚠️ חלון הרישום המתוזמן — נבדק *כאן*, במקום היחיד שכל הערוצים עוברים בו
+  // (פורטל, נדרים, שלוחה טלפונית, מייל ההטבות). אכיפה בכל ערוץ בנפרד הייתה
+  // מבטיחה שערוץ אחד יישכח וימשיך לקבל רישומים אחרי הסגירה.
+  const { getScheduleState } = await import('@/lib/distributionSchedule')
+  const sched = getScheduleState(dist)
+  if (!sched.open) {
+    console.log(`[getOpenDistribution] closed=SCHEDULE state=${sched.state} at=${sched.at} dist=${dist.id}`)
+    return null
+  }
+
+  console.log(`[getOpenDistribution] OPEN dist=${dist.id} name=${dist.name}`)
+  return dist
 }
 
 export interface RegisterResult {
@@ -79,7 +122,9 @@ export async function registerToOpenDistribution(
   if (!db) return { ok: false, created: false, error: 'שגיאת שרת' }
 
   const dist = await getOpenDistribution()
-  if (!dist) return { ok: false, created: false, error: 'אין כרגע חלוקה שהרישום אליה פתוח' }
+  // ההודעה מסבירה *מה קרה ומתי* — מי שאיחר בשעה צריך לדעת שאיחר, ולא לחשוב
+  // שהמערכת תקולה ולהתקשר למשרד.
+  if (!dist) return { ok: false, created: false, error: await getRegistrationClosedMessage() }
 
   const { data: existing } = await db
     .from('distribution_recipients')

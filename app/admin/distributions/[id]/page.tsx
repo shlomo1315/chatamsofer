@@ -166,6 +166,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
         amountPerFamily={amount}
         registrationOpen={d.registration_open === true}
         distributionName={`${d.name}${d.year ? ` ${d.year}` : ''}`}
+        opensAt={d.registration_opens_at ?? null}
+        closesAt={d.registration_closes_at ?? null}
       />
     </div>
   )

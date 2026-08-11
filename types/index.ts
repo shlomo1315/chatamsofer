@@ -274,8 +274,14 @@ export interface Distribution {
   amount_per_family?: number
   /** הרישום פתוח? רק חלוקה פעילה מקבלת רישומים */
   registration_open?: boolean
+  /** מועדי התיעוד — מתי המתג נדלק/כובה בפועל */
   registration_opened_at?: string
   registration_closed_at?: string
+  /** חלון הרישום המתוזמן — null/undefined = ללא הגבלה (ניהול ידני במתג).
+   *  ⚠️ אלו *לא* opened_at/closed_at: אלה תיעוד של מה שקרה, ואלה הגדרה
+   *  של מה שיקרה. הרישום מתקבל רק כשהמתג דלוק *וגם* השעה בתוך החלון. */
+  registration_opens_at?: string | null
+  registration_closes_at?: string | null
   created_by?: string
   created_at: string
   updated_at: string

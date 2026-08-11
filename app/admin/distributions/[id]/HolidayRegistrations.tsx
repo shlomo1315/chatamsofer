@@ -1,8 +1,9 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send } from 'lucide-react'
+import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send, CalendarClock } from 'lucide-react'
+import { getScheduleState, formatDeadline } from '@/lib/distributionSchedule'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useToast } from '@/components/ui/Toast'
@@ -79,14 +80,32 @@ const SOURCE_ICON: Record<RegisterSource, typeof Monitor> = {
 // כך שאי אפשר היה לסנן דווקא לערוץ שדרכו מגיע רוב הרישום המאסיבי.
 const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', 'admin']
 
+/**
+ * ISO → הערך ש-datetime-local מצפה לו ("2026-08-14T20:00"), בשעון המקומי.
+ *
+ * ⚠️ toISOString() לא מתאים כאן: הוא מחזיר UTC, והשדה מפרש את מה שמקבל
+ * כשעון מקומי — כך שהשעה הייתה מוצגת בהפרש של שלוש שעות מזו שנשמרה.
+ * ההיסט מנוכה ידנית כדי שהמנהל יראה בדיוק את השעה שהזין.
+ */
+function isoToLocalInput(iso?: string | null): string {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (!Number.isFinite(t)) return ''
+  const d = new Date(t - new Date(t).getTimezoneOffset() * 60000)
+  return d.toISOString().slice(0, 16)
+}
+
 export default function HolidayRegistrations({
   distributionId, rows, amountPerFamily, registrationOpen, distributionName,
+  opensAt = null, closesAt = null,
 }: {
   distributionId: string
   rows: RegistrationRow[]
   amountPerFamily: number
   registrationOpen: boolean
   distributionName: string
+  opensAt?: string | null
+  closesAt?: string | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -101,6 +120,41 @@ export default function HolidayRegistrations({
   const [toggling, setToggling] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [opensLocal, setOpensLocal] = useState(isoToLocalInput(opensAt))
+  const [closesLocal, setClosesLocal] = useState(isoToLocalInput(closesAt))
+  const [savingWindow, setSavingWindow] = useState(false)
+
+  // ⚠️ המצב מחושב מחדש כל דקה ולא פעם אחת בטעינה: מסך שנשאר פתוח על שולחן
+  // המשרד היה ממשיך להראות "🟢 פתוח" שעות אחרי שהחלון נסגר בפועל.
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+  const sched = useMemo(() => getScheduleState(
+    { registration_open: registrationOpen, registration_opens_at: opensAt, registration_closes_at: closesAt },
+    new Date(nowTick),
+  ), [registrationOpen, opensAt, closesAt, nowTick])
+  const liveOpen = sched.open
+
+  const saveWindow = async () => {
+    setSavingWindow(true)
+    try {
+      const res = await fetch('/api/admin/distributions', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: distributionId,
+          registration_opens_at: opensLocal || null,
+          registration_closes_at: closesLocal || null,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error ?? 'השמירה נכשלה'); setSavingWindow(false); return }
+      toast.success(closesLocal ? 'החלון נשמר — הרישום ייסגר אוטומטית' : 'החלון נוקה')
+      router.refresh()
+    } catch { toast.error('שגיאת רשת') }
+    setSavingWindow(false)
+  }
 
   // ── פילוחים — מחושבים מהנתונים בזמן אמת, בלי סיכומים שמורים ──
   const bySource = useMemo(() => {
@@ -336,11 +390,26 @@ export default function HolidayRegistrations({
             })}
           </div>
         </div>
-        <div className={`rounded-2xl border-2 p-5 ${registrationOpen ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50'}`}>
+        {/* ⚠️ מצב הרישום מוצג לפי המצב *בפועל* ולא לפי המתג בלבד: מתג דלוק
+            עם חלון שנסגר הוא "סגור", ומתג שמראה 🟢 בזמן שהערוצים דוחים
+            רישומים הוא בדיוק החיווי שגורם לטלפונים למשרד. */}
+        <div className={`rounded-2xl border-2 p-5 ${liveOpen ? 'border-green-300 bg-green-50' : 'border-slate-200 bg-slate-50'}`}>
           <p className="text-xs font-bold text-slate-500 mb-1">מצב הרישום</p>
-          <p className={`text-lg font-extrabold ${registrationOpen ? 'text-green-700' : 'text-slate-600'}`}>
-            {registrationOpen ? '🟢 פתוח לרישום' : '⚪ סגור'}
+          <p className={`text-lg font-extrabold ${liveOpen ? 'text-green-700' : 'text-slate-600'}`}>
+            {liveOpen ? '🟢 פתוח לרישום' : sched.state === 'before_open' ? '🕓 ממתין לפתיחה'
+              : sched.state === 'after_close' ? '🔒 נסגר בזמן שנקבע' : '⚪ סגור'}
           </p>
+          {registrationOpen && !liveOpen && sched.at && (
+            <p className="mt-1 text-[11px] font-semibold text-amber-700 leading-snug">
+              המתג דלוק, אך {sched.state === 'before_open' ? 'טרם הגיע מועד הפתיחה' : 'עבר מועד הסגירה'}
+              {' — '}{formatDeadline(sched.at)}
+            </p>
+          )}
+          {liveOpen && closesAt && (
+            <p className="mt-1 text-[11px] font-semibold text-green-700 leading-snug">
+              ייסגר {formatDeadline(closesAt)}
+            </p>
+          )}
           {canEdit && (
             <button type="button" onClick={toggleRegistration} disabled={toggling}
               className={`mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-white transition ${registrationOpen ? 'bg-slate-600 hover:bg-slate-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
@@ -350,6 +419,42 @@ export default function HolidayRegistrations({
           )}
         </div>
       </div>
+
+      {/* ── חלון רישום מתוזמן ── */}
+      {canEdit && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarClock size={15} className="text-slate-400" />
+            <h3 className="text-sm font-bold text-slate-700">שעות פתיחה וסגירה</h3>
+          </div>
+          <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+            הרישום ייסגר אוטומטית במועד שנקבע — בכל הערוצים (אתר, נדרים, שלוחה טלפונית).
+            השאירו ריק כדי לנהל ידנית בלבד.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-bold text-slate-500">פתיחה</span>
+              <input type="datetime-local" value={opensLocal} onChange={e => setOpensLocal(e.target.value)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none" />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-bold text-slate-500">סגירה</span>
+              <input type="datetime-local" value={closesLocal} onChange={e => setClosesLocal(e.target.value)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-blue-400 focus:outline-none" />
+            </label>
+            <button type="button" onClick={saveWindow} disabled={savingWindow}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+              {savingWindow && <Loader2 size={13} className="animate-spin" />}שמור
+            </button>
+            {(opensLocal || closesLocal) && (
+              <button type="button" onClick={() => { setOpensLocal(''); setClosesLocal('') }}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                נקה
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── פילוחים לחיצים ── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col gap-3">
