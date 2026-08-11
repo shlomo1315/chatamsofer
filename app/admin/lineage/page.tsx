@@ -2411,6 +2411,8 @@ export default function LineagePage() {
             setView('tree')
             handleLocate([id])
           }}
+          // הסרת עותקים מוחקת צמתים — העץ שעל המסך התיישן.
+          onFixed={() => { void softRefresh() }}
         />
       )}
 
