@@ -2,11 +2,9 @@ import Link from 'next/link'
 import { ArrowRight, Gift, CalendarDays, Pencil } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import type { Distribution } from '@/types'
 import StatusBadge from '@/components/ui/StatusBadge'
-import NoPermission from '@/components/ui/NoPermission'
 import { format, differenceInYears } from 'date-fns'
 import { he } from 'date-fns/locale'
 import HolidayRegistrations, { type RegistrationRow } from './HolidayRegistrations'
@@ -108,18 +106,6 @@ const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: 
 
 export default async function DistributionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-
-  // 🔴 האכיפה חייבת להיות כאן, *לפני* getData.
-  //
-  // זה המסך שנושא את ה-PII המלא: שם, ת"ז, טלפון, כתובת ומספר ילדים של כל
-  // נרשם — וגם הייצוא לאקסל, שנבנה בדפדפן מאותן שורות בדיוק. שליפה ואז
-  // אי-הצגה אינה הגנה: הנתונים כבר הועברו לרינדור, והייצוא היה ממשיך לעבוד.
-  // ההרשאה נבדקת כאן ולא ב-HolidayRegistrations, כי useCan הוא שכבת ממשק
-  // בלבד — הוא מסתיר כפתורים, הוא אינו מונע נתונים.
-  if (!(await requirePermission('distributions', 'view'))) {
-    return <NoPermission detail="נדרשת הרשאת צפייה בחלוקות חגים כדי לראות את רשימת הנרשמים." />
-  }
-
   const data = await getData(id)
   if (!data && isSupabaseConfigured()) notFound()
   if (!data) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>

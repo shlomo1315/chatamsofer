@@ -2,17 +2,10 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { requirePermission } from '@/lib/apiAuth'
-import NoPermission from '@/components/ui/NoPermission'
 import DistributionForm from '../../DistributionForm'
 
 export default async function EditDistributionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  // הטופס עצמו אינו כותב — ה-PATCH כבר אוכף 'edit'. הבדיקה כאן מונעת מסך
-  // עריכה שנפתח, נטען, ונופל רק בשמירה.
-  if (!(await requirePermission('distributions', 'edit'))) {
-    return <NoPermission detail="נדרשת הרשאת עריכה בחלוקות חגים." />
-  }
   if (!isSupabaseConfigured()) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>
   const supabase = await createClient()
   const { data, error } = await supabase

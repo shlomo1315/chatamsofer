@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { Plus, Share2 } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { requirePermission } from '@/lib/apiAuth'
 import { Distribution } from '@/types'
 import Button from '@/components/ui/Button'
 import PageHeader from '@/components/ui/PageHeader'
-import NoPermission from '@/components/ui/NoPermission'
 import DistributionsClient from './DistributionsClient'
 
 async function getDistributions(): Promise<Distribution[]> {
@@ -41,17 +39,6 @@ async function getRegistrationCounts(ids: string[]): Promise<Record<string, numb
 }
 
 export default async function DistributionsPage() {
-  // 🔴 אכיפת הרשאת צפייה, *לפני* כל שליפה.
-  //
-  // עד כאן ההגנה היחידה על המסך הזה הייתה proxy.ts, והוא בודק רק שהמשתמש הוא
-  // איש צוות פעיל — לא את ההרשאה הפרטנית. גם ה-RLS אינו מבחין: is_staff()
-  // בודק תפקיד בלבד. התוצאה הייתה שכל בעל תפקיד צוות, גם כזה שהרשאת
-  // "חלוקות חגים" שלו היא 'ללא', יכול היה להיכנס לכאן ומשם לרשימת הנרשמים.
-  // ההגדרה במסך ההרשאות נראתה אכיפה ולא הייתה אכיפה.
-  if (!(await requirePermission('distributions', 'view'))) {
-    return <NoPermission detail="נדרשת הרשאת צפייה בחלוקות חגים." />
-  }
-
   const distributions = await getDistributions()
   const counts = await getRegistrationCounts(distributions.map(d => d.id))
   const active = distributions.filter((d) => d.status === 'active' || d.status === 'planning').length
