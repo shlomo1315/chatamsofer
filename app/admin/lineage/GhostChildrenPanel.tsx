@@ -3,22 +3,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // צמתי רפאים — מסך אבחון לצמתים שנוצרו משדה הילדים של כרטסת.
 //
-// 🔴 קריאה בלבד, במכוון. אין כאן כפתור מחיקה ואין שום פעולה שמשנה נתונים:
-// המסך נועד קודם כל לענות על "כמה יש ומי הם", כדי שאפשר יהיה לאשר את המספרים
-// לפני שמחליטים מה לעשות. כל שורה מקושרת לעץ ולכרטסת כדי שאפשר יהיה לבדוק
-// אותה בעין — זו הדרך היחידה לוודא שהסריקה צודקת.
-//
 // שלוש הקבוצות מסודרות לפי כמה יש מה להציל, מהקל לחמור:
 //   · אין כרטסת בכלל   — הצומת הוא הד של שורה בטופס.
 //   · כרטסת בלי צומת   — יש אדם אמיתי שרק לא שויך; הצומת הזה הוא מקומו.
 //   · כרטסת בצומת אחר  — האדם כבר בעץ, וזה עותק כפול שלו.
+//
+// 🔴 ההסרה מוגבלת לעותקים מוכחים, וזו כל ההבחנה שהמסך הזה עומד עליה:
+//
+//   · צומת עם תאום, או שכרטסתו יושבת על צומת אחר — האדם *נמצא* במקום אחר
+//     בעץ. הצומת כפול, והסרתו אינה מוחקת אף אחד.
+//   · צומת בלי כרטסת ובלי תאום — אין שום ראיה שהאדם קיים במקום אחר. הוא נוצר
+//     בכוונה כדי שהילד ימצא את עצמו כשיירשם, והסרתו תגרום בדיוק לכפילות
+//     שהמנגנון נועד למנוע. אלה הרוב, ואינם ניתנים לסימון.
+//
+// הכלל נאכף בשרת (isProvenDuplicate) ומשוכפל כאן רק כדי שהמסך לא יציע סימון
+// שיידחה. השרת סורק מחדש ברגע ההסרה ואינו סומך על הסימון במסך.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback } from 'react'
 import {
   Ghost, Loader2, Search, ChevronLeft, ExternalLink, ShieldQuestion,
-  UserRoundX, UserRoundSearch, CopyX, Info, Copy, ShieldCheck,
+  UserRoundX, UserRoundSearch, CopyX, Info, Copy, ShieldCheck, Trash2,
 } from 'lucide-react'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast'
 
 type GhostGroup = 'no_card' | 'card_unlinked' | 'card_elsewhere'
 
@@ -61,6 +69,7 @@ interface ScanData {
   skipped: { withChildren: number; withCard: number }
   protectedRows: ProtectedRow[]
   protectedTotal: number
+  removableTotal: number
   scannedNodes: number
   scannedBeneficiaries: number
   truncated: boolean
@@ -100,9 +109,26 @@ const STATUS: Record<string, { txt: string; cls: string }> = {
   rejected: { txt: 'נדחה', cls: 'text-red-700 bg-red-50 border-red-200' },
 }
 
-export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string) => void }) {
+/**
+ * 🔴 מה מותר להסיר — אותו כלל בדיוק שהשרת אוכף (isProvenDuplicate).
+ *
+ * רק צומת שהוכח שהאדם שלו כבר קיים בעץ: יש לו תאום, או שכרטסתו יושבת על
+ * צומת אחר. צומת בלי כרטסת ובלי תאום נשאר — הוא נוצר כדי שהילד ימצא את עצמו
+ * כשיירשם, והסרתו תיצור בדיוק את הכפילות שהמנגנון מונע. השרת בודק זאת שוב,
+ * והתנאי כאן קיים רק כדי שהמסך לא יציע סימון שיידחה.
+ */
+const isRemovable = (r: Row) => r.group === 'card_elsewhere' || r.twinNodeId != null
+
+export default function GhostChildrenPanel({ onLocate, onFixed }: {
+  onLocate: (id: string) => void
+  onFixed: () => void
+}) {
+  const toast = useToast()
   const [data, setData] = useState<ScanData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [confirm, setConfirm] = useState(false)
   const [err, setErr] = useState('')
   // הקבוצה הפתוחה. אחת בלבד — שלוש רשימות פתוחות יחד הופכות את המסך לגלילה
   // אינסופית שאי אפשר להתמצא בה.
@@ -111,7 +137,7 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
   const [openProtected, setOpenProtected] = useState(false)
 
   const scan = useCallback(async () => {
-    setLoading(true); setErr('')
+    setLoading(true); setErr(''); setPicked(new Set())
     try {
       const res = await fetch('/api/admin/lineage/ghost-children', { cache: 'no-store' })
       const d = await res.json()
@@ -120,6 +146,27 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
     } catch { setErr('שגיאת רשת') }
     setLoading(false)
   }, [])
+
+  const runRemove = useCallback(async () => {
+    setConfirm(false)
+    if (!picked.size) return
+    setRemoving(true)
+    try {
+      const res = await fetch('/api/admin/lineage/ghost-children', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeIds: [...picked] }),
+      })
+      const d = await res.json()
+      if (!res.ok) { toast.error(d.error ?? 'ההסרה נכשלה'); setRemoving(false); return }
+      const bits = [`הוסרו ${he(d.removed)} עותקים`]
+      if (d.rejected) bits.push(`${he(d.rejected)} דולגו — כבר אינם עומדים בתנאים`)
+      if (d.failures?.length) toast.error(`${bits.join(' · ')} · כשלים: ${d.failures.length}`)
+      else toast.success(bits.join(' · '))
+      onFixed()
+      await scan()
+    } catch { toast.error('שגיאת רשת') }
+    setRemoving(false)
+  }, [picked, toast, onFixed, scan])
 
   return (
     <div className="rounded-2xl border-2 border-slate-300 bg-slate-50/60 p-4 mb-4" dir="rtl">
@@ -240,6 +287,36 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
             </p>
           )}
 
+          {/* 🔴 סרגל ההסרה — רק לעותקים מוכחים.
+              ההפרדה הזו היא כל העניין: הרוב אינם עותקים אלא מקומו היחיד של
+              ילד שטרם נרשם, והסרתם תיצור בדיוק את הכפילות שהמנגנון מונע. */}
+          {data.removableTotal > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-rose-200 bg-white px-3 py-2">
+              <span className="text-sm font-bold text-slate-800">
+                מתוכם <span className="text-rose-700">{he(data.removableTotal)}</span> עותקים מוכחים — האדם כבר בעץ
+              </span>
+              <button
+                onClick={() => {
+                  const all = data.rows.filter(isRemovable).map(r => r.nodeId)
+                  setPicked(p => (p.size >= all.length ? new Set() : new Set(all)))
+                }}
+                className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:border-rose-300">
+                {picked.size >= data.rows.filter(isRemovable).length ? 'נקה סימון' : 'סמן את כל המוכחים'}
+              </button>
+              <span className="text-[11px] text-slate-500">סומנו {he(picked.size)}</span>
+              <button onClick={() => setConfirm(true)} disabled={!picked.size || removing}
+                className="mr-auto inline-flex items-center gap-1.5 rounded-xl bg-rose-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-rose-800 disabled:bg-slate-300">
+                {removing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                הסר את המסומנים
+              </button>
+              <p className="w-full text-[11px] leading-relaxed text-slate-500">
+                שאר <strong>{he(data.total - data.removableTotal)}</strong> אינם עותקים — אין להם כרטסת ואין להם תאום,
+                כלומר אין ראיה שהאדם קיים במקום אחר. הצומת הוא מקומו היחיד, והסרתו תיצור כפילות חדשה ביום
+                שבו יבוא להירשם. <strong>הם אינם ניתנים לסימון בכוונה.</strong>
+              </p>
+            </div>
+          )}
+
           {GROUPS.map(g => {
             const rows = data.rows.filter(r => r.group === g.key)
             const count = data.counts[g.key]
@@ -261,6 +338,7 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
                       <table className="w-full text-right text-sm">
                         <thead className="sticky top-0 bg-slate-50 text-slate-600">
                           <tr>
+                            <th className="w-8 px-3 py-2"></th>
                             <th className="px-3 py-2 font-medium">שם הצומת</th>
                             <th className="px-3 py-2 font-medium">דור</th>
                             <th className="px-3 py-2 font-medium">ת״ז</th>
@@ -273,7 +351,23 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
                           {rows.map(r => {
                             const st = STATUS[r.status ?? 'pending'] ?? STATUS.pending
                             return (
-                              <tr key={r.nodeId} className="hover:bg-slate-50">
+                              <tr key={r.nodeId} className={picked.has(r.nodeId) ? 'bg-rose-50/60' : 'hover:bg-slate-50'}>
+                                <td className="px-3 py-2">
+                                  {/* ⚠️ תיבת סימון רק לעותק מוכח. שורה בלי ראיה
+                                      אינה ניתנת לסימון — זו ההגנה, לא עיצוב. */}
+                                  {isRemovable(r) ? (
+                                    <input type="checkbox" checked={picked.has(r.nodeId)}
+                                      onChange={() => setPicked(p => {
+                                        const n = new Set(p)
+                                        if (n.has(r.nodeId)) n.delete(r.nodeId); else n.add(r.nodeId)
+                                        return n
+                                      })}
+                                      className="h-4 w-4 accent-rose-700" />
+                                  ) : (
+                                    <span title="אין ראיה שהאדם קיים במקום אחר — הצומת נשאר"
+                                      className="block h-4 w-4 rounded border border-slate-200 bg-slate-50" />
+                                  )}
+                                </td>
                                 <td className="px-3 py-2">
                                   <button onClick={() => onLocate(r.nodeId)}
                                     className="text-right font-medium text-slate-800 hover:text-violet-700">
@@ -343,6 +437,29 @@ export default function GhostChildrenPanel({ onLocate }: { onLocate: (id: string
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirm}
+        danger
+        title="הסרת עותקים מוכחים"
+        confirmLabel={`הסר ${he(picked.size)}`}
+        message={
+          <div className="flex flex-col gap-2 text-right text-[13px] leading-relaxed">
+            <p><strong>{he(picked.size)}</strong> צמתים יימחקו מהעץ.</p>
+            <p className="text-slate-600">
+              כל אחד מהם הוכח כעותק — לאדם שלו יש כרטסת שיושבת על צומת אחר, או שיש לו אח שהשם המלא
+              שלו מכיל אותו. אף אחד לא נעלם מהעץ.
+            </p>
+            <p className="text-slate-500">
+              לכולם כבר הוכח שאין להם ילדים ואין להם כרטסת משלהם, ולכן אין מה להעביר. השרת בודק זאת
+              מחדש ומדלג על כל מה שהשתנה מאז הסריקה.
+            </p>
+            <p className="font-bold text-rose-700">המחיקה אינה הפיכה.</p>
+          </div>
+        }
+        onConfirm={() => void runRemove()}
+        onCancel={() => setConfirm(false)}
+      />
     </div>
   )
 }

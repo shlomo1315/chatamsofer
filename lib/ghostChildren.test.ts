@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  findGhostChildren, normalizeIdNumber, containedInName, looksLikeChildName,
+  findGhostChildren, normalizeIdNumber, containedInName, looksLikeChildName, isProvenDuplicate,
   type GhostNodeRow, type GhostBenRow,
 } from './ghostChildren'
 
@@ -330,5 +330,55 @@ describe('🔴 findGhostChildren — מה שאסור לגעת בו', () => {
     const scan = scenario({ extraNodes: [node({ id: 'kid', parent_id: 'g', generation: 8 })] })
     expect(scan.rows.map(r => r.nodeId)).not.toContain('g')
     expect(scan.protectedRows.map(r => r.nodeId)).toContain('g')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 isProvenDuplicate — הכלל שקובע מה מותר להסיר.
+//
+// זו ההבחנה היחידה שמפרידה בין "עותק מיותר" לבין "מקומו היחיד של אדם", ולכן
+// היא נעולה כאן. טעות לכיוון אחד משאירה בלגן; טעות לכיוון השני מוחקת את
+// הצומת שדרכו הילד היה אמור למצוא את עצמו כשיבוא להירשם.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 isProvenDuplicate — מה מותר להסיר', () => {
+  it('כרטסת יושבת על צומת אחר → עותק מוכח', () => {
+    const scan = scenario({
+      extraNodes: [node({ id: 'real', name: 'רבי משה שרייבר', parent_id: 'p' })],
+      extraBens: [ben({ id: 'his', id_number: '123456789', lineage_node_id: 'real' })],
+    })
+    expect(scan.rows[0].group).toBe('card_elsewhere')
+    expect(isProvenDuplicate(scan.rows[0])).toBe(true)
+  })
+
+  it('יש אח שהשם המלא שלו מכיל אותו → עותק מוכח', () => {
+    const scan = scenario({
+      extraNodes: [node({ id: 'twin', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'p', generation: 7 })],
+    })
+    expect(scan.rows[0].twinNodeId).toBe('twin')
+    expect(isProvenDuplicate(scan.rows[0])).toBe(true)
+  })
+
+  it('🔴 אין כרטסת ואין תאום → אינו עותק, ואסור להסיר', () => {
+    // הילד פשוט טרם נרשם. הצומת הוא מקומו היחיד, והסרתו תיצור כפילות
+    // חדשה ביום שבו יבוא להירשם — בדיוק מה שיצירת הצומת נועדה למנוע.
+    const scan = scenario()
+    expect(scan.rows[0].group).toBe('no_card')
+    expect(scan.rows[0].twinNodeId).toBeNull()
+    expect(isProvenDuplicate(scan.rows[0])).toBe(false)
+  })
+
+  it('יש כרטסת בלי שיוך ובלי תאום → אינו עותק', () => {
+    // הכרטסת קיימת אבל אינה יושבת על אף צומת, ולכן אין ראיה שהאדם בעץ.
+    const scan = scenario({ extraBens: [ben({ id: 'his', id_number: '123456789', lineage_node_id: null })] })
+    expect(scan.rows[0].group).toBe('card_unlinked')
+    expect(isProvenDuplicate(scan.rows[0])).toBe(false)
+  })
+
+  it('תאום גובר גם כשאין כרטסת בכלל', () => {
+    const scan = scenario({
+      extraNodes: [node({ id: 'twin', name: 'רבי דוד ומרת משה סינצבנג', parent_id: 'p', generation: 7 })],
+    })
+    expect(scan.rows[0].group).toBe('no_card')
+    expect(isProvenDuplicate(scan.rows[0])).toBe(true)
   })
 })

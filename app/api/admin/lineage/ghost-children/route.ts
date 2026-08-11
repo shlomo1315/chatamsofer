@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { logActivity } from '@/lib/activityLog'
+import { invalidateLineageCache } from '@/lib/lineageSync'
 import { fetchAllRows } from '@/lib/fetchAllRows'
-import { findGhostChildren, type GhostNodeRow, type GhostBenRow } from '@/lib/ghostChildren'
+import { findGhostChildren, isProvenDuplicate, type GhostNodeRow, type GhostBenRow } from '@/lib/ghostChildren'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -82,10 +84,84 @@ export async function GET() {
     skipped: scan.skipped,
     protectedRows,
     protectedTotal: scan.protectedRows.length,
+    // כמה מתוך הרשימה הם עותקים מוכחים — כלומר כמה באמת ניתן להסיר.
+    removableTotal: scan.rows.filter(isProvenDuplicate).length,
     scannedNodes: scan.scannedNodes,
     scannedBeneficiaries: scan.scannedBeneficiaries,
     truncated: scan.total > rows.length,
     maxRowsPerGroup: MAX_ROWS_PER_GROUP,
     restricted: !canSeeBeneficiaries,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// הסרת עותקים מוכחים.
+//
+// 🔴 מסירים *רק* צומת שהוכח שהאדם שלו כבר קיים בעץ — יש לו תאום, או שכרטסתו
+// יושבת על צומת אחר. צומת בלי כרטסת ובלי תאום נשאר: הוא נוצר בכוונה כדי
+// שהילד ימצא את עצמו כשיירשם, והסרתו תיצור בדיוק את הכפילות שהמנגנון מונע.
+//
+// ⚠️ ההסרה היא מחיקה ולא מיזוג, וזה בטוח דווקא בגלל הסייגים של הסריקה: צומת
+// שנכנס לרשימה הוכח כחסר ילדים וחסר כרטסת. אין מה להעביר ממנו לאף מקום.
+//
+// 🔴 סריקה מחדש בשרת. מזהים מהלקוח הם בחירה ולא הוכחה — העץ זז בין הסריקה
+// ללחיצה, וצומת שצבר בינתיים ילד או כרטסת נדחה כאן.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function POST(request: NextRequest) {
+  const staff = await requirePermission('lineage', 'edit')
+  if (!staff) return forbidden()
+
+  const admin = getServiceClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const body = await request.json().catch(() => ({}))
+  const wanted: string[] = Array.isArray(body?.nodeIds) ? body.nodeIds.map(String) : []
+  if (!wanted.length) return NextResponse.json({ error: 'לא נבחרו צמתים' }, { status: 400 })
+
+  const [nodes, bens] = await Promise.all([
+    fetchAllRows<GhostNodeRow>((from, to) =>
+      admin.from('lineage_nodes')
+        .select('id, name, parent_id, generation, status, id_number').range(from, to)),
+    fetchAllRows<GhostBenRow>((from, to) =>
+      admin.from('beneficiaries')
+        .select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, lineage_node_id, children')
+        .range(from, to)),
+  ])
+  if (nodes.error || bens.error) {
+    return NextResponse.json({ error: 'טעינת הנתונים נכשלה' }, { status: 500 })
+  }
+
+  const scan = findGhostChildren(nodes.rows, bens.rows)
+  const eligible = new Map(scan.rows.filter(isProvenDuplicate).map(r => [r.nodeId, r]))
+  const targets = wanted.filter(id => eligible.has(id))
+  const rejected = wanted.length - targets.length
+
+  let removed = 0
+  const failures: { name: string; reason: string }[] = []
+
+  // ⚠️ סדרתי: מחיקות מקבילות תחת אותו אב הן בדיוק המצב שבו ספירת הילדים
+  // שנקראה מראש כבר אינה נכונה.
+  for (const id of targets) {
+    const row = eligible.get(id)!
+    const { error } = await admin.from('lineage_nodes').delete().eq('id', id)
+    if (error) failures.push({ name: row.nodeName, reason: error.message })
+    else removed++
+  }
+
+  if (removed) invalidateLineageCache()
+
+  await logActivity(admin, {
+    userId: staff.userId,
+    action: 'lineage_ghost_duplicate_remove',
+    entityType: 'lineage_node',
+    details: { requested: wanted.length, removed, rejected, failed: failures.length },
+  }).catch(() => {})
+
+  console.log(`[ghost-children] הוסרו ${removed} עותקים · נדחו ${rejected} · כשלים ${failures.length}`)
+
+  return NextResponse.json({
+    removed, rejected,
+    failures: failures.slice(0, 20),
+    remaining: scan.rows.filter(isProvenDuplicate).length - removed,
   })
 }
