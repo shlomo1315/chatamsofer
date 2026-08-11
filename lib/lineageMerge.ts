@@ -282,6 +282,16 @@ async function mergeOne(
   let children = 0
   let beneficiaries = 0
 
+  // 🔴 אישור אינו אובד במיזוג.
+  //
+  // pickKeepId מעדיף צומת מאומת, ולכן במסלול האוטומטי השורד מאומת ממילא. אבל
+  // במיזוג ידני בעץ *הצומת שנלחץ* הוא השורד, ללא קשר לסטטוס — ואם הוא ממתין
+  // בעוד הכפיל שנבלע היה מאושר, האישור נעלם בשקט. אותו אדם, שכבר נבדק ואושר,
+  // חזר להמתין לאישור בגלל פעולת ניקוי.
+  //
+  // אם *מישהו* מהקבוצה מאושר, השורד מאושר.
+  let absorbedVerified = false
+
   for (const mid of mergeIds) {
     // ⚡ שלוש הפעולות הראשונות עצמאיות זו מזו — רצות במקביל (Promise.all) במקום
     // סדרתית. קוראים את הצומת *לפני* המחיקה, ומעבירים ילדים+משפחות ל-keepId.
@@ -298,6 +308,7 @@ async function mergeOne(
 
     children += kids?.length ?? 0
     beneficiaries += bens?.length ?? 0
+    if (((node as { status?: string | null } | null)?.status ?? '') === 'verified') absorbedVerified = true
 
     // ⚠️ הרישום נכתב לפני המחיקה. אם הכתיבה נכשלת — לא מוחקים, כי מחיקה בלי
     // רישום היא בדיוק המצב הבלתי-הפיך שהיומן נועד למנוע.
@@ -337,6 +348,17 @@ async function mergeOne(
     if (!gone || gone.length === 0) {
       console.error('[lineageMerge] המחיקה לא הסירה דבר — צומת:', mid)
       throw new Error('המיזוג לא בוצע: מחיקת הצומת לא הסירה שום שורה (בדוק הרשאות service role / RLS על lineage_nodes)')
+    }
+  }
+
+  // ⚠️ רק כלפי מעלה, ורק אם השורד אינו נדחה. צומת שנדחה בהחלטה מפורשת אינו
+  // מתאושש ממיזוג — דחייה היא הכרעה, לא מצב ביניים.
+  if (absorbedVerified) {
+    const { data: keep } = await db.from('lineage_nodes').select('status').eq('id', keepId).maybeSingle()
+    const cur = (keep as { status?: string | null } | null)?.status ?? ''
+    if (cur !== 'verified' && cur !== 'rejected') {
+      const { error } = await db.from('lineage_nodes').update({ status: 'verified' }).eq('id', keepId)
+      if (error) console.error('[lineageMerge] שימור האישור בשורד נכשל:', error.message)
     }
   }
 
