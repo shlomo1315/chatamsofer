@@ -1,5 +1,34 @@
 import { describe, it, expect } from 'vitest'
-import { pickChildrenForTree, childRelation } from './lineageFamilyChildren'
+import { pickChildrenForTree, childRelation, syncApprovedFamilyChildren } from './lineageFamilyChildren'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// מסד מזויף מינימלי — רק המסלולים ש-syncApprovedFamilyChildren נוגע בהם.
+function fakeDb(o: {
+  siblings?: { id: string; name: string; status: string | null; id_number: string | null }[]
+  onInsert?: (row: Record<string, unknown>) => void
+  onUpdate?: (row: Record<string, unknown>) => void
+}): SupabaseClient {
+  const sibs = o.siblings ?? []
+  return {
+    from: () => ({
+      select: () => ({
+        eq: (col: string) => ({
+          maybeSingle: async () => col === 'id'
+            ? { data: { id: 'P', generation: 7 }, error: null }   // ההורה
+            : { data: null, error: null },
+          limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+          then: undefined,
+          // .eq('parent_id', …) מוחזר כמערך האחים
+          data: sibs, error: null,
+        }),
+      }),
+      insert: async (row: Record<string, unknown>) => { o.onInsert?.(row); return { error: null } },
+      update: (row: Record<string, unknown>) => ({
+        eq: async () => { o.onUpdate?.(row); return { error: null } },
+      }),
+    }),
+  } as unknown as SupabaseClient
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מי מבין ילדי המשפחה נכנס לעץ הדורות כשהמשפחה מאושרת.
@@ -61,5 +90,37 @@ describe('קשר הילד להורה בעץ', () => {
     expect(childRelation('')).toBeNull()
     expect(childRelation(undefined)).toBeNull()
     expect(childRelation('משהו אחר')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הכלל שנשבר פעם אחת וחייב להישאר נעול: סנכרון ילדי משפחה אינו קובע סטטוס.
+//
+// אישור משפחה יצר את כל ילדיה כמאומתים *וגם* קידם ילדים קיימים ל"מאומת".
+// המנהל אישר אדם אחד וקיבל שבעה שמות ירוקים חדשים בעץ, בלי שאיש בדק אותם.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('סנכרון ילדים אינו קובע סטטוס', () => {
+  it('צומת חדש נוצר כ-pending, ולא כמאומת', async () => {
+    const inserts: Record<string, unknown>[] = []
+    const db = fakeDb({ onInsert: r => inserts.push(r) })
+    await syncApprovedFamilyChildren(db, 'P', [
+      { name: 'משה', id_number: '123456782', gender: 'male' },
+    ])
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0].status).toBe('pending')
+  })
+
+  it('סטטוס של צומת קיים אינו נגוע', async () => {
+    const updates: Record<string, unknown>[] = []
+    const db = fakeDb({
+      siblings: [{ id: 'C1', name: 'משה', status: 'pending', id_number: null }],
+      onUpdate: r => updates.push(r),
+    })
+    await syncApprovedFamilyChildren(db, 'P', [
+      { name: 'משה', id_number: '123456782', gender: 'male' },
+    ])
+    // רק הת"ז נכתבת — היא עובדה מזהה, לא החלטה.
+    expect(updates).toEqual([{ id_number: '123456782' }])
+    expect(updates.some(u => 'status' in u)).toBe(false)
   })
 })

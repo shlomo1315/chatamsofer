@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
   let children = { created: 0, verified: 0, linked: 0 }
   try {
     children = (await syncChildrenOfBeneficiary(admin, beneficiaryId)) ?? children
-    if (children.created || children.verified) {
-      console.log(`[approve-lineage] ${beneficiaryId} → ${children.created} ילדים נוספו לעץ, ${children.verified} אושרו`)
+    // ⚠️ "ממתינים" ולא "אושרו": הסנכרון אינו מאשר איש. ראו syncApprovedFamilyChildren.
+    if (children.created || children.linked) {
+      console.log(`[approve-lineage] ${beneficiaryId} → ${children.created} ילדים נוספו לעץ כממתינים, ${children.linked} קושרו לצומת קיים`)
     }
   } catch (e) {
     console.error('[approve-lineage] children sync failed:', e)
