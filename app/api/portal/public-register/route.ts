@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
-import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
+import { validateIsraeliId, normalizeDateToISO, isValidDateInput } from '@/lib/validation'
 import { getRegistrationGate, registrationAllowed } from '@/lib/registrationGate'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
 import { placeAnnouncementCall } from '@/lib/yemotCall'
@@ -96,6 +96,42 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
 
   if (!id_number || !full_name || !family_name) {
     return NextResponse.json({ error: 'שדות חובה חסרים' }, { status: 400 })
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // אכיפת תקינות תאריכי לידה — הנרשם, האישה, וכל ילד.
+  //
+  // ⚠️ למה בשרת ולא בטופס: בכל הממשקים שלנו התאריך נבחר מ-HebrewDatePicker
+  // ולכן תמיד ISO. אבל ה-endpoint הזה משותף גם לטופס נדרים פלוס (matara.pro),
+  // שאינו שלנו ושולח JSON ישירות — picker בצד הלקוח הוא נוחות, לא אכיפה.
+  //
+  // ⚠️ תאריכי הילדים הם המסוכנים: הם נשמרים בתוך JSON, ש*מקבל כל מחרוזת
+  // בשקט*. כך נשמר "210726" (6 ספרות) והוצג בכרטסת כ-01/01/210726. התאריך
+  // הראשי, לעומתו, יושב בעמודת date שהייתה מפילה את ה-INSERT ברעש.
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    const DATE_HINT = 'יש להזין תאריך בפורמט יום/חודש/שנה עם שנה מלאה בת 4 ספרות (למשל 21/07/2026)'
+    const badDate = (label: string, value: unknown) => {
+      // לוג מפורש עם הערך שהתקבל — כך נדע איזה ערוץ שולח פורמט שגוי ומהו,
+      // במקום לגלות זאת חודש אחר כך בעין מתוך הכרטסת.
+      console.error(`[public-register] תאריך פסול (${label}):`, JSON.stringify(String(value ?? '')))
+      return NextResponse.json({ error: `${label}: ${DATE_HINT}`, field: 'birth_date' }, { status: 400 })
+    }
+    if (!isValidDateInput(birth_date as string | null | undefined)) {
+      return badDate('תאריך לידה', birth_date)
+    }
+    if (!isValidDateInput(spouse_birth_date as string | null | undefined)) {
+      return badDate('תאריך לידה של האשה', spouse_birth_date)
+    }
+    if (Array.isArray(children)) {
+      for (const [i, c] of (children as Record<string, unknown>[]).entries()) {
+        if (!c || typeof c !== 'object') continue
+        if (!isValidDateInput(c.birth_date as string | null | undefined)) {
+          const who = String(c.name ?? '').trim() || `ילד ${i + 1}`
+          return badDate(`תאריך לידה של ${who}`, c.birth_date)
+        }
+      }
+    }
   }
 
   // חייב להיות לפחות מספר טלפון אחד (בעל / אשה / נוסף)

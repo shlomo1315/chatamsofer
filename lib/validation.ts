@@ -39,6 +39,31 @@ export function normalizeDateToISO(raw?: string | null): string | null {
   return v
 }
 
+// האם הערך הוא תאריך שניתן לשמור? (ריק = כן — תאריך אינו תמיד שדה חובה)
+//
+// ⚠️ למה זה נחוץ בנוסף ל-normalizeDateToISO: הנרמול מחזיר ערך לא-מזוהה *כפי
+// שהוא*, במכוון, כדי לא להסתיר נתון פגום. זה נכון לעמודת `date` — שם ערך פגום
+// מפיל את ה-INSERT ברעש (22008) ואי אפשר לפספס אותו. אבל תאריכי הילדים נשמרים
+// בתוך JSON (beneficiaries.children), ו-JSON מקבל כל מחרוזת בשקט: כך נשמר
+// "210726" והוצג בכרטסת כ-01/01/210726 (new Date פירש 210726 כמספר שנה).
+//
+// ⚠️ הבדיקה אינה תחבירית בלבד. `31022026` תואם את תבנית DDMMYYYY ויתורגם
+// ל-"2026-02-31" — מחרוזת שנראית תקינה ואינה קיימת בלוח השנה. לכן מוודאים
+// שהתאריך *שורד הלוך-ושוב* דרך Date: אם היום/החודש השתנו בבנייה, הערך הומצא.
+//
+// ⚠️ אין כאן ניסיון לנחש פורמטים חדשים (למשל DDMMYY). ניחוש בין DDMMYY
+// ל-YYMMDD היה כותב תאריך לידה שגוי בשקט — גרוע יותר מדחייה מפורשת.
+export function isValidDateInput(raw?: string | null): boolean {
+  const v = String(raw ?? '').trim()
+  if (!v) return true                       // ריק = לא הוזן; חובה נאכפת בנפרד
+  const iso = normalizeDateToISO(v)
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false
+  const [y, mo, d] = iso.split('-').map(Number)
+  if (y < 1900 || y > 2100) return false    // טווח סביר לתאריך לידה
+  const dt = new Date(Date.UTC(y, mo - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d
+}
+
 export function validatePhone(p: string): boolean {
   const d = p.replace(/\D/g, '')
   return d.length === 10 && d.startsWith('05')
