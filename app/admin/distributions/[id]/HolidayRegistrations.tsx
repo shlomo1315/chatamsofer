@@ -74,6 +74,11 @@ const SOURCE_ICON: Record<RegisterSource, typeof Monitor> = {
   portal: Monitor, phone: Phone, email: Mail, nedarim: CreditCard, admin: Pencil,
 }
 
+// ⚠️ מקור אמת אחד לסדר הערוצים — גם לכרטיס הפילוח וגם לצ'יפים של הסינון.
+// היו שתי רשימות נפרדות, והן נפרדו: nedarim תוקן בכרטיס התצוגה ונשכח בסינון,
+// כך שאי אפשר היה לסנן דווקא לערוץ שדרכו מגיע רוב הרישום המאסיבי.
+const SOURCE_ORDER: RegisterSource[] = ['phone', 'portal', 'nedarim', 'email', 'admin']
+
 export default function HolidayRegistrations({
   distributionId, rows, amountPerFamily, registrationOpen, distributionName,
 }: {
@@ -267,6 +272,11 @@ export default function HolidayRegistrations({
   const chip = (active: boolean) =>
     `px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${active ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`
 
+  // שורת מונה לחיצה בכרטיסי הפילוח. הסימון הפעיל אינו קישוט: בלעדיו הלחיצה
+  // מסננת טבלה שנמצאת הרחק למטה, והמסך נראה כאילו לא הגיב.
+  const statRow = (active: boolean) =>
+    `flex w-full items-center justify-between rounded-lg px-2 py-1 text-right transition-colors ${active ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`
+
   return (
     <div className="flex flex-col gap-5">
       {/* ── מונים חיים: נרשמים וצפי תקציבי ── */}
@@ -280,23 +290,28 @@ export default function HolidayRegistrations({
           <p className="text-3xl font-extrabold text-emerald-900 ltr-num">{fmtCur(expectedAll)}</p>
           <p className="text-[11px] text-emerald-700 mt-1">{rows.length} × {fmtCur(amountPerFamily)} למשפחה</p>
         </div>
-        {/* ── אישורים וכרטיסים — המסלול שאחרי הרישום ── */}
+        {/* ── אישורים וכרטיסים — המסלול שאחרי הרישום ──
+            ⚠️ השורות כאן לחיצות ומסננות את הטבלה, בדיוק כמו הצ'יפים שמתחת.
+            כמספרים בלבד הן הזמינו לחיצה שלא עשתה כלום: המנהל רואה "ממתינים
+            לאישור 47", לוחץ כדי לראות מי הם, ושום דבר לא קורה. */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2 text-slate-500 mb-2"><ShieldCheck size={16} /><span className="text-xs font-bold">אישורים וכרטיסים</span></div>
           <div className="flex flex-col gap-1 text-[12.5px]">
-            <div className="flex items-center justify-between">
-              <span className="text-amber-800">ממתינים לאישור</span>
-              <span className="font-extrabold text-amber-900 ltr-num">{approvalCounts.pending}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-green-800">מאושרים</span>
-              <span className="font-extrabold text-green-900 ltr-num">{approvalCounts.approved}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-rose-800">נדחו</span>
-              <span className="font-extrabold text-rose-900 ltr-num">{approvalCounts.rejected}</span>
-            </div>
-            <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-1">
+            {([
+              { k: 'pending' as const, label: 'ממתינים לאישור', text: 'text-amber-800', num: 'text-amber-900' },
+              { k: 'approved' as const, label: 'מאושרים', text: 'text-green-800', num: 'text-green-900' },
+              { k: 'rejected' as const, label: 'נדחו', text: 'text-rose-800', num: 'text-rose-900' },
+            ]).map(r => (
+              <button key={r.k} type="button" onClick={() => setApproval(a => (a === r.k ? 'all' : r.k))}
+                title="לחצו כדי לסנן את הרשימה"
+                className={statRow(approval === r.k)}>
+                <span className={r.text}>{r.label}</span>
+                <span className={`font-extrabold ltr-num ${r.num}`}>{approvalCounts[r.k]}</span>
+              </button>
+            ))}
+            {/* כרטיסים ששויכו — תצוגה בלבד: אין לו פילטר מקביל בטבלה, ולעשות
+                אותו לחיץ בלי שיסנן היה משחזר בדיוק את התקלה שתוקנה כאן. */}
+            <div className="mt-1 flex items-center justify-between border-t border-slate-100 px-2 pt-1.5">
               <span className="text-slate-600">כרטיסים ששויכו</span>
               <span className="font-extrabold text-slate-800 ltr-num">{cardsLinked} / {approvalCounts.approved}</span>
             </div>
@@ -308,13 +323,15 @@ export default function HolidayRegistrations({
             {/* ⚠️ nedarim חייב להיכלל — רוב הרישום המאסיבי לחגים מגיע דרך טופס
                 נדרים (matara.pro). בלעדיו הפילוח "בלע" את נרשמי נדרים בשקט
                 (סכום הערוצים המוצגים נמוך בהרבה מסך "נרשמו"). */}
-            {(['phone', 'portal', 'nedarim', 'email', 'admin'] as RegisterSource[]).map(s => {
+            {SOURCE_ORDER.map(s => {
               const I = SOURCE_ICON[s]
               return (
-                <div key={s} className="flex items-center justify-between text-[12.5px]">
+                <button key={s} type="button" onClick={() => setSource(c => (c === s ? 'all' : s))}
+                  title="לחצו כדי לסנן את הרשימה"
+                  className={`${statRow(source === s)} text-[12.5px]`}>
                   <span className="flex items-center gap-1.5 text-slate-600"><I size={13} />{SOURCE_LABEL[s]}</span>
                   <span className="font-extrabold text-slate-800 ltr-num">{bySource[s] ?? 0}</span>
-                </div>
+                </button>
               )
             })}
           </div>
@@ -339,7 +356,7 @@ export default function HolidayRegistrations({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-400 w-16">ערוץ:</span>
           <button className={chip(source === 'all')} onClick={() => setSource('all')}>הכל</button>
-          {(['phone', 'portal', 'email', 'admin'] as RegisterSource[]).map(s => (
+          {SOURCE_ORDER.map(s => (
             <button key={s} className={chip(source === s)} onClick={() => setSource(s)}>{SOURCE_LABEL[s]} ({bySource[s] ?? 0})</button>
           ))}
         </div>
