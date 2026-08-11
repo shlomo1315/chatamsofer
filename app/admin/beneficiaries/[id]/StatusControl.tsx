@@ -165,11 +165,39 @@ export default function StatusControl({ id, status, advance, readOnly }: {
     }
   }
 
-  const handleOptionClick = (next: EligibilityStatus) => {
+  // ── אישור יחוס: מה עוד יאושר בדרך ──────────────────────────────────────────
+  //
+  // ⚠️ אישור נרשם מאמת גם את *כל אבותיו הממתינים* עד הצומת המאושר הראשון —
+  // פעולה רחבה בהרבה ממה שהכפתור "אישור יחוס" מרמז. עד כה זה קרה בשקט, ומנהל
+  // גילה בדיעבד שצבע חצי ענף. כאן מציגים לו את הרשימה המלאה, לפי סדר הדורות,
+  // *לפני* שמשהו קורה.
+  //
+  // ⚠️ הרשימה מגיעה מהשרת ולא מחושבת כאן: אותה planApproveChain שתבצע בפועל.
+  // חישוב מקביל בצד הלקוח היה נפרד ממנה בתיקון הראשון, והאזהרה הייתה מבטיחה
+  // דבר אחד בזמן שהשרת עושה אחר.
+  const [chainWarn, setChainWarn] = useState<{ id: string; name: string; generation: number; isSelf: boolean }[] | null>(null)
+  const [loadingChain, setLoadingChain] = useState(false)
+
+  const handleOptionClick = async (next: EligibilityStatus) => {
     setOpen(false)
     if (next === 'rejected') { setShowRejectModal(true); return }
     if (next === 'docs_pending') { setShowDocsModal(true); return }
     if (next === 'deep_review') { setDeepReason(''); setShowDeepModal(true); return }
+
+    if (next === 'approved') {
+      setLoadingChain(true)
+      try {
+        const res = await fetch(`/api/admin/approve-lineage?beneficiaryId=${encodeURIComponent(id)}`, { cache: 'no-store' })
+        const d = await res.json()
+        setLoadingChain(false)
+        // ⚠️ רק כשיש *אבות* שיושפעו. אישור שנוגע בנרשם בלבד אינו מפתיע איש,
+        // ואזהרה עליו הייתה הופכת לרעש שלומדים ללחוץ עליו בלי לקרוא.
+        if (res.ok && (d.ancestors ?? 0) > 0) { setChainWarn(d.chain); return }
+      } catch {
+        setLoadingChain(false)
+        // ⚠️ כשל בתצוגה המקדימה אינו חוסם אישור — הוא רק מוותר על האזהרה.
+      }
+    }
     applyStatus(next)
   }
 
@@ -189,13 +217,15 @@ export default function StatusControl({ id, status, advance, readOnly }: {
       <div className="relative" ref={ref}>
         <button
           onClick={() => { if (!readOnly) setOpen((o) => !o) }}
-          disabled={saving || readOnly}
+          disabled={saving || loadingChain || readOnly}
           title={readOnly ? 'סטטוס המשפחה — ניתן לשינוי מכרטסת הצאצא בלבד' : undefined}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
             readOnly ? 'cursor-default disabled:opacity-100' : 'disabled:opacity-60'
           } ${STYLES[styleKey]}`}
         >
-          {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
+          {/* ⚠️ הספינר כולל את טעינת התצוגה המקדימה: התפריט נסגר מיד עם
+              הלחיצה, ובלי סימן הכפתור נראה תקוע עד שהאזהרה נפתחת. */}
+          {(saving || loadingChain) ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
           {label}
           {!readOnly && <ChevronDown size={12} className={`transition-transform ${open ? 'rotate-180' : ''}`} />}
         </button>
@@ -372,6 +402,54 @@ export default function StatusControl({ id, status, advance, readOnly }: {
                 className="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
                 {saving && <Loader2 size={13} className="animate-spin" />}
                 שלח ועדכן סטטוס
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── אזהרת מפל האישור ─────────────────────────────────────────────────
+          נפתחת רק כשיש אבות שיושפעו, ומציגה את כולם לפי סדר הדורות — מהקדום
+          לחדש, כפי שקוראים שרשרת יוחסין. */}
+      {chainWarn && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => !saving && setChainWarn(null)}>
+          <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="mb-3 flex items-start gap-2.5">
+              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-500" />
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">שים לב — האישור לא נעצר בו</h2>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-slate-600">
+                  יחוס אינו מוכח אם חוליה אחת בשרשרת אינה מאומתת. לכן אישור הצאצא הזה יאשר
+                  גם את <strong>{chainWarn.filter(s => !s.isSelf).length} הדורות שמעליו</strong> שעדיין ממתינים לאימות.
+                </p>
+              </div>
+            </div>
+
+            <p className="mb-1.5 text-[11px] font-bold text-slate-500">כל מי שיאושר, לפי הסדר:</p>
+            <ol className="mb-4 overflow-hidden rounded-xl border border-slate-200">
+              {chainWarn.map((s, i) => (
+                <li key={s.id}
+                  className={`flex items-center gap-2 px-3 py-2 text-[12.5px] ${i % 2 ? 'bg-slate-50/60' : 'bg-white'} ${s.isSelf ? 'font-bold text-indigo-800' : 'text-slate-700'}`}>
+                  <span className="w-14 shrink-0 text-[11px] text-slate-400">דור {s.generation}</span>
+                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                  {s.isSelf && <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">הצאצא הזה</span>}
+                </li>
+              ))}
+            </ol>
+
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setChainWarn(null)} disabled={saving}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                ביטול
+              </button>
+              <button
+                onClick={() => { const n = chainWarn.length; setChainWarn(null); void applyStatus('approved'); void n }}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50">
+                {saving && <Loader2 size={13} className="animate-spin" />}
+                אשר את כל {chainWarn.length} הדורות
               </button>
             </div>
           </div>
