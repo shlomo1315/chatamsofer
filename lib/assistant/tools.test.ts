@@ -13,6 +13,7 @@ function fakeDb() {
   const self = () => chain
   Object.assign(chain, {
     from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self, in: self,
+    range: self,
     then: (r: (v: unknown) => unknown) => r({ data: [{ id: '1', secret: 'רגיש' }], count: 99 }),
   })
   return chain as never
@@ -82,6 +83,7 @@ describe('אכיפת הרשאות', () => {
       const self = () => chain
       Object.assign(chain, {
         from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self,
+        range: self,
         in: (col: string, vals: unknown) => { calls.push({ col, vals }); return chain },
         then: (r: (v: unknown) => unknown) => r({ data: [], count: 0 }),
       })
@@ -169,9 +171,18 @@ describe('עץ הדורות (lineage_tree)', () => {
   ]
   // מסד מזויף שמחזיר את העץ ל-lineage_nodes וספירת משפחות ל-beneficiaries
   function treeDb(ns: unknown[], famCount = 0): ToolCtx['db'] {
+    // ⚠️ העץ נשלף דרך fetchAllRows, ולכן הבילדר חייב לתמוך ב-range — ולחתוך
+    // לפיו באמת. מוק שמחזיר את כל השורות בכל דף נראה עובד כל עוד המדגם קטן,
+    // אבל עם 1000 שורות ומעלה הוא ייתקע בלולאה: fetchAllRows עוצר רק על דף חלקי.
     const node = () => {
       const b: Record<string, unknown> = {}
-      Object.assign(b, { select: () => b, eq: () => b, then: (res: (v: unknown) => unknown) => res({ data: ns, error: null }) })
+      let win: [number, number] | null = null
+      Object.assign(b, {
+        select: () => b, eq: () => b,
+        range: (from: number, to: number) => { win = [from, to]; return b },
+        then: (res: (v: unknown) => unknown) =>
+          res({ data: win ? ns.slice(win[0], win[1] + 1) : ns, error: null }),
+      })
       return b
     }
     const ben = () => {

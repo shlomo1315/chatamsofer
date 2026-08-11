@@ -13,17 +13,27 @@ const baseNodes = [
   { id: 'moshe', name: 'משה סופר', generation: 3, parent_id: 'shimon', status: 'verified' },
 ]
 
+// ⚠️ העץ נשלף דרך fetchAllRows, ולכן הבילדר המזויף חייב לתמוך ב-range —
+// ובאמת לחתוך לפיו. מוק שמחזיר את כל השורות בכל דף נראה עובד כל עוד המדגם
+// קטן, אבל ברגע שמישהו יוסיף מדגם של 1000 שורות ומעלה הוא ייתקע בלולאה
+// אינסופית: fetchAllRows עוצר רק כשדף חוזר חלקי.
 function makeDb(opts: { bene: unknown; nodes: unknown[]; familyRows: unknown[] }) {
   return {
     from(table: string) {
       if (table === 'lineage_nodes') {
         const b: Record<string, unknown> = {}
-        Object.assign(b, { select: () => b, then: (r: (v: unknown) => unknown) => r({ data: opts.nodes, error: null }) })
+        let win: [number, number] | null = null
+        Object.assign(b, {
+          select: () => b,
+          range: (from: number, to: number) => { win = [from, to]; return b },
+          then: (r: (v: unknown) => unknown) =>
+            r({ data: win ? opts.nodes.slice(win[0], win[1] + 1) : opts.nodes, error: null }),
+        })
         return b
       }
       const b: Record<string, unknown> = {}
       Object.assign(b, {
-        select: () => b, eq: () => b,
+        select: () => b, eq: () => b, range: () => b,
         maybeSingle: () => Promise.resolve({ data: opts.bene, error: null }),
         then: (r: (v: unknown) => unknown) => r({ data: opts.familyRows, error: null }),
       })
