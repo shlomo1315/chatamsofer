@@ -24,6 +24,7 @@ import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
 import SendLineageLinkButton from '../SendLineageLinkButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { nodeIsSelf } from '@/lib/beneficiaryNode'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
 import PhoneActivity from './PhoneActivity'
@@ -610,19 +611,49 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         if (!gens.some(g => g.generation === 1)) {
           gens.unshift({ generation: 1, name: CHATAM_SOFER, status: 'verified', relation: null })
         }
-        // ⚠️ הצאצא *עצמו* — הנרשם — אינו צומת בעץ הדורות (העץ הוא של האבות;
-        // lineage_node_id שלו מצביע לאב האחרון). לכן הוא נעדר מסוף השרשרת. מוסיפים
-        // אותו כדור אחרון (שם משפחה + הבעל והאישה), כדי שסדר הדורות יסתיים בו —
-        // "עד אליו כולל אותו". נגזר הדור מהצומת האחרון + 1.
+        // הצאצא *עצמו* — הנרשם — מתווסף כדור אחרון, כדי שסדר הדורות יסתיים בו
+        // ("עד אליו כולל אותו").
+        //
+        // 🔴 מותנה, ולא תמיד. ההנחה המקורית הייתה שהנרשם לעולם אינו צומת בעץ
+        // ("העץ הוא של האבות, ו-lineage_node_id מצביע לאב האחרון"). ההנחה הזו
+        // חדלה להיות נכונה כש-ensureBeneficiaryNode נכנס: מאז *לכל* נרשם יש
+        // צומת משלו, ו-lineage_node_id מצביע עליו ולא על אביו. השרשרת כבר
+        // מסתיימת בנרשם, וההוספה חסרת התנאי הוסיפה אותו פעם שנייה — דור אחרון
+        // כפול בכל כרטסת, שנראה כמו כפילות בנתונים ואינו כזה.
+        //
+        // ⚠️ הזיהוי מבני קודם כול: ת"ז הצומת מול ת"ז הכרטסת. השוואת שמות נשברת
+        // על הבדל של אות אחת בין הניסוח בעץ לכרטסת ("חנה רחל" מול "מנה רחל"),
+        // וזה בדיוק המצב שהתגלה בשטח. nodeIsSelf נשאר כרשת גיבוי לצמתים ותיקים
+        // שטרם סומנה עליהם ת"ז.
         {
-          const lastGen = gens.length ? Math.max(...gens.map(g => g.generation)) : 1
-          const fam = (beneficiary.family_name ?? '').trim()
-          const husband = (beneficiary.full_name ?? '').trim()
-          const wife = (beneficiary.spouse_name ?? '').trim()
-          const selfName = [fam, [husband, wife].filter(Boolean).join(' ו')].filter(Boolean).join(' ') || husband || 'הצאצא'
-          // ⚠️ כתום (pending) — הצאצא עצמו עדיין לא מאושר בעץ הדורות. הוא הנרשם,
-          // ואישורו נעשה בנפרד; צביעתו כחול (verified) הייתה מטעה כאילו אושר.
-          gens.push({ generation: lastGen + 1, name: selfName, status: 'pending', relation: null })
+          const terminal = pathNodes.find(n => n.id === beneficiary.lineage_node_id) ?? null
+          const digits = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+          const benDigits = digits(beneficiary.id_number)
+          const alreadyEndsWithSelf = !!terminal && (
+            (!!benDigits && digits((terminal as { id_number?: string | null }).id_number) === benDigits) ||
+            nodeIsSelf(
+              {
+                id: beneficiary.id,
+                id_number: beneficiary.id_number,
+                full_name: beneficiary.full_name,
+                spouse_name: beneficiary.spouse_name,
+                family_name: beneficiary.family_name,
+                lineage_chain: beneficiary.lineage_chain,
+              },
+              terminal.name,
+            )
+          )
+
+          if (!alreadyEndsWithSelf) {
+            const lastGen = gens.length ? Math.max(...gens.map(g => g.generation)) : 1
+            const fam = (beneficiary.family_name ?? '').trim()
+            const husband = (beneficiary.full_name ?? '').trim()
+            const wife = (beneficiary.spouse_name ?? '').trim()
+            const selfName = [fam, [husband, wife].filter(Boolean).join(' ו')].filter(Boolean).join(' ') || husband || 'הצאצא'
+            // ⚠️ כתום (pending) — הצאצא עצמו עדיין לא מאושר בעץ הדורות. הוא הנרשם,
+            // ואישורו נעשה בנפרד; צביעתו כחול (verified) הייתה מטעה כאילו אושר.
+            gens.push({ generation: lastGen + 1, name: selfName, status: 'pending', relation: null })
+          }
         }
         // ⚡ הצמתים לבורר *אינם* נשלחים יותר כ-prop: קודם כל ~5000 צמתי העץ עברו
         // סריאליזציה ל-HTML ולפיילואד בכל טעינת כרטסת, גם כשהמשתמש בטאב אחר.
