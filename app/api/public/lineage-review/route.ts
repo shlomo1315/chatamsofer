@@ -5,6 +5,7 @@ import { logActivity } from '@/lib/activityLog'
 import { rateLimit } from '@/lib/rateLimit'
 import { clientIp } from '@/lib/rateLimit'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { nodeIsSelf, type BeneficiaryForNode } from '@/lib/beneficiaryNode'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,9 +69,16 @@ export async function GET(request: NextRequest) {
   // לשאלה שנשאל. pathToRoot מחזיר את המסלול המלא מהשורש ועד הצומת שלו.
   let recipient: Record<string, unknown> | null = null
   let chain: TreeNodeRow[] = []
+  // 🔴 הצומת של הנמען עצמו בתוך השרשרת, אם הוא שם.
+  //
+  // עד ההשלmה למפרע הנרשם *לא* היה צומת בעץ, ו-lineage_node_id הצביע על אביו.
+  // מאז כל נרשם מקבל צומת משלו, ו-lineage_node_id מצביע עליו — ולכן האיבר
+  // האחרון בשרשרת הוא הנרשם, לא האב. בלי ההבחנה הזאת הדף תייג את הנרשם עצמו
+  // כ"האב שלכם", והנמען ראה את עצמו מוצג כאביו.
+  let selfNodeId: string | null = null
   if (inv.beneficiary_id) {
     const { data: ben } = await admin.from('beneficiaries')
-      .select('full_name, family_name, spouse_name, id_number, phone, address, city, lineage_node_id')
+      .select('full_name, family_name, spouse_name, id_number, phone, address, city, gender, lineage_chain, lineage_node_id')
       .eq('id', inv.beneficiary_id).maybeSingle()
     if (ben) {
       // ⚠️ ת"ז מוסתרת חלקית: הדף ציבורי ונפתח מקישור במייל, ואין סיבה לחשוף
@@ -82,7 +90,27 @@ export async function GET(request: NextRequest) {
         idMasked: idNum, phone: ben.phone ?? null,
         address: [ben.address, ben.city].filter(Boolean).join(', ') || null,
       }
-      if (ben.lineage_node_id) chain = pathToRoot(nodes, ben.lineage_node_id as string)
+      if (ben.lineage_node_id) {
+        chain = pathToRoot(nodes, ben.lineage_node_id as string)
+        // אותה בדיקת בעלות כמו בהשלמה למפרע: ת"ז זהה, או שם הצומת זהה לשם
+        // המחושב של הנרשם. שני הסימנים מכסים גם צמתים שנוצרו לפני שהוטבעה ת"ז.
+        const last = chain[chain.length - 1]
+        if (last) {
+          if (nodeIsSelf({ ...ben, id: inv.beneficiary_id } as BeneficiaryForNode, last.name)) {
+            selfNodeId = last.id
+          } else {
+            // ⚠️ שאילתה נפרדת ולא הרחבת NODE_SELECT: מערך nodes נשלח לדף
+            // ציבורי, והוספת id_number שם הייתה חושפת תעודות זהות של כל העץ.
+            const cleanId = (v: unknown) => String(v ?? '').replace(/\D/g, '')
+            const mine = cleanId(ben.id_number)
+            if (mine) {
+              const { data: row } = await admin.from('lineage_nodes')
+                .select('id_number').eq('id', last.id).maybeSingle()
+              if (cleanId(row?.id_number) === mine) selfNodeId = last.id
+            }
+          }
+        }
+      }
     }
   }
 
@@ -90,13 +118,23 @@ export async function GET(request: NextRequest) {
   // התיקון הוא בחירת אב אחר, והאב הנכון נמצא בהכרח מחוץ לענף השגוי — בלי
   // העץ המלא אין במה לבחור. נשלחות עמודות התצוגה בלבד (שם/הורה/דור), בלי
   // שום מידע אישי על נרשמים, ולכן אין כאן חשיפה מעבר לשמות האבות.
+  //
+  // 🔴 מאושרים בלבד. הבורר הציג גם צמתים ממתינים, וביניהם טקסט חופשי שמישהו
+  // הקליד לתוך שדה שם ("אני נכד של... אני מודה לכם באופן אישי"). בחירה בצומת
+  // כזה מצמידה את הנרשם לרשומה שאולי בכלל תידחה, והרשימה נראית כאילו העץ
+  // מלא זבל.
+  //
+  // ⚠️ השורש נשמר תמיד: הוא נקודת העוגן לתיקון הדור הראשון, וסינון שלו היה
+  // מרוקן את הבורר בדיוק במקום שבו הוא הכי נחוץ.
   const fullTree = inv.mode === 'order'
-    ? nodes.map(n => ({ id: n.id, name: n.name, parent_id: n.parent_id, generation: n.generation, relation: n.relation ?? null }))
+    ? nodes
+      .filter(n => n.status === 'verified' || !n.parent_id)
+      .map(n => ({ id: n.id, name: n.name, parent_id: n.parent_id, generation: n.generation, relation: n.relation ?? null }))
     : undefined
 
   return NextResponse.json({
     rootNodeId: inv.root_node_id, recipientName: inv.recipient_name,
-    mode: inv.mode ?? 'full', recipient, chain, nodes: subtree, fullTree,
+    mode: inv.mode ?? 'full', recipient, chain, selfNodeId, nodes: subtree, fullTree,
   })
 }
 
