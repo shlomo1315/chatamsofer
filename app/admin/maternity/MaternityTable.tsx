@@ -13,7 +13,8 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from './maternityStatus'
-import { babyNameLabel, isNamePending, type AidNameFields } from '@/lib/babyNames'
+import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
+import { matchesBucket, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
@@ -30,20 +31,11 @@ const motherName = (m?: MotherRef) => {
 // ממתין=pending · מאושר=active · לא מאושר=cancelled · בדיקה מעמיקה=deep_review
 // ממתין לתיקונים=pending_fixes (baby_name_pending) — חוצה-סטטוס: היולדת סימנה
 // "עדיין אין שם" וטרם השלימה. כל עוד לא תוקן, הרשומה יושבת כאן ולא ב"ממתין לאישור".
-type Filter = 'all' | 'pending' | 'pending_fixes' | 'active' | 'cancelled' | 'deep_review'
-// ⚠️ isNamePending בודק *שני* המקורות (baby_name + babies[]): רשומה שהשם שלה
-// הושלם באחד מהם אינה "ממתינה לתיקון" רק כי הדגל נשאר דלוק.
-// וגם: רק תיק שעדיין ממתין לאישור יושב כאן. תיק שאושר (או בוטל) — הטיפול בו
-// נגמר; קודם הוא נספר גם כ"מאושר" וגם כ"ממתין לתיקונים", ולכן סכום הכרטיסים
-// היה גדול מסך הכול, והיולדת נראתה כאילו לא טופלה.
-const namePending = (a: MaternityAid) => isNamePending(a as AidNameFields) && a.status === 'pending'
-const matchesFilter = (a: MaternityAid, f: Filter) => {
-  if (f === 'all') return true
-  if (f === 'pending_fixes') return namePending(a)
-  // "ממתין לאישור" לא כולל רשומות שממתינות לתיקון שם — הן בקטגוריה נפרדת
-  if (f === 'pending') return a.status === 'pending' && !namePending(a)
-  return a.status === f
-}
+type Filter = MaternityBucket
+// ⚠️ ההגדרה עברה ל-lib/maternityBuckets, כדי שניווט "הבאה/הקודמת" בכרטסת
+// ישתמש *בדיוק* באותו כלל. כשהם חלוקים, "הבאה" קופצת ליולדת מלשונית אחרת
+// והרצף שבו המזכירות עובדת נקטע.
+const matchesFilter = (a: MaternityAid, f: Filter) => matchesBucket(a as BucketAid, f)
 
 // סינון לפי ההטבה שהיולדת ביקשה. undefined (בקשות ישנות) = ביקשה — תאימות לאחור.
 type BenefitFilter = 'all' | 'card' | 'recovery' | 'both'
@@ -153,16 +145,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
     return () => window.removeEventListener('focus', onFocus)
   }, [router])
 
-  // המונים תואמים ללוגיקת matchesFilter: "ממתין לאישור" לא כולל רשומות הממתינות
-  // לתיקון שם (הן נספרות ב"ממתין לתיקונים"), כדי שרשומה לא תיספר פעמיים.
-  const counts = useMemo(() => ({
-    all: data.length,
-    pending: data.filter(a => a.status === 'pending' && !namePending(a)).length,
-    pending_fixes: data.filter(a => namePending(a)).length,
-    active: data.filter(a => a.status === 'active').length,
-    cancelled: data.filter(a => a.status === 'cancelled').length,
-    deep_review: data.filter(a => a.status === 'deep_review').length,
-  }), [data])
+  // ⚠️ המונים נגזרים מ-matchesFilter עצמו ולא משוכפלים לידו. כשהיו שני
+  // מימושים, כל שינוי בכלל היה צריך להיזכר בשניהם — והמונה על הכרטיס הראה
+  // מספר אחד בזמן שהלשונית הציגה רשימה אחרת.
+  const counts = useMemo(() => Object.fromEntries(
+    CARD_DEFS.map(c => [c.key, data.filter(a => matchesFilter(a, c.key)).length]),
+  ) as Record<Filter, number>, [data])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -298,8 +286,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
               ) : visibleRows.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
+                  // ⚠️ הלשונית נוסעת בכתובת. בלעדיה הכרטסת אינה יודעת באיזו
+                  // רשימה המזכירות עובדת, ו"הבאה" חוזרת לרוץ על כל הטבלה.
+                  // הסינון אינו נשמר בכתובת של הרשימה עצמה, ולכן הקישור הוא
+                  // המקום היחיד שבו הוא עובר הלאה.
                   <tr key={aid.id}
-                    onClick={() => router.push(`/admin/maternity/${aid.id}`)}
+                    onClick={() => router.push(`/admin/maternity/${aid.id}?st=${filter}`)}
                     className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
                     <td className="px-2 py-3 align-middle font-medium text-slate-800 break-words">{motherName(m)}</td>
                     <td className="px-2 py-3 align-middle text-xs font-mono text-slate-600 break-words"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
