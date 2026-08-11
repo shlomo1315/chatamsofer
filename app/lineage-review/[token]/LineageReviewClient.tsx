@@ -34,6 +34,13 @@ export default function LineageReviewClient({ token }: { token: string }) {
   // שרשרת האבות שלו — במקום ענף צאצאים שאינו קשור לשאלה שנשאל.
   const [recipient, setRecipient] = useState<{ name: string; idMasked: string | null; phone: string | null; address: string | null } | null>(null)
   const [chain, setChain] = useState<Node[]>([])
+  // 🔴 הצומת של הנמען עצמו בשרשרת, אם הוא שם.
+  //
+  // עד ההשלמה למפרע הנרשם לא היה צומת בעץ, והאיבר האחרון בשרשרת היה תמיד
+  // אביו. מאז כל נרשם מקבל צומת משלו — והתגית "האב שלכם" נדבקה לנרשם עצמו,
+  // כלומר הנמען ראה את שמו שלו מוצג כאביו. null בקישורים ישנים, ואז נשמרת
+  // ההתנהגות הקודמת.
+  const [selfNodeId, setSelfNodeId] = useState<string | null>(null)
   const [mode, setMode] = useState<'full' | 'order'>('full')
   // כל העץ — לבחירת אב אחר בעת תיקון הסדר
   const [fullTree, setFullTree] = useState<Node[]>([])
@@ -51,6 +58,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
       setRootId(data.rootNodeId ?? null)
       setRecipient(data.recipient ?? null)
       setChain(data.chain ?? [])
+      setSelfNodeId(data.selfNodeId ?? null)
       setMode(data.mode === 'order' ? 'order' : 'full')
       setFullTree(data.fullTree ?? [])
     } catch { setError('שגיאת רשת') }
@@ -69,19 +77,30 @@ export default function LineageReviewClient({ token }: { token: string }) {
   // לגמרי — מה שיוצר שרשרת בלתי אפשרית (קפיצת דורות או לולאה). התיקון האמיתי
   // תמיד נמצא בין הילדים של אותו אב: "אינני צאצא של הבן הזה אלא של אחיו".
   // כשמתקנים את הדור הראשון שאחרי השורש, האפשרויות הן ילדי השורש.
-  const pickOptions = useMemo(() => {
-    if (!fixGen) return []
+  //
+  // 🔴 בשורה של הנמען עצמו מתקנים את *האב* שאליו הוא מחובר, ולכן הדור שמוחלף
+  // הוא הדור שלפניו והמועמדים הם אחיו של האב (ילדי הסבא). בלי ההיסט הזה
+  // הבורר הציע את אחיו של הנמען, ובחירה בהם הייתה תולה אותו תחת אחיו שלו.
+  const anchorIdx = useMemo(() => {
+    if (!fixGen) return -1
     const idx = chain.findIndex(c => c.id === fixGen.node.id)
-    if (idx < 0) return []
-    // ההורה בשרשרת: הדור שלפניו. בדור הראשון — שורש העץ עצמו.
-    const parentId = idx > 0 ? chain[idx - 1].id : (fullTree.find(n => !n.parent_id)?.id ?? null)
+    if (idx < 0) return -1
+    return fixGen.node.id === selfNodeId ? idx - 1 : idx
+  }, [fixGen, chain, selfNodeId])
+
+  const pickOptions = useMemo(() => {
+    if (anchorIdx < 0) return []
+    const anchor = chain[anchorIdx]
+    if (!anchor) return []
+    // ההורה בשרשרת: הדור שלפני הדור שמוחלף. בדור הראשון — שורש העץ עצמו.
+    const parentId = anchorIdx > 0 ? chain[anchorIdx - 1].id : (fullTree.find(n => !n.parent_id)?.id ?? null)
     if (!parentId) return []
-    const siblings = fullTree.filter(n => n.parent_id === parentId && n.id !== fixGen.node.id)
+    const siblings = fullTree.filter(n => n.parent_id === parentId && n.id !== anchor.id)
     const q = pickQuery.trim()
     return siblings
       .filter(n => !q || n.name.includes(q))
       .sort((a, b) => a.name.localeCompare(b.name, 'he'))
-  }, [pickQuery, fullTree, fixGen, chain])
+  }, [pickQuery, fullTree, anchorIdx, chain])
 
   // מיון היררכי — שורש, ואז ילדים בהזחה לפי דור
   const ordered = useMemo(() => {
@@ -201,7 +220,14 @@ export default function LineageReviewClient({ token }: { token: string }) {
                     <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[11px] font-extrabold text-indigo-700">{g.generation}</span>
                     <span className="flex-1 min-w-[120px] text-sm font-bold text-slate-800">{g.name}</span>
                     {g.relation && <span className="text-[10px] font-bold text-slate-400">{g.relation === 'son_in_law' ? 'חתן' : 'בן'}</span>}
-                    {i === chain.length - 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
+                    {/* ⚠️ "האב שלכם" יושב על הדור שלפני הנמען, לא על האחרון.
+                        כשהנרשם עצמו נמצא בשרשרת (selfNodeId), האחרון הוא הוא —
+                        ותיוגו כאב הציג לנמען את שמו שלו כאביו. בקישורים ישנים
+                        אין selfNodeId, ואז האחרון הוא באמת האב. */}
+                    {g.id === selfNodeId
+                      ? <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">זה אתם</span>
+                      : i === chain.length - (selfNodeId ? 2 : 1) &&
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">האב שלכם</span>}
                     {sentGens.has(g.id) ? (
                       <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"><CheckCircle2 size={11} /> נשלח לאישור</span>
                     ) : (
@@ -228,12 +254,20 @@ export default function LineageReviewClient({ token }: { token: string }) {
                     <div className="border-t border-indigo-100 bg-slate-50 px-3 py-3">
                       {fixGen.action === 'replace' ? (
                         <>
+                          {/* ⚠️ נוסח נפרד לשורה של הנמען עצמו: "במקום <שמך>"
+                              נקרא כאילו מבקשים ממנו להחליף את עצמו. מה שמתקנים
+                              שם הוא האב שאליו הוא מחובר. */}
                           <p className="mb-1 text-[11px] font-bold text-slate-600">
-                            במקום <span className="text-rose-600">{g.name}</span> — בחרו מבין
-                            {i > 0 ? <> ילדיו של <span className="text-indigo-700">{chain[i - 1].name}</span></> : <> צאצאי מרן החתם סופר זי&quot;ע</>}:
+                            {g.id === selfNodeId ? (
+                              <>אינכם בנו של <span className="text-rose-600">{chain[i - 1]?.name ?? 'הדור שמעליכם'}</span>? בחרו את האב הנכון מבין ילדיו של{' '}
+                                <span className="text-indigo-700">{chain[i - 2]?.name ?? 'הדור שלפניו'}</span>:</>
+                            ) : (
+                              <>במקום <span className="text-rose-600">{g.name}</span> — בחרו מבין
+                                {i > 0 ? <> ילדיו של <span className="text-indigo-700">{chain[i - 1].name}</span></> : <> צאצאי מרן החתם סופר זי&quot;ע</>}:</>
+                            )}
                           </p>
                           <p className="mb-2 text-[10px] text-slate-400">
-                            מוצגים רק השמות ששייכים לדור זה — כך השרשרת נשארת תקינה.
+                            מוצגים רק דורות <strong>מאושרים</strong> ששייכים לדור זה — כך השרשרת נשארת תקינה.
                           </p>
                           {/* תיבת החיפוש רק כשיש הרבה אפשרויות; ברשימה קצרה היא מיותרת */}
                           {pickOptions.length > 8 && (
@@ -252,11 +286,14 @@ export default function LineageReviewClient({ token }: { token: string }) {
                             {pickOptions.map(o => (
                               <button key={o.id} disabled={busy === g.id}
                                 onClick={async () => {
-                                  // ⚠️ ההצעה היא לשנות את האב של *הדור הבא* בשרשרת,
-                                  // ולא של הדור שנלחץ: "במקום X יבוא Y" פירושו
-                                  // שהבן של X צריך להיות תלוי ב-Y. בדור האחרון
-                                  // (האב שלכם) מציעים לשנות את האב שלו עצמו.
-                                  const target = chain[i + 1] ?? g
+                                  // ⚠️ ההצעה היא לשנות את האב של *הדור הבא* אחרי
+                                  // הדור שמוחלף: "במקום X יבוא Y" פירושו שהבן
+                                  // של X צריך להיות תלוי ב-Y.
+                                  //
+                                  // anchorIdx כבר מביא בחשבון את השורה של הנמען
+                                  // עצמו, שבה הדור שמוחלף הוא אביו — ולכן מי
+                                  // שעובר אב הוא הנמען.
+                                  const target = chain[anchorIdx + 1] ?? g
                                   setBusy(g.id)
                                   const ok = await suggest({ kind: 'reparent', nodeId: target.id, parentId: o.id })
                                   setBusy(null)
