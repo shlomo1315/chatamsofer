@@ -33,9 +33,17 @@ export function permissionAllows(perms: UserPermissions | undefined, section: Se
 // ⚠️ המחיקה אינה נגזרת מכאן — מחיקת צאצא שמורה למנהל בלבד ונאכפת בנפרד
 //    (requireAdmin בנתיב /api/admin/beneficiaries/delete + isAdmin בכפתור).
 //    לכן רצפה של 'edit' כאן נותנת עריכה, לא מחיקה.
+//
+// מזכירות: צפייה בחלוקות החגים פתוחה תמיד.
+// ⚠️ הרצפה הזו נוספה יחד עם אכיפת ההרשאה על מסך חלוקות החגים. עד אז המסך
+//    היה פתוח לכל איש צוות בלי קשר לסימון, ולכן ייתכן שאיש לא טרח לסמן
+//    'חלוקות חגים' לאף מזכירה. בלי הרצפה, הרגע שבו האכיפה נכנסת לתוקף הוא
+//    גם הרגע שבו כל המזכירות נחסמות — באמצע קמפיין רישום פעיל.
+// ⚠️ 'view' ולא יותר: הצפייה שייכת לתפקיד, אבל פתיחת רישום, אישור נרשמים
+//    ושיוך כרטיסים דורשים סימון מפורש כמו קודם.
 // ─────────────────────────────────────────────────────────────────────────────
 const ROLE_FLOOR: Partial<Record<UserRole, Partial<Record<SectionKey, PermissionLevel>>>> = {
-  secretary: { beneficiaries: 'edit' },
+  secretary: { beneficiaries: 'edit', distributions: 'view' },
 }
 
 // none < view < add < edit — סדר ליניארי: כל רמה מכילה את זו שמתחתיה
