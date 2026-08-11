@@ -695,12 +695,42 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
   }
 
   async function patchStatus(node: LineageNode, status: 'verified' | 'pending' | 'rejected') {
+    // 🔴 אישור האבות נשאל, לא נעשה בשקט.
+    //
+    // אישור צומת אחד סימן "מאושר" את כל שרשרת האבות הממתינה מעליו. מי שאישר
+    // אדם בדור 9 אישר איתו ארבעה אבות שאיש לא בדק — מסוכן במיוחד בזמן ניקוי
+    // כפילויות, כי בדיוק האבות הכפולים שנבדקים נצבעו ירוק.
+    //
+    // ⚠️ הצורך אמיתי: בורר סדר הדורות ברישום מנווט דרך מאושרים בלבד, ולכן בן
+    // מאושר שאביו "ממתין" לא יופיע לנרשמים הבאים. לכן שואלים ולא מבטלים.
+    let verifyAncestors = false
+    if (status === 'verified') {
+      const byId = new Map(nodes.map(n => [n.id, n]))
+      const pend: LineageNode[] = []
+      const seen = new Set<string>([node.id])
+      let cur = node.parent_id
+      while (cur && !seen.has(cur)) {
+        seen.add(cur)
+        const a = byId.get(cur)
+        if (!a || (a.status ?? 'pending') === 'verified') break
+        pend.push(a)
+        cur = a.parent_id
+      }
+      if (pend.length) {
+        verifyAncestors = confirm(
+          `לאשר גם את ${pend.length} הדורות שמעליו?\n\n` +
+          pend.map((a, i) => `${i + 1}. ${a.name}  (דור ${a.generation})`).join('\n') +
+          '\n\nאישור = כל אלה יסומנו "מאושר".\n' +
+          'ביטול = רק הצומת הזה יאושר. שימו לב: כל עוד אב שלו "ממתין", הוא לא יופיע לנרשמים בבורר סדר הדורות.',
+        )
+      }
+    }
     onStatusChange(node.id, status)
     const res = await fetch('/api/admin/lineage', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ id: node.id, status }),
+      body: JSON.stringify({ id: node.id, status, verifyAncestors }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
