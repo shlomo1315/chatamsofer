@@ -434,6 +434,20 @@ export async function mergeWithCascade(
     cascadeUp?: boolean
     /** מיזוג אחורנית גם כשהניסוח שונה (בהסכמת המשתמש) */
     cascadeUpApprox?: boolean
+    /**
+     * 🔴 לדילוג על חישוב הדורות — להרצה המונית בלבד, והקורא אחראי להריץ
+     * recalcGenerations פעם אחת בסופה.
+     *
+     * recalcGenerations סורק את *כל* טבלת הצמתים (16 סבבי רשת ב-15 אלף שורות),
+     * והוא רץ אחרי כל מיזוג בודד. במיזוג בטוח של 150 קבוצות זה 2,400 פניות
+     * סדרתיות ל-Supabase — ההרצה זחלה לקצב של מיזוג אחד לכמה שניות, והמסך
+     * נראה תקוע.
+     *
+     * ⚠️ במיזוג בטוח הדורות ממילא אינם משתנים: כל הקבוצה חולקת אותו אב ואותו
+     * דור, הצומת שנשאר אינו זז, וילדים שעוברים אליו שומרים על אותו מרחק
+     * מהשורש. הריצה האחת בסוף היא ביטוח, לא צורך.
+     */
+    skipRecalc?: boolean
   },
 ): Promise<MergeResult> {
   const ctx = { batchId: opts.batchId, userId: opts.userId }
@@ -464,7 +478,7 @@ export async function mergeWithCascade(
     }
   }
 
-  await recalcGenerations(db, plan.topId)
+  if (!opts.skipRecalc) await recalcGenerations(db, plan.topId)
 
   return {
     batchId: opts.batchId,

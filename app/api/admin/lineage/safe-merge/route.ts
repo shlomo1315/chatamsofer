@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
-import { mergeWithCascade, pickKeepId } from '@/lib/lineageMerge'
+import { mergeWithCascade, pickKeepId, recalcGenerations } from '@/lib/lineageMerge'
 import { invalidateLineageCache } from '@/lib/lineageSync'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
@@ -39,7 +39,7 @@ function getAdminClient() {
 async function loadTree(admin: NonNullable<ReturnType<typeof getAdminClient>>) {
   const nodes = await fetchAllRows<Row>((from, to) =>
     admin.from('lineage_nodes').select('id, name, parent_id, generation, status').range(from, to))
-  if (nodes.error) return { error: nodes.error, groups: [], childCount: new Map<string, number>(), nameById: new Map<string, string>(), benCount: new Map<string, number>() }
+  if (nodes.error) return { error: nodes.error, groups: [], childCount: new Map<string, number>(), nameById: new Map<string, string>(), benCount: new Map<string, number>(), rootId: null }
 
   const childCount = new Map<string, number>()
   for (const n of nodes.rows) {
@@ -54,7 +54,8 @@ async function loadTree(admin: NonNullable<ReturnType<typeof getAdminClient>>) {
     if (b.lineage_node_id) benCount.set(b.lineage_node_id, (benCount.get(b.lineage_node_id) ?? 0) + 1)
   }
 
-  return { error: null, groups: findSafeMergeGroups(nodes.rows), childCount, nameById, benCount }
+  const rootId = nodes.rows.find(n => !n.parent_id)?.id ?? null
+  return { error: null, groups: findSafeMergeGroups(nodes.rows), childCount, nameById, benCount, rootId }
 }
 
 export async function GET() {
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
-  const { error, groups, childCount } = await loadTree(admin)
+  const { error, groups, childCount, rootId } = await loadTree(admin)
   if (error) return NextResponse.json({ error }, { status: 500 })
   if (!groups.length) {
     return NextResponse.json({
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
   // את הקונטיינר, והבקשה נקטעת בלי שום סימן במסך. מנה קטנה חוזרת תמיד בזמן,
   // והלקוח חוזר עליה עד הסוף.
   const asked = Number(request.nextUrl.searchParams.get('limit') ?? 0)
-  const batch = Math.min(Math.max(asked || 150, 1), 500)
+  const batch = Math.min(Math.max(asked || 100, 1), 500)
 
   // ⚠️ batchId משותף לכל המנות, ומגיע מהלקוח: מיזוג הוא פעולה אחת מבחינת
   // המשתמש, וביטול צריך להחזיר את כולה. חלוקה למנות לא הייתה מצדיקה איבוד
@@ -158,6 +159,10 @@ export async function POST(request: NextRequest) {
         names: {},
         userId: staff.userId,
         cascadeDown: false, cascadeUp: false, cascadeUpApprox: false,
+        // ⚠️ ראו ההערה ב-mergeWithCascade: חישוב הדורות סורק את כל הטבלה, והוא
+        // רץ פעם אחת בסוף המנה במקום 150 פעם בתוכה. במיזוג בטוח הדורות ממילא
+        // אינם משתנים — כל הקבוצה חולקת אב ודור, והצומת שנשאר אינו זז.
+        skipRecalc: true,
       })
       merged++
       removed += mergeIds.length
@@ -166,6 +171,14 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       failures.push({ name: exactNameKey(group[0].name), reason: e instanceof Error ? e.message : String(e) })
     }
+  }
+
+  // ⚠️ ריצה אחת לכל המנה, ולא אחרי כל מיזוג. במיזוג בטוח הדורות אינם משתנים
+  // כלל, וזו הגנה מפני מקרה קצה — לא חלק מהתיקון עצמו. best-effort: כישלון
+  // כאן לא אמור להציג את המנה שכבר בוצעה כנכשלת.
+  if (rootId && (merged || failures.length)) {
+    await recalcGenerations(admin, rootId).catch(e =>
+      console.error('[safe-merge] חישוב דורות נכשל:', e instanceof Error ? e.message : e))
   }
 
   invalidateLineageCache()

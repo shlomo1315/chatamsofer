@@ -92,7 +92,7 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
       // ⚠️ תקרת סבבים: הגנה מפני לולאה שאינה מתקדמת (למשל כשכל הקבוצות
       // הנותרות נכשלות). 40 × 150 מכסה בנוחות כל סריקה סבירה.
       for (let round = 0; round < 40; round++) {
-        const res = await fetch(`/api/admin/lineage/safe-merge?limit=150&batch=${batchId}`, { method: 'POST' })
+        const res = await fetch(`/api/admin/lineage/safe-merge?limit=100&batch=${batchId}`, { method: 'POST' })
         const d = await readJson(res)
         if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
         tot.merged += d.merged; tot.removed += d.removed
