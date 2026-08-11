@@ -1,8 +1,9 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
-import { Loader2, RefreshCw, X, Check, Undo2, AlertTriangle, Users, MapPin } from 'lucide-react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Loader2, RefreshCw, X, Check, Undo2, AlertTriangle, Users, MapPin, Zap } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import MergePlanModal, { type PlanResp, type PlanStep } from './MergePlanModal'
+import QuickReview from './QuickReview'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מרכז המיזוגים — סריקת כפילויות והכרעה עליהן.
@@ -62,6 +63,12 @@ export default function DuplicatesPanel({
   // המבנה מוכיח שהם אותו אדם — ורק במיזוג המודרך, לא בהרצה מרוכזת.
   const [upApprox, setUpApprox] = useState(true)
   const [planning, setPlanning] = useState<string | null>(null)
+  // 🔴 תצלום קפוא של הרשימה בזמן פתיחת הסקירה המהירה, ולא ה-state החי.
+  //
+  // כל מיזוג מרענן את הסריקה, והרשימה נבנית מחדש בסדר אחר. אילו הסקירה
+  // הייתה קוראת את groups, המדד היה מצביע אחרי כל הכרעה על קבוצה *אחרת* —
+  // המשתמש היה מדלג על זוגות בלי לדעת, ומכריע על זוגות שלא הספיק לקרוא.
+  const [quick, setQuick] = useState<DupGroup[] | null>(null)
 
   const scan = useCallback(async () => {
     setLoading(true)
@@ -138,6 +145,10 @@ export default function DuplicatesPanel({
     setPlanning(null)
   }
 
+  // ⚠️ ה-batchId של המיזוג האחרון — כדי שכפתור הביטול בסקירה המהירה יבטל
+  // *את מה שהרגע נעשה*, ולא את מה שבמקרה ראשון ברשימת הביטולים.
+  const lastBatch = useRef<string | null>(null)
+
   const mergeGroup = async (g: DupGroup, quiet = false, names?: Record<string, string>, approx = false): Promise<MergeOutcome> => {
     try {
       const keep = chooseKeep(g.nodes)
@@ -161,6 +172,7 @@ export default function DuplicatesPanel({
         if (!quiet) toast.error(d.error || 'שגיאה במיזוג')
         return 'error'
       }
+      if (typeof d.batchId === 'string') lastBatch.current = d.batchId
       if (!quiet) {
         toast.success(
           d.cascadedCount
@@ -268,7 +280,18 @@ export default function DuplicatesPanel({
           </button>
         ))}
       </div>
-      <div style={{ fontSize: 11.5, color: '#64748B', marginBottom: 10 }}>{LEVEL_UI[tab].hint}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11.5, color: '#64748B' }}>{LEVEL_UI[tab].hint}</span>
+        {/* 🔴 סקירה מהירה — קבוצה אחת על המסך, הכרעה במקלדת.
+            ברמת "קרובים מאוד" יש מאות קבוצות, וברשימה צריך לגלול, לאתר, ללחוץ,
+            ולמצוא את המקום מחדש אחרי שהיא מתעדכנת. כאן אין ניווט בכלל. */}
+        {shown.length > 0 && (
+          <button onClick={() => setQuick(shown)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#4F46E5', color: '#fff', border: 'none', borderRadius: 9, padding: '6px 13px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <Zap size={13} /> סקירה מהירה ({shown.length.toLocaleString('he-IL')})
+          </button>
+        )}
+      </div>
 
       {/* אישור מרוכז — רק לרמת "זהים" */}
       {tab === 'exact' && shown.length > 0 && (
@@ -356,6 +379,56 @@ export default function DuplicatesPanel({
             )
           })}
         </div>
+      )}
+
+      {/* ── תצוגה מקדימה של המפל + בחירת שם לכל דור — קומפוננטה משותפת ──
+          אותו מודאל משמש גם את המיזוג הידני בעץ (MergePlanModal), כדי שתהיה
+          חוויה אחת בלבד ולא שני עיצובים שמסתעפים. */}
+      {quick && (
+          <QuickReview
+            groups={quick}
+            levelLabel={LEVEL_UI[tab].label}
+            onLocate={onLocate}
+            onMerge={async (g, name) => {
+              const grp = g as DupGroup
+              const keep = chooseKeep(grp.nodes)
+              // ⚠️ upApprox נשמר גם כאן: אותה התנהגות בדיוק כמו במסלול הרגיל.
+              // מסך מהיר שממזג אחרת ממה שהמשתמש הורגל אליו הוא מלכודת.
+              const out = await mergeGroup(grp, true, { [keep.id]: name }, upApprox)
+              // 🔴 'gone' = הקבוצה כבר נבלעה במפל של מיזוג קודם באותה ריצה.
+              // זו תוצאה תקינה ולא כשל: המשתמש התכוון בדיוק לזה, וזה כבר קרה.
+              // הצגתה כשגיאה הייתה עוצרת את הרצף ומזמינה לחיצה חוזרת מיותרת.
+              if (out === 'gone') { toast.success('כבר מוזג קודם במפל'); return true }
+              if (out !== 'ok') return false
+              toast.success('מוזג')
+              return true
+            }}
+            onDismiss={async (g) => {
+              try {
+                await fetch('/api/admin/lineage/duplicates', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ids: g.nodes.map(n => n.id) }),
+                })
+                return true
+              } catch { toast.error('שגיאה בשמירה'); return false }
+            }}
+            onUndo={async () => {
+              const id = lastBatch.current
+              if (!id) { toast.error('אין מיזוג לבטל'); return false }
+              try {
+                const r = await fetch('/api/admin/lineage/merge/undo', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ batchId: id }),
+                })
+                const d = await r.json()
+                if (!r.ok) { toast.error(d.error || 'שגיאה בביטול'); return false }
+                lastBatch.current = null
+                toast.success(`בוטל · ${d.restored} צמתים הוחזרו`)
+                return true
+              } catch { toast.error('שגיאת רשת'); return false }
+            }}
+            onClose={() => { setQuick(null); void scan(); void loadUndo(); onDone() }}
+          />
       )}
 
       {/* ── תצוגה מקדימה של המפל + בחירת שם לכל דור — קומפוננטה משותפת ──

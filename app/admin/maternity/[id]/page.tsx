@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle, ChevronRight, ChevronLeft } from 'lucide-react'
+import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid, Beneficiary } from '@/types'
@@ -24,6 +24,9 @@ import { ViewDocButton } from '@/components/ui/DocViewer'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+import { adjacentInBucket, isBucket, BUCKET_LABEL, type MaternityBucket, type AdjacentRow } from '@/lib/maternityBuckets'
+import AdjacentNav from './AdjacentNav'
 import BirthCertificatePreview from './BirthCertificatePreview'
 import RecoveryUnlockButton from './RecoveryUnlockButton'
 import LineageTreeToggle from './LineageTreeToggle'
@@ -74,20 +77,46 @@ async function getAid(id: string): Promise<MaternityAid | null> {
 
 // ניווט בין יולדות בלי לחזור לרשימה: מחזיר את מזהי היולדת הקודמת/הבאה לפי
 // אותו סדר של הרשימה הראשית (created_at יורד — חדש→ישן). "הבאה" = הישנה יותר
-// (הבאה למטה ברשימה), "הקודמת" = החדשה יותר. שתי שאילתות קלות מאונדקסות.
-async function getAdjacentAids(currentId: string, createdAt: string | null): Promise<{ prevId: string | null; nextId: string | null }> {
-  if (!isSupabaseConfigured() || !createdAt) return { prevId: null, nextId: null }
+// (הבאה למטה ברשימה), "הקודמת" = החדשה יותר.
+//
+// 🔴 נעול ללשונית שממנה נכנסו (?st=). קודם הניווט רץ על *כל* הטבלה, ומי שנכנס
+// מ"ממתין לאישור" ולחץ "הבאה" נחת על יולדת מאושרת ואיבד את הרצף שבו עבד.
+//
+// ⚠️ "ממתין לתיקונים" אינו סטטוס במסד אלא נגזרת (דגל שם + מצב המסמכים של
+// המשפחה), ולכן אי אפשר לסנן אותו ב-SQL. במקום זה נשלפות העמודות הקלות של כל
+// הלידות והשכנים נמצאים בזיכרון — אותו כלל בדיוק ששולט ברשימה עצמה.
+async function getAdjacentAids(currentId: string, createdAt: string | null, bucket: MaternityBucket) {
+  const none = { prevId: null, nextId: null, allPrevId: null, allNextId: null }
+  if (!isSupabaseConfigured() || !createdAt) return none
   const supabase = await createClient()
-  // הבאה = created_at קטן יותר (ישנה יותר); הקודמת = created_at גדול יותר.
-  const [{ data: next }, { data: prev }] = await Promise.all([
-    supabase.from('maternity_aids').select('id').lt('created_at', createdAt)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('maternity_aids').select('id').gt('created_at', createdAt)
-      .order('created_at', { ascending: true }).limit(1).maybeSingle(),
-  ])
+
+  // ללא נעילה — שתי שאילתות קלות מאונדקסות, כמו קודם.
+  if (bucket === 'all') {
+    const [{ data: next }, { data: prev }] = await Promise.all([
+      supabase.from('maternity_aids').select('id').lt('created_at', createdAt)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('maternity_aids').select('id').gt('created_at', createdAt)
+        .order('created_at', { ascending: true }).limit(1).maybeSingle(),
+    ])
+    const p = (prev as { id: string } | null)?.id ?? null
+    const n = (next as { id: string } | null)?.id ?? null
+    return { prevId: p, nextId: n, allPrevId: p, allNextId: n }
+  }
+
+  // ⚠️ שליפה בדפים: .limit() לבדו נחתך ל-1000 (db-max-rows), והניווט היה
+  // מדלג בשקט על כל מה שמעבר. ראו lib/fetchAllRows.
+  const { rows, error } = await fetchAllRows<AdjacentRow & { id: string }>((from, to) =>
+    supabase.from('maternity_aids')
+      .select('id, created_at, status, baby_name, baby_name_pending, babies, beneficiary:beneficiaries(eligibility_status)')
+      .or('birth_type.is.null,birth_type.neq.silent')
+      .range(from, to))
+  if (error) return none
+
+  const current = { id: currentId, created_at: createdAt }
   return {
-    prevId: (prev as { id: string } | null)?.id ?? null,
-    nextId: (next as { id: string } | null)?.id ?? null,
+    ...adjacentInBucket(rows, current, bucket),
+    ...(({ prevId, nextId }) => ({ allPrevId: prevId, allNextId: nextId }))(
+      adjacentInBucket(rows, current, 'all')),
   }
 }
 
@@ -225,9 +254,19 @@ async function getLineagePath(
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
 
-export default async function MaternityDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MaternityDetailPage(
+  { params, searchParams }: {
+    params: Promise<{ id: string }>
+    // st = הלשונית שממנה נכנסו, ועליה ננעל ניווט הבאה/קודמת.
+    searchParams?: Promise<Record<string, string | string[] | undefined>>
+  },
+) {
   const _t0 = Date.now()
   const { id } = await params
+  // ⚠️ מאומת מול רשימת הלשוניות ולא מועבר כמות שהוא: ערך שרירותי מהכתובת
+  // היה נכנס ישר להשוואת סטטוס ומרוקן את הניווט בלי שום הסבר.
+  const stRaw = (await searchParams)?.st
+  const bucket: MaternityBucket = isBucket(stRaw) ? stRaw : 'all'
   const aid = await getAid(id)
   const _tAid = Date.now()
   const ben = aid?.beneficiary as Beneficiary | undefined
@@ -240,8 +279,8 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
     computeGenStatus(typedChain, ben?.lineage_node_id),
     // לתוויות בבאנר "השלמת מסמכים" — כולל סוגים שנוספו בהגדרות
     getDocTypes(),
-    // ניווט הבאה/קודמת — לפי סדר הרשימה הראשית (created_at)
-    getAdjacentAids(id, (aid as { created_at?: string } | null)?.created_at ?? null),
+    // ניווט הבאה/קודמת — לפי סדר הרשימה הראשית (created_at), נעול ללשונית
+    getAdjacentAids(id, (aid as { created_at?: string } | null)?.created_at ?? null, bucket),
   ])
   // מדידת זמן זמנית לאבחון האיטיות — נראה ב-Railway logs היכן הזמן מתבזבז
   console.log(`[perf] maternity/${id}: getAid=${_tAid - _t0}ms, lineage+docs=${Date.now() - _tAid}ms, total=${Date.now() - _t0}ms`)
@@ -290,27 +329,8 @@ export default async function MaternityDetailPage({ params }: { params: Promise<
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* ניווט בין יולדות בלי לחזור לרשימה — הבאה/קודמת לפי סדר הרשימה */}
-          <div className="flex items-center rounded-lg border border-slate-200 overflow-hidden ml-1">
-            {adjacent.prevId ? (
-              <Link href={`/admin/maternity/${adjacent.prevId}`}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-l border-slate-200"
-                title="ללידה הקודמת">
-                <ChevronRight size={15} /> ללידה הקודמת
-              </Link>
-            ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 border-l border-slate-200 cursor-default"><ChevronRight size={15} /> ללידה הקודמת</span>
-            )}
-            {adjacent.nextId ? (
-              <Link href={`/admin/maternity/${adjacent.nextId}`}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                title="ללידה הבאה">
-                ללידה הבאה <ChevronLeft size={15} />
-              </Link>
-            ) : (
-              <span className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-300 cursor-default">ללידה הבאה <ChevronLeft size={15} /></span>
-            )}
-          </div>
+          {/* ניווט בין יולדות בלי לחזור לרשימה — נעול ללשונית שממנה נכנסו */}
+          <AdjacentNav {...adjacent} bucket={bucket} bucketLabel={BUCKET_LABEL[bucket]} />
           <StatusControl aid={aid} advance familyApproved={beneficiary?.eligibility_status === 'approved'} />
           <MaternityActions aid={aid} />
         </div>
