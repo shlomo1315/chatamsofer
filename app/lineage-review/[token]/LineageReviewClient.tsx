@@ -17,6 +17,8 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   pending: { label: 'ממתין', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
   rejected: { label: 'נדחה', cls: 'bg-red-100 text-red-700 border-red-200' },
 }
+import ManualGenerationForm, { ManualAddGate } from '@/components/lineage/ManualGenerationForm'
+
 const NON_HEBREW = /[^֐-׿ ׳״'"-]/g
 
 export default function LineageReviewClient({ token }: { token: string }) {
@@ -48,6 +50,10 @@ export default function LineageReviewClient({ token }: { token: string }) {
   const [fixGen, setFixGen] = useState<{ node: Node; action: 'replace' | 'insert' } | null>(null)
   const [pickQuery, setPickQuery] = useState('')
   const [sentGens, setSentGens] = useState<Set<string>>(new Set())
+  // ⚠️ אותה חלונית חוסמת של הרישום, לפני שהטופס נפתח בכלל. הוספה ידנית של דור
+  // שכבר קיים בעץ היא המקור המרכזי לכפילויות, ובדף התיקון היא לא הייתה קיימת
+  // כלל — כאן דווקא, כשמתקנים שרשרת שגויה, הפיתוי להוסיף במקום לחפש גדול יותר.
+  const [addGate, setAddGate] = useState<Node | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -240,7 +246,7 @@ export default function LineageReviewClient({ token }: { token: string }) {
                             החלף דור
                           </button>
                         )}
-                        <button onClick={() => { setFixGen({ node: g, action: 'insert' }); setPickQuery('') }}
+                        <button onClick={() => { setAddGate(g); setPickQuery('') }}
                           title="חסר דור בין זה לדור שאחריו"
                           className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
                           + דור חסר
@@ -311,33 +317,46 @@ export default function LineageReviewClient({ token }: { token: string }) {
                           <p className="mb-2 text-[11px] font-bold text-slate-600">
                             הוספת דור חסר אחרי <span className="text-indigo-600">{g.name}</span>:
                           </p>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <input value={addName} onChange={e => setAddName(e.target.value.replace(NON_HEBREW, ''))} autoFocus
-                              placeholder="שם הדור החסר…"
-                              className="min-w-[150px] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                            <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
-                              {(['son', 'son_in_law'] as const).map(r => (
-                                <button key={r} onClick={() => setAddRelation(r)}
-                                  className={`px-2.5 py-2 text-xs font-semibold ${addRelation === r ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>{r === 'son' ? 'בן' : 'חתן'}</button>
-                              ))}
-                            </div>
-                            <button disabled={!addName.trim() || busy === g.id}
-                              onClick={async () => {
-                                setBusy(g.id)
-                                const ok = await suggest({ kind: 'add_child', parentId: g.id, name: addName.trim(), relation: addRelation })
-                                setBusy(null)
-                                if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null); setAddName('') }
-                              }}
-                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50">שליחה</button>
-                          </div>
+                          {/* 🔴 אותו טופס בדיוק של הרישום, ולא שדה חופשי.
+                              קודם היה כאן שדה שם אחד, בלי אזהרת התארים, בלי
+                              החלונית על השם המלא, ובלי התצוגה "ייכנס לעץ כך".
+                              התוצאה: מי שמתקן דרך הקישור הזה הזין "רבי משה
+                              שליט\"א" כשם — בדיוק מה שהרישום חוסם — והשם נכנס
+                              לעץ בניסוח שאינו ניתן להצלבה. */}
+                          <ManualGenerationForm
+                            generation={g.generation + 1}
+                            submitLabel="שליחה לאישור"
+                            busy={busy === g.id}
+                            onCancel={() => setFixGen(null)}
+                            onSubmit={async v => {
+                              setBusy(g.id)
+                              const ok = await suggest({ kind: 'add_child', parentId: g.id, name: v.name, relation: v.relation })
+                              setBusy(null)
+                              if (ok) { setSentGens(s => new Set(s).add(g.id)); setFixGen(null) }
+                            }}
+                          />
                         </>
                       )}
-                      <button onClick={() => setFixGen(null)} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
+                      {fixGen.action === 'replace' && (
+                        <button onClick={() => setFixGen(null)} className="mt-2 text-[11px] text-slate-400 underline">ביטול</button>
+                      )}
                     </div>
                   )}
                 </div>
               ))}
             </div>
+            {/* ⚠️ אותה חלונית של הרישום, ובאותם שני נוסחים: כשיש דורות ברשימה
+                האזהרה אדומה ומדברת על דחיית הרישום, וכשאין מול מה לבדוק היא
+                ניטרלית. הבחנה זו היא מה שמונע ממנה להפוך לרעש שסוגרים בלי לקרוא. */}
+            {addGate && (
+              <ManualAddGate
+                hasOptions={fullTree.some(n => n.parent_id === addGate.id)}
+                generation={addGate.generation + 1}
+                onCancel={() => setAddGate(null)}
+                onConfirm={() => { setFixGen({ node: addGate, action: 'insert' }); setAddGate(null) }}
+              />
+            )}
+
             <p className="mt-2.5 text-[11px] leading-relaxed text-indigo-500">
               נפלה טעות בסדר? לחצו על <strong>החלף דור</strong> ובחרו את השם הנכון מהעץ, או על <strong>+ דור חסר</strong> אם חסר דור באמצע. לאחר התיקון יועבר לאישור המזכירות.
             </p>
