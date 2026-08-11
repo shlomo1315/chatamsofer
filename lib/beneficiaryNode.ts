@@ -107,6 +107,23 @@ export async function ensureBeneficiaryNode(
     return { ok: true, nodeId: parent.id as string, created: false, adopted: false, claimed: false }
   }
 
+  // 🔴 שרשרת הייחוס נטענת כאן אם הקורא לא הביא אותה.
+  //
+  // ⚠️ זו אינה נוחות אלא הגנה. nodeIsSelf נשען על השרשרת כסימן השני, והסימן
+  // הזה היה מת בייצור חודשים: הרישום הציבורי שלף את הנרשם בלי העמודה, ולכן
+  // הבדיקה השוותה תמיד מול מחרוזת ריקה ונכשלה. הטסט עבר, כי הוא בונה את
+  // האובייקט עם השדה — בדיוק הפער שבין בדיקה לקורא אמיתי.
+  //
+  // ההבחנה קריטית: undefined = הקורא לא טען את העמודה, ולכן טוענים אותה כאן.
+  // null או [] = נטענה ובאמת ריקה, ואין מה לחפש.
+  let chain = ben.lineage_chain
+  if (chain === undefined) {
+    const { data: withChain } = await db.from('beneficiaries')
+      .select('lineage_chain').eq('id', ben.id).maybeSingle()
+    chain = (withChain as { lineage_chain?: unknown } | null)?.lineage_chain ?? null
+  }
+  const benWithChain: BeneficiaryForNode = { ...ben, lineage_chain: chain }
+
   // 🔴 1b) הצומת הוא שלו לפי *שם*, גם בלי ת"ז.
   //
   // זה המצב של רוב הנרשמים: הרישום יצר להם צומת (הם נכללים ב-lineage_new_nodes)
@@ -115,7 +132,7 @@ export async function ensureBeneficiaryNode(
   // כפילויות, בדיוק ההיפך ממה שההשלמה נועדה לעשות.
   //
   // מסמנים את הת"ז על הצומת הקיים, כך שמכאן ואילך הבעלות מזוהה מיד.
-  if (nodeIsSelf(ben, String((parent as { name?: string }).name ?? ''))) {
+  if (nodeIsSelf(benWithChain, String((parent as { name?: string }).name ?? ''))) {
     if (myId && !cleanId((parent as { id_number?: string | null }).id_number)) {
       await db.from('lineage_nodes').update({ id_number: myId }).eq('id', parent.id)
     }

@@ -549,8 +549,13 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // ⚠️ אינו תלוי באישור: הצומת נוצר בסטטוס 'pending', כמו כל צומת שממתין
   // לאימות. האישור נשאר החלטה של הצוות.
   try {
+    // 🔴 lineage_chain חייב להיכלל. הוא הסימן השני ב-nodeIsSelf — "הנרשם סימן
+    // 'זה אני' על צומת קיים שנוסח אחרת" — וזו ההגנה היחידה כשהניסוח בעץ שונה
+    // מהשם המחושב (אות אחת בשם האישה מספיקה). בלי השדה הבדיקה נופלת תמיד על
+    // מחרוזת ריקה, המערכת מסיקה "אינו בעץ", ונוצר לנרשם עותק שני *כילד של
+    // עצמו* — דור אחרון מיותר בכל כרטסת.
     const { data: fresh } = await admin.from('beneficiaries')
-      .select('id, id_number, full_name, spouse_name, family_name, gender, lineage_node_id')
+      .select('id, id_number, full_name, spouse_name, family_name, gender, lineage_node_id, lineage_chain')
       .eq('id_number', cleanId).maybeSingle()
     if (fresh) {
       const { ensureBeneficiaryNode } = await import('@/lib/beneficiaryNode')

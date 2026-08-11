@@ -60,18 +60,29 @@ function fakeDb(nodes: Node[], bens: Ben[]) {
         }
         return api
       }
-      // beneficiaries
-      return {
-        update(patch: Record<string, unknown>) {
-          return {
-            eq(col: string, val: unknown) {
-              for (const b of bens) {
-                if ((b as unknown as Record<string, unknown>)[col] === val) Object.assign(b, patch)
-              }
-              return Promise.resolve({ error: null })
-            },
-          }
-        },
+      // beneficiaries — select נדרש כדי שהפונקציה תוכל להשלים בעצמה את
+      // lineage_chain כשהקורא לא הביא אותו.
+      {
+        const filters: { col: string; val: unknown }[] = []
+        const api: Record<string, unknown> = {
+          select() { return api },
+          eq(col: string, val: unknown) { filters.push({ col, val }); return api },
+          maybeSingle() {
+            const hit = bens.find(b => filters.every(f => (b as unknown as Record<string, unknown>)[f.col] === f.val))
+            return Promise.resolve({ data: hit ?? null, error: null })
+          },
+          update(patch: Record<string, unknown>) {
+            return {
+              eq(col: string, val: unknown) {
+                for (const b of bens) {
+                  if ((b as unknown as Record<string, unknown>)[col] === val) Object.assign(b, patch)
+                }
+                return Promise.resolve({ error: null })
+              },
+            }
+          },
+        }
+        return api
       }
     },
   }
@@ -252,5 +263,77 @@ describe('🔴 ensureBeneficiaryNode — הצומת שלו קיים בלי ת"ז
     await ensureBeneficiaryNode(db, bens[0])
 
     expect(nodes.length).toBe(2)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 הרגרסיה שעלתה מהשטח: "בכל כרטסת הוא מוסיף עוד דור אחרון".
+//
+// nodeIsSelf נכתב עם שני סימנים, והשני — שרשרת הייחוס — הוא היחיד שתופס מצב
+// שבו הניסוח בעץ שונה מהשם המחושב. הוא נבדק ועבר, אבל בייצור הוא היה מת:
+// הרישום הציבורי שלף את הנרשם *בלי* העמודה lineage_chain, ולכן ההשוואה נעשתה
+// תמיד מול מחרוזת ריקה. אות אחת שונה בשם האישה הספיקה כדי שהמערכת תסיק
+// "אינו בעץ" ותיצור לנרשם עותק שני כילד של עצמו.
+//
+// הבדיקות כאן נועלות את הפער בין מה שהפונקציה מקבלת לבין מה שקורא אמיתי
+// מעביר — ולכן הן קוראות לה *בלי* השדה, כפי שהייצור עשה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('🔴 דור אחרון כפול — הקורא לא הביא את שרשרת הייחוס', () => {
+  const selfNode: Node = {
+    id: 'self-node', name: 'רבי שלמה ומרת חנה רחל עקשטיין',
+    parent_id: 'gramps', generation: 7, status: 'verified', id_number: null,
+  }
+  // הניסוח בעץ נכתב "חנה רחל"; בכרטסת נשמר "מנה רחל". אות אחת.
+  const registrant = (over: Partial<Ben> = {}): Ben => ({
+    id: 'b9', id_number: '203207923', full_name: 'שלמה', spouse_name: 'מנה רחל',
+    family_name: 'עקשטיין', gender: 'male', lineage_node_id: 'self-node', ...over,
+  })
+
+  it('השם המחושב באמת שונה מהניסוח בעץ — זה מה שמפיל את הסימן הראשון', () => {
+    expect(beneficiaryNodeName(registrant())).toBe('רבי שלמה ומרת מנה רחל עקשטיין')
+    expect(beneficiaryNodeName(registrant())).not.toBe(selfNode.name)
+  })
+
+  it('הקורא לא הביא lineage_chain — הפונקציה משלימה אותו ואינה יוצרת דור מיותר', async () => {
+    const nodes = [{ ...selfNode }]
+    // כך נראתה השורה בייצור: השדה קיים במסד, אבל ה-select לא כלל אותו.
+    const stored = registrant({ lineage_chain: [
+      { generation: 6, name: 'רבי פסח ומרת טובה גיננדל לוי' },
+      { generation: 7, name: 'רבי שלמה ומרת חנה רחל עקשטיין' },
+    ] })
+    const bens = [stored]
+    const db = fakeDb(nodes, bens)
+
+    // ⚠️ מועבר בלי lineage_chain — בדיוק כמו ה-select של הרישום הציבורי.
+    const { lineage_chain, ...withoutChain } = stored
+    void lineage_chain
+    const res = await ensureBeneficiaryNode(db, withoutChain as Ben)
+
+    expect(res).toMatchObject({ ok: true, created: false, claimed: true, nodeId: 'self-node' })
+    expect(nodes.length).toBe(1)                  // 🔴 לא נוצר דור 8
+    expect(nodes[0].id_number).toBe('203207923')  // הת"ז נרשמה על הצומת הקיים
+  })
+
+  it('שרשרת שנטענה ובאמת ריקה אינה מזוהה כ"לא נטענה" — ונוצר צומת כרגיל', async () => {
+    const nodes = [{ ...selfNode }]
+    const bens = [registrant({ lineage_chain: null })]
+    const db = fakeDb(nodes, bens)
+
+    const res = await ensureBeneficiaryNode(db, bens[0])
+
+    // אין ראיה שהצומת הוא הנרשם עצמו, ולכן ההתנהגות הישנה נשמרת במלואה.
+    expect(res).toMatchObject({ ok: true, created: true })
+    expect(nodes.length).toBe(2)
+  })
+
+  it('ההשלמה אינה דורסת שרשרת שהקורא כן הביא', async () => {
+    const nodes = [{ ...selfNode }]
+    // במסד יושבת שרשרת תואמת, אבל הקורא מוסר במפורש שרשרת ריקה.
+    const bens = [registrant({ lineage_chain: [{ generation: 7, name: 'רבי שלמה ומרת חנה רחל עקשטיין' }] })]
+    const db = fakeDb(nodes, bens)
+
+    const res = await ensureBeneficiaryNode(db, { ...bens[0], lineage_chain: [] } as Ben)
+
+    expect(res).toMatchObject({ ok: true, created: true })
   })
 })
