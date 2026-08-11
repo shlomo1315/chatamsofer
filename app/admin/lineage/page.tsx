@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
@@ -368,6 +368,44 @@ const pal = (g: number) => PALETTE[g % PALETTE.length]
 
 // ─── Modal ───
 
+// בורר סגנון ההדפסה. ברמת המודול ולא בתוך העמוד: הוא נדרש גם במסך הרגיל וגם
+// במסך המלא, ושני עותקים של אותו בורר היו מתפצלים בשינוי הראשון.
+function PrintPicker({ title, count, onPick, onClose }: {
+  title: string; count: number
+  onPick: (m: PrintMode) => void
+  onClose: () => void
+}) {
+  return (
+    <div onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: '#fff', borderRadius: 18, padding: 22, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>איך להדפיס את האילן?</div>
+        <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>{title} · {count} צאצאים</div>
+        {([
+          { m: 'tree' as const, icon: '🌳', t: 'תרשים עץ מעוצב', d: 'דורות זה מתחת לזה, לרוחב הדף. קליל וברור לעין — מתאים למשפחה קטנה או בינונית.' },
+          { m: 'list' as const, icon: '📋', t: 'רשימה מוזחת', d: 'שורה לכל שם עם משבצת לסימון. נשאר קריא בכל גודל משפחה ונשפך על כמה עמודים.' },
+        ]).map(o => (
+          <button key={o.m} onClick={() => onPick(o.m)}
+            style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', textAlign: 'right', background: '#fff', border: '2px solid #E2E8F0', borderRadius: 14, padding: '13px 15px', marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#A78BFA'; e.currentTarget.style.background = '#FAF5FF' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff' }}>
+            <span style={{ fontSize: 24, lineHeight: 1 }}>{o.icon}</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{o.t}</span>
+              <span style={{ display: 'block', fontSize: 11.5, color: '#64748B', lineHeight: 1.5, marginTop: 2 }}>{o.d}</span>
+            </span>
+          </button>
+        ))}
+        <button onClick={onClose}
+          style={{ width: '100%', background: 'none', border: 'none', color: '#64748B', fontSize: 13, fontWeight: 700, padding: '8px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
+          ביטול
+        </button>
+      </div>
+    </div>
+  )
+}
+
 type ModalState =
   | { type: 'edit';   node: LineageNode }
   | { type: 'add';    parentId: string | null; parentName: string }
@@ -416,7 +454,7 @@ function RelationPicker({ value, onChange, required }: { value: 'son' | 'son_in_
 
 // ─── Tree view ───
 
-function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]> }) {
+function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearFilters, statusFilter, generationFilter, mergeMode, mergeSel, dupIds, onToggleMerge, dupFilter, onMergeGroup, onCleanChildren, onReviewToggle, reviewExcluded, onFocusNode, focusId, anchor, scanIds, locateIds, linked, fullMode = false }: { nodes: LineageNode[]; onRefresh: () => void; onStatusChange: (id: string, status: 'verified' | 'pending' | 'rejected') => void; onRelationChange: (id: string, relation: 'son' | 'son_in_law' | null) => void; onClearFilters: () => void; statusFilter: StatusFilter; generationFilter: number | null; mergeMode: boolean; mergeSel: Set<string>; dupIds: Set<string>; onToggleMerge: (id: string) => void; dupFilter: boolean; onMergeGroup: (id: string) => void; onCleanChildren: (id: string) => void; onReviewToggle?: (id: string) => boolean; reviewExcluded?: Set<string>; onFocusNode: (id: string | null) => void; focusId: string | null; anchor: { id: string; n: number } | null; scanIds: Set<string>; locateIds: Set<string>; linked: Record<string, { id: string; name: string }[]>; fullMode?: boolean }) {
   const toast = useToast()
   const router = useRouter()
   const canAdd = useCan('lineage', 'add')
@@ -864,8 +902,10 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
             'linear-gradient(170deg,#fdfbf5 0%,#f6f1e4 100%)',
           border: '1.5px solid #e6ddc8',
           boxShadow: '0 4px 32px rgba(140,110,40,0.08)',
-          height: 'calc(100vh - 260px)',
-          minHeight: 400,
+          // ⚠️ במסך המלא הגובה נקבע ע"י המעטפת (inset), ולא ע"י ניכוי קבוע
+          // מגובה החלון: הקבוע 260 מניח את סרגל הכלים והמקרא, ושם הם אינם.
+          height: fullMode ? '100%' : 'calc(100vh - 260px)',
+          minHeight: fullMode ? 0 : 400,
           cursor: 'grab',
         }}
       >
@@ -1257,12 +1297,27 @@ function TreeView({ nodes, onRefresh, onStatusChange, onRelationChange, onClearF
                       )
                     })()}
 
-                    {/* מיקוד בענף — רק לצומת שיש לו צאצאים, ורק כשאינו כבר במוקד */}
+                    {/* מיקוד בענף — רק לצומת שיש לו צאצאים, ורק כשאינו כבר במוקד.
+                        ⚠️ במסך המלא הכיתוב שונה: שם הפעולה אינה "הצג ענף" אלא
+                        *החלפת* הענף שעליו עובדים, וכיתוב זהה בשני המצבים היה
+                        מטעה — נראה כאילו הוא פותח משהו נוסף. */}
                     {pos.node.children.length > 0 && focusId !== pos.node.id && (
                       <button onClick={() => onFocusNode(pos.node.id)}
-                        title="הצג רק את הענף הזה — הצומת וכל צאצאיו, למסך עבודה נקי"
+                        title={fullMode
+                          ? 'החלף את הענף שעליו עובדים — הצומת הזה וכל צאצאיו'
+                          : 'הצג רק את הענף הזה — הצומת וכל צאצאיו, למסך עבודה נקי'}
                         style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#7C3AED', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        🌳 הצג אילן צאצאים של דור זה
+                        {fullMode ? '🎯 החלף את הענף לכאן' : '🌳 הצג אילן צאצאים של דור זה'}
+                      </button>
+                    )}
+                    {/* ⚠️ לשונית חדשה ולא ניווט במקום: המנהל עובד על ענף אחד
+                        לאורך זמן, ורוצה להשאיר את העץ המלא פתוח לצידו. פתיחה
+                        באותה לשונית הייתה מאבדת את המיקום בעץ הראשי בכל צלילה. */}
+                    {pos.node.children.length > 0 && !fullMode && (
+                      <button onClick={() => window.open(`/admin/lineage?focus=${pos.node.id}&full=1`, '_blank', 'noopener')}
+                        title="פתח את הענף במסך מלא, בלשונית נפרדת"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', justifyContent: 'center', padding: '7px 12px', borderRadius: 10, background: '#fff', color: '#5B21B6', border: '1.5px solid #DDD6FE', cursor: 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        <ExternalLink size={12} /> פתח במסך מלא בלשונית חדשה
                       </button>
                     )}
                     {/* ── סטטוס הדור — ניתן לעריכה ישירות מכאן ──
@@ -1668,6 +1723,15 @@ export default function LineagePage() {
   // ולאבד את ההקשר בכל פעם. כאן בוחרים צומת ורואים רק אותו ואת צאצאיו —
   // התמונה כולה מול העיניים, ואפשר לתקן אחד אחרי השני.
   const [focusId, setFocusId] = useState<string | null>(null)
+  // ── מסך מלא לענף אחד ──
+  // 🔴 העץ נחנק בין הכלים. סרגל הכפתורים, הבאנרים והמקרא גוזלים כ-260 פיקסלים
+  // מגובה המסך, והעטיפה של אזור הניהול מגבילה לרוחב 1536 וממרכזת. כשעובדים על
+  // ענף עמוק זה בדיוק מה שחסר: כל דור שנחתך למטה מחייב גלילה, ובגלילה מאבדים
+  // את ההקשר של מי מתחת למי.
+  //
+  // כאן הענף נפרש על כל השטח שבין התפריט לכותרת. התפריט והכותרת נשארים
+  // בכוונה — צריך להישאר אפשר לנווט משם, וזה גם מה שהמנהל ביקש.
+  const [fullScreen, setFullScreen] = useState(false)
   // צומת ששיתופו נערך כרגע (חלונית ניהול השיתוף)
   const [shareNode, setShareNode] = useState<{ id: string; name: string } | null>(null)
   // מרכז השליטה המרכזי בכל הרשאות השיתוף (טבלת כל הקישורים)
@@ -1993,14 +2057,59 @@ export default function LineagePage() {
   useEffect(() => {
     if (didFocusParam.current || !nodes.length) return
     didFocusParam.current = true
-    const target = new URLSearchParams(window.location.search).get('focus')
+    const qs = new URLSearchParams(window.location.search)
+    const target = qs.get('focus')
     if (!target || !nodes.some(n => n.id === target)) return
+    // full=1 — נפתח מ"פתח ענף בלשונית חדשה". נקרא כאן ולא בנפרד, כדי שהמסך
+    // המלא ייפתח *יחד* עם המיקוד ולא ירצד בין שני מצבים.
+    const wantFull = qs.get('full') === '1'
     const t = setTimeout(() => {
       setFocusId(target)
+      if (wantFull) setFullScreen(true)
       setAnchor(a => ({ id: target, n: (a?.n ?? 0) + 1 }))
     }, 0)
     return () => clearTimeout(t)
   }, [nodes])
+
+  // ⚠️ הכתובת מתעדכנת בכל החלפת ענף — replaceState ולא push, כדי שכפתור
+  // "אחורה" של הדפדפן לא יהפוך לרשימת כל הענפים שביקרו בהם. רענון נשאר
+  // באותו ענף, ואפשר לשמור סימנייה או לשלוח קישור לענף מסוים.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const qs = new URLSearchParams(window.location.search)
+    if (focusId) qs.set('focus', focusId); else qs.delete('focus')
+    if (fullScreen) qs.set('full', '1'); else qs.delete('full')
+    const next = qs.toString()
+    const url = `${window.location.pathname}${next ? `?${next}` : ''}`
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', url)
+    }
+  }, [focusId, fullScreen])
+
+  // ⚠️ יציאה ממסך מלא ב-Esc: המסך מכסה את רוב החלון, וכפתור יציאה יחיד בפינה
+  // הוא מלכודת כשגוללים רחוק לתוך הענף.
+  useEffect(() => {
+    if (!fullScreen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullScreen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fullScreen])
+
+  // שרשרת האבות של הענף שבמוקד — לשביל הניווט במסך המלא.
+  // בלעדיו, אחרי שלוש צלילות אין שום דרך לדעת איפה אתה בעץ.
+  const focusTrail = useMemo(() => {
+    if (!focusId) return [] as LineageNode[]
+    const byId = new Map(nodes.map(n => [n.id, n]))
+    const out: LineageNode[] = []
+    const seen = new Set<string>()
+    let cur = byId.get(focusId)
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      out.unshift(cur)
+      cur = cur.parent_id ? byId.get(cur.parent_id) : undefined
+    }
+    return out
+  }, [nodes, focusId])
 
   const maxGen = nodes.length ? Math.max(...nodes.map(n => n.generation)) : 0
   const genCounts = useMemo(() => {
@@ -2042,6 +2151,82 @@ export default function LineagePage() {
       await softRefresh(); close()
     } catch { setSaveErr('שגיאה') }
     setSaving(false)
+  }
+
+  // ── מסך מלא לענף אחד ──
+  // ⚠️ שכבה קבועה ולא שינוי של פריסת אזור הניהול: העטיפה מוסיפה ריפוד, מגבילה
+  // ל-1536 וממרכזת, ואין בה שום דרך לוותר על זה לעמוד יחיד. שכבה שמתחילה מתחת
+  // לכותרת (60px) ולצד התפריט (224px בדסקטופ) משיגה את אותה תוצאה בלי לגעת
+  // בפריסה של אף מסך אחר — ובלי להסתיר את התפריט והכותרת, שהמנהל ביקש להשאיר.
+  if (fullScreen && focusNode) {
+    return (
+      <div className="fixed inset-0 top-[60px] lg:right-56 z-40 flex flex-col bg-white" dir="rtl">
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+        <div className="flex items-center gap-2 flex-wrap border-b border-violet-200 bg-violet-50/70 px-4 py-2">
+          <span className="text-base">🌳</span>
+          {/* שביל הניווט — בלי זה, אחרי שלוש צלילות אין דרך לדעת איפה אתה
+              בעץ, וצריך לצאת ולהתחיל מחדש. כל דור לחיץ וקופץ אליו. */}
+          <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1 text-[11px]">
+            {focusTrail.map((n, i) => (
+              <span key={n.id} className="flex items-center gap-1">
+                {i > 0 && <ChevronLeft size={11} className="text-violet-300 shrink-0" />}
+                {i === focusTrail.length - 1 ? (
+                  <strong className="text-violet-900 text-[13px]">{n.name}</strong>
+                ) : (
+                  <button onClick={() => { setFocusId(n.id); setAnchor(a => ({ id: n.id, n: (a?.n ?? 0) + 1 })) }}
+                    title={`חזרה לענף של ${n.name}`}
+                    className="max-w-[160px] truncate rounded px-1 text-violet-600 hover:bg-violet-100 hover:text-violet-900">
+                    {n.name}
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+          <span className="text-[11px] font-bold text-violet-700 whitespace-nowrap">
+            דור {focusNode.generation} · {(visibleNodes.length - 1).toLocaleString('he-IL')} צאצאים
+          </span>
+          <button onClick={() => setPrintPick(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-800 hover:bg-violet-50">
+            <Printer size={13} /> הדפסה
+          </button>
+          {canEdit && (
+            <button onClick={() => setShareNode({ id: focusNode.id, name: focusNode.name })}
+              className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50">
+              <Link2 size={13} /> שתף ענף
+            </button>
+          )}
+          <button onClick={() => setFullScreen(false)} title="יציאה ממסך מלא (Esc)"
+            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700">
+            <X size={13} /> צא ממסך מלא
+          </button>
+        </div>
+
+        <p className="border-b border-slate-100 bg-white px-4 py-1 text-[10px] text-slate-400">
+          ריחוף על דור מציג <strong>&quot;החלף את הענף לכאן&quot;</strong> — מעבר לתת-ענף בלי לצאת מהמסך. Esc יוצא.
+        </p>
+
+        <div className="flex-1 min-h-0 p-2">
+          <TreeView key={`full-${focusId}`} nodes={visibleNodes} fullMode onRefresh={softRefresh}
+            onStatusChange={(id, status) => setNodes(prev => prev.map(n => n.id === id ? { ...n, status } : n))}
+            onRelationChange={(id, relation) => setNodes(prev => prev.map(n => n.id === id ? { ...n, relation } : n))}
+            onClearFilters={() => { setStatusFilter(null); setGenerationFilter(null); setDupFilter(false) }}
+            statusFilter={statusFilter} generationFilter={generationFilter}
+            mergeMode={mergeMode} mergeSel={mergeSel} dupIds={dupIds} onToggleMerge={toggleMerge}
+            dupFilter={dupFilter} onMergeGroup={quickMergeGroup} onCleanChildren={setCleanParentId}
+            onFocusNode={(id) => { setFocusId(id); if (id) setAnchor(a => ({ id, n: (a?.n ?? 0) + 1 })) }}
+            focusId={focusId} anchor={anchor} scanIds={scanIds} locateIds={locateIds} linked={linked} />
+        </div>
+
+        {printPick && (
+          <PrintPicker title={focusNode.name} count={visibleNodes.length - 1}
+            onPick={printFocus} onClose={() => setPrintPick(false)} />
+        )}
+        {shareNode && (
+          <ShareBranchModal nodeId={shareNode.id} nodeName={shareNode.name} onClose={() => setShareNode(null)} />
+        )}
+      </div>
+    )
   }
 
   return (
@@ -2298,35 +2483,8 @@ export default function LineagePage() {
 
       {/* ── בחירת סגנון הדפסה ── */}
       {printPick && focusNode && (
-        <div onClick={() => setPrintPick(false)}
-          style={{ position: 'fixed', inset: 0, zIndex: 95, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: '#fff', borderRadius: 18, padding: 22, width: '100%', maxWidth: 460, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 4 }}>איך להדפיס את האילן?</div>
-            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>
-              {focusNode.name} · {visibleNodes.length - 1} צאצאים
-            </div>
-            {([
-              { m: 'tree' as const, icon: '🌳', t: 'תרשים עץ מעוצב', d: 'דורות זה מתחת לזה, לרוחב הדף. קליל וברור לעין — מתאים למשפחה קטנה או בינונית.' },
-              { m: 'list' as const, icon: '📋', t: 'רשימה מוזחת', d: 'שורה לכל שם עם משבצת לסימון. נשאר קריא בכל גודל משפחה ונשפך על כמה עמודים.' },
-            ]).map(o => (
-              <button key={o.m} onClick={() => printFocus(o.m)}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', textAlign: 'right', background: '#fff', border: '2px solid #E2E8F0', borderRadius: 14, padding: '13px 15px', marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#A78BFA'; e.currentTarget.style.background = '#FAF5FF' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.background = '#fff' }}>
-                <span style={{ fontSize: 24, lineHeight: 1 }}>{o.icon}</span>
-                <span style={{ flex: 1 }}>
-                  <span style={{ display: 'block', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>{o.t}</span>
-                  <span style={{ display: 'block', fontSize: 11.5, color: '#64748B', lineHeight: 1.5, marginTop: 2 }}>{o.d}</span>
-                </span>
-              </button>
-            ))}
-            <button onClick={() => setPrintPick(false)}
-              style={{ width: '100%', background: 'none', border: 'none', color: '#64748B', fontSize: 13, fontWeight: 700, padding: '8px 0', cursor: 'pointer', fontFamily: 'inherit' }}>
-              ביטול
-            </button>
-          </div>
-        </div>
+        <PrintPicker title={focusNode.name} count={visibleNodes.length - 1}
+          onPick={printFocus} onClose={() => setPrintPick(false)} />
       )}
 
       {/* generation legend — clickable filters */}
