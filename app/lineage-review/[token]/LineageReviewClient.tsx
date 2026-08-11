@@ -148,6 +148,24 @@ export default function LineageReviewClient({ token }: { token: string }) {
     finally { setBusy(null) }
   }
 
+  // 🔴 "זה אני" — הנמען מסמן שהצומת הוא הוא עצמו.
+  //
+  // נשלח כהערה מפורשת ולא כפעולה על העץ: שיוך כרטסת לצומת הוא החלטה עם
+  // השלכות (כל הדורות שמעליו הופכים לייחוס שלו), ואין דרך לאמת מקישור ציבורי
+  // שהאדם שלחץ הוא באמת אותו אדם. המזכירות מאשרת.
+  const markSelf = async (n: Node) => {
+    if (!confirm(`לסמן ש"${n.name}" הוא אתם?\n\nההודעה תישלח למזכירות לאישור, ואחריו הכרטסת שלכם תשויך לרשומה הזאת.`)) return
+    await suggest({ kind: 'note', nodeId: n.id, text: `הנמען מסמן שהוא עצמו הצומת "${n.name}" (דור ${n.generation}) — יש לשייך את כרטסתו לרשומה זו.` })
+  }
+
+  // הסרת דור מהשרשרת — הצעה, לא מחיקה.
+  const askRemove = async (n: Node) => {
+    if (!confirm(`להודיע שהדור "${n.name}" אינו שייך לשרשרת שלכם?\n\nההודעה תישלח למזכירות. הדור לא יימחק מהעץ עד שייבדק.`)) return
+    if (await suggest({ kind: 'note', nodeId: n.id, text: `הנמען מדווח שהדור "${n.name}" (דור ${n.generation}) אינו שייך לשרשרת הייחוס שלו ויש להסירו ממנה.` })) {
+      setSentGens(s => new Set(s).add(n.id))
+    }
+  }
+
   const act = async (nodeId: string, action: 'verify' | 'reject' | 'rename', name?: string) => {
     setBusy(nodeId); setError('')
     try {
@@ -251,6 +269,32 @@ export default function LineageReviewClient({ token }: { token: string }) {
                           className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
                           + דור חסר
                         </button>
+                        {/* 🔴 "זה אני" — כמו ברישום.
+                            הנמען מזהה את עצמו בשרשרת, ואם המערכת סימנה את הדור
+                            הלא נכון כ"זה אתם" אין לו שום דרך לתקן. בלי זה הוא
+                            נאלץ להסביר את זה במייל חוזר, ובינתיים הכרטסת שלו
+                            מחוברת לצומת של אביו או של בנו.
+                            ⚠️ מדור 5 ומעלה בלבד: אין אדם חי שהוא עצמו דור 2/3/4
+                            לחתם סופר, וסימון שם הוא תמיד טעות שקוטעת את השרשרת
+                            באמצע ומשייכת אותו לאב-קדמון. */}
+                        {g.generation >= 5 && g.id !== selfNodeId && (
+                          <button onClick={() => { void markSelf(g) }} disabled={busy === g.id}
+                            title="זהו שמי — שייכו אותי לרשומה הזאת"
+                            className="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-2 py-1 text-[11px] font-bold text-green-700 hover:bg-green-600 hover:text-white disabled:opacity-50">
+                            <UserPlus size={11} /> זה אני
+                          </button>
+                        )}
+                        {/* מחיקה — רק לדור שהנמען עצמו הוסיף ועדיין ממתין לאישור.
+                            ⚠️ דור מאושר אינו נמחק מכאן: הוא עשוי לשאת תחתיו ענפים
+                            של משפחות אחרות, ומחיקה מקישור ציבורי הייתה מוחקת גם
+                            אותם. גם זו הצעה שעוברת לאישור המזכירות. */}
+                        {g.status !== 'verified' && g.generation > 1 && (
+                          <button onClick={() => { void askRemove(g) }} disabled={busy === g.id}
+                            title="דור זה אינו שייך לשרשרת שלי"
+                            className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50">
+                            הסר דור
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
