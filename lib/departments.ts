@@ -56,7 +56,18 @@ export const BRAND_NAME = 'היכל החתם סופר'
 
 // אפשרויות שליחה לפי מחלקה: המייל נשלח מכתובת המחלקה (fromEmail),
 // תשובות חוזרות לאותה כתובת, ושם התצוגה כולל את שם המחלקה.
-export function mailFor(key: DepartmentKey): { fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey } {
+export function mailFor(key: DepartmentKey, labelOverride?: string): { fromEmail: string; replyTo: string; fromName: string; department: DepartmentKey } {
   const dep = DEPARTMENTS[key] ?? DEPARTMENTS.main
-  return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${dep.label}`, department: dep.key }
+  // ⚠️ labelOverride — כשהפנייה אינה בשם המחלקה אלא בשם *הנושא*.
+  //
+  // מיילים על סדר היוחסין יצאו בשם "עזר יולדות", כי הם נשלחו מהתיבה שממנה
+  // נשלחו גם מכתבי היולדות. הנמען קיבל בקשה לאשר את שרשרת הדורות שלו ממחלקה
+  // שאין לה שום קשר לנושא, והתשובות שלו נחתו בתיבה הלא נכונה.
+  //
+  // התיבה נשארת ככתובת השולח והמענה — היא זו שמנוטרת — ורק שם התצוגה מספר
+  // לנמען על מה מדובר.
+  return { fromEmail: dep.email, replyTo: dep.email, fromName: `${BRAND_NAME} · ${labelOverride ?? dep.label}`, department: dep.key }
 }
+
+/** שם התצוגה לפניות על סדר היוחסין — הנושא ולא המחלקה. */
+export const LINEAGE_MAIL_LABEL = 'תיקוני יוחסין'
