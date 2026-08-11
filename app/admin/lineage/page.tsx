@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, Ghost } from 'lucide-react'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, Ghost, GitMerge } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
@@ -12,6 +12,7 @@ import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal
 import SuggestionsInbox from './SuggestionsInbox'
 import CleanChildrenPanel from './CleanChildrenPanel'
 import GhostChildrenPanel from './GhostChildrenPanel'
+import SelfDuplicatesPanel from './SelfDuplicatesPanel'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { buildForest } from '@/lib/lineageForest'
@@ -1778,6 +1779,8 @@ export default function LineagePage() {
   const [showUnlinked, setShowUnlinked] = useState(false)
   // צמתי רפאים — אלה שנוצרו משדה הילדים של כרטסת ולא מאדם שנרשם
   const [showGhosts, setShowGhosts] = useState(false)
+  // דור אחרון כפול — נרשם שנתלה כילד של עצמו
+  const [showSelfDups, setShowSelfDups] = useState(false)
   // צומת → המשפחות המקושרות אליו, לקפיצה ישירה מהעץ לכרטסת
   const [linked, setLinked] = useState<Record<string, { id: string; name: string }[]>>({})
   // ⚠️ תוצאות הסריקה מסומנות על העץ עצמו. רשימה בפאנל אומרת *כמה* יש, אבל לא
@@ -2362,6 +2365,13 @@ export default function LineagePage() {
             style={{ background: showGhosts ? '#475569' : '#fff', color: showGhosts ? '#fff' : '#334155', border: '1px solid #CBD5E1' }}>
             <Ghost size={14} /> {showGhosts ? 'סגור צמתי רפאים' : 'צמתי רפאים'}
           </button>
+          {/* דור אחרון כפול — נרשם שנתלה כילד של עצמו. שלא כמו צמתי הרפאים,
+              כאן יש תיקון בפועל, ולכן הוא עובר דרך אישור שמפרט מה יקרה. */}
+          <button onClick={() => setShowSelfDups(s => !s)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: showSelfDups ? '#A21CAF' : '#fff', color: showSelfDups ? '#fff' : '#86198F', border: '1px solid #F5D0FE' }}>
+            <GitMerge size={14} /> {showSelfDups ? 'סגור דור כפול' : 'דור אחרון כפול'}
+          </button>
           <button onClick={() => (mergeMode ? exitMerge() : enterMerge())}
             className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
             style={{ background: mergeMode ? '#9333EA' : '#fff', color: mergeMode ? '#fff' : '#7C2D92', border: '1px solid #E9D5FF' }}>
@@ -2401,6 +2411,18 @@ export default function LineagePage() {
             setView('tree')
             handleLocate([id])
           }}
+        />
+      )}
+
+      {showSelfDups && (
+        <SelfDuplicatesPanel
+          onLocate={(id) => {
+            setShowSelfDups(false)
+            setView('tree')
+            handleLocate([id])
+          }}
+          // התיקון מוחק צמתים ומזיז כרטסות — העץ שעל המסך התיישן.
+          onFixed={() => { void softRefresh() }}
         />
       )}
 
