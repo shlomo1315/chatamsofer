@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import DuplicatesPanel from './DuplicatesPanel'
 import TreeHealthPanel from './TreeHealthPanel'
 import SafeMergePanel from './SafeMergePanel'
+import MergeCenterPanel from './MergeCenterPanel'
 import UnlinkedPanel from './UnlinkedPanel'
 import MergePlanModal, { type PlanResp as MergePlanResp } from './MergePlanModal'
 import SuggestionsInbox from './SuggestionsInbox'
@@ -1776,6 +1777,7 @@ export default function LineagePage() {
   const [showDups, setShowDups] = useState(false)
   const [showHealth, setShowHealth] = useState(false)
   const [showSafeMerge, setShowSafeMerge] = useState(false)
+  const [showMergeCenter, setShowMergeCenter] = useState(false)
   const [showUnlinked, setShowUnlinked] = useState(false)
   // צמתי רפאים — אלה שנוצרו משדה הילדים של כרטסת ולא מאדם שנרשם
   const [showGhosts, setShowGhosts] = useState(false)
@@ -2351,6 +2353,16 @@ export default function LineagePage() {
             style={{ background: showSafeMerge ? '#059669' : '#fff', color: showSafeMerge ? '#fff' : '#047857', border: '1px solid #A7F3D0' }}>
             <ShieldCheck size={14} /> {showSafeMerge ? 'סגור מיזוג בטוח' : 'מיזוג בטוח'}
           </button>
+          {/* תור הכפילויות — אשכולות שם זהה *בלי* דרישת אב משותף, ולכן הוא
+              רואה בדיוק את הכפילות שהמיזוג הבטוח מפספס: אותו סב שנרשם מחדש
+              תחת כל אחד מנכדיו, ולכן יושב תחת אבות שונים.
+              ⚠️ שם נפרד מ"מרכז המיזוגים" שלצידו (DuplicatesPanel) בכוונה —
+              שני כפתורים באותו שם היו בלתי ניתנים להבחנה בשורת הכלים. */}
+          <button onClick={() => setShowMergeCenter(true)}
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+            style={{ background: '#fff', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+            <GitMerge size={14} /> תור הכפילויות
+          </button>
           {/* נרשמים ללא שיוך לעץ — הקבוצה שההשלמה האוטומטית אינה יכולה לגעת בה,
               ולכן היא לא נסגרת מעצמה ודורשת מסך משלה. */}
           <button onClick={() => setShowUnlinked(s => !s)}
@@ -2399,6 +2411,12 @@ export default function LineagePage() {
       {canEdit && <SuggestionsInbox onApplied={() => { void softRefresh() }} />}
 
       {showSafeMerge && <SafeMergePanel onDone={() => { void softRefresh() }} />}
+      {showMergeCenter && (
+        <MergeCenterPanel
+          onClose={() => setShowMergeCenter(false)}
+          onDone={() => { void softRefresh() }}
+        />
+      )}
 
       {showUnlinked && <UnlinkedPanel onDone={() => { void softRefresh() }} />}
 
