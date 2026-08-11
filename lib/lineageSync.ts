@@ -21,6 +21,13 @@ export interface TreeNodeRow {
   generation: number
   status: string
   relation?: string | null
+  /**
+   * ת"ז הבעלים של הצומת, כפי ש-ensureBeneficiaryNode מסמן אותה.
+   *
+   * ⚠️ נדרשת כדי לזהות *מבנית* שצומת הוא הנרשם עצמו. זיהוי לפי שם נשבר על
+   * הבדל של אות אחת בין הניסוח בעץ לבין הכרטסת, וזה בדיוק מה שקרה בשטח.
+   */
+  id_number?: string | null
 }
 
 export interface ChainEntry {
@@ -29,7 +36,7 @@ export interface ChainEntry {
   relation: string | null
 }
 
-export const NODE_SELECT = 'id, name, parent_id, generation, status, relation'
+export const NODE_SELECT = 'id, name, parent_id, generation, status, relation, id_number'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // גרסת המטמון של עץ הדורות. כרטסת הלידה (app/admin/maternity/[id]/page.tsx)
