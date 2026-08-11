@@ -84,17 +84,39 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
       'הפעולה רצה במנות ומציגה התקדמות, וניתנת לביטול במלואה.',
     )) return
 
-    setRunning(true); setErr(''); setProgress(null)
+    setRunning(true); setErr('')
+    // ⚠️ מונה מיד עם הלחיצה, ולא רק אחרי שהמנה הראשונה חוזרת. קודם הוא נדלק
+    // רק בסוף המנה, ולכן בדקה הראשונה המסך נראה בדיוק כמו תקוע — וזו הייתה
+    // כל הסיבה שההרצה נראתה מתה בזמן שהיא עבדה.
+    setProgress(`מנה 1 · ממזג…`)
     const batchId = crypto.randomUUID()
     const tot = { merged: 0, removed: 0, children: 0, families: 0, failed: 0 }
     const failures: Failure[] = []
+    let lastErr: string | null = null
+    let strikes = 0
     try {
-      // ⚠️ תקרת סבבים: הגנה מפני לולאה שאינה מתקדמת (למשל כשכל הקבוצות
-      // הנותרות נכשלות). 40 × 150 מכסה בנוחות כל סריקה סבירה.
-      for (let round = 0; round < 40; round++) {
-        const res = await fetch(`/api/admin/lineage/safe-merge?limit=100&batch=${batchId}`, { method: 'POST' })
-        const d = await readJson(res)
-        if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
+      // ⚠️ תקרת סבבים: הגנה מפני לולאה שאינה מתקדמת. 80 × 25 מכסה בנוחות
+      // כל סריקה סבירה.
+      for (let round = 0; round < 80; round++) {
+        setProgress(`מנה ${round + 1} · מוזגו ${he(tot.merged)}${lastErr ? ' · מנסה שוב' : ''}`)
+        let d: { merged: number; removed: number; children?: number; families?: number
+          failed?: number; failures?: Failure[]; remaining: number; error?: string }
+        try {
+          const res = await fetch(`/api/admin/lineage/safe-merge?limit=25&batch=${batchId}`, { method: 'POST' })
+          d = await readJson(res)
+          if (!res.ok) throw new Error(d.error || 'שגיאה במיזוג')
+        } catch (e) {
+          // 🔴 מנה שנקטעה אינה מפילה את ההרצה.
+          //
+          // מנה שחורגת מהזמן מחזירה 499, אבל השרת ממשיך וכותב את מה שהספיק —
+          // כל מיזוג נשמר בפני עצמו. ביטול כל ההרצה בנקודה הזאת זרק גם את מה
+          // שכן בוצע, והמנהל נשאר עם "0 מוזגו" בזמן שהמסד התקדם. המנה הבאה
+          // סורקת מחדש וממשיכה מהמצב האמיתי.
+          lastErr = e instanceof Error ? e.message : 'שגיאה'
+          if (++strikes >= 3) throw new Error(lastErr)
+          continue
+        }
+        strikes = 0; lastErr = null
         tot.merged += d.merged; tot.removed += d.removed
         tot.children += d.children ?? 0; tot.families += d.families ?? 0
         tot.failed += d.failed ?? 0

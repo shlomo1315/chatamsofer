@@ -36,10 +36,21 @@ function getAdminClient() {
   return createClient(url, key)
 }
 
-async function loadTree(admin: NonNullable<ReturnType<typeof getAdminClient>>) {
+// ⚠️ withBeneficiaries: ספירת המשפחות דרושה רק לתצוגה המקדימה. ב-POST היא
+// הוסיפה שבעה סבבי רשת לכל מנה — בלי להשפיע על המיזוג עצמו — וכל שנייה שם
+// נחסכת ממש מהתקרה שהפילה את הבקשה.
+async function loadTree(
+  admin: NonNullable<ReturnType<typeof getAdminClient>>,
+  opts: { withBeneficiaries?: boolean } = {},
+) {
+  const empty = {
+    groups: [] as ReturnType<typeof findSafeMergeGroups>,
+    childCount: new Map<string, number>(), nameById: new Map<string, string>(),
+    benCount: new Map<string, number>(), rootId: null as string | null,
+  }
   const nodes = await fetchAllRows<Row>((from, to) =>
     admin.from('lineage_nodes').select('id, name, parent_id, generation, status').range(from, to))
-  if (nodes.error) return { error: nodes.error, groups: [], childCount: new Map<string, number>(), nameById: new Map<string, string>(), benCount: new Map<string, number>(), rootId: null }
+  if (nodes.error) return { error: nodes.error, ...empty }
 
   const childCount = new Map<string, number>()
   for (const n of nodes.rows) {
@@ -47,11 +58,13 @@ async function loadTree(admin: NonNullable<ReturnType<typeof getAdminClient>>) {
   }
   const nameById = new Map(nodes.rows.map(n => [n.id, n.name]))
 
-  const bens = await fetchAllRows<{ lineage_node_id: string | null }>((from, to) =>
-    admin.from('beneficiaries').select('lineage_node_id').not('lineage_node_id', 'is', null).range(from, to))
   const benCount = new Map<string, number>()
-  for (const b of bens.rows) {
-    if (b.lineage_node_id) benCount.set(b.lineage_node_id, (benCount.get(b.lineage_node_id) ?? 0) + 1)
+  if (opts.withBeneficiaries) {
+    const bens = await fetchAllRows<{ lineage_node_id: string | null }>((from, to) =>
+      admin.from('beneficiaries').select('lineage_node_id').not('lineage_node_id', 'is', null).range(from, to))
+    for (const b of bens.rows) {
+      if (b.lineage_node_id) benCount.set(b.lineage_node_id, (benCount.get(b.lineage_node_id) ?? 0) + 1)
+    }
   }
 
   const rootId = nodes.rows.find(n => !n.parent_id)?.id ?? null
@@ -63,7 +76,7 @@ export async function GET() {
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'חיבור Supabase לא מוגדר' }, { status: 500 })
 
-  const { error, groups, childCount, nameById, benCount } = await loadTree(admin)
+  const { error, groups, childCount, nameById, benCount } = await loadTree(admin, { withBeneficiaries: true })
   if (error) return NextResponse.json({ error }, { status: 500 })
 
   const sum = (ids: string[], m: Map<string, number>) => ids.reduce((t, id) => t + (m.get(id) ?? 0), 0)
@@ -130,8 +143,14 @@ export async function POST(request: NextRequest) {
   // של אלף וחצי חורגת מתקרת הזמן של הנתיב. גרוע מזה — פריסה חדשה באמצע הורגת
   // את הקונטיינר, והבקשה נקטעת בלי שום סימן במסך. מנה קטנה חוזרת תמיד בזמן,
   // והלקוח חוזר עליה עד הסוף.
+  // 🔴 25, לא 100.
+  //
+  // מנה של 100 רצה 125 שניות והחיבור נסגר עליה (499, "client has closed the
+  // request"). המדידה: ~10 שניות קבועות לטעינת העץ בתחילת המנה, ועוד כשנייה
+  // לכל מיזוג — חמש פניות ל-Supabase בכל אחד, בהשהיה של מאתיים מילישניות.
+  // מנה קטנה חוזרת בפחות מחצי דקה, והלולאה בלקוח סוגרת את הפער.
   const asked = Number(request.nextUrl.searchParams.get('limit') ?? 0)
-  const batch = Math.min(Math.max(asked || 100, 1), 500)
+  const batch = Math.min(Math.max(asked || 25, 1), 200)
 
   // ⚠️ batchId משותף לכל המנות, ומגיע מהלקוח: מיזוג הוא פעולה אחת מבחינת
   // המשתמש, וביטול צריך להחזיר את כולה. חלוקה למנות לא הייתה מצדיקה איבוד
@@ -173,20 +192,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ⚠️ ריצה אחת לכל המנה, ולא אחרי כל מיזוג. במיזוג בטוח הדורות אינם משתנים
-  // כלל, וזו הגנה מפני מקרה קצה — לא חלק מהתיקון עצמו. best-effort: כישלון
-  // כאן לא אמור להציג את המנה שכבר בוצעה כנכשלת.
-  if (rootId && (merged || failures.length)) {
+  // ⚠️ נמדד מול הקבוצות שנסרקו בתחילת המנה הזאת. מיזוג יוצר קבוצות *חדשות*
+  // דור אחד למטה (ילדים שמתאחדים תחת הורה אחד), ואלה יתגלו רק בסריקה הבאה —
+  // ולכן remaining=0 אינו מבטיח שהעץ נקי, אלא רק שהסבב הנוכחי הושלם.
+  const remaining = Math.max(0, groups.length - targets.length)
+
+  // ⚠️ רק במנה האחרונה. חישוב הדורות סורק את כל הטבלה — עשר שניות — ובמיזוג
+  // בטוח הדורות ממילא אינם משתנים (כל הקבוצה חולקת אב ודור). הרצתו בכל מנה
+  // הייתה מוסיפה עשר דקות של המתנה טהורה על פני חמישים מנות, ומחזירה את
+  // הבקשות לקצה תקרת הזמן שהפילה אותן.
+  if (rootId && remaining === 0 && merged) {
     await recalcGenerations(admin, rootId).catch(e =>
       console.error('[safe-merge] חישוב דורות נכשל:', e instanceof Error ? e.message : e))
   }
 
   invalidateLineageCache()
-
-  // ⚠️ נמדד מול הקבוצות שנסרקו בתחילת המנה הזאת. מיזוג יוצר קבוצות *חדשות*
-  // דור אחד למטה (ילדים שמתאחדים תחת הורה אחד), ואלה יתגלו רק בסריקה הבאה —
-  // ולכן remaining=0 אינו מבטיח שהעץ נקי, אלא רק שהסבב הנוכחי הושלם.
-  const remaining = Math.max(0, groups.length - targets.length)
 
   await logActivity(admin, {
     userId: staff.userId,
