@@ -128,7 +128,12 @@ export default function LineageChainChips({
     const prevChip = gens.find(g => g.generation === prevGen)
     if (!prevChip) return null
     const ids = pickerNodes
-      .filter(n => n.generation === prevGen && n.status === 'verified' && norm(n.name) === norm(prevChip.name))
+      // 🔴 לא רק 'verified'. הדרישה שהדור הקודם יהיה מאושר חסמה את הבורר כמעט
+      // בכל העץ — 359 מאושרים מול 11,817 ממתינים — והמסך הורה "תקנו קודם את
+      // הדור הקודם" גם כשהוא קיים, נכון, ופשוט טרם אושר. אישור הוא החלטה
+      // נפרדת של הצוות; לתיקון סדר הדורות די בכך שהצומת קיים.
+      // 'rejected' כן נשאר מחוץ לתמונה — הוא נדחה בהחלטה מפורשת.
+      .filter(n => n.generation === prevGen && (n.status ?? '') !== 'rejected' && norm(n.name) === norm(prevChip.name))
       .map(n => n.id)
     return ids.length ? new Set(ids) : null
   }, [pickerGen, gens, pickerNodes])
@@ -146,7 +151,10 @@ export default function LineageChainChips({
     if (pickerGen == null || prevGenUnresolved) return []
     const term = q.trim()
     return pickerNodes
-      .filter(n => n.generation === pickerGen && (n.status === 'verified' || !n.status))
+      // ⚠️ גם ממתינים מוצעים, מאותה סיבה. ההגנה האמיתית אינה הסטטוס אלא השורה
+      // שאחריה: המועמד חייב להיות *ילד של הדור הקודם בשרשרת*, ולכן אי אפשר
+      // לבחור צומת מענף זר גם אם שמו זהה.
+      .filter(n => n.generation === pickerGen && (n.status ?? '') !== 'rejected')
       .filter(n => !prevGenNodeIds || (n.parent_id != null && prevGenNodeIds.has(n.parent_id)))
       .filter(n => !term || n.name.includes(term))
       .slice(0, 60)
@@ -264,7 +272,14 @@ export default function LineageChainChips({
               ) : pickerOptions.map(n => (
                 <button key={n.id} type="button" onClick={() => assign(n.id)} disabled={assigning}
                   className="flex items-center justify-between text-right rounded-lg border border-slate-200 px-3 py-2 text-sm hover:border-indigo-300 hover:bg-indigo-50 transition-colors disabled:opacity-50">
-                  <span className="font-medium text-slate-800">{n.name}</span>
+                  <span className="font-medium text-slate-800">
+                    {n.name}
+                    {/* ⚠️ הסטטוס גלוי: מאז שגם ממתינים מוצעים, צריך לדעת שהצומת
+                        שנבחר עדיין לא אושר — אחרת השיוך נראה סופי והוא לא. */}
+                    {(n.status ?? '') !== 'verified' && (
+                      <span className="mr-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">ממתין</span>
+                    )}
+                  </span>
                   {assigning ? <Loader2 size={13} className="animate-spin text-slate-400" /> : <Check size={14} className="text-indigo-400" />}
                 </button>
               ))}
