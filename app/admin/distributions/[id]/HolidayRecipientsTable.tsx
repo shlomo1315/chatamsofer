@@ -174,7 +174,9 @@ export default function HolidayRecipientsTable({
                 )}
                 <td className="text-slate-600">{r.spouse_name ?? '—'}</td>
                 <td className="font-mono text-slate-600 ltr-num">{r.ben_phone ?? r.phone ?? '—'}</td>
-                <td className="text-slate-600" dir="ltr">{r.email ?? '—'}</td>
+                {/* ⚠️ text-right מפורש: dir="ltr" הופך את ברירת המחדל (start)
+                    לשמאל, והמייל היה נצמד לשמאל בזמן שהכותרת מיושרת לימין. */}
+                <td className="text-slate-600 text-right" dir="ltr">{r.email ?? '—'}</td>
                 <td className="text-slate-600">{r.address ?? '—'}</td>
                 <td className="text-slate-600">{r.city ?? '—'}</td>
                 <td className="text-slate-600 ltr-num">{r.age ?? '—'}</td>
