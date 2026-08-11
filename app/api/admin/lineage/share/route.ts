@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
-import { mailFor } from '@/lib/departments'
+import { mailFor, LINEAGE_MAIL_LABEL } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
 
 export const dynamic = 'force-dynamic'
@@ -108,7 +108,13 @@ export async function POST(request: NextRequest) {
   })
 
   try {
-    await deliverMail(recipientEmail, 'אישור סדר היוחסין — איגוד צאצאי החתם סופר', html, [], mailFor('maternity'))
+    // 🔴 המשרד הראשי ולא "עזר יולדות".
+    //
+    // המייל יצא בשם "היכל החתם סופר · עזר יולדות" ועם דואר חוזר ל-y@ — מחלקה
+    // שאין לה שום קשר לסדר היוחסין. הנמען קיבל בקשה לאשר את שרשרת הדורות שלו
+    // ממחלקת יולדות, ותשובותיו נחתו בתיבה שאינה מטפלת בזה.
+    await deliverMail(recipientEmail, 'אישור סדר היוחסין — איגוד צאצאי החתם סופר', html, [],
+      mailFor('main', LINEAGE_MAIL_LABEL))
   } catch (e) {
     // ההזמנה כבר נוצרה — נחזיר הצלחה חלקית עם אזהרה, כדי שהאדמין יוכל להעתיק ידנית
     return NextResponse.json({ ok: true, link, mailError: e instanceof Error ? e.message : String(e) })

@@ -2053,29 +2053,42 @@ export default function LineagePage() {
   // ⚠️ נכנסים לכאן מכרטסת הצאצא ("פתיחה במסך הייחוס"), ובעץ של מאות צמתים
   // בלי זה היה צריך לחפש את הצומת ידנית. נקרא פעם אחת, אחרי שהצמתים נטענו,
   // וישירות מ-window.location — כדי לא לחייב את העמוד ב-Suspense של useSearchParams.
+  //
+  // 🔴 הפרמטרים נקראים פעם אחת באתחול ה-state, ולא מ-window בתוך האפקט.
+  //
+  // האפקט שמסנכרן את הכתובת רץ מיד בטעינה, כש-focusId עדיין ריק — והוא מחק את
+  // focus ו-full מהכתובת. הקורא כאן ממתין לטעינת הצמתים, ועד שהגיע תורו
+  // הפרמטרים כבר לא היו שם: הלשונית נפתחה על העץ המלא כאילו לא ביקשו כלום.
+  const [deepLink] = useState(() => {
+    if (typeof window === 'undefined') return { focus: null as string | null, full: false }
+    const qs = new URLSearchParams(window.location.search)
+    return { focus: qs.get('focus'), full: qs.get('full') === '1' }
+  })
   const didFocusParam = useRef(false)
   useEffect(() => {
     if (didFocusParam.current || !nodes.length) return
     didFocusParam.current = true
-    const qs = new URLSearchParams(window.location.search)
-    const target = qs.get('focus')
+    const target = deepLink.focus
     if (!target || !nodes.some(n => n.id === target)) return
-    // full=1 — נפתח מ"פתח ענף בלשונית חדשה". נקרא כאן ולא בנפרד, כדי שהמסך
-    // המלא ייפתח *יחד* עם המיקוד ולא ירצד בין שני מצבים.
-    const wantFull = qs.get('full') === '1'
+    // full=1 — נפתח מ"פתח ענף בלשונית חדשה". מוחל *יחד* עם המיקוד ולא בנפרד,
+    // כדי שהמסך לא ירצד בין שני מצבים.
+    const wantFull = deepLink.full
     const t = setTimeout(() => {
       setFocusId(target)
       if (wantFull) setFullScreen(true)
       setAnchor(a => ({ id: target, n: (a?.n ?? 0) + 1 }))
     }, 0)
     return () => clearTimeout(t)
-  }, [nodes])
+  }, [nodes, deepLink])
 
   // ⚠️ הכתובת מתעדכנת בכל החלפת ענף — replaceState ולא push, כדי שכפתור
   // "אחורה" של הדפדפן לא יהפוך לרשימת כל הענפים שביקרו בהם. רענון נשאר
   // באותו ענף, ואפשר לשמור סימנייה או לשלוח קישור לענף מסוים.
+  //
+  // ⚠️ לא נוגע בכתובת לפני שהצמתים נטענו והקישור הישיר הוחל. כתיבה מוקדמת
+  // מוחקת את הפרמטרים שהגיעו בכתובת — וזה בדיוק מה שקרה.
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !nodes.length || !didFocusParam.current) return
     const qs = new URLSearchParams(window.location.search)
     if (focusId) qs.set('focus', focusId); else qs.delete('focus')
     if (fullScreen) qs.set('full', '1'); else qs.delete('full')
@@ -2084,7 +2097,7 @@ export default function LineagePage() {
     if (url !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', url)
     }
-  }, [focusId, fullScreen])
+  }, [focusId, fullScreen, nodes.length])
 
   // ⚠️ יציאה ממסך מלא ב-Esc: המסך מכסה את רוב החלון, וכפתור יציאה יחיד בפינה
   // הוא מלכודת כשגוללים רחוק לתוך הענף.
