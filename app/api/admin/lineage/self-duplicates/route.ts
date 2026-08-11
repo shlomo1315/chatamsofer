@@ -96,32 +96,58 @@ export async function POST(request: NextRequest) {
   let fixed = 0, removed = 0, claimed = 0
   const failures: { node: string; reason: string }[] = []
 
-  // ⚠️ סדרתי ולא במקביל: שתי מחיקות מקבילות תחת אותו אב הן בדיוק המצב שבו
-  // ספירת הילדים שנקראה מראש כבר אינה נכונה.
-  for (const r of targets) {
-    try {
-      // 1) הת"ז עוברת לצומת שנשאר, כדי שהבעלות תזוהה מיד בכל סריקה עתידית.
-      if (r.willCopyIdNumber) {
-        const { error } = await admin.from('lineage_nodes')
-          .update({ id_number: r.benIdNumber }).eq('id', r.keepNodeId)
-        if (error) throw new Error(error.message)
-        claimed++
-      }
+  // ⚡ מקביל ובמנות, ולא שורה-אחר-שורה.
+  //
+  // בגרסה הסדרתית כל שורה עשתה שלושה סבבי רשת, ו-68 שורות היו 204 סבבים
+  // רצופים — 30 שניות, שבסופן הדפדפן ניתק (HTTP 499) והמנהל ראה "שגיאת רשת"
+  // בזמן שהשרת דווקא סיים את העבודה. תיקון שנראה כאילו נכשל והצליח הוא גרוע
+  // משניהם.
+  //
+  // ⚠️ המקביליות בטוחה כאן *בזכות* הסייגים, ולא למרותם: כל צומת ברשימה הוכח
+  // כעלה (בלי ילדים). לכן אף צומת ברשימה אינו האב של צומת אחר ברשימה, ואין
+  // שתי פעולות שיכולות להשפיע זו על תקפותה של זו. אילו היו מוסרים צמתים עם
+  // ילדים, המקביליות הייתה שוברת בדיוק את ספירת הילדים שנקראה מראש.
+  const CHUNK = 25
+  const chunks = <T,>(arr: T[]) =>
+    Array.from({ length: Math.ceil(arr.length / CHUNK) }, (_, i) => arr.slice(i * CHUNK, (i + 1) * CHUNK))
 
-      // 2) הכרטסת מצביעה על הצומת האמיתי — *לפני* המחיקה.
-      // ⚠️ הסדר אינו סגנוני: מחיקה קודם הייתה משאירה את הכרטסת מצביעה על
-      // צומת שאינו קיים, וזה בדיוק המצב שאין ממנו דרך חזרה אוטומטית.
-      const { error: benErr } = await admin.from('beneficiaries')
-        .update({ lineage_node_id: r.keepNodeId }).eq('id', r.benId)
-      if (benErr) throw new Error(benErr.message)
+  // 1) הת"ז עוברת לצמתים שנשארים, כדי שהבעלות תזוהה מיד בכל סריקה עתידית.
+  const toClaim = targets.filter(r => r.willCopyIdNumber)
+  for (const batch of chunks(toClaim)) {
+    const res = await Promise.all(batch.map(r =>
+      admin.from('lineage_nodes').update({ id_number: r.benIdNumber }).eq('id', r.keepNodeId)
+        .then(({ error }) => ({ r, error }))))
+    for (const { r, error } of res) {
+      if (error) failures.push({ node: r.dupNodeName, reason: error.message })
+      else claimed++
+    }
+  }
 
-      // 3) הצומת המיותר נמחק. הוא הוכח כעלה בלי כרטסות אחרות.
-      const { error: delErr } = await admin.from('lineage_nodes').delete().eq('id', r.dupNodeId)
-      if (delErr) throw new Error(delErr.message)
+  // 2) הכרטסות מצביעות על הצומת האמיתי — *לפני* המחיקה.
+  // ⚠️ הסדר בין השלבים אינו סגנוני: מחיקה קודם הייתה משאירה כרטסת שמצביעה
+  // על צומת שאינו קיים, וזה בדיוק המצב שאין ממנו דרך חזרה אוטומטית.
+  const failedBens = new Set<string>()
+  for (const batch of chunks(targets)) {
+    const res = await Promise.all(batch.map(r =>
+      admin.from('beneficiaries').update({ lineage_node_id: r.keepNodeId }).eq('id', r.benId)
+        .then(({ error }) => ({ r, error }))))
+    for (const { r, error } of res) {
+      if (error) { failures.push({ node: r.dupNodeName, reason: error.message }); failedBens.add(r.dupNodeId) }
+    }
+  }
 
-      fixed++; removed++
-    } catch (e) {
-      failures.push({ node: r.dupNodeName, reason: e instanceof Error ? e.message : 'שגיאה' })
+  // 3) הצמתים המיותרים נמחקים — במחיקה אחת לכל מנה.
+  // ⚠️ רק צמתים שהכרטסת שלהם באמת הועברה. צומת שהעברת הכרטסת שלו נכשלה נשאר
+  // במקומו, אחרת הייתה נמחקת השורה שהכרטסת עדיין מצביעה עליה.
+  const toDelete = targets.filter(r => !failedBens.has(r.dupNodeId))
+  for (const batch of chunks(toDelete)) {
+    const ids = batch.map(r => r.dupNodeId)
+    const { error } = await admin.from('lineage_nodes').delete().in('id', ids)
+    if (error) {
+      for (const r of batch) failures.push({ node: r.dupNodeName, reason: error.message })
+    } else {
+      removed += ids.length
+      fixed += ids.length
     }
   }
 
