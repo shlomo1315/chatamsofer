@@ -13,6 +13,13 @@ const PAGE_SIZE = 1000
 // גבול ביטחון מפני לולאה אינסופית (למשל אם השרת יחזיר תמיד דף מלא).
 const MAX_PAGES = 500
 
+// ⚡ כמה דפים נשלפים במקביל בכל סבב.
+//
+// ⚠️ למה לא הכול בבת אחת: מספר הדפים אינו ידוע מראש (אין count), ולכן שליפה
+// מקבילה היא בהכרח ניחוש. חמישה דפים = עד 5,000 שורות בסבב אחד — מכסה את
+// רוב המסכים בסבב-שניים, בלי להציף את המסד בעשרות שאילתות למסך קטן.
+const BATCH_PAGES = 5
+
 export interface PageResult<T> { data: T[] | null; error: { message: string } | null }
 
 /**
@@ -23,14 +30,32 @@ export async function fetchAllRows<T>(
   page: (from: number, to: number) => PromiseLike<PageResult<T>>,
 ): Promise<{ rows: T[]; error: string | null }> {
   const rows: T[] = []
-  for (let i = 0; i < MAX_PAGES; i++) {
-    const from = i * PAGE_SIZE
-    const { data, error } = await page(from, from + PAGE_SIZE - 1)
-    if (error) return { rows, error: error.message }
-    const batch = data ?? []
-    rows.push(...batch)
-    // דף חלקי (או ריק) = הגענו לסוף.
-    if (batch.length < PAGE_SIZE) return { rows, error: null }
+
+  // ⚡ הדפים נשלפים בקבוצות מקבילות ולא אחד-אחרי-השני.
+  //
+  // ⚠️ מה זה תיקן: בחלוקה עם ~6,000 נרשמים השליפה הטורית עשתה 7 סבבי רשת
+  // שכל אחד ממתין לקודמו — זמן הטעינה היה סכום כולם. עכשיו הוא זמן הסבב
+  // האיטי ביותר בכל קבוצה.
+  //
+  // ⚠️ מה *לא* השתנה: דף חלקי עדיין מסמן את הסוף. כשקבוצה מחזירה דף חלקי,
+  // כל מה שמעברו נזרק ואין סבב נוסף — כך שהתוצאה זהה לשליפה הטורית, כולל
+  // הסדר. בלי זה היינו מחזירים שורות מעבר לסוף האמיתי, או קוטעים את הרשימה.
+  for (let start = 0; start < MAX_PAGES; start += BATCH_PAGES) {
+    const size = Math.min(BATCH_PAGES, MAX_PAGES - start)
+    const batch = await Promise.all(
+      Array.from({ length: size }, (_, k) => {
+        const from = (start + k) * PAGE_SIZE
+        return page(from, from + PAGE_SIZE - 1)
+      }),
+    )
+
+    for (const { data, error } of batch) {
+      if (error) return { rows, error: error.message }
+      const got = data ?? []
+      rows.push(...got)
+      // דף חלקי (או ריק) = הגענו לסוף. הדפים שנשלפו אחריו אינם רלוונטיים.
+      if (got.length < PAGE_SIZE) return { rows, error: null }
+    }
   }
   // ⚠️ נעצרנו בגבול הביטחון ולא בסוף הנתונים. מדווחים בלוג במקום להחזיר
   // בשקט רשימה חלקית — זו בדיוק התקלה שהמנגנון הזה נועד למנוע.

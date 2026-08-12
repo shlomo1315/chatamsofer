@@ -103,49 +103,80 @@ export default function HolidayRegistrations({
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // ── פילוחים — מחושבים מהנתונים בזמן אמת, בלי סיכומים שמורים ──
-  const bySource = useMemo(() => {
-    const m: Record<string, number> = { portal: 0, phone: 0, email: 0, nedarim: 0, admin: 0 }
-    rows.forEach(r => { m[r.source] = (m[r.source] ?? 0) + 1 })
-    return m
+  //
+  // ⚡ כל הפילוחים נגזרים במעבר *אחד* על השורות ולא במעבר לכל כרטיס.
+  //
+  // ⚠️ למה זה משנה: בחלוקה עם ~6,000 נרשמים, החישוב הקודם עבר על הרשימה
+  // 12 פעמים (ערוץ, קהילה, 5 טווחי גיל, 4 טווחי ילדים, אישורים, כרטיסים) —
+  // כ-70,000 בדיקות בכל רינדור, וכל הקלדה בתיבת החיפוש הפעילה אותן מחדש.
+  // מעבר אחד מייצר את אותם מספרים בדיוק.
+  const facets = useMemo(() => {
+    const bySource: Record<string, number> = { portal: 0, phone: 0, email: 0, nedarim: 0, admin: 0 }
+    const communityMap = new Map<string, number>()
+    const age: Record<string, number> = {}
+    const kids: Record<string, number> = {}
+    const approval: Record<ApprovalStatus, number> = { pending: 0, approved: 0, rejected: 0 }
+    let cardsLinked = 0
+
+    for (const r of rows) {
+      bySource[r.source] = (bySource[r.source] ?? 0) + 1
+      const c = r.community?.trim() || 'לא צוין'
+      communityMap.set(c, (communityMap.get(c) ?? 0) + 1)
+      // ⚠️ הדלי הראשון שמתאים בלבד — הטווחים זרים זה לזה, ולכן אין טעם
+      // להמשיך לבדוק את השאר.
+      for (const b of AGE_BUCKETS) if (b.test(r.age)) { age[b.key] = (age[b.key] ?? 0) + 1; break }
+      for (const b of KIDS_BUCKETS) if (b.test(r.children_count)) { kids[b.key] = (kids[b.key] ?? 0) + 1; break }
+      approval[r.approval_status] = (approval[r.approval_status] ?? 0) + 1
+      if (r.card_linked_at) cardsLinked++
+    }
+
+    return {
+      bySource,
+      communities: [...communityMap.entries()].sort((a, b) => b[1] - a[1]),
+      ageCounts: AGE_BUCKETS.map(b => ({ ...b, count: age[b.key] ?? 0 })),
+      kidsCounts: KIDS_BUCKETS.map(b => ({ ...b, count: kids[b.key] ?? 0 })),
+      approval,
+      cardsLinked,
+    }
   }, [rows])
 
-  const communities = useMemo(() => {
-    const m = new Map<string, number>()
-    rows.forEach(r => { const c = r.community?.trim() || 'לא צוין'; m.set(c, (m.get(c) ?? 0) + 1) })
-    return [...m.entries()].sort((a, b) => b[1] - a[1])
-  }, [rows])
-
-  const ageCounts = useMemo(
-    () => AGE_BUCKETS.map(b => ({ ...b, count: rows.filter(r => b.test(r.age)).length })),
-    [rows],
-  )
-  const kidsCounts = useMemo(
-    () => KIDS_BUCKETS.map(b => ({ ...b, count: rows.filter(r => b.test(r.children_count)).length })),
-    [rows],
-  )
+  const { bySource, communities, ageCounts, kidsCounts } = facets
 
   // ⚠️ נגזר מהשורות בכל טעינה: הכרטיסים האלה הם מה שהמנהל בודק לפניהם ("כמה
   // ממתינים לאישור", "כמה מאושרים כבר שייכו כרטיס"), ומונה שמור היה מתיישן.
-  const approvalCounts = useMemo(() => {
-    const m: Record<ApprovalStatus, number> = { pending: 0, approved: 0, rejected: 0 }
-    rows.forEach(r => { m[r.approval_status] = (m[r.approval_status] ?? 0) + 1 })
+  // (מחושבים במעבר המשותף למעלה — ראו facets.)
+  const approvalCounts = facets.approval
+  const cardsLinked = facets.cardsLinked
+
+  // ⚡ טקסט החיפוש של כל שורה נבנה פעם אחת ולא בכל הקלדה.
+  //
+  // ⚠️ קודם כל הקלדה בנתה מחדש מחרוזת מ-9 שדות עבור כל אחת מ-~6,000 השורות
+  // (join + toLowerCase), וזה מה שגרם לתיבת החיפוש להרגיש תקועה. עכשיו זה
+  // נגזר פעם אחת מהשורות, והחיפוש עצמו הוא includes בלבד.
+  const haystacks = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const r of rows) {
+      m.set(r.id, [r.name, r.id_number, r.spouse_name, r.ben_phone, r.phone, r.email, r.address, r.city, r.community]
+        .filter(Boolean).join(' ').toLowerCase())
+    }
     return m
   }, [rows])
-  const cardsLinked = useMemo(() => rows.filter(r => r.card_linked_at).length, [rows])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
+    // ⚠️ נבדק פעם אחת מחוץ ללולאה: find() בתוך הלולאה חזר על עצמו לכל שורה.
+    const ageTest = ageBucket === 'all' ? null : AGE_BUCKETS.find(b => b.key === ageBucket)?.test
+    const kidsTest = kidsBucket === 'all' ? null : KIDS_BUCKETS.find(b => b.key === kidsBucket)?.test
     return rows.filter(r => {
       if (source !== 'all' && r.source !== source) return false
       if (approval !== 'all' && r.approval_status !== approval) return false
       if (community !== 'all' && (r.community?.trim() || 'לא צוין') !== community) return false
-      if (ageBucket !== 'all' && !AGE_BUCKETS.find(b => b.key === ageBucket)?.test(r.age)) return false
-      if (kidsBucket !== 'all' && !KIDS_BUCKETS.find(b => b.key === kidsBucket)?.test(r.children_count)) return false
+      if (ageTest && !ageTest(r.age)) return false
+      if (kidsTest && !kidsTest(r.children_count)) return false
       if (!q) return true
-      return [r.name, r.id_number, r.spouse_name, r.ben_phone, r.phone, r.email, r.address, r.city, r.community]
-        .filter(Boolean).join(' ').toLowerCase().includes(q)
+      return (haystacks.get(r.id) ?? '').includes(q)
     })
-  }, [rows, query, source, community, ageBucket, kidsBucket, approval])
+  }, [rows, haystacks, query, source, community, ageBucket, kidsBucket, approval])
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
   const expectedAll = rows.length * amountPerFamily
