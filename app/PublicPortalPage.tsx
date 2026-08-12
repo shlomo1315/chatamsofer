@@ -140,7 +140,7 @@ const DOC_LABELS: Record<string, string> = {
   id_husband_appx: 'ספח תעודת הזהות — הבעל',
   id_wife:         'תעודת זהות — האשה',
   id_wife_appx:    'ספח תעודת הזהות — האשה',
-  id_child:        'תעודת זהות — ילד (כולל ספח)',
+  id_child:        'תעודת זהות — ילד (כולל ספח מלא)',
   marriage_cert: 'תעודת נישואין',
   birth_cert:    'אישור לידה',
   address_proof: 'אישור כתובת מגורים',
@@ -3202,11 +3202,24 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           )}
         </p>
         {/* ת"ז והספח הם שני קבצים נפרדים — ההנחיה משתנה לפי המשבצת */}
-        <p className="text-xs font-bold text-red-600 mb-3">
-          {docType.endsWith('_appx')
-            ? 'צילום הספח — הדף הנלווה לתעודת הזהות. ⚠️ חובה שהספח יהיה מלא עם כל פרטי הילדים. מספיק ספח אחד (של הבעל או של האשה); ניתן לצרף גם את שניהם.'
-            : 'צילום ברור של תעודת הזהות עצמה'}
-        </p>
+        {docType.endsWith('_appx') ? (
+          <div className="mb-3">
+            {/* 🔴 הדרישה המרכזית, בשורה נפרדת ובולטת.
+                ⚠️ קודם היא הייתה משפט אחד בתוך פסקה, ולכן נבלעה — משפחות
+                העלו ספח חלקי (עמוד ראשון בלבד, בלי הילדים), והמסמך הוחזר.
+                כל החזרה כזו היא סבב נוסף מול המשפחה ועיכוב בבקשה. */}
+            <p className="flex items-start gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[13px] font-extrabold text-red-700">
+              <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+              <span>חובה להעלות ספח מלא — כולל כל דפי הילדים.</span>
+            </p>
+            <p className="text-xs text-slate-500 mt-1.5">
+              הספח הוא הדף הנלווה לתעודת הזהות. יש לצלם את כל העמודים שבהם רשומים הילדים.
+              מספיק ספח אחד (של הבעל או של האשה); ניתן לצרף גם את שניהם.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs font-bold text-red-600 mb-3">צילום ברור של תעודת הזהות עצמה</p>
+        )}
         {file ? (
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
             <span className="text-sm text-green-700 flex items-center gap-2">
@@ -5332,6 +5345,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   })()}
                 </div>
               </div>
+
+              {/* 🔴 אזהרת הספח, לפני המשבצות ולא בתוכן.
+                  ⚠️ הסיבה השכיחה ביותר להחזרת מסמכים היא ספח חלקי — עמוד
+                  ראשון בלבד, בלי דפי הילדים. כשההנחיה מופיעה רק ליד המשבצת,
+                  המשפחה כבר בחרה קובץ לפני שקראה אותה. כאן היא נקראת קודם. */}
+              {requiredDocs.some(d => d.endsWith('_appx')) && (
+                <div className="mb-4 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3">
+                  <p className="flex items-start gap-2 font-extrabold text-red-700">
+                    <AlertCircle size={17} className="flex-shrink-0 mt-0.5" />
+                    <span>חובה להעלות ספח מלא — כולל כל דפי הילדים</span>
+                  </p>
+                  <p className="text-[13px] text-red-800/90 mt-1.5 leading-relaxed pr-6">
+                    ספח חלקי (העמוד הראשון בלבד) יוחזר, והבקשה תתעכב. יש לצלם את כל
+                    העמודים שבהם רשומים הילדים.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-4">
                 {requiredDocs.map(d => (
