@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Database,
-  Inbox, Clock, ShieldCheck, Zap,
+  Inbox, Clock, ShieldCheck, Zap, Plus, Trash2, PowerOff,
 } from 'lucide-react'
+import { DEPARTMENTS } from '@/lib/departments'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 
@@ -29,7 +30,14 @@ interface Account {
   last_error: string | null
   neverSynced: boolean
   watch_expires_at: string | null
+  is_active?: boolean
+  indexedCount?: number
 }
+
+// תוויות המחלקות — מקור אמת אחד עם שאר המערכת.
+const DEPT_LABEL: Record<string, string> = Object.fromEntries(
+  Object.values(DEPARTMENTS).map(d => [d.key, d.label]),
+)
 
 interface RunResult {
   email: string
@@ -48,6 +56,7 @@ export default function IndexSyncPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState<string | null>(null)
   const [watchBusy, setWatchBusy] = useState(false)
+  const [acctBusy, setAcctBusy] = useState<string | null>(null)
   // 0 עד שהנתונים נטענים — כך אף מנוי אינו נחשב פעיל לפני שידוע מה מצבו.
   const [now, setNow] = useState(0)
   const [results, setResults] = useState<RunResult[] | null>(null)
@@ -106,6 +115,53 @@ export default function IndexSyncPage() {
   const nearestExpiry = liveAccounts
     .map(a => a.watch_expires_at!)
     .sort((x, y) => new Date(x).getTime() - new Date(y).getTime())[0] ?? null
+
+  // ⚠️ מחלקה ריקה נופלת לדלי אחד מפורש ולא נעלמת: תיבה בלי מחלקה אינה
+  // מנותבת לאיש, וזו בדיוק התקלה שצריך לראות ולא להסתיר.
+  const grouped = (() => {
+    const m = new Map<string, Account[]>()
+    for (const a of accounts) {
+      const k = a.department || ''
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(a)
+    }
+    // ללא-מחלקה אחרון — הוא חריג, לא ברירת מחדל.
+    return [...m.entries()].sort((x, y) => (x[0] ? 0 : 1) - (y[0] ? 0 : 1))
+  })()
+
+  async function toggleActive(a: Account) {
+    const turningOff = a.is_active !== false
+    if (turningOff && !confirm(`להשבית את ${a.email}?\n\nהתיבה תפסיק להסתנכרן. ההודעות שכבר נקלטו יישארו.`)) return
+    setAcctBusy(a.id); setError(null)
+    try {
+      const res = await fetch('/api/admin/gmail/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: a.id, is_active: !turningOff }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'העדכון נכשל'); return }
+      await load()
+    } catch { setError('שגיאת רשת') } finally { setAcctBusy(null) }
+  }
+
+  async function removeAccount(a: Account) {
+    // 🔴 אישור שאומר במפורש כמה הודעות יימחקו. "האם אתה בטוח" גורף אינו
+    // מאפשר להבחין בין מחיקת תיבה ריקה למחיקת אלפי שורות אינדקס.
+    const n = a.indexedCount ?? 0
+    const warn = n > 0
+      ? `\n\n⚠️ יימחקו גם ${n.toLocaleString('he-IL')} הודעות מהאינדקס.\nההודעות עצמן נשארות בגמייל, אך השיוך והתיעוד שנבנו עליהן יאבדו.`
+      : ''
+    if (!confirm(`למחוק את התיבה ${a.email}?${warn}\n\nאם המטרה היא רק לעצור סנכרון — עדיף להשבית.`)) return
+
+    setAcctBusy(a.id); setError(null)
+    try {
+      const res = await fetch(`/api/admin/gmail/accounts?id=${encodeURIComponent(a.id)}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'המחיקה נכשלה'); return }
+      await load()
+    } catch { setError('שגיאת רשת') } finally { setAcctBusy(null) }
+  }
 
   async function toggleWatch(on: boolean) {
     setWatchBusy(true); setError(null)
@@ -270,47 +326,111 @@ export default function IndexSyncPage() {
         </div>
       )}
 
-      {/* התיבות */}
+      {/* ── התיבות, מקובצות לפי מחלקה ──────────────────────────────────────
+          ⚠️ הקיבוץ אינו קישוט: לכל מחלקה תיבה משלה, וזה מה שקובע לאן מייל
+          נכנס מנותב. רשימה שטוחה הסתירה בדיוק את ההתאמה הזו — ומחלקה בלי
+          תיבה (שהדואר שלה פשוט לא נקלט) לא נראתה כלל. */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-3 font-extrabold text-slate-900">התיבות</div>
+        <div className="border-b border-slate-100 px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <span className="font-extrabold text-slate-900">התיבות לפי מחלקה</span>
+          <Link
+            href="/admin/settings/connect-mailbox"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={14} /> חבר תיבה חדשה
+          </Link>
+        </div>
+
         {loading ? (
           <p className="px-5 py-6 text-sm text-slate-400 flex items-center gap-2">
             <Loader2 size={14} className="animate-spin" /> טוען…
           </p>
         ) : accounts.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-slate-400">
-            אין תיבות Gmail פעילות. יש לחבר תיבה בהגדרות ← חיבור תיבת דואר.
-          </p>
+          <div className="px-5 py-8 text-center">
+            <Inbox size={28} className="mx-auto text-slate-300 mb-2" />
+            <p className="text-sm font-bold text-slate-600">עדיין לא חוברה אף תיבה</p>
+            <p className="text-xs text-slate-400 mt-1">
+              חברו תיבה כדי שהדואר שלה ייקלט לאינדקס.
+            </p>
+            <Link
+              href="/admin/settings/connect-mailbox"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700"
+            >
+              <Plus size={14} /> חבר תיבה ראשונה
+            </Link>
+          </div>
         ) : (
-          <div className="divide-y divide-slate-50">
-            {accounts.map(a => (
-              <div key={a.id} className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
-                <div className="min-w-0">
-                  <p dir="ltr" className="font-bold text-slate-800 truncate text-right">{a.email}</p>
-                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                    {a.department && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">{a.department}</span>
-                    )}
-                    {a.neverSynced
-                      ? <span className="font-bold text-amber-700">טרם סונכרן</span>
-                      : <span>סונכרן {fmt(a.last_sync_at)}</span>}
-                    {a.last_full_sync_at && <span>· סריקה מלאה {fmt(a.last_full_sync_at)}</span>}
-                  </p>
-                  {a.last_error && (
-                    <p className="text-xs text-rose-600 font-bold mt-1 flex items-center gap-1">
-                      <AlertTriangle size={12} /> {a.last_error}
-                    </p>
-                  )}
+          <div className="divide-y divide-slate-100">
+            {grouped.map(([deptKey, list]) => (
+              <div key={deptKey} className="px-5 py-3">
+                <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400 mb-2">
+                  {DEPT_LABEL[deptKey] ?? deptKey ?? 'ללא מחלקה'}
+                  <span className="mr-1.5 font-bold text-slate-300">({list.length})</span>
+                </p>
+
+                <div className="space-y-2">
+                  {list.map(a => (
+                    <div key={a.id} className={`rounded-xl border p-3 ${a.is_active === false ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <p dir="ltr" className={`font-bold truncate text-right ${a.is_active === false ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                            {a.email}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                            {a.is_active === false && (
+                              <span className="rounded-full bg-slate-200 px-2 py-0.5 font-bold text-slate-600">מושבתת</span>
+                            )}
+                            {a.neverSynced
+                              ? <span className="font-bold text-amber-700">טרם סונכרן</span>
+                              : <span>סונכרן {fmt(a.last_sync_at)}</span>}
+                            {typeof a.indexedCount === 'number' && (
+                              <span>· <strong className="text-slate-700 ltr-num">{a.indexedCount.toLocaleString('he-IL')}</strong> באינדקס</span>
+                            )}
+                          </p>
+                          {a.last_error && (
+                            <p className="text-xs text-rose-600 font-bold mt-1 flex items-center gap-1">
+                              <AlertTriangle size={12} /> {a.last_error}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => run(a.id)}
+                            disabled={!!syncing || a.is_active === false}
+                            title={a.is_active === false ? 'תיבה מושבתת' : 'סנכרן תיבה זו'}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-40 transition-colors"
+                          >
+                            {syncing === a.id
+                              ? <><Loader2 size={13} className="animate-spin" /> מסנכרן…</>
+                              : <><RefreshCw size={13} /> סנכרן</>}
+                          </button>
+
+                          {/* ⚠️ השבתה ולא מחיקה כברירת מחדל: תיבה מושבתת
+                              מפסיקה להסתנכרן וההודעות שנקלטו ממנה נשארות. */}
+                          <button
+                            onClick={() => toggleActive(a)}
+                            disabled={acctBusy === a.id}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-500 hover:border-amber-300 hover:text-amber-700 disabled:opacity-40 transition-colors"
+                          >
+                            {acctBusy === a.id
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : a.is_active === false ? <>הפעל</> : <><PowerOff size={13} /> השבת</>}
+                          </button>
+
+                          <button
+                            onClick={() => removeAccount(a)}
+                            disabled={acctBusy === a.id}
+                            title="מחיקת התיבה"
+                            className="inline-flex items-center rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-40 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <button
-                  onClick={() => run(a.id)}
-                  disabled={!!syncing}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50 flex-shrink-0 transition-colors"
-                >
-                  {syncing === a.id
-                    ? <><Loader2 size={13} className="animate-spin" /> מסנכרן…</>
-                    : <><RefreshCw size={13} /> סנכרן</>}
-                </button>
               </div>
             ))}
           </div>

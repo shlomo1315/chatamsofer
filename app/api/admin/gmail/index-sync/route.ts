@@ -39,26 +39,33 @@ export async function GET() {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
+  // ⚠️ כולל מושבתות: תיבה שהושבתה חייבת להישאר גלויה כדי שאפשר יהיה
+  // להפעיל אותה מחדש. סינון ל-is_active בלבד היה מעלים אותה מהמסך.
   const { data: accounts } = await db.from('gmail_accounts')
-    .select('id, email, department, last_sync_at, last_full_sync_at, last_history_id, last_error, watch_expires_at')
-    .eq('is_active', true)
+    .select('id, email, department, is_active, last_sync_at, last_full_sync_at, last_history_id, last_error, watch_expires_at')
     .order('email')
 
-  // ספירת האינדקס לכל חשבון — כדי שיהיה ברור מה כבר נקלט.
+  // ספירת האינדקס לכל חשבון — כדי שיהיה ברור מה כבר נקלט, ומה יימחק.
   const { count } = await db.from('gmail_messages')
     .select('id', { count: 'exact', head: true })
     .is('deleted_at', null)
 
+  const withCounts = await Promise.all((accounts ?? []).map(async (a) => {
+    const r = a as Partial<AccountRow> & { id?: string; is_active?: boolean }
+    const { count: own } = await db.from('gmail_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('account_id', r.id).is('deleted_at', null)
+    return {
+      ...r,
+      // ⚠️ הטוקן לא יוצא מהשרת לעולם — הוא מזהה גישה מלאה לתיבה.
+      refresh_token: undefined,
+      neverSynced: !r.last_history_id,
+      indexedCount: own ?? 0,
+    }
+  }))
+
   return NextResponse.json({
-    accounts: (accounts ?? []).map(a => {
-      const r = a as Partial<AccountRow>
-      return {
-        ...r,
-        // ⚠️ הטוקן לא יוצא מהשרת לעולם — הוא מזהה גישה מלאה לתיבה.
-        refresh_token: undefined,
-        neverSynced: !r.last_history_id,
-      }
-    }),
+    accounts: withCounts,
     indexedTotal: count ?? 0,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
