@@ -131,7 +131,10 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   const bottomVisible = navBottom.filter(i => canSee(i.section))
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 
-  const mailActive = pathname.startsWith('/admin/mail')
+  // ⚠️ index-sync יושב תחת /admin/mail, ולכן הוא היה מדליק גם את "מייל
+  // Resend". בתקופת המעבר דווקא ההבחנה בין השניים היא כל העניין.
+  const gmailActive = pathname.startsWith('/admin/mail/index-sync')
+  const mailActive = pathname.startsWith('/admin/mail') && !gmailActive
   // תת-עמוד יולדות פעיל — לפי הקידומת של הקישור עצמו
   const childActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
   const anyChildActive = maternityChildren.some(c => childActive(c.href))
@@ -242,7 +245,10 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
               <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
             )}
             <Mail size={18} className="flex-shrink-0" />
-            <span className="flex-1 text-right">מייל</span>
+            {/* ⚠️ מסומן במפורש כ"Resend" לאורך תקופת המעבר: שני מסלולי דואר
+                פועלים במקביל (Resend הישן, Gmail החדש), ובלי שם מבחין אי אפשר
+                לדעת באיזה מהם צופים — וכל השוואה ביניהם חסרת ערך. */}
+            <span className="flex-1 text-right">מייל Resend</span>
             {unreadCounts.total > 0 && (
               <span className="text-[10px] font-bold bg-red-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
                 {unreadCounts.total}
@@ -280,6 +286,32 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
               })}
             </div>
           )}
+        </div>
+
+        {/* ── מייל Gmail — המסלול החדש, בתקופת המעבר ──────────────────────
+            🔴 מוצג לצד "מייל Resend" ולא במקומו, בכוונה: כל עוד הקליטה
+            מ-Gmail לא אומתה מקצה לקצה, החלפה שקטה של המקור הייתה מסתירה
+            הודעות שלא נקלטו — בלי שאיש ידע שהן חסרות.
+            שניהם זה לצד זה = אפשר להשוות, ורק אז לבטל את הישן. */}
+        <div className="pt-0.5">
+          <Link
+            href="/admin/mail/index-sync"
+            onClick={() => setMobileOpen(false)}
+            className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
+              ${gmailActive
+                ? 'bg-indigo-600/90 text-white shadow-lg shadow-indigo-500/25 ring-1 ring-indigo-400/30'
+                : 'text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+          >
+            {gmailActive && (
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
+            )}
+            <Mail size={18} className="flex-shrink-0" />
+            <span className="flex-1 text-right">מייל Gmail</span>
+            <span className="text-[9px] font-bold bg-amber-400/90 text-amber-950 rounded-full px-1.5 py-0.5 flex-shrink-0">
+              חדש
+            </span>
+          </Link>
         </div>
 
         {/* Section divider: מערכת */}
