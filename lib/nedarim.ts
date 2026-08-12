@@ -173,11 +173,32 @@ export type NedarimClientFields = {
   full_name?: string | null
   family_name?: string | null
   id_number?: string | null
+  /**
+   * סוג המסמך המזהה. 'passport' = דרכון, כל השאר = ת"ז ישראלית.
+   *
+   * 🔴 נדרים דוחה דרכון בשדה Zeout ("מספר זהות שגוי. נא לרשום מספר בספרות
+   * בלבד") — ולכן דרכון נשלח למזהה ג'. בלי ההבחנה הזו כל יולדת עם דרכון
+   * נכשלה בהקמת הכרטיס ונשארה בלי כרטיס מזון.
+   */
+  id_type?: 'id' | 'passport' | string | null
   address?: string | null
   city?: string | null
   phone?: string | null
   phone2?: string | null
   email?: string | null
+}
+
+/**
+ * האם המזהה הוא דרכון ולא ת"ז ישראלית.
+ *
+ * ⚠️ נקבע גם לפי id_type וגם לפי תוכן המספר, ובכוונה: השדה אינו תמיד
+ * מלא (רשומות ישנות, קליטה ממייל), אבל מזהה שיש בו אות *אינו* ת"ז ישראלית
+ * בשום מקרה. שתי הבדיקות יחד מכסות גם רשומה שסומנה וגם כזו שלא.
+ */
+export function isPassportId(fields: { id_number?: string | null; id_type?: string | null }): boolean {
+  if (fields.id_type === 'passport') return true
+  const s = String(fields.id_number ?? '').trim()
+  return s.length > 0 && /[^\d\s-]/.test(s)
 }
 
 // משיכת רשימת כל המשפחות (GetClient_Table) → { total, families[], meta }
@@ -234,11 +255,24 @@ export async function saveClientCard(
   clientId?: string | null,
   groupe: string = 'לידות',
 ): Promise<string | null> {
+  // 🔴 דרכון → מזהה ג', ולא Zeout.
+  //
+  // נדרים אוכף על Zeout ת"ז ישראלית בספרות בלבד, ודוחה דרכון בשגיאה
+  // "מספר זהות שגוי. נא לרשום מספר בספרות בלבד" — כלומר הכרטיס כלל לא הוקם,
+  // והיולדת נשארה בלי כרטיס מזון בלי שאיש שם לב עד שהתלוננה.
+  //
+  // ⚠️ המספר עדיין נשלח, רק בשדה אחר. השמטתו הייתה מקימה משפחה בלי מזהה
+  // כלל, וכל חיפוש עתידי לפי דרכון היה נכשל ומקים אותה שוב.
+  const passport = isPassportId(b)
+  const idValue = String(b.id_number ?? '').trim() || undefined
+
   const r = await nedarimRequest(creds, 'SaveClientCard', {
     ClientId: clientId ?? undefined,
     FamilyName: b.family_name || b.full_name || '',
     FirstName: b.full_name || '',
-    Zeout: b.id_number ?? undefined,
+    Zeout: passport ? undefined : idValue,
+    // מזהה ג' — השדה שנדרים מקצה למסמך שאינו ת"ז ישראלית.
+    Zeout3: passport ? idValue : undefined,
     Address: [b.address, b.city].filter(Boolean).join(', ') || undefined,
     Phone1: b.phone ?? undefined,
     Phone2: b.phone2 ?? undefined,

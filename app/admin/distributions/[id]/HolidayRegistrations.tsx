@@ -27,6 +27,8 @@ export interface RegistrationRow {
   card_linked_at: string | null
   card_link_error: string | null
   name: string
+  family_name?: string | null
+  first_name?: string | null
   id_number: string | null
   spouse_name: string | null
   ben_phone: string | null
@@ -271,8 +273,10 @@ export default function HolidayRegistrations({
   // ⚠️ ת"ז/טלפון/מספר כרטיס מוגדרים 'id' (טקסט) ולא מספר: כמספר הם מאבדים
   // אפס מוביל ומקבלים פסיקי אלפים. גיל/ילדים/סכום הם מספרים אמיתיים, כדי
   // שאפשר יהיה לסכם ולמיין אותם באקסל.
+  // ⚠️ שם משפחה ושם פרטי בעמודות נפרדות — מיון וסינון באקסל לפי שם משפחה
+  // אינם אפשריים כשהשניים במחרוזת אחת.
   const XLSX_COLUMNS: XlsxColumn[] = [
-    { header: 'שם' }, { header: 'ת"ז', kind: 'id' }, { header: 'בן/בת זוג' },
+    { header: 'שם משפחה' }, { header: 'שם פרטי' }, { header: 'ת"ז', kind: 'id' }, { header: 'בן/בת זוג' },
     { header: 'טלפון', kind: 'id' }, { header: 'מייל' }, { header: 'כתובת' }, { header: 'עיר' },
     { header: 'קהילה' }, { header: 'גיל', kind: 'number' }, { header: 'ילדים', kind: 'number' },
     { header: 'ערוץ' }, { header: 'תאריך רישום', kind: 'date' }, { header: 'סכום מתוכנן', kind: 'number' },
@@ -288,7 +292,7 @@ export default function HolidayRegistrations({
         sheetName: 'נרשמים',
         columns: XLSX_COLUMNS,
         rows: filtered.map(r => [
-          r.name, r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
+          r.family_name || r.name, r.first_name || '', r.id_number, r.spouse_name, r.ben_phone ?? r.phone, r.email,
           r.address, r.city, r.community, r.age, r.children_count,
           SOURCE_LABEL[r.source], r.registered_at, amountPerFamily || null,
           APPROVAL_LABEL[r.approval_status], r.card_number, r.card_linked_at,

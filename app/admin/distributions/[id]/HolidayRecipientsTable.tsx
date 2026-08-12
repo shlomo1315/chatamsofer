@@ -27,6 +27,10 @@ export interface HolidayRow {
   card_linked_at: string | null
   card_link_error?: string | null
   name: string
+  /** ⚠️ נשמרים בנפרד ולא מפוצלים מ-name: פיצול לפי רווח היה שובר שמות
+   *  משפחה מורכבים ("בן דוד", "אבו חצירא"). */
+  family_name?: string | null
+  first_name?: string | null
   id_number: string | null
   spouse_name: string | null
   ben_phone: string | null
@@ -98,7 +102,8 @@ export default function HolidayRecipientsTable({
                   className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
               </th>
             )}
-            <th>שם המשפחה</th>
+            <th>שם משפחה</th>
+            <th>שם פרטי</th>
             <th>ת״ז</th>
             {!hideApproval && <th>אישור הבקשה</th>}
             {!hideCard && <th>כרטיס</th>}
@@ -126,11 +131,17 @@ export default function HolidayRecipientsTable({
                       className="h-4 w-4 accent-indigo-600" aria-label={`סימון ${r.name}`} />
                   </td>
                 )}
+                {/* ⚠️ הקישור לכרטסת נשאר על שם המשפחה בלבד ולא על שתי
+                    העמודות: שני קישורים לאותו יעד בשורה אחת מייצרים לחיצה
+                    כפולה מיותרת ומקשים על סימון טקסט. */}
                 <td className="font-semibold text-slate-800">
                   {r.beneficiary_id && canEdit
-                    ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-indigo-700 hover:underline">{r.name}</Link>
-                    : r.name}
+                    ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-indigo-700 hover:underline">
+                        {r.family_name || r.name}
+                      </Link>
+                    : (r.family_name || r.name)}
                 </td>
+                <td className="text-slate-700">{r.first_name || '—'}</td>
                 <td className="font-mono text-slate-600 ltr-num">{r.id_number ?? '—'}</td>
                 {!hideApproval && (
                 <td>

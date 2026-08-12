@@ -90,6 +90,11 @@ async function getData(id: string) {
       card_linked_at: row.card_linked_at ?? null,
       card_link_error: row.card_link_error ?? null,
       name: [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || (b?.full_name ?? 'ללא שם'),
+      // ⚠️ שם המשפחה והשם הפרטי נשמרים גם בנפרד, לא רק במחרוזת המאוחדת:
+      // פיצול בצד הלקוח לפי רווח היה שובר שמות משפחה מורכבים ("בן דוד",
+      // "אבו חצירא") ומזיז חצי מהשם לעמודה הלא נכונה.
+      family_name: b?.family_name ?? null,
+      first_name: b?.full_name || b?.spouse_name || null,
       id_number: b?.id_number ?? null,
       spouse_name: b?.spouse_name ?? null,
       ben_phone: b?.phone || b?.phone2 || null,

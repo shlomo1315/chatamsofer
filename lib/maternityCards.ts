@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { maternityCardEmail } from '@/lib/emailTemplates'
-import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, getMaternityLimitedId } from '@/lib/nedarim'
+import { getNedarimCreds, findClientByZeout, saveClientCard, addTlush, getClientCard, getMaternityLimitedId, isPassportId } from '@/lib/nedarim'
 import { logActivity } from '@/lib/activityLog'
 import { consumeOneCard, getStockBalance } from '@/lib/cardStock'
 import { maybeSendLowStockAlert } from '@/lib/cardStockAlert'
@@ -114,7 +114,11 @@ export async function loadMaternityCardOnApproval(
   // ⚠️ נפילה-לאחור לת"ז האשה: היולדת היא האשה, ובחלק מהרשומות ת"ז הבעל
   // ריקה. חיפוש לפי id_number בלבד נכשל אז ב"שגיאה באיתור משפחה", והכרטיס
   // לא נטען. saveClientCard דורש Zeout — בלעדיו גם ההקמה נכשלת.
-  const zeout = b.id_number || b.spouse_id_number || null
+  // ⚠️ מעדיפים ת"ז ישראלית על דרכון כשיש שתיים: נדרים מחפש בעיקר לפי Zeout,
+  // ומשפחה שהוקמה על דרכון בלבד קשה יותר לאיתור בהמשך. אם *שתיהן* דרכונים
+  // (או שיש רק אחת) — נשלח מה שיש, והוא ינותב למזהה ג'.
+  const idCandidates = [b.id_number, b.spouse_id_number].filter(Boolean).map(String)
+  const zeout = idCandidates.find(v => !isPassportId({ id_number: v })) ?? idCandidates[0] ?? null
   let clientId = b.nedarim_id ? String(b.nedarim_id) : null
   try {
     // ⚠️ החיפוש (GetClient_Table) עלול להיכשל מצד נדרים. זה אינו סיבה

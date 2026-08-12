@@ -75,11 +75,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'אין כתובת מייל מעודכנת במערכת על שמך. אנא פנה למשרד לעדכון פרטים.' }, { status: 400 })
   }
 
-  const [loans, maternity, finaid, widow] = await Promise.all([
+  const [loans, maternity, finaid, widow, holidays] = await Promise.all([
     admin.from('loans').select('id, status, amount, approved_amount, created_at').eq('beneficiary_id', beneficiaryId),
     admin.from('maternity_aids').select('id, status, created_at').eq('beneficiary_id', beneficiaryId),
     admin.from('financial_aid_requests').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId),
     admin.from('widow_requests').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId),
+    // ⚠️ רישום לחלוקת חגים לא הופיע כאן כלל: משפחה שנרשמה קיבלה מייל סטטוס
+    // בלי שום זכר לרישום, והניחה שהוא לא נקלט — ואז נרשמה שוב או התקשרה.
+    admin.from('distribution_recipients')
+      .select('id, registered_at, approval_status, distribution:distributions(name, year)')
+      .eq('beneficiary_id', beneficiaryId),
   ])
 
   type Row = { label: string; date: string; amount: number | null; statusLabel: string; tone: Tone }
@@ -88,7 +93,30 @@ export async function POST(request: NextRequest) {
   for (const m of maternity.data ?? []) { const [statusLabel, tone] = fb(MATERNITY, m.status); rows.push({ label: 'בקשת הבראה ליולדת', date: m.created_at, amount: null, statusLabel, tone }) }
   for (const f of finaid.data ?? []) { const [statusLabel, tone] = fb(FINAID, f.status); rows.push({ label: 'בקשת סיוע רפואי', date: f.created_at, amount: f.status === 'approved' ? (f.amount ?? null) : null, statusLabel, tone }) }
   for (const w of widow.data ?? []) { const [statusLabel, tone] = fb(WIDOW, w.status); rows.push({ label: 'בקשת סיוע', date: w.created_at, amount: w.amount ?? null, statusLabel, tone }) }
+
+  // ── רישום לחלוקת חגים ──
+  // ⚠️ הסטטוס המוצג הוא "התקבלה בהצלחה" ולא approval_status הגולמי: מבחינת
+  // המשפחה הרישום *הושלם*, והאישור הפנימי הוא שלב עיבוד במשרד. הצגת
+  // "ממתין לאישור" הייתה נקראת כאילו הרישום לא נקלט — בדיוק מה שגרם
+  // לרישום כפול ולפניות טלפוניות.
+  for (const h of holidays.data ?? []) {
+    const row = h as unknown as {
+      registered_at?: string | null
+      distribution?: { name?: string | null; year?: string | null } | null
+    }
+    const dist = row.distribution
+    const distName = [dist?.name, dist?.year].filter(Boolean).join(' ')
+    rows.push({
+      label: `בקשת סיוע חגים${distName ? ` — ${distName}` : ''}`,
+      date: row.registered_at ?? new Date().toISOString(),
+      amount: null,
+      statusLabel: 'התקבלה בהצלחה',
+      tone: 'approved',
+    })
+  }
+
   rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const hasHoliday = (holidays.data ?? []).length > 0
 
   const fmtDate = (s: string) => { try { return new Date(s).toLocaleDateString('he-IL') } catch { return '' } }
   const fmtAmt = (n: number | null) => (n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—')
@@ -126,7 +154,23 @@ export async function POST(request: NextRequest) {
         <th style="padding:11px 14px;text-align:right;font-weight:700;">סטטוס</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
-    </table>`
+    </table>
+    ${hasHoliday ? `
+    <!-- ⚠️ מוצג רק למי שנרשם בפועל לחלוקת חגים: הודעה על צינתוקים למי
+         שלא נרשם היא רעש שמסיח מהמידע שביקש. -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;">
+      <tr><td style="background:#fffbeb;border-right:4px solid #f59e0b;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 8px;color:#78350f;font-size:15px;font-weight:800;">עדכונים בעניין חלוקת החגים</p>
+        <p style="margin:0 0 10px;color:#92400e;font-size:14px;line-height:1.8;">
+          עדכונים יישלחו לנרשמים לשירות הצינתוקים.
+        </p>
+        <p style="margin:0;color:#78350f;font-size:14px;line-height:1.8;">
+          להרשמה חייגו עכשיו
+          <a href="tel:023131325" style="color:#b45309;font-weight:800;text-decoration:none;font-size:16px;" dir="ltr">02-313-1325</a>
+          <span style="font-weight:800;">שלוחה 9</span>
+        </p>
+      </td></tr>
+    </table>` : ''}`
 
   const html = shell({
     preheader: 'סטטוס הבקשות הרשומות במערכת על שמך',
