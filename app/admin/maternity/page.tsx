@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Baby, Home } from 'lucide-react'
+import { Plus, Baby, Home, AlertTriangle } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
@@ -63,6 +63,15 @@ export default async function MaternityPage() {
           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
           <Home size={14} /> מימוש בתי החלמה
         </Link>
+        {/* ⚠️ תיקים שטעינת הכרטיס בהם נכשלה אינם מנסים שוב מעצמם — הם
+            תקועים ב-failed עד שמישהו מריץ אותם. בלי כפתור, יולדת נשארת
+            בלי כרטיס בלי שאיש יודע. */}
+        <Can section="maternity" action="edit">
+          <Link href="/admin/maternity/failed-cards"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs font-bold text-amber-700 hover:border-amber-400 transition-colors">
+            <AlertTriangle size={14} /> כרטיסים שנכשלו
+          </Link>
+        </Can>
         <ExportExcelButton type="maternity" />
         {/* ⚠️ מותנה בהרשאת מחלקת היולדות ולא ב-isAdmin: /api/admin/maternity/create
             אוכף requirePermission('maternity','edit') — בדיוק ההרשאה שיש למזכירות
