@@ -10,6 +10,7 @@ import NoPermission from '@/components/ui/NoPermission'
 import { format, differenceInYears } from 'date-fns'
 import { he } from 'date-fns/locale'
 import HolidayRegistrations, { type RegistrationRow } from './HolidayRegistrations'
+import InviteLinkPanel from './InviteLinkPanel'
 import type { RegisterSource } from '@/lib/distributionSources'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 
@@ -120,6 +121,10 @@ export default async function DistributionDetailPage({ params }: { params: Promi
     return <NoPermission detail="נדרשת הרשאת צפייה בחלוקות חגים כדי לראות את רשימת הנרשמים." />
   }
 
+  // ⚠️ הרשאת העריכה נבדקת בשרת ומועברת כדגל: היא שולטת על יצירת קישורי
+  // רישום וביטולם — פעולות שפותחות רישום סגור, ולכן אינן נגזרות מהרשאת הצפייה.
+  const canEditDistribution = !!(await requirePermission('distributions', 'edit'))
+
   const data = await getData(id)
   if (!data && isSupabaseConfigured()) notFound()
   if (!data) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>
@@ -159,6 +164,8 @@ export default async function DistributionDetailPage({ params }: { params: Promi
           לא הוגדר סכום למשפחה — הצפי התקציבי יוצג כאפס. יש להזין את הסכום בעריכת החלוקה.
         </div>
       )}
+
+      <InviteLinkPanel distributionId={d.id} canEdit={canEditDistribution} />
 
       <HolidayRegistrations
         distributionId={d.id}

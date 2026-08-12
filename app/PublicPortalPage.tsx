@@ -1656,6 +1656,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // האישי תוצג *רק* הבקשה של אותה מחלקה — לכל מחלקה יש קישור משלה, ואין
   // סיבה להציג למי שהגיע לבקשת לידה גם הלוואה וסיוע.
   const [arrivedFor, setArrivedFor] = useState<'birth' | 'loan' | 'aid' | 'docs' | 'details' | 'holiday' | null>(null)
+  // ⚠️ קישור רישום עם תוקף (?invite=). מסיר את חסימת הסגירה לחלוקה אחת, ואינו
+  // מחליף את הזיהוי — המשפחה עדיין מתחברת בת"ז + קוד ונרשמת כעצמה.
+  const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [docsGateModal, setDocsGateModal] = useState(false)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
@@ -2910,7 +2913,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (step !== 'dashboard' || !beneficiary?.id) return
     let alive = true
     const t = setTimeout(() => {
-      void fetch(`/api/portal/holiday-register?beneficiary_id=${beneficiary.id}`, { cache: 'no-store' })
+      // הטוקן נשלח גם כאן: בלעדיו השרת יבדוק את החלוקה *הפתוחה* ויחזיר "סגור",
+      // והמשפחה שהגיעה מהקישור הייתה רואה מסך סגור למרות שהקישור תקף.
+      const qs = `beneficiary_id=${beneficiary.id}${inviteToken ? `&token=${encodeURIComponent(inviteToken)}` : ''}`
+      void fetch(`/api/portal/holiday-register?${qs}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(d => {
           if (!alive) return
@@ -2925,7 +2931,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         .catch(() => {})
     }, 0)
     return () => { alive = false; clearTimeout(t) }
-  }, [step, beneficiary?.id])
+  }, [step, beneficiary?.id, inviteToken])
 
   // רישום לחלוקת החגים מהאזור האישי (ערוץ "ממשק דיגיטלי")
   const registerHoliday = async () => {
@@ -2934,7 +2940,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     try {
       const res = await fetch('/api/portal/holiday-register', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ beneficiary_id: beneficiary.id }),
+        // ⚠️ הטוקן נשלח גם ברישום עצמו, ולא רק בבדיקה: הוא מה שמתיר לשרת
+        // לרשום כשהרישום סגור. בלעדיו הרישום היה נדחה אחרי שהמסך כבר הציג
+        // "פתוח" — והמשפחה הייתה מקבלת שגיאה על קישור תקין.
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...(inviteToken ? { token: inviteToken } : {}) }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error || 'הרישום נכשל'); setHolidaySaving(false); return }
@@ -3010,11 +3019,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   // Read the intended action from the URL once on mount (from the email buttons)
   useEffect(() => {
-    const a = new URLSearchParams(window.location.search).get('action')
+    const params = new URLSearchParams(window.location.search)
+    const a = params.get('action')
     if (a === 'birth' || a === 'loan' || a === 'docs' || a === 'aid' || a === 'details' || a === 'holiday') {
       intendedAction.current = a
       setArrivedFor(a)
     }
+    // ⚠️ קישור רישום עם תוקף. נשמר ב-state ולא ב-ref, כי הבקשה לשרת תלויה בו
+    // ו-ref אינו מפעיל את ה-effect מחדש — הטוקן היה מגיע אחרי שהבקשה כבר יצאה.
+    const inv = params.get('invite')
+    if (inv) setInviteToken(inv)
   }, [])
 
   // Once the beneficiary reaches their dashboard, jump straight to the intended form
