@@ -35,16 +35,60 @@ export function defaultMaintenanceMap(): MaintenanceReplyMap {
   return map
 }
 
-/** כתובות שלעולם לא עונים להן — מניעת לולאות. */
+/**
+ * כתובות שלעולם לא עונים להן — מניעת לולאות.
+ *
+ * 🔴 הורחב אחרי לולאה אמיתית בייצור: helpdesk@make.com לא תאם לאף תבנית
+ * כאן, קיבל מענה, ענה אוטומטית "כתובת זו אינה מקבלת הודעות" — וזה נקלט
+ * כפנייה חדשה. מאות מיילים תוך דקות.
+ *
+ * ⚠️ התבניות שנוספו הן שמות התיבה שמערכות שירות משתמשות בהן כשהן *כן*
+ * עונות אוטומטית. מענה אליהן לעולם אינו מגיע לאדם.
+ *
+ * ⚠️ נעולות לתחילת הכתובת (^) או לגבול מפריד — אחרת "care" היה תופס גם
+ * michaelcarey@gmail.com וחוסם פונה אמיתי.
+ */
 const NEVER_REPLY = [
   /@chasamsofer\./i, /^noreply@/i, /^no-reply@/i, /^donotreply@/i,
   /^mailer-daemon@/i, /^postmaster@/i, /^bounce/i, /^notifications?@/i,
   /^automated?@/i, /-noreply@/i,
+  // ── נוספו אחרי הלולאה ──
+  /^(help|helpdesk|support|care|service|ticket|tickets|contact|info|admin|billing|invoice|alerts?|system|daemon|robot|bot|team|hello|mailer|auto)@/i,
+  /[._-](noreply|no-reply|support|helpdesk|donotreply)@/i,
 ]
 function shouldSkip(email: string): boolean {
   const e = email.toLowerCase().trim()
   if (!e.includes('@')) return true
   return NEVER_REPLY.some(re => re.test(e))
+}
+
+/**
+ * 🔴 תקרת מענים לכתובת — בולם הלולאה האחרון.
+ *
+ * ⚠️ כל התבניות שמעל מזהות אוטומציה *לפי דפוס*, ודפוס אפשר תמיד להחמיץ —
+ * helpdesk@ הוכיח את זה. הבדיקה הזו אינה מנחשת אלא סופרת: אחרי 2 מענים
+ * לאותה כתובת בשבוע, לא נשלח עוד, ולא משנה מי היא.
+ *
+ * 🔴 נכשל-סגור: אם הטבלה חסרה או השאילתה נכשלה — לא עונים. במצב שבו איננו
+ * יודעים כמה מענים כבר יצאו, שתיקה עדיפה על לולאה.
+ */
+async function underReplyCap(db: SupabaseClient, email: string): Promise<boolean> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { count, error } = await db
+    .from('auto_reply_log')
+    .select('id', { count: 'exact', head: true })
+    .eq('to_email', email)
+    .gte('created_at', weekAgo)
+
+  if (error) {
+    console.error(`[maintenance-reply] 🔴 בדיקת התקרה נכשלה (${error.message}) — לא נשלח מענה ל-${email}`)
+    return false
+  }
+  if ((count ?? 0) >= 2) {
+    console.warn(`[maintenance-reply] 🔴 תקרת מענים ל-${email} — נחסם (${count} בשבוע האחרון)`)
+    return false
+  }
+  return true
 }
 
 /** האם המייל הנכנס הוא עצמו מענה אוטומטי (לפי כותרות תקניות). */
@@ -151,6 +195,8 @@ export async function maybeSendMaintenanceReply(
     // ⚠️ ההגנות מפני לולאה נשארות — הן קריטיות, לא קשורות ל"פעם אחת".
     if (shouldSkip(email)) return false
     if (isAutoSubmitted(opts.headers)) return false
+    // 🔴 הבולם האחרון — נבדק אחרי כל סינוני הדפוס ולפני השליחה.
+    if (!(await underReplyCap(db, email))) return false
 
     const mail = buildEmail(dept, settings)
     const res = await deliverMail(email, mail.subject, mail.html, undefined, {
@@ -161,6 +207,10 @@ export async function maybeSendMaintenanceReply(
       console.error('[maintenance-reply] שליחה נכשלה:', res.error)
       return false
     }
+    // ⚠️ נרשם *אחרי* שליחה מוצלחת בלבד: רישום מראש היה סופר גם נסיונות
+    // שנכשלו, וחוסם כתובת לגיטימית שמעולם לא קיבלה מענה.
+    await db.from('auto_reply_log').insert({ to_email: email, subject: mail.subject })
+      .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
     console.log(`[maintenance-reply] נשלח מענה (${dept}) אל ${email}`)
     return true
   } catch (e) {
