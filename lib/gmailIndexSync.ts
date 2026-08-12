@@ -201,7 +201,7 @@ export async function syncAccount(
   if (!account.last_history_id) return runFull()
 
   // ── מסלול מצטבר ──
-  let pages: GmailHistoryPage[] = []
+  const pages: GmailHistoryPage[] = []
   try {
     let pageToken: string | undefined
     for (let i = 0; i < MAX_HISTORY_PAGES; i++) {

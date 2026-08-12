@@ -1556,6 +1556,10 @@ export default function MailClient() {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
             <BarChart2 size={13} /> ניטור וסטטיסטיקות
           </Link>
+          <Link href="/admin/mail/index-sync"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors">
+            <RefreshCw size={13} /> סנכרון אינדקס Gmail
+          </Link>
         </div>
       </div>
 
