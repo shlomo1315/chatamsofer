@@ -34,8 +34,16 @@ function extractEmail(from: string): string {
 }
 
 // פונה אוטומטי / רשימת תפוצה — לא נשלח אליו מענה אוטומטי (מניעת לולאות)
+//
+// 🔴 הרשימה הורחבה אחרי לולאה אמיתית בייצור: care@make.com אינו תואם לאף
+// אחת מהתבניות הישנות (אין בו "noreply"), ולכן קיבל מענה אוטומטי — ענה
+// "כתובת זו אינה מקבלת הודעות", וזה נקלט כפנייה חדשה. אינסוף.
+//
+// ⚠️ שמות התיבה שנוספו הם אלה שמערכות שירות משתמשות בהן כשהן *כן* עונות
+// אוטומטית: support, care, help, ticket, service. מענה אליהן לעולם אינו
+// מגיע לאדם, ולכן אין בו תועלת גם כשאין לולאה.
 function isAutomatedSender(fromEmail: string): boolean {
-  return /(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces|notifications?|newsletter|mailer|auto)/i.test(fromEmail)
+  return /(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces|notifications?|newsletter|mailer|auto|support|care|help|helpdesk|ticket|tickets|service|info|admin|team|hello|contact|billing|invoice|alerts?|system|daemon|robot|bot)([._-]|@|$)/i.test(fromEmail)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,6 +152,39 @@ export async function runAutoReply(opts: { dry?: boolean } = {}): Promise<AutoRe
           continue
         }
 
+        // 🔴 תקרת מענים לכתובת — בולם הלולאה האחרון.
+        //
+        // ⚠️ כל הסינונים שמעל מזהים לולאה *לפי דפוס*, ודפוס אפשר להחמיץ:
+        // care@make.com עקף את כולם וייצר מאות מיילים בייצור. הבדיקה הזו
+        // אינה מנחשת — היא סופרת. אחרי 2 מענים לאותה כתובת בשבוע, לא נשלח
+        // עוד, ולא משנה מי היא ומה הדפוס שלה.
+        //
+        // ⚠️ נבדק *אחרי* התיוג של הסינונים הקודמים ולפני השליחה, כי זה
+        // המקום היחיד שבו כל מסלולי המענה מתלכדים.
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        const { count: recentReplies, error: logErr } = await db
+          .from('auto_reply_log')
+          .select('id', { count: 'exact', head: true })
+          .eq('to_email', fromEmail)
+          .gte('created_at', weekAgo)
+
+        // 🔴 נכשל-סגור: אם הטבלה חסרה או השאילתה נכשלה, אנחנו *לא* יודעים
+        // כמה מענים כבר נשלחו — ובמצב הזה עדיף לא לענות מאשר להזין לולאה.
+        // זו בדיוק התקלה שהמנגנון נועד למנוע.
+        if (logErr) {
+          console.error(`[autoReply] 🔴 בדיקת התקרה נכשלה (${logErr.message}) — לא נשלח מענה ל-${fromEmail}`)
+          await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { addLabelIds: [labelId] } })
+          skipped++
+          continue
+        }
+
+        if ((recentReplies ?? 0) >= 2) {
+          console.warn(`[autoReply] 🔴 תקרת מענים לכתובת ${fromEmail} — נחסם (${recentReplies} בשבוע האחרון)`)
+          await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { addLabelIds: [labelId] } })
+          skipped++
+          continue
+        }
+
         // חיפוש הפונה בכרטסת הנתמכים לפי כתובת מייל מדויקת
         const { data: rows } = await db
           .from('beneficiaries')
@@ -174,6 +215,10 @@ export async function runAutoReply(opts: { dry?: boolean } = {}): Promise<AutoRe
         await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { addLabelIds: [labelId] } })
         try {
           await sendGmailMessage(gmail, { to: fromEmail, subject: email.subject, html: email.html, threadId })
+          // ⚠️ נרשם *אחרי* שליחה מוצלחת בלבד. רישום מראש היה סופר גם נסיונות
+          // שנכשלו, וחוסם כתובת לגיטימית שמעולם לא קיבלה מענה.
+          await db.from('auto_reply_log').insert({ to_email: fromEmail, subject: email.subject })
+            .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
           replied++
         } catch (sendErr) {
           await gmail.users.messages.modify({ userId: 'me', id: ref.id!, requestBody: { removeLabelIds: [labelId] } }).catch(() => {})
