@@ -131,9 +131,10 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   const bottomVisible = navBottom.filter(i => canSee(i.section))
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
 
-  // ⚠️ index-sync יושב תחת /admin/mail, ולכן הוא היה מדליק גם את "מייל
+  // ⚠️ מסכי Gmail יושבים תחת /admin/mail, ולכן היו מדליקים גם את "מייל
   // Resend". בתקופת המעבר דווקא ההבחנה בין השניים היא כל העניין.
-  const gmailActive = pathname.startsWith('/admin/mail/index-sync')
+  const gmailActive = pathname.startsWith('/admin/mail/gmail')
+    || pathname.startsWith('/admin/mail/index-sync')
   const mailActive = pathname.startsWith('/admin/mail') && !gmailActive
   // תת-עמוד יולדות פעיל — לפי הקידומת של הקישור עצמו
   const childActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
@@ -295,7 +296,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             שניהם זה לצד זה = אפשר להשוות, ורק אז לבטל את הישן. */}
         <div className="pt-0.5">
           <Link
-            href="/admin/mail/index-sync"
+            href="/admin/mail/gmail"
             onClick={() => setMobileOpen(false)}
             className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all
               ${gmailActive

@@ -36,6 +36,30 @@ interface LineageNode {
   generation: number
   status?: string | null
 }
+interface MaternityRow {
+  id: string
+  birth_date?: string | null
+  baby_name?: string | null
+  baby_gender?: string | null
+  recovery_home?: string | null
+  recovery_arrived?: boolean | null
+  recovery_arrived_at?: string | null
+  recovery_nights?: number | null
+  recovery_amount?: number | null
+  receiptCount?: number | null
+  card_number?: string | null
+  card_voucher_status?: string | null
+  status?: string | null
+  created_at?: string | null
+  beneficiary?: {
+    full_name?: string | null
+    family_name?: string | null
+    spouse_name?: string | null
+    id_number?: string | null
+    phone?: string | null
+    city?: string | null
+  } | null
+}
 interface Recipient {
   id: string
   distribution_id: string
@@ -312,13 +336,165 @@ function SharedRecipientsTable({ rows }: { rows: Recipient[] }) {
 }
 
 // ── Main ──
+// ─────────────────────────────────────────────────────────────────────────────
+// טאב עזר יולדות — תצוגה בלבד.
+//
+// ⚠️ המצב נגזר משני צירים ולא מ-status: הגעה בפועל לבית ההחלמה, וקבלה
+// שהוגשה. הפער ביניהם — מי שמימשה ובית ההחלמה טרם גבה — הוא כסף שטרם שולם,
+// והוא נעלם לגמרי כשמציגים סטטוס גולמי בלבד.
+// ─────────────────────────────────────────────────────────────────────────────
+function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
+  const [q, setQ] = useState('')
+  const [home, setHome] = useState('')
+
+  const stateOf = (r: MaternityRow) => {
+    if (!String(r.recovery_home ?? '').trim()) return 'none' as const
+    if (r.recovery_arrived !== true) return 'not-realized' as const
+    return (r.receiptCount ?? 0) > 0 ? 'realized-charged' as const : 'realized-unbilled' as const
+  }
+  const LABEL = {
+    'realized-charged': 'מימשה וחויבה',
+    'realized-unbilled': 'מימשה — טרם חויבה',
+    'not-realized': 'טרם מימשה',
+    'none': 'ללא בית החלמה',
+  } as const
+  const STYLE = {
+    'realized-charged': 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    'realized-unbilled': 'bg-amber-50 text-amber-800 border-amber-200',
+    'not-realized': 'bg-[#f6f1e4] text-[#6b5d3e] border-[#e8dfc9]',
+    'none': 'bg-slate-50 text-slate-400 border-slate-100',
+  } as const
+
+  const homes = useMemo(() => {
+    const s = new Set<string>()
+    for (const r of rows) { const h = String(r.recovery_home ?? '').trim(); if (h) s.add(h) }
+    return [...s].sort()
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return rows.filter(r => {
+      if (home && String(r.recovery_home ?? '').trim() !== home) return false
+      if (!needle) return true
+      const b = r.beneficiary
+      return [b?.family_name, b?.full_name, b?.spouse_name, b?.id_number, b?.city, r.baby_name, r.recovery_home]
+        .filter(Boolean).join(' ').toLowerCase().includes(needle)
+    })
+  }, [rows, q, home])
+
+  const totals = useMemo(() => {
+    let charged = 0, unbilled = 0, notRealized = 0, amount = 0, nights = 0
+    for (const r of filtered) {
+      const s = stateOf(r)
+      if (s === 'realized-charged') charged++
+      else if (s === 'realized-unbilled') unbilled++
+      else if (s === 'not-realized') notRealized++
+      amount += Number(r.recovery_amount ?? 0) || 0
+      nights += Number(r.recovery_nights ?? 0) || 0
+    }
+    return { charged, unbilled, notRealized, amount, nights }
+  }, [filtered])
+
+  const d = (v?: string | null) => {
+    if (!v) return '—'
+    const dt = new Date(v)
+    return Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('he-IL')
+  }
+  const cur = (n: number) => `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
+
+  return (
+    <div className="space-y-4">
+      {/* סיכום */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'מימשו וחויבו', value: totals.charged.toLocaleString('he-IL'), tone: 'text-emerald-700' },
+          { label: 'מימשו — טרם חויבו', value: totals.unbilled.toLocaleString('he-IL'), tone: 'text-amber-700' },
+          { label: 'טרם מימשו', value: totals.notRealized.toLocaleString('he-IL'), tone: 'text-[#6b5d3e]' },
+          { label: 'סך שחויב', value: cur(totals.amount), tone: 'text-emerald-700' },
+        ].map(c => (
+          <div key={c.label} className="rounded-2xl border border-[#e8dfc9] bg-white p-4">
+            <p className="text-[11px] font-bold text-[#8a7a56]">{c.label}</p>
+            <p className={`text-2xl font-extrabold ltr-num mt-1 ${c.tone}`}>{c.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* סינון */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-[#b3a382] pointer-events-none" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="חיפוש בשם, ת״ז, עיר…"
+            className="w-full pr-9 pl-3 py-2 text-sm rounded-xl border border-[#e8dfc9] bg-white text-[#3a3630] placeholder:text-[#b3a382] focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/40" />
+        </div>
+        <select value={home} onChange={e => setHome(e.target.value)}
+          className="rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-sm font-bold text-[#6b5d3e] focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/40">
+          <option value="">כל בתי ההחלמה</option>
+          {homes.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+      </div>
+
+      {/* הטבלה */}
+      <div className="rounded-2xl border border-[#e8dfc9] bg-white overflow-hidden">
+        {filtered.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-[#8a7a56]">לא נמצאו רשומות</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] border-collapse min-w-[880px]">
+              <thead className="bg-[#faf7ef] text-[#8a7a56]">
+                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-[#efe7d4] [&>th:last-child]:border-l-0">
+                  <th>מצב</th><th>שם המשפחה</th><th>ת״ז</th><th>עיר</th>
+                  <th>תאריך לידה</th><th>תינוק</th><th>בית החלמה</th>
+                  <th>הגעה</th><th>לילות</th><th>סכום</th><th>קבלות</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f4efe2]">
+                {filtered.map(r => {
+                  const s = stateOf(r)
+                  const b = r.beneficiary
+                  const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'
+                  return (
+                    <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-nowrap [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
+                      <td>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STYLE[s]}`}>
+                          {LABEL[s]}
+                        </span>
+                      </td>
+                      <td className="font-bold text-[#3a3630]">{name}</td>
+                      <td className="text-[#6b5d3e] ltr-num">{b?.id_number ?? '—'}</td>
+                      <td className="text-[#6b5d3e]">{b?.city ?? '—'}</td>
+                      <td className="text-[#6b5d3e] ltr-num">{d(r.birth_date)}</td>
+                      <td className="text-[#6b5d3e]">{r.baby_name || '—'}</td>
+                      <td className="text-[#6b5d3e]">{r.recovery_home || '—'}</td>
+                      <td className="text-[#6b5d3e] ltr-num">{r.recovery_arrived ? d(r.recovery_arrived_at) : '—'}</td>
+                      <td className="text-[#6b5d3e] ltr-num">{r.recovery_nights ?? '—'}</td>
+                      <td className="font-bold text-emerald-700 ltr-num">
+                        {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
+                      </td>
+                      <td className="text-[#6b5d3e] ltr-num">{(r.receiptCount ?? 0) || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-center text-[11px] text-[#a8996f]">
+        מוצגות {filtered.length.toLocaleString('he-IL')} מתוך {rows.length.toLocaleString('he-IL')} רשומות · תצוגה בלבד
+      </p>
+    </div>
+  )
+}
+
 export default function SharedDistributionsPage() {
   const [state, setState] = useState<'checking' | 'locked' | 'unlocked'>('checking')
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
-  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree'>('distributions')
+  const [maternity, setMaternity] = useState<MaternityRow[]>([])
+  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree' | 'maternity'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [countdown, setCountdown] = useState(10)
@@ -333,6 +509,7 @@ export default function SharedDistributionsPage() {
         setRecipients(d.recipients ?? [])
         setLineageNodes(d.lineageNodes ?? [])
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
+        setMaternity(d.maternity ?? [])
         setState('unlocked')
         setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
@@ -445,11 +622,12 @@ export default function SharedDistributionsPage() {
         </div>
 
         {/* ── טאבים ראשיים — פרוסים לרוחב, גדולים ומרווחים (grid שווה) ── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {([
             { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={20} /> },
             { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={20} /> },
             { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={20} /> },
+            { key: 'maternity', label: 'עזר יולדות', icon: <Baby size={20} /> },
           ] as const).map(t => (
             <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
               className={`flex items-center justify-center gap-2.5 rounded-2xl px-5 py-5 text-base font-bold transition-all ${
@@ -467,6 +645,8 @@ export default function SharedDistributionsPage() {
         {activeTab === 'breakdown' && <BreakdownPanels recipients={recipients} />}
 
         {activeTab === 'tree' && <GenerationExplorer nodes={lineageNodes} />}
+
+        {activeTab === 'maternity' && <MaternityPanel rows={maternity} />}
 
         {activeTab === 'distributions' && <>
         {/* חיפוש */}

@@ -59,8 +59,48 @@ export async function GET(req: NextRequest) {
     .from('beneficiaries')
     .select('id', { count: 'exact', head: true })
 
+  // ── יולדות — לטאב הייעודי בדף השיתוף ──
+  // ⚠️ תצוגה בלבד. הדף מוגן בסיסמה ומבודד משאר האתר, ולכן הנתונים נשלפים
+  // כאן במלואם ולא נחשפים בשום נתיב ציבורי אחר.
+  const { rows: maternityRows } = await fetchAllRows<Record<string, unknown>>((from, to) => admin
+    .from('maternity_aids')
+    .select('id, birth_date, baby_name, baby_gender, recovery_home, recovery_arrived, recovery_arrived_at, recovery_nights, recovery_amount, card_number, card_voucher_status, status, created_at, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, phone, city)')
+    .order('created_at', { ascending: false })
+    .range(from, to))
+
+  // ספירת קבלות לכל בקשה — מה שקובע "חויבה".
+  // 🔴 recovery_receipt_url לבדו אינו מספיק: מאז המעבר לקבלות מרובות הוא
+  // מחזיק רק את הראשונה, ובקשה עם קבלה משלימה בלבד הייתה נספרת כלא-מחויבת.
+  const { rows: receipts } = await fetchAllRows<{ aid_id: string; amount?: number | null }>((from, to) => admin
+    .from('recovery_receipts').select('aid_id, amount').range(from, to))
+  const recByAid = new Map<string, { count: number; amount: number }>()
+  for (const r of receipts) {
+    const cur = recByAid.get(r.aid_id) ?? { count: 0, amount: 0 }
+    cur.count++
+    cur.amount += Number(r.amount ?? 0) || 0
+    recByAid.set(r.aid_id, cur)
+  }
+
+  const maternity = maternityRows.map(a => {
+    const id = String(a.id ?? '')
+    const rec = recByAid.get(id) ?? { count: 0, amount: 0 }
+    return {
+      ...a,
+      receiptCount: rec.count,
+      // ⚠️ הסכום מהקבלות גובר: הוא המצטבר האמיתי, והשדה הישן מחזיק רק
+      // את ההגשה הראשונה.
+      recovery_amount: rec.count > 0 ? rec.amount : (Number(a.recovery_amount ?? 0) || 0),
+    }
+  })
+
   return NextResponse.json(
-    { distributions: distributions ?? [], recipients, lineageNodes, beneficiariesCount: beneficiariesCount ?? 0 },
+    {
+      distributions: distributions ?? [],
+      recipients,
+      lineageNodes,
+      beneficiariesCount: beneficiariesCount ?? 0,
+      maternity,
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   )
 }

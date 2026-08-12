@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Plus, Baby } from 'lucide-react'
+import { Plus, Baby, Home } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
 import Button from '@/components/ui/Button'
@@ -57,6 +57,12 @@ export default async function MaternityPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="יולדות" subtitle={`כל הלידות · ${aids.length}`}>
+        {/* ⚠️ דוח נפרד מהייצוא הרגיל: הייצוא מחזיר את status הבקשה, שאינו
+            אומר אם היולדת מימשה בפועל בית החלמה. */}
+        <Link href="/admin/maternity/recovery-report"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 hover:text-indigo-700 transition-colors">
+          <Home size={14} /> מימוש בתי החלמה
+        </Link>
         <ExportExcelButton type="maternity" />
         {/* ⚠️ מותנה בהרשאת מחלקת היולדות ולא ב-isAdmin: /api/admin/maternity/create
             אוכף requirePermission('maternity','edit') — בדיוק ההרשאה שיש למזכירות
