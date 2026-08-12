@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Database,
-  Inbox, Clock, ShieldCheck,
+  Inbox, Clock, ShieldCheck, Zap,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -28,6 +28,7 @@ interface Account {
   last_history_id: string | null
   last_error: string | null
   neverSynced: boolean
+  watch_expires_at: string | null
 }
 
 interface RunResult {
@@ -46,6 +47,9 @@ export default function IndexSyncPage() {
   const [indexedTotal, setIndexedTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState<string | null>(null)
+  const [watchBusy, setWatchBusy] = useState(false)
+  // 0 עד שהנתונים נטענים — כך אף מנוי אינו נחשב פעיל לפני שידוע מה מצבו.
+  const [now, setNow] = useState(0)
   const [results, setResults] = useState<RunResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -56,6 +60,7 @@ export default function IndexSyncPage() {
       if (!res.ok) { setError(json.error ?? 'טעינת המצב נכשלה'); return }
       setAccounts(json.accounts ?? [])
       setIndexedTotal(json.indexedTotal ?? 0)
+      setNow(Date.now())
       setError(null)
     } catch { setError('שגיאת רשת') } finally { setLoading(false) }
   }, [])
@@ -90,6 +95,27 @@ export default function IndexSyncPage() {
   }
 
   const neverSynced = accounts.filter(a => a.neverSynced).length
+
+  // ⚠️ "פעיל" נגזר מתפוגה *עתידית* ולא מעצם קיומה: מנוי שפג לפני יומיים
+  // היה מוצג כפעיל, וזה בדיוק המצב שבו המערכת נדמה בשקט.
+  //
+  // ⚠️ ה"עכשיו" נלקח מ-state שנקבע בטעינה ולא מקריאה בזמן הרינדור: קריאה
+  // כזו הופכת את הרינדור ללא-דטרמיניסטי, ומייצרת אי-התאמה בין השרת ללקוח.
+  const liveAccounts = accounts.filter(a => a.watch_expires_at && new Date(a.watch_expires_at).getTime() > now)
+  const liveOn = liveAccounts.length > 0 && liveAccounts.length === accounts.length
+  const nearestExpiry = liveAccounts
+    .map(a => a.watch_expires_at!)
+    .sort((x, y) => new Date(x).getTime() - new Date(y).getTime())[0] ?? null
+
+  async function toggleWatch(on: boolean) {
+    setWatchBusy(true); setError(null)
+    try {
+      const res = await fetch('/api/admin/gmail/watch', { method: on ? 'POST' : 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'הפעולה נכשלה'); return }
+      await load()
+    } catch { setError('שגיאת רשת') } finally { setWatchBusy(false) }
+  }
 
   return (
     <div className="space-y-5">
@@ -158,6 +184,45 @@ export default function IndexSyncPage() {
           ? <><Loader2 size={17} className="animate-spin" /> מסנכרן את כל התיבות… (עשוי לקחת מספר דקות)</>
           : <><RefreshCw size={17} /> סנכרן את כל התיבות</>}
       </button>
+
+      {/* ── סנכרון מיידי ── */}
+      {/* ⚠️ מוצג בנפרד מהסנכרון הידני: זו הפעלה חד-פעמית של מנוי, לא פעולה
+          שחוזרים עליה. והמנוי פג אחרי 7 ימים — לכן התפוגה מוצגת במפורש. */}
+      <div className={`rounded-2xl border p-5 ${liveOn ? 'border-green-200 bg-green-50/50' : 'border-slate-200 bg-white'}`}>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-extrabold text-slate-900 flex items-center gap-2">
+              <Zap size={16} className={liveOn ? 'text-green-600' : 'text-slate-400'} />
+              סנכרון מיידי (Push)
+              {liveOn
+                ? <span className="rounded-full bg-green-100 border border-green-300 px-2 py-0.5 text-[11px] font-extrabold text-green-800">🟢 פעיל</span>
+                : <span className="rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-500">כבוי</span>}
+            </p>
+            <p className="text-[13px] text-slate-600 mt-1.5 leading-relaxed">
+              כשפעיל, גוגל שולח התראה <strong>בשנייה</strong> שמייל נכנס, נקרא או נמחק — והמערכת
+              מתעדכנת מיד, בלי ללחוץ על כלום.
+            </p>
+            {liveOn && nearestExpiry && (
+              <p className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
+                <Clock size={12} /> המנוי פג ב־<strong className="text-slate-700">{fmt(nearestExpiry)}</strong> ומתחדש אוטומטית
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => toggleWatch(!liveOn)}
+            disabled={watchBusy || !accounts.length}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold flex-shrink-0 transition-colors disabled:opacity-50 ${
+              liveOn
+                ? 'border border-slate-200 bg-white text-slate-600 hover:border-rose-300 hover:text-rose-700'
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            {watchBusy
+              ? <><Loader2 size={13} className="animate-spin" /> רגע…</>
+              : liveOn ? <>כבה</> : <><Zap size={13} /> הפעל סנכרון מיידי</>}
+          </button>
+        </div>
+      </div>
 
       {error && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] font-bold text-amber-900 flex items-start gap-2">

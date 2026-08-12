@@ -40,7 +40,7 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { data: accounts } = await db.from('gmail_accounts')
-    .select('id, email, department, last_sync_at, last_full_sync_at, last_history_id, last_error')
+    .select('id, email, department, last_sync_at, last_full_sync_at, last_history_id, last_error, watch_expires_at')
     .eq('is_active', true)
     .order('email')
 
