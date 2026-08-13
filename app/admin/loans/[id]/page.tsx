@@ -47,7 +47,7 @@ async function getBeneficiaryIdDocs(beneficiaryId: string): Promise<{ doc_type: 
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
-const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
+const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 export default async function LoanDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

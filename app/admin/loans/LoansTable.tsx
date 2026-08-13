@@ -11,8 +11,9 @@ import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButton
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
-// סמל השקל אחרי המספר — "₪5,000" נקרא הפוך בעברית
-const fmtCur = (n: number) => `${Math.round(Number(n) || 0).toLocaleString('he-IL')} ₪`
+// 🔴 ההלוואות נקובות בדולר: הסכום מוקלד בדולרים, וההחזר בשקלים לפי שער
+// היום. הצגה ב-₪ הציגה מספר שאינו קיים — לא הסכום שהתבקש ולא זה שיוחזר.
+const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 type BenRef = { full_name?: string; family_name?: string; id_number?: string; spouse_name?: string; spouse_id_number?: string }
 // שם הלווה — שם הבעל (full_name); אם אין בעל, שם האישה (spouse_name)

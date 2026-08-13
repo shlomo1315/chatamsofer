@@ -280,13 +280,16 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
       { key: 'loan.purpose.placeholder', fallback: 'בחר מטרה...', hint: 'ברירת המחדל בבורר' },
       { key: 'loan.purposeDetails.label', fallback: 'פירוט הבקשה', hint: 'תווית תיבת הפירוט' },
       { key: 'loan.purposeDetails.placeholder', fallback: 'פרט/י את מטרת ההלוואה...', hint: 'טקסט מוצע בתיבת הפירוט' },
-      { key: 'loan.amount.label', fallback: 'סכום מבוקש (₪)', hint: 'תווית שדה הסכום' },
-      { key: 'loan.amount.hint', fallback: 'עד 30,000 ₪', hint: 'שורת העזרה מתחת לסכום' },
+      { key: 'loan.amount.label', fallback: 'סכום מבוקש ($)', hint: 'תווית שדה הסכום' },
+      { key: 'loan.amount.hint', fallback: 'עד 30,000$', hint: 'שורת העזרה מתחת לסכום' },
       { key: 'loan.installments.label', fallback: 'מספר תשלומים', hint: 'תווית שדה התשלומים' },
       { key: 'loan.installments.hint', fallback: 'עד 60 תשלומים', hint: 'שורת העזרה מתחת לתשלומים' },
       {
         key: 'loan.currency.notice',
-        fallback: 'שים לב: ההלוואה מתבצעת במטבע דולר ($).',
+        // ⚠️ הניסוח הקודם ("מתבצעת במטבע דולר") רמז שהכסף עצמו עובר בדולרים,
+        // ומשפחות הבינו שהן מקבלות ומחזירות מטבע זר. בפועל הכל בשקלים —
+        // הדולר הוא רק בסיס החישוב, וההצמדה היא מה שמשנה את גובה ההחזר.
+        fallback: 'שים לב: ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר ($).',
         hint: 'הודעת ההדגשה הצהובה',
         multiline: true,
       },
@@ -395,7 +398,7 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
       { key: 'err.docs.pending', fallback: 'נדרשת השלמת מסמכים. בדוק את המייל שנשלח אליך.', multiline: true },
       { key: 'err.loan.purpose', fallback: 'אנא פרט את מטרת ההלוואה' },
       { key: 'err.loan.wedding', fallback: 'יש לצרף הזמנה של החתונה' },
-      { key: 'err.loan.max', fallback: 'הסכום המרבי הוא 30,000 ₪' },
+      { key: 'err.loan.max', fallback: 'הסכום המרבי הוא 30,000$' },
       { key: 'err.loan.installments', fallback: 'מספר התשלומים המרבי הוא 60' },
       { key: 'err.aid.reason', fallback: 'אנא פרט את סיבת הבקשה' },
       { key: 'err.doc.attach', fallback: 'אנא צרף מסמך' },

@@ -109,10 +109,15 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
   const confirmApprove = async () => {
     const n = parseInt(approvedAmount.replace(/\D/g, '') || '0', 10)
     if (!n) { toast.error('יש להזין את הסכום שאושר'); return }
-    if (n > requestedAmount) {
-      toast.error(`הסכום שאושר אינו יכול לעלות על הסכום המבוקש (₪${requestedAmount.toLocaleString('he-IL')})`)
-      return
-    }
+    // 🔴 אין תקרה בשלב האישור, בכוונה.
+    //
+    // ⚠️ קודם נחסם כל סכום שעלה על המבוקש. אבל האישור הוא החלטת המשרד,
+    // ולעיתים מאשרים יותר ממה שהמבקש ביקש (שערוך מחדש, צירוף בקשות,
+    // החלטת ועדה). החסימה הכריחה לערוך את הבקשה המקורית — כלומר לשכתב
+    // את מה שהמבקש באמת ביקש, ולאבד את הנתון האמיתי.
+    //
+    // ⚠️ התקרה בהגשה (30,000) *נשארת* — שם היא מגבילה את המבקש, וזה תקין.
+    // כאן מגבילה את המשרד, וזה לא.
     await applyStatus('approved', { approved_amount: n })
   }
 
@@ -139,22 +144,27 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
             <div className="px-6 py-5 flex flex-col gap-4">
               <div className="flex items-center justify-between text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                 <span className="text-slate-500">סכום מבוקש</span>
-                <span className="font-semibold text-slate-700 ltr-num">₪{requestedAmount.toLocaleString('he-IL')}</span>
+                <span className="font-semibold text-slate-700 ltr-num">${requestedAmount.toLocaleString('he-IL')}</span>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-slate-700">סכום שאושר (₪)</label>
+                <label className="text-sm font-medium text-slate-700">סכום שאושר ($)</label>
                 <input
                   type="text" inputMode="numeric" autoFocus dir="ltr"
                   value={approvedAmount}
-                  onChange={e => {
-                    const digits = e.target.value.replace(/\D/g, '')
-                    // לא מאפשרים לאשר יותר מהסכום המבוקש
-                    const clamped = digits && parseInt(digits, 10) > requestedAmount ? String(requestedAmount) : digits
-                    setApprovedAmount(clamped)
-                  }}
+                  // ⚠️ אין הגבלה: האישור הוא החלטת המשרד, ולעיתים מאשרים
+                  // יותר מהמבוקש. החסימה הכריחה לערוך את הבקשה המקורית
+                  // ולאבד את הסכום שהמבקש באמת ביקש.
+                  onChange={e => setApprovedAmount(e.target.value.replace(/\D/g, ''))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 text-left ltr-num focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-shadow"
                 />
-                <p className="text-[11px] text-slate-400">עד ₪{requestedAmount.toLocaleString('he-IL')} (הסכום המבוקש)</p>
+                {/* ⚠️ הסכום המבוקש מוצג כהתייחסות ולא כתקרה — והחריגה
+                    מסומנת, כדי שאישור גבוה מהמבוקש יהיה מודע ולא בטעות. */}
+                <p className="text-[11px] text-slate-400">
+                  הסכום המבוקש: ${requestedAmount.toLocaleString('he-IL')}
+                  {parseInt(approvedAmount || '0', 10) > requestedAmount && (
+                    <span className="text-amber-600 font-bold"> · מאושר מעל המבוקש</span>
+                  )}
+                </p>
               </div>
               <div className="flex gap-3 mt-1">
                 <button onClick={confirmApprove} disabled={saving}

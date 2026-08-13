@@ -101,6 +101,10 @@ export async function sendLoanInquiry(
 
   if (isFirst) {
     subject = INQUIRY_SUBJECT
+    // ⚠️ עוגן השרשור נשלח כבר בהודעה הראשונה: הודעות ההמשך מצמידות אליו
+    // את עצמן (References), וגם אם ה-Message-ID של תשובת המבקש לא ייקלט —
+    // כל השיחה תתקבץ יחד אצלו.
+    thread.references = `<loan-${loanId}@${INBOUND_DOMAIN}>`
     const greet = greetByStatus(ben?.family_name, ben?.full_name, ben?.marital_status)
     html = shell({
       preheader: 'נדרשת השלמת פרטים בבקשת ההלוואה',
@@ -133,6 +137,21 @@ export async function sendLoanInquiry(
       thread.inReplyTo = lastWithId.message_id
       thread.references = [lastWithId.references_chain, lastWithId.message_id]
         .filter(Boolean).join(' ').trim()
+    } else {
+      // 🔴 נפילה-לאחור כשאין Message-ID של המבקש.
+      //
+      // ⚠️ זה קורה בפועל: Google Workspace עושה dual-delivery, והכותרות
+      // נאכלות בדרך ל-Resend. בלי inReplyTo לקוח הדואר פותח שרשור *חדש*,
+      // והמבקש רואה שתי שיחות נפרדות על אותה בקשה.
+      //
+      // הצמדה מלאכותית לשרשור: מזהה יציב שנגזר מהבקשה עצמה. הוא לא היה
+      // ה-Message-ID האמיתי של אף הודעה, אבל גמייל מקבץ לפי References
+      // גם כשהמזהה אינו מוכר — וזה מספיק כדי לאחד את השיחה.
+      //
+      // ⚠️ חייב להיות זהה בכל הודעה באותה בקשה, אחרת כל תשובה תפתח שרשור
+      // משלה. לכן נגזר מ-loanId בלבד ולא מזמן או מאקראי.
+      thread.references = `<loan-${loanId}@${INBOUND_DOMAIN}>`
+      thread.inReplyTo = thread.references
     }
     // טקסט רגיל בגוף המייל — כמו התכתבות ישירה, בלי עיצוב/מסגרת.
     html = `<div dir="rtl" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.9;color:#0f172a;white-space:pre-wrap;">${esc(text).replace(/\n/g, '<br/>')}</div>`

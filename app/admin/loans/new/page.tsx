@@ -277,13 +277,13 @@ export default function NewLoanPage() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-slate-600">סכום ההלוואה המבוקש (₪) <span className="text-red-500">*</span></label>
+                <label className="text-xs font-medium text-slate-600">סכום ההלוואה המבוקש ($) <span className="text-red-500">*</span></label>
                 <input type="text" inputMode="numeric" value={amount}
                   onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAmount(v); clearErr('amount') }}
                   placeholder="0"
                   className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ltr-num text-left ${fieldErrors.amount ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
                   dir="ltr" />
-                <p className="text-[11px] text-slate-400">ללא תקרה (שימו לב, ההלוואה מתבצעת במטבע הדולר)</p>
+                <p className="text-[11px] text-slate-400">ללא תקרה · ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר ($)</p>
                 {fieldErrors.amount && <p className="text-xs text-red-600">{fieldErrors.amount}</p>}
               </div>
               <div className="flex flex-col gap-1.5">
