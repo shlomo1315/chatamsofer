@@ -205,6 +205,23 @@ export async function GET() {
       // נטען": כרטיס טעון בידי לידה שאינה מאושרת הוא תקלה לתיקון, וספירתו
       // כ"נמסר" הייתה מקבעת אותה במלאי במקום להציג אותה לטיפול.
       issuedCards: coverage.withCard,
+
+      // 🔴 "סך הכרטיסים שנקנו" — נגזר מהיומן, לא מ-balance+issuedCards.
+      //
+      // ⚠️ הבאג שהיה: המסך חישב balance + issuedCards. שני המספרים סופרים
+      // תחומים שונים — balance הוא *כל* היומן מאז ומעולם, ו-issuedCards
+      // סופר רק לידות *פעילות* שמחזיקות כרטיס. כל תיק שנטען ואחר כך הושלם
+      // או בוטל נעלם מהצד השני של המשוואה, והמספר יצא קטן מהאמת.
+      //
+      // המנהל הכניס 300 וראה 295 — הפרש שאינו קיים בשום מקום.
+      //
+      // ⚠️ הרכישות נספרות מ-restock בלבד: adjust חיובי הוא בדרך כלל החזרה
+      // של כרטיס שנוכה ונכשל, והוא אינו קנייה.
+      purchasedCards: (ledger ?? []).reduce((s, r) => {
+        const d = Number((r as { delta?: number }).delta) || 0
+        const reason = (r as { reason?: string }).reason ?? ''
+        return s + (d > 0 && reason === 'restock' ? d : 0)
+      }, 0),
     },
     { headers: NO_STORE },
   )

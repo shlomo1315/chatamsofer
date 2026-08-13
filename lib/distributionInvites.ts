@@ -47,6 +47,61 @@ export const INVITE_MESSAGE: Record<Exclude<InviteVerdict, { ok: true }>['reason
   'wrong-distribution': 'הקישור שייך לחלוקה אחרת. אנא פנו למשרד.',
 }
 
+/** תאריך ושעה בעברית — "12.08.2026 בשעה 14:30". */
+function fmtHe(iso: string): string | null {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  // ⚠️ אזור זמן ישראל במפורש: השרת רץ ב-UTC, ובלעדיו משפחה שהקישור פג
+  // אצלה ב-01:00 בלילה הייתה רואה שעה מוקדמת ביום הקודם.
+  const date = d.toLocaleDateString('he-IL', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric' })
+  const time = d.toLocaleTimeString('he-IL', { timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit' })
+  return `${date} בשעה ${time}`
+}
+
+/**
+ * הודעת דחייה מפורטת — עם שם החלוקה ומועד הסגירה.
+ *
+ * ⚠️ למה זה חשוב: ההודעה הגנרית ("תוקף הקישור פג") אינה אומרת למשפחה
+ * *מה* נסגר ו*מתי*. משפחה שלוחצת על קישור שנשלח לפני שבוע אינה יודעת אם
+ * היא איחרה בשעה או בחודש, ואינה יודעת אם מדובר בחלוקה שהיא בכלל ציפתה
+ * לה — ולכן היא מתקשרת למשרד לברר. המידע הזה עונה על שתי השאלות מראש.
+ *
+ * ⚠️ נופל בחזרה להודעה הגנרית כשחסר מידע: הודעה חלקית ("נסגרה ביום —")
+ * גרועה מהודעה כללית.
+ */
+export function inviteMessageDetailed(
+  reason: Exclude<InviteVerdict, { ok: true }>['reason'],
+  ctx: { distributionName?: string | null; expiresAt?: string | null; startsAt?: string | null } = {},
+): string {
+  const name = String(ctx.distributionName ?? '').trim()
+
+  if (reason === 'expired' && ctx.expiresAt) {
+    const when = fmtHe(ctx.expiresAt)
+    if (when) {
+      return name
+        ? `שימו לב: הרישום לחלוקת ${name} נסגר ביום ${when}.`
+        : `שימו לב: הרישום נסגר ביום ${when}.`
+    }
+  }
+
+  // ⚠️ גם "טרם נפתח" מקבל מועד: משפחה שהגיעה מוקדם צריכה לדעת מתי לחזור,
+  // אחרת היא מתקשרת או מוותרת.
+  if (reason === 'not-started' && ctx.startsAt) {
+    const when = fmtHe(ctx.startsAt)
+    if (when) {
+      return name
+        ? `הרישום לחלוקת ${name} ייפתח ביום ${when}.`
+        : `הרישום ייפתח ביום ${when}.`
+    }
+  }
+
+  if (reason === 'revoked' && name) {
+    return `הקישור לחלוקת ${name} בוטל. אנא פנו למשרד.`
+  }
+
+  return INVITE_MESSAGE[reason]
+}
+
 /**
  * אורך הטוקן — 32 תווים hex = 128 ביט אקראיות.
  *

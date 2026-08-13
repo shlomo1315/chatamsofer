@@ -82,6 +82,9 @@ export default function StockManager() {
   // ⚠️ הכרטיסים שיצאו בפועל נספרים מתיקי הלידות (card_load_status) ולא מהיומן —
   // זו העדות הישירה, וממנה נגזרת ההפחתה בספירה במובן "נקנו בסך הכול".
   const [issuedCards, setIssuedCards] = useState(0)
+  // ⚠️ סך הרכישות מהיומן — מקור האמת ל"נקנו". 0 כשאין נתון (שרת ישן),
+  // ואז המסך נופל בחזרה לחישוב הקודם.
+  const [purchasedCards, setPurchasedCards] = useState(0)
   const [unapproved, setUnapproved] = useState<UnapprovedLoad[]>([])
   const [fixingAll, setFixingAll] = useState(false)
   const [showMissing, setShowMissing] = useState(false)
@@ -104,6 +107,7 @@ export default function StockManager() {
       setCoverage(d.coverage && typeof d.coverage.total === 'number' ? d.coverage as Coverage : null)
       setSince(Array.isArray(d.sinceCount) ? d.sinceCount as SinceRow[] : [])
       setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
+      setPurchasedCards(typeof d.purchasedCards === 'number' ? d.purchasedCards : 0)
       setUnapproved(Array.isArray(d.loadedNotApproved) ? d.loadedNotApproved as UnapprovedLoad[] : [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -290,11 +294,16 @@ export default function StockManager() {
                 נקנו − נמסרו ללידות מאושרות = במלאי. כל השאר (יומן, תנועות,
                 תקופת בדיקות) יושב ב"פילוח מלא" ואינו על הפנים של המסך. */}
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+              {/* 🔴 נגזר מהיומן (restock) ולא מ-balance+issued: שני האחרונים
+                  סופרים תחומים שונים — היומן כולו מול לידות פעילות בלבד —
+                  והמספר יצא קטן מהאמת בכל תיק שהושלם או בוטל. */}
               <span className="text-slate-500">סך הכרטיסים שנקנו</span>
-              <strong className="ltr-num text-base text-slate-900">{recon.balance + issuedCards}</strong>
+              <strong className="ltr-num text-base text-slate-900">{purchasedCards || recon.balance + issuedCards}</strong>
               <span className="text-slate-400">−</span>
-              <span className="text-slate-500">נמסרו ללידות מאושרות</span>
-              <strong className="ltr-num text-base text-slate-900">{issuedCards}</strong>
+              <span className="text-slate-500">נמסרו</span>
+              <strong className="ltr-num text-base text-slate-900">
+                {purchasedCards ? purchasedCards - recon.balance : issuedCards}
+              </strong>
               <span className="text-slate-400">=</span>
               <span className="text-slate-500">במלאי</span>
               <strong className="ltr-num text-base text-emerald-700">{recon.balance}</strong>
