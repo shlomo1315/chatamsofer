@@ -90,9 +90,20 @@ export async function GET(request: NextRequest) {
   // והן מתעדכנות בכל סנכרון. שדה נגזר היה מתיישן.
   if (folder === 'sent') query = query.contains('labels', ['SENT'])
   else if (folder === 'unread') query = query.eq('is_unread', true).contains('labels', ['INBOX'])
+  else if (folder === 'followup') query = query.contains('labels', ['לטיפול'])
+  else if (folder === 'starred') query = query.contains('labels', ['STARRED'])
+  else if (folder === 'all') { /* הכל — בלי סינון תווית */ }
   else query = query.contains('labels', ['INBOX'])
 
   if (department) query = query.eq('department', department)
+  // ⚠️ סינון לפי תיבה: כשמחוברות כמה תיבות, "דואר נכנס" מערבב את כולן
+  // ואי אפשר לעבוד על תיבה אחת.
+  const accountId = sp.get('account') ?? ''
+  if (accountId) query = query.eq('account_id', accountId)
+
+  // תווית Gmail ספציפית (מהפאנל הצדדי).
+  const label = sp.get('label') ?? ''
+  if (label) query = query.contains('labels', [label])
 
   if (q) {
     // ⚠️ חיפוש על מטא-דאטה בלבד — הגוף אינו במסד. זה מכוון: חיפוש בגוף
@@ -112,14 +123,43 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'שליפת ההודעות נכשלה' }, { status: 500 })
   }
 
-  // מונה לא-נקראים לכל מחלקה — לתגיות בסרגל.
+  // מונה לא-נקראים לכל מחלקה ולכל תיבה — לתגיות בפאנל הצדדי.
   const { data: unreadRows } = await db.from('gmail_messages')
-    .select('department').eq('is_unread', true).is('deleted_at', null).contains('labels', ['INBOX'])
+    .select('department, account_id').eq('is_unread', true).is('deleted_at', null).contains('labels', ['INBOX'])
   const unreadByDept: Record<string, number> = {}
-  for (const r of (unreadRows ?? []) as { department?: string | null }[]) {
+  const unreadByAccount: Record<string, number> = {}
+  for (const r of (unreadRows ?? []) as { department?: string | null; account_id?: string | null }[]) {
     const k = r.department || '_none'
     unreadByDept[k] = (unreadByDept[k] ?? 0) + 1
+    if (r.account_id) unreadByAccount[r.account_id] = (unreadByAccount[r.account_id] ?? 0) + 1
   }
+
+  // ── התיבות והתוויות לפאנל הצדדי ──
+  const { data: accounts } = await db.from('gmail_accounts')
+    .select('id, email, label, department').eq('is_active', true).order('email')
+
+  // ⚠️ התוויות נגזרות מהאינדקס ולא נשלפות מ-Gmail בכל טעינה: שליפה משם
+  // הייתה מוסיפה סבב רשת לכל רענון, והתוויות ממילא מסונכרנות.
+  // מסננים תוויות מערכת (INBOX, SENT, CATEGORY_*) שאינן מעניינות בתצוגה.
+  const SYSTEM = /^(INBOX|SENT|DRAFT|SPAM|TRASH|UNREAD|STARRED|IMPORTANT|CHAT|CATEGORY_)/
+  const { data: labelRows } = await db.from('gmail_messages')
+    .select('labels').is('deleted_at', null).limit(2000)
+  const labelCounts: Record<string, number> = {}
+  for (const r of (labelRows ?? []) as { labels?: string[] | null }[]) {
+    for (const l of r.labels ?? []) {
+      if (!l || SYSTEM.test(l)) continue
+      labelCounts[l] = (labelCounts[l] ?? 0) + 1
+    }
+  }
+  const labels = Object.entries(labelCounts)
+    .map(([name, n]) => ({ name, count: n }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 25)
+
+  // מונה "לטיפול" — לתגית בפאנל.
+  const { count: followupCount } = await db.from('gmail_messages')
+    .select('id', { count: 'exact', head: true })
+    .is('deleted_at', null).contains('labels', ['לטיפול'])
 
   return NextResponse.json({
     messages: data ?? [],
@@ -128,5 +168,9 @@ export async function GET(request: NextRequest) {
     pageSize: PAGE_SIZE,
     hasMore: (count ?? 0) > (page + 1) * PAGE_SIZE,
     unreadByDept,
+    unreadByAccount,
+    accounts: accounts ?? [],
+    labels,
+    followupCount: followupCount ?? 0,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }

@@ -26,6 +26,7 @@ export const maxDuration = 300
 interface FailedAid {
   id: string
   card_load_error: string | null
+  card_tlush_id?: string | null
   beneficiary_id: string | null
   beneficiary?: { full_name?: string | null; family_name?: string | null; id_number?: string | null; spouse_id_number?: string | null } | null
 }
@@ -35,8 +36,16 @@ const PASSPORT_ERROR = /מספר זהות שגוי|בספרות בלבד/i
 
 async function listFailed(db: NonNullable<ReturnType<typeof getServiceClient>>) {
   const { data } = await db.from('maternity_aids')
-    .select('id, card_load_error, beneficiary_id, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_id_number)')
+    .select('id, card_load_error, card_tlush_id, beneficiary_id, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_id_number)')
     .eq('card_load_status', 'failed')
+    // 🔴 תיק שכבר יש לו טעינה בנדרים (card_tlush_id) אינו "נכשל" גם אם
+    // הסטטוס אומר כך — הכסף כבר נטען. הרצה חוזרת עליו הייתה מנכה כרטיס
+    // שני מהמלאי וטוענת 600 ₪ נוספים.
+    //
+    // ⚠️ הסינון כאן ולא רק בהגנה הפנימית: הראוט מנקה את card_load_status
+    // לפני הניסיון, וניקוי כזה מבטל את ההגנה שנשענת עליו. השארת התיקים
+    // האלה מחוץ לרשימה מלכתחילה היא ההגנה היחידה שאינה תלויה בסדר.
+    .is('card_tlush_id', null)
     .order('updated_at', { ascending: false })
   return (data ?? []) as unknown as FailedAid[]
 }
@@ -100,13 +109,12 @@ export async function POST(request: Request) {
     const b = a.beneficiary
     const name = [b?.family_name, b?.full_name].filter(Boolean).join(' ') || a.id
     try {
-      // ⚠️ מנקים את סימון הכשל *לפני* הניסיון. הפונקציה עצמה יוצאת מוקדם
-      // רק על 'loaded'/tlush קיים, אבל השארת 'failed' הייתה מסתירה את
-      // התוצאה החדשה אם הריצה תיפול באמצע.
-      await db.from('maternity_aids')
-        .update({ card_load_status: null, card_load_error: null })
-        .eq('id', a.id)
-
+      // 🔴 הסטטוס *אינו* מנוקה לפני הניסיון.
+      //
+      // ⚠️ ניקוי כזה מבטל את ההגנה מפני ניכוי כפול, שנשענת בדיוק על
+      // card_load_status ו-card_tlush_id. loadMaternityCardOnApproval
+      // מטפלת ב-'failed' כמו בכל סטטוס שאינו 'loaded' וממשיכה הלאה —
+      // ולכן אין שום צורך לנקות, ויש נזק ממשי בכך.
       const r = await loadMaternityCardOnApproval(db, a.id)
       results.push({
         id: a.id, name,
