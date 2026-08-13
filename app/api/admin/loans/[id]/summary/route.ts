@@ -60,10 +60,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', benId)
       .maybeSingle(),
 
-    // כל ההלוואות של המשפחה — כולל הנוכחית, כדי שיראו את התמונה המלאה
+    // כל ההלוואות של המשפחה — כולל הנוכחית, כדי שיראו את התמונה המלאה.
+    // ⚠️ בלי טיוטות שממתינות לטופס חתימת רב: הן טרם הוגשו, והצגתן
+    // כ"היסטוריית הלוואות" הייתה מרמזת על בקשה שמעולם לא נכנסה.
     db.from('loans')
       .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, created_at')
       .eq('beneficiary_id', benId)
+      .neq('status', 'awaiting_rabbi_form')
       .order('created_at', { ascending: false }),
 
     // צילומי ת"ז

@@ -12,6 +12,7 @@ const CityStreetPicker = dynamic(() => import('@/components/ui/CityStreetPicker'
 const HebrewDatePicker = dynamic(() => import('@/components/ui/HebrewDatePicker'), { ssr: false })
 const ConfettiSuccess = dynamic(() => import('@/components/ui/ConfettiSuccess'), { ssr: false })
 import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
+import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -6151,30 +6152,54 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </p>
               </div>
 
-              <iframe
-                src={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
-                className="flex-1 w-full border-0 bg-slate-100"
-                title="טופס חתימת רב"
-              />
+              {/* 🔴 מצויר על canvas ולא ב-iframe: נטפרי חוסם PDF ב-iframe
+                  ומציג מסך "נשלח לבדיקה" במקום הטופס. הציור על canvas הוא
+                  ציור מקומי בדפדפן ואינו נתפס כניווט למסמך — אותה גישה
+                  שכבר עובדת בתצוגת אישורי הלידה.
+                  ⚠️ direct — הפורטל אינו סשן צוות, ולכן המשיכה ישירה. */}
+              <div className="rabbi-form-print flex-1 w-full overflow-y-auto bg-slate-100">
+                <PdfCanvasView
+                  url={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
+                  name="טופס חתימת רב"
+                  direct
+                  className="w-full"
+                />
+              </div>
 
               <div className="flex gap-2 px-5 py-3.5 border-t border-slate-100 shrink-0">
-                <a
-                  href={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
-                  download="טופס-חתימת-רב.pdf"
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
-                  <Upload size={16} className="rotate-180" /> הורדה
-                </a>
+                {/* ⚠️ הורדה דרך downloadDocDirect ולא <a download>: ניווט
+                    ישיר ל-PDF נתפס ע"י נטפרי ונשלח לבדיקה. כאן הקובץ
+                    נמשך כ-blob ונשמר מקומית, בלי ניווט. */}
                 <button type="button"
                   onClick={() => {
-                    // ⚠️ הדפסה דרך ה-iframe עצמו, כדי לא להדפיס את הדף
-                    // שמאחוריו. אם הדפדפן חוסם — נופלים לפתיחה בכרטיסייה.
-                    const frame = document.querySelector<HTMLIFrameElement>('iframe[title="טופס חתימת רב"]')
-                    try {
-                      frame?.contentWindow?.focus()
-                      frame?.contentWindow?.print()
-                    } catch {
-                      window.open(`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`, '_blank')
-                    }
+                    downloadDocDirect(
+                      `/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`,
+                      'טופס-חתימת-רב.pdf',
+                    ).catch(() => {})
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Upload size={16} className="rotate-180" /> הורדה
+                </button>
+                <button type="button"
+                  onClick={() => {
+                    // ⚠️ ההדפסה מציירת את הקנבס לחלון הדפסה נקי, ולא דרך
+                    // iframe: נטפרי חוסם ניווט ל-PDF, ולכן window.open על
+                    // הקובץ היה מגיע למסך "נשלח לבדיקה" במקום למדפסת.
+                    const canvases = Array.from(
+                      document.querySelectorAll<HTMLCanvasElement>('.rabbi-form-print canvas'),
+                    )
+                    if (!canvases.length) return
+                    const w = window.open('', '_blank')
+                    if (!w) return
+                    const imgs = canvases
+                      .map(c => `<img src="${c.toDataURL('image/png')}" style="width:100%;display:block;page-break-after:always"/>`)
+                      .join('')
+                    w.document.write(
+                      `<!doctype html><html dir="rtl"><head><title>טופס חתימת רב</title>` +
+                      `<style>@page{margin:0}body{margin:0}img{width:100%}</style></head>` +
+                      `<body onload="window.print();window.close()">${imgs}</body></html>`,
+                    )
+                    w.document.close()
                   }}
                   className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-semibold rounded-xl px-4 py-2.5 transition-all duration-150 text-sm shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)]">
                   <FileText size={16} /> הדפסה

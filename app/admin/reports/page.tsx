@@ -16,7 +16,9 @@ const getReportData = unstable_cache(
       // רק העמודות שהגרפים/הסיכומים למטה משתמשים בהן
       const [b, l, m] = await Promise.all([
         supabase.from('beneficiaries').select('eligibility_status, city'),
-        supabase.from('loans').select('status, amount'),
+        // ⚠️ טיוטות ממתינות לטופס אינן נספרות: הן אינן בקשות שהוגשו,
+        // וספירתן הייתה מנפחת את הדוחות בבקשות שלא קיימות.
+        supabase.from('loans').select('status, amount').neq('status', 'awaiting_rabbi_form'),
         supabase.from('maternity_aids').select('status, card_balance'),
       ])
       return {

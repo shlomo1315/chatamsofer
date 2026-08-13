@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
-import { findOpenLoan, findDraftAwaitingRabbiForm, OPEN_LOAN_MESSAGE } from '@/lib/openLoanGuard'
+import { findOpenLoan, findDraftAwaitingRabbiForm, openLoanMessageFor } from '@/lib/openLoanGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     openLoan: true,
-    message: OPEN_LOAN_MESSAGE,
+    message: openLoanMessageFor(loan),
     since: loan.created_at,
   })
 }

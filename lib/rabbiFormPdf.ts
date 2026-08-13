@@ -31,8 +31,14 @@ export interface RabbiFormData {
   /** סכום מבוקש בדולרים. */
   amount: number
   installments: number
-  /** סדר הדורות מהמבקש כלפי מעלה, עד החת"ם סופר. */
-  lineage: string[]
+  /**
+   * סדר הדורות מהמבקש כלפי מעלה, עד החת"ם סופר.
+   *
+   * ⚠️ מחרוזת = שם בלבד, בלי כינוי קשר. אובייקט = שם + הכינוי כפי
+   * שהוא רשום במערכת ("בן", "חתן"). כשהקשר אינו ידוע לא מודפס כלום,
+   * כי שורה עם כינוי שגוי מטעה יותר משורה בלי כינוי.
+   */
+  lineage: (string | { name: string; relation?: string })[]
 }
 
 export interface FormValidation { ok: boolean; missing: string[] }
@@ -59,22 +65,22 @@ export function validateRabbiForm(d: Partial<RabbiFormData>): FormValidation {
 }
 
 /**
- * היפוך טקסט עברי לכתיבה ב-PDF.
+ * 🔴 אין היפוך. הפונקציה מחזירה את הטקסט כפי שהוא.
  *
- * 🔴 pdf-lib אינו תומך ב-bidi: הוא מצייר תווים לפי הסדר בבייטים, וטקסט
- * עברי מופיע הפוך לחלוטין.
+ * ההנחה הקודמת הייתה ש-pdf-lib מצייר תווים לפי סדר הבייטים ולכן עברית
+ * מופיעה הפוכה — ולכן הטקסט הופך ידנית לפני הציור. זה היה נכון לפונטים
+ * הסטנדרטיים, אבל **לא** לפונט TrueType מוטמע: Heebo נושא את טבלאות
+ * ה-cmap שלו, והדפדפן מסדר את הגליפים נכון בעצמו.
  *
- * ⚠️ מספרים ולטינית *אינם* מתהפכים: "30,000" ו-"g@chasamsofer.info"
- * חייבים להישאר כמו שהם. לכן ההיפוך נעשה על מקטעים.
+ * התוצאה הייתה היפוך כפול — כל המלל הופיע הפוך משמאל לימין.
+ * אומת בניסוי: "שלום עולם" מצויר ישירות נקרא נכון, ואילו המחרוזת
+ * ההפוכה נקראה "םלוע םולש".
+ *
+ * ⚠️ נשארת כפונקציה ולא מוסרת לגמרי: היא נקראת ב-9 מקומות, ושמירתה
+ * כנקודה אחת מתעדת *למה* אין היפוך — אחרת מישהו יחזיר אותו.
  */
 function rtl(text: string): string {
-  const s = String(text ?? '')
-  if (!s) return ''
-  const parts = s.match(/[֐-׿\s"'׳״.,()\-–—]+|[^֐-׿]+/g) ?? [s]
-  return parts
-    .reverse()
-    .map(p => /[֐-׿]/.test(p) ? [...p].reverse().join('') : p)
-    .join('')
+  return String(text ?? '')
 }
 
 /**
@@ -96,6 +102,10 @@ export interface FormLayout {
   lineageStart: FieldPos
   /** מרווח אנכי בין שורות הדורות. */
   lineageGap: number
+  /** ⚠️ עמודות המספר והכינוי — דחופות שמאלה כדי לא לעלות על עיטורי
+   *  הצד של הבלאנק. הערכים הקודמים (70 ו-95) ישבו על העיטור. */
+  lineageNumX: number
+  lineageRelX: number
   rabbiTitle: FieldPos
   rabbiText: FieldPos
   rabbiName: FieldPos
@@ -107,14 +117,20 @@ export interface FormLayout {
 
 /** ⚠️ הקואורדינטות ב-pdf-lib נמדדות מהפינה השמאלית-*תחתונה*. */
 export const DEFAULT_LAYOUT: FormLayout = {
+  // ⚠️ הקצה הימני הוא 400 ולא 540: הבלאנק נושא עמוד עיטורי מוזהב לאורך
+  // כל הצד הימני (רשימת הדורות המעוצבת), ו-540 הציב את כל המלל *על גבי*
+  // העיטור — הטקסט והרקע נקראו זה על זה ושניהם היו בלתי קריאים.
+  // 400 הוא הגבול שבו העיטור מסתיים והשטח הלבן מתחיל.
   title:        { x: 300, y: 690, size: 20 },
-  name:         { x: 540, y: 645, size: 12 },
-  idNumber:     { x: 540, y: 620, size: 12 },
-  amount:       { x: 540, y: 585, size: 12 },
-  installments: { x: 540, y: 560, size: 12 },
-  currencyNote: { x: 540, y: 542, size: 8 },
-  lineageTitle: { x: 540, y: 512, size: 12 },
-  lineageStart: { x: 540, y: 488, size: 10 },
+  name:         { x: 400, y: 645, size: 12 },
+  idNumber:     { x: 400, y: 620, size: 12 },
+  amount:       { x: 400, y: 585, size: 12 },
+  installments: { x: 400, y: 560, size: 12 },
+  currencyNote: { x: 400, y: 542, size: 8 },
+  lineageTitle: { x: 400, y: 512, size: 12 },
+  lineageStart: { x: 400, y: 488, size: 10 },
+  lineageNumX:  42,
+  lineageRelX:  60,
   lineageGap:   18,
   rabbiTitle:   { x: 300, y: 290, size: 14 },
   rabbiText:    { x: 540, y: 258, size: 10 },
@@ -228,14 +244,24 @@ export async function buildRabbiFormPdf(
   // 🔴 מודפס מהמערכת ולא כשורות ריקות: זו הנקודה שבה הטופס הישן הכי נכשל —
   // המבקש מילא בכתב יד "בערך", והרב חתם על שרשרת שאינה תואמת את הרישום.
   R('פירוט היחוס עד רבינו החתם סופר', layout.lineageTitle, bold, GOLD)
+  // ⚠️ הכינוי ("בן", "חתן") נלקח מהמערכת ולא נכתב קשיח.
+  //
+  // קודם הודפס "בן / חתן" על *כל* דור — כלומר הטופס הצהיר שני קשרים
+  // סותרים בכל שורה, והרב נדרש לחתום על משהו שאינו אומר דבר. כשהקשר
+  // אינו ידוע לא מודפס כלום: שורה בלי כינוי היא מידע חסר, שורה עם
+  // כינוי שגוי היא מידע *מטעה*.
   let ly = layout.lineageStart.y
-  for (const [i, name] of data.lineage.entries()) {
+  for (const [i, entry] of data.lineage.entries()) {
     const size = layout.lineageStart.size
-    L(`${i + 1}.`, 70, ly, size, font, GREY)
-    const rel = rtl(i === 0 ? 'המבקש' : 'בן / חתן')
-    page.drawText(rel, { x: 95, y: ly, size, font, color: GREY })
+    const { name, relation } = typeof entry === 'string'
+      ? { name: entry, relation: i === 0 ? 'המבקש' : '' }
+      : entry
+
+    L(`${i + 1}.`, layout.lineageNumX, ly, size, font, GREY)
+    if (relation) L(rtl(relation), layout.lineageRelX, ly, size, font, GREY)
+
     const nm = rtl(name)
-    page.drawText(nm, { x: layout.lineageStart.x - font.widthOfTextAtSize(nm, size), y: ly, size, font: bold, color: DARK })
+    draw(nm, layout.lineageStart.x - font.widthOfTextAtSize(nm, size), ly, size, bold, DARK)
     ly -= layout.lineageGap
   }
 

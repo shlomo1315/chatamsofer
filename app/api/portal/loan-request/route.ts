@@ -9,7 +9,7 @@ import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
-import { findOpenLoan, OPEN_LOAN_MESSAGE } from '@/lib/openLoanGuard'
+import { findOpenLoan, openLoanMessageFor } from '@/lib/openLoanGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
   const openLoan = await findOpenLoan(admin, String(beneficiary_id))
   if (openLoan) {
     return NextResponse.json(
-      { error: OPEN_LOAN_MESSAGE, openLoan: true },
+      { error: openLoanMessageFor(openLoan), openLoan: true },
       { status: 409 },
     )
   }

@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import {
-  findOpenLoan, findDraftAwaitingRabbiForm, OPEN_LOAN_MESSAGE, AWAITING_RABBI_FORM,
+  findOpenLoan, findDraftAwaitingRabbiForm, openLoanMessageFor, AWAITING_RABBI_FORM,
 } from '@/lib/openLoanGuard'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
 
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   // בקשה שכבר הוגשה חוסמת גם יצירת טיוטה חדשה.
   const openLoan = await findOpenLoan(admin, sessionId)
   if (openLoan) {
-    return NextResponse.json({ error: OPEN_LOAN_MESSAGE, openLoan: true }, { status: 409 })
+    return NextResponse.json({ error: openLoanMessageFor(openLoan), openLoan: true }, { status: 409 })
   }
 
   const fields = {

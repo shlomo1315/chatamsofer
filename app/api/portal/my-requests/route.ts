@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
   if (!admin) return NextResponse.json({ requests: [] })
 
   const [loans, maternity, finaid, widow] = await Promise.all([
-    admin.from('loans').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId),
+    // ⚠️ גם למבקש עצמו הטיוטה אינה מוצגת כ"בקשה שהוגשה": היא מטופלת
+    // בחלונית הייעודית (העלאת טופס חתימת רב), והצגתה גם כאן הייתה
+    // אומרת לו שהבקשה בדרך בזמן שהיא עוד לא נשלחה כלל.
+    admin.from('loans').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId).neq('status', 'awaiting_rabbi_form'),
     admin.from('maternity_aids').select('id, status, created_at').eq('beneficiary_id', beneficiaryId),
     admin.from('financial_aid_requests').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId),
     admin.from('widow_requests').select('id, status, amount, created_at').eq('beneficiary_id', beneficiaryId),

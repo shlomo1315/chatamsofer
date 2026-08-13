@@ -251,7 +251,8 @@ async function getActivity(id: string): Promise<ActivityItem[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
   const [loans, maternity] = await Promise.all([
-    supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id),
+    // ⚠️ בלי טיוטות שממתינות לטופס חתימת רב — הן אינן בקשות שהוגשו.
+    supabase.from('loans').select('id, amount, purpose, status, created_at').eq('beneficiary_id', id).neq('status', 'awaiting_rabbi_form'),
     supabase.from('maternity_aids').select('id, baby_name, status, created_at').eq('beneficiary_id', id),
   ])
   if (loans.error) throw loans.error

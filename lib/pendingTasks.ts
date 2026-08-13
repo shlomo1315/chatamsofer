@@ -62,7 +62,10 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
   const handledBenIds = new Set<string>()
   if (pendingBenIds.length) {
     const decided = await Promise.all([
-      supabase.from('loans').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
+      // ⚠️ טיוטה שממתינה לטופס חתימת רב אינה "בקשה שהוכרעה": היא טרם
+      // הוגשה כלל. בלי ההחרגה היא הייתה מוציאה את המשפחה מרשימת
+      // הממתינים לאישור, כאילו כבר טופלה.
+      supabase.from('loans').select('beneficiary_id').in('beneficiary_id', pendingBenIds).not('status', 'in', '(pending,awaiting_rabbi_form)'),
       supabase.from('maternity_aids').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
       supabase.from('financial_aid_requests').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),
       supabase.from('widow_requests').select('beneficiary_id').in('beneficiary_id', pendingBenIds).neq('status', 'pending'),

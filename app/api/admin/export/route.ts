@@ -125,8 +125,11 @@ export async function GET(request: NextRequest) {
     rows = (data ?? []).map((b: Row) => [b.family_name, b.full_name, b.id_number, b.spouse_name, b.spouse_id_number, b.marital_status, b.phone, b.email, b.city, b.address, b.children_count, he(b.eligibility_status), dt(b.created_at)])
   } else if (type === 'loans') {
     filename = 'הלוואות'
+    // ⚠️ בלי טיוטות שממתינות לטופס חתימת רב — הן אינן בקשות שהוגשו,
+    // וייצואן היה מציג למקבל הקובץ בקשות שלא קיימות.
     const data = await fetchAll<Row>((from, to) => admin.from('loans')
       .select('amount, approved_amount, installments, monthly_payment, purpose, status, created_at, beneficiary:beneficiaries(family_name, full_name, id_number, phone)')
+      .neq('status', 'awaiting_rabbi_form')
       .order('created_at', { ascending: false }).range(from, to))
     columns = [
       { header: 'משפחה' }, { header: 'ת.ז', kind: 'id' }, { header: 'טלפון', kind: 'id' },
