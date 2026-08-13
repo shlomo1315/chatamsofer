@@ -33,6 +33,9 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
   // מודל אישור — קליטת הסכום שאושר בפועל לפני האישור
   const [approveOpen, setApproveOpen] = useState(false)
   const [approvedAmount, setApprovedAmount] = useState(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
+  // מודל דחייה — הסיבה נשמרת ומוצגת בבקשה הבאה של אותה משפחה.
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState('')
 
   // סטטוס אופטימי מקומי — מתעדכן מיד בלחיצה, בלי להמתין ל-router.refresh().
   const [localStatus, setLocalStatus] = useState<LoanStatus>(loan.status)
@@ -57,6 +60,7 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
     setLocalStatus(next)
     setOpen(false)
     setApproveOpen(false)
+    setRejectOpen(false)
 
     // 2) כל הרשת ברקע — לא חוסמת את ה-UI. כשל → גלגול אחורה + הודעה.
     void (async () => {
@@ -91,7 +95,25 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
     }
   }
 
+  const confirmReject = async () => {
+    // ⚠️ הסיבה אינה חובה טכנית אבל כן נדרשת בפועל: היא מה שיוצג למזכירות
+    // בפעם הבאה שהמשפחה תגיש. דחייה בלי סיבה משאירה את הבקשה הבאה בדיוק
+    // באותו עיוורון שהתיקון הזה נועד לפתור.
+    const reason = rejectReason.trim()
+    if (!reason) { toast.error('יש לציין את סיבת הדחייה'); return }
+    await applyStatus('rejected', {
+      rejection_reason: reason,
+      rejected_at: new Date().toISOString(),
+    })
+  }
+
   const setStatus = async (next: LoanStatus) => {
+    if (next === 'rejected') {
+      setOpen(false)
+      setRejectReason('')
+      setRejectOpen(true)
+      return
+    }
     // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר הלוואה גם אם היחוס
     // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד ("אישור יחוס" בכרטסת).
     // אישור — קודם מבקשים את הסכום שאושר בפועל
@@ -134,6 +156,42 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
 
   return (
     <div className="inline-block">
+      {/* ── מודל דחייה — הסיבה נשמרת ומוצגת בבקשה הבאה ── */}
+      {rejectOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">
+            <div className="bg-gradient-to-l from-rose-500 to-red-500 px-6 py-4">
+              <h2 className="text-white font-bold">דחיית הלוואה</h2>
+              <p className="text-red-100 text-xs mt-0.5">הסיבה תוצג בבקשה הבאה של המשפחה</p>
+            </div>
+            <div className="px-6 py-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">סיבת הדחייה</label>
+                <textarea
+                  autoFocus rows={4} value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  placeholder="לדוגמה: אין הכנסה קבועה · הבקשה אינה עומדת בתנאי הגמ״ח · חוב פתוח"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-rose-500/40 focus:border-rose-400 transition-shadow"
+                />
+                <p className="text-[11px] text-slate-400">
+                  תוצג למזכירות אם המשפחה תגיש בקשה נוספת — לא נשלחת למבקש.
+                </p>
+              </div>
+              <div className="flex gap-3 mt-1">
+                <button onClick={confirmReject} disabled={saving}
+                  className="flex-1 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50">
+                  דחה בקשה
+                </button>
+                <button onClick={() => setRejectOpen(false)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {approveOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm overflow-hidden">

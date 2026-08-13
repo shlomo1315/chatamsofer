@@ -11,6 +11,7 @@ import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
+import PriorRejectionAlert from './PriorRejectionAlert'
 import { LoanStatusControl, DeleteLoanButton } from '../LoanControls'
 import FamilyApprovalGate from '@/components/admin/FamilyApprovalGate'
 import BackButton from '@/components/ui/BackButton'
@@ -76,6 +77,9 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="flex flex-col gap-5">
+      {/* ⚠️ מוצגת לפני כל השאר: ההחלטה על הבקשה מתקבלת במסך הזה, וההתראה
+          חייבת להגיע לפניה ולא אחריה. */}
+      <PriorRejectionAlert loanId={loan.id} familyName={borrower ?? undefined} />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/loans" />

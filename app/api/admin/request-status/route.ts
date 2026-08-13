@@ -18,8 +18,13 @@ const VALID: Record<string, string[]> = {
   maternity: ['pending', 'active', 'completed', 'cancelled', 'deep_review'],
 }
 // שדות נוספים מותרים לעדכון לכל סוג (whitelist — מונע עדכון עמודות לא צפויות)
+// ⚠️ רשימת היתר ולא "כל מה שנשלח": בלעדיה הלקוח יכול לעדכן כל עמודה
+// בטבלה דרך הנתיב הזה.
 const EXTRA_ALLOWED: Record<string, string[]> = {
-  loan: ['approved_amount'],
+  // ⚠️ rejection_reason נוסף להלוואות: הוא מוצג למזכירות בבקשה הבאה של
+  // אותה משפחה. בלעדיו הוא נשלח מהמסך ונזרק כאן בשקט — הדחייה נשמרה,
+  // הסיבה נעלמה, וההתראה בבקשה הבאה הייתה ריקה.
+  loan: ['approved_amount', 'rejection_reason', 'rejected_at'],
   maternity: ['rejection_reason', 'deep_review_reason'],
 }
 

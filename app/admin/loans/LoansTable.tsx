@@ -20,29 +20,27 @@ type BenRef = { full_name?: string; family_name?: string; id_number?: string; sp
 const borrowerName = (b?: BenRef) =>
   b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 
-type Filter = 'all' | 'pending' | 'inquiry' | 'approved' | 'rejected'
-/** בתוך הבירור: ממתינים לתשובתו · הוא השיב וממתין לטיפול. */
-type InquirySub = 'all' | 'waiting' | 'replied'
+// 🔴 הלשוניות מאורגנות לפי *מי צריך לפעול עכשיו*, לא לפי סטטוס גולמי.
+//
+// ⚠️ קודם "ממתין לאישור" ו"בתהליך בירור" היו שתי קוביות נפרדות, ובקשה
+// שהמבקש כבר ענה עליה נבלעה בתוך "בירור" — כלומר היא דרשה טיפול והמסך
+// הציג אותה כאילו ממתינים לו. עכשיו:
+//   ממתין לטיפול  = הכדור אצלנו (טרם טופל · חזר מבירור)
+//   נשלח לבירור   = הכדור אצל המבקש (נשלח ולא הגיב)
+type Filter = 'all' | 'todo' | 'sent' | 'approved' | 'rejected'
+/** תת-סינון בתוך "ממתין לטיפול": ראשוני · חזר מבירור. */
+type TodoSub = 'all' | 'fresh' | 'returned'
 
-// 'inquiry' (בתהליך בירור) מקבל קובייה משלו — קודם הוא לא נספר בשום מקום,
-// ולכן הטבלה הראתה 3 "ממתינות" בזמן שהקובייה ספרה 2.
 const isPending = (l: Loan) => l.status === 'pending'
 const isInquiry = (l: Loan) => l.status === 'inquiry'
 const isApproved = (l: Loan) => l.status === 'approved' || l.status === 'active' || l.status === 'completed'
 const isRejected = (l: Loan) => l.status === 'rejected' || l.status === 'defaulted'
-const matchesFilter = (l: Loan, f: Filter) => {
-  if (f === 'all') return true
-  if (f === 'pending') return isPending(l)
-  if (f === 'inquiry') return isInquiry(l)
-  if (f === 'approved') return isApproved(l)
-  return isRejected(l)
-}
 
 interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }
 const CARD_DEFS: CardDef[] = [
   { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
-  { key: 'pending', label: 'ממתינות לאישור', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
-  { key: 'inquiry', label: 'בתהליך בירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
+  { key: 'todo', label: 'ממתין לטיפול', icon: Clock, base: 'border-amber-200 hover:border-amber-300', active: 'border-amber-400 ring-2 ring-amber-200 bg-amber-50', iconCls: 'bg-amber-100 text-amber-700' },
+  { key: 'sent', label: 'נשלח לבירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
   { key: 'approved', label: 'מאושרות', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושרות', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
 ]
@@ -56,33 +54,56 @@ const haystack = (l: Loan) => {
 export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; repliedIds?: string[] }) {
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
-  const [sub, setSub] = useState<InquirySub>('all')
+  const [sub, setSub] = useState<TodoSub>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
 
   const replied = useMemo(() => new Set(repliedIds), [repliedIds])
   const hasReplied = (l: Loan) => replied.has(String(l.id))
 
+  // ── שתי הקטגוריות שהלשוניות נשענות עליהן ──
+  // ⚠️ ההבחנה היא *אצל מי הכדור*, ולא מה הסטטוס הגולמי:
+  //   ראשוני   — הוגש וטרם טופל (pending)
+  //   חזר מבירור — נשלח בירור והמבקש ענה. הסטטוס נשאר 'inquiry', אבל
+  //                מבחינת העבודה זו בקשה שממתינה *לנו*.
+  const isFreshTodo = (l: Loan) => isPending(l)
+  const isReturned = (l: Loan) => isInquiry(l) && hasReplied(l)
+  const isTodo = (l: Loan) => isFreshTodo(l) || isReturned(l)
+  // 🔴 "נשלח לבירור" = נשלח ועדיין לא הגיב. בקשה שהמבקש ענה עליה יוצאת
+  // מכאן ועוברת ל"ממתין לטיפול" — אחרת היא נראית כאילו ממתינים לו, בזמן
+  // שהיא בעצם דורשת טיפול מיידי.
+  const isSentPending = (l: Loan) => isInquiry(l) && !hasReplied(l)
+
+  const matchesFilter = (l: Loan, f: Filter) => {
+    if (f === 'all') return true
+    if (f === 'todo') return isTodo(l)
+    if (f === 'sent') return isSentPending(l)
+    if (f === 'approved') return isApproved(l)
+    return isRejected(l)
+  }
+
   const counts = useMemo(() => ({
     all: data.length,
-    pending: data.filter(isPending).length,
-    inquiry: data.filter(isInquiry).length,
+    todo: data.filter(isTodo).length,
+    sent: data.filter(isSentPending).length,
     approved: data.filter(isApproved).length,
     rejected: data.filter(isRejected).length,
-  }), [data])
-
-  const inquiryCounts = useMemo(() => {
-    const inq = data.filter(isInquiry)
-    const r = inq.filter(hasReplied).length
-    return { all: inq.length, replied: r, waiting: inq.length - r }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, replied])
+  }), [data, replied])
+
+  const todoCounts = useMemo(() => ({
+    all: data.filter(isTodo).length,
+    fresh: data.filter(isFreshTodo).length,
+    returned: data.filter(isReturned).length,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [data, replied])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return data.filter(l => {
       if (!matchesFilter(l, filter)) return false
-      if (filter === 'inquiry' && sub !== 'all' && hasReplied(l) !== (sub === 'replied')) return false
+      if (filter === 'todo' && sub === 'fresh' && !isFreshTodo(l)) return false
+      if (filter === 'todo' && sub === 'returned' && !isReturned(l)) return false
       return q === '' || haystack(l).includes(q)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -123,22 +144,24 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
         })}
       </div>
 
-      {/* פילוח הבירור: את מי אנחנו מחכים לו — כדי לדעת לאן להיכנס לטפל */}
-      {filter === 'inquiry' && inquiryCounts.all > 0 && (
+      {/* ⚠️ צ'יפי תת-הסינון של "ממתין לטיפול" — אותו סגנון כמו בדף הצאצאים.
+          ההפרדה חשובה כי שתי הקבוצות דורשות עבודה שונה: בקשה ראשונית
+          נבדקת מאפס, ובקשה שחזרה מבירור צריכה קריאת התשובה בלבד. */}
+      {filter === 'todo' && todoCounts.all > 0 && (
         <div className="flex items-center gap-2 flex-wrap -mt-2">
           {([
-            { key: 'all', label: 'הכל', n: inquiryCounts.all },
-            { key: 'replied', label: 'השיב — ממתין לטיפולכם', n: inquiryCounts.replied },
-            { key: 'waiting', label: 'ממתינים לתשובתו', n: inquiryCounts.waiting },
-          ] as { key: InquirySub; label: string; n: number }[]).map(t => (
+            { key: 'all', label: 'הכל', n: todoCounts.all },
+            { key: 'fresh', label: 'ממתין לטיפול ראשוני', n: todoCounts.fresh },
+            { key: 'returned', label: 'חזר מבירור', n: todoCounts.returned },
+          ] as { key: TodoSub; label: string; n: number }[]).map(t => (
             <button key={t.key} onClick={() => setSub(t.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                 sub === t.key
-                  ? 'bg-sky-600 border-sky-600 text-white'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-sky-300'
+                  ? 'bg-amber-600 border-amber-600 text-white'
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300'
               }`}>
               {t.label}
-              <span className={`mr-1.5 tabular-nums ${sub === t.key ? 'text-sky-100' : 'text-slate-400'}`}>{t.n}</span>
+              <span className={`mr-1.5 tabular-nums ${sub === t.key ? 'text-amber-100' : 'text-slate-400'}`}>{t.n}</span>
             </button>
           ))}
         </div>

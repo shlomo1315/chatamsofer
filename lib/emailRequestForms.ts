@@ -37,6 +37,27 @@ export const LOAN_PURPOSES = [
 // מטרה שמחייבת צירוף הזמנה לחתונה
 export const WEDDING_PURPOSE = 'נישואי הבן/הבת'
 
+/**
+ * תוויות תצוגה לטופס הטיוטה.
+ *
+ * ⚠️ הערך *נשמר* עם הלוכסן ("נישואי הבן/הבת") — הוא מזהה שמושווה בקוד
+ * ושמור במסד על בקשות קיימות. שינויו היה שובר אותן.
+ *
+ * ⚠️ בטופס המייל הלוכסן מבלבל: הוא נראה כמו הוראה למחוק אחד מהצדדים,
+ * בדיוק בטופס שכל כולו "השאירו אחת, מחקו את השאר". לכן התצוגה בלבד
+ * משתנה, והפרסר ממיר בחזרה.
+ */
+export const PURPOSE_DISPLAY: Record<string, string> = {
+  'נישואי הבן/הבת': 'נישואי הבן או הבת',
+}
+export const displayPurpose = (v: string) => PURPOSE_DISPLAY[v] ?? v
+/** ההמרה ההפוכה — מה שהמשתמש השאיר בטופס חזרה לערך השמור. */
+export const canonicalPurpose = (v: string): string => {
+  const t = String(v ?? '').trim()
+  const hit = Object.entries(PURPOSE_DISPLAY).find(([, disp]) => disp === t)
+  return hit ? hit[0] : t
+}
+
 // הצהרה על פנייה קודמת לגמ״ח
 export const LOAN_DECLARATIONS = [
   'לא הגשתי',
@@ -129,7 +150,7 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
         // ⚠️ תנאי רכישת הדירה מודגש כאן ולא רק בפורטל: מי שמגיש במייל אינו
         // רואה את מסך הבקשה כלל, ובלי ההבהרה הוא מגיש לתוכנית עתידית או
         // לדירה להשקעה — ואז הבקשה נדחית אחרי שכבר הושקעה בה עבודה.
-        { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר. ⚠️ רכישת דירה — רק בעת תהליך הרכישה בפועל ולא לתוכנית עתידית, וכן רק דירה למגורים ולא להשקעה', required: true, options: [...LOAN_PURPOSES] },
+        { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר. ⚠️ רכישת דירה — רק בעת תהליך הרכישה בפועל ולא לתוכנית עתידית, וכן רק דירה למגורים ולא להשקעה', required: true, options: LOAN_PURPOSES.map(displayPurpose) },
         { key: 'declaration', label: 'האם פנית בעבר לגמ״ח חתם סופר?', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_DECLARATIONS] },
         { key: 'notes', label: 'הערות', required: false },
       ]
@@ -419,7 +440,10 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
     else if (inst > LOAN_MAX_INSTALLMENTS) errors.push(`מספר התשלומים המרבי הוא ${LOAN_MAX_INSTALLMENTS}`)
     else data.installments = inst
 
-    const purpose = need('purpose', 'מטרת ההלוואה')
+    // ⚠️ ממירים חזרה לערך השמור: הטופס מציג "נישואי הבן או הבת" אבל הערך
+    // במסד הוא "נישואי הבן/הבת". בלי ההמרה כל בקשת חתונה במייל הייתה
+    // נדחית ב"אינה ברשימה".
+    const purpose = canonicalPurpose(need('purpose', 'מטרת ההלוואה') ?? '')
     if (purpose && !LOAN_PURPOSES.includes(purpose as typeof LOAN_PURPOSES[number])) {
       errors.push(`מטרת ההלוואה "${purpose}" אינה ברשימה — יש להשאיר אחת מהאפשרויות בלבד`)
     } else {
