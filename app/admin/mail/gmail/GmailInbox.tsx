@@ -4,11 +4,12 @@ import Link from 'next/link'
 import {
   Inbox, Send, Search, Loader2, Paperclip, RefreshCw, Settings,
   ChevronLeft, Mail, MailOpen, X, AlertTriangle, User, PenSquare,
-  Reply, Trash2, Archive, Flag, Tag, Check, Circle,
+  Reply, Trash2, Archive, Flag, Tag, Check, Circle, ChevronDown,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { DEPARTMENTS } from '@/lib/departments'
+import ComposeDialog from './ComposeDialog'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // תיבת הדואר של Gmail — נבנית על האינדקס.
@@ -91,8 +92,7 @@ export default function GmailInbox() {
   const [composeMode, setComposeMode] = useState<'new' | 'reply'>('new')
   const [cTo, setCTo] = useState('')
   const [cSubject, setCSubject] = useState('')
-  const [cBody, setCBody] = useState('')
-  const [sending, setSending] = useState(false)
+  const [accountMenu, setAccountMenu] = useState(false)
 
   // ⚠️ ref ולא state: משמש בתוך ה-interval, ו-state היה מייצר interval חדש
   // בכל שינוי סינון ומאפס את השעון.
@@ -183,41 +183,40 @@ export default function GmailInbox() {
     setComposeMode('reply')
     setCTo(selected.from_email ?? '')
     setCSubject(selected.subject?.startsWith('Re:') ? selected.subject : `Re: ${selected.subject ?? ''}`)
-    setCBody('')
     setComposeOpen(true)
   }
 
   function startNew() {
     setComposeMode('new')
-    setCTo(''); setCSubject(''); setCBody('')
+    setCTo(''); setCSubject('')
     setComposeOpen(true)
   }
 
-  async function send() {
-    setSending(true)
+  async function sendMail(p: { to: string; subject: string; html: string; attachments: { name: string; type: string; data: string }[] }) {
     try {
       const res = await fetch('/api/admin/gmail/inbox/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: composeMode === 'reply' ? 'reply' : 'send',
-          to: cTo, subject: cSubject,
-          // ⚠️ שורות חדשות מומרות ל-<br>: הגוף נשלח כ-HTML, ובלי ההמרה
-          // כל ההודעה מגיעה כפסקה אחת רצופה.
-          html: cBody.replace(/\n/g, '<br>'),
+          to: p.to, subject: p.subject, html: p.html,
+          attachments: p.attachments,
           threadId: composeMode === 'reply' ? selected?.thread_id : undefined,
-          accountId: selected?.account_id ?? account ?? undefined,
+          // ⚠️ התיבה הפעילה קובעת מי השולח. בתשובה — התיבה שאליה הגיעה
+          // ההודעה, אחרת המשפחה מקבלת תשובה מכתובת שלא כתבה אליה.
+          accountId: composeMode === 'reply' ? (selected?.account_id ?? undefined) : (account || undefined),
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(json.error ?? 'השליחה נכשלה'); return }
-      setComposeOpen(false)
+      if (!res.ok) { setError(json.error ?? 'השליחה נכשלה'); return false }
       setError(null)
       await load(true)
-    } catch { setError('שגיאת רשת') } finally { setSending(false) }
+      return true
+    } catch { setError('שגיאת רשת'); return false }
   }
 
   const totalUnread = Object.values(unreadByDept).reduce((a, b) => a + b, 0)
+  const activeAccount = accounts.find(a => a.id === account) ?? null
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
 
   const navBtn = (active: boolean) =>
@@ -229,20 +228,75 @@ export default function GmailInbox() {
     <div className="flex flex-col gap-4">
       {/* כותרת */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
+        <div className="min-w-0">
+          {/* 🔴 שם התיבה הפעילה — לא "תיבת Gmail" גנרי. כשמחוברות כמה
+              תיבות, בלי השם אי אפשר לדעת באיזו צופים ומאיזו תישלח תשובה. */}
           <h1 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-            <Mail size={20} className="text-indigo-600" /> תיבת Gmail
+            <Mail size={20} className="text-indigo-600" />
+            <span dir="ltr" className="truncate">{activeAccount?.email ?? 'כל התיבות'}</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {total.toLocaleString('he-IL')} הודעות
+            {activeAccount ? (deptLabel(activeAccount.department) ?? 'תיבת דואר') : `${accounts.length} תיבות`}
+            {' · '}{total.toLocaleString('he-IL')} הודעות
             {totalUnread > 0 && <> · <strong className="text-indigo-600">{totalUnread}</strong> לא נקראו</>}
-            <span className="text-slate-300"> · מתעדכן אוטומטית</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* ── בורר התיבות, בפינה כמו בגמייל ── */}
+          {accounts.length > 0 && (
+            <div className="relative">
+              <button onClick={() => setAccountMenu(o => !o)}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:border-indigo-300">
+                <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-extrabold text-white"
+                  style={{ backgroundColor: deptColor(activeAccount?.department) }}>
+                  {(activeAccount?.email ?? 'A').slice(0, 1).toUpperCase()}
+                </span>
+                <span className="hidden sm:inline max-w-40 truncate" dir="ltr">
+                  {activeAccount?.email ?? 'כל התיבות'}
+                </span>
+                <ChevronDown size={13} className="text-slate-400" />
+              </button>
+
+              {accountMenu && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setAccountMenu(false)} />
+                  <div className="absolute left-0 mt-1.5 z-40 w-72 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    <button onClick={() => { setAccount(''); setAccountMenu(false); setPage(0); setSelected(null) }}
+                      className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-100 ${!account ? 'bg-indigo-50' : ''}`}>
+                      <p className="text-xs font-bold text-slate-800">כל התיבות</p>
+                      <p className="text-[11px] text-slate-400">{accounts.length} תיבות מחוברות</p>
+                    </button>
+                    {accounts.map(a => {
+                      const n = unreadByAccount[a.id] ?? 0
+                      return (
+                        <button key={a.id}
+                          onClick={() => { setAccount(a.id); setAccountMenu(false); setPage(0); setSelected(null) }}
+                          className={`w-full text-right px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 flex items-center gap-2.5 ${account === a.id ? 'bg-indigo-50' : ''}`}>
+                          <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-extrabold text-white flex-shrink-0"
+                            style={{ backgroundColor: deptColor(a.department) }}>
+                            {a.email.slice(0, 1).toUpperCase()}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <p dir="ltr" className="text-xs font-bold text-slate-800 truncate text-right">{a.email}</p>
+                            <p className="text-[11px] text-slate-400">{deptLabel(a.department) ?? a.label ?? '—'}</p>
+                          </span>
+                          {n > 0 && <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 rounded-full px-1.5">{n}</span>}
+                        </button>
+                      )
+                    })}
+                    <Link href="/admin/settings/connect-mailbox"
+                      className="block px-3 py-2.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 border-t border-slate-100">
+                      + חבר תיבה נוספת
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <button onClick={startNew}
             className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700">
-            <PenSquare size={14} /> הודעה חדשה
+            <PenSquare size={14} /> אימייל חדש
           </button>
           <button onClick={() => { setPage(0); void load() }} disabled={loading}
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
@@ -516,38 +570,16 @@ export default function GmailInbox() {
 
       {/* ── חלון כתיבה ── */}
       {composeOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
-          onClick={e => { if (e.target === e.currentTarget) setComposeOpen(false) }}>
-          <div className="w-full sm:max-w-2xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-              <h3 className="font-extrabold text-slate-900">
-                {composeMode === 'reply' ? 'תשובה' : 'הודעה חדשה'}
-              </h3>
-              <button onClick={() => setComposeOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
-            </div>
-            <div className="p-5 space-y-3">
-              <input value={cTo} onChange={e => setCTo(e.target.value)} dir="ltr" placeholder="אל…"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-              <input value={cSubject} onChange={e => setCSubject(e.target.value)} placeholder="נושא"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-              <textarea value={cBody} onChange={e => setCBody(e.target.value)} rows={10} placeholder="תוכן ההודעה…"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-            </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50">
-              <span className="text-[11px] text-slate-400">
-                {composeMode === 'reply' ? 'התשובה תישלח בשרשור הקיים' : 'ההודעה תישלח מהתיבה הפעילה'}
-              </span>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setComposeOpen(false)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">ביטול</button>
-                <button onClick={send} disabled={sending || !cTo.trim() || !cBody.trim()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
-                  {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} שלח
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ComposeDialog
+          mode={composeMode}
+          initialTo={cTo}
+          initialSubject={cSubject}
+          accountEmail={(composeMode === 'reply'
+            ? accounts.find(a => a.id === selected?.account_id)?.email
+            : activeAccount?.email) ?? null}
+          onClose={() => setComposeOpen(false)}
+          onSent={sendMail}
+        />
       )}
     </div>
   )

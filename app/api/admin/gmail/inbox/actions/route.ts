@@ -54,6 +54,8 @@ async function labelId(gmail: ReturnType<typeof getGmailClientForToken>, name: s
   }
 }
 
+interface Attachment { name: string; type: string; data: string }
+
 interface Body {
   action: 'send' | 'reply' | 'mark-read' | 'mark-unread' | 'followup' | 'unfollowup' | 'trash' | 'archive'
   messageId?: string
@@ -61,8 +63,62 @@ interface Body {
   to?: string
   subject?: string
   html?: string
+  attachments?: Attachment[]
   /** התיבה שממנה לשלוח — לבחירת השולח כשיש כמה. */
   accountId?: string
+}
+
+/** כותרת מקודדת ל-UTF-8 — נושא/שם קובץ בעברית מגיע כג'יבריש בלעדיה. */
+const enc = (s: string) => `=?UTF-8?B?${Buffer.from(s, 'utf8').toString('base64')}?=`
+
+/**
+ * שליחה עם צירופים — multipart/mixed.
+ *
+ * ⚠️ נפרד מ-sendGmailMessage כי המבנה שונה לגמרי: הודעה עם צירופים חייבת
+ * גבול (boundary) בין החלקים, וניסיון להוסיף צירוף להודעה פשוטה שובר את
+ * ה-MIME בשקט — גמייל שולח, והנמען מקבל הודעה ריקה עם זבל.
+ */
+async function sendWithAttachments(
+  gmail: ReturnType<typeof getGmailClientForToken>,
+  o: { to: string; subject: string; html: string; from: string; threadId?: string; attachments: Attachment[] },
+) {
+  // ⚠️ גבול אקראי מספיק כדי שלא יופיע בתוכן. הופעה מקרית שלו הייתה קוטעת
+  // את ההודעה באמצע.
+  const boundary = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+  const parts: string[] = [
+    `From: ${enc('היכל החתם סופר')} <${o.from}>`,
+    `To: ${o.to}`,
+    `Reply-To: ${o.from}`,
+    `Subject: ${enc(o.subject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from(o.html, 'utf8').toString('base64'),
+  ]
+
+  for (const a of o.attachments) {
+    parts.push(
+      `--${boundary}`,
+      `Content-Type: ${a.type || 'application/octet-stream'}; name="${enc(a.name)}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${enc(a.name)}"`,
+      '',
+      a.data,
+    )
+  }
+  parts.push(`--${boundary}--`, '')
+
+  const raw = Buffer.from(parts.join('\r\n'), 'utf8')
+    .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw, threadId: o.threadId || undefined },
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -101,12 +157,21 @@ export async function POST(request: NextRequest) {
         }
         // ⚠️ threadId בתשובה בלבד: בהודעה חדשה הוא היה משרשר אותה לשיחה
         // אקראית, וההודעה הייתה נעלמת בתוך שרשור שאינו קשור אליה.
-        await sendGmailMessage(gmail, {
-          to, subject, html,
-          threadId: body.action === 'reply' ? body.threadId : undefined,
-          from: acc.email,
-          replyTo: acc.email,
-        })
+        const atts = Array.isArray(body.attachments) ? body.attachments : []
+        if (atts.length) {
+          await sendWithAttachments(gmail, {
+            to, subject, html, from: acc.email,
+            threadId: body.action === 'reply' ? body.threadId : undefined,
+            attachments: atts,
+          })
+        } else {
+          await sendGmailMessage(gmail, {
+            to, subject, html,
+            threadId: body.action === 'reply' ? body.threadId : undefined,
+            from: acc.email,
+            replyTo: acc.email,
+          })
+        }
         console.log(`[inbox/actions] נשלח מ-${acc.email} אל ${to}`)
         return NextResponse.json({ ok: true })
       }

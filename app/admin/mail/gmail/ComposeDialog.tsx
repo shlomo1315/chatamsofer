@@ -1,0 +1,263 @@
+'use client'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  X, Send, Loader2, Paperclip, Search, User, Trash2,
+  Bold, Italic, Underline, List, ListOrdered, Link2, AlertTriangle,
+} from 'lucide-react'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// חלון כתיבת אימייל — עורך עשיר, אנשי קשר, וצירופים.
+//
+// ⚠️ העורך הוא contentEditable ולא textarea: סרגל העיצוב (מודגש/נטוי/רשימה)
+// דורש HTML חי, ו-textarea מחזיק טקסט שטוח בלבד.
+//
+// ⚠️ אנשי הקשר מגיעים מחיפוש המוטבים הקיים — לפי שם, ת"ז או מייל. ההקלדה
+// אינה מחייבת בחירה: אפשר להקליד כתובת חופשית, כי לא כל נמען הוא מוטב.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface Contact {
+  id: string
+  full_name?: string | null
+  family_name?: string | null
+  email?: string | null
+  phone?: string | null
+  city?: string | null
+  id_number?: string | null
+}
+
+interface Att { name: string; size: number; type: string; data: string }
+
+/** ⚠️ תקרת גודל לכל הצירופים יחד. Gmail חוסם מעל 25MB, והכשל שם אינו מוסבר. */
+const MAX_TOTAL = 20 * 1024 * 1024
+
+export default function ComposeDialog({
+  mode, initialTo, initialSubject, accountEmail, onClose, onSent,
+}: {
+  mode: 'new' | 'reply'
+  initialTo?: string
+  initialSubject?: string
+  accountEmail?: string | null
+  onClose: () => void
+  onSent: (payload: { to: string; subject: string; html: string; attachments: Att[] }) => Promise<boolean>
+}) {
+  const [to, setTo] = useState(initialTo ?? '')
+  const [subject, setSubject] = useState(initialSubject ?? '')
+  const [attachments, setAttachments] = useState<Att[]>([])
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [contactQ, setContactQ] = useState('')
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [showContacts, setShowContacts] = useState(false)
+  const [searching, setSearching] = useState(false)
+
+  const editorRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  // ── חיפוש אנשי קשר ──
+  // ⚠️ מושהה: חיפוש בכל הקלדה היה יורה עשרות בקשות בזמן שמקלידים שם.
+  const searchContacts = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setContacts([]); return }
+    setSearching(true)
+    try {
+      const digits = q.replace(/\D/g, '')
+      const param = digits.length >= 5 ? `id_number=${digits}` : `q=${encodeURIComponent(q)}`
+      const res = await fetch(`/api/admin/beneficiary-search?${param}&limit=8`, { cache: 'no-store' })
+      const json = await res.json()
+      setContacts(Array.isArray(json) ? json : (json.results ?? json.beneficiaries ?? []))
+    } catch { /* חיפוש שנכשל אינו חוסם הקלדה חופשית */ } finally { setSearching(false) }
+  }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => { void searchContacts(contactQ) }, 300)
+    return () => clearTimeout(t)
+  }, [contactQ, searchContacts])
+
+  // ── צירופים ──
+  async function addFiles(files: FileList | null) {
+    if (!files?.length) return
+    setError(null)
+    const next: Att[] = [...attachments]
+    let total = next.reduce((s, a) => s + a.size, 0)
+
+    for (const f of Array.from(files)) {
+      total += f.size
+      // ⚠️ הבדיקה על הסכום המצטבר ולא על כל קובץ בנפרד: חמישה קבצים של
+      // 5MB עוברים כל אחד ונחסמים יחד — והכשל בגמייל אינו מוסבר.
+      if (total > MAX_TOTAL) {
+        setError(`הצירופים חורגים מ-${Math.round(MAX_TOTAL / 1024 / 1024)}MB. הסירו קובץ ונסו שוב.`)
+        break
+      }
+      const data = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result ?? '').split(',')[1] ?? '')
+        r.onerror = reject
+        r.readAsDataURL(f)
+      }).catch(() => '')
+      if (data) next.push({ name: f.name, size: f.size, type: f.type || 'application/octet-stream', data })
+    }
+    setAttachments(next)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  // ── סרגל העיצוב ──
+  // ⚠️ execCommand מיושן אך הוא הדרך היחידה שעובדת בכל הדפדפנים ללא
+  // ספריית עורך כבדה. הפעולות כאן בסיסיות ולא דורשות יותר מזה.
+  const exec = (cmd: string, val?: string) => {
+    editorRef.current?.focus()
+    document.execCommand(cmd, false, val)
+  }
+
+  async function submit() {
+    const html = editorRef.current?.innerHTML ?? ''
+    if (!to.trim()) { setError('חסרה כתובת נמען'); return }
+    if (!html.replace(/<[^>]*>/g, '').trim() && !attachments.length) {
+      setError('ההודעה ריקה'); return
+    }
+    setSending(true); setError(null)
+    const ok = await onSent({ to: to.trim(), subject: subject.trim() || '(ללא נושא)', html, attachments })
+    setSending(false)
+    if (ok) onClose()
+    else setError('השליחה נכשלה')
+  }
+
+  const tbBtn = 'p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+          <h3 className="font-extrabold text-slate-900">
+            {mode === 'reply' ? 'תשובה' : 'אימייל חדש'}
+          </h3>
+          <div className="flex items-center gap-2">
+            {accountEmail && (
+              <span dir="ltr" className="text-[11px] text-slate-400 hidden sm:inline">מ: {accountEmail}</span>
+            )}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {/* נמען + אנשי קשר */}
+          <div className="px-5 pt-4 pb-2 relative">
+            <div className="flex items-center gap-2">
+              <input value={to} onChange={e => setTo(e.target.value)} dir="ltr" placeholder="אל…"
+                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              <button onClick={() => setShowContacts(s => !s)}
+                title="בחירה מאנשי הקשר"
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                  showContacts ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'
+                }`}>
+                <User size={14} /> אנשי קשר
+              </button>
+            </div>
+
+            {showContacts && (
+              <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="relative border-b border-slate-100">
+                  <Search size={14} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
+                  <input value={contactQ} onChange={e => setContactQ(e.target.value)} autoFocus
+                    placeholder="חיפוש לפי שם, ת״ז או מייל…"
+                    className="w-full pr-9 pl-3 py-2 text-xs focus:outline-none" />
+                </div>
+                <div className="max-h-52 overflow-y-auto">
+                  {searching ? (
+                    <p className="px-3 py-3 text-xs text-slate-400 flex items-center gap-2">
+                      <Loader2 size={12} className="animate-spin" /> מחפש…
+                    </p>
+                  ) : contacts.length === 0 ? (
+                    <p className="px-3 py-3 text-xs text-slate-400">
+                      {contactQ.trim().length < 2 ? 'הקלידו לפחות שני תווים' : 'לא נמצאו תוצאות'}
+                    </p>
+                  ) : contacts.map(c => {
+                    const name = [c.family_name, c.full_name].filter(Boolean).join(' ') || c.full_name || '—'
+                    return (
+                      <button key={c.id} disabled={!c.email}
+                        onClick={() => { if (c.email) { setTo(c.email); setShowContacts(false); setContactQ('') } }}
+                        className="w-full text-right px-3 py-2 hover:bg-indigo-50 disabled:opacity-40 transition-colors border-b border-slate-50 last:border-0">
+                        <p className="text-xs font-bold text-slate-800">{name}</p>
+                        <p dir="ltr" className="text-[11px] text-slate-500 text-right">
+                          {c.email || 'אין כתובת מייל'}{c.city ? ` · ${c.city}` : ''}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="px-5 pb-2">
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="נושא"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+          </div>
+
+          {/* סרגל עיצוב */}
+          <div className="px-5 pb-1 flex items-center gap-0.5 flex-wrap border-b border-slate-100 pb-2">
+            <button onClick={() => exec('bold')} className={tbBtn} title="מודגש"><Bold size={15} /></button>
+            <button onClick={() => exec('italic')} className={tbBtn} title="נטוי"><Italic size={15} /></button>
+            <button onClick={() => exec('underline')} className={tbBtn} title="קו תחתון"><Underline size={15} /></button>
+            <span className="w-px h-4 bg-slate-200 mx-1" />
+            <button onClick={() => exec('insertUnorderedList')} className={tbBtn} title="רשימה"><List size={15} /></button>
+            <button onClick={() => exec('insertOrderedList')} className={tbBtn} title="רשימה ממוספרת"><ListOrdered size={15} /></button>
+            <span className="w-px h-4 bg-slate-200 mx-1" />
+            <button title="קישור" className={tbBtn}
+              onClick={() => { const u = prompt('כתובת הקישור:'); if (u) exec('createLink', u) }}>
+              <Link2 size={15} />
+            </button>
+            <span className="w-px h-4 bg-slate-200 mx-1" />
+            <button onClick={() => fileRef.current?.click()} className={tbBtn} title="צירוף קובץ">
+              <Paperclip size={15} />
+            </button>
+            <input ref={fileRef} type="file" multiple hidden onChange={e => addFiles(e.target.files)} />
+          </div>
+
+          {/* גוף ההודעה */}
+          {/* ⚠️ dir=rtl אך plaintext-only מבוטל: הגוף נשלח כ-HTML ולכן חייב
+              לשמור עיצוב. suppressContentEditableWarning נדרש כי React אינו
+              שולט בתוכן. */}
+          <div ref={editorRef} contentEditable suppressContentEditableWarning dir="rtl"
+            className="mx-5 my-3 min-h-[220px] rounded-xl border border-slate-200 px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-200 overflow-y-auto"
+          />
+
+          {/* צירופים */}
+          {attachments.length > 0 && (
+            <div className="px-5 pb-3 flex flex-wrap gap-2">
+              {attachments.map((a, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-bold text-slate-700">
+                  <Paperclip size={11} />
+                  <span className="max-w-40 truncate">{a.name}</span>
+                  <span className="text-slate-400">{(a.size / 1024).toFixed(0)}KB</span>
+                  <button onClick={() => setAttachments(list => list.filter((_, j) => j !== i))}
+                    className="text-slate-400 hover:text-rose-600"><Trash2 size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {error && (
+            <p className="mx-5 mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 flex items-center gap-1.5">
+              <AlertTriangle size={13} /> {error}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
+          <span className="text-[11px] text-slate-400">
+            {mode === 'reply' ? 'התשובה תישלח בשרשור הקיים' : 'ההודעה תישלח מהתיבה הנבחרת'}
+          </span>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">ביטול</button>
+            <button onClick={submit} disabled={sending || !to.trim()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
+              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} שלח
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
