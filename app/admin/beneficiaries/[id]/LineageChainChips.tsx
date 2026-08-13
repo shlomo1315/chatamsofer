@@ -36,12 +36,19 @@ type Color = 'blue' | 'orange' | 'red'
 //   verified=כחול · rejected=אדום בכל דור · pending בדורות 2–5=אדום (צומת שנוסף
 //   לתוך הליבה המאושרת) · pending מעל 5 או "לא נמצא"=כתום.
 // ─────────────────────────────────────────────────────────────────────────────
+// ⚠️ עיצוב "קלף וחותם" — עקבי עם עץ הדורות שמתחת ועם מסך הניהול.
+// הצ'יפים והעץ מציגים את אותה שרשרת; שתי שפות עיצוב שונות על אותו מסך
+// גרמו לצ'יפים להיראות כרכיב ישן שנשכח.
+//
+// ⚠️ הסמנטיקה של הצבע *לא* השתנתה: מאושר/ממתין/חריג נשארים שלושה מצבים
+// נבדלים — רק הגוון הותאם. אחידות עיצובית שמוחקת את ההבחנה הזו הייתה
+// הופכת אזהרה אמיתית לקישוט.
 const STYLE: Record<Color, string> = {
-  blue:   'bg-blue-600 text-white border-blue-700 font-semibold',
-  orange: 'bg-orange-500 text-white border-orange-600 font-semibold',
-  red:    'bg-red-600 text-white border-red-700 font-bold',
+  blue:   'text-white font-semibold border-[#8a6a1e] bg-[linear-gradient(160deg,#e0b94a,#c69e2d)] shadow-[0_2px_6px_-2px_rgba(198,158,45,0.55)]',
+  orange: 'text-white font-semibold border-[#a15a3d] bg-[linear-gradient(160deg,#c68a4e,#b3703a)] shadow-[0_2px_6px_-2px_rgba(179,112,58,0.55)]',
+  red:    'text-white font-bold border-[#7f1d1d] bg-[linear-gradient(160deg,#b91c1c,#991b1b)] shadow-[0_2px_8px_-2px_rgba(153,27,27,0.6)]',
 }
-const GEN_TXT: Record<Color, string> = { blue: 'text-blue-100', orange: 'text-orange-100', red: 'text-red-100' }
+const GEN_TXT: Record<Color, string> = { blue: 'text-amber-50/80', orange: 'text-orange-50/80', red: 'text-red-100' }
 // ⚠️ כלל הצבע מגיע מ-lib/lineageDeviation ואינו משוכפל כאן: הצ'יפים וחלונית
 // ההתראה חייבים לומר את אותו דבר. עותק שני היה נפרד מהראשון בתיקון הבא, ואז
 // ההתראה מדברת על דור שהצ'יפים מציגים כתקין.
@@ -220,9 +227,11 @@ export default function LineageChainChips({
         {saving && <Loader2 size={13} className="animate-spin text-slate-400" />}
       </div>
       <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" /> מאושר</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> ממתין לאימות</span>
-        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block" /> חריג — בדיקה מעמיקה</span>
+        {/* ⚠️ נקודות המקרא נגזרות מאותם גוונים כמו הצ'יפים — מקרא שאינו
+            תואם את מה שמעליו גרוע מהיעדר מקרא. */}
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#c69e2d] inline-block" /> מאושר</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#b3703a] inline-block" /> ממתין לאימות</span>
+        <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#991b1b] inline-block" /> חריג — בדיקה מעמיקה</span>
         <span>· לחצו על דור לבחירת צומת אחר או לסימון ידני.</span>
       </p>
 

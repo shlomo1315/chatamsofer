@@ -778,8 +778,18 @@ export default function BeneficiaryForm({ defaultValues, beneficiaryId }: Props)
     if (!form.address.trim()) errs.address = 'שדה חובה'
     if (!form.city.trim()) errs.city = 'שדה חובה'
 
-    // אדם חריג אינו צאצא — אין לו שיוך שושלת, ולכן מדלגים על בדיקה זו.
-    if (!form.is_special && !form.lineage_node_id) errs.lineage_node_id = 'יש לבחור שיוך שושלת'
+    // שיוך שושלת — חובה *ברישום חדש* בלבד.
+    //
+    // 🔴 בעריכה זו הייתה חסימה שגויה: מזכיר שנכנס לעדכן טלפון או כתובת
+    // נחסם בדרישה "יש לבחור שיוך שושלת" על משפחה שהשיוך שלה כבר נקבע
+    // מזמן. הסיבה: חלק מהרשומות הישנות נושאות את השרשרת ב-lineage_manual
+    // (שרשור ידני) בלי lineage_node_id, והבדיקה הכירה רק בשדה השני.
+    //
+    // ⚠️ אדם חריג אינו צאצא — אין לו שיוך כלל.
+    const hasLineage = !!form.lineage_node_id || manualLineage.length > 0
+    if (!form.is_special && !hasLineage && !isEdit) {
+      errs.lineage_node_id = 'יש לבחור שיוך שושלת'
+    }
 
     const childErrs: Partial<Record<keyof ChildEntry, string>>[] = children.map(c => {
       const ce: Partial<Record<keyof ChildEntry, string>> = {}
