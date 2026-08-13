@@ -122,9 +122,14 @@ export function fieldsFor(type: ReqType, ctx: Ctx): Field[] {
       ]
     case 'loan':
       return [
-        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: `כתבו סכום בלבד בין ${LOAN_MIN_AMOUNT.toLocaleString('en-US')}-${LOAN_MAX_AMOUNT.toLocaleString('en-US')} וב-₪ בלבד`, required: true },
+        // ⚠️ בדולרים ולא בשקלים — כמו בכל שאר מסכי ההלוואות. הנוסח הקודם
+        // ("וב-₪ בלבד") סתר את ההודעה שההלוואה נקובה בדולר.
+        { key: 'amount', label: 'סכום ההלוואה המבוקש', hint: `כתבו סכום בלבד בין ${LOAN_MIN_AMOUNT.toLocaleString('en-US')}-${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ובדולרים ($) בלבד`, required: true },
         { key: 'installments', label: 'מספר התשלומים', hint: `כתבו מספר בלבד עד ${LOAN_MAX_INSTALLMENTS}`, required: true },
-        { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_PURPOSES] },
+        // ⚠️ תנאי רכישת הדירה מודגש כאן ולא רק בפורטל: מי שמגיש במייל אינו
+        // רואה את מסך הבקשה כלל, ובלי ההבהרה הוא מגיש לתוכנית עתידית או
+        // לדירה להשקעה — ואז הבקשה נדחית אחרי שכבר הושקעה בה עבודה.
+        { key: 'purpose', label: 'מטרת ההלוואה', hint: 'השאירו רק אחת, מחקו את השאר. ⚠️ רכישת דירה — רק בעת תהליך הרכישה בפועל ולא לתוכנית עתידית, וכן רק דירה למגורים ולא להשקעה', required: true, options: [...LOAN_PURPOSES] },
         { key: 'declaration', label: 'האם פנית בעבר לגמ״ח חתם סופר?', hint: 'השאירו רק אחת, מחקו את השאר', required: true, options: [...LOAN_DECLARATIONS] },
         { key: 'notes', label: 'הערות', required: false },
       ]
