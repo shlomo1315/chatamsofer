@@ -96,7 +96,7 @@ export function gmailCounterKey(email: string): string {
 function automatedNotice(replyTo: string): string {
   return `<div style="max-width:480px;margin:12px auto 0;padding:12px 16px;border-radius:12px;`
     + `background:#f8fafc;border:1px solid #e2e8f0;direction:rtl;text-align:center;`
-    + `font-family:Arial,sans-serif;font-size:12px;line-height:1.7;color:#64748b">`
+    + `font-family:'Heebo',Arial,sans-serif;font-size:12px;line-height:1.7;color:#64748b">`
     + `<div style="font-weight:700;color:#475569;margin-bottom:2px">הודעה זו נשלחה ממערכת אוטומטית</div>`
     + `<div>אין להשיב לכתובת זו — הודעות שנשלחות אליה אינן נקראות.</div>`
     + `<div>לפניות ולתשובות: <a href="mailto:${replyTo}" style="color:#4f46e5;font-weight:700;text-decoration:none">${replyTo}</a></div>`

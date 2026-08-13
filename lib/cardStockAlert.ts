@@ -55,7 +55,7 @@ export async function resetAlertIfAboveThreshold(admin: SupabaseClient, balance:
 }
 
 function lowStockEmailHtml(balance: number, threshold: number): string {
-  return `<!doctype html><html dir="rtl" lang="he"><body style="margin:0;background:#f1f5f9;font-family:Rubik,Arial,sans-serif;padding:24px;direction:rtl;text-align:right">
+  return `<!doctype html><html dir="rtl" lang="he"><head><meta charset="utf-8"/><link rel="preconnect" href="https://fonts.googleapis.com"/><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet"/></head><body style="margin:0;background:#f1f5f9;font-family:'Heebo',Arial,sans-serif;padding:24px;direction:rtl;text-align:right">
     <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;direction:rtl;text-align:right">
       <div style="background:#f43f5e;color:#fff;padding:20px 24px;text-align:right">
         <div style="font-size:18px;font-weight:700">⚠️ מלאי כרטיסי מזון נמוך</div>

@@ -154,7 +154,7 @@ export async function sendLoanInquiry(
       thread.inReplyTo = thread.references
     }
     // טקסט רגיל בגוף המייל — כמו התכתבות ישירה, בלי עיצוב/מסגרת.
-    html = `<div dir="rtl" style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.9;color:#0f172a;white-space:pre-wrap;">${esc(text).replace(/\n/g, '<br/>')}</div>`
+    html = `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif;font-size:15px;line-height:1.9;color:#0f172a;white-space:pre-wrap;">${esc(text).replace(/\n/g, '<br/>')}</div>`
   }
 
   const sent = await deliverMail(email, subject, html, undefined, {

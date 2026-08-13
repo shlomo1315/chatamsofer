@@ -52,7 +52,7 @@ async function maybeForwardToGmail(admin: SupabaseClient, msg: {
     ? msg.html
     : `<pre style="white-space:pre-wrap;font-family:inherit;">${(msg.plain ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`
   const html =
-    `<div style="direction:rtl;text-align:right;font-family:Arial,sans-serif;">` +
+    `<div style="direction:rtl;text-align:right;font-family:'Heebo',Arial,sans-serif;">` +
     `<div style="font-size:12px;color:#94a3b8;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px;">` +
     `התקבל ב-${msg.toEmail} · מאת: ${origin}</div>${bodyHtml}</div>`
 

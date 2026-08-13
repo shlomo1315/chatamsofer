@@ -53,7 +53,7 @@ function autoReplyNote(): string {
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
     <tr><td style="background:#f1f5f9;border-radius:10px;padding:11px 16px;text-align:center;">
-      <p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;font-family:Arial,sans-serif;">
+      <p style="margin:0;color:#64748b;font-size:12px;line-height:1.6;font-family:'Heebo',Arial,sans-serif;">
         הודעה זו נשלחה <strong>באופן אוטומטי</strong> ממערכת היכל החתם סופר בעקבות פנייתך.
       </p>
     </td></tr>
@@ -66,7 +66,7 @@ function btn(href: string, label: string, bg: string, textColor = '#ffffff'): st
   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;width:100%;">
     <tr><td align="center" style="border-radius:14px;background:${bg};">
       <a href="${href}" target="_blank"
-         style="display:block;padding:15px 24px;font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:${textColor};text-decoration:none;border-radius:14px;text-align:center;">
+         style="display:block;padding:15px 24px;font-family:'Heebo',Arial,sans-serif;font-size:15px;font-weight:700;color:${textColor};text-decoration:none;border-radius:14px;text-align:center;">
         ${label}
       </a>
     </td></tr>
@@ -85,7 +85,7 @@ function btnPair(
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
           <tr><td align="center" style="border-radius:14px;background:${bg1};">
             <a href="${href1}" target="_blank"
-               style="display:block;padding:14px 12px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:${text1};text-decoration:none;border-radius:14px;text-align:center;">
+               style="display:block;padding:14px 12px;font-family:'Heebo',Arial,sans-serif;font-size:14px;font-weight:700;color:${text1};text-decoration:none;border-radius:14px;text-align:center;">
               ${label1}
             </a>
           </td></tr>
@@ -96,7 +96,7 @@ function btnPair(
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
           <tr><td align="center" style="border-radius:14px;background:${bg2};">
             <a href="${href2}" target="_blank"
-               style="display:block;padding:14px 12px;font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:${text2};text-decoration:none;border-radius:14px;text-align:center;">
+               style="display:block;padding:14px 12px;font-family:'Heebo',Arial,sans-serif;font-size:14px;font-weight:700;color:${text2};text-decoration:none;border-radius:14px;text-align:center;">
               ${label2}
             </a>
           </td></tr>
@@ -191,7 +191,7 @@ function noReplyBox(): string {
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
     <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;">
-      <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.7;font-family:Arial,sans-serif;text-align:center;">
+      <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">
         מייל זה נשלח <strong>באופן אוטומטי</strong> ואין להשיב אליו —
         הודעות הנשלחות לכתובת זו אינן נקראות.<br/>
         בכל עניין שאינו קשור להגשת בקשות בנושאים הנ"ל, ניתן לפנות למשרד בכתובת <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>
@@ -255,13 +255,13 @@ export function benefitsLinkEmail(
     </table>` : ''
   const detailsRows = (details ?? []).map(([l, v]) => detailRow(l, v != null && v !== '' ? String(v) : '')).join('')
   const detailsTable = detailsRows ? `
-    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">${T('details_title')}</p>
+    <p style="margin:0 0 10px;color:#334155;font-size:14px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${T('details_title')}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">${detailsRows}</table>` : ''
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
     ${detailsTable}
-    <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.8;font-family:Arial,sans-serif;">
+    <p style="margin:0 0 20px;color:#334155;font-size:14px;line-height:1.8;font-family:'Heebo',Arial,sans-serif;">
       ${t('intro')}
     </p>
     ${buttons}
@@ -278,7 +278,7 @@ export function emailIntakeConfirmedEmail(name: string, typeLabel: string): Buil
   const greet = greetHe(name)
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#f0fdf4;border-right:4px solid #22c55e;border-radius:0 12px 12px 0;padding:16px 20px;">
         <p style="margin:0;color:#15803d;font-size:15px;font-weight:800;">${typeLabel} שלך נקלטה במערכת ומועברת לטיפול המזכירות.</p>
@@ -303,7 +303,7 @@ export function requestBlockedRejectedEmail(opts: {
   const officeLink = `<a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>`
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">${escapeHtml(t('box_title'))}</p>
@@ -345,7 +345,7 @@ export function emailIntakeRejectedEmail(opts: {
     <p style="margin:0;"><a href="${draftHref}" style="display:inline-block;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${T('draft_button')}</a></p>` : ''
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
       <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 8px;color:#b91c1c;font-size:15px;font-weight:900;">${escapeHtml(typeLabel)} שלך לא נקלטה</p>
@@ -1157,7 +1157,7 @@ export function birthRejectedEmail(opts: {
     </table>` : ''
   const body = `
     ${autoReplyNote()}
-    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:Arial,sans-serif;">${greet}</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
     <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;">
       ${escapeHtml(t('body'))}
     </p>
@@ -1623,7 +1623,7 @@ export function verifyCodeEmail(code: string): BuiltEmail {
   const t = (k: string) => textFor('verify_code_email', k)
   const T = (k: string) => escapeHtml(t(k))
   const html = `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head>
-  <body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;background:#f1f5f9;padding:24px;">
+  <body style="direction:rtl;text-align:right;font-family:'Heebo',Arial,sans-serif;background:#f1f5f9;padding:24px;">
     <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
       <div style="background:#4f46e5;color:#fff;padding:20px 24px;font-size:18px;font-weight:700;">${T('header')}</div>
       <div style="padding:24px;color:#1e293b;font-size:15px;line-height:1.7;">
@@ -1693,20 +1693,20 @@ export function birthApprovalRetractedEmail(
     ? 'בקשתכם <strong>נדחתה</strong>, ואינה מאושרת.'
     : 'בקשתכם <strong>אינה מאושרת בשלב זה</strong>, והיא ממתינה כעת לבדיקה ולאישור.'
   const body = `
-    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
-      <p style="margin:0;color:#92400e;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+      <p style="margin:0;color:#92400e;font-size:15px;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">
         המייל שקיבלתם מאיתנו על <strong>אישור בקשתכם</strong> נשלח אליכם <strong>בטעות</strong>.
         ${stateLine}
       </p>
     </div>
-    <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+    <p style="margin:0 0 14px;color:#334155;font-size:15px;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">
       אם בהמשך תאושר בקשתכם — תקבלו על כך הודעה נוספת במייל. עד אז אין צורך בפעולה מצדכם.
     </p>
-    <p style="margin:0 0 6px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">
+    <p style="margin:0 0 6px;color:#334155;font-size:15px;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">
       אנו מתנצלים על הטעות ועל אי הנוחות.
     </p>
-    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">
       בברכה מרובה,<br/>היכל החתם סופר
     </p>`
   return {
@@ -1738,21 +1738,21 @@ export function holidayCallNoticeEmail(name: string, vars: { distribution?: stri
   const t = (k: string) => textFor('holiday_call_notice', k)
   const fill = (v: string) => v.replace(/\{חלוקה\}/g, vars.distribution ?? '')
   const body = `
-    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:14px 16px;margin:0 0 18px;">
-      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;font-family:Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
+      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
     </div>
     <div style="background:#fef2f2;border:2px solid #fca5a5;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
-      <p style="margin:0 0 10px;color:#991b1b;font-size:15px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('phone_title')))}</p>
+      <p style="margin:0 0 10px;color:#991b1b;font-size:15px;font-weight:800;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('phone_title')))}</p>
       <p style="margin:0 0 12px;text-align:center;">
         <span style="display:inline-block;background:#dc2626;color:#fff;font-size:24px;font-weight:900;letter-spacing:2px;border-radius:12px;padding:12px 26px;direction:ltr;">${escapeHtml(t('phone'))}</span>
       </p>
-      <p style="margin:0;color:#991b1b;font-size:14px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('warning')))}</p>
+      <p style="margin:0;color:#991b1b;font-size:14px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('warning')))}</p>
     </div>
     <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;padding:14px 16px;margin:0 0 18px;">
-      <p style="margin:0;color:#92400e;font-size:15px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('deadline')))}</p>
+      <p style="margin:0;color:#92400e;font-size:15px;font-weight:800;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('deadline')))}</p>
     </div>
-    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
   return {
     subject: fill(t('subject')),
     html: shell({ preheader: fill(t('preheader')), accent: '#0f766e', title: fill(t('title')), subtitle: fill(t('subtitle')), body }),
@@ -1763,12 +1763,12 @@ export function holidayRegisteredEmail(name: string, vars: { distribution?: stri
   const t = (k: string) => textFor('holiday_registered', k)
   const fill = (v: string) => v.replace(/\{חלוקה\}/g, vars.distribution ?? '')
   const body = `
-    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
-      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
+      <p style="margin:0;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('intro')))}</p>
     </div>
-    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:Arial,sans-serif;">${escapeHtml(fill(t('next')))}</p>
-    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+    <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">${escapeHtml(fill(t('next')))}</p>
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
   return {
     subject: fill(t('subject')),
     html: shell({ preheader: fill(t('preheader')), accent: '#0f766e', title: fill(t('title')), subtitle: fill(t('subtitle')), body }),
@@ -1788,12 +1788,12 @@ export function holidayAlreadyRegisteredEmail(
     try { dateStr = new Date(vars.registeredAt).toLocaleDateString('he-IL', { day: 'numeric', month: 'long', year: 'numeric' }) } catch { dateStr = '' }
   }
   const body = `
-    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
+    <p style="margin:0 0 16px;color:#0f172a;font-size:17px;font-weight:800;font-family:'Heebo',Arial,sans-serif;">שלום וברכה${name ? `, ${escapeHtml(name)}` : ''},</p>
     <div style="background:#ecfdf5;border:1px solid #6ee7b7;border-radius:12px;padding:16px 18px;margin:0 0 18px;">
-      <p style="margin:0 0 6px;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:Arial,sans-serif;">הבקשה שלכם ל${escapeHtml(distName)} כבר נקלטה במערכת, נשלח לכם הודעה מסודרת לגבי ההמשך.</p>
-      ${dateStr ? `<p style="margin:0;color:#047857;font-size:14px;font-weight:700;font-family:Arial,sans-serif;">תאריך הרישום: ${escapeHtml(dateStr)}</p>` : ''}
+      <p style="margin:0 0 6px;color:#065f46;font-size:16px;font-weight:800;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">הבקשה שלכם ל${escapeHtml(distName)} כבר נקלטה במערכת, נשלח לכם הודעה מסודרת לגבי ההמשך.</p>
+      ${dateStr ? `<p style="margin:0;color:#047857;font-size:14px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">תאריך הרישום: ${escapeHtml(dateStr)}</p>` : ''}
     </div>
-    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
+    <p style="margin:0;color:#0f172a;font-size:15px;font-weight:700;line-height:1.9;font-family:'Heebo',Arial,sans-serif;">בברכה מרובה,<br/>היכל החתם סופר</p>`
   return {
     subject: `רישומכם ל${distName} כבר נקלט`,
     html: shell({ preheader: 'הרישום שלכם כבר קיים במערכת', accent: '#0f766e', title: 'כבר רשומים', subtitle: distName, body }),

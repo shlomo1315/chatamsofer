@@ -15,8 +15,8 @@ function getAdminClient() {
 }
 
 function codeEmailHtml(code: string): string {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/></head>
-  <body style="direction:rtl;text-align:right;font-family:Arial,sans-serif;background:#f1f5f9;padding:24px;">
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"/><link rel="preconnect" href="https://fonts.googleapis.com"/><link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap" rel="stylesheet"/></head>
+  <body style="direction:rtl;text-align:right;font-family:'Heebo',Arial,sans-serif;background:#f1f5f9;padding:24px;">
     <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
       <div style="background:#4f46e5;color:#fff;padding:20px 24px;font-size:18px;font-weight:700;">היכל החתם סופר — אזור אישי</div>
       <div style="padding:24px;color:#1e293b;font-size:15px;line-height:1.7;">

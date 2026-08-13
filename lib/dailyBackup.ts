@@ -91,7 +91,7 @@ export async function runDailyBackup(force = false): Promise<BackupResult> {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     deliverMail(REPORT_TO, 'כשל בגיבוי היומי',
-      `<div dir="rtl" style="font-family:Arial">הגיבוי היומי (worker פנימי) נכשל: ${msg}</div>`,
+      `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">הגיבוי היומי (worker פנימי) נכשל: ${msg}</div>`,
       undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
     return { ok: false, error: msg }
   }
@@ -105,7 +105,7 @@ async function alertOnce(admin: NonNullable<ReturnType<typeof getServiceClient>>
   if (data?.value === today) return
   await admin.from('app_settings').upsert({ key: settingKey, value: today }, { onConflict: 'key' }).then(undefined, () => {})
   deliverMail(REPORT_TO, 'התראת גיבוי — היכל החתם סופר',
-    `<div dir="rtl" style="font-family:Arial">${message}</div>`,
+    `<div dir="rtl" style="font-family:'Heebo',Arial,sans-serif">${message}</div>`,
     undefined, { fromEmail: REPORT_TO, replyTo: REPORT_TO, skipLog: true }).catch(() => {})
 }
 

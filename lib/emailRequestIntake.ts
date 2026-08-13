@@ -97,13 +97,13 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
   // הערוצים נגזרים ממנה, כדי שלא ייווצר ערוץ שממשיך לרשום אחרי סגירה.
   const dist = await getOpenDistribution()
   if (!dist) {
-    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">הרישום לחלוקת החגים אינו פתוח כרגע. נשמח לעמוד לרשותכם במועד הרישום.</p>')
+    await send('רישום לחלוקת חגים', '<p style="font-family:Heebo,Arial,sans-serif">הרישום לחלוקת החגים אינו פתוח כרגע. נשמח לעמוד לרשותכם במועד הרישום.</p>')
     return true
   }
 
   const idM = String(msg.subject).match(/\d{9}/)
   if (!idM) {
-    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא. יש להשיב עם הנושא: <strong>רישום לחלוקת חגים &lt;תעודת זהות&gt;</strong></p>')
+    await send('רישום לחלוקת חגים', '<p style="font-family:Heebo,Arial,sans-serif">לא צוינה תעודת זהות מלאה (9 ספרות) בשורת הנושא. יש להשיב עם הנושא: <strong>רישום לחלוקת חגים &lt;תעודת זהות&gt;</strong></p>')
     return true
   }
   const idNumber = idM[0]
@@ -118,13 +118,13 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
   // נדרשת התאמה לכתובת הרשומה. הודעת הכשל גנרית ואינה חושפת אם הת"ז קיימת.
   const benEmail = (ben?.email || '').trim().toLowerCase()
   if (!ben || !benEmail || benEmail !== from) {
-    await send('רישום לחלוקת חגים', '<p style="font-family:Arial">לא ניתן לאמת את הבקשה מכתובת מייל זו. יש לשלוח מהכתובת הרשומה במערכת, או להירשם דרך האזור האישי.</p>')
+    await send('רישום לחלוקת חגים', '<p style="font-family:Heebo,Arial,sans-serif">לא ניתן לאמת את הבקשה מכתובת מייל זו. יש לשלוח מהכתובת הרשומה במערכת, או להירשם דרך האזור האישי.</p>')
     return true
   }
 
   const result = await registerToOpenDistribution(ben.id, 'email')
   if (!result.ok) {
-    await send('רישום לחלוקת חגים', `<p style="font-family:Arial">${result.error ?? 'הרישום נכשל'}. אנא נסו שוב או פנו למשרד.</p>`)
+    await send('רישום לחלוקת חגים', `<p style="font-family:Heebo,Arial,sans-serif">${result.error ?? 'הרישום נכשל'}. אנא נסו שוב או פנו למשרד.</p>`)
     return true
   }
 
@@ -134,7 +134,7 @@ async function handleHolidayEmail(admin: SupabaseClient, msg: Msg): Promise<bool
   // כשל: רישום כפול אינו שגיאה מבחינת המשפחה, והיא צריכה לדעת שהיא בפנים.
   const html = result.created
     ? mail.html
-    : `<p style="font-family:Arial;font-size:15px;color:#0f766e;font-weight:700">אתם כבר רשומים לחלוקה זו — אין צורך בפעולה נוספת.</p>${mail.html}`
+    : `<p style="font-family:Heebo,Arial,sans-serif;font-size:15px;color:#0f766e;font-weight:700">אתם כבר רשומים לחלוקה זו — אין צורך בפעולה נוספת.</p>${mail.html}`
   await send(mail.subject, html)
   return true
 }
@@ -158,7 +158,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     console.log(`[emailRequestIntake] ${type} blocked — ${gateDept} department closed (from=${from})`)
     await deliverMail(
       from, 'לגבי פנייתכם',
-      `<div dir="rtl" style="font-family:Arial;font-size:15px;color:#334155;line-height:1.7">שלום רב,<br/><br/>${departmentClosedMessage(gateDept)}<br/><br/>בברכה,<br/>מזכירות היכל החתם סופר</div>`,
+      `<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;font-size:15px;color:#334155;line-height:1.7">שלום רב,<br/><br/>${departmentClosedMessage(gateDept)}<br/><br/>בברכה,<br/>מזכירות היכל החתם סופר</div>`,
       undefined, { ...mailFor('igud'), skipLog: true },
     ).catch(() => {})
     return true

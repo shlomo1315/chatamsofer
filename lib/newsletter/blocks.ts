@@ -94,7 +94,7 @@ function renderBlock(b: Block): string {
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 18px;width:100%;">
         <tr><td align="center" style="border-radius:14px;background:${escapeAttr(b.color ?? GOLD)};">
           <a href="${safeUrl(b.url)}" target="_blank"
-             style="display:block;padding:15px 24px;font-family:Arial,sans-serif;font-size:15px;
+             style="display:block;padding:15px 24px;font-family:'Heebo',Arial,sans-serif;font-size:15px;
                     font-weight:700;color:#ffffff;text-decoration:none;border-radius:14px;text-align:center;">
             ${escapeAttr(b.label ?? 'לחצו כאן')}
           </a>

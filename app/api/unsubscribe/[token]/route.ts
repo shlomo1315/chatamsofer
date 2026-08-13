@@ -28,7 +28,7 @@ function page(title: string, message: string, ok: boolean): NextResponse {
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${title}</title>
 </head>
-<body style="margin:0;font-family:Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+<body style="margin:0;font-family:'Heebo',Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;">
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:40px;max-width:420px;text-align:center;">
     <div style="font-size:40px;margin-bottom:12px;">${ok ? '✓' : '⚠'}</div>
     <h1 style="margin:0 0 10px;color:${color};font-size:20px;">${title}</h1>
@@ -52,7 +52,7 @@ function confirmPage(token: string, email: string): NextResponse {
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>הסרה מרשימת התפוצה</title>
 </head>
-<body style="margin:0;font-family:Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+<body style="margin:0;font-family:'Heebo',Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:36px;max-width:440px;text-align:center;">
     <div style="font-size:36px;margin-bottom:14px;">📬</div>
     <h1 style="margin:0 0 10px;color:#1B3256;font-size:20px;">להסיר אתכם מרשימת התפוצה?</h1>
@@ -117,7 +117,7 @@ function removedPage(token: string): NextResponse {
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>הוסרתם מרשימת התפוצה</title>
 </head>
-<body style="margin:0;font-family:Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+<body style="margin:0;font-family:'Heebo',Arial,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
   <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:36px;max-width:440px;text-align:center;">
     <div style="font-size:36px;margin-bottom:14px;">✓</div>
     <h1 style="margin:0 0 10px;color:#059669;font-size:20px;">הוסרתם מרשימת התפוצה</h1>
