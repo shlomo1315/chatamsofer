@@ -241,6 +241,7 @@ export async function handleLoanInquiryReply(
   body: string,
   byLoanId = false,
   meta?: InboundThreadMeta,
+  attachments?: { url: string; name: string }[],
 ): Promise<boolean> {
   const loanId = byLoanId
     ? tokenOrLoanId
@@ -248,14 +249,22 @@ export async function handleLoanInquiryReply(
   if (!loanId) return false
 
   const text = body.trim()
-  if (!text) return true          // זוהה, אך ריק — לא נרשם, וגם לא ממשיכים לטפל בו
+  const docs = (attachments ?? []).filter(a => a?.url)
+  // ⚠️ גוף ריק *עם* צירוף אינו הודעה ריקה: המבקש שלח את המסמך שהתבקש
+  // בלי להוסיף מילה, וזו תשובה לגיטימית לחלוטין.
+  if (!text && !docs.length) return true
 
   // שומרים גם את מזהי השרשור, כדי שהודעות ההמשך שלנו יישלחו כתשובה באותו שרשור.
   const row: Record<string, unknown> = {
     loan_id: loanId,
     direction: 'applicant',
-    body: text,
+    // הודעה שכולה צירוף מקבלת גוף מפורש, כדי שהשרשור לא יציג שורה ריקה.
+    body: text || 'המסמך המבוקש צורף.',
     is_read: false,               // ממתין לעיון המנהל -> יופיע בהתראות
+  }
+  if (docs.length) {
+    row.attachment_url = docs[0].url
+    row.attachment_name = docs[0].name
   }
   const messageId = meta?.messageId?.trim()
   const references = meta?.references?.trim()
@@ -265,13 +274,39 @@ export async function handleLoanInquiryReply(
   const { error: insErr } = await db.from('loan_messages').insert(row)
   // עמידות: אם עמודות השרשור עדיין לא קיימות (מיגרציה טרם הורצה) — שומרים בלי מטא-דאטה,
   // כדי שהתשובה לא תאבד.
-  if (insErr && (messageId || references)) {
+  if (insErr) {
     await db.from('loan_messages').insert({
       loan_id: loanId,
       direction: 'applicant',
-      body: text,
+      body: row.body,
       is_read: false,
     })
+  }
+
+  // ── המסמך שהושלם בבירור נוסף למסמכי ההלוואה ──
+  //
+  // 🔴 בלי זה המסמך נשאר בשרשור בלבד: המזכיר שפתח את "מסמכים מצורפים"
+  // לא ראה אותו, ולא היה שום סימן לכך שהמסמך החסר הושלם.
+  //
+  // ⚠️ added_in_inquiry מסמן אותו לתווית "הושלם בתהליך הבירור" — כדי
+  // שיהיה ברור שהוא לא הגיע עם הבקשה המקורית אלא הושלם בהמשך.
+  if (docs.length) {
+    const { data: loanRow } = await db
+      .from('loans').select('document_urls').eq('id', loanId).maybeSingle()
+
+    const existing = Array.isArray(loanRow?.document_urls) ? loanRow.document_urls : []
+    // ⚠️ בלי כפילויות: ה-webhook עשוי לרוץ פעמיים על אותו מייל (retry,
+    // dual-delivery), והמסמך היה מופיע פעמיים ברשימה.
+    const known = new Set(existing.map((d: { url?: string }) => String(d?.url ?? '')))
+    const fresh = docs
+      .filter(d => !known.has(d.url))
+      .map(d => ({ url: d.url, name: d.name, added_in_inquiry: true }))
+
+    if (fresh.length) {
+      await db.from('loans')
+        .update({ document_urls: [...existing, ...fresh], updated_at: new Date().toISOString() })
+        .eq('id', loanId)
+    }
   }
 
   // ⚠️ הסטטוס נשאר 'inquiry'. בעבר החזרנו אותו ל'pending', וזה מחק את המידע

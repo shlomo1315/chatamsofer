@@ -145,14 +145,27 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
 // הנושא — של הרשום או של בן/בת הזוג; אם אין ת"ז בנושא, ננסה לפי כתובת השולח.
 async function maybeAutoReplyIgud(
   admin: SupabaseClient,
-  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string },
+  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown },
 ) {
   if (departmentByEmail(msg.toEmail)?.key !== 'igud') return
   const from = (msg.fromEmail || '').toLowerCase()
-  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
-  if (!from || from.endsWith('@chasamsofer.info')) return
-  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+  if (!from || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  // 🔴 הגנות הלולאה — משותפות עם maintenanceReply ולא מקומיות.
+  //
+  // הרשימה המקומית שהייתה כאן כללה רק noreply/mailer-daemon/bounce, ולכן
+  // *לא* חסמה את helpdesk@make.com — הכתובת שגרמה ללולאה האינסופית:
+  // המענה שלנו נחת אצלה, היא ענתה אוטומטית, וזה נקלט כפנייה חדשה.
+  //
+  // שלוש שכבות, לפי סדר עלות:
+  //   1. דפוס הכתובת (help@, support@, ticket@, info@...).
+  //   2. כותרות Auto-Submitted / Precedence — המייל מצהיר שהוא אוטומטי.
+  //   3. תקרת מענים — הבולם האחרון, שאינו מנחש לפי דפוס אלא סופר.
+  const { shouldSkipAutoReply, isAutoSubmittedMail, underAutoReplyCap } =
+    await import('@/lib/maintenanceReply')
+  if (shouldSkipAutoReply(from)) return
+  if (isAutoSubmittedMail(msg.headers)) return
+  if (!(await underAutoReplyCap(admin, from))) return
 
   const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count, eligibility_status'
   type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null; eligibility_status: string | null }
@@ -197,7 +210,17 @@ async function maybeAutoReplyIgud(
     openDist ? { open: true, name: [openDist.name, openDist.year].filter(Boolean).join(' ') } : null)
   // מייל חדש (לא reply), עם הת"ז בשורת הנושא
   const subject = ben.id_number ? `${mail.subject} · ת.ז ${ben.id_number}` : mail.subject
-  await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+  const res = await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+  if (!res.ok) {
+    console.error('[igud-auto-reply] שליחה נכשלה:', res.error)
+    return
+  }
+  // 🔴 רישום המענה — בלעדיו תקרת המענים (underAutoReplyCap) סופרת אפס
+  // לנצח, והבולם האחרון מפני לולאה פשוט אינו קיים.
+  // ⚠️ נרשם רק אחרי שליחה מוצלחת: רישום מראש היה סוגר את התקרה על
+  // כתובת שמעולם לא קיבלה מענה.
+  await admin.from('auto_reply_log').insert({ to_email: from, subject })
+    .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
 }
 
 // פענוח MIME encoded-words בכותרות (Subject וכו') — =?charset?B?base64?= / =?charset?Q?quoted?=.
@@ -778,8 +801,14 @@ export async function POST(request: NextRequest) {
             || getHeader(data.headers, 'in-reply-to').trim()) || undefined,
         }
 
+        // ⚠️ צרופות התשובה נוספות למסמכי ההלוואה עם תווית "הושלם בתהליך
+        // הבירור" — אחרת המסמך שהתבקש נשאר בשרשור ואיש לא רואה אותו.
+        const inqDocs = attachments
+          .filter(a => a.url)
+          .map((a, i) => ({ url: a.url as string, name: a.filename || `מסמך ${i + 1}` }))
+
         // מסלול 1 — הטוקן נמצא (עובד כשהמייל מגיע ישירות ל-Resend)
-        if (loanTok && await handleLoanInquiryReply(admin, loanTok, raw, false, threadMeta)) {
+        if (loanTok && await handleLoanInquiryReply(admin, loanTok, raw, false, threadMeta, inqDocs)) {
           return NextResponse.json({ ok: true, routed: 'loan_inquiry' })
         }
 
@@ -791,7 +820,7 @@ export async function POST(request: NextRequest) {
         // פיזית לא מגיע אלינו, ואי אפשר להסתמך עליו.
         if (looksLikeLoanInquiry) {
           const loanId = await findLoanByApplicantEmail(admin, from.email)
-          if (loanId && await handleLoanInquiryReply(admin, loanId, raw, true, threadMeta)) {
+          if (loanId && await handleLoanInquiryReply(admin, loanId, raw, true, threadMeta, inqDocs)) {
             return NextResponse.json({ ok: true, routed: 'loan_inquiry_by_sender' })
           }
           console.error('[resend-inbound] תשובת בירור — לא נמצאה בקשה תואמת:', from.email)
@@ -1062,7 +1091,7 @@ export async function POST(request: NextRequest) {
           attachments,
         })
         if (!handled && isIgud) {
-          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
         }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
@@ -1073,7 +1102,7 @@ export async function POST(request: NextRequest) {
   } else if (isIgud && isNew) {
     // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
     try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
     } catch (e) {
       console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }

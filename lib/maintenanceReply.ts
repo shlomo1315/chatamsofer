@@ -62,6 +62,11 @@ function shouldSkip(email: string): boolean {
   return NEVER_REPLY.some(re => re.test(e))
 }
 
+// ⚠️ שלוש ההגנות מיוצאות כדי שכל מענה אוטומטי במערכת ישתמש *באותן*
+// בדיקות. מענה שמגדיר לעצמו רשימת חסימות משלו הוא בדיוק הפרצה שדרכה
+// נוצרה הלולאה מול helpdesk@make.com.
+export { shouldSkip as shouldSkipAutoReply }
+
 /**
  * 🔴 תקרת מענים לכתובת — בולם הלולאה האחרון.
  *
@@ -72,7 +77,7 @@ function shouldSkip(email: string): boolean {
  * 🔴 נכשל-סגור: אם הטבלה חסרה או השאילתה נכשלה — לא עונים. במצב שבו איננו
  * יודעים כמה מענים כבר יצאו, שתיקה עדיפה על לולאה.
  */
-async function underReplyCap(db: SupabaseClient, email: string): Promise<boolean> {
+export async function underAutoReplyCap(db: SupabaseClient, email: string): Promise<boolean> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const { count, error } = await db
     .from('auto_reply_log')
@@ -92,7 +97,7 @@ async function underReplyCap(db: SupabaseClient, email: string): Promise<boolean
 }
 
 /** האם המייל הנכנס הוא עצמו מענה אוטומטי (לפי כותרות תקניות). */
-function isAutoSubmitted(headers: unknown): boolean {
+export function isAutoSubmittedMail(headers: unknown): boolean {
   const list = Array.isArray(headers) ? headers : []
   for (const h of list) {
     const name = String((h as { name?: string })?.name ?? '').toLowerCase()
@@ -194,9 +199,9 @@ export async function maybeSendMaintenanceReply(
     const email = (opts.fromEmail ?? '').toLowerCase().trim()
     // ⚠️ ההגנות מפני לולאה נשארות — הן קריטיות, לא קשורות ל"פעם אחת".
     if (shouldSkip(email)) return false
-    if (isAutoSubmitted(opts.headers)) return false
+    if (isAutoSubmittedMail(opts.headers)) return false
     // 🔴 הבולם האחרון — נבדק אחרי כל סינוני הדפוס ולפני השליחה.
-    if (!(await underReplyCap(db, email))) return false
+    if (!(await underAutoReplyCap(db, email))) return false
 
     const mail = buildEmail(dept, settings)
     const res = await deliverMail(email, mail.subject, mail.html, undefined, {

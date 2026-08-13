@@ -223,6 +223,13 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                         <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96}
                           gallery={docGallery} index={i} />
                         <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
+                        {/* ⚠️ תווית למסמך שלא הגיע עם הבקשה המקורית אלא
+                            הושלם בבירור — כדי שלא ייראה כאילו היה שם מלכתחילה. */}
+                        {d.added_in_inquiry && (
+                          <span className="inline-block rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 leading-tight text-center">
+                            הושלם בתהליך הבירור
+                          </span>
+                        )}
                         <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
                       </div>
                     ))}

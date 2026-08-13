@@ -334,7 +334,9 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
       // המסמכים: המזכיר צריך לראות שהוא קיים, ואותו שדה משמש גם בהגשה
       // דרך הפורטל — אחרת אותו נתון היה יושב בשני מקומות שונים לפי הערוץ.
       const rabbiForm = matched['טופס-חתימת-רב'] ?? null
-      const docs = [matched['מסמך-תומך'], matched['הזמנה-לחתונה']].filter(Boolean) as string[]
+      const docs = [
+        matched['מסמך-אחר'], matched['הזמנה-לחתונה'], matched['צילום-תעודות-זהות'],
+      ].filter(Boolean) as string[]
       const r = await admin.from('loans').insert({
         beneficiary_id: ben.id, amount, installments,
         monthly_payment: Math.round((amount / installments) * 100) / 100,

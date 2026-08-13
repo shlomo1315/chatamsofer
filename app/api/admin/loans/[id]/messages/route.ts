@@ -16,11 +16,34 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data, error } = await db
+  const BASE = 'id, direction, body, sender_name, created_at, is_read'
+
+  type MsgRow = {
+    id: string; direction: string; body: string
+    sender_name: string | null; created_at: string; is_read: boolean
+    attachment_url?: string | null; attachment_name?: string | null
+  }
+
+  const first = await db
     .from('loan_messages')
-    .select('id, direction, body, sender_name, created_at, is_read')
+    .select(`${BASE}, attachment_url, attachment_name`)
     .eq('loan_id', id)
     .order('created_at', { ascending: true })
+
+  let data = first.data as MsgRow[] | null
+  let error = first.error
+
+  // ⚠️ עמידות למיגרציה שטרם הורצה: בלי הנפילה-לאחור *כל* שרשור הבירור
+  // היה מחזיר שגיאה בגלל שתי עמודות תצוגה, וההתכתבות הייתה נעלמת מהמסך.
+  if (error) {
+    const retry = await db
+      .from('loan_messages')
+      .select(BASE)
+      .eq('loan_id', id)
+      .order('created_at', { ascending: true })
+    data = retry.data as MsgRow[] | null
+    error = retry.error
+  }
 
   if (error) return NextResponse.json({ error: 'שגיאה בטעינת ההתכתבות' }, { status: 500 })
 

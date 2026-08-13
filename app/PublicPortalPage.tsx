@@ -2666,13 +2666,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // חסרים מבין מסמכי החובה. ת"ז (הבעל/האשה) — כל אחד חובה בנפרד. ספח ת"ז
   // (id_husband_appx / id_wife_appx) — מספיק אחד מהם (בעל *או* אשה); אם קיים
   // לפחות ספח אחד, שניהם אינם נחשבים חסרים.
-  const has = (d: string) => !!existingDocs[d] || !!docFiles[d]
-  const missingRequestIdDocs = () => {
+  // freshOnly — בבקשת הלוואה קובץ *קיים* אינו מספיק: נדרש קובץ חדש
+  // שהועלה עכשיו. אחרת הבקשה נשענת על ספח ישן שאינו משקף את הרכב
+  // המשפחה כיום, וזו בדיוק הסיבה שהדרישה קיימת.
+  const has = (d: string, freshOnly = false) =>
+    freshOnly ? !!docFiles[d] : (!!existingDocs[d] || !!docFiles[d])
+  const missingRequestIdDocs = (freshOnly = false) => {
     const appxKeys = requiredDocs.filter(d => d.endsWith('_appx'))
-    const hasAnyAppx = appxKeys.length > 0 && appxKeys.some(has)
+    const hasAnyAppx = appxKeys.length > 0 && appxKeys.some(d => has(d, freshOnly))
     return requiredDocs.filter(d => {
       if (d.endsWith('_appx')) return !hasAnyAppx   // מספיק ספח אחד
-      return !has(d)
+      return !has(d, freshOnly)
     })
   }
 
@@ -2908,16 +2912,24 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const isRejected = beneficiary?.eligibility_status === 'rejected'
 
   // Which documents are required — secretary's checklist takes priority, else by marital status
-  const requiredDocs: string[] = (() => {
-    const rd = (beneficiary?.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean)
-    if (rd.length) return rd
-    // ת"ז + ספח כשני קבצים נפרדים לכל בן זוג — הספח (הדף הנלווה, שבו מופיעים
-    // הילדים) נדרש לאימות הזהות ולא ניתן להסתפק בצילום התעודה בלבד.
+  // ת"ז + ספח כשני קבצים נפרדים לכל בן זוג — הספח (הדף הנלווה, שבו מופיעים
+  // הילדים) נדרש לאימות הזהות ולא ניתן להסתפק בצילום התעודה בלבד.
+  const docsByMaritalStatus = (() => {
     const ms = beneficiary?.marital_status ?? ''
     if (ms === 'נשואים') return ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx']
     if (['גרוש', 'אלמן'].includes(ms)) return ['id_husband', 'id_husband_appx']
     if (['גרושה', 'אלמנה'].includes(ms)) return ['id_wife', 'id_wife_appx']
     return ['id_husband', 'id_husband_appx']
+  })()
+
+  const requiredDocs: string[] = (() => {
+    // ⚠️ בבקשת הלוואה הרשימה נגזרת *תמיד* מהמצב המשפחתי ולא מהצ'ק-ליסט
+    // של המזכירות: הצ'ק-ליסט נקבע לצורך אישור הרישום ועשוי להיות מצומצם
+    // (או ריק, אם כבר הושלם), ואילו כאן נדרשים הצילומים המעודכנים במלואם
+    // בכל הגשה — כולל הספח עם כל פרטי הילדים.
+    if (loanModalOpen) return docsByMaritalStatus
+    const rd = (beneficiary?.required_docs ?? '').split(',').map(s => s.trim()).filter(Boolean)
+    return rd.length ? rd : docsByMaritalStatus
   })()
   const displayName = beneficiary
     ? [beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ')
@@ -3067,10 +3079,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (!loanForm.declaration) {
       setError('אנא בחרו תשובה: האם פנית בעבר לגמ"ח חתם סופר?'); return
     }
+    // ⚠️ צילומי ת"ז מעודכנים — חובה בכל בקשה, גם למשפחה מאושרת שכבר
+    // העלתה בעבר. freshOnly: קובץ קיים אינו מספיק.
+    const missingIds = missingRequestIdDocs(true)
+    if (missingIds.length) {
+      setError(`חובה להעלות צילום תעודת זהות מעודכן: ${missingIds.map(idDocLabel).join(', ')}`)
+      return
+    }
 
     setError('')
     setRabbiDownloading(true)
     try {
+      // ⚠️ forceFresh — דורס את הקבצים הקיימים בכרטסת. זו המטרה: מרגע
+      // ההגשה הצילומים החדשים הם המעודכנים.
+      if (!(await uploadRequiredIdDocs(true))) {
+        setError('שגיאה בהעלאת צילומי תעודת הזהות. אנא נסו שוב.')
+        return
+      }
       const res = await fetch(`/api/portal/loan-draft${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

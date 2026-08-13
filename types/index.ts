@@ -237,7 +237,8 @@ export interface Loan {
   purpose?: string
   purpose_details?: string
   declaration?: string
-  document_urls?: { url: string; name: string }[]
+  /** ⚠️ added_in_inquiry — המסמך לא הגיע עם הבקשה אלא הושלם במהלך הבירור. */
+  document_urls?: { url: string; name: string; added_in_inquiry?: boolean }[]
   status: LoanStatus
   approved_by?: string
   start_date?: string

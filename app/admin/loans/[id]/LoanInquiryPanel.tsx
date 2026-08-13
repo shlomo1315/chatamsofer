@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2, MessageSquare, AlertCircle, Mail } from 'lucide-react'
+import { Send, Loader2, MessageSquare, AlertCircle, Mail, CheckCircle2 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשור הבירור עם מבקש ההלוואה.
@@ -15,6 +15,9 @@ interface Msg {
   body: string
   sender_name?: string | null
   created_at: string
+  /** מסמך שצורף לתשובה — נוסף גם לחלונית "מסמכים מצורפים". */
+  attachment_url?: string | null
+  attachment_name?: string | null
 }
 
 // "14.07.26 23:49" — הפורמט המבוקש
@@ -168,6 +171,18 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
                 >
                   <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.body}</p>
                 </div>
+
+                {/* 🔴 המסמך החסר הושלם — ההודעה מופיעה בשרשור עצמו, שם
+                    המזכיר מסתכל, ולא רק בחלונית המסמכים. בלעדיה הוא היה
+                    ממשיך להמתין למסמך שכבר הגיע. */}
+                {m.attachment_url && (
+                  <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
+                    <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+                    <span className="text-[11px] font-semibold text-emerald-800 leading-tight">
+                      המסמך החסר נוסף ומופיע בחלונית המסמכים
+                    </span>
+                  </div>
+                )}
 
                 <span className="text-[10px] text-slate-400 mt-1 px-1">{fmt(m.created_at)}</span>
               </div>
