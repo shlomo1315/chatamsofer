@@ -4677,7 +4677,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </label>
                     {pastBenefits.other && (
                       <div className="px-3 pb-2.5">
-                        <TextInput value={pastBenefits.other_details} onChange={e => setPastBenefits(p => ({ ...p, other_details: e.target.value }))} placeholder="פרט/י..." />
+                        <TextInput value={pastBenefits.other_details} onChange={e => setPastBenefits(p => ({ ...p, other_details: e.target.value }))} placeholder="פרטו..." />
                       </div>
                     )}
                   </div>
@@ -5113,7 +5113,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               {statusSentTo ? (
                 <div className="flex items-start gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700">
                   <CheckCircle2 size={16} className="flex-shrink-0 mt-0.5" />
-                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת (<span dir="ltr">{statusSentTo}</span>). בדוק/י את תיבת הדואר (כולל תיקיית ספאם).</span>
+                  <span>סטטוס הבקשות שלך נשלח למייל הרשום במערכת (<span dir="ltr">{statusSentTo}</span>). בדקו את תיבת הדואר (כולל תיקיית ספאם).</span>
                 </div>
               ) : (
                 <>
@@ -5812,7 +5812,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </div>
                   {loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && (
                     <div className="col-span-2">
-                      <Field label={<EditableText k="loan.purposeDetails.label" />} required hint="פרט/י בהרחבה על מטרת ההלוואה והצורך">
+                      <Field label={<EditableText k="loan.purposeDetails.label" />} required hint="פרטו בהרחבה על מטרת ההלוואה והצורך">
                         <textarea value={loanForm.purpose_details} onChange={setLoan('purpose_details')} rows={4}
                           placeholder={t('loan.purposeDetails.placeholder')}
                           className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none w-full" />
@@ -5946,9 +5946,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
               <form onSubmit={handleFinancialAidRequest} className="p-6 flex flex-col gap-4">
                 {renderIdDocsSection()}
-                <Field label="סיבת הבקשה" required hint="פרט/י כמה שיותר על המקרה — הרקע, הצורך והנסיבות. אם מדובר במצב רפואי או דומה, נסח/י בקצרה ובאופן ענייני (אבחנה, טיפול נדרש, עלויות).">
+                <Field label="סיבת הבקשה" required hint="פרטו כמה שיותר על המקרה — הרקע, הצורך והנסיבות. אם מדובר במצב רפואי או דומה, נסחו בקצרה ובאופן ענייני (אבחנה, טיפול נדרש, עלויות).">
                   <textarea value={aidReason} onChange={e => setAidReason(e.target.value)} rows={5}
-                    placeholder="לדוגמה: בעקבות אבחון רפואי נדרש טיפול בעלות גבוהה שאינו מכוסה... אנא פרט/י את המצב, הצרכים והעלויות המשוערות."
+                    placeholder="לדוגמה: בעקבות אבחון רפואי נדרש טיפול בעלות גבוהה שאינו מכוסה... אנא פרטו את המצב, הצרכים והעלויות המשוערות."
                     className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none w-full" />
                 </Field>
                 <Field label="מסמך מצורף" required hint={`צרף מסמך תומך. ${UPLOAD_HINT}`}>

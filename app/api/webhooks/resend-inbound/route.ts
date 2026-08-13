@@ -841,11 +841,15 @@ export async function POST(request: NextRequest) {
   {
     const replyBody = (plain && plain.trim()) ? plain : htmlToPlainText(html ?? '')
     try {
-      const { isGratitudeOrFeedbackReply, handleGratitudeReply, handleFeedbackReply } =
-        await import('@/lib/inboundGratitude')
+      const {
+        isGratitudeOrFeedbackReply, handleGratitudeReply, handleFeedbackReply,
+        looksLikeFeedbackReply, looksLikeGratitudeReply, findAidBySenderEmail,
+      } = await import('@/lib/inboundGratitude')
 
+      const gctx = { recipients: candidates, body: replyBody, attachments }
+
+      // מסלול 1 — הטוקן הגיע (עובד כשהמייל מגיע ישירות ל-Resend).
       if (isGratitudeOrFeedbackReply(candidates)) {
-        const gctx = { recipients: candidates, body: replyBody, attachments }
         if (await handleGratitudeReply(admin, gctx)) {
           return NextResponse.json({ ok: true, routed: 'gratitude' })
         }
@@ -855,6 +859,36 @@ export async function POST(request: NextRequest) {
         console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
       }
 
+      // 🔴 מסלול 2 — זיהוי לפי נושא + שולחת, כשהטוקן אבד.
+      //
+      // ⚠️ Google Workspace עושה dual-delivery ו"אוכל" את office+s<token>@,
+      // ולכן משובים שנשלחו במייל לא נקלטו כלל — הקוד חזר false בשקט.
+      // זו אותה תקלה שכבר תוקנה לתשובות בירור הלוואה; המסלול הזה פשוט
+      // לא קיבל את הנפילה-לאחור.
+      const isFeedback = looksLikeFeedbackReply(subject)
+      const isGratitude = looksLikeGratitudeReply(subject)
+
+      if (isFeedback || isGratitude) {
+        const table = isFeedback ? 'survey_responses' : 'gratitude_letters'
+        const match = await findAidBySenderEmail(admin, from.email, table)
+
+        if (match) {
+          if (isFeedback && await handleFeedbackReply(admin, gctx, match.aidId)) {
+            console.log('[resend-inbound] משוב נקלט לפי זיהוי השולחת')
+            return NextResponse.json({ ok: true, routed: 'feedback_by_sender' })
+          }
+          if (isGratitude && await handleGratitudeReply(admin, gctx, match.aidId)) {
+            console.log('[resend-inbound] מכתב ברכה נקלט לפי זיהוי השולחת')
+            return NextResponse.json({ ok: true, routed: 'gratitude_by_sender' })
+          }
+        }
+        // ⚠️ נרשם כשגיאה ולא כאזהרה: זו תשובה של משתמשת אמיתית שאבדה,
+        // וצריך שהיא תהיה נראית בלוגים ולא תיבלע בשקט כמו קודם.
+        console.error(
+          `[resend-inbound] 🔴 תשובת ${isFeedback ? 'משוב' : 'ברכה'} לא נקלטה — ` +
+          `שולחת: ${from.email}, שיוך שנמצא: ${match?.aidId ?? 'אין'}`,
+        )
+      }
     } catch (e) {
       console.error('[resend-inbound] gratitude/feedback routing failed:', e)
     }

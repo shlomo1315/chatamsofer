@@ -53,15 +53,104 @@ export function isGratitudeOrFeedbackReply(addresses: string[]): boolean {
   return addresses.some(a => /\+[gs][A-Za-z0-9_-]{8,}@/i.test(String(a ?? '')))
 }
 
-/** קליטת מכתב ברכה שהגיע במייל. מחזיר true אם טופל. */
-export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx): Promise<boolean> {
-  const token = extractToken(ctx.recipients, 'g')
-  if (!token) return false
+/**
+ * 🔴 זיהוי לפי *נושא* המייל — כשהטוקן לא הגיע.
+ *
+ * Google Workspace עושה dual-delivery: המייל מגיע ל-Resend דרך
+ * copy@in.chasamsofer.info, וכתובת ה-reply-to שלנו (office+s<token>@)
+ * נאכלת בדרך. כלומר הטוקן פיזית אינו מגיע אלינו, ולכן משובים שנשלחו
+ * במייל פשוט *לא נקלטו* — הפונקציות חזרו false מיד ואיש לא ידע.
+ *
+ * זו בדיוק אותה תקלה שכבר תוקנה לתשובות בירור הלוואה (ראה
+ * findLoanByApplicantEmail ב-lib/loanInquiry.ts), רק שהמסלול הזה
+ * לא קיבל את אותה נפילה-לאחור.
+ *
+ * הנושא נקבע על ידינו בטיוטה (`משוב · <בית החלמה>`), ולכן הוא סימן
+ * אמין — בניגוד לגוף המייל שהנמענת עורכת בחופשיות.
+ */
+export function looksLikeFeedbackReply(subject: string): boolean {
+  return /^\s*(re:|תגובה:)?\s*משוב\s*·/i.test(String(subject ?? ''))
+}
 
-  const aidId = await verifyReplyToken(db, token, 'g')
+/** אותו רעיון עבור מכתב ברכה — הנושא נקבע בטיוטה שאנחנו בונים. */
+export function looksLikeGratitudeReply(subject: string): boolean {
+  return /מכתב\s*ברכה|מכתב\s*תודה/i.test(String(subject ?? ''))
+}
+
+/**
+ * מאתר את הלידה שאליה שייכת התשובה לפי כתובת השולחת — כשהטוקן אבד.
+ *
+ * ⚠️ בטוח בכוונה: מחזיר רק אם יש *בדיוק התאמה אחת* רלוונטית. אם יש
+ * לאותה משפחה כמה לידות פתוחות, אין דרך לדעת לאיזו המשוב שייך —
+ * ושיוך שגוי גרוע מאי-קליטה, כי הוא נראה תקין ואיש לא בודק אותו.
+ *
+ * `table` — הטבלה שאליה נקלטת התשובה, כדי לדלג על לידות שכבר ענו עליהן.
+ */
+export async function findAidBySenderEmail(
+  db: SupabaseClient,
+  email: string,
+  table: 'survey_responses' | 'gratitude_letters',
+): Promise<{ aidId: string; beneficiaryId: string; recoveryHome: string | null } | null> {
+  const clean = String(email ?? '').trim().toLowerCase()
+  if (!clean) return null
+
+  const { data: bens } = await db
+    .from('beneficiaries')
+    .select('id')
+    .ilike('email', clean)
+    .limit(5)
+  if (!bens?.length) return null
+
+  const benIds = bens.map(b => b.id)
+
+  // הלידות של המשפחה, מהעדכנית לישנה.
+  const { data: aids } = await db
+    .from('maternity_aids')
+    .select('id, beneficiary_id, recovery_home')
+    .in('beneficiary_id', benIds)
+    .not('status', 'eq', 'cancelled')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  if (!aids?.length) return null
+
+  // ⚠️ מדלגים על לידות שכבר נקלטה עבורן תשובה: המשוב החדש שייך כמעט
+  // תמיד ללידה האחרונה שטרם נענתה, ולא לזו שכבר יש עליה רשומה.
+  const { data: answered } = await db
+    .from(table)
+    .select('maternity_aid_id')
+    .in('maternity_aid_id', aids.map(a => a.id))
+
+  const answeredIds = new Set((answered ?? []).map(r => String(r.maternity_aid_id)))
+  const candidate = aids.find(a => !answeredIds.has(String(a.id)))
+  if (!candidate) return null
+
+  return {
+    aidId: String(candidate.id),
+    beneficiaryId: String(candidate.beneficiary_id),
+    recoveryHome: (candidate.recovery_home as string | null) ?? null,
+  }
+}
+
+/**
+ * קליטת מכתב ברכה שהגיע במייל. מחזיר true אם טופל.
+ * `knownAidId` — שיוך שאותר לפי השולחת כשהטוקן אבד (ראה findAidBySenderEmail).
+ */
+export async function handleGratitudeReply(
+  db: SupabaseClient,
+  ctx: InboundCtx,
+  knownAidId?: string,
+): Promise<boolean> {
+  let aidId = knownAidId ?? null
+
   if (!aidId) {
-    console.warn('[gratitude] טוקן לא תקין או שפג תוקפו')
-    return false
+    const token = extractToken(ctx.recipients, 'g')
+    if (!token) return false
+
+    aidId = await verifyReplyToken(db, token, 'g')
+    if (!aidId) {
+      console.warn('[gratitude] טוקן לא תקין או שפג תוקפו')
+      return false
+    }
   }
 
   const { data: aid } = await db
@@ -123,15 +212,28 @@ export async function handleGratitudeReply(db: SupabaseClient, ctx: InboundCtx):
   return true
 }
 
-/** קליטת משוב בית החלמה שהגיע במייל (ציונים במספרים). מחזיר true אם טופל. */
-export async function handleFeedbackReply(db: SupabaseClient, ctx: InboundCtx): Promise<boolean> {
-  const token = extractToken(ctx.recipients, 's')
-  if (!token) return false
+/**
+ * קליטת משוב בית החלמה שהגיע במייל (ציונים במספרים). מחזיר true אם טופל.
+ *
+ * `knownAidId` — שיוך שכבר אותר לפי השולחת (כשהטוקן אבד ב-dual-delivery).
+ * כשהוא מועבר, מדלגים על אימות הטוקן שממילא אינו קיים.
+ */
+export async function handleFeedbackReply(
+  db: SupabaseClient,
+  ctx: InboundCtx,
+  knownAidId?: string,
+): Promise<boolean> {
+  let aidId = knownAidId ?? null
 
-  const aidId = await verifyReplyToken(db, token, 's')
   if (!aidId) {
-    console.warn('[feedback] טוקן לא תקין או שפג תוקפו')
-    return false
+    const token = extractToken(ctx.recipients, 's')
+    if (!token) return false
+
+    aidId = await verifyReplyToken(db, token, 's')
+    if (!aidId) {
+      console.warn('[feedback] טוקן לא תקין או שפג תוקפו')
+      return false
+    }
   }
 
   const { data: aid } = await db

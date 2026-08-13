@@ -263,7 +263,7 @@ export default function NewLoanPage() {
                   value={purposeDetails}
                   onChange={e => { setPurposeDetails(e.target.value); clearErr('purposeDetails') }}
                   rows={2}
-                  placeholder="פרט/י את מטרת ההלוואה"
+                  placeholder="פרטו את מטרת ההלוואה"
                   className={`rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 resize-none ${fieldErrors.purposeDetails ? 'border-red-400 focus:ring-red-400' : 'border-slate-300 focus:ring-indigo-500'}`}
                 />
                 {fieldErrors.purposeDetails && <p className="text-xs text-red-600">{fieldErrors.purposeDetails}</p>}

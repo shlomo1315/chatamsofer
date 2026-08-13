@@ -279,7 +279,7 @@ export const PUBLIC_TEXT_GROUPS: PublicTextGroup[] = [
       { key: 'loan.purpose.label', fallback: 'מטרת ההלוואה', hint: 'תווית בורר המטרה' },
       { key: 'loan.purpose.placeholder', fallback: 'בחר מטרה...', hint: 'ברירת המחדל בבורר' },
       { key: 'loan.purposeDetails.label', fallback: 'פירוט הבקשה', hint: 'תווית תיבת הפירוט' },
-      { key: 'loan.purposeDetails.placeholder', fallback: 'פרט/י את מטרת ההלוואה...', hint: 'טקסט מוצע בתיבת הפירוט' },
+      { key: 'loan.purposeDetails.placeholder', fallback: 'פרטו את מטרת ההלוואה...', hint: 'טקסט מוצע בתיבת הפירוט' },
       { key: 'loan.amount.label', fallback: 'סכום מבוקש ($)', hint: 'תווית שדה הסכום' },
       { key: 'loan.amount.hint', fallback: 'עד 10,000$', hint: 'שורת העזרה מתחת לסכום' },
       { key: 'loan.installments.label', fallback: 'מספר תשלומים', hint: 'תווית שדה התשלומים' },

@@ -641,7 +641,7 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
     </table>
 
     <p style="margin:28px 0 0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      בלחיצה תגיע/י למערכת הדיגיטלית שלנו — הזן/י תעודת זהות לכניסה, או מלא/י פרטים להרשמה חדשה.
+      בלחיצה תגיעו למערכת הדיגיטלית שלנו — הזינו תעודת זהות לכניסה, או מלאו פרטים להרשמה חדשה.
     </p>
   `
   return {
