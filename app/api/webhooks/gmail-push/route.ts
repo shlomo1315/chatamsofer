@@ -41,7 +41,16 @@ export async function POST(request: NextRequest) {
   if (!tokenMatches(token, process.env.GMAIL_PUSH_TOKEN)) {
     // ⚠️ 401 ולא 200: זו אינה התראה תקינה מגוגל אלא בקשה זרה, ואין סיבה
     // לאשר אותה. גוגל עצמו לעולם לא יגיע לכאן בלי הטוקן.
-    console.warn('[gmail-push] בקשה ללא טוקן תקין נדחתה')
+    //
+    // ⚠️ אבחון בלי לחשוף את הסוד: מדווחים *אורך* ותו ראשון/אחרון בלבד.
+    // בלי זה אי אפשר להבחין בין "לא הוגדר", "נשלח ריק" ו"נשלח שונה" —
+    // וכל אחד מהם דורש תיקון אחר לגמרי. הסוד עצמו לעולם אינו נכתב ללוג.
+    const got = String(token ?? '')
+    const want = String(process.env.GMAIL_PUSH_TOKEN ?? '')
+    const peek = (s: string) => s.length < 4 ? `(${s.length} תווים)` : `${s.slice(0, 2)}…${s.slice(-2)} (${s.length} תווים)`
+    console.warn(
+      `[gmail-push] טוקן לא תואם · התקבל: ${got ? peek(got) : 'ריק/חסר'} · מוגדר בשרת: ${want ? peek(want) : '🔴 לא הוגדר כלל'}`,
+    )
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
