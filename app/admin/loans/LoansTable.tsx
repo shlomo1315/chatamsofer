@@ -53,7 +53,9 @@ const haystack = (l: Loan) => {
 
 export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; repliedIds?: string[] }) {
   const router = useRouter()
-  const [filter, setFilter] = useState<Filter>('all')
+  // ⚠️ נפתח על "ממתין לטיפול" ולא על "הכל": זו העבודה שממתינה, ורשימת
+  // הכל דורשת סינון ידני בכל כניסה כדי להגיע אליה.
+  const [filter, setFilter] = useState<Filter>('todo')
   const [sub, setSub] = useState<TodoSub>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<SortMode>('newest')
@@ -144,40 +146,52 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
         })}
       </div>
 
-      {/* ⚠️ צ'יפי תת-הסינון של "ממתין לטיפול" — אותו סגנון כמו בדף הצאצאים.
-          ההפרדה חשובה כי שתי הקבוצות דורשות עבודה שונה: בקשה ראשונית
-          נבדקת מאפס, ובקשה שחזרה מבירור צריכה קריאת התשובה בלבד. */}
-      {filter === 'todo' && todoCounts.all > 0 && (
-        <div className="flex items-center gap-2 flex-wrap -mt-2">
-          {([
-            { key: 'all', label: 'הכל', n: todoCounts.all },
-            { key: 'fresh', label: 'ממתין לטיפול ראשוני', n: todoCounts.fresh },
-            { key: 'returned', label: 'חזר מבירור', n: todoCounts.returned },
-          ] as { key: TodoSub; label: string; n: number }[]).map(t => (
-            <button key={t.key} onClick={() => setSub(t.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                sub === t.key
-                  ? 'bg-amber-600 border-amber-600 text-white'
-                  : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300'
-              }`}>
-              {t.label}
-              <span className={`mr-1.5 tabular-nums ${sub === t.key ? 'text-amber-100' : 'text-slate-400'}`}>{t.n}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-slate-700">רשימת הלוואות</h2>
+        {/* ⚠️ סרגל הכלים זהה למחלקת היולדות: החיפוש ראשון — כלומר בקצה
+            הימני ב-RTL — ואחריו המיון והצ'יפים. מיקום אחיד בין המחלקות
+            הוא מה שמונע חיפוש אחרי שדה החיפוש בכל מסך מחדש. */}
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <SortButtons value={sort} onChange={setSort} />
             <div className="relative w-full sm:w-64">
               <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
               <input type="text" value={query} onChange={e => setQuery(e.target.value)} placeholder="חיפוש חופשי…"
                 className="w-full pr-9 pl-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 transition-colors" />
             </div>
+            <SortButtons value={sort} onChange={setSort} />
+
+            {/* ⚠️ צ'יפים בסגנון דף הצאצאים בדיוק — rounded-full, אינדיגו,
+                וסימון ✓ על הפעיל. מוצגים רק בלשונית "ממתין לטיפול", כי שם
+                בלבד ההבחנה רלוונטית: בקשה ראשונית נבדקת מאפס ובקשה שחזרה
+                מבירור דורשת קריאת התשובה בלבד. */}
+            {filter === 'todo' && todoCounts.all > 0 && (
+              <div className="inline-flex items-center gap-1.5 flex-wrap">
+                <button type="button" onClick={() => setSub('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    sub === 'all'
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}>הכל</button>
+                {([
+                  { key: 'fresh', label: 'ממתין לטיפול ראשוני', n: todoCounts.fresh },
+                  { key: 'returned', label: 'חזר מבירור', n: todoCounts.returned },
+                ] as { key: TodoSub; label: string; n: number }[]).map(o => {
+                  const active = sub === o.key
+                  return (
+                    <button key={o.key} type="button" onClick={() => setSub(o.key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                        active
+                          ? 'bg-indigo-100 border-indigo-300 text-indigo-700 shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}>
+                      {active && <Check size={11} className="inline -mt-0.5 ml-1" />}
+                      {o.label}
+                      <span className={`mr-1.5 tabular-nums ${active ? 'text-indigo-500' : 'text-slate-400'}`}>{o.n}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
         <div className="overflow-x-auto">

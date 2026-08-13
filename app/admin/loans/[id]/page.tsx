@@ -110,8 +110,34 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           ⚠️ העליון בשני טורים: הפרטים תפסו חצי מסך והשאר עמד ריק. הבירור
           — הדבר שמסתכלים בו הכי הרבה — נכנס לחצי הפנוי במקום להיות מוסתר.
        ───────────────────────────────────────────────────────────────── */}
+      {/* ⚠️ שני אלה למעלה ובצמוד: כדי להחליט על בקשה צריך לראות את מצב
+          המשפחה ואת מה שנאמר לה — שניהם יחד ובלי גלילה. */}
       <div className="grid gap-5 lg:grid-cols-2 items-start">
-        {/* ── טור ימין: פרטי הבקשה ── */}
+        {/* ── טור ימין: סיכום המשפחה ── */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-violet-600">
+            <Users size={16} />
+            <h2 className="text-sm font-bold text-slate-700">סיכום המשפחה</h2>
+          </div>
+          <FamilySummary loanId={loan.id} />
+        </div>
+
+        {/* ── טור שמאל: הבירור מול המבקש ── */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-sky-600">
+            <MessageSquare size={16} />
+            <h2 className="text-sm font-bold text-slate-700">בירור מול המבקש</h2>
+          </div>
+          <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} applicantName={borrower} />
+        </div>
+      </div>
+
+      {/* ── פרטי הבקשה ── */}
+      <section className="flex flex-col gap-5">
+        <div className="flex items-center gap-2 text-indigo-600 border-t border-slate-200 pt-5">
+          <CreditCard size={16} />
+          <h2 className="text-sm font-bold text-slate-700">פרטי הבקשה</h2>
+        </div>
         <div className="flex flex-col gap-5">
           <Card>
             <div className="flex items-center gap-2 text-indigo-600 mb-3">
@@ -156,25 +182,8 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             </Card>
           )}
         </div>
-
-        {/* ── טור שמאל: הבירור מול המבקש ── */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-sky-600">
-            <MessageSquare size={16} />
-            <h2 className="text-sm font-bold text-slate-700">בירור מול המבקש</h2>
-          </div>
-          <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} applicantName={borrower} />
-        </div>
-      </div>
-
-      {/* ── סיכום המשפחה ── */}
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 text-violet-600 border-t border-slate-200 pt-5">
-          <Users size={16} />
-          <h2 className="text-sm font-bold text-slate-700">סיכום המשפחה</h2>
-        </div>
-        <FamilySummary loanId={loan.id} />
       </section>
+
 
       {/* ── מסמכים ── */}
       {/* ⚠️ מוצג רק כשיש מסמכים: כותרת ריקה נראית כתקלה ומעלה את השאלה
