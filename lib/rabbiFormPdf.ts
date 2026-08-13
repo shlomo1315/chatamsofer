@@ -13,7 +13,7 @@
 // מייצר טופס שנראה אחרת מזה שהמשרד מכיר.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { readFile } from 'fs/promises'
 import path from 'path'
@@ -22,6 +22,8 @@ import path from 'path'
 export const GEMACH_EMAIL = 'g@chasamsofer.info'
 
 const BLANK_PATH = path.join(process.cwd(), 'public', 'forms', 'loan-form-blank.pdf')
+/** פונט עברי מקומי — ראה loadFonts להסבר למה לא מ-CDN. */
+const FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'Heebo.ttf')
 
 export interface RabbiFormData {
   applicantName: string
@@ -124,19 +126,26 @@ export const DEFAULT_LAYOUT: FormLayout = {
 }
 
 /** טוען Heebo; בכשל רשת נופל לגופן סטנדרטי כדי שהטופס ייווצר בכל מקרה. */
+/**
+ * 🔴 הפונט נטען מהדיסק ולא מ-CDN.
+ *
+ * הגרסה הקודמת עשתה fetch ל-fonts.gstatic.com בזמן הבקשה, ובכשל רשת
+ * נפלה לאחור ל-Helvetica. אבל Helvetica היא WinAnsi ו*אינה יכולה לקודד
+ * עברית* — היא זורקת `WinAnsi cannot encode "ה"`. כלומר הנפילה-לאחור לא
+ * הצילה כלום: היא רק הפכה כשל רשת לכשל הפקה, והטופס לא נוצר כלל.
+ *
+ * ⚠️ אין כאן fallback בכוונה: טופס בלי עברית הוא חסר ערך, ועדיף שהשגיאה
+ * תהיה מפורשת ותופיע בלוגים מאשר שתיפול בשקט למשהו שממילא ייכשל.
+ */
 async function loadFonts(pdf: PDFDocument): Promise<{ font: PDFFont; bold: PDFFont }> {
-  try {
-    const [reg, hvy] = await Promise.all([
-      fetch('https://fonts.gstatic.com/s/heebo/v26/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSysd0mj.ttf').then(r => r.arrayBuffer()),
-      fetch('https://fonts.gstatic.com/s/heebo/v26/NGSpv5_NC0k9P_v6ZUCbLRAHxK1EiSyed0mj.ttf').then(r => r.arrayBuffer()),
-    ])
-    return { font: await pdf.embedFont(reg), bold: await pdf.embedFont(hvy) }
-  } catch {
-    return {
-      font: await pdf.embedFont(StandardFonts.Helvetica),
-      bold: await pdf.embedFont(StandardFonts.HelveticaBold),
-    }
-  }
+  const bytes = await readFile(FONT_PATH)
+  // ⚠️ שתי הטמעות נפרדות של אותו קובץ — ולא אותו אובייקט פעמיים.
+  // הקוד מבחין בין רגיל למודגש לפי זהות האובייקט (f === bold), ואילו
+  // היה זה אותו מופע, *כל* הטקסט היה נצבע כמודגש.
+  // subset: true — מטמיע רק את התווים בשימוש, במקום 122KB לכל טופס.
+  const font = await pdf.embedFont(bytes, { subset: true })
+  const bold = await pdf.embedFont(bytes, { subset: true })
+  return { font, bold }
 }
 
 export async function buildRabbiFormPdf(
@@ -156,22 +165,34 @@ export async function buildRabbiFormPdf(
   const GREY = rgb(0.38, 0.33, 0.26)
   const LINE = rgb(0.62, 0.55, 0.44)
 
+  /**
+   * ציור טקסט. כש-f הוא ה"מודגש" — מצויר פעמיים בהיסט זעיר.
+   *
+   * ⚠️ Heebo כאן הוא פונט משתנה (variable), ו-pdf-lib מטמיע ממנו משקל
+   * אחד בלבד. בלי ההדגשה הסינתטית הזו כל הכותרות והתוויות היו נראות
+   * זהות לטקסט הרגיל, והטופס היה מאבד את ההיררכיה שלו.
+   */
+  const draw = (s: string, x: number, y: number, size: number, f: PDFFont, c: typeof DARK) => {
+    page.drawText(s, { x, y, size, font: f, color: c })
+    if (f === bold) page.drawText(s, { x: x + 0.35, y, size, font: f, color: c })
+  }
+
   /** טקסט עברי מיושר לימין (x = הקצה הימני). */
   const R = (t: string, p: FieldPos, f = font, c = DARK) => {
     if (!t) return
     const s = rtl(t)
-    page.drawText(s, { x: p.x - f.widthOfTextAtSize(s, p.size), y: p.y, size: p.size, font: f, color: c })
+    draw(s, p.x - f.widthOfTextAtSize(s, p.size), p.y, p.size, f, c)
   }
   /** טקסט ממורכז סביב x. */
   const C = (t: string, p: FieldPos, f = font, c = DARK) => {
     if (!t) return
     const s = rtl(t)
-    page.drawText(s, { x: p.x - f.widthOfTextAtSize(s, p.size) / 2, y: p.y, size: p.size, font: f, color: c })
+    draw(s, p.x - f.widthOfTextAtSize(s, p.size) / 2, p.y, p.size, f, c)
   }
   /** ערך לטיני/מספרי — בלי היפוך, מיושר לשמאל מנקודת ההתחלה. */
   const L = (t: string, x: number, y: number, size: number, f = font, c = DARK) => {
     if (!t) return
-    page.drawText(String(t), { x, y, size, font: f, color: c })
+    draw(String(t), x, y, size, f, c)
   }
   /** קו מילוי לשדה שנשאר ריק לחתימה. */
   const dash = (fromX: number, toX: number, y: number) =>
@@ -186,7 +207,7 @@ export async function buildRabbiFormPdf(
   const labeled = (label: string, value: string, p: FieldPos, numeric = false) => {
     const lbl = rtl(label)
     const lw = bold.widthOfTextAtSize(lbl, p.size)
-    page.drawText(lbl, { x: p.x - lw, y: p.y, size: p.size, font: bold, color: DARK })
+    draw(lbl, p.x - lw, p.y, p.size, bold, DARK)
     if (!value) return
     const vx = p.x - lw - 8
     if (numeric) {
