@@ -1673,6 +1673,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // של הסכום או המטרה — אחרת הפרטים היו משתנים אחרי שהרב כבר חתם עליהם.
   const [rabbiDraft, setRabbiDraft] = useState<{ loanId: string; amount: number | null; since?: string } | null>(null)
   const [rabbiSavedModal, setRabbiSavedModal] = useState(false)
+  // חלונית הצגת הטופס — נשארת בתוך הכרטסת ולא נפתחת ככרטיסייה חדשה.
+  const [rabbiFormView, setRabbiFormView] = useState<string | null>(null)
   const [rabbiFormFile, setRabbiFormFile] = useState<File | null>(null)
   const [rabbiDownloading, setRabbiDownloading] = useState(false)
   const docsGateShown = useRef(false)
@@ -2644,13 +2646,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   // ── Birth request ──
   // העלאת צילומי ת.ז הנדרשים יחד עם הבקשה (בצאצא שטרם אושר). מחזיר false בשגיאה.
-  const uploadRequiredIdDocs = async (): Promise<boolean> => {
+  // forceFresh — מעלה *כל* קובץ שנבחר, גם אם כבר קיים אחד במערכת.
+  // ⚠️ בלי זה הקובץ החדש היה נזרק בשקט: התנאי `!existingDocs[d]` דילג על
+  // כל מסמך שכבר קיים, ובבקשת הלוואה זו בדיוק המטרה — לדרוס אותו בעדכני.
+  const uploadRequiredIdDocs = async (forceFresh = false): Promise<boolean> => {
     if (!beneficiary) return false
     const fd = new FormData()
     fd.append('beneficiary_id', beneficiary.id)
     let any = false
     for (const d of requiredDocs) {
-      if (!existingDocs[d] && docFiles[d]) { fd.append(d, docFiles[d] as File); any = true }
+      if ((forceFresh || !existingDocs[d]) && docFiles[d]) { fd.append(d, docFiles[d] as File); any = true }
     }
     if (!any) return true
     const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
@@ -3073,12 +3078,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'שגיאה בשמירת הבקשה'); return }
 
-      // ⚠️ ההורדה רק *אחרי* שהשמירה הצליחה: טופס ביד בלי בקשה שמורה
-      // הוא בדיוק המצב שהמנגנון הזה בא למנוע.
-      window.open(`/api/admin/loans/rabbi-form?loan=${encodeURIComponent(data.loanId)}`, '_blank')
-
+      // ⚠️ הטופס מוצג בחלונית *בתוך* הדף ולא ככרטיסייה חדשה, ורק
+      // אחרי שהשמירה הצליחה: טופס ביד בלי בקשה שמורה הוא בדיוק המצב
+      // שהמנגנון הזה בא למנוע.
       setRabbiDraft({ loanId: String(data.loanId), amount: Number(loanForm.amount) })
       setLoanModalOpen(false)
+      // ⚠️ רק חלונית האישור נפתחת כאן. חלונית הטופס נפתחת מתוכה, כדי
+      // ששתיהן לא ייערמו זו על זו והמשתמש יקרא את ההודעה לפני הטופס.
       setRabbiSavedModal(true)
     } catch {
       setError('שגיאת רשת. אנא נסו שוב.')
@@ -3312,10 +3318,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   }
 
   // הצגת שדה מסמך זהות: קובץ חדש שנבחר / קובץ שכבר התקבל (עם אפשרות החלפה) / שדה העלאה
-  const renderIdDocSlot = (docType: string, label: string) => {
+  // forceFresh — חובה להעלות קובץ *חדש*, גם אם כבר קיים אחד במערכת.
+  //
+  // ⚠️ בבקשת הלוואה זו דרישה מהותית ולא נוחות: הקובץ הקיים עשוי להיות
+  // ישן, והספח חייב לשקף את הרכב המשפחה *כיום*. הצגת "הקובץ כבר התקבל"
+  // הייתה אומרת למבקש שאין לו מה לעשות, והבקשה הייתה נשענת על מסמך לא
+  // עדכני. במצב הזה לא מוצג הקובץ הקיים כלל — רק משבצת העלאה.
+  const renderIdDocSlot = (docType: string, label: string, forceFresh = false) => {
     const file = docFiles[docType] ?? null
     const setFile = (f: File | null) => setDocFile(docType, f)
-    const existing = existingDocs[docType]
+    const existing = forceFresh ? undefined : existingDocs[docType]
     const replacing = !!replaceDoc[docType]
     return (
       <div className="border border-slate-200 rounded-xl p-4">
@@ -3401,9 +3413,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     if (d === 'id_wife_appx') return 'ספח תעודת הזהות — האשה'
     return docLabel(d)
   }
-  const renderIdDocsSection = () => {
-    // מוצג כל עוד המשפחה לא אושרה (ממתינה לאישור ראשוני). מאושרת → לא מוצג (הגשה מיידית).
-    if (!beneficiary || isApproved) return null
+  // forceFresh — בבקשת הלוואה הצילומים נדרשים *מחדש* בכל הגשה, גם ממשפחה
+  // מאושרת. לכן הקטע מוצג תמיד ולא רק לפני אישור.
+  const renderIdDocsSection = (forceFresh = false) => {
+    if (!beneficiary) return null
+    if (!forceFresh && isApproved) return null
     return (
       <Card>
         <div className="flex items-start gap-3 mb-4">
@@ -3412,14 +3426,34 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
           <div>
             <p className="font-semibold text-slate-900 mb-1">צילומי תעודות זהות</p>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              לצורך הגשת בקשה למערכת יש להעלות תחילה צילומי תעודות זהות. לאחר מכן ניתן למלא את הבקשה למטה — הבקשה והמסמכים יישלחו יחד.
-            </p>
+            {forceFresh ? (
+              <p className="text-sm text-slate-600 leading-relaxed">
+                לצורך הגשת הבקשה יש להעלות צילום תעודת זהות מעודכן, כולל ספח מלא עם כל פרטי הילדים.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-600 leading-relaxed">
+                לצורך הגשת בקשה למערכת יש להעלות תחילה צילומי תעודות זהות. לאחר מכן ניתן למלא את הבקשה למטה — הבקשה והמסמכים יישלחו יחד.
+              </p>
+            )}
           </div>
         </div>
+
+        {/* 🔴 בהלוואה — הבהרה שאין להסתמך על מסמך קיים.
+            ⚠️ בלי זה המבקש רואה משבצת העלאה ריקה ומניח שמדובר בתקלה,
+            כי הוא *יודע* שהעלה מסמכים בעבר. ההסבר הופך את הדרישה למכוונת. */}
+        {forceFresh && (
+          <div className="mb-4 flex items-start gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+            <AlertCircle size={15} className="flex-shrink-0 mt-0.5 text-red-600" />
+            <p className="text-[13px] font-bold text-red-700 leading-relaxed">
+              חובה להעלות את הצילומים מחדש עבור בקשה זו — גם אם כבר העליתם בעבר.
+              המסמכים החדשים יחליפו את הקיימים בכרטסת.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-4">
           {requiredDocs.map(d => (
-            <div key={d}>{renderIdDocSlot(d, idDocLabel(d))}</div>
+            <div key={d}>{renderIdDocSlot(d, idDocLabel(d), forceFresh)}</div>
           ))}
         </div>
       </Card>
@@ -5908,9 +5942,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   )}
 
                   <button type="button"
-                    onClick={() => window.open(`/api/admin/loans/rabbi-form?loan=${encodeURIComponent(rabbiDraft.loanId)}`, '_blank')}
+                    onClick={() => setRabbiFormView(rabbiDraft.loanId)}
                     className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                    <FileText size={16} /> הורדת הטופס שוב
+                    <FileText size={16} /> הצגת הטופס להדפסה
                   </button>
 
                   <Field label="טופס חתימת רב חתום" required hint={`העלו את הטופס לאחר החתמת הרב. ${UPLOAD_HINT}`}>
@@ -5948,7 +5982,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               ) : (
               /* Modal body */
               <form onSubmit={handleLoanRequest} className="p-6 flex flex-col gap-4">
-                {renderIdDocsSection()}
+                {/* ⚠️ forceFresh — בהלוואה הצילומים נדרשים מחדש בכל הגשה,
+                    גם ממשפחה מאושרת שכבר העלתה בעבר. הספח חייב לשקף את
+                    הרכב המשפחה כיום. */}
+                {renderIdDocsSection(true)}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Field label={<EditableText k="loan.purpose.label" />} required>
@@ -6032,17 +6069,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       <EditableText k="loan.currency.notice" />
                     </div>
                   </div>
-                  {loanForm.amount && loanForm.installments && (
-                    <div className="col-span-2">
-                      <div className="bg-indigo-50 rounded-lg px-3 py-2.5 text-sm text-indigo-800 border border-indigo-100">
-                        <EditableText k="loan.monthly.label" />{' '}
-                        <strong>
-                        {new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 })
-                            .format(parseFloat(loanForm.amount) / parseInt(loanForm.installments, 10) || 0)} ₪
-                        </strong>
-                      </div>
-                    </div>
-                  )}
+                  {/* ⚠️ "תשלום חודשי משוער" הוסר לבקשת המנהל. הוא גם הציג ₪
+                      בזמן שההלוואה נקובה בדולר, וכך סתר את ההודעה שמעליו. */}
                   <div className="col-span-2">
                     <Field label={<EditableText k="loan.declaration.label" />} required>
                       <div className="flex flex-col gap-2">
@@ -6099,6 +6127,63 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
         )}
 
+        {/* ─── חלונית הטופס — הצגה, הדפסה והורדה בתוך הכרטסת ───
+            ⚠️ iframe ולא כרטיסייה חדשה: פתיחת כרטיסייה נחסמת ע"י חוסמי
+            פופ-אפים, ובנייד היא מוציאה את המשתמש מהתהליך. */}
+        {rabbiFormView && (
+          <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText size={18} className="text-indigo-600" />
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">טופס חתימת רב</h3>
+                </div>
+                <button type="button" onClick={() => setRabbiFormView(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="px-5 py-3 border-b border-slate-100 bg-amber-50/70 shrink-0">
+                <p className="text-[13px] text-amber-900 leading-relaxed">
+                  הדפיסו את הטופס, החתימו את הרב, וסרקו אותו <strong>ישר ובאיכות טובה</strong>.
+                  לאחר מכן חזרו לכאן והעלו אותו.
+                </p>
+              </div>
+
+              <iframe
+                src={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
+                className="flex-1 w-full border-0 bg-slate-100"
+                title="טופס חתימת רב"
+              />
+
+              <div className="flex gap-2 px-5 py-3.5 border-t border-slate-100 shrink-0">
+                <a
+                  href={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
+                  download="טופס-חתימת-רב.pdf"
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
+                  <Upload size={16} className="rotate-180" /> הורדה
+                </a>
+                <button type="button"
+                  onClick={() => {
+                    // ⚠️ הדפסה דרך ה-iframe עצמו, כדי לא להדפיס את הדף
+                    // שמאחוריו. אם הדפדפן חוסם — נופלים לפתיחה בכרטיסייה.
+                    const frame = document.querySelector<HTMLIFrameElement>('iframe[title="טופס חתימת רב"]')
+                    try {
+                      frame?.contentWindow?.focus()
+                      frame?.contentWindow?.print()
+                    } catch {
+                      window.open(`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`, '_blank')
+                    }
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-semibold rounded-xl px-4 py-2.5 transition-all duration-150 text-sm shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)]">
+                  <FileText size={16} /> הדפסה
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ─── אישור שמירת הטיוטה (אחרי הורדת טופס חתימת הרב) ─── */}
         {rabbiSavedModal && (
           <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
@@ -6118,9 +6203,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <p className="text-xs text-slate-500 leading-relaxed text-center">
                   לאחר החתמת הרב, היכנסו שוב לבקשת הלוואה והעלו את הטופס החתום. רק אז הבקשה תישלח לטיפול.
                 </p>
+                <button type="button"
+                  onClick={() => {
+                    setRabbiSavedModal(false)
+                    if (rabbiDraft) setRabbiFormView(rabbiDraft.loanId)
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(245,158,11,0.55)]">
+                  <FileText size={18} /> להצגת הטופס והדפסתו
+                </button>
                 <button type="button" onClick={() => setRabbiSavedModal(false)}
-                  className="w-full bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(245,158,11,0.55)]">
-                  הבנתי
+                  className="text-sm text-slate-500 hover:text-slate-700 underline self-center">
+                  סגירה
                 </button>
               </div>
             </div>

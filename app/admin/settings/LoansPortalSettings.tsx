@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Lock, CheckCircle2, Copy, ExternalLink, AlertCircle, Loader2, Mail, Send } from 'lucide-react'
+import { Lock, CheckCircle2, Copy, ExternalLink, AlertCircle, Loader2, Mail, Send, FileSignature } from 'lucide-react'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -313,6 +313,26 @@ export default function LoansPortalSettings() {
           <strong>שלח עכשיו</strong> = שולח את כל ההלוואות שנכנסו מאז הדוח הקודם ומאפס את הספירה ·
           <strong> שלח בדיקה</strong> = שולח עותק לכתובת שבשדה בלי לאפס
         </p>
+      </div>
+
+      {/* ─── טופס חתימת רב — כיול מיקומי השדות על הבלאנק ───
+          ⚠️ מסך הכיול היה קיים אך לא היה מקושר משום מקום, ולכן לא היה
+          דרך להגיע אליו בלי לדעת את הכתובת בעל-פה. */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <FileSignature size={16} className="text-indigo-600" />
+          <h3 className="font-bold text-slate-900 text-sm">טופס חתימת רב</h3>
+        </div>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          עריכת מיקום כל שדה על גבי הבלאנק — שם המבקש, תעודת זהות, סכום ומספר תשלומים.
+          המסך מציג תצוגה מקדימה חיה של הטופס בדיוק כפי שהמבקש מקבל אותו.
+        </p>
+        <a
+          href="/admin/settings/rabbi-form"
+          className="self-start flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2 shadow-sm shadow-indigo-200 transition-colors"
+        >
+          <FileSignature size={13} /> עריכת הטופס
+        </a>
       </div>
     </div>
   )
