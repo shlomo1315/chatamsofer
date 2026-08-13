@@ -18,8 +18,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * ⚠️ `approved` אינו כאן במכוון: הלוואה מאושרת היא החלטה שהתקבלה, וייתכן
  * מצב לגיטימי שבו משפחה שסיימה להחזיר מגישה בקשה חדשה. החסימה היא על
  * בקשה *ממתינה להחלטה*, לא על היסטוריה.
+ *
+ * 🔴 `awaiting_rabbi_form` אינו כאן: זו טיוטה שטרם הוגשה, והיא שייכת
+ * למבקש עצמו. אילו הייתה נחשבת "בקשה פתוחה", המבקש היה ננעל מחוץ
+ * לטיוטה של עצמו — לא יכול להשלים אותה ולא יכול להתחיל חדשה.
  */
 export const OPEN_LOAN_STATUSES = ['pending', 'inquiry'] as const
+
+/** טיוטה שממתינה לטופס חתימת רב חתום — שייכת למבקש, לא למזכיר. */
+export const AWAITING_RABBI_FORM = 'awaiting_rabbi_form'
 
 export type OpenLoan = {
   id: string
@@ -54,6 +61,31 @@ export async function findOpenLoan(
 
   if (error) {
     console.error('[openLoanGuard] query failed:', error.message)
+    return null
+  }
+  return (data?.[0] as OpenLoan | undefined) ?? null
+}
+
+/**
+ * מאתר טיוטה שממתינה לטופס חתימת רב.
+ *
+ * ⚠️ נפרד מ-findOpenLoan בכוונה: זו אינה בקשה שחוסמת, אלא בקשה שהמבקש
+ * צריך *להמשיך*. ערבוב בין השניים היה נועל אותו מחוץ לטיוטה שלו.
+ */
+export async function findDraftAwaitingRabbiForm(
+  db: SupabaseClient,
+  beneficiaryId: string,
+): Promise<OpenLoan | null> {
+  const { data, error } = await db
+    .from('loans')
+    .select('id, status, amount, created_at')
+    .eq('beneficiary_id', beneficiaryId)
+    .eq('status', AWAITING_RABBI_FORM)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    console.error('[openLoanGuard] draft query failed:', error.message)
     return null
   }
   return (data?.[0] as OpenLoan | undefined) ?? null

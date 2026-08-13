@@ -1668,6 +1668,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // למשתמש למלא טופס שלם ורק אז לגלות שהוא נדחה.
   const [openLoanNotice, setOpenLoanNotice] = useState<{ message: string; since?: string } | null>(null)
   const [openLoanModal, setOpenLoanModal] = useState(false)
+  // טיוטה שממתינה לטופס חתימת רב — נשמרה כשהמבקש הוריד את הטופס.
+  // ⚠️ כשהיא קיימת, הטופס נפתח *נעול*: רק העלאת הטופס החתום, בלי עריכה
+  // של הסכום או המטרה — אחרת הפרטים היו משתנים אחרי שהרב כבר חתם עליהם.
+  const [rabbiDraft, setRabbiDraft] = useState<{ loanId: string; amount: number | null; since?: string } | null>(null)
+  const [rabbiSavedModal, setRabbiSavedModal] = useState(false)
+  const [rabbiFormFile, setRabbiFormFile] = useState<File | null>(null)
+  const [rabbiDownloading, setRabbiDownloading] = useState(false)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
@@ -2880,6 +2887,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         // ⚠️ מאפס גם כשאין בקשה פתוחה: אחרת התראה של משתמש קודם הייתה
         // נשארת על המסך אחרי החלפת משתמש באותו דפדפן.
         setOpenLoanNotice(d?.openLoan ? { message: d.message, since: d.since } : null)
+        setRabbiDraft(d?.awaitingRabbiForm
+          ? { loanId: String(d.loanId), amount: d.amount ?? null, since: d.since }
+          : null)
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -3031,6 +3041,86 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     setLoading(false)
   }
+  // ── הורדת טופס חתימת הרב ──
+  //
+  // ⚠️ שומר את הבקשה כטיוטה *לפני* ההורדה. הטופס דורש חתימה פיזית של רב,
+  // וזה לוקח ימים — בלי השמירה המבקש היה חוזר לטופס ריק וממלא הכל מחדש.
+  const handleDownloadRabbiForm = async () => {
+    if (!beneficiary) return
+    // אותן בדיקות כמו בהגשה: טיוטה עם נתונים חסרים הופכת לבקשה פגומה
+    // ברגע שהטופס החתום עולה, והרב כבר חתם על מספרים שלא נשמרו.
+    if (!loanForm.amount || !loanForm.installments || !loanForm.purpose) {
+      setError('יש למלא סכום, מספר תשלומים ומטרה לפני הורדת הטופס'); return
+    }
+    if (Number(loanForm.amount) > LOAN_MAX_AMOUNT) {
+      setError(`הסכום המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')}$`); return
+    }
+    if (loanForm.purpose !== WEDDING_PURPOSE && !loanForm.purpose_details.trim()) {
+      setError('אנא פרטו את מטרת ההלוואה'); return
+    }
+    if (!loanForm.declaration) {
+      setError('אנא בחרו תשובה: האם פנית בעבר לגמ"ח חתם סופר?'); return
+    }
+
+    setError('')
+    setRabbiDownloading(true)
+    try {
+      const res = await fetch(`/api/portal/loan-draft${previewCode ? `?preview=${encodeURIComponent(previewCode)}` : ''}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_id: beneficiary.id, ...loanForm }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בשמירת הבקשה'); return }
+
+      // ⚠️ ההורדה רק *אחרי* שהשמירה הצליחה: טופס ביד בלי בקשה שמורה
+      // הוא בדיוק המצב שהמנגנון הזה בא למנוע.
+      window.open(`/api/admin/loans/rabbi-form?loan=${encodeURIComponent(data.loanId)}`, '_blank')
+
+      setRabbiDraft({ loanId: String(data.loanId), amount: Number(loanForm.amount) })
+      setLoanModalOpen(false)
+      setRabbiSavedModal(true)
+    } catch {
+      setError('שגיאת רשת. אנא נסו שוב.')
+    } finally {
+      setRabbiDownloading(false)
+    }
+  }
+
+  // ── העלאת הטופס החתום → הבקשה מוגשת בפועל ──
+  const handleUploadRabbiForm = async () => {
+    if (!beneficiary || !rabbiFormFile || !rabbiDraft) return
+    setError('')
+    setLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', rabbiFormFile)
+      fd.append('beneficiary_id', beneficiary.id)
+      fd.append('doc_type', 'rabbi_form')
+      const upRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
+      const upData = await upRes.json()
+      if (!upRes.ok || !upData.url) { setError('שגיאה בהעלאת הטופס. אנא נסו שוב.'); return }
+
+      const res = await fetch('/api/portal/loan-draft', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rabbi_form_url: upData.url }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'שגיאה בהגשת הבקשה'); return }
+
+      setRabbiDraft(null)
+      setRabbiFormFile(null)
+      setLoanModalOpen(false)
+      setRequestType('loan')
+      setStep('request-sent')
+    } catch {
+      setError('שגיאת רשת. אנא נסו שוב.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const goToLoanForm = () => {
     if (!gateAllows('gemach', 'גמ"ח ההלוואות')) return
     if (isDocsPending) { setDocsGateModal(true); return }
@@ -3038,8 +3128,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // לתת למשפחה למלא סכום, תשלומים ומסמכים כדי לקבל דחייה בסוף.
     if (openLoanNotice) { setOpenLoanModal(true); return }
     setError('')
+    // ⚠️ טיוטה ממתינה לטופס — פותחים את המסך הנעול ולא טופס ריק. איפוס
+    // הטופס כאן היה מוחק למבקש את מה שכבר מילא לפני שהלך להחתים.
+    if (rabbiDraft) { setRabbiFormFile(null); setLoanModalOpen(true); return }
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setDocFiles({})
+    setRabbiFormFile(null)
     setLoanModalOpen(true)
   }
   // פתיחת מודל בקשת הסיוע — חסום אם המחלקה סגורה (חלונית "בפיתוח")
@@ -5791,7 +5885,68 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </button>
               </div>
 
-              {/* Modal body */}
+              {/* ─── מצב נעול: הבקשה שמורה, ממתינה לטופס חתימת הרב ───
+                  ⚠️ הפרטים אינם ניתנים לעריכה כאן במכוון: הרב חתם על
+                  הסכום והתשלומים שהופיעו בטופס, ושינוי שלהם אחרי החתימה
+                  היה הופך את החתימה למשהו אחר ממה שנחתם. */}
+              {rabbiDraft ? (
+                <div className="p-6 flex flex-col gap-4">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3.5">
+                    <p className="text-sm font-bold text-amber-900 mb-1">הבקשה שמורה וממתינה לטופס חתימת רב</p>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      הפרטים שמילאתם נשמרו במערכת. לאחר החתמת הרב על הטופס, העלו אותו כאן — ורק אז הבקשה תישלח לטיפול.
+                    </p>
+                  </div>
+
+                  {rabbiDraft.amount != null && (
+                    <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <span className="text-xs text-slate-500">הסכום המבוקש</span>
+                      <span className="text-sm font-bold text-slate-800 tabular-nums">
+                        {Math.round(rabbiDraft.amount).toLocaleString('en-US')}$
+                      </span>
+                    </div>
+                  )}
+
+                  <button type="button"
+                    onClick={() => window.open(`/api/admin/loans/rabbi-form?loan=${encodeURIComponent(rabbiDraft.loanId)}`, '_blank')}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+                    <FileText size={16} /> הורדת הטופס שוב
+                  </button>
+
+                  <Field label="טופס חתימת רב חתום" required hint={`העלו את הטופס לאחר החתמת הרב. ${UPLOAD_HINT}`}>
+                    {rabbiFormFile ? (
+                      <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                        <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
+                          <CheckCircle2 size={14} className="flex-shrink-0" />
+                          <span className="truncate">{rabbiFormFile.name}</span>
+                        </span>
+                        <button type="button" onClick={() => setRabbiFormFile(null)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 rounded-lg px-3 py-4 text-sm text-slate-500 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/40">
+                        <Upload size={16} /> לחצו להעלאת הטופס החתום
+                        <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
+                          onChange={e => setRabbiFormFile(e.target.files?.[0] ?? null)} />
+                      </label>
+                    )}
+                  </Field>
+
+                  {error && <ErrorBox message={error} />}
+
+                  <div className="flex gap-3 pt-1">
+                    <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
+                      className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
+                      סגירה
+                    </button>
+                    <button type="button" onClick={handleUploadRabbiForm} disabled={loading || !rabbiFormFile}
+                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-slate-300 disabled:to-slate-300 disabled:cursor-not-allowed shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] disabled:shadow-none text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
+                      {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                      {loading ? 'שולח...' : 'שליחת הבקשה'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+              /* Modal body */
               <form onSubmit={handleLoanRequest} className="p-6 flex flex-col gap-4">
                 {renderIdDocsSection()}
                 <div className="grid grid-cols-2 gap-4">
@@ -5917,18 +6072,57 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
                 {error && <ErrorBox message={error} />}
 
+                {/* ⚠️ הבקשה אינה נשלחת מכאן: היא מחייבת טופס חתימת רב חתום.
+                    הכפתור שומר את הפרטים ומוריד את הטופס, וההגשה בפועל
+                    מתרחשת רק אחרי שהטופס החתום מועלה חזרה. */}
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
+                  <p className="text-xs text-indigo-900 leading-relaxed">
+                    להשלמת הבקשה נדרש טופס חתימת רב. בלחיצה על הכפתור הפרטים יישמרו במערכת
+                    והטופס יורד להחתמה — תוכלו לחזור ולהעלות אותו חתום בכל עת.
+                  </p>
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
                     className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
                     <EditableText k="loan.cancel" />
                   </button>
-                  <button type="submit" disabled={loading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 disabled:bg-indigo-400 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
-                    {loading ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                    {loading ? t('loan.submitting') : <EditableText k="loan.submit" />}
+                  <button type="button" onClick={handleDownloadRabbiForm} disabled={rabbiDownloading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
+                    {rabbiDownloading ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                    {rabbiDownloading ? 'שומר...' : 'שמירה והורדת טופס חתימת רב'}
                   </button>
                 </div>
               </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── אישור שמירת הטיוטה (אחרי הורדת טופס חתימת הרב) ─── */}
+        {rabbiSavedModal && (
+          <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+            onClick={() => setRabbiSavedModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl border border-amber-200 w-full max-w-md overflow-hidden"
+              onClick={e => e.stopPropagation()}>
+              <div className="bg-amber-50 border-b border-amber-200 px-6 py-5 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center mx-auto mb-3">
+                  <FileText size={26} className="text-amber-600" />
+                </div>
+                <h2 className="text-lg font-bold text-amber-900">הבקשה נשמרה</h2>
+              </div>
+              <div className="p-6 flex flex-col gap-4">
+                <p className="text-sm text-slate-600 leading-relaxed text-center">
+                  שימו לב, המערכת שומרת את ההלוואה במצב ממתין לטופס חתימת רב.
+                </p>
+                <p className="text-xs text-slate-500 leading-relaxed text-center">
+                  לאחר החתמת הרב, היכנסו שוב לבקשת הלוואה והעלו את הטופס החתום. רק אז הבקשה תישלח לטיפול.
+                </p>
+                <button type="button" onClick={() => setRabbiSavedModal(false)}
+                  className="w-full bg-gradient-to-b from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(245,158,11,0.55)]">
+                  הבנתי
+                </button>
+              </div>
             </div>
           </div>
         )}

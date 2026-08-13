@@ -6,7 +6,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
-import { findOpenLoan, OPEN_LOAN_MESSAGE } from '@/lib/openLoanGuard'
+import { findOpenLoan, findDraftAwaitingRabbiForm, OPEN_LOAN_MESSAGE } from '@/lib/openLoanGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +21,19 @@ export async function GET(request: NextRequest) {
   const admin = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
+
+  // ⚠️ הטיוטה נבדקת *לפני* הבקשה הפתוחה: היא אינה חסימה אלא משימה
+  // פתוחה של המבקש עצמו, וזו ההודעה שהוא צריך לראות.
+  const draft = await findDraftAwaitingRabbiForm(admin, beneficiaryId)
+  if (draft) {
+    return NextResponse.json({
+      openLoan: false,
+      awaitingRabbiForm: true,
+      loanId: draft.id,
+      amount: draft.amount,
+      since: draft.created_at,
+    })
+  }
 
   const loan = await findOpenLoan(admin, beneficiaryId)
   if (!loan) return NextResponse.json({ openLoan: false })

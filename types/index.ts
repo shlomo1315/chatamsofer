@@ -5,7 +5,10 @@ export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending' | 'docs_returned' | 'deep_review'
 export type Gender = 'male' | 'female'
-export type LoanStatus = 'pending' | 'inquiry' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
+// ⚠️ awaiting_rabbi_form היא *טיוטה*, לא בקשה שהוגשה: המבקש הוריד את טופס
+// חתימת הרב וטרם החזיר אותו חתום. היא אינה מגיעה לטיפול המזכיר ואינה
+// נספרת כבקשה פתוחה (ראה lib/openLoanGuard.ts).
+export type LoanStatus = 'awaiting_rabbi_form' | 'pending' | 'inquiry' | 'approved' | 'active' | 'completed' | 'rejected' | 'defaulted'
 export type MaternityStatus = 'pending' | 'active' | 'completed' | 'cancelled' | 'deep_review'
 export type CardLoadStatus = 'idle' | 'pending' | 'loaded' | 'failed' | 'unloaded'
 export type CardStatus = 'pending' | 'approved' | 'rejected' | 'loaded' | 'awaiting_stock'
@@ -446,6 +449,7 @@ export const ELIGIBILITY_LABELS: Record<EligibilityStatus, string> = {
 }
 
 export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
+  awaiting_rabbi_form: 'ממתין לטופס חתימת רב',
   pending: 'ממתין',
   inquiry: 'בתהליך בירור',
   approved: 'מאושר',

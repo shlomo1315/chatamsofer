@@ -50,7 +50,7 @@ const ACTION_PARAM: Record<ReqType, string> = {
 
 // להגשה חוזרת מצרפים *קישור* לטיוטה מוכנה (mailto) במקום להדביק את כל הטקסט.
 // בבקשות לידה הפנייה היא ליולדת ("מרת <משפחה> <שם האשה> תחי׳") ולא לבעל.
-function reject(
+async function reject(
   to: string, name: string, type: ReqType, errors: string[], idNumber: string,
   ctx: Awaited<ReturnType<typeof loadCtx>>,
   ben?: { family_name?: string | null; spouse_name?: string | null } | null,
@@ -63,7 +63,37 @@ function reject(
   const mail = emailIntakeRejectedEmail({
     name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type], greeting,
   })
-  return deliverMail(to, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
+
+  // ⚠️ בבקשת הלוואה שנדחתה בגלל טופס חתימת רב חסר — מצרפים את הטופס הריק
+  // עצמו. בלעדיו הדחייה אומרת למבקש "חסר טופס" בלי לתת לו דרך להשיג אותו,
+  // והוא נתקע: בפורטל יש כפתור הורדה, במייל אין.
+  let attachments: Awaited<ReturnType<typeof blankRabbiFormAttachment>> = undefined
+  if (type === 'loan' && errors.some(e => e.includes('טופס-חתימת-רב') || e.includes('טופס חתימת רב'))) {
+    attachments = await blankRabbiFormAttachment()
+  }
+
+  return deliverMail(to, mail.subject, mail.html, attachments, { ...mailFor('igud'), skipLog: true })
+}
+
+/**
+ * הטופס הריק כצרופה. מחזיר undefined אם הקובץ אינו זמין — דחייה בלי
+ * הצרופה עדיפה על כישלון שליחה שמשאיר את המבקש בלי שום תשובה.
+ */
+async function blankRabbiFormAttachment() {
+  try {
+    const { readFile } = await import('node:fs/promises')
+    const path = await import('node:path')
+    const file = path.join(process.cwd(), 'public', 'forms', 'loan-form-blank.pdf')
+    const content = await readFile(file)
+    return [{
+      filename: 'טופס-חתימת-רב.pdf',
+      mimeType: 'application/pdf',
+      contentB64: content.toString('base64'),
+    }]
+  } catch (e) {
+    console.error('[emailRequestIntake] הטופס הריק לא נטען:', e)
+    return undefined
+  }
 }
 
 // מחזיר true אם המייל זוהה כבקשה וטופל (כדי לדלג על מענה אוטומטי אחר).
@@ -300,11 +330,18 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
     } else if (type === 'loan') {
       const amount = data.amount as number
       const installments = data.installments as number
+      // ⚠️ הטופס החתום נשמר בשדה הייעודי (rabbi_form_url) ולא רק ברשימת
+      // המסמכים: המזכיר צריך לראות שהוא קיים, ואותו שדה משמש גם בהגשה
+      // דרך הפורטל — אחרת אותו נתון היה יושב בשני מקומות שונים לפי הערוץ.
+      const rabbiForm = matched['טופס-חתימת-רב'] ?? null
+      const docs = [matched['מסמך-תומך'], matched['הזמנה-לחתונה']].filter(Boolean) as string[]
       const r = await admin.from('loans').insert({
         beneficiary_id: ben.id, amount, installments,
         monthly_payment: Math.round((amount / installments) * 100) / 100,
         purpose: data.purpose, notes: data.notes ?? null,
-        document_urls: matched['מסמך-תומך'] ? [matched['מסמך-תומך']] : null,
+        document_urls: docs.length ? docs : null,
+        rabbi_form_url: rabbiForm,
+        rabbi_form_uploaded_at: rabbiForm ? new Date().toISOString() : null,
         status: 'pending',
       })
       insErr = r.error?.message ?? null
