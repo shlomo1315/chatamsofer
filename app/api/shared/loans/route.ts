@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   // ב-limit — הרשימה נקטעה ב-1,000 בשקט. ראו lib/fetchAllRows.
   const { rows, error } = await fetchAllRows<unknown>((from, to) => admin
     .from('loans')
-    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email)')
+    // ⚠️ note_sent_at/by — שלב "נשלח שטר" שקודם לביצוע. spouse_name
+    // ו-spouse_id_number נוספו לחיפוש: מחפשים גם לפי שם ות"ז של האשה.
+    .select('id, amount, approved_amount, installments, monthly_payment, purpose, purpose_details, status, start_date, notes, note_sent_at, note_sent_by, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, city, address, phone, email, spouse_name, spouse_id_number)')
     .in('status', ['approved', 'active'])
     .order('created_at', { ascending: false })
     .range(from, to))
