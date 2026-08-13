@@ -31,7 +31,7 @@ export const NEWSLETTER_ACTIONS: NewsletterAction[] = [
     label: 'להגשת בקשת הלוואה',
     url: `${SITE}/?action=loan`,
     color: '#0ea5e9',
-    description: 'גמ״ח הלוואות — עד 30,000 ₪',
+    description: 'גמ״ח הלוואות — עד 10,000$',
   },
   {
     key: 'aid',

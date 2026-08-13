@@ -7,8 +7,9 @@ import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
-import { LOAN_DECLARATIONS } from '@/lib/emailRequestForms'
+import { LOAN_DECLARATIONS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
+import { findOpenLoan, OPEN_LOAN_MESSAGE } from '@/lib/openLoanGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,8 +68,11 @@ export async function POST(request: NextRequest) {
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     return NextResponse.json({ error: 'סכום לא תקין' }, { status: 400 })
   }
-  if (parsedAmount > 30000) {
-    return NextResponse.json({ error: 'הסכום המרבי הוא 30,000 ₪' }, { status: 400 })
+  // ⚠️ התקרה מגיעה מ-LOAN_MAX_AMOUNT ולא ממספר קשיח. הסכום הופיע כאן, בטופס
+  // המייל ובטקסטים הציבוריים בשלושה עותקים נפרדים — ושינוי תקרה עדכן רק חלק
+  // מהם. מקור אמת אחד מונע מהערוצים לסתור זה את זה.
+  if (parsedAmount > LOAN_MAX_AMOUNT) {
+    return NextResponse.json({ error: `הסכום המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')}$` }, { status: 400 })
   }
   if (isNaN(parsedInstallments) || parsedInstallments <= 0) {
     return NextResponse.json({ error: 'מספר תשלומים לא תקין' }, { status: 400 })
@@ -96,6 +100,16 @@ export async function POST(request: NextRequest) {
   if (ben.eligibility_status === 'rejected') {
     notifyRejectedRequest(ben)
     return NextResponse.json({ error: 'הגשת בקשה אינה זמינה עבור חשבון זה' }, { status: 403 })
+  }
+
+  // ⚠️ חסימת בקשה כפולה — הבדיקה האחרונה לפני ה-insert, אחרי כל שאר
+  // הוולידציות: אין טעם לומר "יש לך בקשה פתוחה" למי שממילא שלח טופס פגום.
+  const openLoan = await findOpenLoan(admin, String(beneficiary_id))
+  if (openLoan) {
+    return NextResponse.json(
+      { error: OPEN_LOAN_MESSAGE, openLoan: true },
+      { status: 409 },
+    )
   }
 
   const monthly_payment = parsedAmount / parsedInstallments

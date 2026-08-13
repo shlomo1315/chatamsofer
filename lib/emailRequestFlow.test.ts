@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildDraftBody, parseDraft, validateRequest, fieldsFor,
-  detectReqType, SUBJECT_PREFIX, type ReqType,
+  detectReqType, SUBJECT_PREFIX, LOAN_MIN_AMOUNT, LOAN_MAX_AMOUNT, type ReqType,
 } from './emailRequestForms'
+
+// ⚠️ הטסטים נגזרים מהקבועים ולא ממספרים קשיחים: כשהתקרה השתנתה
+// מ-30,000 ל-10,000, טסט עם "20000" כסכום תקין היה נכשל בלי קשר לבאג.
+const OVER_MAX = String(LOAN_MAX_AMOUNT + 1)
+const VALID_AMOUNT = String(Math.round(LOAN_MAX_AMOUNT / 2))
+const MAX_STR = LOAN_MAX_AMOUNT.toLocaleString('en-US')
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הצלבה מלאה לכל סוגי הבקשות: הטופס שהמערכת מייצרת → הפרסור → הוולידציה.
@@ -97,7 +103,7 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
 
   it('loan', () => {
     let d = buildDraftBody('loan', '318344884', ctx)
-    d = fill(d, 'סכום ההלוואה המבוקש', '20000')
+    d = fill(d, 'סכום ההלוואה המבוקש', VALID_AMOUNT)
     d = fill(d, 'מספר התשלומים', '24')
     d = fill(d, 'מטרת ההלוואה', 'שמחה משפחתית')
     d = fill(d, 'האם פנית בעבר', 'לא הגשתי')
@@ -109,14 +115,14 @@ describe('טופס מלא כהלכה עובר ולידציה', () => {
 
   it('loan — דוחה סכום מעל התקרה', () => {
     let d = buildDraftBody('loan', '318344884', ctx)
-    d = fill(d, 'סכום ההלוואה המבוקש', '50000')   // מעל 30,000
+    d = fill(d, 'סכום ההלוואה המבוקש', OVER_MAX)
     d = fill(d, 'מספר התשלומים', '24')
     d = fill(d, 'מטרת ההלוואה', 'שמחה משפחתית')
     d = fill(d, 'האם פנית בעבר', 'לא הגשתי')
 
     const r = validateRequest('loan', parseDraft('loan', d, ctx), ctx)
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.errors.join(' ')).toContain('30,000')
+    if (!r.ok) expect(r.errors.join(' ')).toContain(MAX_STR)
   })
 
   it('financial_aid', () => {
@@ -175,16 +181,16 @@ describe('מגבלות סכום ההלוואה', () => {
   }
 
   it('סכום מתחת למינימום — נדחה', () => {
-    // הטופס מבטיח "בין 1,000 ל-30,000". בלי אכיפה, ההבטחה הייתה שקרית.
+    // הטופס מבטיח טווח מפורש. בלי אכיפה, ההבטחה הייתה שקרית.
     const r = validateRequest('loan', parseDraft('loan', loanBody('500'), ctx), ctx)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.errors.join(' ')).toContain('1,000')
   })
 
   it('סכום מעל המקסימום — נדחה', () => {
-    const r = validateRequest('loan', parseDraft('loan', loanBody('50000'), ctx), ctx)
+    const r = validateRequest('loan', parseDraft('loan', loanBody(OVER_MAX), ctx), ctx)
     expect(r.ok).toBe(false)
-    if (!r.ok) expect(r.errors.join(' ')).toContain('30,000')
+    if (!r.ok) expect(r.errors.join(' ')).toContain(MAX_STR)
   })
 
   it('בדיוק המינימום — מתקבל', () => {

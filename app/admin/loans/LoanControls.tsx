@@ -20,7 +20,14 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
   defaulted: { label: 'לא מאושר',     cls: 'bg-red-100 text-red-800 hover:bg-red-200 border-red-200', icon: X },
 }
 
-export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boolean; familyApproved?: boolean }) {
+/**
+ * ⚠️ variant='buttons' מציג שני כפתורים מפורשים (אישור / דחייה) במקום
+ * תפריט נפתח. אותה לוגיקה בדיוק — רק המראה משתנה.
+ *
+ * הסיבה: בכרטסת ההחלטה היא הפעולה המרכזית, ותפריט נפתח מסתיר אותה מאחורי
+ * לחיצה נוספת. ברשימה, לעומת זאת, התפריט חוסך מקום בכל שורה.
+ */
+export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: Loan; advance?: boolean; familyApproved?: boolean; variant?: 'pill' | 'buttons' }) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -250,7 +257,38 @@ export function LoanStatusControl({ loan, advance }: { loan: Loan; advance?: boo
           </div>
         </div>
       )}
-      {canEdit ? (
+      {/* ── שני כפתורים מפורשים (כרטסת) ── */}
+      {/* ⚠️ גוונים רכים (50/700) ולא צבע מלא: זו פעולה בלתי הפיכה מבחינת
+          המשפחה, וכפתור צועק מזמין לחיצה מהירה. הצבע מבחין, לא מושך. */}
+      {canEdit && variant === 'buttons' ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* הסטטוס הנוכחי — כדי שיהיה ברור מה כבר הוחלט */}
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${pill.cls}`}>
+            <Icon size={13} /> {pill.label}
+          </span>
+
+          {!isApprovedLike && (
+            <button onClick={() => setStatus('approved')} disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-50 transition-colors">
+              {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+              אישור ההלוואה
+            </button>
+          )}
+          {!isRejectedLike && (
+            <button onClick={() => setStatus('rejected')} disabled={saving}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 transition-colors">
+              <X size={15} /> דחיית ההלוואה
+            </button>
+          )}
+          {/* ⚠️ שאר הפעולות (בירור, החזרה לממתין) נשארות בתפריט: הן
+              נדירות, וכפתור לכל אחת היה מטשטש את שתי ההחלטות העיקריות. */}
+          <button ref={btnRef} onClick={toggle} disabled={saving}
+            title="פעולות נוספות"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50 transition-colors">
+            <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      ) : canEdit ? (
         <button ref={btnRef} onClick={toggle} disabled={saving}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors disabled:opacity-60 ${pill.cls}`}>
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}

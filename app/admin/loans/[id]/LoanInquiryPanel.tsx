@@ -50,8 +50,34 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
     finally { setLoading(false) }
   }, [loanId])
 
-  useEffect(() => { void load() }, [load])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
+  // ⚠️ נדחה בטיק ומבוטל בניקוי: קריאה ישירה מעדכנת state בזמן רינדור,
+  // ומעבר מהיר מהמסך היה מנסה לעדכן רכיב מפורק.
+  useEffect(() => {
+    let alive = true
+    const t = setTimeout(() => { if (alive) void load() }, 0)
+    return () => { alive = false; clearTimeout(t) }
+  }, [load])
+
+  // 🔴 גלילה *בתוך* רשימת ההודעות בלבד — לא של הדף.
+  //
+  // ⚠️ scrollIntoView גורר את כל המסמך: כשהפאנל ישב בטאב נפרד זה לא
+  // הורגש, אבל מאז שהוא עמודה צדדית בכרטסת, כל טעינת הודעות גררה את
+  // הדף למטה בכניסה — והמשתמש מצא את עצמו באמצע הכרטסת בלי שנגע בכלום.
+  //
+  // ⚠️ הדילוג על הטעינה הראשונה מכוון: בכניסה רוצים לראות את *ראש*
+  // השרשור. הגלילה לתחתית נכונה רק כשהודעה חדשה נוספת בזמן צפייה.
+  const firstLoad = useRef(true)
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return }
+    // ⚠️ נדחה בטיק: הגלילה חייבת לרוץ אחרי שההודעות צוירו, אחרת
+    // scrollHeight עדיין משקף את הגובה הקודם.
+    const t = setTimeout(() => {
+      const box = endRef.current?.parentElement
+      // גלילה ידנית של המכל, בלי לגעת בגלילת הדף.
+      if (box) box.scrollTop = box.scrollHeight
+    }, 0)
+    return () => clearTimeout(t)
+  }, [msgs])
 
   // רענון חי — תשובה שנקלטת במייל מופיעה כאן תוך שניות, בלי לרענן את הדף.
   // גם מיד עם חזרה ללשונית, כדי שלא יהיה עיכוב עד לטיק הבא.

@@ -15,7 +15,7 @@ import { ViewDocButton, downloadDocDirect } from '@/components/ui/DocViewer'
 import SignaturePad from '@/components/ui/SignaturePad'
 import { useDocTypes } from '@/lib/useDocTypes'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
-import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS } from '@/lib/emailRequestForms'
+import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import { composeLineageName, findTitles } from '@/lib/lineageNameFormat'
 import EditableText, { EditProvider } from './EditableText'
@@ -1663,6 +1663,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // מחליף את הזיהוי — המשפחה עדיין מתחברת בת"ז + קוד ונרשמת כעצמה.
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [docsGateModal, setDocsGateModal] = useState(false)
+  // בקשת הלוואה פתוחה — חוסמת הגשת בקשה נוספת עד לקבלת החלטה.
+  // ⚠️ תצוגה בלבד; האכיפה בשרת (loan-request מחזיר 409). המסך רק חוסך
+  // למשתמש למלא טופס שלם ורק אז לגלות שהוא נדחה.
+  const [openLoanNotice, setOpenLoanNotice] = useState<{ message: string; since?: string } | null>(null)
+  const [openLoanModal, setOpenLoanModal] = useState(false)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
@@ -2773,7 +2778,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       setError('אנא מלא את כל שדות החובה')
       return
     }
-    if (Number(loanForm.amount) > 30000) { setError('הסכום המרבי הוא 30,000 ₪'); return }
+    if (Number(loanForm.amount) > LOAN_MAX_AMOUNT) { setError(`הסכום המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')}$`); return }
     if (Number(loanForm.installments) > 60) { setError('מספר התשלומים המרבי הוא 60'); return }
     if (loanForm.purpose && loanForm.purpose !== WEDDING_PURPOSE && !loanForm.purpose_details.trim()) { setError('אנא פרט את מטרת ההלוואה'); return }
     if (loanForm.purpose === WEDDING_PURPOSE && !loanWeddingFile) { setError('יש לצרף הזמנה של החתונה'); return }
@@ -2859,6 +2864,26 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     } catch { setError('שגיאת רשת. אנא נסה שוב.') }
     setLoading(false)
   }
+
+  // בדיקת בקשת הלוואה פתוחה — נטענת ברגע שיש מוטב מזוהה בסשן, כדי שההתראה
+  // תהיה מוכנה לפני שהמשתמש לוחץ על "בקשת הלוואה".
+  const beneficiaryId = beneficiary?.id
+  // ⚠️ אין setState סינכרוני בגוף ה-effect (react-hooks/set-state-in-effect).
+  // גם אין צורך: בלי סשן ה-API מחזיר openLoan:false, וה-.then מאפס ממילא.
+  useEffect(() => {
+    if (!beneficiaryId) return
+    let cancelled = false
+    fetch('/api/portal/open-loan')
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return
+        // ⚠️ מאפס גם כשאין בקשה פתוחה: אחרת התראה של משתמש קודם הייתה
+        // נשארת על המסך אחרי החלפת משתמש באותו דפדפן.
+        setOpenLoanNotice(d?.openLoan ? { message: d.message, since: d.since } : null)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [beneficiaryId])
 
   // ─── Status badge ───
   const isPending = beneficiary?.eligibility_status === 'pending' || beneficiary?.eligibility_status === 'review'
@@ -3009,6 +3034,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const goToLoanForm = () => {
     if (!gateAllows('gemach', 'גמ"ח ההלוואות')) return
     if (isDocsPending) { setDocsGateModal(true); return }
+    // ⚠️ לפני הטופס ולא אחריו: הבקשה הפתוחה חוסמת ממילא בשרת, ואין טעם
+    // לתת למשפחה למלא סכום, תשלומים ומסמכים כדי לקבל דחייה בסוף.
+    if (openLoanNotice) { setOpenLoanModal(true); return }
     setError('')
     setLoanForm({ amount: '', installments: '', purpose: '', purpose_details: '', declaration: '', notes: '' })
     setDocFiles({})
@@ -5828,8 +5856,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div className="col-span-2 sm:col-span-1">
                     <Field label={<EditableText k="loan.amount.label" />} required hint={<EditableText k="loan.amount.hint" />}>
                       <TextInput
-                        type="number" min="100" max="30000" step="100"
-                        value={loanForm.amount} onChange={setLoanClamped('amount', 30000)}
+                        type="number" min="100" max={LOAN_MAX_AMOUNT} step="100"
+                        value={loanForm.amount} onChange={setLoanClamped('amount', LOAN_MAX_AMOUNT)}
                         placeholder="5000" required
                       />
                     </Field>
@@ -6051,6 +6079,36 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <button type="button" onClick={() => setDocsGateModal(false)}
                 className="text-sm text-slate-500 hover:text-slate-700 underline self-center">
                 סגירה
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── בקשת הלוואה פתוחה — אין להגיש בקשה נוספת ─── */}
+      {openLoanModal && openLoanNotice && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
+          onClick={() => setOpenLoanModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-sky-200 w-full max-w-md overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            <div className="bg-sky-50 border-b border-sky-200 px-6 py-5 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-sky-100 flex items-center justify-center mx-auto mb-3">
+                <Clock size={26} className="text-sky-600" />
+              </div>
+              <h2 className="text-lg font-bold text-sky-900">בקשה קיימת בתהליך בירור</h2>
+            </div>
+            <div className="p-6 flex flex-col gap-4">
+              <p className="text-sm text-slate-600 leading-relaxed text-center">
+                {openLoanNotice.message}
+              </p>
+              {openLoanNotice.since && (
+                <p className="text-xs text-slate-500 text-center">
+                  הבקשה הוגשה בתאריך {new Date(openLoanNotice.since).toLocaleDateString('he-IL')}
+                </p>
+              )}
+              <button type="button" onClick={() => setOpenLoanModal(false)}
+                className="w-full bg-gradient-to-b from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(14,165,233,0.55)]">
+                הבנתי
               </button>
             </div>
           </div>

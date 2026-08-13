@@ -9,6 +9,7 @@ import {
   draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
 import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
+import { findOpenLoan, openLoanEmailReason } from './openLoanGuard'
 
 // מיפוי סוג בקשה → מחלקה (שער), כדי לדעת אם המחלקה פתוחה כרגע.
 // משמש גם את חסימת הקליטה (מחלקה סגורה) וגם את בניית קישורי הטיוטה.
@@ -260,6 +261,17 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
           ? 'הבקשה ללידה זו כבר אושרה.'
           : 'כבר הגשתם בקשה ללידה זו, הבקשה בטיפול ותקבלו על כך עדכון בהקדם.',
       ], idNumber, ctx, ben)
+      return true
+    }
+  }
+
+  // ⚠️ מניעת בקשת הלוואה כפולה — כמו בלידה, גם כאן שתי בקשות פתוחות לאותו
+  // אדם הן תקלה ולא מצב לגיטימי. הבודק משותף לפורטל ולמייל כדי ששני הערוצים
+  // לא יגדירו "בקשה פתוחה" אחרת זה מזה.
+  if (type === 'loan') {
+    const openLoan = await findOpenLoan(admin, ben.id)
+    if (openLoan) {
+      await reject(from, name, type, [openLoanEmailReason(openLoan)], idNumber, ctx, ben)
       return true
     }
   }

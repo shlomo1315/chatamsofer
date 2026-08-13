@@ -155,11 +155,22 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
       )}
 
       {/* היסטוריית הלוואות */}
+      {/* ⚠️ מהבהב רק כשיש היסטוריה: זו העובדה שצריך לשים לב אליה — משפחה
+          שכבר קיבלה או ביקשה בעבר. על בקשה ראשונה ההבהוב היה רעש. */}
       {section !== 'family' && (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
-          <Banknote size={16} className="text-emerald-600" />
-          <h3 className="font-semibold text-slate-900 text-sm">היסטוריית הלוואות</h3>
+      <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
+        loanHistory.count > 0 ? 'border-amber-300 animate-soft-attention' : 'border-slate-200'
+      }`}>
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Banknote size={16} className="text-emerald-600" />
+            <h3 className="font-semibold text-slate-900 text-sm">היסטוריית הלוואות</h3>
+          </div>
+          {loanHistory.count > 0 && (
+            <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[11px] font-extrabold text-amber-800">
+              {loanHistory.count} בקשות קודמות
+            </span>
+          )}
         </div>
 
         {loanHistory.count === 0 ? (

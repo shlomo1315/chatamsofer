@@ -7,7 +7,7 @@ export type ReqType = 'birth' | 'silent_birth' | 'loan' | 'financial_aid' | 'wid
 
 // ── קבועי הלוואה — מקור אמת יחיד לפורטל, לטופס המייל ולמסכי הניהול ──
 export const LOAN_MIN_AMOUNT = 1_000
-export const LOAN_MAX_AMOUNT = 30_000
+export const LOAN_MAX_AMOUNT = 10_000
 export const LOAN_MAX_INSTALLMENTS = 60
 
 // חלון ה*הגשה*: 30 יום מהלידה.
@@ -431,8 +431,8 @@ export function validateRequest(type: ReqType, values: Record<string, string>, c
     if (!amount || amount <= 0) errors.push('סכום ההלוואה חסר או לא תקין')
     // המינימום נאכף כי הטופס מבטיח "בין 1,000 ל-30,000" — בלי האכיפה,
     // סכום נמוך יותר היה מתקבל והטופס היה משקר.
-    else if (amount < LOAN_MIN_AMOUNT) errors.push(`סכום ההלוואה המזערי הוא ${LOAN_MIN_AMOUNT.toLocaleString('en-US')} ₪`)
-    else if (amount > LOAN_MAX_AMOUNT) errors.push(`סכום ההלוואה המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')} ₪`)
+    else if (amount < LOAN_MIN_AMOUNT) errors.push(`סכום ההלוואה המזערי הוא ${LOAN_MIN_AMOUNT.toLocaleString('en-US')}$`)
+    else if (amount > LOAN_MAX_AMOUNT) errors.push(`סכום ההלוואה המרבי הוא ${LOAN_MAX_AMOUNT.toLocaleString('en-US')}$`)
     else data.amount = amount
 
     const inst = parseInt((values.installments ?? '').replace(/[^\d]/g, ''), 10)

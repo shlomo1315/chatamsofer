@@ -103,7 +103,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <LoanStatusControl loan={loan} advance familyApproved={familyApproved} />
+          <LoanStatusControl loan={loan} advance familyApproved={familyApproved} variant="buttons" />
           <Link href={`/admin/loans/${loan.id}/edit`}>
             <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה
@@ -260,7 +260,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                   <p className="text-sm font-bold text-slate-800">החלטה על הבקשה</p>
                   <p className="text-xs text-slate-500 mt-0.5">אישור או דחייה — סיבת הדחייה תישמר ותוצג בבקשה הבאה</p>
                 </div>
-                <LoanStatusControl loan={loan} advance familyApproved={familyApproved} />
+                <LoanStatusControl loan={loan} advance familyApproved={familyApproved} variant="buttons" />
               </div>
             </Card>
           </section>
