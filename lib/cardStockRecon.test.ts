@@ -81,8 +81,34 @@ describe('reconcileStock', () => {
   it('הפילוח מסכם כל תנועה, כולל התאמות', () => {
     const r = reconcileStock([restock(200), restock(100), birth('a'), refund('a')], [approved('a')])
     expect(r.byReason.find(l => l.reason === 'restock')).toMatchObject({ count: 2, total: 300 })
+    // ⚠️ הפילוח לפי סיבה עדיין מציג *כל* תנועה, כולל ההחזרה — הוא נועד
+    // לתחקור ולא לספירה.
     expect(r.byReason.find(l => l.reason === 'adjust')).toMatchObject({ count: 1, total: 1 })
-    expect(r.totalIn).toBe(301)
+  })
+
+  it('🔴 "נקנו" סופר רכישות בלבד — החזרה אינה קנייה', () => {
+    // הוכנסו 300 כרטיסים. אחד נוכה ללידה, נכשל, והוחזר.
+    // totalIn חייב להישאר 300: ההחזרה מבטלת ניכוי, היא אינה רכישה.
+    //
+    // 🔴 זה קרה בייצור: ארבעה תיקי דרכון נוכו והוחזרו כל שעה במשך יממה,
+    // וכל החזרה הוסיפה ל"נקנו". המנהל הכניס 300 וראה 295 — מספר שאינו
+    // קיים בשום מקום במציאות.
+    const r = reconcileStock([restock(200), restock(100), birth('a'), refund('a')], [approved('a')])
+    expect(r.totalIn).toBe(300)
+  })
+
+  it('🔴 החזרה מקזזת את הניכוי ואינה מנפחת את "נמסרו"', () => {
+    // ניכוי + החזרה = אפס נטו. שניהם חייבים להתאזן, אחרת "נמסרו" מדווח
+    // כרטיסים שלא נמסרו לאיש.
+    const r = reconcileStock([restock(300), birth('a'), refund('a')], [approved('a')])
+    expect(r.totalIn).toBe(300)
+    expect(r.totalOut).toBe(0)
+    expect(r.balance).toBe(300)
+  })
+
+  it('הזהות "פתיחה + נכנס − יצא = מלאי" נשמרת גם עם החזרות', () => {
+    const r = reconcileStock([restock(300), birth('a'), refund('a'), birth('b')], [approved('a'), approved('b')])
+    expect(r.opening + r.totalIn - r.totalOut).toBe(r.balance)
   })
 
   it('ניכוי לידה שאיבד את הקישור לתיק (התיק נמחק) נספר בנפרד ומסכם את הפער', () => {

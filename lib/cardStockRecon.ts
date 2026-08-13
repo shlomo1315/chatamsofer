@@ -221,8 +221,25 @@ export function reconcileStock(ledger: ReconLedgerRow[], aids: ReconAid[]): Stoc
 
   for (const row of rows) {
     const delta = Number(row.delta) || 0
-    if (delta > 0) totalIn += delta
+    const reasonKey = row.reason ?? 'adjust'
+
+    // 🔴 "נקנו" סופר רכישות בלבד — לא החזרות.
+    //
+    // ⚠️ הבאג שהיה כאן: כל תנועה חיובית נספרה כ"נכנס", כולל החזרה של
+    // כרטיס שנוכה ונכשל ("החזרה אוטומטית — טעינת נדרים נכשלה"). החזרה
+    // אינה קנייה — היא ביטול של ניכוי, ושתיהן יחד מתאזנות לאפס.
+    //
+    // 🔴 בפועל זה עיוות את המספר בגלוי: ארבעה תיקי דרכון נוכו והוחזרו
+    // *כל שעה* במשך יממה, וכל החזרה כזו הוסיפה ל"נקנו". המנהל הכניס 300
+    // וראה 295 — מספר שאינו קיים בשום מקום במציאות.
+    //
+    // ⚠️ ההחזרה עדיין נספרת ב-totalOut *השלילי* דרך הקיזוז ב-netByAid,
+    // ולכן הזהות "פתיחה + נכנס − יצא = מלאי" נשמרת. רק הסיווג השתנה.
+    const isReturn = delta > 0 && reasonKey === 'adjust' && !!row.aid_id
+    if (delta > 0) { if (!isReturn) totalIn += delta }
     else totalOut += -delta
+    // החזרה מקזזת את הניכוי שקדם לה, ולכן מופחתת מהיוצא ולא מתווספת לנכנס.
+    if (isReturn) totalOut -= delta
 
     const reason = row.reason ?? 'adjust'
     const line = reasonMap.get(reason) ?? { reason, count: 0, total: 0 }
