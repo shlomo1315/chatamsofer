@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
-import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, Ghost, GitMerge } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge } from 'lucide-react'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
@@ -2370,6 +2371,13 @@ export default function LineagePage() {
             style={{ background: showUnlinked ? '#D97706' : '#fff', color: showUnlinked ? '#fff' : '#B45309', border: '1px solid #FDE68A' }}>
             <Link2 size={14} /> {showUnlinked ? 'סגור ללא שיוך' : 'ללא שיוך לעץ'}
           </button>
+          {/* ⚠️ משפחות שאושרו ללא החלטה מתועדת — אישור צומת בעץ מקדם
+              אוטומטית כל משפחה שהשרשרת שלה מאומתת, כולל כאלה שאיש לא בדק.
+              מסך נפרד כי זו החלטת זכאות, לא תחזוקת עץ. */}
+          <Link href="/admin/lineage/auto-approved"
+            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm bg-white text-amber-700 border border-amber-300 hover:bg-amber-50">
+            <ShieldAlert size={14} /> אישורים ללא תיעוד
+          </Link>
           {/* צמתי רפאים — צמתים שנוצרו משדה הילדים של כרטסת ולא מאדם שנרשם.
               מסך סריקה בלבד: קודם רואים כמה יש ומי הם, ורק אחר כך מחליטים. */}
           <button onClick={() => setShowGhosts(s => !s)}

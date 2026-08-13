@@ -168,7 +168,23 @@ export default function IndexSyncPage() {
     try {
       const res = await fetch('/api/admin/gmail/watch', { method: on ? 'POST' : 'DELETE' })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(json.error ?? 'הפעולה נכשלה'); return }
+
+      // ⚠️ הראוט מחזיר 200 גם כשחלק מהתיבות נכשלו (הצלחה חלקית). בדיקת
+      // res.ok בלבד הסתירה את הכשל, והמסך הציג "כבוי" בלי הסבר.
+      const results = Array.isArray(json.results) ? json.results as { email: string; ok: boolean; error?: string }[] : []
+      const failed = results.filter(r => !r.ok)
+
+      if (!res.ok) {
+        setError(json.error ?? 'הפעולה נכשלה')
+      } else if (failed.length) {
+        // ⚠️ מציגים את שגיאת גוגל *כלשונה*: היא אומרת בדיוק מה לתקן
+        // ("Invalid topicName…"), ו"הפעולה נכשלה" גורף שלח אותנו לנחש.
+        setError(`${failed.length} תיבות נכשלו · ${failed[0].error ?? 'שגיאה לא ידועה'}`)
+      }
+
+      // 🔴 טוענים מחדש *תמיד*, גם בכישלון חלקי: תיבה אחת שהצליחה חייבת
+      // להופיע כפעילה. יציאה מוקדמת השאירה את המסך על המצב הישן, ולכן
+      // הוא הראה "כבוי" אחרי הפעלה שהצליחה.
       await load()
     } catch { setError('שגיאת רשת') } finally { setWatchBusy(false) }
   }
