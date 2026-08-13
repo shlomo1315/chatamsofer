@@ -114,7 +114,68 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'שגיאה בשמירת הטיוטה' }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, loanId: data?.id ?? null })
+  const loanId = data?.id ? String(data.id) : null
+  if (loanId) void sendRabbiFormMail(admin, loanId, sessionId, parsedAmount, parsedInstallments)
+
+  return NextResponse.json({ ok: true, loanId })
+}
+
+/**
+ * שולח למבקש את המייל שנושא את טופס חתימת הרב.
+ *
+ * ⚠️ המייל אינו רק נוחות: הוא ההודעה שאליה המבקש *משיב* עם הטופס החתום,
+ * וכותרות השרשור של התשובה הן הדרך הנקייה לזהות לאיזו בקשה הוא שייך.
+ * בלי המייל הזה אין למבקש שרשור להשיב אליו כלל.
+ *
+ * ⚠️ לא חוסם את הבקשה: המבקש מוריד את הטופס מהדפדפן ממילא, וכישלון
+ * שליחה לא אמור למנוע ממנו להתקדם.
+ */
+async function sendRabbiFormMail(
+  admin: ReturnType<typeof getAdminClient>,
+  loanId: string,
+  beneficiaryId: string,
+  amount: number,
+  installments: number,
+) {
+  if (!admin) return
+  try {
+    const { data: ben } = await admin
+      .from('beneficiaries')
+      .select('email, family_name, full_name, id_number')
+      .eq('id', beneficiaryId)
+      .maybeSingle()
+    if (!ben?.email) return
+
+    const { buildRabbiFormPdf } = await import('@/lib/rabbiFormPdf')
+    const { rabbiFormEmail } = await import('@/lib/emailTemplates')
+    const { loanFormCode } = await import('@/lib/rabbiFormReturn')
+    const { deliverMail } = await import('@/lib/sendMail')
+    const { mailFor } = await import('@/lib/departments')
+
+    const code = loanFormCode(loanId)
+    const mail = rabbiFormEmail({
+      familyName: ben.family_name,
+      applicantName: ben.full_name,
+      amount,
+      code,
+    })
+
+    const pdf = await buildRabbiFormPdf({
+      applicantName: [ben.family_name, ben.full_name].filter(Boolean).join(' '),
+      idNumber: String(ben.id_number ?? ''),
+      amount,
+      installments,
+      lineage: [],
+    })
+
+    await deliverMail(ben.email, mail.subject, mail.html, [{
+      filename: 'טופס-חתימת-רב.pdf',
+      mimeType: 'application/pdf',
+      contentB64: Buffer.from(pdf).toString('base64'),
+    }], mailFor('gemach'))
+  } catch (e) {
+    console.error('[loan-draft] שליחת טופס חתימת רב נכשלה:', e)
+  }
 }
 
 /** PUT — העלאת הטופס החתום. הטיוטה הופכת לבקשה שממתינה לטיפול. */

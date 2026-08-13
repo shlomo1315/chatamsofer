@@ -1907,3 +1907,97 @@ export function emailVerifyRequestEmail(
     html: shell({ preheader: t('preheader'), accent: '#6366f1', title: t('title'), subtitle: t('subtitle'), body }),
   }
 }
+
+// ─── טופס חתימת רב — המייל שנושא את הטופס להחתמה ──────────────────────────────
+//
+// 🔴 המייל הזה נושא שתי הוראות שבלעדיהן הטופס חוזר ולא נקלט:
+//   1. חובה להשיב *לאותה הודעה* — כך נשמרות כותרות השרשור, וזו הדרך
+//      הנקייה לקשר את הטופס החוזר לבקשה.
+//   2. הסריקה חייבת להיות ישרה וברורה — טופס עקום או מטושטש אינו קריא
+//      ואינו יכול לשמש כאסמכתה חתומה.
+//
+// ⚠️ ההוראות מודגשות ויזואלית ולא נטמעות בפסקה: מי שמקבל מייל עם קובץ
+// מצורף סורק אותו בעיניים ומחפש את הקובץ. הוראה שנקברת בטקסט רץ פשוט
+// לא נקראת, והטופס חוזר בדרך הלא נכונה.
+export function rabbiFormEmail(opts: {
+  familyName?: string | null
+  applicantName?: string | null
+  amount?: number | null
+  code: string
+}): BuiltEmail {
+  const who = [opts.familyName, opts.applicantName].filter(Boolean).join(' ')
+  const greeting = who ? `לכבוד משפחת ${escapeHtml(who)},` : 'שלום וברכה,'
+  const amountLine = opts.amount != null
+    ? `<p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.9;">
+         בקשתכם להלוואה על סך
+         <strong style="color:#0f172a;">${Math.round(Number(opts.amount)).toLocaleString('en-US')}$</strong>
+         נשמרה במערכת וממתינה לטופס חתימת הרב.
+       </p>`
+    : ''
+
+  const body = `
+    <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">${greeting}</p>
+    ${amountLine}
+
+    <p style="margin:0 0 22px;color:#334155;font-size:15px;line-height:1.9;">
+      מצורף למייל זה טופס חתימת רב. יש להדפיס אותו, להחתים את הרב, ולהחזירו אלינו לפי ההוראות שלהלן.
+    </p>
+
+    <!-- 🔴 הוראה 1 — השבה לאותה הודעה -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:14px;padding:20px 22px;">
+        <p style="margin:0 0 10px;color:#991b1b;font-size:16px;font-weight:900;">
+          חובה להשיב לְהודעה זו בלבד
+        </p>
+        <p style="margin:0 0 12px;color:#7f1d1d;font-size:14px;line-height:1.85;">
+          לאחר החתמת הרב, לחצו על <strong>"השב" (Reply)</strong> על המייל הזה עצמו, וצרפו את הטופס הסרוק.
+        </p>
+        <p style="margin:0;color:#7f1d1d;font-size:14px;line-height:1.85;">
+          <strong>אין לפתוח מייל חדש</strong> ואין לשלוח לכתובת אחרת — רק כך המערכת מזהה
+          לאיזו בקשה הטופס שייך. טופס שיישלח בהודעה חדשה לא ישויך לבקשתכם.
+        </p>
+      </td></tr>
+    </table>
+
+    <!-- מזהה הבקשה — עוגן גיבוי לזיהוי -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;text-align:center;">
+        <p style="margin:0 0 6px;color:#64748b;font-size:13px;">מספר הבקשה שלכם</p>
+        <p style="margin:0;color:#0f172a;font-size:22px;font-weight:900;letter-spacing:2px;" dir="ltr">#${escapeHtml(opts.code)}</p>
+        <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;">
+          המספר מופיע בשורת הנושא — אין למחוק אותו כאשר משיבים.
+        </p>
+      </td></tr>
+    </table>
+
+    <!-- 🔴 הוראה 2 — איכות הסריקה -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:20px 22px;">
+        <p style="margin:0 0 10px;color:#92400e;font-size:16px;font-weight:900;">
+          הסריקה חייבת להיות ישרה וברורה
+        </p>
+        <p style="margin:0 0 10px;color:#78350f;font-size:14px;line-height:1.85;">
+          סרקו את הטופס <strong>ישר, ללא הטיה וללא עיוות</strong>, בתאורה טובה ובאיכות גבוהה.
+          יש לוודא שכל הפרטים <strong>וחתימת הרב</strong> נראים בבירור.
+        </p>
+        <p style="margin:0;color:#78350f;font-size:14px;line-height:1.85;">
+          <strong>טופס עקום, חתוך, מטושטש או חלקי — לא ייקלט,</strong> והבקשה תעוכב עד לקבלת סריקה תקינה.
+        </p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;">
+      הבקשה תיכנס לטיפול רק לאחר קבלת הטופס החתום. בכל שאלה — ניתן להשיב להודעה זו.
+    </p>`
+
+  return {
+    subject: `טופס חתימת רב · בקשת הלוואה #${opts.code}`,
+    html: shell({
+      preheader: 'חובה להשיב להודעה זו בלבד, עם הטופס החתום סרוק ישר וברור',
+      accent: '#4f46e5',
+      title: 'טופס חתימת רב',
+      subtitle: 'גמ״ח היכל החתם סופר',
+      body,
+    }),
+  }
+}

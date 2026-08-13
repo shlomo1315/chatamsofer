@@ -859,6 +859,51 @@ export async function POST(request: NextRequest) {
         console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
       }
 
+      // ── החזרת טופס חתימת רב חתום ──
+      //
+      // 🔴 שלוש שכבות זיהוי (ראה lib/rabbiFormReturn.ts): כותרות שרשור,
+      // קוד בנושא, וכתובת השולח. שכבה אחת לא הספיקה — Google Workspace
+      // עושה dual-delivery ו"אוכל" כותרות, וכך בדיוק אבדו משובי בתי
+      // ההחלמה. הקוד גלוי בנושא ולכן שורד גם כשהכותרות לא.
+      {
+        const { looksLikeRabbiFormReturn, findLoanForReturnedForm } =
+          await import('@/lib/rabbiFormReturn')
+
+        if (looksLikeRabbiFormReturn(subject)) {
+          const doc = attachments.find(a =>
+            a.url && /pdf|image\//i.test(a.mimeType ?? ''))
+
+          if (!doc?.url) {
+            // ⚠️ נרשם כשגיאה: המבקש השיב, אבל בלי קובץ — הבקשה תקועה
+            // והוא אינו יודע. זה חייב להיות נראה בלוגים.
+            console.error(`[resend-inbound] 🔴 החזרת טופס חתימת רב בלי קובץ מצורף — ${from.email}`)
+          } else {
+            const match = await findLoanForReturnedForm(admin, from.email, subject)
+            if (match) {
+              const { error: upErr } = await admin
+                .from('loans')
+                .update({
+                  rabbi_form_url: doc.url,
+                  rabbi_form_uploaded_at: new Date().toISOString(),
+                  status: 'pending',
+                })
+                .eq('id', match.loanId)
+                .eq('status', 'awaiting_rabbi_form')
+
+              if (!upErr) {
+                console.log(`[resend-inbound] טופס חתימת רב נקלט (${match.matchedBy}) → ${match.loanId}`)
+                return NextResponse.json({ ok: true, routed: 'rabbi_form' })
+              }
+              console.error('[resend-inbound] שמירת טופס חתימת רב נכשלה:', upErr.message)
+            } else {
+              console.error(
+                `[resend-inbound] 🔴 טופס חתימת רב חזר אך לא שויך — ${from.email}, נושא: ${subject}`,
+              )
+            }
+          }
+        }
+      }
+
       // 🔴 מסלול 2 — זיהוי לפי נושא + שולחת, כשהטוקן אבד.
       //
       // ⚠️ Google Workspace עושה dual-delivery ו"אוכל" את office+s<token>@,
