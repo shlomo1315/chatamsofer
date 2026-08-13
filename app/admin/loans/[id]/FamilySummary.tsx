@@ -41,7 +41,7 @@ const STATUS_HE: Record<string, string> = {
   active: 'פעיל', completed: 'הושלם', rejected: 'נדחה', defaulted: 'בפיגור',
 }
 
-const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
+const fmtCur = (n: number) => `$${Math.round(n).toLocaleString('he-IL')}`
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('he-IL')
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
@@ -54,7 +54,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export default function FamilySummary({ loanId }: { loanId: string }) {
+export default function FamilySummary({ loanId, section = 'all' }: { loanId: string; section?: 'all' | 'family' | 'history' }) {
   const [data, setData] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -81,6 +81,7 @@ export default function FamilySummary({ loanId }: { loanId: string }) {
   return (
     <div className="flex flex-col gap-4">
       {/* פרטי המשפחה */}
+      {section !== 'history' && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -151,8 +152,10 @@ export default function FamilySummary({ loanId }: { loanId: string }) {
           </div>
         )}
       </div>
+      )}
 
       {/* היסטוריית הלוואות */}
+      {section !== 'family' && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
           <Banknote size={16} className="text-emerald-600" />
@@ -198,6 +201,7 @@ export default function FamilySummary({ loanId }: { loanId: string }) {
           </>
         )}
       </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-import { X, Download, FileText, Loader2, ExternalLink } from 'lucide-react'
+import { X, Download, FileText, Loader2, ExternalLink, ChevronRight, ChevronLeft } from 'lucide-react'
 import { loadDocBlob, openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import SafeDocImage from './SafeDocImage'
 import PdfCanvasView from './PdfCanvasView'
@@ -10,7 +10,7 @@ import PdfCanvasView from './PdfCanvasView'
 // לחיצה מחוץ לקובץ סוגרת · X בפינה השמאלית העליונה סוגר · Esc סוגר.
 type DocInfo = { url: string; name?: string | null }
 
-const DocViewerContext = createContext<(doc: DocInfo) => void>(() => {})
+const DocViewerContext = createContext<(doc: DocInfo & { gallery?: DocInfo[]; index?: number }) => void>(() => {})
 
 const isImageRef = (u?: string | null) => !!u && /\.(png|jpe?g|gif|webp|bmp|heic|heif|svg)(\?|#|$)/i.test(u)
 const isPdfRef = (u?: string | null) => !!u && /\.pdf(\?|#|$)/i.test(u)
@@ -92,18 +92,46 @@ function PdfInlineView({ url, name }: { url: string; name?: string | null }) {
 
 export function DocViewerProvider({ children }: { children: React.ReactNode }) {
   const [doc, setDoc] = useState<DocInfo | null>(null)
-  const open = useCallback((d: DocInfo) => { if (d?.url) setDoc(d) }, [])
-  const close = useCallback(() => setDoc(null), [])
+  // ⚠️ הגלריה נשמרת בנפרד מהמסמך הפתוח: היא מגיעה מהקורא (רשימת המסמכים
+  // של אותה בקשה), והמסמך הפתוח הוא רק המצביע לתוכה.
+  const [gallery, setGallery] = useState<DocInfo[]>([])
+  const [index, setIndex] = useState(0)
 
-  // Esc לסגירה + חסימת גלילת רקע כל עוד המודל פתוח
+  const open = useCallback((d: DocInfo & { gallery?: DocInfo[]; index?: number }) => {
+    if (!d?.url) return
+    setDoc({ url: d.url, name: d.name })
+    setGallery(Array.isArray(d.gallery) ? d.gallery : [])
+    setIndex(typeof d.index === 'number' ? d.index : 0)
+  }, [])
+  const close = useCallback(() => { setDoc(null); setGallery([]); setIndex(0) }, [])
+
+  // ⚠️ ניווט מעגלי: מהאחרון לראשון ולהפך. מסך שנתקע בקצה מחייב לחזור
+  // אחורה ידנית, וזה בדיוק מה שהניווט נועד לחסוך.
+  const go = useCallback((delta: number) => {
+    setIndex(prev => {
+      if (gallery.length < 2) return prev
+      const next = (prev + delta + gallery.length) % gallery.length
+      const target = gallery[next]
+      if (target?.url) setDoc({ url: target.url, name: target.name })
+      return next
+    })
+  }, [gallery])
+
+  // Esc לסגירה · חצים לניווט · חסימת גלילת רקע כל עוד המודל פתוח
   useEffect(() => {
     if (!doc) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return }
+      // 🔴 היפוך כיוון ב-RTL: החץ *שמאלה* מקדם למסמך הבא, כי בעברית
+      // הרשימה נקראת מימין לשמאל. הכיוון ההפוך היה מרגיש שבור.
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(1) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(-1) }
+    }
     window.addEventListener('keydown', onKey)
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prevOverflow }
-  }, [doc, close])
+  }, [doc, close, go])
 
   // זיהוי סוג הקובץ — לפי השם *וגם* לפי הכתובת. חלק מהקוראים מעבירים תווית
   // בעברית ללא סיומת ("מסמך מצורף", "מסמך 1"), ואז רק הכתובת מעידה על הסוג;
@@ -133,6 +161,37 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
           >
             <X size={24} />
           </button>
+
+          {/* ── ניווט בין מסמכים ── */}
+          {/* ⚠️ מוצג רק כשיש יותר מאחד: חצים על מסמך בודד הם רעש שמרמז
+              שיש עוד משהו לראות. */}
+          {gallery.length > 1 && (
+            <>
+              {/* ⚠️ החץ הימני חוזר אחורה והשמאלי מתקדם — כיוון הקריאה
+                  בעברית, וזהה למה שהמקלדת עושה. */}
+              <button
+                onClick={e => { e.stopPropagation(); go(-1) }}
+                title="המסמך הקודם (חץ ימינה)"
+                aria-label="המסמך הקודם"
+                className="absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/90 text-slate-700 hover:bg-white shadow-lg transition-colors"
+              >
+                <ChevronRight size={26} />
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); go(1) }}
+                title="המסמך הבא (חץ שמאלה)"
+                aria-label="המסמך הבא"
+                className="absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/90 text-slate-700 hover:bg-white shadow-lg transition-colors"
+              >
+                <ChevronLeft size={26} />
+              </button>
+
+              {/* מונה מיקום — כדי לדעת כמה עוד נשארו */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full bg-black/70 px-3.5 py-1.5 text-xs font-bold text-white ltr-num">
+                {index + 1} / {gallery.length}
+              </div>
+            </>
+          )}
 
           {/* הקובץ עצמו — עצירת בועה כדי שלחיצה עליו לא תסגור */}
           <div onClick={e => e.stopPropagation()} className="relative flex items-center justify-center w-full max-w-5xl max-h-[90vh]">
@@ -174,20 +233,24 @@ export function useDocViewer() {
 
 // כפתור/קישור "צפייה" מוכן שפותח את המסמך בחלונית קופצת (במקום לשונית חדשה).
 export function ViewDocButton({
-  url, name, label = 'צפייה', className = '', children,
+  url, name, label = 'צפייה', className = '', children, gallery, index,
 }: {
   url: string | null | undefined
   name?: string | null
   label?: string
   className?: string
   children?: React.ReactNode
+  /** רשימת המסמכים לניווט בחצים. אופציונלי — בלעדיה אין ניווט. */
+  gallery?: DocInfo[]
+  /** מיקום המסמך הנוכחי בגלריה. */
+  index?: number
 }) {
   const openDoc = useDocViewer()
   if (!url) return null
   return (
     <button
       type="button"
-      onClick={e => { e.stopPropagation(); openDoc({ url, name }) }}
+      onClick={e => { e.stopPropagation(); openDoc({ url, name, gallery, index }) }}
       className={className || 'inline-flex items-center gap-1.5 text-xs font-medium text-indigo-700 hover:text-white hover:bg-indigo-600 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-600 transition-colors'}
     >
       {children ?? (<><FileText size={14} /> {label}</>)}

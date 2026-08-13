@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare } from 'lucide-react'
+import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare, Banknote } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
@@ -74,6 +74,21 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   // הלווה = הבעל (full_name); אם אין בעל, האישה (spouse_name)
   const borrower = b ? ([b.family_name, b.full_name || b.spouse_name].filter(Boolean).join(' ') || b.full_name) : undefined
 
+  // ⚠️ הגלריה כוללת גם את המסמכים המצורפים וגם את צילומי הת"ז: מבחינת
+  // המזכירות זו רשימה אחת שעוברים עליה, וההפרדה לשני כרטיסים היא תצוגה
+  // בלבד. גלריות נפרדות היו עוצרות את הניווט באמצע.
+  const docGallery = [
+    ...(Array.isArray(loan.document_urls)
+      ? loan.document_urls.map((d, i) => ({ url: d.url, name: d.name || `מסמך ${i + 1}` }))
+      : []),
+    ...idDocs.filter(d => d.file_url).map(d => ({
+      url: d.file_url as string,
+      name: d.doc_type === 'id_husband' ? 'ת.ז. הבעל'
+        : d.doc_type === 'id_wife' ? 'ת.ז. האישה'
+        : (d.file_name ?? 'מסמך'),
+    })),
+  ]
+
   return (
     <div className="flex flex-col gap-5">
       {/* ⚠️ מוצגת לפני כל השאר: ההחלטה על הבקשה מתקבלת במסך הזה, וההתראה
@@ -100,137 +115,166 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
 
       {/* שער אישור המשפחה — אם טרם אושרה, מציג פרטים+ייחוס ומאפשר אישור ישיר; חוסם אישור בקשה לפני כן */}
       {b && <FamilyApprovalGate beneficiary={b} />}
+
       {/* ─────────────────────────────────────────────────────────────────
-          🔴 מסך אחד רציף, בלי טאבים.
-          
-          ⚠️ הטאבים הסתירו מידע שנדרש *יחד*: כדי להחליט על בקשה צריך לראות
-          את הפרטים, את הבירור מול המבקש ואת המסמכים באותו רגע. מעבר בין
-          טאבים הכריח לזכור מה היה בקודם.
-          
-          ⚠️ העליון בשני טורים: הפרטים תפסו חצי מסך והשאר עמד ריק. הבירור
-          — הדבר שמסתכלים בו הכי הרבה — נכנס לחצי הפנוי במקום להיות מוסתר.
+          🔴 פריסה: עמודת בירור קבועה בצד שמאל לכל גובה המסך, וכל השאר
+          בטור אחד לצידה.
+
+          ⚠️ הבירור אינו "עוד מקטע" אלא ההקשר שבו קוראים את כל השאר: מה
+          נשאל, מה ענו, ומה עוד חסר. כשהוא היה מקטע בגלילה, כל בדיקה של
+          פרט בבקשה הצריכה גלילה חזרה אליו.
+
+          ⚠️ sticky ולא רק grid: הטור הימני ארוך (סיכום, פרטים, היסטוריה,
+          מסמכים), ובלי ההצמדה הבירור נעלם מהמסך אחרי הגלילה הראשונה.
        ───────────────────────────────────────────────────────────────── */}
-      {/* ⚠️ שני אלה למעלה ובצמוד: כדי להחליט על בקשה צריך לראות את מצב
-          המשפחה ואת מה שנאמר לה — שניהם יחד ובלי גלילה. */}
-      <div className="grid gap-5 lg:grid-cols-2 items-start">
-        {/* ── טור ימין: סיכום המשפחה ── */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-violet-600">
-            <Users size={16} />
-            <h2 className="text-sm font-bold text-slate-700">סיכום המשפחה</h2>
-          </div>
-          <FamilySummary loanId={loan.id} />
+      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)] items-start">
+
+        {/* ── טור ימין: כל התוכן, בסדר העבודה ── */}
+        <div className="flex flex-col gap-5 min-w-0">
+
+          {/* 1 · סיכום המשפחה */}
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-violet-600">
+              <Users size={16} />
+              <h2 className="text-sm font-bold text-slate-700">סיכום המשפחה</h2>
+            </div>
+            <FamilySummary loanId={loan.id} section="family" />
+          </section>
+
+          {/* 2 · פרטי הלוואה + הערות */}
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-indigo-600 border-t border-slate-200 pt-5">
+              <CreditCard size={16} />
+              <h2 className="text-sm font-bold text-slate-700">פרטי הלוואה</h2>
+            </div>
+
+            <Card>
+              <div className="space-y-2 text-sm">
+                <p><span className="text-slate-500">סכום מבוקש: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
+                {loan.approved_amount != null && (
+                  <p><span className="text-slate-500">סכום שאושר: </span><span className="font-bold text-green-700 ltr-num">{fmtCur(loan.approved_amount)}</span></p>
+                )}
+                <p><span className="text-slate-500">מספר תשלומים: </span>{loan.installments}</p>
+                <p><span className="text-slate-500">מטרה: </span>{loan.purpose ?? '—'}</p>
+                {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}
+                {loan.declaration && <p><span className="text-slate-500">פנייה קודמת לגמ״ח: </span>{loan.declaration}</p>}
+                <p><span className="text-slate-500">תאריך הגשה: </span><span className="ltr-num">{fmtDate(loan.created_at)}</span></p>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center gap-2 mb-3">
+                {loan.disbursed_at
+                  ? <CheckCircle2 size={16} className="text-emerald-500" />
+                  : <Clock size={16} className="text-amber-500" />}
+                <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
+              </div>
+              {loan.disbursed_at ? (
+                <div className="space-y-1.5 text-sm">
+                  <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
+                  <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
+                  {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
+              )}
+            </Card>
+
+            {loan.notes && (
+              <Card>
+                <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{loan.notes}</p>
+              </Card>
+            )}
+          </section>
+
+          {/* 3 · היסטוריית הלוואות */}
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-emerald-600 border-t border-slate-200 pt-5">
+              <Banknote size={16} />
+              <h2 className="text-sm font-bold text-slate-700">היסטוריית הלוואות</h2>
+            </div>
+            <FamilySummary loanId={loan.id} section="history" />
+          </section>
+
+          {/* 4 · מסמכים מצורפים */}
+          {/* ⚠️ מוצג רק כשיש מסמכים: כותרת ריקה נראית כתקלה ומעלה את השאלה
+              היכן הם, בעוד שבפועל פשוט לא צורפו. */}
+          {((Array.isArray(loan.document_urls) && loan.document_urls.length > 0) || idDocs.length > 0) && (
+            <section className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-sky-600 border-t border-slate-200 pt-5">
+                <FileText size={16} />
+                <h2 className="text-sm font-bold text-slate-700">מסמכים מצורפים</h2>
+              </div>
+
+              {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
+                <Card>
+                  {loan.document_urls.length > 1 && (
+                    <p className="text-[11px] text-slate-400 mb-2.5">
+                      לחיצה פותחת את המסמך · מעבר בין מסמכים בחיצי המקלדת או בחצים שבצדדים
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-3">
+                    {loan.document_urls.map((d, i) => (
+                      <div key={i} className="flex flex-col gap-1 w-24">
+                        {/* ⚠️ הגלריה מועברת לכל תמונונת: המציג צריך את *כל*
+                            הרשימה כדי לדעת מה הבא, ואת המיקום כדי לדעת מהיכן
+                            להתחיל. */}
+                        <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96}
+                          gallery={docGallery} index={i} />
+                        <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
+                        <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
+              {idDocs.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 text-indigo-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 max-w-2xl">
+                    {idDocs.find(d => d.doc_type === 'id_husband') && (
+                      <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
+                    )}
+                    {idDocs.find(d => d.doc_type === 'id_wife') && (
+                      <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
+                    )}
+                  </div>
+                </Card>
+              )}
+            </section>
+          )}
+
+          {/* 5 · לחצני אישור ודחייה */}
+          {/* ⚠️ בתחתית ולא רק בראש: ההחלטה מתקבלת *אחרי* קריאת כל החומר,
+              והמיקום כאן משקף את סדר העבודה בפועל. הכפתור בכותרת נשאר
+              לגישה מהירה כשכבר יודעים מה להחליט. */}
+          <section className="border-t border-slate-200 pt-5">
+            <Card>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">החלטה על הבקשה</p>
+                  <p className="text-xs text-slate-500 mt-0.5">אישור או דחייה — סיבת הדחייה תישמר ותוצג בבקשה הבאה</p>
+                </div>
+                <LoanStatusControl loan={loan} advance familyApproved={familyApproved} />
+              </div>
+            </Card>
+          </section>
         </div>
 
-        {/* ── טור שמאל: הבירור מול המבקש ── */}
-        <div className="flex flex-col gap-2">
+        {/* ── טור שמאל: הבירור, צמוד לכל הגובה ── */}
+        <aside className="flex flex-col gap-2 lg:sticky lg:top-4">
           <div className="flex items-center gap-2 text-sky-600">
             <MessageSquare size={16} />
             <h2 className="text-sm font-bold text-slate-700">בירור מול המבקש</h2>
           </div>
           <LoanInquiryPanel loanId={loan.id} hasEmail={Boolean(b?.email)} applicantName={borrower} />
-        </div>
+        </aside>
       </div>
-
-      {/* ── פרטי הבקשה ── */}
-      <section className="flex flex-col gap-5">
-        <div className="flex items-center gap-2 text-indigo-600 border-t border-slate-200 pt-5">
-          <CreditCard size={16} />
-          <h2 className="text-sm font-bold text-slate-700">פרטי הבקשה</h2>
-        </div>
-        <div className="flex flex-col gap-5">
-          <Card>
-            <div className="flex items-center gap-2 text-indigo-600 mb-3">
-              <CreditCard size={16} />
-              <span className="text-xs font-semibold text-slate-500 uppercase">פרטי הלוואה</span>
-            </div>
-            <div className="space-y-2 text-sm">
-              <p><span className="text-slate-500">סכום מבוקש: </span><span className="font-bold ltr-num">{fmtCur(loan.amount)}</span></p>
-              {loan.approved_amount != null && (
-                <p><span className="text-slate-500">סכום שאושר: </span><span className="font-bold text-green-700 ltr-num">{fmtCur(loan.approved_amount)}</span></p>
-              )}
-              <p><span className="text-slate-500">מספר תשלומים: </span>{loan.installments}</p>
-              <p><span className="text-slate-500">מטרה: </span>{loan.purpose ?? '—'}</p>
-              {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}
-              {loan.declaration && <p><span className="text-slate-500">פנייה קודמת לגמ״ח: </span>{loan.declaration}</p>}
-              <p><span className="text-slate-500">תאריך הגשה: </span><span className="ltr-num">{fmtDate(loan.created_at)}</span></p>
-            </div>
-          </Card>
-
-          <Card>
-            <div className="flex items-center gap-2 mb-3">
-              {loan.disbursed_at
-                ? <CheckCircle2 size={16} className="text-emerald-500" />
-                : <Clock size={16} className="text-amber-500" />}
-              <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
-            </div>
-            {loan.disbursed_at ? (
-              <div className="space-y-1.5 text-sm">
-                <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
-                <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
-                {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
-            )}
-          </Card>
-
-          {loan.notes && (
-            <Card>
-              <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
-              <p className="text-sm text-slate-700">{loan.notes}</p>
-            </Card>
-          )}
-        </div>
-      </section>
-
-
-      {/* ── מסמכים ── */}
-      {/* ⚠️ מוצג רק כשיש מסמכים: כותרת ריקה נראית כתקלה ומעלה את השאלה
-          "איפה הם", בעוד שבפועל פשוט לא צורפו. */}
-      {((Array.isArray(loan.document_urls) && loan.document_urls.length > 0) || idDocs.length > 0) && (
-        <section className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-sky-600 border-t border-slate-200 pt-5">
-            <FileText size={16} />
-            <h2 className="text-sm font-bold text-slate-700">מסמכים</h2>
-          </div>
-
-          {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 text-indigo-600 mb-3">
-                <FileText size={16} />
-                <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים מצורפים</span>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {loan.document_urls.map((d, i) => (
-                  <div key={i} className="flex flex-col gap-1 w-24">
-                    <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96} />
-                    <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
-                    <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          {idDocs.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 text-indigo-600 mb-3">
-                <FileText size={16} />
-                <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 max-w-2xl">
-                {idDocs.find(d => d.doc_type === 'id_husband') && (
-                  <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
-                )}
-                {idDocs.find(d => d.doc_type === 'id_wife') && (
-                  <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
-                )}
-              </div>
-            </Card>
-          )}
-        </section>
-      )}
     </div>
   )
 }
