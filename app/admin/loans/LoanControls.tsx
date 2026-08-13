@@ -280,13 +280,10 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
               <X size={15} /> דחיית ההלוואה
             </button>
           )}
-          {/* ⚠️ שאר הפעולות (בירור, החזרה לממתין) נשארות בתפריט: הן
-              נדירות, וכפתור לכל אחת היה מטשטש את שתי ההחלטות העיקריות. */}
-          <button ref={btnRef} onClick={toggle} disabled={saving}
-            title="פעולות נוספות"
-            className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50 transition-colors">
-            <ChevronDown size={15} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-          </button>
+          {/* ⚠️ אין כאן תפריט "פעולות נוספות" בכוונה: בכרטסת ההחלטה היא
+              בינארית — אישור או דחייה. החץ פתח חלונית עם פעולות נוספות
+              ("אשר זכאי" וכו') שהסיטו את המזכיר מההחלטה שהוא בא לקבל.
+              הפעולות הנדירות עדיין זמינות דרך גרסת ה-pill ברשימה. */}
         </div>
       ) : canEdit ? (
         <button ref={btnRef} onClick={toggle} disabled={saving}
