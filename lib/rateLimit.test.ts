@@ -51,8 +51,22 @@ describe('rateLimit — ספירה בחלון (שאר המסלולים)', () => 
 describe('clientIpOrNull — IP חסר', () => {
   const req = (headers: Record<string, string>) => new Request('https://x.test', { headers })
 
-  it('שולף את הכתובת הראשונה מ-x-forwarded-for', () => {
-    expect(clientIpOrNull(req({ 'x-forwarded-for': '9.9.9.9, 10.0.0.1' }))).toBe('9.9.9.9')
+  // 🔴 אבטחה: הערך ה*אחרון* ולא הראשון.
+  //
+  // הראשון הוא מה שהלקוח שלח — מחרוזת בשליטתו המלאה. הטסט הקודם דרש
+  // אותו במפורש, ולכן קיבע פרצה: כל מגבלת קצב במערכת הייתה ניתנת
+  // לעקיפה ע"י שליחת ערך אקראי בכותרת בכל בקשה.
+  it('שולף את הכתובת האחרונה מ-x-forwarded-for (זו שה-proxy הוסיף)', () => {
+    expect(clientIpOrNull(req({ 'x-forwarded-for': '9.9.9.9, 10.0.0.1' }))).toBe('10.0.0.1')
+  })
+
+  it('ערך מזויף מהלקוח אינו גובר על זה שה-proxy הוסיף', () => {
+    // התוקף שולח כתובת משלו; ה-proxy מוסיף אחריה את האמיתית.
+    expect(clientIpOrNull(req({ 'x-forwarded-for': 'fake-1, fake-2, 203.0.113.7' }))).toBe('203.0.113.7')
+  })
+
+  it('כתובת יחידה — מוחזרת כמות שהיא', () => {
+    expect(clientIpOrNull(req({ 'x-forwarded-for': '203.0.113.9' }))).toBe('203.0.113.9')
   })
 
   it('נופל ל-x-real-ip', () => {

@@ -54,12 +54,29 @@ export function __resetRateLimits() {
  * עשרה שקדמו לו ואינם קשורים אליו. במסלולים שבהם חסימה שגויה היא הנזק הגדול
  * (רישום), עדיף לוותר על מגבלת ה-IP מאשר לחסום את כולם יחד.
  */
+/**
+ * 🔴 כתובת הפונה — נלקחת מהערך ה*אחרון* ב-x-forwarded-for, לא הראשון.
+ *
+ * הכותרת היא רשימה שכל proxy בדרך מוסיף לה ערך בסוף. הערך הראשון הוא
+ * מה ש*הלקוח* שלח — כלומר מחרוזת בשליטתו המלאה. הגרסה הקודמת לקחה אותו,
+ * ולכן כל מגבלת קצב במערכת הייתה ניתנת לעקיפה מוחלטת: די היה לשלוח
+ * `X-Forwarded-For: <מספר אקראי>` בכל בקשה כדי שכל בקשה תיספר כפונה חדש.
+ * זה נטרל בפועל את ההגנה מפני סריקת מאגר ומפני ניחוש קודים.
+ *
+ * הערך האחרון נוסף ע"י ה-proxy שלנו (Railway) ואינו ניתן לזיוף מבחוץ:
+ * גם אם הלקוח שולח כותרת משלו, ה-proxy מוסיף אחריה את הכתובת האמיתית.
+ *
+ * ⚠️ אם בעתיד תתווסף שכבת proxy נוספת (CDN), יש לספור אחורה בהתאם —
+ * הערך הנכון הוא זה שנוסף ע"י ה-proxy הקרוב ביותר לאפליקציה.
+ */
 export function clientIpOrNull(request: Request): string | null {
   const fwd = request.headers.get('x-forwarded-for')
   if (fwd) {
-    const first = fwd.split(',')[0].trim()
-    if (first) return first
+    const parts = fwd.split(',').map(s => s.trim()).filter(Boolean)
+    const last = parts[parts.length - 1]
+    if (last) return last
   }
+  // ⚠️ x-real-ip מוגדר ע"י ה-proxy ואינו רשימה, ולכן בטוח לקחתו כמות שהוא.
   const real = request.headers.get('x-real-ip')?.trim()
   return real || null
 }

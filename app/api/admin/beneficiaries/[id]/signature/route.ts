@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requireNonMailStaff, getServiceClient } from '@/lib/apiAuth'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // חתימת ההצהרה של המוטב, כתמונה.
@@ -13,7 +13,11 @@ import { requireStaff, getServiceClient } from '@/lib/apiAuth'
 export const dynamic = 'force-dynamic'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await requireStaff())) return new NextResponse('לא מורשה', { status: 401 })
+  // ⚠️ requireNonMailStaff ולא requireStaff — כמו בשאר מסלולי המוטבים
+  // בתיקייה הזו. משתמש "מייל בלבד" מנותב בכוח למסך הדואר ואינו אמור
+  // להגיע לנתוני מוטבים; דרך המסלול הזה הוא יכול היה לאסוף חתימות יד
+  // סרוקות בכמות, לפי מזהי מוטב שמופיעים ברשימת ההודעות שלו.
+  if (!(await requireNonMailStaff())) return new NextResponse('לא מורשה', { status: 401 })
 
   const { id } = await params
   const db = getServiceClient()

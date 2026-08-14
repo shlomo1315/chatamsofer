@@ -182,7 +182,29 @@ async function maybeAutoReplyIgud(
       .maybeSingle()
     ben = (data as Ben) ?? null
   }
-  // 2) נפילה-לאחור — לפי כתובת השולח
+  // 🔴 שער הבעלות — הת"ז שבנושא אינה הוכחת זהות.
+  //
+  // בלי הבדיקה הזו כל אדם בעולם יכול לשלוח מייל ל-igud@ עם ת"ז בשורת
+  // הנושא ולקבל בחזרה, לכתובת שלו, את התיק המלא של אותו אדם: שם, ת"ז,
+  // טלפון, כתובת, מצב משפחתי, בן/בת זוג ומספר ילדים — ובנוסף קישורי
+  // הגשה חתומים המשויכים לת"ז שלו, שמאפשרים לפתוח בקשות בשמו.
+  //
+  // ⚠️ ת"ז ישראלית אינה סוד, וספרת ביקורת מאפשרת ייצור סיטונאי של
+  // מספרים תקינים — כלומר אפשר לסרוק את המאגר בשיטתיות.
+  //
+  // ⚠️ תקרת המענים אינה עוזרת כאן: היא נספרת לפי כתובת הנמען, ותוקף
+  // שמחליף כתובת שולח בכל פנייה אינו נספר כלל.
+  //
+  // ההגנה זהה לזו שכבר קיימת ב-handleEmailRequest (קליטת בקשות במייל):
+  // המענה נשלח רק אם כתובת השולח היא הכתובת הרשומה על הכרטסת.
+  if (ben && String(ben.email ?? '').toLowerCase().trim() !== from) {
+    console.warn(`[igud-auto-reply] 🔴 נחסם: ${from} ביקש ת"ז שאינה שלו`)
+    ben = null
+  }
+
+  // 2) נפילה-לאחור — לפי כתובת השולח.
+  // ⚠️ בטוחה מעצם הגדרתה: היא מתאימה לכתובת השולח עצמו, ולכן המענה
+  // חוזר לבעל הכרטסת בלבד.
   if (!ben) {
     const { data } = await admin.from('beneficiaries').select(COLS).ilike('email', from).maybeSingle()
     ben = (data as Ben) ?? null
@@ -398,14 +420,20 @@ export async function POST(request: NextRequest) {
     authenticated = verifySvixSignature(request, rawBody, signingSecret)
     // נפילה-לאחור לסוד הסטטי: אם סוד ה-Svix שגוי או שייך ל-webhook אחר,
     // בלי זה כל הדואר הנכנס מת בשקט עד שמישהו יבחין.
+    //
+    // ⚠️ הנפילה-לאחור מוותרת על ההגנה מפני replay שחתימת Svix מספקת
+    // (חלון 5 דקות + חתימה משתנה). היא נשארת כרשת ביטחון תפעולית, אבל
+    // ברגע שאומת שהדואר נכנס דרך חתימת Svix — יש למחוק את
+    // RESEND_WEBHOOK_SECRET ואת שני הבלוקים האלה, ולהישאר עם
+    // verifySvixSignature בלבד.
     if (!authenticated && staticSecret) {
-      const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
+      const provided = request.headers.get('x-webhook-secret')
       authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
       if (authenticated) console.warn('[resend-inbound] חתימת Svix נכשלה — אומת בסוד הסטטי. בדוק את RESEND_WEBHOOK_SIGNING_SECRET.')
     }
     if (!authenticated) return await denyAuth('חתימת Svix לא תקינה — ככל הנראה RESEND_WEBHOOK_SIGNING_SECRET שגוי')
   } else if (staticSecret) {
-    const provided = request.headers.get('x-webhook-secret') ?? request.nextUrl.searchParams.get('secret')
+    const provided = request.headers.get('x-webhook-secret')
     authenticated = Boolean(provided) && safeEqual(provided!, staticSecret)
     if (!authenticated) return await denyAuth('הסוד הסטטי חסר או שגוי בבקשה')
   }

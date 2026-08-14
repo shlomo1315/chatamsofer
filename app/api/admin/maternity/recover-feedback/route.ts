@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 import {
   looksLikeFeedbackReply, looksLikeGratitudeReply,
   findAidBySenderEmail, handleFeedbackReply, handleGratitudeReply,
@@ -119,10 +120,18 @@ async function run(dryRun: boolean) {
   })
 }
 
+// 🔴 אימות הרשאה חובה בכל מסלול API.
+//
+// proxy.ts מחריג במפורש את `api` מה-matcher שלו (שורה 135), ולכן *אין*
+// שום שכבת הגנה במעלה הזרם — כל מסלול מגן על עצמו בלבד. המסלול הזה
+// עובד ב-service-role (עוקף RLS), קורא את כל תיבת הדואר הנכנס וכותב
+// לטבלאות המשוב והברכות; בלי הבדיקה הוא היה פתוח לכל אדם באינטרנט.
 export async function GET(_request: NextRequest) {
+  if (!(await requirePermission('maternity', 'edit'))) return forbidden()
   return run(true)
 }
 
 export async function POST(_request: NextRequest) {
+  if (!(await requirePermission('maternity', 'edit'))) return forbidden()
   return run(false)
 }
