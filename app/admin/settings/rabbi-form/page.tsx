@@ -22,12 +22,16 @@ interface FieldPos { x: number; y: number; size: number }
 interface Layout {
   title: FieldPos; name: FieldPos; idNumber: FieldPos; amount: FieldPos
   installments: FieldPos; currencyNote: FieldPos; lineageTitle: FieldPos
-  lineageStart: FieldPos; lineageGap: number; rabbiTitle: FieldPos
+  lineageStart: FieldPos; lineageGap: number
+  lineageNumX: number; lineageRelX: number
+  rabbiTitle: FieldPos
   rabbiText: FieldPos; rabbiName: FieldPos; rabbiPhone: FieldPos
   rabbiStamp: FieldPos; instructions: FieldPos; email: FieldPos
 }
 
-type FieldKey = Exclude<keyof Layout, 'lineageGap'>
+// ⚠️ השדות המספריים (מרווח, עמודות) אינם FieldPos ולכן אינם ניתנים
+// לבחירה כ"שדה פעיל" — אין להם x/y/size להזזה.
+type FieldKey = Exclude<keyof Layout, 'lineageGap' | 'lineageNumX' | 'lineageRelX'>
 
 const FIELDS: { key: FieldKey; label: string }[] = [
   { key: 'title', label: 'כותרת הטופס' },
@@ -56,6 +60,11 @@ export default function RabbiFormSettingsPage() {
   // ⚠️ מפתח לרענון ה-iframe: שינוי src זהה אינו טוען מחדש, ולכן מוסיפים
   // פרמטר שמשתנה בכל שמירה.
   const [previewKey, setPreviewKey] = useState(0)
+  // הזזת *כל* השדות יחד — לשמירת המרווחים ביניהם.
+  const [moveAll, setMoveAll] = useState(false)
+  // כתובת ה-blob של התצוגה החיה. null = טרם נוצרה (מציגים את השמורה).
+  const [liveUrl, setLiveUrl] = useState<string | null>(null)
+  const [rendering, setRendering] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -72,14 +81,71 @@ export default function RabbiFormSettingsPage() {
     return () => { alive = false; clearTimeout(t) }
   }, [load])
 
-  /** ⚠️ ציר ה-Y ב-PDF עולה כלפי מעלה — הפוך מהאינטואיציה במסך. */
+  /**
+   * הזזת השדה הפעיל.
+   *
+   * ⚠️ ציר ה-Y ב-PDF עולה כלפי מעלה — הפוך מהאינטואיציה במסך.
+   *
+   * moveAll — כשמסומן, *כל* השדות זזים יחד באותו היסט. בלעדיו הורדת
+   * בלוק שלם (למשל כשהבלאנק מתחלף) הייתה מחייבת להזיז 15 שדות אחד-אחד
+   * ולשמור על המרווחים ביניהם ידנית — עבודה שנשברת על טעות אחת.
+   * ⚠️ גודל הגופן לעולם אינו משתנה קבוצתית: הוא מאפיין של כל שדה
+   * בנפרד, ושינוי גורף היה הורס את ההיררכיה של הטופס.
+   */
   const nudge = (axis: 'x' | 'y' | 'size', delta: number) => {
     setLayout(l => {
       if (!l) return l
+      if (moveAll && axis !== 'size') {
+        const next = { ...l }
+        for (const f of FIELDS) {
+          const p = l[f.key] as FieldPos
+          next[f.key] = { ...p, [axis]: Math.round((p[axis] + delta) * 10) / 10 }
+        }
+        return next
+      }
       const cur = l[active] as FieldPos
       return { ...l, [active]: { ...cur, [axis]: Math.round((cur[axis] + delta) * 10) / 10 } }
     })
   }
+
+  // ── תצוגה מקדימה חיה ──
+  //
+  // 🔴 ה-PDF מופק מחדש בכל שינוי, מהפריסה שבמסך ולא מזו השמורה. בלי זה
+  // המכייל היה חייב לשמור כדי לראות — כלומר כל ניסוי היה משנה מיד את
+  // הטופס שהמבקשים מקבלים בפועל.
+  //
+  // ⚠️ מושהה ב-350ms: לחיצה על חץ משנה את הפריסה מיד, והפקת PDF לכל
+  // לחיצה הייתה מציפה את השרת ומקפיאה את המסך בזמן לחיצות רצופות.
+  //
+  // ⚠️ ה-blob הקודם משוחרר (revokeObjectURL) — כל הפקה יוצרת אובייקט
+  // חדש בזיכרון הדפדפן, ובלי השחרור סשן כיול ארוך היה מדליף אותם.
+  useEffect(() => {
+    if (!layout) return
+    let alive = true
+    let created: string | null = null
+
+    const t = setTimeout(async () => {
+      setRendering(true)
+      try {
+        const res = await fetch('/api/admin/loans/rabbi-form', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ previewLayout: layout }),
+        })
+        if (!res.ok || !alive) return
+        const blob = await res.blob()
+        if (!alive) return
+        created = URL.createObjectURL(blob)
+        setLiveUrl(prev => { if (prev) URL.revokeObjectURL(prev); return created })
+      } catch { /* התצוגה החיה אינה קריטית — נשארת האחרונה שהוצגה */ }
+      finally { if (alive) setRendering(false) }
+    }, 350)
+
+    return () => { alive = false; clearTimeout(t) }
+  }, [layout])
+
+  // שחרור ה-blob האחרון ביציאה מהמסך.
+  useEffect(() => () => { setLiveUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null }) }, [])
 
   async function save() {
     if (!layout) return
@@ -170,8 +236,24 @@ export default function RabbiFormSettingsPage() {
             {cur && (
               <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
                 <p className="text-xs font-extrabold text-slate-700">
-                  {FIELDS.find(f => f.key === active)?.label}
+                  {moveAll ? 'כל השדות יחד' : FIELDS.find(f => f.key === active)?.label}
                 </p>
+
+                {/* ⚠️ הזזה קבוצתית — כשהבלאנק מתחלף כל התוכן צריך לזוז
+                    באותו היסט. בלי זה צריך להזיז 15 שדות אחד-אחד ולשמור
+                    על המרווחים ביניהם ידנית, מה שנשבר על טעות אחת. */}
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 cursor-pointer hover:border-indigo-300 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={moveAll}
+                    onChange={e => setMoveAll(e.target.checked)}
+                    className="accent-indigo-600"
+                  />
+                  <span className="text-[11px] font-bold text-slate-700 leading-tight">
+                    הזז את כל השדות יחד
+                    <span className="block font-normal text-slate-400">שומר על המרווחים ביניהם</span>
+                  </span>
+                </label>
 
                 {/* ⚠️ החצים מסומנים לפי מה שרואים במסך, לא לפי ציר ה-PDF:
                     "למעלה" מזיז למעלה בעין, וההיפוך מטופל בקוד. */}
@@ -227,13 +309,17 @@ export default function RabbiFormSettingsPage() {
               <span className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
                 <FileText size={15} className="text-indigo-600" /> תצוגה מקדימה
               </span>
-              <span className="text-[11px] text-slate-400">נתוני דוגמה · הטופס האמיתי</span>
+              <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                {rendering && <Loader2 size={11} className="animate-spin text-indigo-500" />}
+                נתוני דוגמה · מתעדכן חי
+              </span>
             </div>
             {/* ⚠️ iframe ולא תמונה: הדפדפן מציג PDF במלוא האיכות, וכל
-                ניסיון להמיר לתמונה היה מוסיף שכבת עיבוד שמסתירה סטיות. */}
+                ניסיון להמיר לתמונה היה מוסיף שכבת עיבוד שמסתירה סטיות.
+                ⚠️ ה-src הוא blob של הפריסה *הנוכחית* (לא השמורה), ולכן
+                כל הזזה נראית מיד. עד ליצירת ה-blob הראשון מוצגת השמורה. */}
             <iframe
-              key={previewKey}
-              src={`/api/admin/loans/rabbi-form?preview=1&v=${previewKey}`}
+              src={liveUrl ?? `/api/admin/loans/rabbi-form?preview=1&v=${previewKey}`}
               title="תצוגה מקדימה של הטופס"
               className="w-full h-[80vh] bg-slate-50"
             />

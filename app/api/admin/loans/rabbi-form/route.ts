@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
-import { buildRabbiFormPdf, validateRabbiForm, DEFAULT_LAYOUT, type FormLayout, type RabbiFormData } from '@/lib/rabbiFormPdf'
+import { buildRabbiFormPdf, validateRabbiForm, lineageFromChain, DEFAULT_LAYOUT, type FormLayout, type RabbiFormData } from '@/lib/rabbiFormPdf'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,9 +57,15 @@ export async function GET(request: NextRequest) {
       idNumber: '123456789',
       amount: 25000,
       installments: 48,
+      // ⚠️ מהשורש כלפי מטה — כמו בטופס האמיתי.
       lineage: [
-        'ישראל ישראלי', 'ר׳ משה ישראלי', 'ר׳ יעקב ישראלי', 'ר׳ אברהם ישראלי',
-        'ר׳ יצחק ישראלי', 'ר׳ שמעון ישראלי', 'רבינו החתם סופר זיע״א',
+        { name: 'רבינו החתם סופר זיע״א' },
+        { name: 'ר׳ שמעון ישראלי', relation: 'בן' },
+        { name: 'ר׳ יצחק ישראלי', relation: 'בן' },
+        { name: 'ר׳ אברהם ישראלי', relation: 'חתן' },
+        { name: 'ר׳ יעקב ישראלי', relation: 'בן' },
+        { name: 'ר׳ משה ישראלי', relation: 'בן' },
+        { name: 'ישראל ישראלי', relation: 'בן' },
       ],
     }
     return pdfResponse(await buildRabbiFormPdf(demo, layout), 'תצוגה-מקדימה.pdf')
@@ -88,10 +94,11 @@ export async function GET(request: NextRequest) {
     idNumber: b?.id_number ?? '',
     amount: Number(row.amount ?? 0),
     installments: Number(row.installments ?? 0),
-    // ⚠️ הסדר מהמבקש כלפי מעלה — כך הוא מופיע בטופס וכך הרב קורא אותו.
-    lineage: Array.isArray(b?.lineage_chain)
-      ? b.lineage_chain.map(c => String(c?.name ?? '')).filter(Boolean).reverse()
-      : [],
+    // ⚠️ הסדר מהחת"ם סופר כלפי מטה — השורש בראש והמבקש בתחתית. הגרסה
+    // הקודמת עשתה reverse והציגה את השרשרת הפוכה. הבנייה עברה ל-
+    // lineageFromChain כדי שכל שלושת המסלולים (ניהול, פורטל, מייל)
+    // יציגו את אותו סדר ואת אותם כינויים.
+    lineage: lineageFromChain(b?.lineage_chain),
   }
 
   const check = validateRabbiForm(form)
@@ -109,7 +116,35 @@ export async function POST(request: NextRequest) {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const body = await request.json().catch(() => ({})) as Partial<RabbiFormData>
+  const raw = await request.json().catch(() => ({})) as
+    Partial<RabbiFormData> & { previewLayout?: Partial<FormLayout> }
+
+  // ── תצוגה מקדימה חיה (מסך הכיול) ──
+  //
+  // ⚠️ הפריסה מגיעה בגוף הבקשה ולא נקראת מההגדרות: זו כל הנקודה —
+  // לראות את השינוי *לפני* השמירה. בלי זה המכייל היה חייב לשמור כדי
+  // לראות, ולכן כל ניסוי היה משנה את הטופס שהמבקשים מקבלים בפועל.
+  if (raw.previewLayout) {
+    const demo: RabbiFormData = {
+      applicantName: 'משפחת ישראלי — ישראל ישראלי',
+      idNumber: '123456789',
+      amount: 25000,
+      installments: 48,
+      lineage: [
+        { name: 'רבינו החתם סופר זיע״א' },
+        { name: 'ר׳ שמעון ישראלי', relation: 'בן' },
+        { name: 'ר׳ יצחק ישראלי', relation: 'בן' },
+        { name: 'ר׳ אברהם ישראלי', relation: 'חתן' },
+        { name: 'ר׳ יעקב ישראלי', relation: 'בן' },
+        { name: 'ר׳ משה ישראלי', relation: 'בן' },
+        { name: 'ישראל ישראלי', relation: 'בן' },
+      ],
+    }
+    const merged = { ...DEFAULT_LAYOUT, ...raw.previewLayout } as FormLayout
+    return pdfResponse(await buildRabbiFormPdf(demo, merged), 'תצוגה-מקדימה.pdf')
+  }
+
+  const body = raw as Partial<RabbiFormData>
   const check = validateRabbiForm(body)
   // 🔴 חוסם הפקה חלקית: טופס עם שדה ריק מגיע לרב, הוא חותם, והמסמך
   // אינו תואם את הבקשה — ואז אין דרך לתקן בלי להחתים שוב.

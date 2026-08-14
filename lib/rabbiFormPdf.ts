@@ -41,6 +41,34 @@ export interface RabbiFormData {
   lineage: (string | { name: string; relation?: string })[]
 }
 
+/**
+ * בונה את סדר הדורות לטופס מתוך lineage_chain של המוטב.
+ *
+ * ⚠️ הסדר הוא **מהחת"ם סופר כלפי מטה** — דור 1 בראש והמבקש בתחתית.
+ * זהו הסדר שבו קוראים ייחוס, וזה גם מה שהרב מצפה לראות כשהוא מאמת
+ * את השרשרת: מתחילים מהשורש ויורדים.
+ *
+ * ⚠️ הכינוי ("בן"/"חתן") נלקח מהרשומה כפי שהוא. כשאינו ידוע לא מודפס
+ * כלום — שורה עם כינוי שגוי מטעה יותר משורה בלי כינוי.
+ */
+export function lineageFromChain(chain: unknown): RabbiFormData['lineage'] {
+  if (!Array.isArray(chain)) return []
+  const REL: Record<string, string> = { son: 'בן', son_in_law: 'חתן' }
+
+  const rows = (chain as { name?: string; generation?: number; relation?: string }[])
+    .map(n => ({
+      name: String(n?.name ?? '').trim(),
+      generation: Number(n?.generation ?? 0),
+      relation: REL[String(n?.relation ?? '')] ?? '',
+    }))
+    .filter(r => r.name)
+
+  // ⚠️ ממוין לפי מספר הדור ולא נשען על סדר המערך: השרשרת נבנית ממקורות
+  // שונים (שרשור ידני, גזירה מהעץ) ואינה מובטחת ממוינת.
+  rows.sort((a, b) => a.generation - b.generation)
+  return rows.map(({ name, relation }) => ({ name, relation }))
+}
+
 export interface FormValidation { ok: boolean; missing: string[] }
 
 /**
@@ -238,7 +266,10 @@ export async function buildRabbiFormPdf(
   labeled('מספר זהות:', data.idNumber, layout.idNumber, true)
   labeled('סכום ההלוואה המבוקש:', `$${Math.round(data.amount).toLocaleString('en-US')}`, layout.amount, true)
   labeled('מספר התשלומים:', String(data.installments), layout.installments, true)
-  R('שימו לב: ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר ($).', layout.currencyNote, font, GREY)
+  // ⚠️ הסוגריים כתובים הפוך במכוון: pdf-lib מצייר תווים לפי סדרם ואינו
+  // מיישם bidi, ולכן סוגר-פותח בטקסט עברי מצויר כפי שהוא — כלומר ")$("
+  // בקוד הוא "($)" על הדף. כתיבה "נכונה" כאן הייתה מתהפכת בפלט.
+  R('שימו לב: ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר )$(.', layout.currencyNote, font, GREY)
 
   // ── סדר הדורות ──
   // 🔴 מודפס מהמערכת ולא כשורות ריקות: זו הנקודה שבה הטופס הישן הכי נכשל —
@@ -294,16 +325,30 @@ export async function buildRabbiFormPdf(
   // ── כתובת המייל בפוטר ──
   // 🔴 מכסים את הכתובת שבבלאנק ומדפיסים את הנוכחית מעליה.
   //
-  // ⚠️ הבלאנק נושא כתובת gmail פרטית. תשובות אליה אינן נקלטות במערכת
-  // ואינן מנוטרות — כלומר טופס שנשלח לשם פשוט נעלם. הכיסוי נעשה כאן
-  // ולא בעריכת הבלאנק, כדי שהחלפת כתובת בעתיד לא תדרוש עיצוב מחדש.
-  page.drawRectangle({ x: width / 2 - 170, y: layout.email.y - 6, width: 340, height: 20, color: rgb(0.35, 0.16, 0.07) })
+  // ⚠️ הכיסוי חייב להישאר: הבלאנק נושא כתובת gmail פרטית, ותשובות אליה
+  // אינן נקלטות במערכת ואינן מנוטרות — טופס שנשלח לשם פשוט נעלם.
+  //
+  // ⚠️ הצבע תואם *במדויק* לפס הפוטר של הבלאנק (חום כהה), ולכן המלבן
+  // נבלע בו ואינו נראה כפס נוסף שהודבק. הגרסה הקודמת השתמשה בגוון בהיר
+  // יותר, וזה מה שיצר את הרושם של פס חדש מתחת לכתובת.
+  // ⚠️ הגובה מצומצם לגובה השורה בלבד — מלבן גבוה מדי חורג מהפס עצמו
+  // ומופיע כמלבן על הרקע.
   const emailLbl = rtl('אימייל:')
   const elw = bold.widthOfTextAtSize(emailLbl, layout.email.size)
   const ew = font.widthOfTextAtSize(GEMACH_EMAIL, layout.email.size)
   const total = elw + 6 + ew
-  page.drawText(emailLbl, { x: layout.email.x + total / 2 - elw, y: layout.email.y, size: layout.email.size, font: bold, color: rgb(1, 1, 1) })
-  page.drawText(GEMACH_EMAIL, { x: layout.email.x - total / 2, y: layout.email.y, size: layout.email.size, font, color: rgb(1, 1, 1) })
+  // ⚠️ המלבן רחב בכוונה (חוצה את כל הפס), ולא צמוד לטקסט: הכתובת
+  // שבבלאנק ארוכה מהכתובת שלנו, וכיסוי צר השאיר ממנה שאריות משני
+  // הצדדים — "chasa..." שנראה כמו טקסט זר על הפס.
+  page.drawRectangle({
+    x: 0,
+    y: layout.email.y - 6,
+    width,
+    height: layout.email.size + 11,
+    color: rgb(0.243, 0.106, 0.043),
+  })
+  draw(emailLbl, layout.email.x + total / 2 - elw, layout.email.y, layout.email.size, bold, rgb(1, 1, 1))
+  draw(GEMACH_EMAIL, layout.email.x - total / 2, layout.email.y, layout.email.size, font, rgb(1, 1, 1))
 
   return pdf.save()
 }

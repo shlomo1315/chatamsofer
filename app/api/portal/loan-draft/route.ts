@@ -141,12 +141,12 @@ async function sendRabbiFormMail(
   try {
     const { data: ben } = await admin
       .from('beneficiaries')
-      .select('email, family_name, full_name, id_number')
+      .select('email, family_name, full_name, id_number, lineage_chain')
       .eq('id', beneficiaryId)
       .maybeSingle()
     if (!ben?.email) return
 
-    const { buildRabbiFormPdf } = await import('@/lib/rabbiFormPdf')
+    const { buildRabbiFormPdf, lineageFromChain } = await import('@/lib/rabbiFormPdf')
     const { rabbiFormEmail } = await import('@/lib/emailTemplates')
     const { loanFormCode } = await import('@/lib/rabbiFormReturn')
     const { deliverMail } = await import('@/lib/sendMail')
@@ -165,7 +165,7 @@ async function sendRabbiFormMail(
       idNumber: String(ben.id_number ?? ''),
       amount,
       installments,
-      lineage: [],
+      lineage: lineageFromChain(ben.lineage_chain),
     })
 
     await deliverMail(ben.email, mail.subject, mail.html, [{

@@ -12,7 +12,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import {
-  buildRabbiFormPdf, DEFAULT_LAYOUT, type FormLayout, type RabbiFormData,
+  buildRabbiFormPdf, lineageFromChain, DEFAULT_LAYOUT, type FormLayout, type RabbiFormData,
 } from '@/lib/rabbiFormPdf'
 
 export const dynamic = 'force-dynamic'
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   const { data: ben } = await db
     .from('beneficiaries')
-    .select('family_name, full_name, id_number')
+    .select('family_name, full_name, id_number, lineage_chain, lineage_node_id')
     .eq('id', beneficiaryId)
     .maybeSingle()
 
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     idNumber: String(ben?.id_number ?? ''),
     amount: Number(loan.amount ?? 0),
     installments: Number(loan.installments ?? 0),
-    lineage: [],
+    lineage: lineageFromChain(ben?.lineage_chain),
   }
 
   try {
