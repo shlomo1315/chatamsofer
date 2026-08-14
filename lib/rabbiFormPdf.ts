@@ -281,6 +281,10 @@ export async function buildRabbiFormPdf(
   // סותרים בכל שורה, והרב נדרש לחתום על משהו שאינו אומר דבר. כשהקשר
   // אינו ידוע לא מודפס כלום: שורה בלי כינוי היא מידע חסר, שורה עם
   // כינוי שגוי היא מידע *מטעה*.
+  // ⚠️ כל השורה מיושרת לימין ונבנית משמאל לימין בשלושה מקטעים:
+  // "דור N:" · השם · "(בן)". הגרסה הקודמת פיזרה את המספר והכינוי
+  // לעמודות בקצה השמאלי של הדף, והתוצאה נראתה כשלוש רשימות נפרדות
+  // במקום שורה אחת — ובעברית גם קפצו לצד הלא נכון.
   let ly = layout.lineageStart.y
   for (const [i, entry] of data.lineage.entries()) {
     const size = layout.lineageStart.size
@@ -288,11 +292,32 @@ export async function buildRabbiFormPdf(
       ? { name: entry, relation: i === 0 ? 'המבקש' : '' }
       : entry
 
-    L(`${i + 1}.`, layout.lineageNumX, ly, size, font, GREY)
-    if (relation) L(rtl(relation), layout.lineageRelX, ly, size, font, GREY)
-
+    // ⚠️ נכתב בסדר הטבעי ("דור 1:") ומצויר נכון על הדף.
+    //
+    // 🔴 אל תהפוך את הנקודתיים כאן. הפקת הטקסט מ-PDF מציגה אותם בסדר
+    // הלוגי ("דור :1") וזה *נראה* כבאג — אבל הרינדור בפועל תקין.
+    // "תיקון" שנשען על הפקת הטקסט הפך את התווית לשבורה על הדף עצמו.
+    // הסוגריים והמטבע כן דורשים היפוך; הנקודתיים כאן — לא.
+    const genLbl = rtl(`דור ${i + 1}:`)
     const nm = rtl(name)
-    draw(nm, layout.lineageStart.x - font.widthOfTextAtSize(nm, size), ly, size, bold, DARK)
+    // ⚠️ הסוגריים כתובים הפוך במכוון — pdf-lib אינו מיישם bidi, ולכן
+    // ")בן(" בקוד הוא "(בן)" על הדף. ראה הערת הסוגריים בהערת המטבע.
+    const relLbl = relation ? rtl(`)${relation}(`) : ''
+
+    const gw = bold.widthOfTextAtSize(genLbl, size)
+    const nw = font.widthOfTextAtSize(nm, size)
+    const rw = relLbl ? font.widthOfTextAtSize(relLbl, size) : 0
+
+    // הקצה הימני קבוע לכל השורות; כל מקטע נדחף שמאלה מקודמו.
+    let x = layout.lineageStart.x
+    draw(genLbl, x - gw, ly, size, bold, GREY)
+    x -= gw + 6
+    draw(nm, x - nw, ly, size, bold, DARK)
+    if (relLbl) {
+      x -= nw + 6
+      draw(relLbl, x - rw, ly, size, font, GREY)
+    }
+
     ly -= layout.lineageGap
   }
 
