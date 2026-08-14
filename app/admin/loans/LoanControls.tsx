@@ -40,6 +40,13 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
   // מודל אישור — קליטת הסכום שאושר בפועל לפני האישור
   const [approveOpen, setApproveOpen] = useState(false)
   const [approvedAmount, setApprovedAmount] = useState(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
+  // האם לאשר גם את הייחוס יחד עם ההלוואה.
+  //
+  // ⚠️ ברירת המחדל היא false — אישור ההלוואה בלבד. אישור ייחוס הוא
+  // הצהרה נפרדת ומשמעותית על שיוך המשפחה לשושלת, והוא משפיע על כל
+  // הבקשות העתידיות שלה. הפיכתו לתופעת לוואי של אישור הלוואה הייתה
+  // מאשרת שושלות בלי שאיש בחן אותן.
+  const [approveLineage, setApproveLineage] = useState(false)
   // מודל דחייה — הסיבה נשמרת ומוצגת בבקשה הבאה של אותה משפחה.
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -127,6 +134,9 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
     if (next === 'approved') {
       setOpen(false)
       setApprovedAmount(String(Math.round(Number(loan.approved_amount ?? loan.amount) || 0)))
+      // ⚠️ מאופס בכל פתיחה: הבחירה שייכת לבקשה הנוכחית בלבד, ו"דביקות"
+      // מאישור קודם הייתה מאשרת ייחוס בלי כוונה בבקשה הבאה.
+      setApproveLineage(false)
       setApproveOpen(true)
       return
     }
@@ -145,7 +155,30 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
     // החלטת ועדה). החסימה הכריחה לערוך את הבקשה המקורית — כלומר לשכתב
     // את מה שהמבקש באמת ביקש, ולאבד את הנתון האמיתי.
     //
-    // ⚠️ התקרה בהגשה (30,000) *נשארת* — שם היא מגבילה את המבקש, וזה תקין.
+    // ── אישור הייחוס, אם נבחר במפורש ──
+    //
+    // ⚠️ נשלח *לפני* applyStatus ולא אחריו: applyStatus מפעילה את
+    // המעבר האוטומטי לבקשה הבאה (ניווט אחרי 1.5 שניות), וקריאה שנשלחת
+    // אחריה הייתה נקטעת באמצע כשהדף מתחלף.
+    //
+    // ⚠️ לא ממתינים לתשובה (void): אישור ההלוואה אינו תלוי בה, ושתי
+    // ההחלטות נפרדות. כשל באישור הייחוס לא אמור לעכב או לבטל הלוואה.
+    //
+    // ⚠️ אישור ייחוס מאמת גם את כל האבות הממתינים עד הצומת המאושר
+    // הראשון — פעולה רחבה, ולכן היא מתבצעת רק בבחירה מפורשת.
+    if (approveLineage && loan.beneficiary_id) {
+      void fetch('/api/admin/approve-lineage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // ⚠️ approved: true חובה — בלעדיו המסלול מפרש את הבקשה
+        // כ*ביטול* אישור ומחזיר את הצומת ל"ממתין".
+        body: JSON.stringify({ beneficiaryId: loan.beneficiary_id, approved: true }),
+      }).then(r => {
+        if (!r.ok) toast.error('ההלוואה אושרה, אך אישור הייחוס נכשל')
+      }).catch(() => toast.error('ההלוואה אושרה, אך אישור הייחוס נכשל'))
+    }
+
+    // ⚠️ התקרה בהגשה *נשארת* — שם היא מגבילה את המבקש, וזה תקין.
     // כאן מגבילה את המשרד, וזה לא.
     await applyStatus('approved', { approved_amount: n })
   }
@@ -231,6 +264,36 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
                   )}
                 </p>
               </div>
+              {/* ── היקף האישור ──
+                  ⚠️ שתי אפשרויות מפורשות ולא תיבת סימון: תיבה שאינה
+                  מסומנת נקראת כ"טרם החלטתי", ואילו כאן ברירת המחדל היא
+                  החלטה בפני עצמה — לאשר את ההלוואה בלבד. */}
+              <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-3">
+                <span className="text-xs font-bold text-slate-600">היקף האישור</span>
+
+                <label className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                  !approveLineage ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'
+                }`}>
+                  <input type="radio" name="approve-scope" checked={!approveLineage}
+                    onChange={() => setApproveLineage(false)} className="mt-0.5 accent-emerald-600" />
+                  <span className="text-xs leading-tight">
+                    <span className="font-bold text-slate-800">רק את ההלוואה</span>
+                    <span className="block text-slate-500">ללא אישור ייחוס</span>
+                  </span>
+                </label>
+
+                <label className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer transition-colors ${
+                  approveLineage ? 'border-amber-300 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'
+                }`}>
+                  <input type="radio" name="approve-scope" checked={approveLineage}
+                    onChange={() => setApproveLineage(true)} className="mt-0.5 accent-amber-600" />
+                  <span className="text-xs leading-tight">
+                    <span className="font-bold text-slate-800">גם את הייחוס</span>
+                    <span className="block text-slate-500">מאשר את המשפחה ואת אבותיה הממתינים</span>
+                  </span>
+                </label>
+              </div>
+
               <div className="flex gap-3 mt-1">
                 <button onClick={confirmApprove} disabled={saving}
                   className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-green-500 to-emerald-500 text-white font-semibold py-2.5 text-sm shadow-md shadow-emerald-200 hover:opacity-90 transition-opacity disabled:opacity-50">
