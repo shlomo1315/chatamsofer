@@ -355,6 +355,12 @@ function buildQuery(
 
   if (input.status && spec.statusCol) {
     q = q.eq(spec.statusCol, String(input.status))
+  } else if (spec.table === 'loans') {
+    // ⚠️ טיוטות שממתינות לטופס חתימת רב אינן בקשות שהוגשו: המבקש הוריד
+    // את הטופס וטרם החזירו חתום. ספירתן כ"הלוואות" הייתה נותנת לצוות
+    // מספרים גבוהים מהמציאות ומדווחת על בקשות שאיש לא הגיש.
+    // ⚠️ רק כשלא התבקש סטטוס מפורש — מי שמבקש במפורש את הטיוטות יקבל אותן.
+    q = q.neq('status', 'awaiting_rabbi_form')
   }
 
   const since = sinceISO(Number(input.days))

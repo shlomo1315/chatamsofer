@@ -12,7 +12,7 @@ function fakeDb() {
   const chain: Record<string, unknown> = {}
   const self = () => chain
   Object.assign(chain, {
-    from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self, in: self,
+    from: self, select: self, eq: self, neq: self, gte: self, or: self, order: self, limit: self, in: self,
     range: self,
     then: (r: (v: unknown) => unknown) => r({ data: [{ id: '1', secret: 'רגיש' }], count: 99 }),
   })
@@ -82,7 +82,7 @@ describe('אכיפת הרשאות', () => {
       const chain: Record<string, unknown> = {}
       const self = () => chain
       Object.assign(chain, {
-        from: self, select: self, eq: self, gte: self, or: self, order: self, limit: self,
+        from: self, select: self, eq: self, neq: self, gte: self, or: self, order: self, limit: self,
         range: self,
         in: (col: string, vals: unknown) => { calls.push({ col, vals }); return chain },
         then: (r: (v: unknown) => unknown) => r({ data: [], count: 0 }),
@@ -105,6 +105,53 @@ describe('אכיפת הרשאות', () => {
       const r = await runTool(admin, 'count_data', { table: t.table }) as { error?: string }
       expect(r.error, `מנהל נחסם מ-${t.table}`).toBeUndefined()
     }
+  })
+
+  // ⚠️ רגרסיה: טיוטה שממתינה לטופס חתימת רב אינה בקשה שהוגשה. אילו נספרה,
+  // העוזר היה מדווח לצוות על הלוואות שאיש לא הגיש.
+  it('ספירת הלוואות מדלגת על טיוטות שממתינות לטופס חתימת רב', async () => {
+    const neqCalls: { col: string; val: unknown }[] = []
+    const recordingDb = () => {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      Object.assign(chain, {
+        from: self, select: self, eq: self, gte: self, or: self, order: self,
+        limit: self, in: self, range: self,
+        neq: (col: string, val: unknown) => { neqCalls.push({ col, val }); return chain },
+        then: (r: (v: unknown) => unknown) => r({ data: [], count: 0 }),
+      })
+      return chain as never
+    }
+    const ctx: ToolCtx = {
+      db: recordingDb(), perms: {} as never, isAdmin: true,
+      mailboxEmails: [], mailboxKeys: [],
+    }
+    await runTool(ctx, 'count_data', { table: 'loans' })
+    const skip = neqCalls.find(c => c.col === 'status' && c.val === 'awaiting_rabbi_form')
+    expect(skip, 'טיוטות נספרות כהלוואות').toBeDefined()
+  })
+
+  // ⚠️ מי שמבקש במפורש את הטיוטות — כן מקבל אותן. הסינון הוא ברירת מחדל,
+  // לא חסימה.
+  it('בקשה מפורשת לסטטוס הטיוטה אינה מסוננת', async () => {
+    const neqCalls: string[] = []
+    const recordingDb = () => {
+      const chain: Record<string, unknown> = {}
+      const self = () => chain
+      Object.assign(chain, {
+        from: self, select: self, eq: self, gte: self, or: self, order: self,
+        limit: self, in: self, range: self,
+        neq: (col: string) => { neqCalls.push(col); return chain },
+        then: (r: (v: unknown) => unknown) => r({ data: [], count: 0 }),
+      })
+      return chain as never
+    }
+    const ctx: ToolCtx = {
+      db: recordingDb(), perms: {} as never, isAdmin: true,
+      mailboxEmails: [], mailboxKeys: [],
+    }
+    await runTool(ctx, 'count_data', { table: 'loans', status: 'awaiting_rabbi_form' })
+    expect(neqCalls).toHaveLength(0)
   })
 })
 

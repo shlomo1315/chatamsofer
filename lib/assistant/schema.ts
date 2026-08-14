@@ -92,8 +92,10 @@ export const TABLES: TableSpec[] = [
     table: 'loans',
     label: 'הלוואות',
     perm: 'loans',
-    about: 'בקשות הלוואה מהגמ"ח: סכום מבוקש ומאושר, מספר תשלומים, מטרה, האם בוצעה.',
-    columns: ['id', 'amount', 'approved_amount', 'installments', 'monthly_payment', 'purpose', 'disbursed_at', 'status', 'created_at'],
+    about: 'בקשות הלוואה מהגמ"ח: סכום מבוקש ומאושר (בדולרים $), מספר תשלומים, מטרה. ' +
+      'שלבי הביצוע: note_sent_at = נשלח שטר לחתימה · disbursed_at = בוצעה ההפקדה בפועל. ' +
+      'rabbi_form_url = טופס חתימת הרב החתום שהמבקש העלה.',
+    columns: ['id', 'amount', 'approved_amount', 'installments', 'monthly_payment', 'purpose', 'note_sent_at', 'disbursed_at', 'rabbi_form_url', 'status', 'created_at'],
     dateCol: 'created_at',
     statusCol: 'status',
     joinBeneficiary: true,
@@ -215,7 +217,11 @@ export const STATUS_HE: Record<string, Record<string, string>> = {
     cancelled: 'בוטלה',
   },
   loans: {
+    // ⚠️ טיוטה שטרם הוגשה — המבקש הוריד את טופס חתימת הרב וטרם החזירו
+    // חתום. אינה מופיעה ברשימת ההלוואות ואינה ממתינה לטיפול הצוות.
+    awaiting_rabbi_form: 'ממתינה לטופס חתימת רב (טרם הוגשה)',
     pending: 'ממתינה לאישור',
+    inquiry: 'בתהליך בירור מול המבקש',
     approved: 'אושרה (טרם בוצעה)',
     active: 'פעילה (בהחזר)',
     completed: 'הושלמה',
