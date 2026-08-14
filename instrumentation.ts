@@ -183,6 +183,32 @@ export async function register() {
     console.log('[legacy-sync] hourly scheduler started')
   }
 
+  // ── חידוש מנוי ה-push של Gmail — כל שעה ──
+  //
+  // 🔴 מנוי ה-watch פג אחרי 7 ימים בדיוק, וגוגל אינו מתריע ואינו מנסה שוב.
+  // בלי החידוש הזה הסנכרון המיידי נדם בשקט מדי שבוע: המסך ממשיך להציג
+  // "מופעל", הדחיפות מפסיקות, ואיש לא יודע עד שמייל לא מגיע. זה בדיוק
+  // מה שקרה — המנוי הופעל ידנית ופג כעבור שבוע.
+  //
+  // ⚠️ רץ כל שעה אבל מחדש רק כשנותרו פחות מ-3 ימים, כך שיש מרווח
+  // לנסיונות חוזרים אם החידוש נכשל. הקריאה אידמפוטנטית.
+  if (process.env.GMAIL_WATCH_RENEW_DISABLED !== '1') {
+    const tickWatchRenew = async () => {
+      try {
+        const { getServiceClient } = await import('@/lib/apiAuth')
+        const db = getServiceClient()
+        if (!db) return
+        const { renewExpiringWatches } = await import('@/lib/gmailWatchRenew')
+        const res = await renewExpiringWatches(db)
+        if (res.renewed || res.failed) {
+          console.log(`[gmail-watch-renew] hourly · renewed=${res.renewed} failed=${res.failed}`)
+        }
+      } catch (err) { console.error('[gmail-watch-renew] hourly tick failed', err) }
+    }
+    setTimeout(() => { void tickWatchRenew(); setInterval(() => { void tickWatchRenew() }, HOURLY_MS) }, INITIAL_DELAY_MS)
+    console.log('[gmail-watch-renew] hourly scheduler started')
+  }
+
   // ── גיבוי יומי מלא ל-Google Drive — מדי יום בחצות שעון ישראל ──
   // ⚠️ החליף את שירות ה-curl החיצוני שנשבר בשקט (curl parse error) ולא גיבה
   // 6 ימים בלי שאיש ידע. worker פנימי עמיד + התראת מייל אם עבר יום בלי גיבוי.
