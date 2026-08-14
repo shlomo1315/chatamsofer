@@ -297,12 +297,16 @@ export default function StockManager() {
               {/* 🔴 נגזר מהיומן (restock) ולא מ-balance+issued: שני האחרונים
                   סופרים תחומים שונים — היומן כולו מול לידות פעילות בלבד —
                   והמספר יצא קטן מהאמת בכל תיק שהושלם או בוטל. */}
+              {/* 🔴 אין יותר נפילה-לאחור ל-balance+issuedCards.
+                  היא הייתה מוצגת בכל פעם ש-purchasedCards יצא 0, ואז
+                  המסך הראה מספר *שגוי* (295) במקום להודות שאין נתון.
+                  מספר שגוי גרוע ממקף: אי אפשר להבחין בו. */}
               <span className="text-slate-500">סך הכרטיסים שנקנו</span>
-              <strong className="ltr-num text-base text-slate-900">{purchasedCards || recon.balance + issuedCards}</strong>
+              <strong className="ltr-num text-base text-slate-900">{purchasedCards || '—'}</strong>
               <span className="text-slate-400">−</span>
               <span className="text-slate-500">נמסרו</span>
               <strong className="ltr-num text-base text-slate-900">
-                {purchasedCards ? purchasedCards - recon.balance : issuedCards}
+                {purchasedCards ? purchasedCards - recon.balance : '—'}
               </strong>
               <span className="text-slate-400">=</span>
               <span className="text-slate-500">במלאי</span>

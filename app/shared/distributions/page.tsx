@@ -371,16 +371,70 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
     return [...s].sort()
   }, [rows])
 
+  // ── סינון לפי טווח תאריכים ──
+  //
+  // ⚠️ התאריך הקובע הוא *ההגעה בפועל* (recovery_arrived_at) ולא הלידה:
+  // דוח פעילות של בית החלמה שואל "כמה יולדות שהו אצלי בחודש X", ולידה
+  // בסוף החודש עם שהות בחודש הבא הייתה נספרת בחודש הלא נכון.
+  // ⚠️ נפילה-לאחור לתאריך הלידה רק כשאין תאריך הגעה — כדי ששורות
+  // ותיקות לא ייעלמו מהדוח לגמרי.
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+
+  const rowDate = (r: MaternityRow): string | null =>
+    r.recovery_arrived_at ?? r.birth_date ?? null
+
+  /** קיצורי טווח — החודש, הקודם, 3 חודשים, הכל. */
+  const setRange = (kind: 'this' | 'prev' | 'q' | 'all') => {
+    if (kind === 'all') { setFrom(''); setTo(''); return }
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth()
+    const iso = (d: Date) => d.toISOString().slice(0, 10)
+    if (kind === 'this') { setFrom(iso(new Date(y, m, 1))); setTo(iso(new Date(y, m + 1, 0))) }
+    else if (kind === 'prev') { setFrom(iso(new Date(y, m - 1, 1))); setTo(iso(new Date(y, m, 0))) }
+    else { setFrom(iso(new Date(y, m - 2, 1))); setTo(iso(new Date(y, m + 1, 0))) }
+  }
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter(r => {
       if (home && String(r.recovery_home ?? '').trim() !== home) return false
+      const rd = rowDate(r)
+      // ⚠️ שורה בלי תאריך כלל נשמרת רק כשאין סינון — אחרת דוח חודשי
+      // היה כולל שורות שאיש אינו יודע מתי קרו.
+      if ((from || to) && !rd) return false
+      if (from && rd && rd.slice(0, 10) < from) return false
+      if (to && rd && rd.slice(0, 10) > to) return false
       if (!needle) return true
       const b = r.beneficiary
       return [b?.family_name, b?.full_name, b?.spouse_name, b?.id_number, b?.city, r.baby_name, r.recovery_home]
         .filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
-  }, [rows, q, home])
+  }, [rows, q, home, from, to])
+
+  // ── פילוח לפי בית החלמה ──
+  // ⚠️ נגזר מ-filtered ולא מ-rows: הפילוח חייב לשקף את הטווח שנבחר,
+  // אחרת המספרים בטבלה והמספרים בפילוח סותרים זה את זה.
+  const byHome = useMemo(() => {
+    const m = new Map<string, { home: string; arrived: number; unbilled: number; amount: number; nights: number; names: string[] }>()
+    for (const r of filtered) {
+      const h = String(r.recovery_home ?? '').trim()
+      if (!h) continue
+      const e = m.get(h) ?? { home: h, arrived: 0, unbilled: 0, amount: 0, nights: 0, names: [] }
+      const s = stateOf(r)
+      if (s === 'realized-charged' || s === 'realized-unbilled') {
+        e.arrived++
+        if (s === 'realized-unbilled') e.unbilled++
+        const b = r.beneficiary
+        const nm = [b?.family_name, b?.spouse_name || b?.full_name].filter(Boolean).join(' ')
+        if (nm) e.names.push(nm)
+      }
+      e.amount += Number(r.recovery_amount ?? 0) || 0
+      e.nights += Number(r.recovery_nights ?? 0) || 0
+      m.set(h, e)
+    }
+    return [...m.values()].sort((a, b) => b.amount - a.amount || b.arrived - a.arrived)
+  }, [filtered])
 
   const totals = useMemo(() => {
     let charged = 0, unbilled = 0, notRealized = 0, amount = 0, nights = 0
@@ -432,6 +486,102 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
           {homes.map(h => <option key={h} value={h}>{h}</option>)}
         </select>
       </div>
+
+      {/* ── סינון לפי תקופה ──
+          ⚠️ קיצורים *וגם* טווח חופשי: הקיצורים מכסים את השאלה הנפוצה
+          ("מה היה החודש"), והטווח החופשי נדרש לחשבונית מול בית החלמה
+          שאינה מתיישרת לגבולות חודש. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1">
+          {([
+            { k: 'this' as const, label: 'החודש' },
+            { k: 'prev' as const, label: 'חודש קודם' },
+            { k: 'q' as const, label: '3 חודשים' },
+            { k: 'all' as const, label: 'הכל' },
+          ]).map(b => (
+            <button key={b.k} type="button" onClick={() => setRange(b.k)}
+              className="rounded-lg border border-[#e8dfc9] bg-white px-2.5 py-1.5 text-[12px] font-bold text-[#6b5d3e] hover:bg-[#faf6ec] transition-colors">
+              {b.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1.5 text-[12px] text-[#8a7a56]">
+          מתאריך
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+            className="rounded-lg border border-[#e8dfc9] bg-white px-2 py-1.5 text-[12px] text-[#3a3630] focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/40" />
+        </label>
+        <label className="flex items-center gap-1.5 text-[12px] text-[#8a7a56]">
+          עד
+          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+            className="rounded-lg border border-[#e8dfc9] bg-white px-2 py-1.5 text-[12px] text-[#3a3630] focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/40" />
+        </label>
+        {(from || to) && (
+          <span className="text-[11px] text-[#8a7a56]">· לפי מועד ההגעה לבית ההחלמה</span>
+        )}
+      </div>
+
+      {/* ── פילוח לפי בית החלמה ──
+          ⚠️ מוצג מעל הטבלה ולא מתחתיה: זו השאלה שבגללה נכנסים למסך
+          ("כמה שילמתי לכל בית וכמה יולדות הגיעו"), והפירוט השמי הוא
+          העומק שמתחתיו. */}
+      {byHome.length > 0 && (
+        <div className="rounded-2xl border border-[#e8dfc9] bg-white overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-[#f0e9d8] bg-[#faf6ec] flex items-center justify-between gap-2">
+            <span className="text-[13px] font-extrabold text-[#6b5d3e]">סיכום לפי בית החלמה</span>
+            <span className="text-[11px] text-[#8a7a56]">{byHome.length} בתים · {filtered.length} רשומות</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] border-collapse min-w-[640px]">
+              <thead>
+                <tr className="bg-[#fdfaf3] text-[#8a7a56] text-[11px]">
+                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">בית החלמה</th>
+                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">יולדות שהגיעו</th>
+                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">לילות</th>
+                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">שולם</th>
+                  <th className="px-3 py-2 text-right font-bold">טרם חויבו</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byHome.map(h => (
+                  <tr key={h.home} className="border-t border-[#f4efe1] align-top">
+                    <td className="px-3 py-2.5 border-l border-[#f0e9d8]">
+                      <div className="font-bold text-[#3a3630]">{h.home}</div>
+                      {/* ⚠️ השמות מוצגים כאן ולא רק בטבלה למטה: הבקשה הייתה
+                          לראות "כמה יולדות הגיעו עם שמות" בלי לחפש. */}
+                      {h.names.length > 0 && (
+                        <div className="text-[11px] text-[#8a7a56] leading-relaxed mt-0.5">
+                          {h.names.join(' · ')}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] font-bold text-[#3a3630] tabular-nums">{h.arrived}</td>
+                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums text-[#6b5d3e]">{h.nights || '—'}</td>
+                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] font-bold text-emerald-800 tabular-nums">
+                      {h.amount ? `₪${Math.round(h.amount).toLocaleString('he-IL')}` : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 tabular-nums">
+                      {h.unbilled
+                        ? <span className="rounded-full bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 font-bold">{h.unbilled}</span>
+                        : <span className="text-[#b3a382]">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-[#faf6ec] border-t-2 border-[#e8dfc9] font-extrabold text-[#3a3630]">
+                  <td className="px-3 py-2.5 border-l border-[#f0e9d8]">סה״כ</td>
+                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums">{byHome.reduce((s, h) => s + h.arrived, 0)}</td>
+                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums">{byHome.reduce((s, h) => s + h.nights, 0) || '—'}</td>
+                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums text-emerald-800">
+                    ₪{Math.round(byHome.reduce((s, h) => s + h.amount, 0)).toLocaleString('he-IL')}
+                  </td>
+                  <td className="px-3 py-2.5 tabular-nums">{byHome.reduce((s, h) => s + h.unbilled, 0) || '—'}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* הטבלה */}
       <div className="rounded-2xl border border-[#e8dfc9] bg-white overflow-hidden">
