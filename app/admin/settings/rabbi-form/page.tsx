@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight, Loader2, Save, RotateCcw, FileText, RefreshCw,
@@ -65,6 +65,15 @@ export default function RabbiFormSettingsPage() {
   // כתובת ה-blob של התצוגה החיה. null = טרם נוצרה (מציגים את השמורה).
   const [liveUrl, setLiveUrl] = useState<string | null>(null)
   const [rendering, setRendering] = useState(false)
+  // ⚠️ הפריסה השמורה — נשמרת בנפרד כדי לדעת אם יש שינויים שטרם נשמרו.
+  // בלעדיה הכפתור "שמור" נראה זהה בין מצב נקי למצב עם שינויים, והמכייל
+  // עוזב את המסך בלי לדעת שהעבודה שלו אבדה.
+  const [savedLayout, setSavedLayout] = useState<Layout | null>(null)
+  const dirty = !!layout && !!savedLayout && JSON.stringify(layout) !== JSON.stringify(savedLayout)
+  // גרירה ישירה על התצוגה
+  const [dragging, setDragging] = useState<FieldKey | null>(null)
+  const dragRef = useRef<{ key: FieldKey; sx: number; sy: number; ox: number; oy: number } | null>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => {
     try {
@@ -72,6 +81,7 @@ export default function RabbiFormSettingsPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'הטעינה נכשלה'); return }
       setLayout(json.layout)
+      setSavedLayout(json.layout)
     } catch { toast.error('שגיאת רשת') } finally { setLoading(false) }
   }, [toast])
 
@@ -147,6 +157,54 @@ export default function RabbiFormSettingsPage() {
   // שחרור ה-blob האחרון ביציאה מהמסך.
   useEffect(() => () => { setLiveUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null }) }, [])
 
+  // ── גרירה ישירה על התצוגה ──
+  //
+  // ⚠️ שכבת שקופה מעל ה-PDF, עם ריבוע לכל שדה במיקומו. ה-PDF עצמו
+  // מוצג ב-iframe ואי אפשר "לתפוס" בו טקסט, ולכן הגרירה נעשית על
+  // הריבועים שמעליו.
+  //
+  // ⚠️ המרת קואורדינטות: ציר ה-Y ב-PDF עולה כלפי מעלה והמקור בפינה
+  // השמאלית-תחתונה, בעוד במסך הוא יורד מהפינה השמאלית-עליונה. בלי
+  // ההיפוך כל גרירה למטה הייתה מזיזה את השדה למעלה.
+  const PAGE_W = 595
+  const PAGE_H = 842
+
+  const onDragStart = (key: FieldKey, e: React.PointerEvent) => {
+    if (!layout) return
+    e.preventDefault()
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+    const p = layout[key] as FieldPos
+    dragRef.current = { key, sx: e.clientX, sy: e.clientY, ox: p.x, oy: p.y }
+    setActive(key)
+    setDragging(key)
+  }
+
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    const stage = stageRef.current
+    if (!d || !stage) return
+    // יחס ההמרה מפיקסלים על המסך לנקודות PDF — נגזר מרוחב התצוגה בפועל,
+    // כדי שהגרירה תהיה מדויקת בכל גודל חלון.
+    const scale = stage.clientWidth / PAGE_W
+    const dx = (e.clientX - d.sx) / scale
+    const dy = (e.clientY - d.sy) / scale
+    const key: FieldKey = d.key
+    setLayout(l => {
+      if (!l) return l
+      const p = l[key] as FieldPos
+      return {
+        ...l,
+        [key]: {
+          ...p,
+          x: Math.round((d.ox + dx) * 10) / 10,
+          y: Math.round((d.oy - dy) * 10) / 10,   // ⚠️ מינוס — ציר הפוך
+        },
+      }
+    })
+  }
+
+  const onDragEnd = () => { dragRef.current = null; setDragging(null) }
+
   async function save() {
     if (!layout) return
     setSaving(true)
@@ -159,6 +217,7 @@ export default function RabbiFormSettingsPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'השמירה נכשלה'); return }
       toast.success('הפריסה נשמרה')
+      setSavedLayout(layout)
       setPreviewKey(k => k + 1)
     } catch { toast.error('שגיאת רשת') } finally { setSaving(false) }
   }
@@ -174,6 +233,7 @@ export default function RabbiFormSettingsPage() {
       const json = await res.json()
       if (!res.ok) { toast.error(json.error ?? 'האיפוס נכשל'); return }
       setLayout(json.layout)
+      setSavedLayout(json.layout)
       toast.success('אופס לברירת המחדל')
       setPreviewKey(k => k + 1)
     } catch { toast.error('שגיאת רשת') } finally { setSaving(false) }
@@ -201,9 +261,15 @@ export default function RabbiFormSettingsPage() {
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-rose-300 hover:text-rose-700 disabled:opacity-50">
             <RotateCcw size={14} /> איפוס
           </button>
-          <button onClick={save} disabled={saving || !layout}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} שמור
+          {/* ⚠️ מהבהב רק כשיש שינויים שטרם נשמרו. כפתור שנראה זהה בין
+              מצב נקי למצב "מלא" הביא לעזיבת המסך בלי לשמור, וכל הכיול
+              אבד — עבודה עדינה שקשה לשחזר. */}
+          <button onClick={save} disabled={saving || !layout || !dirty}
+            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-extrabold text-white transition-colors disabled:opacity-50 ${
+              dirty ? 'bg-amber-500 hover:bg-amber-600 animate-save-pulse' : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}>
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {dirty ? 'שמור שינויים' : 'נשמר'}
           </button>
         </div>
       </div>
@@ -318,11 +384,56 @@ export default function RabbiFormSettingsPage() {
                 ניסיון להמיר לתמונה היה מוסיף שכבת עיבוד שמסתירה סטיות.
                 ⚠️ ה-src הוא blob של הפריסה *הנוכחית* (לא השמורה), ולכן
                 כל הזזה נראית מיד. עד ליצירת ה-blob הראשון מוצגת השמורה. */}
-            <iframe
-              src={liveUrl ?? `/api/admin/loans/rabbi-form?preview=1&v=${previewKey}`}
-              title="תצוגה מקדימה של הטופס"
-              className="w-full h-[80vh] bg-slate-50"
-            />
+            {/* ⚠️ יחס A4 קבוע (595:842) ולא גובה קבוע: שכבת הגרירה חייבת
+                לשבת בדיוק על העמוד, וכל סטייה ביחס הייתה מזיזה את
+                הריבועים ביחס לטקסט שמתחתיהם. */}
+            <div
+              ref={stageRef}
+              className="relative w-full bg-slate-50 select-none"
+              style={{ aspectRatio: `${PAGE_W} / ${PAGE_H}` }}
+              onPointerMove={onDragMove}
+              onPointerUp={onDragEnd}
+              onPointerCancel={onDragEnd}
+            >
+              <iframe
+                src={liveUrl ?? `/api/admin/loans/rabbi-form?preview=1&v=${previewKey}`}
+                title="תצוגה מקדימה של הטופס"
+                className="absolute inset-0 w-full h-full border-0"
+                // ⚠️ ה-iframe אינו מקבל אירועי עכבר: בלי זה הוא בולע את
+                // הגרירה ברגע שהסמן עובר מעל ה-PDF, והשדה "נתקע" באמצע.
+                style={{ pointerEvents: 'none' }}
+              />
+
+              {/* ── ידיות הגרירה ── */}
+              {layout && FIELDS.map(f => {
+                const p = layout[f.key] as FieldPos
+                const isActive = active === f.key
+                const isDragging = dragging === f.key
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onPointerDown={e => onDragStart(f.key, e)}
+                    title={`${f.label} — גררו למיקום הרצוי`}
+                    className={`absolute -translate-y-1/2 rounded px-1.5 py-0.5 text-[9px] font-bold whitespace-nowrap transition-colors ${
+                      isDragging
+                        ? 'bg-indigo-600 text-white ring-2 ring-indigo-300 cursor-grabbing z-20'
+                        : isActive
+                          ? 'bg-indigo-500/85 text-white ring-1 ring-indigo-300 cursor-grab z-10'
+                          : 'bg-slate-900/25 text-white hover:bg-indigo-500/70 cursor-grab'
+                    }`}
+                    style={{
+                      // ⚠️ right ולא left: השדות מיושרים לימין ב-PDF,
+                      // ו-p.x הוא הקצה הימני שלהם.
+                      right: `${((PAGE_W - p.x) / PAGE_W) * 100}%`,
+                      top: `${((PAGE_H - p.y) / PAGE_H) * 100}%`,
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}

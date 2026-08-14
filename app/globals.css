@@ -137,9 +137,23 @@ th.ltr-num {
   animation: soft-attention 3s ease-in-out infinite;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   כפתור "שמור שינויים" עם שינויים ממתינים.
+
+   ⚠️ הבהוב על ה*הילה* ולא על הצבע או הגודל: הכפתור נלחץ, ושינוי גודל
+   היה מזיז אותו מתחת לסמן ברגע הלחיצה.
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes save-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+  50%      { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+}
+.animate-save-pulse { animation: save-pulse 1.6s ease-out infinite; }
+
 /* כיבוד העדפת המשתמש להפחתת תנועה */
 @media (prefers-reduced-motion: reduce) {
   .animate-ping-slow { animation: none; }
+  /* ⚠️ הכפתור נשאר כתום גם בלי ההבהוב — הצבע הוא המידע. */
+  .animate-save-pulse { animation: none; }
   /* ⚠️ המסגרת נשארת צהובה גם בלי ההבהוב: הסימון הוא המידע, והתנועה
      היא רק הדגשה שלו. */
   .animate-soft-attention {
