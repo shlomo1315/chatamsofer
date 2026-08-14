@@ -2,6 +2,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { Plus, RefreshCw, Loader2, ChevronRight, ChevronLeft, ChevronDown, Pencil, Trash2, X, Users, Check, Printer, MapPin, Link2, ExternalLink, Activity, ShieldCheck, ShieldAlert, Ghost, GitMerge } from 'lucide-react'
+import { genTone } from '@/lib/lineagePalette'
 import ShareBranchModal from './ShareBranchModal'
 import SharePermissionsPanel from './SharePermissionsPanel'
 import { useRouter } from 'next/navigation'
@@ -358,17 +359,8 @@ function collectEdges(positions: Positioned[]) {
 
 // ─── Colors ───
 
-// סולם דורות "קלף וחותם": כל דור בגוון מלא מעט מתקדם — זהב חם → נחושת → ארד → יין → חום עתיק.
-// מבנה האובייקט זהה (bg/ring/shadow/light/text) כדי שכל שאר הקוד המשתמש ב-pal(g) לא ישתנה.
-const PALETTE = [
-  { bg: 'linear-gradient(160deg,#e0b94a 0%,#c69e2d 78%)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)', light: '#FBF3DA', text: '#8a6a1e' },
-  { bg: 'linear-gradient(160deg,#d3a344 0%,#bf8b34 78%)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)', light: '#FAEFD6', text: '#7d5a1f' },
-  { bg: 'linear-gradient(160deg,#c68a4e 0%,#b3703a 78%)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)', light: '#F6E9D8', text: '#7a4a26' },
-  { bg: 'linear-gradient(160deg,#b56f4f 0%,#a15a3d 78%)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)',  light: '#F3E2D8', text: '#6f3a2a' },
-  { bg: 'linear-gradient(160deg,#a15a58 0%,#8c4a44 78%)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)',  light: '#F0DEDC', text: '#5f3230' },
-  { bg: 'linear-gradient(160deg,#867059 0%,#6f5a44 78%)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)',  light: '#EBE4D8', text: '#4d3f30' },
-]
-const pal = (g: number) => PALETTE[g % PALETTE.length]
+// ⚠️ הפלטה מגיעה מ-lib/lineagePalette ואינה מוגדרת כאן — ראה שם למה.
+const pal = genTone
 
 // ─── Modal ───
 

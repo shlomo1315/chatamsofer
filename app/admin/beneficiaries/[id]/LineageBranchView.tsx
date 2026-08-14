@@ -4,6 +4,7 @@ import { Loader2, Pencil, Plus, Trash2, ExternalLink, ArrowRight } from 'lucide-
 import { useRouter } from 'next/navigation'
 import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { genTone } from '@/lib/lineagePalette'
 import { useCan } from '@/components/StaffPermissions'
 import { genColor, asGenStatus } from '@/lib/lineageDeviation'
 
@@ -31,16 +32,8 @@ interface Pos { node: TNode; x: number; y: number; cx: number; cy: number }
 
 const NW = 172, NH = 58, HGAP = 48, VGAP = 96, PAD = 72
 
-// סולם דורות "קלף וחותם": זהב חם → נחושת → ארד → יין → חום עתיק (זהה למסך הניהול).
-const PALETTE = [
-  { bg: 'linear-gradient(160deg,#e0b94a,#c69e2d)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)' },
-  { bg: 'linear-gradient(160deg,#d3a344,#bf8b34)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)' },
-  { bg: 'linear-gradient(160deg,#c68a4e,#b3703a)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)' },
-  { bg: 'linear-gradient(160deg,#b56f4f,#a15a3d)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)'  },
-  { bg: 'linear-gradient(160deg,#a15a58,#8c4a44)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)'  },
-  { bg: 'linear-gradient(160deg,#867059,#6f5a44)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)'  },
-]
-const pal = (g: number) => PALETTE[g % PALETTE.length]
+// ⚠️ הפלטה מגיעה מ-lib/lineagePalette ואינה מוגדרת כאן — ראה שם למה.
+const pal = genTone
 
 function buildTree(flat: LineageNode[]): TNode[] {
   const map = new Map<string, TNode>()

@@ -6,6 +6,7 @@ import Button from '@/components/ui/Button'
 import EmailInput from '@/components/ui/EmailInput'
 import { GitBranch, ChevronLeft, Loader2, Heart, User, Phone, MapPin, Users, FileText, Plus, X, CheckCircle2, Check, ShieldAlert } from 'lucide-react'
 import { validateIsraeliId, validatePhone } from '@/lib/validation'
+import { genTone } from '@/lib/lineagePalette'
 import CityStreetPicker from '@/components/ui/CityStreetPicker'
 import HebrewDatePicker from '@/components/ui/HebrewDatePicker'
 import { useToast } from '@/components/ui/Toast'
@@ -66,15 +67,11 @@ interface TreePickerPos { node: TreePickerNode; x: number; y: number; cx: number
 
 const TP_NW = 172, TP_NH = 58, TP_HGAP = 48, TP_VGAP = 96, TP_PAD = 72
 
-const TP_PALETTE = [
-  { bg: 'linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%)', ring: '#7C3AED', shadow: 'rgba(124,58,237,0.38)' },
-  { bg: 'linear-gradient(135deg,#2563EB 0%,#1E40AF 100%)', ring: '#2563EB', shadow: 'rgba(37,99,235,0.32)'  },
-  { bg: 'linear-gradient(135deg,#0891B2 0%,#0E7490 100%)', ring: '#0891B2', shadow: 'rgba(8,145,178,0.32)'  },
-  { bg: 'linear-gradient(135deg,#059669 0%,#047857 100%)', ring: '#059669', shadow: 'rgba(5,150,105,0.32)'  },
-  { bg: 'linear-gradient(135deg,#D97706 0%,#B45309 100%)', ring: '#D97706', shadow: 'rgba(217,119,6,0.32)'  },
-  { bg: 'linear-gradient(135deg,#DB2777 0%,#BE185D 100%)', ring: '#DB2777', shadow: 'rgba(219,39,119,0.32)' },
-]
-const tpPal = (g: number) => TP_PALETTE[g % TP_PALETTE.length]
+// 🔴 זה היה "העץ הישן" שנראה בעריכת כרטסת: פלטה סגולה-כחולה-ורודה
+// לגמרי מנותקת מסולם "קלף וחותם" של שאר העץ. היא נשארה כאן אחרי
+// שכל שאר המסכים עודכנו, ולכן אותו עץ בדיוק נראה אחרת בעריכה.
+// עכשיו מהמקור המשותף (lib/lineagePalette).
+const tpPal = genTone
 
 function tpBuildTree(flat: LineageNode[]): TreePickerNode[] {
   const map = new Map<string, TreePickerNode>()

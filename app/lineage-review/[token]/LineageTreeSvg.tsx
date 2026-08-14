@@ -1,5 +1,6 @@
 'use client'
 import { useMemo, useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react'
+import { genTone } from '@/lib/lineagePalette'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עץ יוחסין ויזואלי — העתק נאמן של מנוע עץ הדורות המלא (app/admin/lineage),
@@ -22,16 +23,8 @@ interface Positioned { node: TreeNode; x: number; y: number; cx: number; cy: num
 // קבועים זהים לעץ הדורות המלא
 const NW = 172, NH = 58, HGAP = 48, VGAP = 96, PAD = 72
 
-// פלטת "קלף וחותם" — זהה לעץ הדורות
-const PALETTE = [
-  { bg: 'linear-gradient(160deg,#e0b94a 0%,#c69e2d 78%)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.34)', text: '#8a6a1e' },
-  { bg: 'linear-gradient(160deg,#d3a344 0%,#bf8b34 78%)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.32)', text: '#7d5a1f' },
-  { bg: 'linear-gradient(160deg,#c68a4e 0%,#b3703a 78%)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.32)', text: '#7a4a26' },
-  { bg: 'linear-gradient(160deg,#b56f4f 0%,#a15a3d 78%)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.32)',  text: '#6f3a2a' },
-  { bg: 'linear-gradient(160deg,#a15a58 0%,#8c4a44 78%)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.32)',  text: '#5f3230' },
-  { bg: 'linear-gradient(160deg,#867059 0%,#6f5a44 78%)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.32)',  text: '#4d3f30' },
-]
-const pal = (g: number) => PALETTE[g % PALETTE.length]
+// ⚠️ הפלטה מגיעה מ-lib/lineagePalette ואינה מוגדרת כאן — ראה שם למה.
+const pal = genTone
 
 function buildForest(nodes: TreeNode[], rootId: string | null): TreeNodeH[] {
   const map = new Map<string, TreeNodeH>()

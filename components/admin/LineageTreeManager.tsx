@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { GitBranch, Plus, Trash2, ChevronDown, ChevronLeft, Loader2, X, Check, Pencil, RefreshCw } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { genTone } from '@/lib/lineagePalette'
 
 interface LineageNode {
   id: string
@@ -95,6 +96,9 @@ function NodeRow({
     if (ok) setEditing(false)
   }
 
+  // גוון הדור — מהמקור המשותף, כדי שהמסך הזה יראה זהה לכרטסת ולעץ הציבורי.
+  const tone = genTone(node.generation)
+
   // Valid parents = every node except this node and its descendants
   const blocked = descendantsOf(node.id, allNodes)
   const parentOptions = allNodes
@@ -114,19 +118,31 @@ function NodeRow({
           {expanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
         </button>
 
+        {/* ⚠️ הגוון נגזר מ-genTone (lib/lineagePalette) ולא מהעומק במסך:
+            הצבע חייב לומר "דור N" באותה שפה כמו בכרטסת ובעץ הציבורי.
+            הנקודה הישנה נצבעה לפי depth, ולכן אותו דור נראה אחרת בכל
+            מסך — וזה מה שגרם למסך הזה להיראות כעץ ישן. */}
         <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center">
-          <div className={`w-2 h-2 rounded-full ${depth === 0 ? 'bg-indigo-500' : depth === 1 ? 'bg-blue-400' : 'bg-slate-300'}`} />
+          <span
+            className="w-2.5 h-2.5 rounded-full ring-1"
+            style={{ background: tone.bg, boxShadow: `0 1px 3px ${tone.shadow}`, ...({ '--tw-ring-color': tone.ring } as React.CSSProperties) }}
+          />
         </div>
 
         <button
           onClick={startEdit}
-          className="flex-1 min-w-0 text-right text-sm text-slate-800 font-medium hover:text-indigo-600 truncate"
+          className="flex-1 min-w-0 text-right text-sm text-slate-800 font-medium hover:text-amber-800 truncate transition-colors"
           title="לחץ לעריכה"
         >
           {node.name}
           {node.notes ? <span className="text-xs text-slate-400 font-normal mr-2">· {node.notes}</span> : null}
         </button>
-        <span className="text-xs text-slate-400 ml-2 flex-shrink-0">דור {node.generation}</span>
+        <span
+          className="text-[11px] font-bold ml-2 flex-shrink-0 rounded-full px-2 py-0.5 border"
+          style={{ background: tone.light, color: tone.text, borderColor: tone.ring }}
+        >
+          דור {node.generation}
+        </span>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button onClick={startEdit} className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700" title="ערוך">
             <Pencil size={14} />
@@ -143,31 +159,31 @@ function NodeRow({
       {/* Inline edit panel */}
       {editing && (
         <div
-          className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 mb-1 flex flex-col gap-2"
+          className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 mb-1 flex flex-col gap-2"
           style={{ marginRight: `${12 + depth * 20}px` }}
         >
-          <label className="text-xs font-medium text-indigo-800">שם</label>
+          <label className="text-xs font-medium text-amber-900">שם</label>
           <input
             type="text"
             value={editName}
             onChange={e => setEditName(e.target.value)}
             autoFocus
             onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
-            className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="rounded-lg border border-amber-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
-          <label className="text-xs font-medium text-indigo-800">הערות</label>
+          <label className="text-xs font-medium text-amber-900">הערות</label>
           <input
             type="text"
             value={editNotes}
             onChange={e => setEditNotes(e.target.value)}
             placeholder="הערות (אופציונלי)"
-            className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="rounded-lg border border-amber-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
-          <label className="text-xs font-medium text-indigo-800">הורה (העברה בעץ)</label>
+          <label className="text-xs font-medium text-amber-900">הורה (העברה בעץ)</label>
           <select
             value={editParent}
             onChange={e => setEditParent(e.target.value)}
-            className="rounded-lg border border-indigo-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="rounded-lg border border-amber-200 px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
           >
             <option value="">— שורש (ללא הורה) —</option>
             {parentOptions.map((p) => (
@@ -308,7 +324,7 @@ export default function LineageTreeManager() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <GitBranch size={18} className="text-indigo-500" />
+          <GitBranch size={18} className="text-amber-600" />
           <h2 className="text-sm font-semibold text-slate-700">עץ הדורות</h2>
           <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{nodes.length} רשומות</span>
           <button onClick={loadNodes} className="p-1 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100" title="רענן">

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react'
 import { Plus, Pencil, Trash2, X, Check, Loader2, GitBranch, Users, Search } from 'lucide-react'
+import { genTone } from '@/lib/lineagePalette'
 
 // ─── Types ───
 
@@ -72,16 +73,11 @@ function canvasSize(pos: Positioned[]) {
 
 // ─── Color palette ───
 
-// סולם דורות "קלף וחותם": זהב חם → נחושת → ארד → יין → חום עתיק (זהה למסך הניהול).
-const PALETTE = [
-  { bg: 'linear-gradient(160deg,#e0b94a,#c69e2d)', ring: '#c69e2d', shadow: 'rgba(198,158,45,0.40)', light: '#FBF3DA', text: '#8a6a1e' },
-  { bg: 'linear-gradient(160deg,#d3a344,#bf8b34)', ring: '#bf8b34', shadow: 'rgba(191,139,52,0.38)', light: '#FAEFD6', text: '#7d5a1f' },
-  { bg: 'linear-gradient(160deg,#c68a4e,#b3703a)', ring: '#b3703a', shadow: 'rgba(179,112,58,0.38)', light: '#F6E9D8', text: '#7a4a26' },
-  { bg: 'linear-gradient(160deg,#b56f4f,#a15a3d)', ring: '#a15a3d', shadow: 'rgba(161,90,61,0.38)',  light: '#F3E2D8', text: '#6f3a2a' },
-  { bg: 'linear-gradient(160deg,#a15a58,#8c4a44)', ring: '#8c4a44', shadow: 'rgba(140,74,68,0.38)',  light: '#F0DEDC', text: '#5f3230' },
-  { bg: 'linear-gradient(160deg,#867059,#6f5a44)', ring: '#6f5a44', shadow: 'rgba(111,90,68,0.38)',  light: '#EBE4D8', text: '#4d3f30' },
-]
-function pal(gen: number) { return PALETTE[gen % PALETTE.length] }
+// ⚠️ הפלטה מגיעה מ-lib/lineagePalette ואינה מוגדרת כאן.
+// היא הייתה משוכפלת בארבעה רכיבי עץ שונים, וההעתקים כבר החלו להיפרד
+// (עוצמת הצל כאן הייתה 0.40 מול 0.34 בכרטסת). מקור אחד = כל המסכים
+// משתנים יחד, ואי אפשר שמסך אחד יישאר עם עיצוב ישן.
+const pal = genTone
 
 function collectEdges(positions: Positioned[]) {
   const byId = new Map(positions.map(p => [p.node.id, p]))
