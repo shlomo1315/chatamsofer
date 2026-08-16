@@ -620,14 +620,29 @@ export function registrationInviteEmail(portalBase = PORTAL_BASE_DEFAULT): Built
       חיפשנו את כתובת המייל שממנה פנית — ולא מצאנו אותה רשומה במערכת שלנו.
     </p>
 
+    <!-- 🔴 התיבה אינה נקראת — נאמר מפורשות ולפני כל השאר.
+         ⚠️ הנוסח הקודם הזמין "לכתוב לנו במייל חדש" בלי לציין שאיש אינו
+         קורא את התיבה, ולכן פונה היה ממשיך להתכתב ולהמתין לתשובה שלא
+         תגיע לעולם. -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:14px;padding:18px 20px;">
+        <p style="margin:0 0 8px;color:#991b1b;font-size:15px;font-weight:900;">
+          תיבה זו אינה נקראת
+        </p>
+        <p style="margin:0;color:#7f1d1d;font-size:13.5px;line-height:1.8;">
+          המענה נשלח אוטומטית, ואיש אינו קורא את ההודעות שמגיעות לכאן.
+          כל הפניות והבקשות מוגשות <strong>במערכת הדיגיטלית</strong> — הקישור למטה.
+        </p>
+      </td></tr>
+    </table>
+
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 28px;">
       <tr><td style="background:#fefce8;border-right:4px solid #eab308;border-radius:0 12px 12px 0;padding:18px 20px;">
-        <p style="margin:0 0 8px;color:#854d0e;font-size:14px;font-weight:800;">אם אתה/את כבר רשום/ה אצלנו:</p>
+        <p style="margin:0 0 8px;color:#854d0e;font-size:14px;font-weight:800;">אם אתם כבר רשומים אצלנו:</p>
         <p style="margin:0;color:#713f12;font-size:13px;line-height:1.7;">
-          ניתן לכתוב לנו ב<strong>מייל חדש</strong> לכתובת
-          <a href="mailto:igud@chasamsofer.info" style="color:#854d0e;font-weight:700;text-decoration:none;">igud@chasamsofer.info</a>,
-          וב<strong>שורת הנושא</strong> לכתוב את <strong>מספר תעודת הזהות שלך במלואו (כולל ספרת ביקורת)</strong> —
-          והמערכת תשלח אליך אוטומטית מייל עם הפרטים שלך וקישורים להגשת בקשות.
+          ייתכן שפניתם מכתובת מייל שאינה זו הרשומה אצלנו.
+          היכנסו למערכת עם מספר תעודת הזהות — שם תמצאו את הפרטים שלכם,
+          את סדר הדורות, ואת כל הבקשות הפתוחות.
         </p>
       </td></tr>
     </table>

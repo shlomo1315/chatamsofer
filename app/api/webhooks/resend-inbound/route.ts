@@ -256,7 +256,29 @@ async function maybeAutoReplyIgud(
     const { data } = await admin.from('beneficiaries').select(COLS).ilike('email', from).maybeSingle()
     ben = (data as Ben) ?? null
   }
-  if (!ben) return
+
+  // 🔴 פונה שאינו מזוהה — הזמנה להרשמה, ולא שתיקה.
+  //
+  // ⚠️ עד כה היה כאן `return` בלבד: מי שאינו רשום (או ששלח מכתובת שאינה
+  // על הכרטסת) לא קיבל דבר, ולא ידע אם המייל בכלל הגיע. התבנית
+  // registrationInviteEmail הייתה קיימת כל הזמן, אך נותרה מחוברת רק
+  // ל-lib/autoReply.ts — המנגנון הישן שסרק את תיבת Gmail ואינו רץ עוד
+  // מאז המעבר ל-webhook של Resend. בכתיבה מחדש היא פשוט לא חוברה.
+  //
+  // ⚠️ אינה חושפת דבר: המענה גנרי לחלוטין — בלי שם, ת"ז או פרטים — ולכן
+  // אינו מאפשר את סריקת המאגר שההגנה מעליו נועדה למנוע.
+  if (!ben) {
+    const { registrationInviteEmail } = await import('@/lib/emailTemplates')
+    const invite = registrationInviteEmail()
+    const r = await deliverMail(from, invite.subject, invite.html, undefined, { ...mailFor('igud'), skipLog: true })
+    if (!r.ok) {
+      console.error('[igud-auto-reply] שליחת הזמנה להרשמה נכשלה:', r.error)
+      return
+    }
+    await admin.from('auto_reply_log').insert({ to_email: from, subject: invite.subject })
+      .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
+    return
+  }
 
   const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
   const details: [string, string | number | null | undefined][] = [

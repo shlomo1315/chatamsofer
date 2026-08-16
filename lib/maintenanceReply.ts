@@ -71,12 +71,25 @@ export { shouldSkip as shouldSkipAutoReply }
  * 🔴 תקרת מענים לכתובת — בולם הלולאה האחרון.
  *
  * ⚠️ כל התבניות שמעל מזהות אוטומציה *לפי דפוס*, ודפוס אפשר תמיד להחמיץ —
- * helpdesk@ הוכיח את זה. הבדיקה הזו אינה מנחשת אלא סופרת: אחרי 2 מענים
- * לאותה כתובת בשבוע, לא נשלח עוד, ולא משנה מי היא.
+ * helpdesk@ הוכיח את זה. הבדיקה הזו אינה מנחשת אלא סופרת.
+ *
+ * ⚠️ התקרה היא 10 לשבוע ולא 2.
+ *
+ * שתיים חסמו אנשים אמיתיים: מי שפנה שלוש פעמים בשבוע — שאלה, ואז
+ * הבהרה, ואז בקשה נוספת — קיבל שתיקה מוחלטת בפנייה השלישית, בלי שידע
+ * מדוע. התיבות האלה אינן נקראות בידי אדם, ולכן שתיקה שם היא מבוי סתום
+ * גמור ולא רק עיכוב.
+ *
+ * ⚠️ 10 עדיין בולם לולאה: רובוט בלולאה מגיע לעשרה מענים תוך דקות, בעוד
+ * שאדם אמיתי כמעט לעולם אינו שולח עשרה מיילים בשבוע לאותה תיבה. שאר
+ * ההגנות (דפוס הכתובת, כותרות Auto-Submitted) תופסות את הרוב לפני כן —
+ * הספירה היא הרשת האחרונה, לא הראשונה.
  *
  * 🔴 נכשל-סגור: אם הטבלה חסרה או השאילתה נכשלה — לא עונים. במצב שבו איננו
  * יודעים כמה מענים כבר יצאו, שתיקה עדיפה על לולאה.
  */
+const AUTO_REPLY_WEEKLY_CAP = 10
+
 export async function underAutoReplyCap(db: SupabaseClient, email: string): Promise<boolean> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
   const { count, error } = await db
@@ -89,7 +102,7 @@ export async function underAutoReplyCap(db: SupabaseClient, email: string): Prom
     console.error(`[maintenance-reply] 🔴 בדיקת התקרה נכשלה (${error.message}) — לא נשלח מענה ל-${email}`)
     return false
   }
-  if ((count ?? 0) >= 2) {
+  if ((count ?? 0) >= AUTO_REPLY_WEEKLY_CAP) {
     console.warn(`[maintenance-reply] 🔴 תקרת מענים ל-${email} — נחסם (${count} בשבוע האחרון)`)
     return false
   }
