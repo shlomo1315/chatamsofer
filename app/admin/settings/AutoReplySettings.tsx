@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail,
 } from 'lucide-react'
+import { REQUEST_MAILTO_PRESETS, requestMailtoUrl } from '@/lib/autoReplyConfig'
 import type { AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection } from '@/lib/autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -267,14 +268,46 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 function ButtonsEditor({ label, hint, buttons, onChange }: {
   label: string; hint?: string; buttons: AutoReplyButton[]; onChange: (b: AutoReplyButton[]) => void
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false)
+
+  /** מוסיף כפתור הגשה מוכן — נושא שה-webhook מזהה + גוף מונחה. */
+  const addPreset = (p: typeof REQUEST_MAILTO_PRESETS[number]) => {
+    onChange([...buttons, { label: p.label, url: requestMailtoUrl(p.subject) }])
+    setPickerOpen(false)
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-bold text-slate-600">{label}</span>
-        <button onClick={() => onChange([...buttons, { label: '', url: '' }])}
-          className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700">
-          <Plus size={13} /> הוספה
-        </button>
+        <div className="flex items-center gap-3">
+          {/* ⚠️ בורר קישורי הגשה: הרכבת mailto עם נושא מזוהה וגוף מונחה
+              ביד היא מקור לטעויות, ונושא שגוי אחד מנתק את קליטת הבקשה. */}
+          <div className="relative">
+            <button onClick={() => setPickerOpen(o => !o)}
+              className="flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-700">
+              <Mail size={13} /> קישור הגשה
+            </button>
+            {pickerOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setPickerOpen(false)} />
+                <div className="absolute left-0 top-6 z-20 w-60 rounded-xl border border-slate-200 bg-white shadow-lg p-1">
+                  {REQUEST_MAILTO_PRESETS.map(p => (
+                    <button key={p.subject} onClick={() => addPreset(p)}
+                      className="w-full text-right px-3 py-2 rounded-lg hover:bg-emerald-50 transition-colors">
+                      <span className="block text-xs font-bold text-slate-800">{p.label}</span>
+                      <span className="block text-[11px] text-slate-400">{p.hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={() => onChange([...buttons, { label: '', url: '' }])}
+            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-700">
+            <Plus size={13} /> הוספה
+          </button>
+        </div>
       </div>
       {hint && <p className="text-[11px] text-slate-400 mb-1.5">{hint}</p>}
       <div className="flex flex-col gap-1.5">

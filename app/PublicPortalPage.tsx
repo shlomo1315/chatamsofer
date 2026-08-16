@@ -1928,24 +1928,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [existingDocs, setExistingDocs] = useState<Record<string, { url: string; name: string }>>({})
   const [docFiles, setDocFiles] = useState<Record<string, File | null>>({})
 
-  // אזהרת החלפת קובץ: מסמך שכבר קיים במערכת יידרס. מוצגת פעם אחת, בבחירה,
-  // כדי שהמשתמש לא ימחק בטעות מסמך תקין.
-  const [replaceWarn, setReplaceWarn] = useState<{ key: string; file: File } | null>(null)
-
+  // ⚠️ אזהרת "החלפת מסמך קיים" הוסרה.
+  //
+  // היא נבנתה כדי למנוע מחיקה בטעות, אבל בפועל הופיעה דווקא כשהמערכת
+  // *ביקשה* מהמבקש להעלות מסמכים מחדש — כלומר בדיוק כשההחלפה מכוונת.
+  // הודעת "המסמך הקיים יימחק לצמיתות" באמצע השלמת מסמכים נדרשים היא
+  // רעש שמפחיד את הפונה בלי שיש מה להחליט.
+  //
+  // ⚠️ המחיקה עצמה נשארת בשרת (upload-docs): העלאה חדשה מחליפה את
+  // הקודמת. זו התנהגות מכוונת, רק בלי לשאול.
   const setDocFile = (key: string, f: File | null) => {
-    // קובץ קיים + קובץ חדש נבחר => מבקשים אישור לפני שדורסים
-    if (f && existingDocs[key]) {
-      setReplaceWarn({ key, file: f })
-      return
-    }
     setDocFiles(prev => ({ ...prev, [key]: f }))
-  }
-
-  /** אישור ההחלפה — מכניס את הקובץ שנבחר בפועל. */
-  const confirmReplace = () => {
-    if (!replaceWarn) return
-    setDocFiles(prev => ({ ...prev, [replaceWarn.key]: replaceWarn.file }))
-    setReplaceWarn(null)
   }
   const { docTypes: dynDocTypes } = useDocTypes()
   // תווית מסמך: עדיפות לתוויות המתארות, ואז לסוגים מותאמים מההגדרות
@@ -3144,7 +3137,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setError('')
     setRabbiDownloading(true)
     try {
-      setRabbiFormView(`/api/portal/rabbi-form?t=${Date.now()}`)
+      // ⚠️ מסמן "הצג את הטופס" בלבד. קודם הושמה כאן כתובת מלאה, בעוד
+      // שאר הקוד מרכיב ממנו `?loan=<ערך>` — כך נוצרה כתובת מקוננת
+      // (`?loan=%2Fapi%2Fportal%2Frabbi-form...`). המסלול מתעלם מהפרמטר
+      // ולכן התצוגה שרדה, אך ההורדה נשברה.
+      setRabbiFormView('blank')
     } catch {
       setError('שגיאת רשת. אנא נסו שוב.')
     } finally {
@@ -6463,7 +6460,9 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ⚠️ direct — הפורטל אינו סשן צוות, ולכן המשיכה ישירה. */}
               <div className="rabbi-form-print flex-1 w-full overflow-y-auto bg-slate-100">
                 <PdfCanvasView
-                  url={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
+                  url={rabbiFormView === 'blank'
+                    ? '/api/portal/rabbi-form'
+                    : `/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
                   name="טופס אישור רב"
                   direct
                   className="w-full"
@@ -6471,15 +6470,36 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
 
               <div className="flex gap-2 px-5 py-3.5 border-t border-slate-100 shrink-0">
-                {/* ⚠️ הורדה דרך downloadDocDirect ולא <a download>: ניווט
-                    ישיר ל-PDF נתפס ע"י נטפרי ונשלח לבדיקה. כאן הקובץ
-                    נמשך כ-blob ונשמר מקומית, בלי ניווט. */}
+                {/* 🔴 משיכה ישירה כ-blob, לא downloadDocDirect.
+                    downloadDocDirect מיועד לקבצים בדלי האחסון: הוא מפרק את
+                    הכתובת לנתיב אחסון ומושך דרך /api/files/data. הטופס אינו
+                    קובץ מאוחסן אלא נוצר דינמית ב-/api/portal/rabbi-form,
+                    ולכן הנתיב "נמצא" היה הכתובת עצמה — 404, ובפורטל גם 401.
+                    ה-catch הריק בלע את השגיאה, והכפתור פשוט לא עשה כלום.
+                    ⚠️ blob ולא <a download>: ניווט ישיר ל-PDF נתפס ע"י
+                    נטפרי ונשלח לבדיקה. */}
                 <button type="button"
-                  onClick={() => {
-                    downloadDocDirect(
-                      `/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`,
-                      'טופס-אישור-רב.pdf',
-                    ).catch(() => {})
+                  onClick={async () => {
+                    try {
+                      const src = rabbiFormView === 'blank'
+                        ? '/api/portal/rabbi-form'
+                        : `/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`
+                      const res = await fetch(src, { credentials: 'include' })
+                      if (!res.ok) throw new Error(String(res.status))
+                      const blob = await res.blob()
+                      const href = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = href
+                      a.download = 'טופס-אישור-רב.pdf'
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      // ⚠️ שחרור מושהה: ביטול מיידי מבטל את ההורדה בחלק
+                      // מהדפדפנים לפני שהספיקו לקרוא את ה-blob.
+                      setTimeout(() => URL.revokeObjectURL(href), 10_000)
+                    } catch {
+                      setError('הורדת הטופס נכשלה. אנא נסו שוב.')
+                    }
                   }}
                   className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
                   <Upload size={16} className="rotate-180" /> הורדה
@@ -7077,50 +7097,6 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         </p>
       </footer>
 
-      {/* אזהרת החלפת מסמך — הקובץ הקיים יימחק לצמיתות */}
-      {replaceWarn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setReplaceWarn(null)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="bg-amber-50 border-b border-amber-200 px-5 py-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                <AlertTriangle size={20} />
-              </div>
-              <h3 className="font-bold text-slate-900">שימו לב — החלפת מסמך קיים</h3>
-            </div>
-
-            <div className="px-5 py-4 flex flex-col gap-3">
-              <p className="text-sm text-slate-700 leading-relaxed">
-                עבור <strong>{docLabel(replaceWarn.key)}</strong> כבר קיים מסמך במערכת.
-              </p>
-              <p className="text-sm text-slate-700 leading-relaxed">
-                העלאת הקובץ החדש <strong>תחליף את הקובץ הקיים</strong>. הקובץ הקודם יימחק לצמיתות ולא ניתן יהיה לשחזרו.
-              </p>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <p className="text-[11px] text-slate-500 mb-0.5">הקובץ החדש</p>
-                <p className="text-sm font-semibold text-slate-800 truncate">{replaceWarn.file.name}</p>
-              </div>
-            </div>
-
-            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setReplaceWarn(null)}
-                className="text-sm font-medium text-slate-600 px-4 py-2 rounded-lg hover:bg-white transition-colors"
-              >
-                ביטול
-              </button>
-              <button
-                type="button"
-                onClick={confirmReplace}
-                className="text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg transition-colors shadow-sm"
-              >
-                כן, החלף את הקובץ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
     </EditProvider>
   )
