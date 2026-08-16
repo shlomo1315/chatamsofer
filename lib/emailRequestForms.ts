@@ -76,6 +76,56 @@ export const SUBJECT_PREFIX: Record<ReqType, string> = {
   widow: 'בקשת סיוע אלמנה',
 }
 
+/**
+ * תיבת האגף → סוג הבקשה שמוגשת אליה.
+ *
+ * 🔴 מאפשר הגשה עם **ת"ז בלבד** בשורת הנושא: התיבה כבר אומרת מה סוג
+ * הבקשה, ואין צורך שהפונה ישמור על ניסוח מדויק. עד כה כל ההגשות הופנו
+ * ל-igud@, ולכן הנושא היה הדבר היחיד שקבע — ושורת נושא שהשתנתה קצת
+ * הפילה את הקליטה בשקט.
+ *
+ * ⚠️ אינו מחליף את זיהוי הנושא אלא נוסף עליו: קישורי mailto שכבר נשלחו
+ * לאנשים מפנים ל-igud@ עם נושא מלא, והם חייבים להמשיך לעבוד.
+ *
+ * ⚠️ igud@ בכוונה *אינו* ברשימה — היא תיבת הכניסה הכללית, ומייל שמגיע
+ * אליה עם "שלום, מה שלומכם" אינו בקשה. שם הנושא עדיין קובע.
+ */
+export const MAILBOX_REQUEST_TYPE: Record<string, ReqType> = {
+  'g@chasamsofer.info': 'loan',
+  'y@chasamsofer.info': 'birth',
+  'r@chasamsofer.info': 'financial_aid',
+  'a@chasamsofer.info': 'widow',
+}
+
+/**
+ * האם המייל הזה הוא בקשה — לפי התיבה שאליה הגיע ולפי הנושא.
+ *
+ * ⚠️ מייל לתיבת אגף נחשב בקשה רק אם יש בנושא ת"ז בת 9 ספרות. בלי זה
+ * כל שאלה שנשלחת ל-g@ ("מה קורה עם ההלוואה שלי") הייתה נקלטת כבקשה
+ * חדשה ומקבלת מייל דחייה במקום מענה.
+ */
+export function detectReqTypeForMailbox(subject: string, mailbox?: string | null): ReqType | null {
+  const box = String(mailbox ?? '').toLowerCase().trim()
+  const byBox = MAILBOX_REQUEST_TYPE[box]
+  const bySubject = detectReqType(subject)
+
+  // ⚠️ ת"ז תקינה בנושא — גם המזהה שהקליטה זקוקה לו, וגם ההבחנה בין הגשה
+  // לבין שאלה רגילה לאותה תיבה.
+  const id = String(subject ?? '').match(/\d{9}/)?.[0]
+  const hasValidId = !!id && validateIsraeliId(id)
+
+  // 🔴 בתיבת אגף — ת"ז תקינה היא תנאי מוחלט, גם כשהנושא הזכיר את הסוג.
+  //
+  // detectReqType תופס מילות מפתח ("הלוואה", "לידה"), ולכן שאלה תמימה
+  // כמו "מה קורה עם ההלוואה שלי?" זוהתה כבקשת הלוואה חדשה — והפונה קיבל
+  // מייל דחייה ("לא צוינה תעודת זהות") במקום מענה. בתיבות האלה שאלות הן
+  // הרוב, ולכן הרף כאן מחמיר יותר מאשר ב-igud.
+  if (byBox) return hasValidId ? (bySubject ?? byBox) : null
+
+  // תיבה שאינה תיבת הגשה (igud, office) — הנושא לבדו קובע, כשהיה.
+  return bySubject
+}
+
 // זיהוי סוג הבקשה מתוך שורת הנושא (לידה שקטה לפני לידה — כי "לידה" מוכל ב"לידה שקטה").
 // עמיד: מסיר סימוני כיווניות (RTL/LTR marks) ורווחים כפולים, ותופס וריאציות ניסוח נפוצות.
 export function detectReqType(subject: string): ReqType | null {

@@ -5,7 +5,7 @@ import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMai
 import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
-import { handleEmailRequest, isRequestSubject } from '@/lib/emailRequestIntake'
+import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
 import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
@@ -323,6 +323,11 @@ export async function POST(request: NextRequest) {
   // (3) נפילה-לאחור ל-to של ה-envelope.
   // בקשה (לידה/הלוואה/סיוע) — תמיד מנותבת ל-igud, גם כשהגיעה דרך כתובת
   // ה-copy. בלי זה היא נופלת ל'משרד ראשי' ומייל הדחייה לא נשלח.
+  //
+  // ⚠️ *לפי הנושא בלבד* כאן, ובכוונה: הכלל הזה נועד להציל בקשה שהגיעה
+  // דרך כתובת ה-copy ואיבדה את נמענה. בקשה שהוגשה לתיבת אגף (g@/y@/r@/a@)
+  // כבר יודעת לאן היא שייכת, והפנייתה ל-igud הייתה מוציאה אותה מהתיבה
+  // שהמזכיר של אותו אגף עוקב אחריה.
   const isRequestMail = isRequestSubject(subject)
 
   // כל כללי הניתוב מרוכזים ב-lib/mailRouting (ונבדקים שם).
@@ -332,6 +337,14 @@ export async function POST(request: NextRequest) {
     isRequest: isRequestMail,
     envelopeTo: to.email,
   })
+
+  // 🔴 זיהוי הבקשה הסופי — לפי הנושא *או* לפי התיבה שאליה הגיעה.
+  //
+  // הגשה לתיבת אגף עם ת"ז בלבד בנושא היא בקשה תקפה: התיבה אומרת את הסוג.
+  // ⚠️ חייב לשמש בכל החלטה על המייל הזה. אילו הקליטה הייתה מזהה בקשה
+  // והמענה האוטומטי לא — הפונה היה מקבל גם אישור קליטה וגם "פנייתכם
+  // התקבלה" הגנרי, שסותר אותו.
+  const isRequest = isRequestMailFor(subject, resolvedToEmail)
 
   // ── בידוד ארגוני: קליטה רק של דואר שמופנה לדומיין של חתם סופר ──
   // אותו webhook נכנס עלול לקבל דואר ממערכות אחרות שמשתמשות באותה תשתית Resend.
@@ -834,8 +847,12 @@ export async function POST(request: NextRequest) {
 
   // נושא אפקטיבי: אם הנושא לא זוהה כבקשה — נפילה-לאחור לזיהוי לפי גוף הטופס.
   // (מגן על נושא פגום/מקודד, כשהגוף הוא טופס בקשה תקין.)
-  let requestSubject = subject
-  if (!isRequestSubject(subject)) {
+  //
+  // ⚠️ קודם לכל — השלמה לפי התיבה: הגשה ל-g@/y@/r@/a@ עם ת"ז בלבד מקבלת
+  // כאן נושא מלא בפורמט שהקליטה מצפה לו, שכן handleEmailRequest נשען על
+  // detectReqType(subject) כדי לדעת את הסוג.
+  let requestSubject = effectiveRequestSubject(subject, resolvedToEmail)
+  if (!isRequestSubject(requestSubject)) {
     const idInBody = (bodyText.match(/מזה[הא][:\s]*?(\d{9})/) || bodyText.match(/ת\.?\s*ז[:\s.]*?(\d{9})/))?.[1] ?? null
     let bodyType: string | null = null
     if (/בית\s*החלמה/.test(bodyText) && /תאריך\s*לידה/.test(bodyText)) {
@@ -967,7 +984,10 @@ export async function POST(request: NextRequest) {
   // ⚠️ לא נשלח על בקשות (מקבלות מענה ייעודי — אישור קליטה או פירוט מה חסר),
   // ולא על תשובות בשרשור שלנו או בירורי הלוואה — הפונה כבר בתוך תהליך.
   try {
-    if (!isRequestSubject(subject) && !isReplyToUs && !looksLikeLoanInquiry) {
+    // ⚠️ isRequest ולא isRequestSubject: בקשה שהוגשה לתיבת אגף עם ת"ז בלבד
+    // אינה מזוהה לפי הנושא, ובלי התיקון הזה הייתה מקבלת גם אישור קליטה
+    // וגם את המענה הגנרי — שני מיילים סותרים על פנייה אחת.
+    if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry) {
       await sendAutoReply(admin, {
         fromEmail: from.email,
         department: departmentByEmail(resolvedToEmail)?.key ?? null,

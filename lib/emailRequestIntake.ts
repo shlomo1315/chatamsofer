@@ -5,7 +5,7 @@ import { deliverMail } from './sendMail'
 import { mailFor } from './departments'
 import { emailIntakeRejectedEmail, requestBlockedRejectedEmail, requestReceivedEmail, greetMrs } from './emailTemplates'
 import {
-  detectReqType, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
+  detectReqType, detectReqTypeForMailbox, SUBJECT_PREFIX, attachmentsFor, parseDraft, validateRequest,
   draftMailto, IGUD_MAILBOX, type ReqType,
 } from './emailRequestForms'
 import { isDepartmentOpen, departmentClosedMessage, type GatedDepartment } from './departmentGates'
@@ -398,6 +398,41 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
 // משמש את ה-webhook לבדיקה מהירה אם זו בקשה (לפי הנושא)
 export function isRequestSubject(subject: string): boolean {
   return detectReqType(subject) !== null
+}
+
+/**
+ * כמו isRequestSubject, אך מזהה גם לפי התיבה שאליה הגיע המייל.
+ *
+ * 🔴 חייב לשמש בכל מקום שבו isRequestSubject שימש לקבלת החלטה על מייל
+ * נכנס. בקשה שתזוהה כאן אך לא שם (או להפך) תיפול בין הכיסאות: או
+ * שתיקלט ותקבל *גם* מענה אוטומטי, או שלא תיקלט כלל.
+ */
+export function isRequestMailFor(subject: string, mailbox?: string | null): boolean {
+  return detectReqTypeForMailbox(subject, mailbox) !== null
+}
+
+/**
+ * הנושא שהקליטה עובדת איתו.
+ *
+ * ⚠️ handleEmailRequest נשען על detectReqType(subject) כדי לדעת את הסוג.
+ * כשההגשה הגיעה לתיבת אגף עם ת"ז בלבד, הנושא אינו מכיל את הסוג — ולכן
+ * הוא מורכב כאן מחדש בפורמט שהקליטה מצפה לו.
+ */
+export function effectiveRequestSubject(subject: string, mailbox?: string | null): string {
+  const type = detectReqTypeForMailbox(subject, mailbox)
+
+  // 🔴 אינו בקשה — מוחזר נושא מנוטרל ולא הנושא המקורי.
+  //
+  // ⚠️ "מה קורה עם ההלוואה שלי?" שנשלח ל-g@ אינו בקשה (אין ת"ז), אבל
+  // הנושא המקורי עדיין מכיל את המילה "הלוואה" — ולכן isRequestSubject
+  // עליו מחזיר אמת. החזרתו כפי שהוא הייתה מחזירה את השאלה למסלול
+  // הקליטה דרך הדלת האחורית, והפונה היה מקבל מייל דחייה במקום מענה.
+  if (!type) return isRequestSubject(subject) ? '' : subject
+
+  const id = String(subject ?? '').match(/\d{9}/)?.[0] ?? ''
+  // נושא שכבר בפורמט הנכון נשאר כפי שהוא — כדי לא לאבד ניסוח מדויק
+  // (למשל "בקשת סיוע אלמן" מול "אלמנה").
+  return isRequestSubject(subject) ? subject : `${SUBJECT_PREFIX[type]} · ת.ז ${id}`
 }
 
 // בונה קישורי mailto לטיוטות הגשה במייל (לחסומים) — לכל סוג בקשה, עם הת"ז בנושא.
