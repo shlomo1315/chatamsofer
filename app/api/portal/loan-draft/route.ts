@@ -16,6 +16,7 @@ import {
   findOpenLoan, findDraftAwaitingRabbiForm, openLoanMessageFor, AWAITING_RABBI_FORM,
 } from '@/lib/openLoanGuard'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
+import { normalizeLoanSource } from '@/lib/loanSubmissionSource'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'נדרש אימות מחדש' }, { status: 401 })
   }
 
-  const { amount, installments, purpose, purpose_details, declaration, notes, document_urls } = body
+  const {
+    amount, installments, purpose, purpose_details, declaration, notes, document_urls,
+    rabbi_form_url, submission_source,
+  } = body
 
   const parsedAmount = parseFloat(String(amount))
   const parsedInstallments = parseInt(String(installments), 10)
@@ -82,6 +86,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: openLoanMessageFor(openLoan), openLoan: true }, { status: 409 })
   }
 
+  // 🔴 טופס אישור הרב חובה — הבקשה מוגשת שלמה או לא מוגשת כלל.
+  //
+  // ⚠️ קודם נשמרה כאן טיוטה בסטטוס awaiting_rabbi_form, והמבקש נדרש
+  // לחזור בכניסה נפרדת כדי להעלות את הטופס. רבים לא חזרו: הבקשה נותרה
+  // תקועה במצב ביניים והקפיצה חלונית השלמה בכל כניסה. עכשיו הטופס
+  // מתקבל בחלונית ההנחיות — לפני המילוי — ומצורף בהגשה עצמה.
+  const rabbiFormUrl = String(rabbi_form_url ?? '').trim()
+  if (!rabbiFormUrl) {
+    return NextResponse.json({ error: 'חובה לצרף את טופס אישור הרב החתום' }, { status: 400 })
+  }
+
   const fields = {
     beneficiary_id: sessionId,
     amount: parsedAmount,
@@ -92,8 +107,13 @@ export async function POST(request: NextRequest) {
     declaration: parsedDeclaration,
     notes: notes ? String(notes).trim() : null,
     document_urls: Array.isArray(document_urls) && document_urls.length ? document_urls : null,
-    status: AWAITING_RABBI_FORM,
-    rabbi_form_downloaded_at: new Date().toISOString(),
+    // ⚠️ pending ולא AWAITING_RABBI_FORM: הבקשה שלמה ומגיעה ישירות
+    // לטיפול המזכיר.
+    status: 'pending',
+    rabbi_form_url: rabbiFormUrl,
+    rabbi_form_uploaded_at: new Date().toISOString(),
+    // מאיפה הוגשה — לפילוח אתר מול מייל. ראה lib/loanSubmissionSource.
+    submission_source: normalizeLoanSource(submission_source),
   }
 
   // ⚠️ טיוטה קיימת מתעדכנת ולא מוכפלת: הורדה חוזרת של הטופס (כי הקובץ

@@ -248,6 +248,14 @@ export interface Loan {
   end_date?: string
   disbursed_at?: string | null
   disbursed_by?: string | null
+  /** טופס אישור הרב החתום, כפי שצורף בהגשה. */
+  rabbi_form_url?: string | null
+  /**
+   * מאיפה הוגשה הבקשה — 'portal' (האתר) או 'email'.
+   * ⚠️ null בבקשות שקדמו לשדה: אינן יודעות מאיפה הגיעו, וקביעת ערך
+   * עבורן הייתה ממציאה נתון. ראו lib/loanSubmissionSource.
+   */
+  submission_source?: string | null
   notes?: string
   created_at: string
   updated_at: string

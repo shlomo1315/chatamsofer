@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
+import { loanSourceLabel } from '@/lib/loanSubmissionSource'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import SafeDocImage from '@/components/ui/SafeDocImage'
@@ -161,6 +162,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                 {loan.purpose_details && <p><span className="text-slate-500">פירוט מטרה: </span>{loan.purpose_details}</p>}
                 {loan.declaration && <p><span className="text-slate-500">פנייה קודמת לגמ״ח: </span>{loan.declaration}</p>}
                 <p><span className="text-slate-500">תאריך הגשה: </span><span className="ltr-num">{fmtDate(loan.created_at)}</span></p>
+                {/* ⚠️ מקור ההגשה מוצג בכרטסת ולא רק נצבר לדוח: כשבקשה
+                    נראית חריגה (טופס ממולא ביד, פרטים חסרים) השאלה
+                    הראשונה היא באיזה מסלול היא הגיעה. */}
+                <p><span className="text-slate-500">הוגשה דרך: </span>{loanSourceLabel(loan.submission_source)}</p>
               </div>
             </Card>
 

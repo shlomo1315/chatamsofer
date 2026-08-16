@@ -25,24 +25,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'נדרש אימות מחדש' }, { status: 401 })
   }
 
-  const loanId = request.nextUrl.searchParams.get('loan')
-  if (!loanId) return NextResponse.json({ error: 'חסר מזהה בקשה' }, { status: 400 })
-
+  // 🔴 אינו דורש מזהה בקשה.
+  //
+  // ⚠️ קודם הטופס הופק רק עבור בקשה קיימת (?loan=), וזה כפה את הסדר
+  // הישן: המבקש נאלץ להגיש קודם — ולו כטיוטה — רק כדי לקבל את הטופס
+  // להחתמה, ואז לחזור בכניסה נפרדת. עכשיו הטופס נגזר מפרטי המוטב
+  // בלבד (שם, ת"ז, סדר הדורות), ולכן ניתן להורידו לפני שנפתחה בקשה.
+  //
+  // ⚠️ ההרשאה לא נחלשה: היא נשענת על סשן הפורטל (getPortalBeneficiaryId)
+  // ומפיקה אך ורק את פרטי המוטב שבסשן. הסכום ומספר התשלומים הוסרו
+  // מהטופס ממילא — ראה lib/rabbiFormPdf.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
-
-  // ⚠️ ה-eq על beneficiary_id הוא ההרשאה עצמה: בלעדיו כל מזהה הלוואה
-  // היה מפיק טופס עם פרטי משפחה אחרת.
-  const { data: loan } = await db
-    .from('loans')
-    .select('id, amount, installments, beneficiary_id')
-    .eq('id', loanId)
-    .eq('beneficiary_id', beneficiaryId)
-    .maybeSingle()
-
-  if (!loan) return NextResponse.json({ error: 'הבקשה לא נמצאה' }, { status: 404 })
 
   const { data: ben } = await db
     .from('beneficiaries')
