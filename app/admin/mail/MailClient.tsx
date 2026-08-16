@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { docViewUrl, docDownloadUrl } from '@/lib/docUrl'
 import { openDocInNewTab, downloadDocViaData } from '@/lib/docBlob'
 import DocThumb from '@/components/ui/DocThumb'
+import RelatedRecords from './RelatedRecords'
 import {
   Inbox, Send, RefreshCw, PenSquare, Mail, Search, X,
   ChevronLeft, ChevronRight, Loader2, Reply, User, Phone, MapPin,
@@ -1737,6 +1738,13 @@ export default function MailClient() {
                   )
                 )}
               </div>
+              {/* ⚠️ קפיצה לבקשות של השולח — key לפי הכתובת, כדי שמעבר
+                  להודעה אחרת ישלוף מחדש ולא יציג את הבקשות של הקודם. */}
+              {selected.fromEmail && folder !== 'SENT' && (
+                <div className="mt-1.5">
+                  <RelatedRecords key={selected.fromEmail} email={selected.fromEmail} />
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end min-w-0 max-w-[65%]">
               {/* Handled toggle */}

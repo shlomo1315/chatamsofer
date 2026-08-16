@@ -10,6 +10,15 @@ import LineageAssignEditor from './LineageAssignEditor'
 import { Beneficiary } from '@/types'
 import Card from '@/components/ui/Card'
 import Tabs from '@/components/ui/Tabs'
+import { OPEN_LOAN_STATUSES } from '@/lib/openLoanGuard'
+
+/** לידות פעילות: הוגשו וטרם נסגרו/בוטלו. */
+const OPEN_MATERNITY_STATUSES = ['pending', 'approved', 'active']
+
+/** תוויות הסטטוס לקיצור "בקשות פעילות". */
+const ACTIVE_LABEL: Record<string, string> = {
+  pending: 'ממתינה', inquiry: 'בבירור', approved: 'אושרה', active: 'פעילה',
+}
 import BackButton from '@/components/ui/BackButton'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -684,6 +693,17 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
     </Card>
   )
 
+  // ── בקשות פעילות — לקיצור הדרך שבראש הכרטסת ──
+  //
+  // ⚠️ הסטטוסים נגזרים מ-OPEN_LOAN_STATUSES (מקור האמת ב-openLoanGuard)
+  // ולא מרשימה מקומית: רשימה משוכפלת מתפצלת מהמקור ברגע שסטטוס משתנה,
+  // וזה בדיוק מה שההערה שם מזהירה מפניו.
+  const openRequests = activity.filter(a =>
+    a.kind === 'loan'
+      ? (OPEN_LOAN_STATUSES as readonly string[]).includes(a.status)
+      : OPEN_MATERNITY_STATUSES.includes(a.status),
+  )
+
   // ── Tab: היסטוריית פעילות ──
   const activityTab = activity.length === 0 ? (
     <Card><p className="text-center text-slate-400 text-sm py-6">אין פעילות רשומה למשפחה זו</p></Card>
@@ -883,6 +903,27 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── בקשות פעילות — קיצור דרך ──
+          ⚠️ מוצג מחוץ לטאבים ובראש הכרטסת: הנתונים היו זמינים רק בתוך
+          "היסטוריית פעילות", כלומר שתי לחיצות מהמסך הראשי, ומעורבבים עם
+          בקשות סגורות. השאלה "מה פתוח למשפחה הזו עכשיו" היא הנפוצה
+          ביותר, והיא לא הייתה מקבלת תשובה במבט אחד. */}
+      {openRequests.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap rounded-xl border border-emerald-200 bg-emerald-50/60 px-3.5 py-2.5">
+          <span className="text-xs font-bold text-emerald-800 shrink-0">בקשות פעילות:</span>
+          {openRequests.map(r => (
+            <Link key={`${r.kind}-${r.id}`}
+              href={r.kind === 'loan' ? `/admin/loans/${r.id}` : `/admin/maternity/${r.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-[11px] font-bold text-emerald-900 hover:bg-emerald-100 transition-colors">
+              {r.kind === 'loan' ? <CreditCard size={11} /> : <Baby size={11} />}
+              {r.title}
+              <span className="font-normal text-emerald-600">· {ACTIVE_LABEL[r.status] ?? r.status}</span>
+              <ChevronLeft size={11} className="opacity-60" />
+            </Link>
+          ))}
         </div>
       )}
 
