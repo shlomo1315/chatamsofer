@@ -96,8 +96,16 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   return (
     <div className="flex flex-col gap-5">
       {/* ⚠️ מוצגת לפני כל השאר: ההחלטה על הבקשה מתקבלת במסך הזה, וההתראה
-          חייבת להגיע לפניה ולא אחריה. */}
-      <PriorRejectionAlert loanId={loan.id} familyName={borrower ?? undefined} />
+          חייבת להגיע לפניה ולא אחריה.
+
+          🔴 רק כשהבקשה טרם הוכרעה (ממתינה או בבירור).
+          ⚠️ ההתראה היא כלי החלטה: היא נועדה למנוע אישור של בקשה שנדחתה
+          בעבר מסיבה שעדיין תקפה. אחרי שההחלטה כבר התקבלה אין לה תפקיד —
+          היא רק חוסמת את המסך בכל כניסה לתיק מאושר, ומאמנת את המזכיר
+          לסגור חלוניות בלי לקרוא אותן. */}
+      {(loan.status === 'pending' || loan.status === 'inquiry') && (
+        <PriorRejectionAlert loanId={loan.id} familyName={borrower ?? undefined} />
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/loans" />
