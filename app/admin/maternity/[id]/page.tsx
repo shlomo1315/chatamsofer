@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { ArrowRight, Baby, CreditCard, Home, FileText, User, Phone, MapPin, GitBranch, ExternalLink, Mail, Download, Heart, Star, XCircle } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -261,6 +262,7 @@ export default async function MaternityDetailPage(
     searchParams?: Promise<Record<string, string | string[] | undefined>>
   },
 ) {
+  await guardPage('maternity')
   const _t0 = Date.now()
   const { id } = await params
   // ⚠️ מאומת מול רשימת הלשוניות ולא מועבר כמות שהוא: ערך שרירותי מהכתובת

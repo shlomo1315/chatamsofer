@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowRight, HeartHandshake } from 'lucide-react'
@@ -27,6 +28,7 @@ async function getFamily(id: string) {
 }
 
 export default async function FamilyFilePage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('widows')
   const { id } = await params
   const data = await getFamily(id)
   if (!data && isSupabaseConfigured()) notFound()

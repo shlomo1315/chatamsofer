@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { Plus, CreditCard, ExternalLink } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -61,6 +62,7 @@ async function getReplied(): Promise<string[]> {
 }
 
 export default async function LoansPage() {
+  await guardPage('loans')
   // ⚡ במקביל ולא בטור — getReplied כבר לא צריך את ה-IDs מ-getLoans (ראו שם)
   const [loans, replied] = await Promise.all([getLoans(), getReplied()])
 

@@ -1,9 +1,11 @@
+import { guardPage } from '@/lib/pageGuard'
 import { createClient } from '@/lib/supabase/server'
 import GratitudeTable, { type GratitudeRow } from './GratitudeTable'
 
 export const dynamic = 'force-dynamic'
 
 export default async function GratitudePage() {
+  await guardPage('maternity')
   const supabase = await createClient()
 
   const { data, error } = await supabase

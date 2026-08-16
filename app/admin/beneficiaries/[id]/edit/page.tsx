@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
@@ -13,6 +14,7 @@ async function getBeneficiary(id: string) {
 }
 
 export default async function EditBeneficiaryPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('beneficiaries')
   const { id } = await params
   const b = await getBeneficiary(id)
   if (!b && isSupabaseConfigured()) notFound()

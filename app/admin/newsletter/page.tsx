@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Send, Ban, Users } from 'lucide-react'
@@ -7,6 +8,7 @@ import CampaignsTable, { type CampaignRow } from './CampaignsTable'
 export const dynamic = 'force-dynamic'
 
 export default async function NewsletterPage() {
+  await guardPage('newsletter')
   const supabase = await createClient()
 
   const { data, error } = await supabase

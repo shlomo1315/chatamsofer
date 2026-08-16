@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { ArrowRight, Users, Plus } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -21,6 +22,7 @@ async function getFamily(id: string): Promise<(Family & { beneficiaries: Benefic
 }
 
 export default async function FamilyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('beneficiaries')
   const { id } = await params
   const family = await getFamily(id)
 

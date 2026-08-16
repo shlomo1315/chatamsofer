@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowRight, FileText, HandCoins } from 'lucide-react'
@@ -25,6 +26,7 @@ async function getReq(id: string): Promise<FinancialAidRequest | null> {
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
 export default async function FinancialAidDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('financial_aid')
   const { id } = await params
   const req = await getReq(id)
   if (!req && isSupabaseConfigured()) notFound()

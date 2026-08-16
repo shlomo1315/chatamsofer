@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { GitBranch } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -18,6 +19,7 @@ async function getRelations(): Promise<FamilyRelation[]> {
 }
 
 export default async function GenealogyPage() {
+  await guardPage('lineage')
   const relations = await getRelations()
 
   return (

@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -57,6 +58,7 @@ async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowReques
 }
 
 export default async function WidowsPage() {
+  await guardPage('widows')
   const { widows, requests, payments, error } = await getData()
 
   return (

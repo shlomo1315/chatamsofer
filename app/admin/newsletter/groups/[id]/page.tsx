@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
@@ -7,6 +8,7 @@ import GroupDetail from './GroupDetail'
 export const dynamic = 'force-dynamic'
 
 export default async function GroupPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('newsletter')
   const { id } = await params
   const supabase = await createClient()
 

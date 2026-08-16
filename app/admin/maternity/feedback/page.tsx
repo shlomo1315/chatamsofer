@@ -1,9 +1,11 @@
+import { guardPage } from '@/lib/pageGuard'
 import { createClient } from '@/lib/supabase/server'
 import FeedbackTable, { type FeedbackRow, type SurveyQuestion } from './FeedbackTable'
 
 export const dynamic = 'force-dynamic'
 
 export default async function MaternityFeedbackPage() {
+  await guardPage('maternity')
   let rows: FeedbackRow[] = []
   let questions: SurveyQuestion[] = []
   let missing = false

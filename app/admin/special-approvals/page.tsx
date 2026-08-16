@@ -1,3 +1,4 @@
+import { guardAdminPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
@@ -23,6 +24,7 @@ async function assertAdmin() {
 }
 
 export default async function SpecialApprovalsPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
+  await guardAdminPage()
   await assertAdmin()
   const rawParams = await searchParams
   const p = readListParams({ get: (k) => rawParams[k] ?? null })

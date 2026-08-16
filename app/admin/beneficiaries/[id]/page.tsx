@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Phone, MapPin, Calendar, Users, GitBranch, ChevronLeft, FileText, User, Activity, Baby, CreditCard, Paperclip, Mail, Gift, AlertTriangle, MessageSquare } from 'lucide-react'
@@ -307,6 +308,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 export default async function BeneficiaryDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('beneficiaries')
   const { id } = await params
   // הרצה מקבילית: getBeneficiary/getBirthCertificates/getActivity תלויים רק ב-id.
   // רק getLineagePath תלוי בצומת היחוס של המוטב, לכן נשלף אחרי שיש beneficiary.

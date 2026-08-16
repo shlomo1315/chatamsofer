@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { Heart } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
@@ -32,6 +33,7 @@ async function getSilentAids(): Promise<MaternityAid[]> {
 }
 
 export default async function SilentBirthPage() {
+  await guardPage('maternity')
   const aids = await getSilentAids()
 
   return (

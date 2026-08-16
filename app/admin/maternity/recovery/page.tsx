@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { Baby } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { MaternityAid } from '@/types'
@@ -62,6 +63,7 @@ async function getData(): Promise<{
 }
 
 export default async function RecoveryPage() {
+  await guardPage('maternity')
   const { aids, homes, homeObjs, ratings } = await getData()
 
   // אירועים לחלונית ההתראה: מימוש זכאות / בקשת תיקון

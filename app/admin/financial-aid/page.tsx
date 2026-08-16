@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import type { FinancialAidRequest } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
@@ -26,6 +27,7 @@ async function getRequests(): Promise<FinancialAidRequest[]> {
 }
 
 export default async function FinancialAidPage() {
+  await guardPage('financial_aid')
   const requests = await getRequests()
   return (
     <div className="flex flex-col gap-6">

@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import Link from 'next/link'
 import { ArrowRight, CreditCard, FileText, Edit, CheckCircle2, Clock, ExternalLink, Users, MessageSquare, Banknote } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -50,6 +51,7 @@ const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: 
 const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
 
 export default async function LoanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardPage('loans')
   const { id } = await params
   const loan = await getLoan(id)
   const beneficiaryId = (loan?.beneficiary as { id?: string } | undefined)?.id

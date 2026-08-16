@@ -1,3 +1,4 @@
+import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
 import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
@@ -87,6 +88,7 @@ async function assertAdmin() {
 }
 
 export default async function SettingsPage() {
+  await guardAdminPage()
   await assertAdmin()
   const [profiles, recoveryHomes] = await Promise.all([getProfiles(), getRecoveryHomes()])
 

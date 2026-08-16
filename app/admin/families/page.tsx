@@ -1,3 +1,4 @@
+import { guardPage } from '@/lib/pageGuard'
 import { Plus } from 'lucide-react'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Family } from '@/types'
@@ -23,6 +24,7 @@ async function getFamilies(): Promise<(Family & { member_count: number })[]> {
 }
 
 export default async function FamiliesPage() {
+  await guardPage('beneficiaries')
   const families = await getFamilies()
 
   return (
