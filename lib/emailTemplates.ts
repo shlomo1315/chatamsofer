@@ -1983,9 +1983,15 @@ export function gemachIntakeEmail(opts?: { portalBase?: string; blankFormUrl?: s
         <p style="margin:0 0 14px;color:#475569;font-size:14px;line-height:1.85;">
           2. טופס אישור רב חתום.
         </p>
-        <p style="margin:0 0 10px;color:#475569;font-size:14px;line-height:1.85;">
-          <a href="${escapeHtml(blankForm)}" style="color:#4f46e5;font-weight:800;text-decoration:underline;">הורדת טופס אישור רב ריק</a>
-          — יש למלא בכתב יד את השם, מספר הזהות וסדר הדורות, ולהחתים את הרב.
+        <!-- ⚠️ כפתור ולא קישור בתוך משפט: זו הפעולה שהמבקש חייב לבצע
+             לפני שהוא ממשיך, וקישור בשורת טקסט נבלע בין השאר. -->
+        <p style="margin:0 0 10px;">
+          <a href="${escapeHtml(blankForm)}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:14px;font-weight:800;text-decoration:none;border-radius:10px;padding:11px 20px;">
+            לחצו כאן להורדת טופס אישור רב
+          </a>
+        </p>
+        <p style="margin:0 0 10px;color:#475569;font-size:13px;line-height:1.8;">
+          יש למלא בכתב יד את השם, מספר הזהות וסדר הדורות, ולהחתים את הרב.
         </p>
         <!-- ⚠️ שם הקובץ מפורש: הקליטה האוטומטית מזהה את הטופס לפי שמו,
              וקובץ בשם אחר עלול שלא להיקלט ולעכב את הבקשה. -->

@@ -376,7 +376,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50" dir="rtl">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[1800px] mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
               <CreditCard size={20} className="text-white" />
@@ -405,8 +405,10 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      {/* max-w-7xl (1280px) — 8 עמודות צריכות מקום. ממורכז, עם רווח בצדדים. */}
-      <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
+      {/* ⚠️ 1800px ולא 1280: הטבלה נושאת שבע עמודות, ובמסך רחב היא נדחסה
+          לשליש מהרוחב בעוד הצדדים ריקים. כתובות ומיילים נשברו לשתי שורות
+          בלי סיבה. */}
+      <main className="max-w-[1800px] mx-auto px-4 py-6 flex flex-col gap-6">
         {/* Filter Cards */}
         <div className="grid grid-cols-3 gap-3">
           {statCards.map(s => {
@@ -487,14 +489,19 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                       חייבו רוחב מינימלי של 880px, וכל מסך צר מזה נגלל. שתי
                       השורות של הכתובת קריאות יותר משתי עמודות צרות ממילא. */}
                   <table className="w-full table-fixed text-sm text-right border-collapse">
+                    {/* ⚠️ עמודת הסטטוס מקבלת 14%: היא מכילה גם את התג
+                        "בוצעה" וגם כפתור "ביטול", ו-6% דחקו אותם מעבר
+                        לרוחב הטבלה — מה שהחזיר את הגלילה האופקית דרך
+                        הדלת האחורית. עמודה שאינה יכולה להתכווץ חייבת
+                        מקום מובטח, ולא שארית. */}
                     <colgroup>
-                      <col style={{ width: '20%' }} />  {/* שם */}
-                      <col style={{ width: '13%' }} />  {/* ת.ז. */}
-                      <col style={{ width: '19%' }} />  {/* כתובת — רחוב + עיר */}
-                      <col style={{ width: '14%' }} />  {/* טלפון — nowrap */}
-                      <col style={{ width: '18%' }} />  {/* מייל — נשבר */}
+                      <col style={{ width: '18%' }} />  {/* שם */}
+                      <col style={{ width: '12%' }} />  {/* ת.ז. */}
+                      <col style={{ width: '17%' }} />  {/* כתובת — רחוב + עיר */}
+                      <col style={{ width: '13%' }} />  {/* טלפון — nowrap */}
+                      <col style={{ width: '16%' }} />  {/* מייל — נשבר */}
                       <col style={{ width: '10%' }} />  {/* סכום — nowrap */}
-                      <col style={{ width: '6%'  }} />  {/* סטטוס */}
+                      <col style={{ width: '14%' }} />  {/* סטטוס — תג + כפתור ביטול */}
                     </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
