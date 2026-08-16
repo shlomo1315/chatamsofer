@@ -69,6 +69,11 @@ export async function sendAutoReply(
     fromEmail: string
     department?: DepartmentKey | null
     headers?: unknown
+    /**
+     * ⚠️ אינו משמש לנעילה, ובמכוון: dual-delivery מייצר שני עותקים עם
+     * message_id שונה, ולכן הוא אינו מזהה אמין של "אותה הודעה". נשמר
+     * בחתימה לצורכי אבחון בלבד.
+     */
     messageId?: string
   },
 ): Promise<boolean> {
@@ -97,13 +102,20 @@ export async function sendAutoReply(
       return false
     }
 
-    // 🔴 נעילה לפי ההודעה *והתיבה* — מונעת מענה כפול כששני עותקים של אותו
-    // webhook מגיעים, בלי לחסום מענה לגיטימי מתיבה אחרת.
+    // 🔴 נעילה לפי *שולח + תיבה*, ובמכוון לא לפי messageId.
     //
-    // ⚠️ המפתח כולל את התיבה בכוונה: מייל אחד שהופנה גם ל-office וגם
-    // ל-igud אמור לקבל מענה משתיהן. נעילה לפי messageId בלבד הייתה
-    // מאפשרת לתיבה הראשונה לחסום את השנייה.
-    const lockKey = `auto_reply:${dept}:${opts.messageId || from}`.slice(0, 200)
+    // ⚠️ הבאג שזה מתקן: Google dual-delivery מייצר **שני עותקים נפרדים
+    // של אותו מייל, כל אחד עם message_id משלו**. נעילה לפי messageId לא
+    // זיהתה אותם כאותה הודעה, והפונה קיבל את אותו מענה פעמיים בהפרש
+    // שניות. שתי קליטות בלוג ("נקלטו 3" ואז "נקלטו 1") הן אותו מייל.
+    //
+    // ⚠️ התיבה נשארת במפתח: מייל שהופנה גם ל-office וגם ל-igud אמור
+    // לקבל מענה משתיהן, ולכן הן אינן חוסמות זו את זו.
+    //
+    // ⚠️ המחיר: פונה ששולח שני מיילים *שונים* לאותה תיבה תוך 10 דקות
+    // יקבל מענה אחד בלבד. זה מקובל — המענה גנרי וזהה בשני המקרים, ומענה
+    // כפול מרעיש הרבה יותר ממענה שהושהה.
+    const lockKey = `auto_reply:${dept}:${from}`.slice(0, 200)
     const LOCK_TTL_MS = 10 * 60 * 1000
     const nowMs = Date.now()
     const { data: prevLock } = await db.from('app_settings').select('value').eq('key', lockKey).maybeSingle()
