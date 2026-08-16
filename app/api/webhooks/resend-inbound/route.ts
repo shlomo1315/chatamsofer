@@ -40,6 +40,19 @@ async function maybeForwardToGmail(admin: SupabaseClient, msg: {
   if (!target || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(target)) return
   if (target.toLowerCase() === from) return  // לא מעבירים בחזרה לשולח
 
+  // 🔴 כתובת מציין-מקום שנשארה בהגדרות.
+  //
+  // ⚠️ קרה בפועל: 'YOUR_EMAIL@gmail.com' נשארה ב-mail_forward מהתקנה,
+  // וכל מייל נכנס נשלח אליה, נכשל, והחזיר Delivery Status Notification
+  // לתיבה. עשרות הודעות כשל ביום שהסתירו דואר אמיתי.
+  //
+  // ⚠️ נבדק כאן ולא רק בשמירת ההגדרות: הערך כבר יושב במסד אצל מי
+  // שהתקין, ותיקון בטופס לבדו לא היה מנקה אותו.
+  if (/^(your_?email|example|test|changeme|placeholder)@/i.test(target)) {
+    console.warn(`[mail-forward] 🔴 כתובת מציין-מקום בהגדרות — ההעברה מדולגת: ${target}`)
+    return
+  }
+
   // צרופות — מצרפים מחדש מתוך האחסון (best-effort)
   const atts: MailAttachment[] = []
   for (const a of msg.attachments) {
