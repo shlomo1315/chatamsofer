@@ -15,7 +15,12 @@ export async function POST(req: Request) {
     const ok = await verifyPortalPassword(String(password))
     if (!ok) return NextResponse.json({ error: 'סיסמה שגויה' }, { status: 401 })
 
-    const token = await issuePortalToken()
+    // ⚠️ מזוהה ל-portal_sessions כדי שהמנהל יוכל לזהות מכשיר ולנתק אותו
+    // נקודתית. לא מזהה ודאי — עזר תפעולי בלבד.
+    const token = await issuePortalToken({
+      userAgent: req.headers.get('user-agent'),
+      ip: clientIp(req),
+    })
     const res = NextResponse.json({ ok: true })
     res.cookies.set(PORTAL_COOKIE, token, {
       httpOnly: true,

@@ -1,5 +1,59 @@
 import { describe, it, expect } from 'vitest'
-import { resolveMailbox } from './mailRouting'
+import { resolveMailbox, resolveAllMailboxes } from './mailRouting'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 מייל שהופנה לכמה אגפים בבת אחת.
+//
+// הבאג: מי ששלח ל-office@ ול-igud@ יחד קיבל את מענה האופיס *פעמיים*,
+// ואיגוד לא ענה כלל. Google שולח שני עותקים (dual-delivery), שניהם
+// נושאים את אותה רשימת נמענים, ו-resolveMailbox מחזיר תמיד את הראשונה
+// מביניהן — כלומר שני העותקים נפתרו לאותה תיבה.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('כל התיבות שהמייל הופנה אליהן', () => {
+  it('שני אגפים בשורת הנמענים — שניהם מוחזרים', () => {
+    const boxes = resolveAllMailboxes({
+      direct: ['office@chasamsofer.info', 'igud@chasamsofer.info'],
+    })
+    expect(boxes).toEqual(['office@chasamsofer.info', 'igud@chasamsofer.info'])
+  })
+
+  it('אותה תיבה פעמיים — פעם אחת בלבד', () => {
+    // ⚠️ אחרת אותו מענה נשלח פעמיים על עותק אחד.
+    const boxes = resolveAllMailboxes({
+      direct: ['office@chasamsofer.info', 'OFFICE@chasamsofer.info'],
+      cc: ['office@chasamsofer.info'],
+    })
+    expect(boxes).toHaveLength(1)
+  })
+
+  it('ישירים לפני Cc', () => {
+    const boxes = resolveAllMailboxes({
+      direct: ['g@chasamsofer.info'],
+      cc: ['office@chasamsofer.info'],
+    })
+    expect(boxes[0]).toBe('g@chasamsofer.info')
+    expect(boxes).toContain('office@chasamsofer.info')
+  })
+
+  it('כתובות שאינן תיבות מוכרות מושמטות', () => {
+    const boxes = resolveAllMailboxes({
+      direct: ['copy@in.chasamsofer.info', 'someone@gmail.com', 'y@chasamsofer.info'],
+    })
+    expect(boxes).toEqual(['y@chasamsofer.info'])
+  })
+
+  it('בלי אף תיבה מוכרת — רשימה ריקה', () => {
+    // ⚠️ הקורא נופל-לאחור ל-resolveMailbox, שתמיד מחזיר יעד כלשהו.
+    expect(resolveAllMailboxes({ direct: ['copy@in.chasamsofer.info'] })).toEqual([])
+  })
+
+  it('התיבה של resolveMailbox תמיד ברשימה', () => {
+    // ⚠️ עקביות בין השתיים: ההודעה נשמרת באחת, והמענה יוצא מכולן —
+    // אבל זו שבה היא נשמרה חייבת להיות ביניהן.
+    const input = { direct: ['10@chasamsofer.info'], cc: ['office@chasamsofer.info'] }
+    expect(resolveAllMailboxes(input)).toContain(resolveMailbox(input))
+  })
+})
 
 // הבאג שהתגלה בפרודקשן: מיילים שנשלחו לתיבה 10 הופיעו בתיבת office,
 // ומשתמשים ראו דואר של מחלקה אחרת.

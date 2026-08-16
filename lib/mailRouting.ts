@@ -22,6 +22,32 @@ export interface RouteInput {
 const ORG_DOMAIN = '@chasamsofer.info'
 const COPY_SUBDOMAIN = '.chasamsofer.info'   // כתובת ה-copy של Google dual-delivery
 
+/**
+ * כל התיבות המוכרות שהמייל הופנה אליהן — לפי סדר עדיפות.
+ *
+ * 🔴 נדרש כי מייל אחד יכול להיות מופנה לכמה אגפים בבת אחת. resolveMailbox
+ * מחזיר אחת בלבד (התיבה שבה ההודעה תישמר), אבל **המענה האוטומטי חייב
+ * לצאת מכל אחת מהן**: מי ששלח ל-office ול-igud יחד קיבל את מענה האופיס
+ * פעמיים — פעם לכל עותק של dual-delivery — במקום מענה מכל אגף.
+ *
+ * ⚠️ ישירים לפני Cc, ובלי כפילויות.
+ */
+export function resolveAllMailboxes(input: RouteInput): string[] {
+  const direct = (input.direct ?? []).filter(Boolean)
+  const cc = (input.cc ?? []).filter(Boolean)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const a of [...direct, ...cc]) {
+    const dep = departmentByEmail(a)
+    if (!dep) continue
+    const key = dep.email.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(dep.email)
+  }
+  return out
+}
+
 export function resolveMailbox(input: RouteInput): string {
   const direct = (input.direct ?? []).filter(Boolean)
   const cc = (input.cc ?? []).filter(Boolean)

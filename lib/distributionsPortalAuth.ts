@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs'
 import { createClient } from '@supabase/supabase-js'
 import { createHmac, timingSafeEqual } from 'crypto'
+import { issueSession, verifySession, revokeSessionByToken } from './portalSessions'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — אימות סיסמה אחת (view-only).
@@ -60,24 +61,41 @@ export async function verifyPortalPassword(plaintext: string): Promise<boolean> 
   return bcrypt.compare(plaintext, hash)
 }
 
-// טוקן: "<day>.<hmac>" — תקף TOKEN_DAYS_VALID ימים, וקשור לסיסמה הנוכחית
-export async function issuePortalToken(): Promise<string> {
-  const day = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
+/**
+ * טוקן כניסה — `<sessionId>.<hmac>`, מזהה אקראי לכל כניסה.
+ * 🔴 ראו ההסבר המלא ב-lib/portalSessions: הפורמט הישן היה זהה לכל מי
+ * שנכנס באותו יום, ולכן העתקת עוגייה נתנה גישה מלאה בלי סיסמה.
+ */
+export async function issuePortalToken(meta?: { userAgent?: string | null; ip?: string | null }): Promise<string> {
   const fp = await passwordFingerprint()
-  const sig = createHmac('sha256', secret()).update(`dist_portal:${day}:${fp}`).digest('hex')
-  return `${day}.${sig}`
+  const { token } = await issueSession('distributions', fp, secret(), TOKEN_DAYS_VALID, meta)
+  return token
 }
 
 export async function verifyPortalToken(token: string | undefined): Promise<boolean> {
   if (!token) return false
   const dot = token.indexOf('.')
   if (dot < 0) return false
-  const day = Number(token.slice(0, dot))
-  const sig = token.slice(dot + 1)
-  if (isNaN(day)) return false
-  const now = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
-  if (now - day > TOKEN_DAYS_VALID || day > now) return false
   const fp = await passwordFingerprint()
-  const expected = createHmac('sha256', secret()).update(`dist_portal:${day}:${fp}`).digest('hex')
-  return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+
+  // ⚠️ טוקן ישן ("<יום>.<hmac>") נתמך עד לפקיעתו, כדי שהפריסה לא תנתק
+  // את כל מי שמחובר כרגע. מזהה הסשן החדש הוא 64 תווי hex ולעולם אינו
+  // נראה כמספר יום.
+  const head = token.slice(0, dot)
+  if (/^\d{1,7}$/.test(head)) {
+    const day = Number(head)
+    const now = Math.floor(Date.now() / (24 * 60 * 60 * 1000))
+    if (now - day > TOKEN_DAYS_VALID || day > now) return false
+    const sig = token.slice(dot + 1)
+    const expected = createHmac('sha256', secret()).update(`dist_portal:${day}:${fp}`).digest('hex')
+    return sig.length === expected.length && timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+  }
+
+  return verifySession('distributions', token, fp, secret())
+}
+
+/** יציאה מרצון — מנתקת את הסשן הזה בלבד. */
+export async function revokePortalToken(token: string | undefined): Promise<void> {
+  if (!token || /^\d{1,7}\./.test(token)) return
+  await revokeSessionByToken('distributions', token)
 }

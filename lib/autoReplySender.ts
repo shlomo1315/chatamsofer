@@ -97,9 +97,13 @@ export async function sendAutoReply(
       return false
     }
 
-    // 🔴 נעילה לפי ההודעה עצמה — מונעת מענה כפול כששני עותקים של אותו
-    // webhook מגיעים. ממוקדת בהודעה ואינה נוגעת בהודעות אחרות מאותו שולח.
-    const lockKey = `auto_reply:${opts.messageId || `${from}|${dept}`}`.slice(0, 200)
+    // 🔴 נעילה לפי ההודעה *והתיבה* — מונעת מענה כפול כששני עותקים של אותו
+    // webhook מגיעים, בלי לחסום מענה לגיטימי מתיבה אחרת.
+    //
+    // ⚠️ המפתח כולל את התיבה בכוונה: מייל אחד שהופנה גם ל-office וגם
+    // ל-igud אמור לקבל מענה משתיהן. נעילה לפי messageId בלבד הייתה
+    // מאפשרת לתיבה הראשונה לחסום את השנייה.
+    const lockKey = `auto_reply:${dept}:${opts.messageId || from}`.slice(0, 200)
     const LOCK_TTL_MS = 10 * 60 * 1000
     const nowMs = Date.now()
     const { data: prevLock } = await db.from('app_settings').select('value').eq('key', lockKey).maybeSingle()

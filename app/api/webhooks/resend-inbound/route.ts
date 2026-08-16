@@ -6,7 +6,7 @@ import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
 import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, isRequestMailFor, effectiveRequestSubject } from '@/lib/emailRequestIntake'
-import { resolveMailbox } from '@/lib/mailRouting'
+import { resolveMailbox, resolveAllMailboxes } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
 export const dynamic = 'force-dynamic'
@@ -988,12 +988,28 @@ export async function POST(request: NextRequest) {
     // אינה מזוהה לפי הנושא, ובלי התיקון הזה הייתה מקבלת גם אישור קליטה
     // וגם את המענה הגנרי — שני מיילים סותרים על פנייה אחת.
     if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry) {
-      await sendAutoReply(admin, {
-        fromEmail: from.email,
-        department: departmentByEmail(resolvedToEmail)?.key ?? null,
-        headers: data.headers,
-        messageId: String(messageId),
-      })
+      // 🔴 מענה מכל תיבה שאליה המייל הופנה, ולא רק מזו שבה הוא נשמר.
+      //
+      // ⚠️ הבאג: מי ששלח ל-office@ ול-igud@ יחד קיבל את מענה האופיס
+      // *פעמיים*. Google שולח שני עותקים (dual-delivery), שניהם נושאים
+      // את אותה רשימת נמענים, ו-resolveMailbox מחזיר תמיד את הראשונה
+      // מביניהן — כלומר שני העותקים נפתרו ל-office, ואיגוד לא ענה כלל.
+      //
+      // ⚠️ הנעילה ב-sendAutoReply היא לפי messageId+תיבה, ולכן שני
+      // מענים מאותה הודעה לשתי תיבות שונים אינם חוסמים זה את זה — אבל
+      // עותק שני של אותה הודעה לאותה תיבה כן נחסם.
+      const boxes = resolveAllMailboxes({ direct: directRecipients, cc: ccRecipients })
+      const targets = boxes.length ? boxes : [resolvedToEmail]
+      for (const box of targets) {
+        const key = departmentByEmail(box)?.key
+        if (!key) continue
+        await sendAutoReply(admin, {
+          fromEmail: from.email,
+          department: key,
+          headers: data.headers,
+          messageId: String(messageId),
+        })
+      }
     }
   } catch (e) {
     console.error('[resend-inbound] auto-reply error:', e instanceof Error ? e.message : String(e))
