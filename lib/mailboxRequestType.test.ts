@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { detectReqTypeForMailbox, MAILBOX_REQUEST_TYPE } from './emailRequestForms'
 import { isRequestMailFor, effectiveRequestSubject, isRequestSubject } from './emailRequestIntake'
+import { REQUEST_MAILTO_PRESETS, requestMailtoUrl } from './autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // הגשה לתיבת אגף עם ת"ז בלבד בשורת הנושא.
@@ -113,6 +114,45 @@ describe('🔴 עקביות: קליטה ומענה אוטומטי מסכימים
       expect(isRequestSubject(eff)).toBe(isReq)
     })
   }
+})
+
+describe('🔴 קישורי ההגשה שבדף ההגדרות באמת נקלטים', () => {
+  // ⚠️ הקישורים האלה מגיעים לפונים במייל. תיבה שגויה או נושא שגוי אחד
+  // = בקשות שנשלחות ולא נקלטות, בלי שאיש יבחין.
+  for (const p of REQUEST_MAILTO_PRESETS) {
+    it(`"${p.label}" מייצר קישור שנקלט`, () => {
+      const url = requestMailtoUrl(p.subject, p.mailbox)
+      expect(url.startsWith('mailto:')).toBe(true)
+
+      // מפרקים את הקישור בחזרה לנמען ולנושא — כפי שלקוח המייל יעשה
+      const to = decodeURIComponent(url.slice('mailto:'.length).split('?')[0])
+      const params = new URLSearchParams(url.split('?')[1] ?? '')
+      const subj = params.get('subject') ?? ''
+
+      if (p.mailbox) {
+        // מסלול התיבה: הנושא נקי, והת"ז לבדה תספיק
+        expect(to).toBe(p.mailbox)
+        expect(detectReqTypeForMailbox(subj.replace(/\[.*?\]/, VALID_ID), to)).not.toBeNull()
+      } else {
+        // מסלול האיגוד: הנושא הוא שקובע
+        expect(to).toBe('igud@chasamsofer.info')
+        expect(isRequestSubject(subj)).toBe(true)
+      }
+    })
+  }
+
+  it('כל תיבה שבבורר קיימת במיפוי הקליטה', () => {
+    for (const p of REQUEST_MAILTO_PRESETS) {
+      if (p.mailbox) expect(MAILBOX_REQUEST_TYPE).toHaveProperty(p.mailbox)
+    }
+  })
+
+  it('הנושא של כל preset מזוהה גם בפני עצמו', () => {
+    // נדרש לתאימות לאחור: קישורים ישנים נשלחו עם הנושא המלא.
+    for (const p of REQUEST_MAILTO_PRESETS) {
+      expect(isRequestSubject(`${p.subject} · ת.ז ${VALID_ID}`), p.label).toBe(true)
+    }
+  })
 })
 
 describe('המיפוי עצמו', () => {

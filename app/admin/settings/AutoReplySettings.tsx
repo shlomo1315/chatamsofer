@@ -272,7 +272,7 @@ function ButtonsEditor({ label, hint, buttons, onChange }: {
 
   /** מוסיף כפתור הגשה מוכן — נושא שה-webhook מזהה + גוף מונחה. */
   const addPreset = (p: typeof REQUEST_MAILTO_PRESETS[number]) => {
-    onChange([...buttons, { label: p.label, url: requestMailtoUrl(p.subject) }])
+    onChange([...buttons, { label: p.label, url: requestMailtoUrl(p.subject, p.mailbox) }])
     setPickerOpen(false)
   }
 

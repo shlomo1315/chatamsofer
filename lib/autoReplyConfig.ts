@@ -32,12 +32,18 @@ export const AUTO_REPLY_KEY = 'auto_reply_config'
  * ⚠️ בלי ת"ז בנושא, בשונה מ-draftMailto: המענה האוטומטי נשלח גם למי
  * שאיננו מזהים, ואין ממה לגזור אותה. הגוף מנחה את הפונה להוסיף אותה.
  */
-export const REQUEST_MAILTO_PRESETS: { label: string; subject: string; hint: string }[] = [
-  { label: 'הגשת בקשת לידה', subject: 'בקשת לידה', hint: 'עזר יולדות' },
-  { label: 'הגשת בקשת לידה שקטה', subject: 'בקשת לידה שקטה', hint: 'עזר יולדות' },
-  { label: 'הגשת בקשת הלוואה', subject: 'בקשת הלוואה', hint: 'גמ"ח' },
-  { label: 'הגשת בקשת סיוע רפואי', subject: 'בקשת סיוע רפואי', hint: 'סיוע רפואי' },
-  { label: 'הגשת בקשת סיוע אלמנה', subject: 'בקשת סיוע אלמנה', hint: 'אלמנות ויתומים' },
+export const REQUEST_MAILTO_PRESETS: {
+  label: string; subject: string; hint: string
+  /** תיבת האגף — כשקיימת, די בת"ז בנושא (ראו MAILBOX_REQUEST_TYPE). */
+  mailbox?: string
+}[] = [
+  { label: 'הגשת בקשת לידה', subject: 'בקשת לידה', hint: 'עזר יולדות · y@', mailbox: 'y@chasamsofer.info' },
+  { label: 'הגשת בקשת הלוואה', subject: 'בקשת הלוואה', hint: 'גמ"ח · g@', mailbox: 'g@chasamsofer.info' },
+  { label: 'הגשת בקשת סיוע רפואי', subject: 'בקשת סיוע רפואי', hint: 'סיוע רפואי · r@', mailbox: 'r@chasamsofer.info' },
+  { label: 'הגשת בקשת סיוע אלמנה', subject: 'בקשת סיוע אלמנה', hint: 'אלמנות ויתומים · a@', mailbox: 'a@chasamsofer.info' },
+  // ⚠️ לידה שקטה אין לה תיבה ייעודית — הנושא הוא שמבחין בינה לבין לידה
+  // רגילה, ולכן היא נשלחת לאיגוד עם נושא מלא.
+  { label: 'הגשת בקשת לידה שקטה', subject: 'בקשת לידה שקטה', hint: 'עזר יולדות · דרך איגוד' },
 ]
 
 /**
@@ -50,7 +56,27 @@ export const REQUEST_MAILTO_PRESETS: { label: string; subject: string; hint: str
  * ⚠️ הסוגריים המרובעים הם מציין-מקום גלוי: שדה ריק אחרי "ת.ז" נשלח כפי
  * שהוא בלי שהפונה בכלל שם לב שחסר בו משהו.
  */
-export function requestMailtoUrl(subject: string, to = 'igud@chasamsofer.info'): string {
+export function requestMailtoUrl(subject: string, mailbox?: string): string {
+  // ── הגשה לתיבת האגף: ת"ז בלבד בנושא ──
+  //
+  // ⚠️ התיבה כבר אומרת את סוג הבקשה, ולכן שורת הנושא נקייה לגמרי. זה
+  // המסלול המועדף — אין ניסוח שהפונה עלול לשבור.
+  if (mailbox) {
+    const body =
+      `שימו לב — בשורת הנושא למעלה יש להקליד\n` +
+      `מספר תעודת זהות בלבד: 9 ספרות, כולל ספרת ביקורת.\n` +
+      `אין להוסיף בשורת הנושא שום מלל אחר.\n` +
+      `‏──────────────────────────\n\n` +
+      `פרטי הפונה:\n\n` +
+      `שם מלא: \n` +
+      `מספר זהות: \n` +
+      `טלפון: \n\n` +
+      `יש לצרף להודעה זו את כל המסמכים הנדרשים.`
+    const subj = '[הקלידו כאן ת.ז — 9 ספרות בלבד]'
+    return `mailto:${mailbox}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
+  }
+
+  // ── נפילה-לאחור: הגשה לאיגוד, שם הנושא הוא שקובע את הסוג ──
   const body =
     `שימו לב — הוראות למילוי שורת הנושא:\n` +
     `‏──────────────────────────\n` +
@@ -65,7 +91,7 @@ export function requestMailtoUrl(subject: string, to = 'igud@chasamsofer.info'):
     `טלפון: \n\n` +
     `יש לצרף להודעה זו את כל המסמכים הנדרשים.`
   const subj = `${subject} · ת.ז [הקלידו כאן ת.ז — 9 ספרות]`
-  return `mailto:${to}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
+  return `mailto:igud@chasamsofer.info?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
 }
 
 export const MAX_BUTTONS = 8
