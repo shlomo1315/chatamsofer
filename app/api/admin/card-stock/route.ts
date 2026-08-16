@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
 import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
+import { sumPurchasedCards } from '@/lib/purchasedCards'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
@@ -228,15 +229,11 @@ export async function GET() {
       // ⚠️ ההבחנה היא לפי aid_id ולא לפי reason: adjust חיובי *עם*
       // aid_id הוא החזרת כרטיס שנוכה ונכשל — לא קנייה. adjust חיובי
       // בלי שיוך ללידה הוא הוספת מלאי לכל דבר.
-      purchasedCards: (ledger ?? []).reduce((s, r) => {
-        const row = r as { delta?: number; reason?: string | null; aid_id?: string | null }
-        const d = Number(row.delta) || 0
-        if (d <= 0) return s
-        const reason = row.reason ?? 'adjust'
-        if (reason === 'restock') return s + d
-        if (reason === 'adjust' && !row.aid_id) return s + d
-        return s
-      }, 0),
+      // 🔴 fullLedger ולא ledger. זה היה הבאג שהחזיר את התקלה: `ledger`
+      // הוא 50 השורות שהמסך מציג, והרכישה המקורית (300) היא תנועה ישנה
+      // שנדחקה מחוץ לטווח הזה. הסכום יצא 0, והמסך הציג '—' גם ב"נקנו"
+      // וגם ב"נמסרו" שנגזר ממנו.
+      purchasedCards: sumPurchasedCards(fullLedger ?? []),
     },
     { headers: NO_STORE },
   )
