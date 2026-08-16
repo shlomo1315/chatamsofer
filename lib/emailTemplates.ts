@@ -21,7 +21,7 @@ const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
 // ⚠️ קישור ולא קובץ מצורף: PDF מצורף הופך את מסלול המייל לברירת המחדל,
 // בעוד שהמסלול המועדף הוא האתר — שם הטופס מגיע מלא מהמערכת.
 // ניתן לעקוף דרך משתנה סביבה אם הקובץ בדרייב יוחלף.
-const RABBI_FORM_BLANK_URL =
+export const RABBI_FORM_BLANK_URL =
   process.env.RABBI_FORM_BLANK_URL
   || 'https://drive.google.com/file/d/1Q--ShoskoYagSZkmRNKbuDrV074tmLEU/view?usp=sharing'
 

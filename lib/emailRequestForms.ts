@@ -2,6 +2,7 @@
 // המשתמש מקבל קישור mailto עם נושא "בקשת <סוג> · ת.ז <מספר>" וגוף עם שדות למילוי
 // שורה-אחר-שורה. בשליחה, ה-webhook מזהה לפי הנושא, מפרסר, מאמת, ומכניס למערכת.
 import { validateIsraeliId } from './validation'
+import { RABBI_FORM_BLANK_URL } from './emailTemplates'
 
 export type ReqType = 'birth' | 'silent_birth' | 'loan' | 'financial_aid' | 'widow'
 
@@ -245,6 +246,16 @@ export function buildDraftBody(type: ReqType, idNumber: string, ctx: Ctx): strin
 
     const req = atts.filter(a => a.required)
     const opt = atts.filter(a => !a.required)
+
+    // ⚠️ קישור להורדת הטופס הריק — *לפני* רשימת הקבצים ולא אחריה.
+    // המבקש קורא "חובה לצרף טופס אישור רב", ואם הקישור מופיע מתחת
+    // לרשימה הוא כבר עזב את המייל כדי לחפש מאיפה להשיג אותו.
+    if (type === 'loan') {
+      L.push('קישור להורדת טופס אישור רב:')
+      L.push(`  ${RABBI_FORM_BLANK_URL}`)
+      L.push('  יש למלא את השם, מספר הזהות וסדר הדורות, ולהחתים את הרב.')
+      L.push('')
+    }
 
     if (req.length) {
       L.push('קבצים שחובה לצרף:')

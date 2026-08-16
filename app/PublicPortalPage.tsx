@@ -3512,6 +3512,23 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setError('')
     setPendingConfirmed(false)
   }
+
+  /**
+   * סגירת טופס בקשה.
+   *
+   * 🔴 מי שהגיע מקישור ייעודי (?action=loan וכדומה) יוצא מהמערכת, ולא
+   * נוחת באזור האישי.
+   *
+   * ⚠️ הקישור שבמייל מיועד לפעולה אחת — הגשת בקשה למחלקה מסוימת. מי
+   * שביטל אותה לא ביקש לראות את התיק המלא שלו, ונחיתה שם היא מסך שלא
+   * ביקש. מי שרוצה לאזור האישי נכנס בקישור הראשי.
+   *
+   * ⚠️ מי שנכנס בדרך הרגילה כן חוזר לאזור האישי — שם הוא היה קודם.
+   */
+  const closeRequestForm = () => {
+    if (arrivedFor) backToHome()
+    else backToDashboard()
+  }
   const backToHome = () => {
     setStep('id-lookup')
     setIdInput('')
@@ -5380,7 +5397,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 {/* ⚠️ מחלקה סגורה — לא מוזכרת כלל (לא כפתור, לא "תיפתח בקרוב"):
                     בקשת המנהל היא ששום מחלקה סגורה לא תופיע באתר. כשפתוחה,
                     הכפתור מוצג ומסביר על הכפתור אם יש חסם אחר (מצב משפחתי/מסמכים). */}
-                {deptGates.maternity && (() => {
+                {/* ─────────────────────────────────────────────────────────────
+                    🔴 כפתורי ההגשה מוצגים *רק* למי שהגיע מקישור ייעודי (?action=).
+                    באזור האישי עצמו הם אינם מופיעים כלל.
+
+                    ⚠️ ההגשה נעשית ממחלקה — הקישור מגיע במייל, לכל מחלקה משלה.
+                    האזור האישי מציג את הפרטים ואת מצב הבקשות, ומשם ניתן לבקש
+                    את הקישורים למייל. כך כל בקשה נפתחת מתוך ההקשר שלה, ולא
+                    מרשימת כפתורים כללית שאינה יודעת מי המחלקה הרלוונטית.
+                    ───────────────────────────────────────────────────────── */}
+                {arrivedFor === 'birth' && deptGates.maternity && (() => {
                   const blocked =
                     !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
                     : isDocsPending ? 'יש להשלים תחילה את המסמכים הנדרשים'
@@ -5409,7 +5435,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   )
                 })()}
 
-                {deptGates.gemach && (
+                {arrivedFor === 'loan' && deptGates.gemach && (
                   <button
                     onClick={goToLoanForm}
                     className="flex items-center gap-4 bg-sky-50 rounded-2xl border-2 border-sky-200 p-5 hover:border-sky-400 transition-all duration-150 text-right shadow-sm group"
@@ -5425,7 +5451,18 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   </button>
                 )}
 
-                {deptGates.financial_aid && (
+                {/* ⚠️ מחליף את כפתורי ההגשה שהוסרו: בלי שורה כזו האזור
+                    האישי נראה כמסך ללא מוצא — הפרטים מוצגים, ואין שום רמז
+                    כיצד מגישים בקשה. הכפתור לקבלת הקישורים יושב בכרטיס
+                    שמעל, וזו ההפניה אליו. */}
+                {!arrivedFor && (
+                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    להגשת בקשה — לחצו על <strong>״קבלת קישור להגשת בקשות במייל״</strong> שלמעלה.
+                    הקישורים נשלחים לכתובת הרשומה, ומשם ניתן להגיש בקשה לכל מחלקה.
+                  </p>
+                )}
+
+                {arrivedFor === 'aid' && deptGates.financial_aid && (
                   <button
                     onClick={goToAidForm}
                     className="flex items-center gap-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-400 transition-all duration-150 text-right shadow-sm group"
@@ -5664,7 +5701,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         {step === 'new-birth' && (
           <form onSubmit={handleBirthRequest} className="flex flex-col gap-4">
             <div className="flex items-center gap-3 mb-1">
-              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={closeRequestForm} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
               <EditableText k="birth.title" as="h2" className="font-bold text-slate-900 text-lg" />
@@ -5846,7 +5883,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         {step === 'new-silent-birth' && (
           <form onSubmit={handleSilentBirthRequest} className="flex flex-col gap-4">
             <div className="flex items-center gap-3 mb-1">
-              <button type="button" onClick={backToDashboard} className="text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={closeRequestForm} className="text-slate-400 hover:text-slate-600">
                 <ArrowRight size={20} />
               </button>
               <EditableText k="silent.title" as="h2" className="font-bold text-slate-900 text-lg" />
@@ -5960,7 +5997,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <CreditCard size={18} className="text-blue-600" />
                   <EditableText k="loan.modal.title" as="h3" className="font-bold text-slate-900" />
                 </div>
-                <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
+                <button type="button" onClick={() => { setLoanModalOpen(false); setError(''); if (arrivedFor) backToHome() }}
                   className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
                   <X size={20} />
                 </button>
@@ -6129,7 +6166,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </Field>
 
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => { setLoanModalOpen(false); setError('') }}
+                  <button type="button" onClick={() => { setLoanModalOpen(false); setError(''); if (arrivedFor) backToHome() }}
                     className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 transition-all duration-150">
                     <EditableText k="loan.cancel" />
                   </button>
@@ -6755,7 +6792,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <EditableText k="sent.body2" />
               </p>
               <div className="flex flex-col gap-2">
-                <button onClick={backToDashboard}
+                <button onClick={closeRequestForm}
                   className="flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-150 text-sm"
                 >
                   <User size={16} /> <EditableText k="sent.back" />
