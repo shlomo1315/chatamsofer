@@ -262,7 +262,13 @@ export interface Loan {
    * עבורן הייתה ממציאה נתון. ראו lib/loanSubmissionSource.
    */
   submission_source?: string | null
+  /** הערות *המבקש* — ממולא בטופס ההגשה ומוצג בכרטסת כדברי הפונה. */
   notes?: string
+  /**
+   * הערות *המשרד* — שדה פנימי לצוות, נערך בכרטסת לפני ההכרעה.
+   * ⚠️ אינו נחשף למבקש ואינו נשלח במיילים. נפרד מ-notes בכוונה.
+   */
+  office_notes?: string | null
   created_at: string
   updated_at: string
   beneficiary?: Beneficiary
