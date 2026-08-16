@@ -192,11 +192,34 @@ async function maybeAutoReplyGemach(
 // הנושא — של הרשום או של בן/בת הזוג; אם אין ת"ז בנושא, ננסה לפי כתובת השולח.
 async function maybeAutoReplyIgud(
   admin: SupabaseClient,
-  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown },
+  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown; messageId?: string },
 ) {
   if (departmentByEmail(msg.toEmail)?.key !== 'igud') return
   const from = (msg.fromEmail || '').toLowerCase()
   if (!from || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  // 🔴 נעילה לפי ההודעה עצמה — מחליפה את isNew שהשתיק את המענה לגמרי.
+  //
+  // ⚠️ isNew היה גס מדי: הוא חסם כל ריצה שנייה של ה-webhook, כולל כזו
+  // שבה המענה מעולם לא נשלח. הנעילה כאן ממוקדת — היא חוסמת *מענה שני
+  // לאותה הודעה*, ולא נוגעת בהודעות אחרות מאותו שולח.
+  //
+  // ⚠️ נופלת-לאחור לשולח+נושא כשאין message_id: בלי מפתח יציב הנעילה
+  // חסרת ערך, ושני עותקים של אותו מייל היו מייצרים שני מענים.
+  const lockKey = `igud_reply:${(msg.messageId || `${from}|${msg.subject}`)}`.slice(0, 200)
+  const LOCK_TTL_MS = 10 * 60 * 1000
+  const nowMs = Date.now()
+  const { data: prevLock } = await admin
+    .from('app_settings').select('value').eq('key', lockKey).maybeSingle()
+  const prevAt = prevLock?.value ? Date.parse(String(prevLock.value)) : NaN
+  if (!isNaN(prevAt) && (nowMs - prevAt) < LOCK_TTL_MS) {
+    console.log(`[igud-auto-reply] כבר נענה על ההודעה הזו — מדלג (${from})`)
+    return
+  }
+  await admin.from('app_settings').upsert(
+    { key: lockKey, value: new Date(nowMs).toISOString(), updated_at: new Date(nowMs).toISOString() },
+    { onConflict: 'key' },
+  )
 
   // 🔴 הגנות הלולאה — משותפות עם maintenanceReply ולא מקומיות.
   //
@@ -208,11 +231,22 @@ async function maybeAutoReplyIgud(
   //   1. דפוס הכתובת (help@, support@, ticket@, info@...).
   //   2. כותרות Auto-Submitted / Precedence — המייל מצהיר שהוא אוטומטי.
   //   3. תקרת מענים — הבולם האחרון, שאינו מנחש לפי דפוס אלא סופר.
+  // ⚠️ כל דילוג נרשם עם סיבתו. כשהמענה נדם לשלושה ימים, השתיקה הייתה
+  // מוחלטת — אף לוג לא אמר מדוע, והאבחון דרש קריאת קוד במקום קריאת לוג.
   const { shouldSkipAutoReply, isAutoSubmittedMail, underAutoReplyCap } =
     await import('@/lib/maintenanceReply')
-  if (shouldSkipAutoReply(from)) return
-  if (isAutoSubmittedMail(msg.headers)) return
-  if (!(await underAutoReplyCap(admin, from))) return
+  if (shouldSkipAutoReply(from)) {
+    console.log(`[igud-auto-reply] דילוג: דפוס כתובת חסומה — ${from}`)
+    return
+  }
+  if (isAutoSubmittedMail(msg.headers)) {
+    console.log(`[igud-auto-reply] דילוג: המייל מצהיר שהוא אוטומטי — ${from}`)
+    return
+  }
+  if (!(await underAutoReplyCap(admin, from))) {
+    console.log(`[igud-auto-reply] דילוג: תקרת מענים שבועית — ${from}`)
+    return
+  }
 
   const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count, eligibility_status'
   type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null; eligibility_status: string | null }
@@ -1196,7 +1230,7 @@ export async function POST(request: NextRequest) {
           attachments,
         })
         if (!handled && isIgud) {
-          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
+          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers, messageId: String(messageId) })
         }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
@@ -1204,10 +1238,23 @@ export async function POST(request: NextRequest) {
         await admin.from('app_settings').delete().eq('key', lockKey)
       }
     }
-  } else if (isIgud && isNew) {
-    // מענה גנרי — רק על מייל חדש (אין טעם לענות שוב על retry)
+  } else if (isIgud) {
+    // 🔴 בלי isNew.
+    //
+    // ⚠️ זה הבאג שהשתיק את המענה: Resend שולח את ה-webhook יותר מפעם אחת
+    // (retry על timeout, ו-dual-delivery). בריצה השנייה ה-upsert מדלג
+    // בגלל ignoreDuplicates, isNew הופך ל-false, והמענה דולג — בשקט.
+    // ההודעה נקלטה בתיבה כרגיל, ולכן שום דבר לא *נראה* שבור.
+    //
+    // אותה תקלה בדיוק כבר תוקנה כאן פעמיים — בניתוב מכתבי הברכה
+    // ובקליטת בקשות במייל (ראו ההערות "חייב לרוץ מחוץ ל-if (isNew)").
+    // המענה האוטומטי נשאר מאחור.
+    //
+    // ⚠️ הכפילות נמנעת ב-underAutoReplyCap ולא ב-isNew: הוא סופר מענים
+    // שיצאו בפועל, ולכן retry אינו מייצר מענה שני — ואילו מייל אמיתי
+    // חדש כן מקבל מענה, גם אם ההודעה כבר הייתה בטבלה.
     try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers, messageId: String(messageId) })
     } catch (e) {
       console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
     }
