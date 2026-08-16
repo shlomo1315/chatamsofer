@@ -250,6 +250,12 @@ export interface Loan {
   disbursed_by?: string | null
   /** טופס אישור הרב החתום, כפי שצורף בהגשה. */
   rabbi_form_url?: string | null
+  /** מועד ההכרעה. null בבקשות שהוכרעו לפני הוספת התיעוד. */
+  approved_at?: string | null
+  rejected_at?: string | null
+  rejected_by?: string | null
+  /** סיבת דחיית *הבקשה הזו* — נבדלת מ-rejection_reason של המשפחה. */
+  rejection_reason?: string | null
   /**
    * מאיפה הוגשה הבקשה — 'portal' (האתר) או 'email'.
    * ⚠️ null בבקשות שקדמו לשדה: אינן יודעות מאיפה הגיעו, וקביעת ערך

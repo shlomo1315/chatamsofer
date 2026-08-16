@@ -6,6 +6,7 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
 import { loanSourceLabel } from '@/lib/loanSubmissionSource'
+import LoanDecisionPanel from './LoanDecisionPanel'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import DocThumb from '@/components/ui/DocThumb'
 import SafeDocImage from '@/components/ui/SafeDocImage'
@@ -105,8 +106,11 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
             <p className="text-sm text-slate-500 ltr-num">{b?.id_number}</p>
           </div>
         </div>
+        {/* ⚠️ כפתורי ההכרעה הוסרו מהכותרת: ההחלטה מתקבלת אחרי קריאת החומר,
+            והפאנל בתחתית הכרטסת הוא המקום היחיד לה. שני עותקים של אותה
+            פעולה — אחד בראש ואחד בתחתית — הכפילו את הסיכון להכרעה בהיסח
+            הדעת, ובראש הדף הם הוצגו עוד לפני שנקרא דבר. */}
         <div className="flex items-center gap-2">
-          <LoanStatusControl loan={loan} advance familyApproved={familyApproved} variant="buttons" />
           <Link href={`/admin/loans/${loan.id}/edit`}>
             <button className="flex items-center gap-1.5 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5 transition-colors">
               <Edit size={14} /> עריכה
@@ -269,13 +273,10 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               לגישה מהירה כשכבר יודעים מה להחליט. */}
           <section className="border-t border-slate-200 pt-5">
             <Card>
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">החלטה על הבקשה</p>
-                  <p className="text-xs text-slate-500 mt-0.5">אישור או דחייה — סיבת הדחייה תישמר ותוצג בבקשה הבאה</p>
-                </div>
-                <LoanStatusControl loan={loan} advance familyApproved={familyApproved} variant="buttons" />
-              </div>
+              {/* ⚠️ בקשה שכבר הוכרעה מציגה את ההחלטה, לא את כפתורי ההכרעה:
+                  "אישור או דחייה — סיבת הדחייה תישמר" מנוסח כהוראה לפעולה
+                  שכבר בוצעה, והמזכיר לא ידע מהסתכלות אם הבקשה טופלה. */}
+              <LoanDecisionPanel loan={loan} familyApproved={familyApproved} />
             </Card>
           </section>
         </div>

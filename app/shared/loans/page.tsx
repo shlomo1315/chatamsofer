@@ -257,6 +257,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
   const [filter, setFilter] = useState<FilterMode>('pending')
   const [search, setSearch] = useState('')
   const [noteSaving, setNoteSaving] = useState<string | null>(null)
+  const [undoing, setUndoing] = useState<string | null>(null)
 
   const loadLoans = useCallback(async () => {
     setLoading(true)
@@ -277,6 +278,33 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     setLoans(prev => prev.map(l =>
       l.id === loanId ? { ...l, disbursed_at: disbursedAt, disbursed_by: disbursedBy } : l,
     ))
+  }
+
+  /**
+   * ביטול סימון הביצוע — ההלוואה חוזרת לרשימת הממתינות.
+   *
+   * ⚠️ אישור לפני הפעולה: היא מחזירה הלוואה לתור ומוחקת את מועד הביצוע,
+   * ואינה נראית ככזו מהכפתור הקטן שמפעיל אותה.
+   *
+   * ⚠️ עדכון אופטימי עם גלגול-לאחור בכשל, כמו ב-toggleNoteSent: בלי
+   * הגלגול המסך היה מציג "ממתינה" על הלוואה שהשרת לא שינה.
+   */
+  const undoDisburse = async (loan: PortalLoan) => {
+    if (!window.confirm('לבטל את סימון הביצוע? ההלוואה תחזור לרשימת הממתינות לביצוע.')) return
+    const prevAt = loan.disbursed_at ?? null
+    const prevBy = loan.disbursed_by ?? null
+    setUndoing(loan.id)
+    setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: null, disbursed_by: null } : l))
+    try {
+      const res = await fetch(`/api/shared/loans/${loan.id}/disburse`, { method: 'DELETE' })
+      if (!res.ok) {
+        setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: prevAt, disbursed_by: prevBy } : l))
+      }
+    } catch {
+      setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: prevAt, disbursed_by: prevBy } : l))
+    } finally {
+      setUndoing(null)
+    }
   }
 
   // סימון "נשלח שטר" — שלב הביניים שלפני ההפקדה.
@@ -502,9 +530,24 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                 אפשר לבטלו אם סומן בטעות, כל עוד לא הופקד. */}
                             <td className="px-3 py-3.5 align-middle">
                               {isDone ? (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 whitespace-nowrap">
-                                  <CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}
-                                </span>
+                                /* ⚠️ ביטול הסימון אפשרי: הרשימה מוצגת כטבלה
+                                   והשורות דומות זו לזו, וסימון של השורה הלא
+                                   נכונה הוא תרחיש אמיתי. עד כה לא הייתה שום
+                                   דרך לתקן — ההלוואה נותרה מסומנת כמבוצעת,
+                                   וההפקדה האמיתית נעלמה מהתור. */
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 whitespace-nowrap">
+                                    <CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}
+                                  </span>
+                                  <button
+                                    onClick={() => undoDisburse(l)}
+                                    disabled={undoing === l.id}
+                                    title="סימון בטעות? החזרת ההלוואה לרשימת הממתינות לביצוע"
+                                    className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 underline decoration-dotted underline-offset-2 disabled:opacity-50"
+                                  >
+                                    {undoing === l.id ? 'מבטל…' : 'ביטול הסימון'}
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="flex flex-col gap-1.5">
                                   <button

@@ -46,3 +46,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE — ביטול סימון הביצוע. הבקשה חוזרת ל"ממתינה לביצוע".
+//
+// ⚠️ סימון בטעות הוא תרחיש אמיתי: הרשימה מוצגת כטבלה, והשורות דומות זו
+// לזו. עד כה לא הייתה שום דרך לתקן — מי שסימן את השורה הלא נכונה נשאר
+// עם הלוואה שמסומנת כמבוצעת ולא בוצעה, וההפקדה האמיתית נעלמה מהתור.
+//
+// ⚠️ מנקה גם את start_date ו-end_date: הם נגזרו ממועד הביצוע, והשארתם
+// הייתה מותירה לוח תשלומים שנשען על תאריך שבוטל.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const token = req.cookies.get(PORTAL_COOKIE)?.value
+  if (!(await verifyPortalToken(token))) {
+    return NextResponse.json({ error: 'נדרשת אימות' }, { status: 401 })
+  }
+
+  const { id } = await params
+  const admin = adminClient()
+
+  // ⚠️ eq('status','active') הוא ההגנה: רק הלוואה שסומנה כמבוצעת ניתנת
+  // לביטול. בקשה שכבר הושלמה או נדחתה אינה חוזרת לתור דרך המסלול הזה.
+  const { data, error } = await admin.from('loans').update({
+    status: 'approved',
+    disbursed_at: null,
+    disbursed_by: null,
+    start_date: null,
+    end_date: null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id).eq('status', 'active').select('id')
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data?.length) {
+    return NextResponse.json({ error: 'ההלוואה אינה מסומנת כמבוצעת' }, { status: 404 })
+  }
+  return NextResponse.json({ ok: true })
+}

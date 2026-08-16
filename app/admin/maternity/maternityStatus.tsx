@@ -206,6 +206,12 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
   }
 
   const setStatus = async (next: MaternityStatus, reason?: string, note?: string) => {
+    // 🔴 קפיצה לבקשה הבאה — רק על הכרעה סופית.
+    //
+    // ⚠️ התנאי היה `next !== 'pending'`, ולכן גם מעבר ל"בדיקה מעמיקה"
+    // נחשב כסיום טיפול והמסך קפץ לבקשה אחרת. בדיקה מעמיקה אינה הכרעה:
+    // הבקשה נשארת פתוחה, והמזכיר עדיין עובד עליה.
+    const isFinalDecision = next === 'active' || next === 'cancelled'
     // אישור הבקשה עצמאי — אין חסימה לפי אישור המשפחה. ניתן לאשר לידה גם אם היחוס
     // טרם אושר (לבקשת הלקוח). אישור היחוס נעשה בנפרד בכפתור "אישור יחוס".
     // ── UI אופטימי: סוגרים מיד ומראים הצלחה, וכל העבודה מול השרת רצה ברקע ──
@@ -261,7 +267,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
           }).catch(() => {})
         }
         // רק כשלא מדובר בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
-        if (!(advance && next !== 'pending')) router.refresh()
+        if (!(advance && isFinalDecision)) router.refresh()
       } catch (err: unknown) {
         toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
         router.refresh()
@@ -270,7 +276,7 @@ export function StatusControl({ aid, advance }: { aid: MaternityAid; advance?: b
     void runBackground()
 
     // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הממתינה הבאה
-    if (advance && next !== 'pending') {
+    if (advance && isFinalDecision) {
       setShowSuccess(true)
       setTimeout(() => {
         goToNextPending(supabase, router, { table: 'maternity_aids', statusColumn: 'status', pendingValues: ['pending'], currentId: aid.id, detailBase: '/admin/maternity', listPath: '/admin/maternity' })

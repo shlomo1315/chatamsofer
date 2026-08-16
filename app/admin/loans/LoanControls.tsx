@@ -70,6 +70,14 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
   // הרשת רצה ברקע. קודם ה-setLocalStatus חיכה ל-await fetch של request-status,
   // ולכן האישור "נתקע" עד שהשרת ענה — וזה מה שהרגיש איטי. עכשיו התגובה מיידית.
   const applyStatus = (next: LoanStatus, extra: Record<string, unknown> = {}) => {
+    // 🔴 קפיצה לבקשה הבאה — רק על הכרעה סופית (אישור או דחייה).
+    //
+    // ⚠️ התנאי היה `next !== 'pending'`, ולכן גם מעבר ל'בירור' נחשב
+    // כסיום טיפול: המזכיר שלח שאלה למבקש והמסך קפץ לבקשה אחרת — בעוד
+    // שהוא באמצע עבודה על זו, ורוצה לראות את התשובה. בירור אינו הכרעה;
+    // הבקשה נשארת פתוחה וממתינה למבקש.
+    const isFinalDecision = next === 'approved' || next === 'rejected'
+
     // 1) משוב ויזואלי מיידי — לפני כל קריאת רשת
     setLocalStatus(next)
     setOpen(false)
@@ -93,7 +101,7 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
           }).catch(() => {})
         }
         // רק כשלא בזרימת "בקשה הבאה" — נרענן ברקע לעדכון המספרים
-        if (!(advance && next !== 'pending')) router.refresh()
+        if (!(advance && isFinalDecision)) router.refresh()
       } catch (err: unknown) {
         setLocalStatus(loan.status) // גלגול אחורה במקרה כשל
         toast.error(`שגיאה בעדכון: ${err instanceof Error ? err.message : String(err)}`)
@@ -101,7 +109,7 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
     })()
 
     // טיפול בבקשה ממתינה מתוך כרטיס הבקשה → חלונית הצלחה ואז קפיצה לבקשה הבאה
-    if (advance && next !== 'pending') {
+    if (advance && isFinalDecision) {
       setShowSuccess(true)
       setTimeout(() => {
         goToNextPending(supabase, router, { table: 'loans', statusColumn: 'status', pendingValues: ['pending'], currentId: loan.id, detailBase: '/admin/loans', listPath: '/admin/loans' })
@@ -180,7 +188,9 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
 
     // ⚠️ התקרה בהגשה *נשארת* — שם היא מגבילה את המבקש, וזה תקין.
     // כאן מגבילה את המשרד, וזה לא.
-    await applyStatus('approved', { approved_amount: n })
+    // ⚠️ approved_at נרשם כאן: הכרטסת מציגה "אושרה בתאריך", ובלי התיעוד
+    // האישור היה מוצג בלי מועד. rejected_at כבר נרשם בדחייה.
+    await applyStatus('approved', { approved_amount: n, approved_at: new Date().toISOString() })
   }
 
   const options: { value: LoanStatus; label: string; cls: string; icon: typeof Check }[] = [
