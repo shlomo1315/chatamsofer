@@ -295,6 +295,32 @@ export function defaultAutoReplyMap(): AutoReplyMap {
     weeklyCap: DEFAULT_WEEKLY_CAP,
   }
 
+  // ⚠️ תיבת הבירורים של עזר יולדות — אינה תיבת הרשמה. הרישום נעשה בטופס
+  // ממוחשב, ולכן המענה מפנה אליו ומבהיר שכאן ניתן מענה לבירורים בלבד.
+  map.maternity = {
+    enabled: true,
+    subject: 'הגעתם לאגף עזר יולדות · היכל החתם סופר',
+    message:
+      'שלום וברכה!\n\n' +
+      'במייל זה תקבלו מענה רק לבירורים ושאלות שאינן קשורות לרישום לקבלת ההטבה.\n' +
+      'הרישום נעשה בצורה ממוחשבת:',
+    buttons: [],
+    sections: [
+      {
+        title: 'לשאר אגפי היכל החתם סופר',
+        text: 'היכל החתם סופר (משרד ראשי):',
+        buttons: [{ label: 'office@chasamsofer.info', url: 'mailto:office@chasamsofer.info' }],
+      },
+      {
+        title: 'איגוד הצאצאים',
+        text: 'לפניות בענייני איגוד הצאצאים:',
+        buttons: [{ label: 'igud@chasamsofer.info', url: 'mailto:igud@chasamsofer.info' }],
+      },
+    ],
+    footnote: '',
+    weeklyCap: DEFAULT_WEEKLY_CAP,
+  }
+
   // ⚠️ igud היא תיבת הכניסה של איגוד הצאצאים. עד המעבר היא החזירה לפונה
   // מזוהה את פרטיו וקישורי הגשה חתומים; זה הוסר בכוונה — התיבה מפנה לאגף
   // הנכון, ואינה משמשת להגשת בקשות.
