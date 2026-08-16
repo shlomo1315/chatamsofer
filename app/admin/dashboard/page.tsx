@@ -5,8 +5,12 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { unstable_cache } from 'next/cache'
-import { getServiceClient } from '@/lib/apiAuth'
+import { redirect } from 'next/navigation'
+import { getServiceClient, requireStaff } from '@/lib/apiAuth'
+import { roleAllows } from '@/lib/permissions'
+import type { SectionKey } from '@/types'
 import { getPendingTasks } from '@/lib/pendingTasks'
+import { visibleTasks } from '@/lib/pendingTasksScope'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { isAwaitingCard, holdsCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import PendingTasksPanel from './PendingTasksPanel'
@@ -185,6 +189,23 @@ function getGreeting() {
 
 
 export default async function DashboardPage() {
+  // ── מי רואה מה ──────────────────────────────────────────────────────────
+  // ⚠️ לוח הבקרה אינו "מחלקה" ולכן אין לו guardPage — אבל כל קובייה שלו
+  // חושפת נתוני מחלקה (סכומי הלוואות, מספרי לידות, תקציב חלוקות). בלי
+  // הסינון הזה משתמש שהורשה למחלקה אחת קרא את המספרים של כל השאר.
+  //
+  // ⚠️ הסינון בשרת ולא ב-CSS: קובייה מוסתרת ב-hidden עדיין מגיעה ל-HTML
+  // ונקראת ב-view-source. כאן היא פשוט אינה מרונדרת.
+  const staff = await requireStaff()
+  if (!staff) redirect('/login')
+  const can = (section: SectionKey) =>
+    staff.role === 'admin' || roleAllows(staff.role, staff.permissions, section, 'view')
+
+  const DEPT_SECTIONS: SectionKey[] = [
+    'beneficiaries', 'loans', 'maternity', 'maternity_cards', 'distributions', 'financial_aid',
+  ]
+  const anyDept = DEPT_SECTIONS.some(can)
+
   const cached = await getStats()
   // ⚠️ מלאי הכרטיסים נקרא *מחוץ* למטמון, בכל טעינה. הספירות הכבדות יכולות
   // להיות בנות חמש שניות, אבל המלאי לא: כשהדשבורד הציג 251 ומסך הכרטיסים 250,
@@ -200,8 +221,12 @@ export default async function DashboardPage() {
   // "ממתינים לטיפול" — נספר מאותו מקור אמת שהפאנל משתמש בו (getPendingTasks),
   // כדי שהכרטיס והרשימה יראו *בדיוק* אותו מספר. הניכוי-ספירה הקודם נתן פער
   // (כרטיס 1, רשימה 4) כשהיו שורות dismissed יתומות שכבר לא ממתינות.
+  // ⚠️ מסונן לפי הרשאות: הפאנל מאחד חמש מחלקות (ובהן אלמנות), והספירה
+  // חייבת לשקף את מה שהמשתמש באמת יראה — אחרת הכרטיס מציג 12 והרשימה 3.
   const svc = getServiceClient()
-  const pendingTotal = svc ? (await getPendingTasks(svc)).length : 0
+  const pendingTotal = svc
+    ? visibleTasks(await getPendingTasks(svc), staff.role, staff.permissions, staff.role === 'admin').length
+    : 0
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -231,39 +256,58 @@ export default async function DashboardPage() {
 
       {/* ── KPI Row ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="משפחות רשומות"
-          value={fmt(s.totalBeneficiaries)}
-          sub={`${fmt(s.newBeneficiariesWeek)} נרשמו השבוע`}
-          subPositive
-          icon={<Users size={18} />}
-          color="indigo"
-          href="/admin/beneficiaries"
-        />
-        <KpiCard
-          label="הלוואות פעילות"
-          value={fmtCur(s.totalLoanAmount)}
-          sub={`${fmt(s.activeLoans)} תיקים פעילים`}
-          icon={<Landmark size={18} />}
-          color="blue"
-          href="/admin/loans"
-        />
+        {can('beneficiaries') && (
+          <KpiCard
+            label="משפחות רשומות"
+            value={fmt(s.totalBeneficiaries)}
+            sub={`${fmt(s.newBeneficiariesWeek)} נרשמו השבוע`}
+            subPositive
+            icon={<Users size={18} />}
+            color="indigo"
+            href="/admin/beneficiaries"
+          />
+        )}
+        {can('loans') && (
+          <KpiCard
+            label="הלוואות פעילות"
+            value={fmtCur(s.totalLoanAmount)}
+            sub={`${fmt(s.activeLoans)} תיקים פעילים`}
+            icon={<Landmark size={18} />}
+            color="blue"
+            href="/admin/loans"
+          />
+        )}
         <PendingTasksPanel count={pendingTotal} />
-        <KpiCard
-          label="תיבת המייל"
-          value="מייל"
-          sub="דואר נכנס ויוצא"
-          icon={<Mail size={18} />}
-          color="violet"
-          href="/admin/mail"
-        />
+        {/* "מייל בלבד" רואה את הקובייה מתוקף ההגדרה, כמו בסרגל */}
+        {(can('mail') || staff.mailOnly) && (
+          <KpiCard
+            label="תיבת המייל"
+            value="מייל"
+            sub="דואר נכנס ויוצא"
+            icon={<Mail size={18} />}
+            color="violet"
+            href="/admin/mail"
+          />
+        )}
       </div>
 
+      {/* ⚠️ משתמש בלי אף הרשאת מחלקה קיבל עמוד ריק שנראה כתקלה במערכת.
+          הודעה מפורשת עדיפה — היא אומרת לו למי לפנות במקום להשאיר אותו
+          מול מסך לבן. */}
+      {!anyDept && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 flex items-center gap-2">
+          <AlertCircle size={16} className="flex-shrink-0 text-slate-400" />
+          <span>לא הוגדרו לך מחלקות להצגה בלוח הבקרה. לפתיחת גישה — פנה למנהל המערכת.</span>
+        </div>
+      )}
+
       {/* ── Departments ──────────────────────────────────────────── */}
+      {anyDept && (
       <div>
         <h2 className="text-base font-semibold text-slate-700 mb-4">אגפי העמותה</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
 
+          {can('beneficiaries') && (
           <DeptCard
             title="איגוד הצאצאים"
             icon={<Users size={20} />}
@@ -276,7 +320,9 @@ export default async function DashboardPage() {
               { label: 'נרשמו השבוע', value: fmt(s.newBeneficiariesWeek), tone: 'info' },
             ]}
           />
+          )}
 
+          {can('loans') && (
           <DeptCard
             title="גמ״ח — הלוואות"
             icon={<Landmark size={20} />}
@@ -288,7 +334,9 @@ export default async function DashboardPage() {
               { label: 'בפיגור', value: fmt(s.defaultedLoans), tone: s.defaultedLoans > 0 ? 'danger' : 'neutral' },
             ]}
           />
+          )}
 
+          {can('maternity') && (
           <DeptCard
             title="עזר יולדות"
             icon={<Baby size={20} />}
@@ -300,7 +348,9 @@ export default async function DashboardPage() {
               { label: 'תיקים פעילים', value: fmt(s.maternityActive), tone: 'success' },
             ]}
           />
+          )}
 
+          {can('maternity_cards') && (
           <DeptCard
             title="כרטיסי מזון יולדות"
             icon={<UtensilsCrossed size={20} />}
@@ -312,10 +362,12 @@ export default async function DashboardPage() {
               { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: s.cardsRemaining < 5 ? 'danger' : 'info' },
             ]}
           />
+          )}
 
           {/* ⚠️ חלוקות חגים במקום אלמנות ויתומים: המחלקה הפעילה היא זו שצריכה
               להיות על הלוח. בשלב הרישום הנתון הקריטי הוא הצפי התקציבי — לפיו
               נקבע מה אפשר להתחייב, ולכן הוא מוצג ולא רק מספר הנרשמים. */}
+          {can('distributions') && (
           <DeptCard
             title="חלוקות חגים"
             icon={<Gift size={20} />}
@@ -330,7 +382,9 @@ export default async function DashboardPage() {
               { label: 'חלוקות בתכנון', value: fmt(s.distributionsPlanned), tone: 'neutral' },
             ]}
           />
+          )}
 
+          {can('financial_aid') && (
           <DeptCard
             title="סיוע רפואי"
             icon={<HandCoins size={20} />}
@@ -342,9 +396,11 @@ export default async function DashboardPage() {
               { label: 'אושרו', value: fmt(s.aidApproved), tone: 'success' },
             ]}
           />
+          )}
 
         </div>
       </div>
+      )}
 
       {/* ── Footer ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 text-xs text-slate-400 px-1">

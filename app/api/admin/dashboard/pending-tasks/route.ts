@@ -2,16 +2,25 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireNonMailStaff } from '@/lib/apiAuth'
 import { getPendingTasks } from '@/lib/pendingTasks'
+import { visibleTasks } from '@/lib/pendingTasksScope'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   // הגנת הרשאה מפורשת (defense-in-depth מעבר ל-RLS) — מחזיר PII של בקשות ממתינות
-  if (!(await requireNonMailStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  const staff = await requireNonMailStaff()
+  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   try {
     const supabase = await createClient()
     // מקור אמת יחיד — אותה פונקציה שהכרטיס בדשבורד סופר ממנה, כדי שלא יהיה פער.
-    const tasks = await getPendingTasks(supabase)
+    //
+    // ⚠️ מסונן לפי הרשאות באותה פונקציה בדיוק שהדשבורד סופר בה: הרשימה
+    // מאחדת חמש מחלקות (ובהן אלמנות), והחזרתה במלואה החזירה שמות משפחה
+    // ממחלקות שהמשתמש אינו מורשה להן — גם כשהכרטיס כבר הציג ספירה מסוננת.
+    const tasks = visibleTasks(
+      await getPendingTasks(supabase),
+      staff.role, staff.permissions, staff.role === 'admin',
+    )
     return NextResponse.json({ tasks })
   } catch {
     return NextResponse.json({ tasks: [] }, { status: 500 })
