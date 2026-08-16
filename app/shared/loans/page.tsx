@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X } from 'lucide-react'
+import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X, RotateCcw } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PortalLoan {
@@ -18,6 +18,8 @@ interface PortalLoan {
   note_sent_by?: string | null
   disbursed_at?: string | null
   disbursed_by?: string | null
+  /** 'approved' = ממתינה לביצוע · 'active' = בוצעה. מוחזר מה-API ומתעדכן בביטול. */
+  status?: string
   beneficiary?: {
     full_name?: string
     family_name?: string
@@ -290,18 +292,27 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
    * הגלגול המסך היה מציג "ממתינה" על הלוואה שהשרת לא שינה.
    */
   const undoDisburse = async (loan: PortalLoan) => {
-    if (!window.confirm('לבטל את סימון הביצוע? ההלוואה תחזור לרשימת הממתינות לביצוע.')) return
-    const prevAt = loan.disbursed_at ?? null
-    const prevBy = loan.disbursed_by ?? null
+    if (!window.confirm('לבטל את הפעולה? ההלוואה תחזור לרשימת הממתינות לביצוע.')) return
+    const prev = { at: loan.disbursed_at ?? null, by: loan.disbursed_by ?? null, status: loan.status }
     setUndoing(loan.id)
-    setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: null, disbursed_by: null } : l))
+    // ⚠️ גם status ולא רק disbursed_at: השרת מחזיר את שניהם, ו-state
+    // שמעדכן רק אחד מהם יוצא מסונכרן מול השרת עד לרענון הבא.
+    setLoans(ls => ls.map(l =>
+      l.id === loan.id ? { ...l, disbursed_at: null, disbursed_by: null, status: 'approved' } : l))
+    const rollback = () => setLoans(ls => ls.map(l =>
+      l.id === loan.id ? { ...l, disbursed_at: prev.at, disbursed_by: prev.by, status: prev.status } : l))
     try {
       const res = await fetch(`/api/shared/loans/${loan.id}/disburse`, { method: 'DELETE' })
       if (!res.ok) {
-        setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: prevAt, disbursed_by: prevBy } : l))
+        const d = await res.json().catch(() => ({}))
+        rollback()
+        // ⚠️ הודעה למשתמש ולא כשל שקט: קודם הכפתור פשוט "לא עשה כלום",
+        // ולא היה שום רמז לסיבה.
+        alert(d.error ?? 'ביטול הפעולה נכשל. נסו שוב.')
       }
     } catch {
-      setLoans(ls => ls.map(l => l.id === loan.id ? { ...l, disbursed_at: prevAt, disbursed_by: prevBy } : l))
+      rollback()
+      alert('שגיאת רשת — ביטול הפעולה נכשל.')
     } finally {
       setUndoing(null)
     }
@@ -471,26 +482,25 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                 {/* min-w נמוך מרוחב המכל (1280 פחות padding) — כך הטבלה נמתחת
                     לרוחב המלא בלי גלילה אופקית, ורק במסך צר באמת היא נגללת. */}
                 <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <table className="w-full min-w-[880px] table-fixed text-sm text-right border-collapse">
-                    {/* טלפון וסכום הם whitespace-nowrap — הם לא יכולים להתכווץ,
-                        ואם צרים מדי הם דוחפים את הטבלה מעבר לרוחב שלה. לכן הם
-                        מקבלים מקום מובטח, והמייל (break-all) מתכווץ במקומם. */}
+                  {/* 🔴 ללא min-w: הטבלה נכנסת לרוחב המסך ואינה נגללת לצד.
+                      ⚠️ הכתובת אוחדה לעמודה אחת (רחוב + עיר) — שמונה עמודות
+                      חייבו רוחב מינימלי של 880px, וכל מסך צר מזה נגלל. שתי
+                      השורות של הכתובת קריאות יותר משתי עמודות צרות ממילא. */}
+                  <table className="w-full table-fixed text-sm text-right border-collapse">
                     <colgroup>
-                      <col style={{ width: '16%' }} />  {/* שם */}
-                      <col style={{ width: '11%' }} />  {/* ת.ז. */}
-                      <col style={{ width: '14%' }} />  {/* רחוב */}
-                      <col style={{ width: '10%' }} />  {/* עיר */}
-                      <col style={{ width: '13%' }} />  {/* טלפון — nowrap */}
-                      <col style={{ width: '16%' }} />  {/* מייל — נשבר */}
-                      <col style={{ width: '11%' }} />  {/* סכום — nowrap */}
-                      <col style={{ width: '9%' }} />   {/* סטטוס */}
+                      <col style={{ width: '20%' }} />  {/* שם */}
+                      <col style={{ width: '13%' }} />  {/* ת.ז. */}
+                      <col style={{ width: '19%' }} />  {/* כתובת — רחוב + עיר */}
+                      <col style={{ width: '14%' }} />  {/* טלפון — nowrap */}
+                      <col style={{ width: '18%' }} />  {/* מייל — נשבר */}
+                      <col style={{ width: '10%' }} />  {/* סכום — nowrap */}
+                      <col style={{ width: '6%'  }} />  {/* סטטוס */}
                     </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
                         <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">שם</th>
                         <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">ת.ז.</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">רחוב</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">עיר</th>
+                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">כתובת</th>
                         <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">טלפון</th>
                         <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">מייל</th>
                         <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">סכום מאושר</th>
@@ -507,12 +517,18 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                             </td>
                             <td className="px-3 py-3.5 border-l border-slate-100 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
 
-                            {/* כתובת — רחוב ועיר בעמודות נפרדות. break-words מונע גלישה החוצה. */}
+                            {/* כתובת — רחוב ועיר בתא אחד, זה מעל זה.
+                                ⚠️ אוחדו כדי לחסוך עמודה: שמונה עמודות חייבו
+                                גלילה אופקית בכל מסך צר מ-880px. */}
                             <td className="px-3 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
-                              {l.beneficiary?.address || '—'}
-                            </td>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
-                              {l.beneficiary?.city || '—'}
+                              {l.beneficiary?.address || l.beneficiary?.city ? (
+                                <>
+                                  <span className="block">{l.beneficiary?.address || '—'}</span>
+                                  {l.beneficiary?.city && (
+                                    <span className="block text-xs text-slate-400">{l.beneficiary.city}</span>
+                                  )}
+                                </>
+                              ) : '—'}
                             </td>
                             <td className="px-3 py-3.5 border-l border-slate-100 align-middle whitespace-nowrap">
                               {l.beneficiary?.phone
@@ -535,17 +551,23 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                    נכונה הוא תרחיש אמיתי. עד כה לא הייתה שום
                                    דרך לתקן — ההלוואה נותרה מסומנת כמבוצעת,
                                    וההפקדה האמיתית נעלמה מהתור. */
-                                <div className="flex flex-col items-start gap-1">
+                                <div className="flex flex-col items-start gap-1.5">
                                   <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 whitespace-nowrap">
                                     <CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}
                                   </span>
+                                  {/* ⚠️ כפתור מלא ולא קישור-טקסט: הפעולה מחזירה
+                                      הלוואה לתור ומוחקת את מועד הביצוע, וקישור
+                                      דקיק לא נקרא כפעולה שאפשר לסמוך עליה. */}
                                   <button
                                     onClick={() => undoDisburse(l)}
                                     disabled={undoing === l.id}
-                                    title="סימון בטעות? החזרת ההלוואה לרשימת הממתינות לביצוע"
-                                    className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 underline decoration-dotted underline-offset-2 disabled:opacity-50"
+                                    title="סומן בטעות? החזרת ההלוואה לרשימת הממתינות לביצוע"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50 whitespace-nowrap"
                                   >
-                                    {undoing === l.id ? 'מבטל…' : 'ביטול הסימון'}
+                                    {undoing === l.id
+                                      ? <Loader2 size={13} className="animate-spin" />
+                                      : <RotateCcw size={13} />}
+                                    {undoing === l.id ? 'מבטל…' : 'ביטול הפעולה'}
                                   </button>
                                 </div>
                               ) : (
