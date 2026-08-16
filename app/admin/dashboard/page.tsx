@@ -11,6 +11,8 @@ import { roleAllows } from '@/lib/permissions'
 import type { SectionKey } from '@/types'
 import { getPendingTasks } from '@/lib/pendingTasks'
 import { visibleTasks } from '@/lib/pendingTasksScope'
+import { getPurchases } from '@/lib/cardPurchases'
+import { cardsDelivered } from '@/lib/cardsDelivered'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { isAwaitingCard, holdsCard, AWAITING_SELECT, type AwaitingAid } from '@/lib/awaitingFilter'
 import PendingTasksPanel from './PendingTasksPanel'
@@ -211,13 +213,28 @@ export default async function DashboardPage() {
   // להיות בנות חמש שניות, אבל המלאי לא: כשהדשבורד הציג 251 ומסך הכרטיסים 250,
   // המנהל אינו חושב "מטמון" אלא "אחד מהמספרים שקרי" — ומפסיק להאמין לשניהם.
   // שאילתה אחת על view מסוכם, זולה דיה לכל טעינה.
-  const liveStock = await (async () => {
+  //
+  // ⚠️ הרכישות נקראות כאן יחד עם המלאי, ומאותה סיבה: "נמסרו" נגזר משניהם
+  // (ראה lib/cardsDelivered), וקריאת אחד מהם ממטמון בזמן שהשני חי הייתה
+  // מציגה משוואה שאינה נסגרת — בדיוק התסמין שהתלוננו עליו.
+  const live = await (async () => {
     const db = getServiceClient()
-    if (!db) return null
-    const { data } = await db.from('card_stock_balance').select('balance').maybeSingle()
-    return data ? Number(data.balance ?? 0) : null
+    if (!db) return { stock: null as number | null, purchased: 0 }
+    const [stockRes, purchasesRes] = await Promise.all([
+      db.from('card_stock_balance').select('balance').maybeSingle(),
+      getPurchases(db),
+    ])
+    return {
+      stock: stockRes.data ? Number(stockRes.data.balance ?? 0) : null,
+      purchased: purchasesRes.totalPurchased,
+    }
   })()
-  const s = liveStock == null ? cached : { ...cached, cardsRemaining: liveStock }
+  const s = live.stock == null ? cached : { ...cached, cardsRemaining: live.stock }
+
+  // "נמסרו" = נקנו − במלאי, ולא ספירת לידות פעילות. הספירה לפי status
+  // השמיטה לידות שהושלמו — הכרטיס שלהן יצא ואינו חוזר — והלוח הציג 146
+  // בעוד שהמשוואה מחייבת 152.
+  const delivered = cardsDelivered(live.purchased, s.cardsRemaining)
   // "ממתינים לטיפול" — נספר מאותו מקור אמת שהפאנל משתמש בו (getPendingTasks),
   // כדי שהכרטיס והרשימה יראו *בדיוק* אותו מספר. הניכוי-ספירה הקודם נתן פער
   // (כרטיס 1, רשימה 4) כשהיו שורות dismissed יתומות שכבר לא ממתינות.
@@ -356,10 +373,15 @@ export default async function DashboardPage() {
             icon={<UtensilsCrossed size={20} />}
             href="/admin/maternity/cards"
             accent="#10b981"
+            /* ⚠️ שלוש השורות מרכיבות משוואה שהמנהל יכול לסגור בעצמו:
+               נקנו − נמסרו = מלאי. קודם הוצג "נמסרו" מספירת לידות פעילות
+               (146), שאינה מתיישבת עם 300 ו-148 — והמנהל ראה שישה כרטיסים
+               נעלמים בלי הסבר. */
             rows={[
-              { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: s.cardsPending > 0 ? 'warning' : 'neutral' },
-              { label: 'נמסרו ללידות מאושרות', value: fmt(s.cardsLoaded), tone: 'success' },
+              { label: 'סך שנקנו', value: live.purchased > 0 ? fmt(live.purchased) : '—', tone: 'neutral' },
+              { label: 'נמסרו', value: delivered == null ? '—' : fmt(delivered), tone: 'success' },
               { label: 'מלאי נותר', value: fmt(s.cardsRemaining), tone: s.cardsRemaining < 5 ? 'danger' : 'info' },
+              { label: 'ממתינות לכרטיס', value: fmt(s.cardsPending), tone: s.cardsPending > 0 ? 'warning' : 'neutral' },
             ]}
           />
           )}
