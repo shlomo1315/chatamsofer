@@ -17,6 +17,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import { generationLabel } from './generationLabel'
 
 /** כתובת הגמ"ח שמודפסת בפוטר, במקום זו שבבלאנק. */
 export const GEMACH_EMAIL = 'g@chasamsofer.info'
@@ -320,7 +321,12 @@ export async function buildRabbiFormPdf(
     // הלוגי ("דור :1") וזה *נראה* כבאג — אבל הרינדור בפועל תקין.
     // "תיקון" שנשען על הפקת הטקסט הפך את התווית לשבורה על הדף עצמו.
     // הסוגריים והמטבע כן דורשים היפוך; הנקודתיים כאן — לא.
-    const genLbl = rtl(`דור ${i + 1}:`)
+    // 🔴 עובר דרך generationLabel ולא נבנה כאן: "דור 10:" הופיע על הדף
+    // כ-"דור 01:" — pdf-lib אינו מיישם bidi, ורצף ספרות בתוך מחרוזת
+    // עברית מצויר בכיוון הסביבה. דורות 1-9 הסתירו זאת לגמרי (ספרה
+    // בודדת נראית זהה בשני הכיוונים), והבאג נחשף רק בייחוס בן עשרה
+    // דורות ומעלה — המקרה שהטופס נועד לו.
+    const genLbl = rtl(generationLabel(i + 1))
     const nm = rtl(name)
     // ⚠️ הסוגריים כתובים הפוך במכוון — pdf-lib אינו מיישם bidi, ולכן
     // ")בן(" בקוד הוא "(בן)" על הדף. ראה הערת הסוגריים בהערת המטבע.

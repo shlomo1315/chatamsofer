@@ -31,7 +31,11 @@ interface PortalLoan {
   } | null
 }
 
-const fmtCur = (n: number) => `₪${Math.round(Number(n) || 0).toLocaleString('he-IL')}`
+// ⚠️ דולר ולא שקל: סכומי ההלוואות נשמרים ומוצגים בדולרים לכל אורך
+// המערכת (תקרת הבקשה היא $10,000, וטופס הבקשה מציג "סכום מבוקש ($)").
+// הפורטל הציג ₪ על אותם מספרים — כלומר הצהיר סכום שגוי פי כמה למי
+// שמבצע את ההפקדה בפועל.
+const fmtCur = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString('en-US')}`
 const fmtDate = (d?: string | null) => {
   if (!d) return ''
   return new Date(d).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
