@@ -27,6 +27,10 @@ type Coverage = { total: number; withCard: number; missing: { aidId: string; nam
 type SinceRow = { id: string; delta: number; reason: string; created_at: string | null; aidId: string | null; name: string | null; note: string | null }
 // כרטיס טעון בידי לידה שאינה מאושרת — תקלה לתיקון, לא נתון לחישוב
 type UnapprovedLoad = { aidId: string; name: string; statusLabel: string; amount: number | null }
+
+// רכישה מתועדת — מקור האמת ל"נקנו". התאריך חובה: הוא מה שהופך את
+// המספר לבר-בירור מול חשבונית.
+type Purchase = { id: string; quantity: number; purchased_on: string; note: string | null; created_by: string | null }
 type Recon = {
   balance: number; totalIn: number; totalOut: number
   heldOk: number; strayCards: number; expectedBalance: number
@@ -82,16 +86,19 @@ export default function StockManager() {
   // ⚠️ הכרטיסים שיצאו בפועל נספרים מתיקי הלידות (card_load_status) ולא מהיומן —
   // זו העדות הישירה, וממנה נגזרת ההפחתה בספירה במובן "נקנו בסך הכול".
   const [issuedCards, setIssuedCards] = useState(0)
-  // ⚠️ סך הרכישות מהיומן — מקור האמת ל"נקנו". 0 כשאין נתון (שרת ישן),
-  // ואז המסך נופל בחזרה לחישוב הקודם.
+  // ⚠️ סך הרכישות — מטבלת card_purchases, לא מיומן התנועות. הגזירה מהיומן
+  // נכשלה שלוש פעמים (0, 295, 662) כי הוא מערבב רכישות עם החזרות ותיקוני
+  // ספירה. עכשיו רכישה היא אירוע מתועד עם תאריך.
   const [purchasedCards, setPurchasedCards] = useState(0)
+  const [purchases, setPurchases] = useState<Purchase[]>([])
+  const [showPurchases, setShowPurchases] = useState(false)
   const [unapproved, setUnapproved] = useState<UnapprovedLoad[]>([])
   const [fixingAll, setFixingAll] = useState(false)
   const [showMissing, setShowMissing] = useState(false)
   const [showRecon, setShowRecon] = useState(false)
   const [returning, setReturning] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<'add' | 'remove' | 'baseline' | null>(null)
+  const [modal, setModal] = useState<'add' | 'remove' | 'baseline' | 'purchase' | null>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [flash, setFlash] = useState('')
 
@@ -108,6 +115,7 @@ export default function StockManager() {
       setSince(Array.isArray(d.sinceCount) ? d.sinceCount as SinceRow[] : [])
       setIssuedCards(typeof d.issuedCards === 'number' ? d.issuedCards : 0)
       setPurchasedCards(typeof d.purchasedCards === 'number' ? d.purchasedCards : 0)
+      setPurchases(Array.isArray(d.purchases) ? d.purchases as Purchase[] : [])
       setUnapproved(Array.isArray(d.loadedNotApproved) ? d.loadedNotApproved as UnapprovedLoad[] : [])
     } catch { /* ignore */ }
     setLoading(false)
@@ -302,7 +310,11 @@ export default function StockManager() {
                   המסך הראה מספר *שגוי* (295) במקום להודות שאין נתון.
                   מספר שגוי גרוע ממקף: אי אפשר להבחין בו. */}
               <span className="text-slate-500">סך הכרטיסים שנקנו</span>
-              <strong className="ltr-num text-base text-slate-900">{purchasedCards || '—'}</strong>
+              <button type="button" onClick={() => setShowPurchases(v => !v)}
+                className="ltr-num text-base font-bold text-slate-900 underline decoration-dotted decoration-slate-300 underline-offset-4 hover:decoration-slate-500"
+                title="הצג את פירוט הרכישות">
+                {purchasedCards || '—'}
+              </button>
               <span className="text-slate-400">−</span>
               <span className="text-slate-500">נמסרו</span>
               <strong className="ltr-num text-base text-slate-900">
@@ -312,6 +324,44 @@ export default function StockManager() {
               <span className="text-slate-500">במלאי</span>
               <strong className="ltr-num text-base text-emerald-700">{recon.balance}</strong>
             </div>
+
+            {/* ── פירוט הרכישות ──────────────────────────────────────────
+                ⚠️ המספר "נקנו" נכשל שלוש פעמים כשנגזר מיומן התנועות, ולכן
+                הוא מוצג כאן עם המקור שלו: כל רכישה, עם התאריך שלה. מנהל
+                שרואה מספר שאינו מסתדר לו יכול לפתוח ולראות ממה הוא מורכב
+                במקום לנחש. */}
+            {showPurchases && (
+              <div className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-[13px] font-bold text-slate-700">פירוט הרכישות</p>
+                  {canEdit && (
+                    <button type="button" onClick={() => setModal('purchase')}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-slate-900">
+                      <Plus size={12} /> רשום רכישה
+                    </button>
+                  )}
+                </div>
+                {purchases.length === 0 ? (
+                  <p className="text-[12px] text-slate-500">טרם נרשמו רכישות.</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {purchases.map(p => (
+                      <div key={p.id} className="flex items-baseline justify-between gap-3 text-[12px] border-b border-slate-200 last:border-0 py-1">
+                        <span className="ltr-num font-bold text-slate-900 shrink-0">{p.quantity.toLocaleString('he-IL')}</span>
+                        <span className="ltr-num text-slate-600 shrink-0">
+                          {new Date(p.purchased_on).toLocaleDateString('he-IL')}
+                        </span>
+                        <span className="text-slate-500 truncate flex-1 text-left">{p.note ?? ''}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-baseline justify-between gap-3 text-[12px] pt-1.5 font-bold text-slate-900">
+                      <span className="ltr-num">{purchasedCards.toLocaleString('he-IL')}</span>
+                      <span>סך הכול נרכשו</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* ⚠️ תקלה, לא נתון: כרטיס טעון בידי לידה שאינה מאושרת פירושו כסף
                 שאינו מאושר בידי משפחה *וגם* כרטיס שחסר במלאי. הוא אינו נספר
@@ -581,6 +631,13 @@ export default function StockManager() {
           </div>
         )}
       </div>
+
+      {modal === 'purchase' && (
+        <PurchaseModal
+          onClose={() => setModal(null)}
+          onDone={(msg) => { setModal(null); setFlash(msg); setTimeout(() => setFlash(''), 4000); load() }}
+        />
+      )}
 
       {modal === 'baseline' && (
         <BaselineModal
@@ -893,6 +950,100 @@ function StockMovementModal({ mode, currentBalance, awaiting, onClose, onDone, o
               {isAdd ? 'הוסף למלאי' : 'הורד מהמלאי'}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// רישום רכישת כרטיסים.
+//
+// ⚠️ נפרד מ"הוסף מלאי" בכוונה. שתי פעולות שונות: רכישה עונה על "כמה נקנו
+// בסך הכול" (מול חשבונית), והוספת מלאי על "כמה נכנסו למגירה עכשיו".
+// ערבובן הוא מה שהחזיר מספרים שגויים שוב ושוב — יומן התנועות כולל גם
+// החזרות של כרטיסים שנכשלו ותיקוני ספירה, שאינם רכישות.
+//
+// ⚠️ התאריך חובה ואין לו ברירת מחדל של "היום": רכישה מוזנת לרוב אחרי
+// שהגיעה החשבונית, והתיעוד צריך לשקף את יום הרכישה בפועל.
+// ─────────────────────────────────────────────────────────────────────────────
+function PurchaseModal({ onClose, onDone }: { onClose: () => void; onDone: (msg: string) => void }) {
+  const [qty, setQty] = useState('')
+  const [date, setDate] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const today = new Date().toISOString().slice(0, 10)
+  const n = Number(qty)
+  const valid = Number.isInteger(n) && n > 0 && !!date && date <= today
+
+  const submit = async () => {
+    if (!valid) { setErr('נדרשים כמות ותאריך רכישה תקינים'); return }
+    setBusy(true); setErr('')
+    try {
+      const r = await fetch('/api/admin/card-stock', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: n, purchasedOn: date, note: note.trim() || undefined }),
+      })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'שגיאה'); setBusy(false); return }
+      onDone(`נרשמה רכישה של ${n.toLocaleString('he-IL')} כרטיסים`)
+    } catch { setErr('שגיאת רשת'); setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+          <h3 className="font-bold text-slate-900 flex items-center gap-2">
+            <Plus size={16} className="text-slate-700" /> רישום רכישת כרטיסים
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-3">
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            רישום הרכישה מתעד <strong>כמה כרטיסים נרכשו ומתי</strong>. הוא אינו משנה את
+            המלאי — להכנסת הכרטיסים למגירה יש להשתמש ב״הוסף מלאי״.
+          </p>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">כמות כרטיסים</span>
+            <input type="number" min={1} value={qty} onChange={e => setQty(e.target.value)} autoFocus
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm ltr-num focus:border-slate-500 focus:outline-none" />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">
+              תאריך הרכישה <span className="text-rose-600">*</span>
+            </span>
+            <input type="date" value={date} max={today} onChange={e => setDate(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm ltr-num focus:border-slate-500 focus:outline-none" />
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">הערה (רשות)</span>
+            <input value={note} onChange={e => setNote(e.target.value)} placeholder="מספר חשבונית, ספק…"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+          </label>
+
+          {err && (
+            <p className="flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+              <AlertTriangle size={13} className="shrink-0" /> {err}
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 px-5 py-3.5 border-t border-slate-100">
+          <button onClick={submit} disabled={busy || !valid}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-900 disabled:opacity-50">
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} שמור רכישה
+          </button>
+          <button onClick={onClose} disabled={busy}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            ביטול
+          </button>
         </div>
       </div>
     </div>

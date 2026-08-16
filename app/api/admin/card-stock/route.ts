@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, requireAdmin, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireAdmin, requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { getStockBalance, addStockMovement, setBaselineStock } from '@/lib/cardStock'
 import { reconcileStock, heldAidIds, approvedCardCoverage, scopedLedger } from '@/lib/cardStockRecon'
-import { sumPurchasedCards } from '@/lib/purchasedCards'
+import { getPurchases, validatePurchase } from '@/lib/cardPurchases'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
@@ -12,11 +12,16 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // GET: מלאי נוכחי + יומן התנועות האחרונות (לתצוגה אונליין)
 export async function GET() {
-  if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
+  // ⚠️ requirePermission ולא requireStaff: המסך חושף מלאי, רכישות ושמות
+  // משפחה של לידות שמחזיקות כרטיס — נתוני מחלקה לכל דבר.
+  if (!(await requirePermission('maternity_cards', 'view'))) {
+    return NextResponse.json({ error: 'לא מורשה' }, { status: 401, headers: NO_STORE })
+  }
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500, headers: NO_STORE })
 
   const balance = await getStockBalance(admin)
+  const purchases = await getPurchases(admin)
 
   // ── התאמת המלאי ─────────────────────────────────────────────────────────
   // ⚠️ המלאי לבדו אינו בר-בירור: "הכנסתי 300, אישרתי 48, למה 247?". התשובה
@@ -229,11 +234,14 @@ export async function GET() {
       // ⚠️ ההבחנה היא לפי aid_id ולא לפי reason: adjust חיובי *עם*
       // aid_id הוא החזרת כרטיס שנוכה ונכשל — לא קנייה. adjust חיובי
       // בלי שיוך ללידה הוא הוספת מלאי לכל דבר.
-      // 🔴 fullLedger ולא ledger. זה היה הבאג שהחזיר את התקלה: `ledger`
-      // הוא 50 השורות שהמסך מציג, והרכישה המקורית (300) היא תנועה ישנה
-      // שנדחקה מחוץ לטווח הזה. הסכום יצא 0, והמסך הציג '—' גם ב"נקנו"
-      // וגם ב"נמסרו" שנגזר ממנו.
-      purchasedCards: sumPurchasedCards(fullLedger ?? []),
+      // 🔴 נקרא מטבלת הרכישות ואינו נגזר מהיומן.
+      //
+      // הגזירה מהיומן נכשלה שלוש פעמים: 0 (הרכישה נדחקה מחוץ ל-50 השורות
+      // שנסרקו), 295 (נוסחה שגויה), 662 (סכימת כל התנועות החיוביות —
+      // כולל החזרות של כרטיסים שנכשלו ותיקוני ספירה, שאינם רכישות).
+      // יומן התנועות אינו יומן רכישות, ואין בו סימן ודאי שמבחין ביניהם.
+      purchasedCards: purchases.totalPurchased,
+      purchases: purchases.purchases,
     },
     { headers: NO_STORE },
   )
@@ -370,4 +378,47 @@ export async function POST(request: NextRequest) {
 
   // failed/notConfigured מדווחים למסך — כדי שכשל בשיוך לא ייעלם בשקט
   return NextResponse.json({ balance, processed, failed, notConfigured, errors: stockErrors })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT: רישום רכישת כרטיסים — { quantity, purchasedOn, note? }
+//
+// ⚠️ נפרד מ-POST (תנועת מלאי) בכוונה, ואינו נוגע ביומן התנועות: רכישה
+// עונה על "כמה נקנו בסך הכול", ותנועת מלאי על "כמה יש עכשיו". ערבוב
+// השניים הוא בדיוק מה שהחזיר מספרים שגויים שוב ושוב — יומן התנועות
+// כולל גם החזרות ותיקוני ספירה, שאינם רכישות.
+//
+// ⚠️ הוספת רכישה אינה מעלה את המלאי מעצמה. מי שרכש כרטיסים והכניס אותם
+// למגירה ירשום גם תנועת מלאי (POST) — שתי פעולות, כי הן באמת שתי
+// עובדות נפרדות: לפעמים רוכשים ומקבלים בהמשך.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function PUT(request: NextRequest) {
+  // כמו תנועות המלאי — מנהל בלבד.
+  const staff = await requireAdmin()
+  if (!staff) return forbidden()
+  const admin = getServiceClient()
+  if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const body = await request.json().catch(() => ({}))
+  const { quantity, purchasedOn, note } = body as { quantity?: unknown; purchasedOn?: unknown; note?: unknown }
+
+  // ⚠️ התאריך של השרת ולא של הדפדפן: שעון לקוח שגוי היה חוסם רכישה תקינה
+  // או מתיר עתידית.
+  const today = new Date().toISOString().slice(0, 10)
+  const invalid = validatePurchase(quantity, purchasedOn, today)
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
+
+  const { error } = await admin.from('card_purchases').insert({
+    quantity: Number(quantity),
+    purchased_on: purchasedOn as string,
+    note: typeof note === 'string' && note.trim() ? note.trim() : null,
+    created_by: staff.email ?? null,
+  })
+  if (error) {
+    console.error('[card-stock] purchase insert failed:', error.message)
+    return NextResponse.json({ error: 'שמירת הרכישה נכשלה' }, { status: 500 })
+  }
+
+  const purchases = await getPurchases(admin)
+  return NextResponse.json({ ok: true, ...purchases })
 }
