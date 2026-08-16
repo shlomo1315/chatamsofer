@@ -1740,6 +1740,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   const [lineageFixSending, setLineageFixSending] = useState(false)
   const [lineageFixErr, setLineageFixErr] = useState('')
   const [lineageFixDone, setLineageFixDone] = useState(false)
+  // 🔴 שרשרת הדורות שנבנתה בעורך שבאזור האישי.
+  // ⚠️ נפרד מ-fixLineageResult (תיקון שהמשרד דרש, בזרימת המסמכים): שני
+  // המסלולים יכולים להיות פתוחים בו-זמנית, ומצב משותף היה מערבב ביניהם.
+  const [portalFixLineage, setPortalFixLineage] = useState<LineageResult | null>(null)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
@@ -3648,15 +3652,26 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setLineageFixErr('')
     setLineageFixSending(true)
     try {
+      // ⚠️ אותו מבנה בדיוק כמו בהרשמה ובתיקון שהמשרד דורש (ראו
+      // handleFixLineageSubmit): דור 1 הוא רבינו החתם סופר, אחריו
+      // האבות לפי הסדר, והמבקש עצמו אחרון.
+      const anc = portalFixLineage?.ancestors ?? []
+      const chain = portalFixLineage?.valid ? [
+        { generation: 1, name: 'רבינו החתם סופר', relation: null as string | null },
+        ...anc.map((a, i) => ({ generation: i + 2, name: a.name, relation: a.relation as string | null })),
+        { generation: anc.length + 2, name: fixSelfName, relation: portalFixLineage.selfRelation as string | null },
+      ] : null
+
       const res = await fetch('/api/portal/lineage-fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: lineageFixText }),
+        body: JSON.stringify({ text: lineageFixText, ...(chain ? { chain } : {}) }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setLineageFixErr(d.error ?? 'שליחת הבקשה נכשלה'); return }
       setLineageFixDone(true)
       setLineageFixText('')
+      setPortalFixLineage(null)
     } catch {
       setLineageFixErr('שגיאת רשת — נסו שוב')
     } finally {
@@ -5329,13 +5344,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   ⚠️ בתוך הכרטיס ולא כטאבים ראשיים: שלושתם עונים על "מי
                   אני במערכת", והפרדתם לטאבים עליונים הייתה מפזרת שאלה
                   אחת על פני שלושה מסכים. */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1 overflow-x-auto">
+              {/* ⚠️ הוגדלו: text-xs עם ריפוד צר נקרא כקישורי משנה ולא
+                  כניווט, ומשתמשים לא הבחינו שיש כאן שלושה מסכים. עכשיו
+                  שורת טאבים מלאה ברוחב הכרטיס, עם מצב פעיל מובלט. */}
+              <div className="mt-4 pt-3 border-t border-slate-100 grid grid-cols-3 gap-1.5">
                 {HOME_TABS.map(t => (
                   <button key={t.key} type="button" onClick={() => setHomeTab(t.key)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                    className={`px-3 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
                       homeTab === t.key
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200'
                     }`}>
                     {t.label}
                   </button>
@@ -5344,42 +5362,66 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
               {/* Personal details */}
               {homeTab === 'details' && (
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-                {beneficiary.id_number && (
-                  <div><EditableText k="dash.field.id" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.id_number}</span></div>
-                )}
-                {beneficiary.phone && (
-                  <div><EditableText k="dash.field.phone" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
-                )}
-                {beneficiary.email && (
-                  <div className="col-span-2">
-                    <EditableText k="dash.field.email" className="text-slate-400 text-xs block" />
-                    <span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span>
-                    {/* חיווי "לא מאומת" — מוצג כל עוד הכתובת לא אומתה, ומשמש גם
-                        כקיצור לפתיחת חלונית האימות מחדש אחרי שנסגרה. */}
-                    {emailVerified === false && (
-                      <button type="button" onClick={() => setShowEmailVerifyModal(true)}
-                        className="inline-flex items-center gap-1 mr-2 align-middle text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors">
-                        <AlertCircle size={11} /> לא מאומת · אמת עכשיו
-                      </button>
+              <div className="mt-3 flex flex-col gap-3">
+                {/* ── זהות: הבעל ובת הזוג, זה לצד זה ──
+                    ⚠️ הועלו לראש והובלטו. שם בת הזוג והת"ז שלה היו קבורים
+                    מתחת לבלוק המייל שתופס שתי עמודות, כלומר הפרט שמזהה את
+                    המשפחה הופיע אחרי כתובת המייל. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+                    <span className="text-[11px] font-bold text-slate-400 block mb-0.5">
+                      {(beneficiary.marital_status || '').startsWith('נשו') ? 'הבעל' : 'פרטים אישיים'}
+                    </span>
+                    <p className="text-base font-black text-slate-900 leading-tight truncate">
+                      {[beneficiary.family_name, beneficiary.full_name].filter(Boolean).join(' ') || '—'}
+                    </p>
+                    {beneficiary.id_number && (
+                      <p className="text-sm font-bold text-slate-600 mt-0.5" dir="ltr">{beneficiary.id_number}</p>
                     )}
                   </div>
-                )}
-                {beneficiary.marital_status && (
-                  <div><EditableText k="dash.field.marital" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.marital_status}</span></div>
-                )}
-                {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_name && (
-                  <div><EditableText k="dash.field.spouse" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.spouse_name}</span></div>
-                )}
-                {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_id_number && (
-                  <div><EditableText k="dash.field.spouseId" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.spouse_id_number}</span></div>
-                )}
-                {(beneficiary.address || beneficiary.city) && (
-                  <div className="col-span-2"><EditableText k="dash.field.address" className="text-slate-400 text-xs block" /><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
-                )}
-                {beneficiary.children_count != null && (
-                  <div><EditableText k="dash.field.children" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.children_count}</span></div>
-                )}
+
+                  {(beneficiary.marital_status || '').startsWith('נשו') && beneficiary.spouse_name && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5">
+                      <span className="text-[11px] font-bold text-slate-400 block mb-0.5">בת הזוג</span>
+                      <p className="text-base font-black text-slate-900 leading-tight truncate">
+                        {beneficiary.spouse_name}
+                      </p>
+                      {beneficiary.spouse_id_number && (
+                        <p className="text-sm font-bold text-slate-600 mt-0.5" dir="ltr">{beneficiary.spouse_id_number}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── שאר הפרטים ── */}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+                  {beneficiary.phone && (
+                    <div><EditableText k="dash.field.phone" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.phone}</span></div>
+                  )}
+                  {beneficiary.marital_status && (
+                    <div><EditableText k="dash.field.marital" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.marital_status}</span></div>
+                  )}
+                  {beneficiary.email && (
+                    <div className="col-span-2">
+                      <EditableText k="dash.field.email" className="text-slate-400 text-xs block" />
+                      <span className="text-slate-700 break-all" dir="ltr">{beneficiary.email}</span>
+                      {/* חיווי "לא מאומת" — מוצג כל עוד הכתובת לא אומתה, ומשמש גם
+                          כקיצור לפתיחת חלונית האימות מחדש אחרי שנסגרה. */}
+                      {emailVerified === false && (
+                        <button type="button" onClick={() => setShowEmailVerifyModal(true)}
+                          className="inline-flex items-center gap-1 mr-2 align-middle text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 hover:bg-amber-100 transition-colors">
+                          <AlertCircle size={11} /> לא מאומת · אמת עכשיו
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {(beneficiary.address || beneficiary.city) && (
+                    <div className="col-span-2"><EditableText k="dash.field.address" className="text-slate-400 text-xs block" /><span className="text-slate-700">{[beneficiary.address, beneficiary.city].filter(Boolean).join(', ')}</span></div>
+                  )}
+                  {beneficiary.children_count != null && (
+                    <div><EditableText k="dash.field.children" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.children_count}</span></div>
+                  )}
+                </div>
               </div>
               )}
 
@@ -5482,23 +5524,40 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       ) : (
                         <>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            מצאתם טעות בשם, בסדר או בקשר? כתבו מה צריך לתקן. הבקשה נבדקת
-                            במשרד לפני שהיא נכנסת — הרישום עצמו אינו משתנה מיד.
+                            בנו מחדש את סדר הדורות הנכון. הבקשה נבדקת במשרד לפני שהיא
+                            נכנסת — הרישום עצמו אינו משתנה מיד.
                           </p>
+
+                          {/* 🔴 עורך הדורות המלא — אותו רכיב שבו מולאו הדורות
+                              בהרשמה. עד כה היה כאן שדה טקסט חופשי בלבד, והמנהל
+                              נדרש לפענח מהמלל מה בדיוק לשנות ולהקליד בעצמו. */}
+                          <div className="rounded-xl border border-slate-200 bg-white p-3">
+                            <LineageBuilder selfName={fixSelfName} onChange={setPortalFixLineage} />
+                          </div>
+
+                          {/* ⚠️ הערה חופשית נשארת, כתוספת: היא הדרך היחידה לתאר
+                              בעיה שאינה "שם שגוי בדור מסוים". */}
+                          <label className="text-xs font-bold text-slate-600 mt-1">הערה למשרד (רשות)</label>
                           <textarea
                             value={lineageFixText}
                             onChange={e => setLineageFixText(e.target.value)}
-                            rows={3}
+                            rows={2}
                             maxLength={1000}
-                            placeholder="לדוגמה: בדור 4 השם צריך להיות ר׳ אברהם יהושע, והקשר הוא בן ולא חתן"
+                            placeholder="הסבר נוסף, אם יש — למשל מקור המידע או ספק לגבי ענף מסוים"
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                           />
                           {lineageFixErr && <p className="text-xs text-red-600">{lineageFixErr}</p>}
-                          <button type="button" onClick={submitLineageFix} disabled={lineageFixSending}
+                          <button type="button" onClick={submitLineageFix}
+                            disabled={lineageFixSending || !portalFixLineage?.valid}
                             className="self-start inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg px-4 py-2 transition-colors">
                             {lineageFixSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                             שליחת הבקשה
                           </button>
+                          {!portalFixLineage?.valid && (
+                            <p className="text-[11px] text-slate-400">
+                              יש להשלים את שרשרת הדורות עד אליכם כדי לשלוח.
+                            </p>
+                          )}
                         </>
                       )}
                     </div>

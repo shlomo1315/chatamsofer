@@ -165,6 +165,13 @@ export async function sendLoanInquiry(
     ...mailFor('gemach'),
     replyTo: `office+l${token}@${INBOUND_DOMAIN}`,
     skipLog: true,
+    // 🔴 לא דרך מאגר Gmail — הזהות והשרשור תלויים בכתובת השולח.
+    //
+    // ⚠️ Gmail מחליף כתובת "מאת" שאינה אליאס מאומת בכתובת החשבון עצמו
+    // (code@chasamsofer.info), ולכן המבקש קיבל את הבירור מכתובת טכנית
+    // שאינה הגמ"ח. במייל שכל תכליתו לגרום לו להשיב, זה גם נראה חשוד
+    // וגם מפצל את השרשור.
+    gmailPriority: 'never',
     ...thread,
   })
 

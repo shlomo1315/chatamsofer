@@ -12,8 +12,22 @@ interface Suggestion {
   id: string; kind: 'rename' | 'add_child' | 'reparent' | 'note'
   node_id: string | null; parent_id: string | null
   proposed_name: string | null; relation: 'son' | 'son_in_law' | null
-  payload: { text?: string } | null; reviewer_name: string | null; created_at: string
+  payload: {
+    text?: string
+    // 🔴 שרשרת דורות מובנית — מגיעה מעורך הדורות שבאזור האישי.
+    // עד כה הגיע טקסט חופשי בלבד, והמנהל נדרש לפענח מהמלל מה לשנות.
+    chain?: { generation: number; name: string; relation: string | null }[]
+    chain_before?: { generation: number; name: string; relation: string | null }[] | null
+    source?: string
+  } | null
+  reviewer_name: string | null; created_at: string
 }
+
+/** שרשרת דורות → מחרוזת להשוואה, כדי לסמן מה השתנה. */
+const chainKey = (c?: { name: string; relation: string | null }[] | null) =>
+  (c ?? []).map(r => `${r.name}|${r.relation ?? ''}`).join('→')
+
+const relLabel = (r: string | null) => r === 'son_in_law' ? 'חתן' : r === 'son' ? 'בן' : ''
 
 const KIND_META = {
   rename: { icon: Pencil, label: 'תיקון שם', color: '#7C3AED' },
@@ -94,7 +108,54 @@ export default function SuggestionsInbox({ onApplied }: { onApplied: () => void 
                     <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${meta.color}18`, color: meta.color }}>{meta.label}</span>
                     {s.reviewer_name && <span className="text-xs text-slate-400">מאת {s.reviewer_name}</span>}
                   </div>
-                  <p className="text-sm text-slate-800 mt-0.5 break-words">{describe(s)}</p>
+                  {/* 🔴 שרשרת מובנית — מוצגת כדורות ולא כמלל.
+                      ⚠️ ההצעה הגיעה עד כה כמחרוזת אחת, והמנהל נדרש לקרוא
+                      אותה ולהקליד את השינוי בעצמו. עכשיו רואים מיד מה
+                      השתנה: כל דור בשורה, והשונים מסומנים. */}
+                  {s.payload?.chain?.length ? (
+                    <div className="mt-1">
+                      {(() => {
+                        const before = s.payload?.chain_before ?? []
+                        const changed = chainKey(before) !== chainKey(s.payload?.chain)
+                        return (
+                          <>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {s.payload!.chain!.map((r, i) => {
+                                const prev = before[i]
+                                const isDiff = !prev || prev.name !== r.name || prev.relation !== r.relation
+                                return (
+                                  <span key={i}
+                                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] border ${
+                                      isDiff
+                                        ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600'
+                                    }`}
+                                    title={prev && isDiff ? `היה: ${prev.name}${relLabel(prev.relation) ? ` (${relLabel(prev.relation)})` : ''}` : undefined}>
+                                    <span className="text-slate-400">{r.generation}</span>
+                                    {r.name}
+                                    {relLabel(r.relation) && <span className="opacity-60">({relLabel(r.relation)})</span>}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                            {!changed && (
+                              <p className="text-[11px] text-slate-400 mt-1">זהה לשרשרת הקיימת — ייתכן שההערה היא העיקר.</p>
+                            )}
+                            {/* ⚠️ ההערה מוצגת בנפרד מהסיכום: הסיכום כבר מכיל
+                                את הדורות, והצגתו כאן הייתה כפילות. */}
+                            {(() => {
+                              const note = (s.payload?.text ?? '').split('הערת המבקש:')[1]?.trim()
+                              return note
+                                ? <p className="text-xs text-slate-600 mt-1 break-words">הערה: {note}</p>
+                                : null
+                            })()}
+                          </>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-800 mt-0.5 break-words whitespace-pre-wrap">{describe(s)}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => decide(s.id, 'approve')} disabled={busy === s.id}
