@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
@@ -21,6 +22,7 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   // שער המחלקה — גמ"ח הלוואות סגור → לא מקבלים בקשות (נחסם גם בקריאה ישירה ל-API).
   // ⚠️ קוד תצוגה מוקדמת (?preview=) עוקף את השער לבקשה זו בלבד — כדי שאפשר
   // יהיה לבדוק את כל הזרימה לפני הפתיחה לציבור, בלי לפתוח את המחלקה לכולם.

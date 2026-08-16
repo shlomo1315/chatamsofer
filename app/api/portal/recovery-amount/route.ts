@@ -6,6 +6,7 @@ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { recoveryRealizedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ function getAdminClient() {
 
 // בית ההחלמה מזין את הסכום שמומש עבור הלידה ושולח לאישור. רק כשסומן "הגיעה".
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const { home, aidId, amount, nights, receiptNumber, stayFrom, stayTo, receiptUrl } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
   // קישור ישיר לקבלה (חלופה להעלאת קובץ) — נשמר רק אם http/https תקין.

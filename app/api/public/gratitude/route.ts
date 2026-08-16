@@ -6,6 +6,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { gratitudeReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { cancelGratitudeReminder } from '@/lib/scheduledMail'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ interface BenRow {
 
 // GET — טעינת מצב הדף (האם כבר נשלח מכתב)
 export async function GET(request: NextRequest) {
+  await ensureEmailTexts()
   const token = request.nextUrl.searchParams.get('token') ?? ''
   const aidId = verifyPublicToken(token, 'g')
   if (!aidId) return NextResponse.json({ error: 'קישור לא תקין' }, { status: 401 })
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   if (!rateLimit(`gratitude:${clientIp(request)}`, 20, 60 * 60 * 1000)) {
     return NextResponse.json({ error: 'יותר מדי בקשות, נסו שוב מאוחר יותר' }, { status: 429 })
   }

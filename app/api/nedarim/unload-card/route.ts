@@ -4,6 +4,7 @@ import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { getNedarimCreds } from '@/lib/nedarim'
 import { unloadAidCard, type UnloadableAid } from '@/lib/unloadExpired'
 import { birthApprovalRetractedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 
@@ -28,6 +29,7 @@ function getAdminClient(): SupabaseClient | null {
 // לבטל את הטעינה שנגררה ממנה.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('maternity', 'edit')
   if (!staff) return forbidden()
 

@@ -3,6 +3,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { getServiceClient } from '@/lib/apiAuth'
 import { getOpenDistribution, registerToOpenDistribution } from '@/lib/holidayDistributions'
 import { holidayRegisteredEmail, holidayAlreadyRegisteredEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { checkInvite, INVITE_MESSAGE, type InviteRow } from '@/lib/distributionInvites'
@@ -61,6 +62,7 @@ async function resolveInvite(
 }
 
 export async function GET(request: NextRequest) {
+  await ensureEmailTexts()
   const params = new URL(request.url).searchParams
   const beneficiaryId = params.get('beneficiary_id')
   const token = params.get('token') ?? ''
@@ -122,6 +124,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   let body: { beneficiary_id?: string; token?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
   const beneficiaryId = String(body.beneficiary_id ?? '')

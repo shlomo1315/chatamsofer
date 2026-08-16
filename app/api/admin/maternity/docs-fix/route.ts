@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { addBeneficiaryNote, resolveAuthorName } from '@/lib/beneficiaryNotes'
 import { docsPendingEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { getDocTypes } from '@/lib/serverDocTypes'
@@ -22,6 +23,7 @@ export const dynamic = 'force-dynamic'
 // בקשת הלידה עצמה *אינה* משנה סטטוס — היא נשארת ממתינה עד שהמסמכים ייבדקו.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('maternity', 'edit')
   if (!staff) return forbidden()
   const db = getServiceClient()

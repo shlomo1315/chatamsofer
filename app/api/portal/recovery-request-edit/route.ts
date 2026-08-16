@@ -6,6 +6,7 @@ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { recoveryEditRequestEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ const motherName = (b?: Ben | null) =>
 
 // בית ההחלמה מבקש לפתוח רשומה נעולה לתיקון. מסמן זמן בקשה ושולח מייל התראה.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const { home, aidId } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
 

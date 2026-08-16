@@ -4,6 +4,7 @@ import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { emailVerifyRequestEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { listUnverified, verificationStats, isValidEmail } from '@/lib/emailVerification'
 
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,7 @@ export const maxDuration = 300
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET() {
+  await ensureEmailTexts()
   if (!(await requireAdmin())) return forbidden()
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
@@ -31,6 +33,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requireAdmin()
   if (!staff) return forbidden()
   const admin = getServiceClient()

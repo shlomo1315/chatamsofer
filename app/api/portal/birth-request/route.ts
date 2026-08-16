@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
 import { validateIsraeliId } from '@/lib/validation'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
@@ -27,6 +28,7 @@ function getAdminClient() {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   let body: Record<string, unknown>
   try {
     body = await request.json()

@@ -4,6 +4,7 @@ import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
 import { rateLimit } from '@/lib/rateLimit'
 import { isDepartmentAccessible, departmentClosedMessage } from '@/lib/departmentGates'
@@ -20,6 +21,7 @@ function getAdmin() {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   // שער המחלקה — אלמנות ויתומים סגור → לא מקבלים בקשות
   // ⚠️ ?preview= עוקף את השער לבקשה זו בלבד (ראו lib/departmentGates).
   if (!(await isDepartmentAccessible('widows', request.nextUrl.searchParams.get('preview')))) {

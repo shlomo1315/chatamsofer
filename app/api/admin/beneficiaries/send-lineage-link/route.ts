@@ -4,6 +4,7 @@ import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { lineageOrderFixEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { logActivity } from '@/lib/activityLog'
 
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,7 @@ const isValidEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 // ולקשר את ההצעות שיגיעו חזרה לכרטסת שלו. mode='order' מגביל את הדף לתיקון
 // סדר הדורות בלבד — בלי אישור/דחייה/שינוי שם של צמתים אחרים בענף.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 

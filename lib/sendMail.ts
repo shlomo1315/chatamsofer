@@ -270,6 +270,19 @@ export async function deliverMail(
   attachments?: MailAttachment[],
   options?: MailOptions,
 ): Promise<{ ok: boolean; error?: string; id?: string }> {
+  // 🔴 מרענן את מטמון הטקסטים הערוכים.
+  //
+  // ⚠️ ההערה ב-emailTextsStore הבטיחה שהקריאה הזו מתבצעת כאן, אבל היא
+  // מעולם לא נכתבה: הקובץ הזה לא ייבא את המודול כלל. בפועל הטקסטים
+  // נטענו רק בעליית השרת, ועריכה במסך ההגדרות לא השפיעה על מיילים
+  // שנשלחו מתהליך אחר — עד לפריסה הבאה.
+  //
+  // ⚠️ הרענון כאן מועיל למייל *הבא*, לא לזה שביד: ה-HTML כבר נבנה עם
+  // הטקסטים שהיו במטמון. זה מקובל — הפער מצטמצם לשליחה אחת במקום
+  // להימשך עד הפריסה, וזו הנקודה היחידה שכל המיילים עוברים דרכה.
+  // ⚠️ לא חוסם ולא זורק: כשל טעינה מחזיר את ברירות המחדל שבקוד.
+  void import('./emailTextsStore').then(m => m.ensureEmailTexts()).catch(() => {})
+
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     console.error('[mail] RESEND_API_KEY חסר — לא נשלח מייל')

@@ -6,6 +6,7 @@ import { verifyRecoveryPortalToken } from '@/lib/recoveryPortalAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { recoveryTopupEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,7 @@ function getAdminClient() {
 // עד כה הרשומה הייתה נעולה, הקבלה הישנה נדרסת בכל העלאה, ובית ההחלמה נתקע.
 // כאן הקבלה *מצטרפת* לקודמות והסכום מצטבר, בלי לפתוח את הרשומה לעריכה.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const { home, aidId, amount, nights, note, receiptUrl } = await request.json()
   if (!home || !aidId) return NextResponse.json({ error: 'חסרים פרטים' }, { status: 400 })
 

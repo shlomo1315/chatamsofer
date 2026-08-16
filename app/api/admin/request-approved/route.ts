@@ -4,6 +4,7 @@ import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { loanApprovedEmail, birthApprovedEmail, type RequestApprovedBeneficiary } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { loadMaternityCardOnApproval } from '@/lib/maternityCards'
 import { buildMaternityVouchers } from '@/lib/maternityVoucher'
 import { buildInstructionsSheet } from '@/lib/instructionsSheet'
@@ -125,6 +126,12 @@ export async function POST(request: NextRequest) {
       try {
         // מספרי הטלפון המעודכנים של המשפחה — להפעלת הכרטיס (המערכת מזהה לפי מספרים אלו בלבד)
         const benPhones = [(ben as { phone?: string | null }).phone, (ben as { spouse_phone?: string | null }).spouse_phone, (ben as { phone2?: string | null }).phone2]
+        // 🔴 טעינת הטקסטים הערוכים *לפני* בניית התבנית.
+        //
+        // ⚠️ בלעדיה התבנית נבנית מהמטמון שנטען בעליית השרת, ועריכה
+        // במסך "הודעות מייל" אינה משפיעה עד לפריסה הבאה — בדיוק המצב
+        // שבו נוסח שנערך לא הופיע במייל שיצא.
+        await ensureEmailTexts()
         const mail = type === 'loan'
           ? loanApprovedEmail(ben, req as unknown as { amount?: number; approved_amount?: number | null; installments?: number; monthly_payment?: number; purpose?: string })
           : birthApprovedEmail(ben, req as unknown as { baby_name?: string; baby_gender?: string; birth_date?: string; recovery_home?: string }, { centers, serial, phones: benPhones, cardInStock })

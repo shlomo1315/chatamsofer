@@ -5,6 +5,7 @@ import { getGmailClient, parseMessage } from '@/lib/gmail'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +42,7 @@ function parseDecision(raw: string): { kind: 'approved'; amount: number } | { ki
 }
 
 export async function POST() {
+  await ensureEmailTexts()
   if (!(await requireStaff())) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

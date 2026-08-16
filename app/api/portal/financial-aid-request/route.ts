@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { deliverMail, urlToAttachment } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { requestReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { signedDocUrl } from '@/lib/docUrl'
 import { getPortalBeneficiaryId } from '@/lib/portalSession'
 import { notifyRejectedRequest } from '@/lib/rejectedRequestMail'
@@ -29,6 +30,7 @@ function getAdminClient() {
 
 // בקשת סיוע רפואי מהטופס הציבורי: נימוק + מסמך מצורף.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   // שער המחלקה — סיוע רפואי סגור → לא מקבלים בקשות
   // ⚠️ ?preview= עוקף את השער לבקשה זו בלבד (ראו lib/departmentGates).
   if (!(await isDepartmentAccessible('financial_aid', request.nextUrl.searchParams.get('preview')))) {

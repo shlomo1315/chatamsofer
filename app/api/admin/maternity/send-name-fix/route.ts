@@ -4,6 +4,7 @@ import { signPublicToken } from '@/lib/publicToken'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,7 @@ export const dynamic = 'force-dynamic'
 // נשלח כשסומן "עדיין אין שם", או כשהוזן שם לא-תקין ורוצים שהיולדת תתקן במיידי.
 // הקישור נושא טוקן HMAC חתום (kind='n', תקף 7 ימים) — היולדת מזינה שם והוא נקלט אוטומטית.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('maternity', 'edit')
   if (!staff) return forbidden()
 

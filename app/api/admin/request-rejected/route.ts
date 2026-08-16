@@ -4,6 +4,7 @@ import { requireStaff, requirePermission, forbidden } from '@/lib/apiAuth'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { birthRejectedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ function getAdminClient() {
 // שולח ליולדת מייל מעוצב "בקשת הלידה נדחתה" עם הסיבה שהוזנה.
 // (הפנייה היא ליולדת — האשה — לפי מוסכמת המיילים של עזר יולדות.)
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requireStaff()
   if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
 

@@ -5,6 +5,7 @@ import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { financialAidDecisionEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ function getAdminClient() {
 
 // עדכון ידני של החלטה (אישור עם סכום / דחייה / החזרה לממתין) + הודעה למבקש.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('financial_aid', 'edit')
   if (!staff) return forbidden()
   const { id, status, amount } = await request.json()

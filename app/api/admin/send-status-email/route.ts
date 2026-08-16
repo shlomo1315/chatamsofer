@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { docsPendingEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { getDocTypes } from '@/lib/serverDocTypes'
@@ -15,6 +16,7 @@ function getClient() {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requireStaff()
   if (!staff) return unauthorized()
 

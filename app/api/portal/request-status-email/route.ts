@@ -6,6 +6,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { maskEmail } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
@@ -38,6 +39,7 @@ const TONE_BG: Record<Tone, string> = { pending: '#fffbeb', progress: '#eff6ff',
 
 // שולח למוטב (לכתובת הרשומה במערכת) מייל עם סטטוס כל בקשותיו. דורש סשן פורטל תקף.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   let body: { beneficiary_id?: string; idType?: 'id' | 'passport'; id?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 

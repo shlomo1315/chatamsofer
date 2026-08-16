@@ -6,6 +6,7 @@ import { rateLimit, clientIp } from '@/lib/rateLimit'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { benefitsLinkEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { buildDraftLinks } from '@/lib/emailRequestIntake'
 import { maskEmail } from '@/lib/phone'
 
@@ -23,6 +24,7 @@ function getAdminClient() {
 //   • לפי ת"ז (idType+id) — לפני כניסה, נשלח רק לכתובת הרשומה (כמו איפוס סיסמה).
 //   • לפי סשן פורטל (beneficiary_id) — אחרי כניסה.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   let body: { beneficiary_id?: string; idType?: 'id' | 'passport'; id?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 

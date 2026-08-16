@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden } from '@/lib/apiAuth'
 import { setPortalPassword } from '@/lib/loansPortalAuth'
 import { portalCredentialsEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 
@@ -11,6 +12,7 @@ const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 // שליחת פרטי הכניסה לפורטל ביצוע ההלוואות במייל — קובע/מעדכן את הסיסמה ושולח מייל מעוצב.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   if (!(await requirePermission('loans', 'edit'))) return forbidden()
 
   let body: { email?: string; password?: string }

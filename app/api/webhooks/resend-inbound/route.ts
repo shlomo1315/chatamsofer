@@ -5,6 +5,7 @@ import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMai
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
 import { shouldSendGenericReply } from '@/lib/autoReplyRouting'
 import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
 import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
@@ -475,6 +476,7 @@ function debugSnapshot(d: any): any {
 // Webhook לקבלת מיילים נכנסים מ-Resend Inbound.
 // Resend עוטף את הנתונים תחת data; תומכים גם במבנה שטוח ליתר ביטחון.
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   // חובה לקרוא את הגוף כטקסט גולמי — אימות חתימת Svix מחושב עליו בדיוק
   // כפי שהתקבל. כל שינוי (אפילו רווח) ישבור את החתימה.
   const rawBody = await request.text()

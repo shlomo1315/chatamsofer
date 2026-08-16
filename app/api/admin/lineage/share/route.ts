@@ -5,6 +5,7 @@ import { logActivity } from '@/lib/activityLog'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor, LINEAGE_MAIL_LABEL } from '@/lib/departments'
 import { shell } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,7 @@ const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 //   DELETE { token } → מבטל הרשאה (revoked_at). הלינק מפסיק לעבוד מיד.
 
 export async function GET(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
   const rootNodeId = request.nextUrl.searchParams.get('rootNodeId')
@@ -55,6 +57,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 
@@ -130,6 +133,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  await ensureEmailTexts()
   const staff = await requirePermission('lineage', 'edit')
   if (!staff) return forbidden()
 

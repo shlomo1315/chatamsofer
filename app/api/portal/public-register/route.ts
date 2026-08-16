@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
+import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { validateIsraeliId, normalizeDateToISO } from '@/lib/validation'
@@ -621,5 +622,6 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
 }
 
 export async function POST(request: NextRequest) {
+  await ensureEmailTexts()
   return handlePublicRegister(request)
 }
