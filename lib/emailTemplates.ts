@@ -17,6 +17,14 @@ const PORTAL_BASE_DEFAULT =
   process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://chasamsofer.co.il'
 const LOGO_URL = `${PORTAL_BASE_DEFAULT.replace(/\/$/, '')}/logo.png`
 
+// טופס אישור רב ריק (Google Drive) — למי שמגיש דרך המייל וממלא ביד.
+// ⚠️ קישור ולא קובץ מצורף: PDF מצורף הופך את מסלול המייל לברירת המחדל,
+// בעוד שהמסלול המועדף הוא האתר — שם הטופס מגיע מלא מהמערכת.
+// ניתן לעקוף דרך משתנה סביבה אם הקובץ בדרייב יוחלף.
+const RABBI_FORM_BLANK_URL =
+  process.env.RABBI_FORM_BLANK_URL
+  || 'https://drive.google.com/file/d/1Q--ShoskoYagSZkmRNKbuDrV074tmLEU/view?usp=sharing'
+
 // מנטרל תווי HTML בערכים מבוססי-משתמש לפני שילובם ב-HTML של המייל (מניעת הזרקת HTML)
 function escapeHtml(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
@@ -1905,6 +1913,86 @@ export function emailVerifyRequestEmail(
   return {
     subject: t('subject'),
     html: shell({ preheader: t('preheader'), accent: '#6366f1', title: t('title'), subtitle: t('subtitle'), body }),
+  }
+}
+
+// ─── מענה אוטומטי לפניית גמ"ח ─────────────────────────────────────────────────
+//
+// נשלח למי שפונה לראשונה ל-g@chasamsofer.info ומציג שני מסלולי הגשה.
+//
+// 🔴 האתר מוצג ראשון ובכפתור בולט, והמייל כמסלול משני בטקסט.
+// זו העדפה מכוונת ולא עיצוב: בהגשה דרך האתר טופס אישור הרב מגיע *מלא*
+// מהמערכת — שם, ת"ז וסדר הדורות מודפסים מתוך הרישום — ואילו במייל הפונה
+// ממלא הכול ביד ועלול לטעות בשמות הדורות, וזה בדיוק מה שהרב מאשר.
+//
+// ⚠️ הטופס הריק ניתן כקישור ולא כקובץ מצורף, מאותה סיבה: PDF מצורף הופך
+// למסלול ברירת המחדל (הפונה מדפיס ומתחיל למלא בלי לשקול), בעוד שקישור
+// מציב את שני המסלולים באותה שורה ומאפשר לראות שהאתר קל יותר.
+export function gemachIntakeEmail(opts?: { portalBase?: string; blankFormUrl?: string }): BuiltEmail {
+  const base = (opts?.portalBase || PORTAL_BASE_DEFAULT).replace(/\/$/, '')
+  const blankForm = opts?.blankFormUrl || RABBI_FORM_BLANK_URL
+
+  const body = `
+    <p style="margin:0 0 18px;color:#0f172a;font-size:16px;font-weight:700;">שלום וברכה,</p>
+
+    <p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.9;">
+      הגעתם לאגף ההלוואות של היכל החתם סופר.
+    </p>
+
+    <!-- מסלול 1 — האתר. מוצג ראשון ובכפתור. -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 14px;">
+      <tr><td style="background:#eef2ff;border:2px solid #c7d2fe;border-radius:14px;padding:20px 22px;">
+        <p style="margin:0 0 8px;color:#3730a3;font-size:16px;font-weight:900;">
+          להגשת בקשה חדשה — דרך האתר
+        </p>
+        <p style="margin:0 0 16px;color:#4338ca;font-size:14px;line-height:1.85;">
+          המהיר והפשוט מבין השניים: טופס אישור הרב מופק עבורכם
+          <strong>מלא בפרטים שלכם ובסדר הדורות</strong> — אין צורך למלא דבר ביד.
+        </p>
+        ${btn(`${base}/?action=loan`, 'להגשת בקשה באתר', '#4f46e5')}
+      </td></tr>
+    </table>
+
+    <!-- מסלול 2 — מייל. משני, בטקסט. -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;">
+      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;">
+        <p style="margin:0 0 10px;color:#0f172a;font-size:15px;font-weight:800;">
+          או — הגשה דרך המייל
+        </p>
+        <p style="margin:0 0 14px;color:#475569;font-size:14px;line-height:1.85;">
+          ניתן להשיב להודעה זו עם פרטי הבקשה. <strong>חובה לצרף</strong>:
+        </p>
+        <p style="margin:0 0 6px;color:#475569;font-size:14px;line-height:1.85;">
+          1. צילום תעודת זהות כולל ספח עם כל פרטי הילדים, מעודכן.
+        </p>
+        <p style="margin:0 0 14px;color:#475569;font-size:14px;line-height:1.85;">
+          2. טופס אישור רב חתום.
+        </p>
+        <p style="margin:0 0 10px;color:#475569;font-size:14px;line-height:1.85;">
+          <a href="${escapeHtml(blankForm)}" style="color:#4f46e5;font-weight:800;text-decoration:underline;">הורדת טופס אישור רב ריק</a>
+          — יש למלא בכתב יד את השם, מספר הזהות וסדר הדורות, ולהחתים את הרב.
+        </p>
+        <!-- ⚠️ שם הקובץ מפורש: הקליטה האוטומטית מזהה את הטופס לפי שמו,
+             וקובץ בשם אחר עלול שלא להיקלט ולעכב את הבקשה. -->
+        <p style="margin:0;color:#64748b;font-size:13px;line-height:1.8;">
+          נא לוודא ששם הקובץ המצורף הוא <strong>טופס אישור רב</strong>.
+        </p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
+      הודעה זו נשלחה אוטומטית. לשאלות נוספות ניתן להשיב להודעה זו.
+    </p>
+  `
+  return {
+    subject: 'אגף ההלוואות — היכל החתם סופר',
+    html: shell({
+      preheader: 'להגשת בקשת הלוואה — דרך האתר או במייל',
+      accent: '#10b981',
+      title: 'אגף ההלוואות',
+      subtitle: 'היכל החתם סופר',
+      body,
+    }),
   }
 }
 

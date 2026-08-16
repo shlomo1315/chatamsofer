@@ -140,6 +140,53 @@ async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string |
   await deliverMail(from, 'הגרלת כרטיסי טיסה — היכל החתם סופר', html, undefined, { ...mailFor('inbox8'), skipLog: true })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// מענה אוטומטי לפניות שמגיעות לתיבת גמ"ח (g@chasamsofer.info).
+//
+// מציג שני מסלולי הגשה: האתר (מועדף — הטופס מגיע מלא מהמערכת) והמייל
+// (עם קישור לטופס ריק למילוי ביד).
+//
+// ⚠️ נשלח לפונה *ראשון בלבד*, ולכן עובר דרך underAutoReplyCap: מי שכבר
+// באמצע התכתבות על בקשה קיימת לא אמור לקבל את הנחיות ההגשה שוב בכל
+// תשובה שהוא שולח — זה מרעיש ונראה כתקלה.
+//
+// ⚠️ אינו עונה להחזרת טופס אישור רב: מי שמשיב עם הטופס החתום נמצא כבר
+// בתוך התהליך, והנחיות "איך להגיש" בשלב הזה מבלבלות.
+// ─────────────────────────────────────────────────────────────────────────────
+async function maybeAutoReplyGemach(
+  admin: SupabaseClient,
+  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown },
+) {
+  if (departmentByEmail(msg.toEmail)?.key !== 'gemach') return
+  const from = (msg.fromEmail || '').toLowerCase()
+  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
+  if (!from || from.endsWith('@chasamsofer.info')) return
+  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
+
+  // ⚠️ החזרת טופס חתום אינה פנייה חדשה — ראה ההערה בראש הפונקציה.
+  const { looksLikeRabbiFormReturn } = await import('@/lib/rabbiFormReturn')
+  if (looksLikeRabbiFormReturn(msg.subject || '')) return
+
+  const { shouldSkipAutoReply, isAutoSubmittedMail, underAutoReplyCap } =
+    await import('@/lib/maintenanceReply')
+  if (shouldSkipAutoReply(from)) return
+  if (isAutoSubmittedMail(msg.headers)) return
+  if (!(await underAutoReplyCap(admin, from))) return
+
+  const { gemachIntakeEmail } = await import('@/lib/emailTemplates')
+  const mail = gemachIntakeEmail()
+  const res = await deliverMail(from, mail.subject, mail.html, undefined, { ...mailFor('gemach'), skipLog: true })
+  if (!res.ok) {
+    console.error('[gemach-auto-reply] שליחה נכשלה:', res.error)
+    return
+  }
+  // 🔴 רישום המענה — בלעדיו תקרת המענים סופרת אפס לנצח, והבולם האחרון
+  // מפני לולאה פשוט אינו קיים.
+  await admin.from('auto_reply_log').insert({ to_email: from, subject: mail.subject })
+    .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
+}
+
 // מענה אוטומטי לפניות שמגיעות לתיבת "איגוד" — מייל חדש עם הפרטים של הפונה +
 // קישורי הגשת בקשות. הזיהוי: מספר ת"ז מלא (9 ספרות, כולל ספרת ביקורת) בשורת
 // הנושא — של הרשום או של בן/בת הזוג; אם אין ת"ז בנושא, ננסה לפי כתובת השולח.
@@ -1042,6 +1089,14 @@ export async function POST(request: NextRequest) {
       if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
     } catch (e) {
       console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
+    }
+    // מענה אוטומטי לפניות גמ"ח — שני מסלולי ההגשה (אתר / מייל)
+    // ⚠️ אותם תנאים כמו השאר: לא על תשובה לשרשור שלנו ולא על בירור
+    // הלוואה קיים — הפונה כבר בתוך תהליך, והנחיות הגשה יבלבלו אותו.
+    try {
+      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyGemach(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
+    } catch (e) {
+      console.error('[resend-inbound] gemach auto-reply error:', e instanceof Error ? e.message : String(e))
     }
     // אבחון קליטה — שומר את הנושא והחלטת הניתוב, לאבחון כשל זיהוי בקשה.
     try {
