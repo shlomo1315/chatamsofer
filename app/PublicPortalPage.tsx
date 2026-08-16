@@ -24,7 +24,7 @@ import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
   Baby, CreditCard, Gift, ChevronLeft, Phone, MapPin, Mail, Landmark,
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
-  AlertTriangle, Home, ClipboardList,
+  AlertTriangle, Home, ClipboardList, Send,
 } from 'lucide-react'
 
 // ─── Types ───
@@ -1721,6 +1721,13 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ⚠️ 'home' הוא ברירת המחדל ולא 'requests': הפרטים והייחוס הם מה
   // שהמשפחה נכנסת לראות, והתזכורות הפעילות חייבות להופיע בכניסה.
   const [dashTab, setDashTab] = useState<'home' | 'requests' | 'docs' | 'contact'>('home')
+
+  // בקשת תיקון סדר הדורות — ראו lib/lineageFixRequest.
+  const [lineageFixOpen, setLineageFixOpen] = useState(false)
+  const [lineageFixText, setLineageFixText] = useState('')
+  const [lineageFixSending, setLineageFixSending] = useState(false)
+  const [lineageFixErr, setLineageFixErr] = useState('')
+  const [lineageFixDone, setLineageFixDone] = useState(false)
   const docsGateShown = useRef(false)
   const [authPassword, setAuthPassword] = useState('')
   const [authPassword2, setAuthPassword2] = useState('')
@@ -3554,6 +3561,28 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     setPendingConfirmed(false)
   }
 
+  // שליחת בקשת תיקון סדר הדורות. ההצעה ממתינה לאישור המנהל ואינה
+  // משנה את העץ — ראו app/api/portal/lineage-fix.
+  const submitLineageFix = async () => {
+    setLineageFixErr('')
+    setLineageFixSending(true)
+    try {
+      const res = await fetch('/api/portal/lineage-fix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: lineageFixText }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setLineageFixErr(d.error ?? 'שליחת הבקשה נכשלה'); return }
+      setLineageFixDone(true)
+      setLineageFixText('')
+    } catch {
+      setLineageFixErr('שגיאת רשת — נסו שוב')
+    } finally {
+      setLineageFixSending(false)
+    }
+  }
+
   /**
    * סגירת טופס בקשה.
    *
@@ -5254,23 +5283,69 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 )}
               </div>
 
-              {/* סדר הייחוס שסומן */}
+              {/* ── סדר הדורות ──────────────────────────────────────────
+                  ⚠️ רשימה ממוספרת ולא שרשרת צ'יפים: הדורות הם רצף שהסדר
+                  בו נושא מידע, ושרשרת צ'יפים נקטעת באמצע שורה ומאבדת
+                  אותו. המספור אמיתי — הוא הדור עצמו. */}
               {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-slate-100">
-                  <EditableText k="dash.field.lineage" className="text-slate-400 text-xs block mb-1.5" />
-                  <div className="flex items-center gap-1 flex-wrap">
-                    {beneficiary.lineage_chain.map((c, i) => (
-                      <span key={i} className="flex items-center gap-1">
-                        {i > 0 && <ChevronLeft size={11} className="text-slate-300" />}
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {c.name}
-                          {(c.relation === 'son' || c.relation === 'son_in_law') && (
-                            <span className="text-[10px] text-indigo-400 mr-1">({c.relation === 'son' ? 'בן' : 'חתן'})</span>
-                          )}
-                        </span>
-                      </span>
-                    ))}
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <EditableText k="dash.field.lineage" className="text-slate-400 text-xs" />
+                    <button type="button" onClick={() => { setLineageFixOpen(o => !o); setLineageFixDone(false) }}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50 transition-colors">
+                      {lineageFixOpen ? 'סגירה' : 'בקשת תיקון'}
+                    </button>
                   </div>
+
+                  <ol className="flex flex-col">
+                    {beneficiary.lineage_chain.map((c, i) => (
+                      <li key={i} className="flex items-center gap-2.5 py-1.5 border-b border-slate-50 last:border-0">
+                        <span className="w-6 h-6 shrink-0 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center justify-center tabular-nums">
+                          {i + 1}
+                        </span>
+                        <span className="flex-1 min-w-0 text-sm font-semibold text-slate-800">{c.name}</span>
+                        {(c.relation === 'son' || c.relation === 'son_in_law') && (
+                          <span className="text-[11px] text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
+                            {c.relation === 'son' ? 'בן' : 'חתן'}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+
+                  {/* ⚠️ בקשה ולא עריכה ישירה: הייחוס קובע זכאות, ושינוי
+                      שלו עובר בדיקה במשרד לפני שהוא נכנס לעץ. */}
+                  {lineageFixOpen && (
+                    <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3 flex flex-col gap-2">
+                      {lineageFixDone ? (
+                        <p className="flex items-center gap-2 text-sm text-green-700">
+                          <CheckCircle2 size={16} className="shrink-0" />
+                          הבקשה התקבלה ותיבדק במשרד. תודה!
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            מצאתם טעות בשם, בסדר או בקשר? כתבו מה צריך לתקן. הבקשה נבדקת
+                            במשרד לפני שהיא נכנסת — הרישום עצמו אינו משתנה מיד.
+                          </p>
+                          <textarea
+                            value={lineageFixText}
+                            onChange={e => setLineageFixText(e.target.value)}
+                            rows={3}
+                            maxLength={1000}
+                            placeholder="לדוגמה: בדור 4 השם צריך להיות ר׳ אברהם יהושע, והקשר הוא בן ולא חתן"
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                          />
+                          {lineageFixErr && <p className="text-xs text-red-600">{lineageFixErr}</p>}
+                          <button type="button" onClick={submitLineageFix} disabled={lineageFixSending}
+                            className="self-start inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg px-4 py-2 transition-colors">
+                            {lineageFixSending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                            שליחת הבקשה
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
