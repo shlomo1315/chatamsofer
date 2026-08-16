@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
 import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
+import { shouldSendGenericReply } from '@/lib/autoReplyRouting'
 import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
 import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
 import { resolveMailbox } from '@/lib/mailRouting'
@@ -1276,7 +1277,19 @@ export async function POST(request: NextRequest) {
     // ייעודי) ולא על replies/בירורי הלוואה (מונע לולאה).
     const dept = departmentByEmail(resolvedToEmail)?.key ?? null
 
-    if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry) {
+    // 🔴 לא על תיבת האיגוד — היא כבר קיבלה מענה ייעודי למעלה.
+    //
+    // ⚠️ זה היה הבאג: שני המענים רצו ברצף על אותו מייל. הגנרי ("קיבלנו
+    // את פנייתכם") רץ אחרון, נרשם ל-auto_reply_log, ואכל את תקרת
+    // המענים — כך שמייל ההטבות, שרץ *לפניו*, נחסם ב-underAutoReplyCap
+    // בפנייה הבאה. הלוג מראה את התוצאה במלואה: כל השורות הן "קיבלנו
+    // את פנייתכם", ואף אחת אינה מייל ההטבות.
+    //
+    // ⚠️ וגם בלי התקרה זה היה שגוי: הפונה קיבל שני מיילים על פנייה
+    // אחת — אחד עם הפרטים והקישורים, ומיד אחריו "נשוב אליכם בהקדם".
+    // ⚠️ ההחלטה ב-lib/autoReplyRouting ולא כתנאי ידני כאן: מענה ייעודי
+    // חדש שיתווסף בעתיד חייב להופיע ברשימה שם, אחרת הוא נולד עם אותו באג.
+    if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry && shouldSendGenericReply(dept)) {
       const { maybeSendMaintenanceReply } = await import('@/lib/maintenanceReply')
       await maybeSendMaintenanceReply(admin, {
         fromEmail: from.email,
