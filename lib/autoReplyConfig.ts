@@ -152,12 +152,30 @@ export function buildAutoReplyBody(
 
   const footnote = (settings.footnote ?? '').trim() ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
-      <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;">
-        <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.8;">${textToHtml(settings.footnote ?? '')}</p>
+      <tr><td style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;">
+        <p style="margin:0;color:#92400e;font-size:13px;line-height:1.8;">${textToHtml(settings.footnote ?? '')}</p>
       </td></tr>
     </table>` : ''
 
-  return `${intro}${renderButtons(settings.buttons, accent)}${sections ? `<div style="margin:22px 0 0;">${sections}</div>` : ''}${footnote}`
+  // 🔴 ההבהרה נבנית כאן ולא מסתמכת על התוספת האוטומטית של מסלול Gmail:
+  // אחרת מייל שיוצא דרך Resend היה מגיע בלי שום הבהרה, ורק נמעני Gmail
+  // היו רואים אותה. אותו מייל, שתי התנהגויות.
+  //
+  // ⚠️ בלי כתובת מייל: ההפניות לאגפים נמצאות בסעיפים שהמנהל הגדיר, וכתובת
+  // נוספת כאן סתרה אותן ("פנו לאגף X" ומיד "לפניות: office@").
+  const noReply = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+      <tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 4px;color:#991b1b;font-size:15px;font-weight:900;line-height:1.6;text-align:center;">
+          מייל זה נשלח ממערכת אוטומטית — אין להשיב עליו
+        </p>
+        <p style="margin:0;color:#b91c1c;font-size:13px;line-height:1.8;text-align:center;">
+          הודעות הנשלחות לכתובת זו אינן נקראות. במידת הצורך ניתן לפנות לכל אגף בנפרד.
+        </p>
+      </td></tr>
+    </table>`
+
+  return `${intro}${renderButtons(settings.buttons, accent)}${sections ? `<div style="margin:22px 0 0;">${sections}</div>` : ''}${footnote}${noReply}`
 }
 
 /**

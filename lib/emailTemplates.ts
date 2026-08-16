@@ -179,9 +179,11 @@ export function shell(opts: {
             <img src="${LOGO_URL}" alt="לוגו" width="36" height="36"
                  style="border-radius:8px;display:inline-block;margin-bottom:10px;opacity:0.7;"/>
             <p style="margin:0 0 4px;color:#334155;font-size:13px;font-weight:700;">היכל החתם סופר</p>
+            <!-- ⚠️ בלי כתובת מייל וללא חזרה על "נשלח אוטומטית": ההבהרה
+                 מופיעה פעם אחת בגוף ההודעה (noReplyBox), והכתובת שייכת
+                 לסעיפי ההפניה שם — לא לכותרת התחתונה. -->
             <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.7;">
-              מייל זה נשלח אוטומטית ממערכת היכל החתם סופר.<br/>
-              לפרטים ויצירת קשר: <a href="mailto:${OFFICE_EMAIL}" style="color:${accent};text-decoration:none;font-weight:600;">${OFFICE_EMAIL}</a>
+              מערכת היכל החתם סופר
             </p>
           </td>
         </tr>
@@ -195,14 +197,18 @@ export function shell(opts: {
 }
 
 // ─── הודעת "אל תשיבו" מודגשת (לתחתית מיילים אוטומטיים מהאיגוד) ───────────────
+// ⚠️ בלי כתובת מייל, ובניסוח אחד בלבד. ההבהרה הופיעה שלוש פעמים בתחתית
+// אותו מייל (כאן, ב-automatedNotice של sendMail, ובכותרת התחתונה של shell)
+// וכל אחת חזרה על כתובת המשרד. ההפניה לאגפים שייכת לגוף ההודעה.
 function noReplyBox(): string {
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
-    <tr><td style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 18px;">
-      <p style="margin:0;color:#991b1b;font-size:13px;line-height:1.7;font-family:'Heebo',Arial,sans-serif;text-align:center;">
-        מייל זה נשלח <strong>באופן אוטומטי</strong> ואין להשיב אליו —
-        הודעות הנשלחות לכתובת זו אינן נקראות.<br/>
-        בכל עניין שאינו קשור להגשת בקשות בנושאים הנ"ל, ניתן לפנות למשרד בכתובת <a href="mailto:${OFFICE_EMAIL}" style="color:#b91c1c;font-weight:700;text-decoration:none;">${OFFICE_EMAIL}</a>
+    <tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:16px 20px;">
+      <p style="margin:0 0 4px;color:#991b1b;font-size:15px;font-weight:900;line-height:1.6;font-family:'Heebo',Arial,sans-serif;text-align:center;">
+        מייל זה נשלח ממערכת אוטומטית — אין להשיב עליו
+      </p>
+      <p style="margin:0;color:#b91c1c;font-size:13px;line-height:1.8;font-family:'Heebo',Arial,sans-serif;text-align:center;">
+        הודעות הנשלחות לכתובת זו אינן נקראות. במידת הצורך ניתן לפנות לכל אגף בנפרד.
       </p>
     </td></tr>
   </table>`

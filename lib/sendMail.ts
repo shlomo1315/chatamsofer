@@ -93,22 +93,29 @@ export function gmailCounterKey(email: string): string {
 // רואה אותו בשורת "מאת". בלי הבהרה מפורשת הוא משיב לשם בתום לב — והתשובה
 // יושבת בתיבה נטושה. הכותרת Reply-To מפנה לתיבת המשרד, אבל היא אינה נראית
 // למשתמש; ההבהרה הזו כן.
-function automatedNotice(replyTo: string): string {
-  return `<div style="max-width:480px;margin:12px auto 0;padding:12px 16px;border-radius:12px;`
-    + `background:#f8fafc;border:1px solid #e2e8f0;direction:rtl;text-align:center;`
-    + `font-family:'Heebo',Arial,sans-serif;font-size:12px;line-height:1.7;color:#64748b">`
-    + `<div style="font-weight:700;color:#475569;margin-bottom:2px">הודעה זו נשלחה ממערכת אוטומטית</div>`
-    + `<div>אין להשיב לכתובת זו — הודעות שנשלחות אליה אינן נקראות.</div>`
-    + `<div>לפניות ולתשובות: <a href="mailto:${replyTo}" style="color:#4f46e5;font-weight:700;text-decoration:none">${replyTo}</a></div>`
+// ⚠️ בלי כתובת מייל. ההבהרה הופיעה שלוש פעמים בתחתית אותו מייל — כאן,
+// ב-noReplyBox של התבנית, ובכותרת התחתונה של shell — וכל אחת הציגה שוב את
+// כתובת המשרד. הכתובת שייכת לגוף ההודעה, שם היא רלוונטית להקשר; כאן היא
+// רק חזרה שלישית על אותו דבר.
+function automatedNotice(): string {
+  return `<div style="max-width:520px;margin:16px auto 0;padding:16px 20px;border-radius:12px;`
+    + `background:#fef2f2;border:2px solid #fecaca;direction:rtl;text-align:center;`
+    + `font-family:'Heebo',Arial,sans-serif;line-height:1.8;">`
+    + `<div style="font-weight:900;color:#991b1b;font-size:15px;margin-bottom:4px">`
+    + `מייל זה נשלח ממערכת אוטומטית — אין להשיב עליו</div>`
+    + `<div style="color:#b91c1c;font-size:13px">`
+    + `הודעות הנשלחות לכתובת זו אינן נקראות. במידת הצורך ניתן לפנות לכל אגף בנפרד.</div>`
     + `</div>`
 }
 
 // הוספת ההבהרה לגוף ההודעה, לפני סגירת body אם קיים.
-// ⚠️ מדלג כשההודעה כבר כוללת הבהרה משלה (תבניות שבהן היא חלק מהעיצוב),
-// כדי לא להציג לנמען את אותו משפט פעמיים.
-function withAutomatedNotice(html: string, replyTo: string): string {
-  if (/אין להשיב/.test(html)) return html
-  const notice = automatedNotice(replyTo)
+//
+// 🔴 הבדיקה חייבת לכסות את *כל* הניסוחים שמופיעים בתבניות. היא חיפשה
+// "אין להשיב" בלבד, בעוד noReplyBox כותב "ואין להשיב אליו" — ולכן החמיצה
+// אותו, והנמען קיבל את אותה הבהרה פעמיים בזו אחר זו.
+function withAutomatedNotice(html: string): string {
+  if (/אין להשיב|ואין להשיב|אינן נקראות/.test(html)) return html
+  const notice = automatedNotice()
   return /<\/body>/i.test(html)
     ? html.replace(/<\/body>/i, `${notice}</body>`)
     : html + notice
@@ -213,7 +220,7 @@ async function trySendViaGmail(
           // כדי שהנמען ישיב עליו, והתוספת סתרה את גוף ההודעה עצמו.
           html: thread?.inReplyTo || thread?.references
             ? html
-            : withAutomatedNotice(html, replyTo || from),
+            : withAutomatedNotice(html),
         })
         return acc.email
       } catch (e) {
