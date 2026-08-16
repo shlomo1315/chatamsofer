@@ -71,6 +71,16 @@ export async function POST(request: NextRequest) {
     fileEntries.push({ docType, file: val as File })
   }
 
+  // 🔴 הוספת קובץ נוסף לאותה קטגוריה, במקום החלפת הקיים.
+  //
+  // ⚠️ ת"ז אינה תמיד קובץ אחד: ספח מרובה עמודים, צילום קדמי ואחורי, או
+  // מסמך שנסרק לשני קבצים. ההחלפה הגורפת אילצה את הפונה לבחור איזה עמוד
+  // "שווה יותר", ובפועל מסמכים נשלחו חסרים.
+  //
+  // ⚠️ ברירת המחדל נשארת החלפה — בחירת קובץ חדש באותו שדה היא כמעט תמיד
+  // תיקון ולא תוספת. ההוספה נעשית רק בלחיצה מפורשת על "+".
+  const appendMode = String(formData.get('append') ?? '') === '1'
+
   for (const { docType, file: singleFile } of fileEntries) {
     if (!singleFile || typeof singleFile === 'string') continue
     if (singleFile.size > MAX_SIZE) return NextResponse.json({ error: `הקובץ ${singleFile.name} גדול מ-10MB` }, { status: 400 })
@@ -100,7 +110,9 @@ export async function POST(request: NextRequest) {
     //
     // הסדר חשוב: מוחקים *אחרי* שההעלאה החדשה הצליחה. אם נמחק קודם ואז
     // ההעלאה תיכשל — המשתמש יישאר בלי שום קובץ.
-    const { data: old } = await admin
+    //
+    // 🔴 ב-appendMode אין מחיקה — הקובץ מצטרף לקיימים (ראו ההערה למעלה).
+    const { data: old } = appendMode ? { data: null } : await admin
       .from('documents')
       .select('id, file_url')
       .eq('beneficiary_id', beneficiaryId)

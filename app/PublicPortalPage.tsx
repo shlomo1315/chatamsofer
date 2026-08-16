@@ -1939,7 +1939,25 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // הקודמת. זו התנהגות מכוונת, רק בלי לשאול.
   const setDocFile = (key: string, f: File | null) => {
     setDocFiles(prev => ({ ...prev, [key]: f }))
+    // בחירת קובץ ראשי מאפסת קבצים נוספים שנבחרו קודם לאותה קטגוריה
+    if (!f) setExtraDocs(prev => ({ ...prev, [key]: [] }))
   }
+
+  // 🔴 קבצים *נוספים* לאותה קטגוריה — נשמרים בנפרד מהקובץ הראשי.
+  //
+  // ⚠️ ת"ז אינה תמיד קובץ אחד: ספח מרובה עמודים, צילום קדמי ואחורי, או
+  // מסמך שנסרק לשניים. עד כה כל בחירה חדשה דרסה את הקודמת, ולכן מסמכים
+  // נשלחו חסרים — הפונה נאלץ לבחור איזה עמוד "שווה יותר".
+  //
+  // ⚠️ מבנה נפרד ולא מערך אחד: הקובץ הראשי הוא מה שמחליף את הקיים, בעוד
+  // הנוספים תמיד מצטרפים. ערבובם היה מחייב לדעת מי מהם "הראשון".
+  const [extraDocs, setExtraDocs] = useState<Record<string, File[]>>({})
+
+  const addExtraDoc = (key: string, f: File) =>
+    setExtraDocs(prev => ({ ...prev, [key]: [...(prev[key] ?? []), f] }))
+
+  const removeExtraDoc = (key: string, i: number) =>
+    setExtraDocs(prev => ({ ...prev, [key]: (prev[key] ?? []).filter((_, j) => j !== i) }))
   const { docTypes: dynDocTypes } = useDocTypes()
   // תווית מסמך: עדיפות לתוויות המתארות, ואז לסוגים מותאמים מההגדרות
   const docLabel = (d: string) => DOC_LABELS[d] ?? dynDocTypes.find(t => t.value === d)?.label ?? 'מסמך'
@@ -2715,7 +2733,30 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     if (!any) return true
     const res = await fetch('/api/portal/upload-docs', { method: 'POST', body: fd })
-    return res.ok
+    if (!res.ok) return false
+
+    // ── קבצים נוספים לאותה קטגוריה ──
+    //
+    // 🔴 בקריאה *שנייה* עם append=1, אחרי שהראשונה הצליחה. הקריאה הראשונה
+    // מוחקת את הקבצים הישנים מאותו סוג; אילו הנוספים נשלחו יחד איתה, הם
+    // היו נמחקים על ידה או מוחקים זה את זה — כל קובץ נוסף היה דורס את
+    // קודמו, ורק האחרון היה שורד.
+    const extras = new FormData()
+    extras.append('beneficiary_id', beneficiary.id)
+    extras.append('append', '1')
+    let anyExtra = false
+    for (const d of requiredDocs) {
+      // רק לקטגוריות שבאמת הועלו עכשיו — אחרת הנוסף היה מצטרף לקובץ ישן
+      if (!((forceFresh || !existingDocs[d]) && docFiles[d])) continue
+      for (const xf of extraDocs[d] ?? []) { extras.append(d, xf); anyExtra = true }
+    }
+    if (!anyExtra) return true
+
+    // ⚠️ כשל בקבצים הנוספים אינו מפיל את ההגשה: המסמך העיקרי כבר נשמר,
+    // וחסימת הבקשה כאן הייתה מאבדת גם אותו.
+    const extraRes = await fetch('/api/portal/upload-docs', { method: 'POST', body: extras })
+    if (!extraRes.ok) console.error('[portal] העלאת קבצים נוספים נכשלה')
+    return true
   }
   // המסמכים שעדיין חסרים להגשת הבקשה (לא קיימים וגם לא נבחר קובץ)
   // חסרים מבין מסמכי החובה. ת"ז (הבעל/האשה) — כל אחד חובה בנפרד. ספח ת"ז
@@ -3462,13 +3503,44 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           <p className="text-xs font-bold text-red-600 mb-3">צילום ברור של תעודת הזהות עצמה</p>
         )}
         {file ? (
-          <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-            <span className="text-sm text-green-700 flex items-center gap-2">
-              <CheckCircle2 size={14} /> {file.name}
-            </span>
-            <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-600">
-              <X size={14} />
-            </button>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
+                <CheckCircle2 size={14} className="flex-shrink-0" />
+                <span className="truncate">{file.name}</span>
+              </span>
+              <button type="button" onClick={() => setFile(null)} className="text-red-400 hover:text-red-600 flex-shrink-0">
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* קבצים נוספים לאותה קטגוריה */}
+            {(extraDocs[docType] ?? []).map((xf, i) => (
+              <div key={i} className="flex items-center justify-between bg-green-50/70 border border-green-200 rounded-lg px-3 py-2">
+                <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
+                  <CheckCircle2 size={14} className="flex-shrink-0" />
+                  <span className="truncate">{xf.name}</span>
+                </span>
+                <button type="button" onClick={() => removeExtraDoc(docType, i)}
+                  className="text-red-400 hover:text-red-600 flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+
+            {/* 🔴 הוספת קובץ נוסף — לספח מרובה עמודים, צילום דו-צדדי, או
+                מסמך שנסרק לשניים. עד כה כל בחירה דרסה את הקודמת. */}
+            <label className="flex items-center justify-center gap-1.5 cursor-pointer rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 transition-colors">
+              <Plus size={13} /> הוספת קובץ נוסף לאותו מסמך
+              <input type="file" accept={UPLOAD_ACCEPT} className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) addExtraDoc(docType, f)
+                  // ⚠️ איפוס הערך: בלעדיו בחירת אותו קובץ פעמיים ברצף
+                  // אינה מפעילה onChange כלל.
+                  e.target.value = ''
+                }} />
+            </label>
           </div>
         ) : existing && !replacing ? (
           <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
