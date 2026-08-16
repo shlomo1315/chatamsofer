@@ -30,7 +30,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  */
 export const OPEN_LOAN_STATUSES = ['pending', 'inquiry', 'approved'] as const
 
-/** טיוטה שממתינה לטופס חתימת רב חתום — שייכת למבקש, לא למזכיר. */
+/** טיוטה שממתינה לטופס אישור רב חתום — שייכת למבקש, לא למזכיר. */
 export const AWAITING_RABBI_FORM = 'awaiting_rabbi_form'
 
 export type OpenLoan = {
@@ -92,7 +92,7 @@ export async function findOpenLoan(
 }
 
 /**
- * מאתר טיוטה שממתינה לטופס חתימת רב.
+ * מאתר טיוטה שממתינה לטופס אישור רב.
  *
  * ⚠️ נפרד מ-findOpenLoan בכוונה: זו אינה בקשה שחוסמת, אלא בקשה שהמבקש
  * צריך *להמשיך*. ערבוב בין השניים היה נועל אותו מחוץ לטיוטה שלו.

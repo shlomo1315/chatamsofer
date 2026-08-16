@@ -49,12 +49,21 @@ describe('מסע הלוך-חזור של הנושא', () => {
   })
 
   it('מזהה החזרת טופס גם בלי קוד — שם נכנסת הנפילה-לאחור לפי השולח', () => {
-    expect(looksLikeRabbiFormReturn('Re: טופס חתימת רב')).toBe(true)
-    expect(extractLoanFormCode('Re: טופס חתימת רב')).toBeNull()
+    expect(looksLikeRabbiFormReturn('Re: טופס אישור רב')).toBe(true)
+    expect(extractLoanFormCode('Re: טופס אישור רב')).toBeNull()
   })
 
   it('אינו תופס מיילים אחרים', () => {
     expect(looksLikeRabbiFormReturn('בקשת הלוואה')).toBe(false)
     expect(looksLikeRabbiFormReturn('משוב · בית החלמה')).toBe(false)
+  })
+
+  // ⚠️ הטופס שונה שמו מ"חתימת רב" ל"אישור רב", אבל מיילים שיצאו לפני
+  // השינוי עדיין בדרך חזרה — הנושא שלהם נקבע ברגע השליחה. אילו הזיהוי
+  // צומצם לנוסח החדש, כל טופס כזה היה נופל בשקט ואיש לא היה מבחין עד
+  // שמבקש היה מתלונן שהטופס "לא הגיע".
+  it('ממשיך לזהות את הנוסח הישן — טפסים שנשלחו לפני שינוי השם', () => {
+    expect(looksLikeRabbiFormReturn('Re: טופס חתימת רב · בקשת הלוואה #ABCD')).toBe(true)
+    expect(looksLikeRabbiFormReturn('טופס חתימת רב')).toBe(true)
   })
 })

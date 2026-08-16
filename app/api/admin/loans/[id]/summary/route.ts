@@ -61,7 +61,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .maybeSingle(),
 
     // כל ההלוואות של המשפחה — כולל הנוכחית, כדי שיראו את התמונה המלאה.
-    // ⚠️ בלי טיוטות שממתינות לטופס חתימת רב: הן טרם הוגשו, והצגתן
+    // ⚠️ בלי טיוטות שממתינות לטופס אישור רב: הן טרם הוגשו, והצגתן
     // כ"היסטוריית הלוואות" הייתה מרמזת על בקשה שמעולם לא נכנסה.
     db.from('loans')
       .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, created_at')

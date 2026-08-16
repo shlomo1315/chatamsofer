@@ -5,7 +5,7 @@ import { buildRabbiFormPdf, validateRabbiForm, lineageFromChain, DEFAULT_LAYOUT,
 export const dynamic = 'force-dynamic'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// הפקת טופס חתימת רב.
+// הפקת טופס אישור רב.
 //
 // GET  ?loan=<id>   — טופס לבקשה קיימת, עם הנתונים שלה.
 // GET  ?preview=1   — תצוגה מקדימה עם נתוני דוגמה (מסך ההגדרות).
@@ -55,8 +55,6 @@ export async function GET(request: NextRequest) {
     const demo: RabbiFormData = {
       applicantName: 'משפחת ישראלי — ישראל ישראלי',
       idNumber: '123456789',
-      amount: 25000,
-      installments: 48,
       // ⚠️ מהשורש כלפי מטה — כמו בטופס האמיתי.
       lineage: [
         { name: 'רבינו החתם סופר זיע״א' },
@@ -92,8 +90,6 @@ export async function GET(request: NextRequest) {
   const form: RabbiFormData = {
     applicantName: [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '',
     idNumber: b?.id_number ?? '',
-    amount: Number(row.amount ?? 0),
-    installments: Number(row.installments ?? 0),
     // ⚠️ הסדר מהחת"ם סופר כלפי מטה — השורש בראש והמבקש בתחתית. הגרסה
     // הקודמת עשתה reverse והציגה את השרשרת הפוכה. הבנייה עברה ל-
     // lineageFromChain כדי שכל שלושת המסלולים (ניהול, פורטל, מייל)
@@ -107,7 +103,7 @@ export async function GET(request: NextRequest) {
   }
 
   const safeName = form.applicantName.replace(/[\\/:*?"<>|]/g, '')
-  return pdfResponse(await buildRabbiFormPdf(form, layout), `טופס חתימת רב — ${safeName}.pdf`)
+  return pdfResponse(await buildRabbiFormPdf(form, layout), `טופס אישור רב — ${safeName}.pdf`)
 }
 
 export async function POST(request: NextRequest) {
@@ -128,8 +124,6 @@ export async function POST(request: NextRequest) {
     const demo: RabbiFormData = {
       applicantName: 'משפחת ישראלי — ישראל ישראלי',
       idNumber: '123456789',
-      amount: 25000,
-      installments: 48,
       lineage: [
         { name: 'רבינו החתם סופר זיע״א' },
         { name: 'ר׳ שמעון ישראלי', relation: 'בן' },
@@ -144,6 +138,19 @@ export async function POST(request: NextRequest) {
     return pdfResponse(await buildRabbiFormPdf(demo, merged), 'תצוגה-מקדימה.pdf')
   }
 
+  // ── טופס ריק להדפסה ומילוי ביד ──
+  //
+  // ⚠️ מדלג על validateRabbiForm במכוון: הטופס הזה *אמור* להיות ריק.
+  // נועד למסלול המייל, שבו אין למערכת את פרטי הפונה בזמן שליחת ההנחיות.
+  if (raw.blank === true) {
+    const layout = await loadLayout(db)
+    const bytes = await buildRabbiFormPdf(
+      { applicantName: '', idNumber: '', lineage: [], blank: true },
+      layout,
+    )
+    return pdfResponse(bytes, 'טופס אישור רב — ריק.pdf')
+  }
+
   const body = raw as Partial<RabbiFormData>
   const check = validateRabbiForm(body)
   // 🔴 חוסם הפקה חלקית: טופס עם שדה ריק מגיע לרב, הוא חותם, והמסמך
@@ -155,5 +162,5 @@ export async function POST(request: NextRequest) {
   const layout = await loadLayout(db)
   const bytes = await buildRabbiFormPdf(body as RabbiFormData, layout)
   const safeName = String(body.applicantName ?? '').replace(/[\\/:*?"<>|]/g, '')
-  return pdfResponse(bytes, `טופס חתימת רב — ${safeName}.pdf`)
+  return pdfResponse(bytes, `טופס אישור רב — ${safeName}.pdf`)
 }

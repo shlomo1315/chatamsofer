@@ -1669,7 +1669,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // למשתמש למלא טופס שלם ורק אז לגלות שהוא נדחה.
   const [openLoanNotice, setOpenLoanNotice] = useState<{ message: string; since?: string } | null>(null)
   const [openLoanModal, setOpenLoanModal] = useState(false)
-  // טיוטה שממתינה לטופס חתימת רב — נשמרה כשהמבקש הוריד את הטופס.
+  // טיוטה שממתינה לטופס אישור רב — נשמרה כשהמבקש הוריד את הטופס.
   // ⚠️ כשהיא קיימת, הטופס נפתח *נעול*: רק העלאת הטופס החתום, בלי עריכה
   // של הסכום או המטרה — אחרת הפרטים היו משתנים אחרי שהרב כבר חתם עליהם.
   const [rabbiDraft, setRabbiDraft] = useState<{ loanId: string; amount: number | null; since?: string } | null>(null)
@@ -3059,7 +3059,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     }
     setLoading(false)
   }
-  // ── הורדת טופס חתימת הרב ──
+  // ── הורדת טופס אישור הרב ──
   //
   // ⚠️ שומר את הבקשה כטיוטה *לפני* ההורדה. הטופס דורש חתימה פיזית של רב,
   // וזה לוקח ימים — בלי השמירה המבקש היה חוזר לטופס ריק וממלא הכל מחדש.
@@ -5945,14 +5945,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </button>
               </div>
 
-              {/* ─── מצב נעול: הבקשה שמורה, ממתינה לטופס חתימת הרב ───
+              {/* ─── מצב נעול: הבקשה שמורה, ממתינה לטופס אישור הרב ───
                   ⚠️ הפרטים אינם ניתנים לעריכה כאן במכוון: הרב חתם על
                   הסכום והתשלומים שהופיעו בטופס, ושינוי שלהם אחרי החתימה
                   היה הופך את החתימה למשהו אחר ממה שנחתם. */}
               {rabbiDraft ? (
                 <div className="p-6 flex flex-col gap-4">
                   <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3.5">
-                    <p className="text-sm font-bold text-amber-900 mb-1">הבקשה שמורה וממתינה לטופס חתימת רב</p>
+                    <p className="text-sm font-bold text-amber-900 mb-1">הבקשה שמורה וממתינה לטופס אישור רב</p>
                     <p className="text-xs text-amber-800 leading-relaxed">
                       הפרטים שמילאתם נשמרו במערכת. לאחר החתמת הרב על הטופס, העלו אותו כאן — ורק אז הבקשה תישלח לטיפול.
                     </p>
@@ -5973,7 +5973,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     <FileText size={16} /> הצגת הטופס להדפסה
                   </button>
 
-                  <Field label="טופס חתימת רב חתום" required hint={`העלו את הטופס לאחר החתמת הרב. ${UPLOAD_HINT}`}>
+                  <Field label="טופס אישור רב חתום" required hint={`העלו את הטופס לאחר החתמת הרב. ${UPLOAD_HINT}`}>
                     {rabbiFormFile ? (
                       <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
                         <span className="text-sm text-green-700 flex items-center gap-2 min-w-0">
@@ -6126,12 +6126,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
                 {error && <ErrorBox message={error} />}
 
-                {/* ⚠️ הבקשה אינה נשלחת מכאן: היא מחייבת טופס חתימת רב חתום.
+                {/* ⚠️ הבקשה אינה נשלחת מכאן: היא מחייבת טופס אישור רב חתום.
                     הכפתור שומר את הפרטים ומוריד את הטופס, וההגשה בפועל
                     מתרחשת רק אחרי שהטופס החתום מועלה חזרה. */}
                 <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
                   <p className="text-xs text-indigo-900 leading-relaxed">
-                    להשלמת הבקשה נדרש טופס חתימת רב. בלחיצה על הכפתור הפרטים יישמרו במערכת
+                    להשלמת הבקשה נדרש טופס אישור רב. בלחיצה על הכפתור הפרטים יישמרו במערכת
                     והטופס יורד להחתמה — תוכלו לחזור ולהעלות אותו חתום בכל עת.
                   </p>
                 </div>
@@ -6144,7 +6144,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <button type="button" onClick={handleDownloadRabbiForm} disabled={rabbiDownloading}
                     className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-b from-indigo-500 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 disabled:from-indigo-300 disabled:to-indigo-300 shadow-[0_6px_16px_-6px_rgba(79,70,229,0.55)] hover:shadow-[0_10px_22px_-8px_rgba(79,70,229,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] disabled:shadow-none disabled:translate-y-0 text-white font-semibold py-2.5 rounded-xl transition-all duration-150 text-sm">
                     {rabbiDownloading ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                    {rabbiDownloading ? 'שומר...' : 'שמירה והורדת טופס חתימת רב'}
+                    {rabbiDownloading ? 'שומר...' : 'שמירה והורדת טופס אישור רב'}
                   </button>
                 </div>
               </form>
@@ -6162,7 +6162,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 shrink-0">
                 <div className="flex items-center gap-2">
                   <FileText size={18} className="text-indigo-600" />
-                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">טופס חתימת רב</h3>
+                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">טופס אישור רב</h3>
                 </div>
                 <button type="button" onClick={() => setRabbiFormView(null)}
                   className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
@@ -6185,7 +6185,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <div className="rabbi-form-print flex-1 w-full overflow-y-auto bg-slate-100">
                 <PdfCanvasView
                   url={`/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`}
-                  name="טופס חתימת רב"
+                  name="טופס אישור רב"
                   direct
                   className="w-full"
                 />
@@ -6199,7 +6199,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   onClick={() => {
                     downloadDocDirect(
                       `/api/portal/rabbi-form?loan=${encodeURIComponent(rabbiFormView)}`,
-                      'טופס-חתימת-רב.pdf',
+                      'טופס-אישור-רב.pdf',
                     ).catch(() => {})
                   }}
                   className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors">
@@ -6220,7 +6220,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       .map(c => `<img src="${c.toDataURL('image/png')}" style="width:100%;display:block;page-break-after:always"/>`)
                       .join('')
                     w.document.write(
-                      `<!doctype html><html dir="rtl"><head><title>טופס חתימת רב</title>` +
+                      `<!doctype html><html dir="rtl"><head><title>טופס אישור רב</title>` +
                       `<style>@page{margin:0}body{margin:0}img{width:100%}</style></head>` +
                       `<body onload="window.print();window.close()">${imgs}</body></html>`,
                     )
@@ -6234,7 +6234,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
           </div>
         )}
 
-        {/* ─── אישור שמירת הטיוטה (אחרי הורדת טופס חתימת הרב) ─── */}
+        {/* ─── אישור שמירת הטיוטה (אחרי הורדת טופס אישור הרב) ─── */}
         {rabbiSavedModal && (
           <div className="fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" dir="rtl"
             onClick={() => setRabbiSavedModal(false)}>
@@ -6248,7 +6248,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               </div>
               <div className="p-6 flex flex-col gap-4">
                 <p className="text-sm text-slate-600 leading-relaxed text-center">
-                  שימו לב, המערכת שומרת את ההלוואה במצב ממתין לטופס חתימת רב.
+                  שימו לב, המערכת שומרת את ההלוואה במצב ממתין לטופס אישור רב.
                 </p>
                 <p className="text-xs text-slate-500 leading-relaxed text-center">
                   לאחר החתמת הרב, היכנסו שוב לבקשת הלוואה והעלו את הטופס החתום. רק אז הבקשה תישלח לטיפול.

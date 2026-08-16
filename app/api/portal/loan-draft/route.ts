@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// טיוטת בקשת הלוואה — נשמרת ברגע שהמבקש מוריד את טופס חתימת הרב.
+// טיוטת בקשת הלוואה — נשמרת ברגע שהמבקש מוריד את טופס אישור הרב.
 //
 // הרקע: הטופס דורש חתימה פיזית של רב, וזה לוקח ימים. בלי שמירה המבקש
 // היה חוזר לטופס ריק וממלא הכל מחדש. הטיוטה שומרת את כל מה שמילא,
@@ -26,7 +26,7 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-/** POST — שמירת הטיוטה בהורדת טופס חתימת הרב. */
+/** POST — שמירת הטיוטה בהורדת טופס אישור הרב. */
 export async function POST(request: NextRequest) {
   const previewCode = request.nextUrl.searchParams.get('preview')
   if (!(await isDepartmentAccessible('gemach', previewCode))) {
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * שולח למבקש את המייל שנושא את טופס חתימת הרב.
+ * שולח למבקש את המייל שנושא את טופס אישור הרב.
  *
  * ⚠️ המייל אינו רק נוחות: הוא ההודעה שאליה המבקש *משיב* עם הטופס החתום,
  * וכותרות השרשור של התשובה הן הדרך הנקייה לזהות לאיזו בקשה הוא שייך.
@@ -163,18 +163,16 @@ async function sendRabbiFormMail(
     const pdf = await buildRabbiFormPdf({
       applicantName: [ben.family_name, ben.full_name].filter(Boolean).join(' '),
       idNumber: String(ben.id_number ?? ''),
-      amount,
-      installments,
       lineage: lineageFromChain(ben.lineage_chain),
     })
 
     await deliverMail(ben.email, mail.subject, mail.html, [{
-      filename: 'טופס-חתימת-רב.pdf',
+      filename: 'טופס-אישור-רב.pdf',
       mimeType: 'application/pdf',
       contentB64: Buffer.from(pdf).toString('base64'),
     }], mailFor('gemach'))
   } catch (e) {
-    console.error('[loan-draft] שליחת טופס חתימת רב נכשלה:', e)
+    console.error('[loan-draft] שליחת טופס אישור רב נכשלה:', e)
   }
 }
 

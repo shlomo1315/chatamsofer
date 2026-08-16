@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// הפקת טופס חתימת רב עבור *המבקש עצמו* (הפורטל הציבורי).
+// הפקת טופס אישור רב עבור *המבקש עצמו* (הפורטל הציבורי).
 //
 // 🔴 מסלול נפרד מ-/api/admin/loans/rabbi-form: המסלול הניהולי מוגן ב-
 // requireStaff, ולכן דפדפן של מבקש מקבל ממנו דחייה ("הדף לא יכול לטפל
@@ -61,8 +61,6 @@ export async function GET(request: NextRequest) {
   const data: RabbiFormData = {
     applicantName: [ben?.family_name, ben?.full_name].filter(Boolean).join(' '),
     idNumber: String(ben?.id_number ?? ''),
-    amount: Number(loan.amount ?? 0),
-    installments: Number(loan.installments ?? 0),
     lineage: lineageFromChain(ben?.lineage_chain),
   }
 
@@ -73,7 +71,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/pdf',
         // ⚠️ inline: הטופס מוצג בחלונית בתוך הדף (iframe) ומשם מדפיסים
         // או מורידים. attachment היה כופה הורדה ושובר את התצוגה.
-        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent('טופס-חתימת-רב.pdf')}`,
+        'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent('טופס-אישור-רב.pdf')}`,
         'Cache-Control': 'no-store',
       },
     })

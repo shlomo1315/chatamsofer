@@ -916,7 +916,7 @@ export async function POST(request: NextRequest) {
         console.warn('[resend-inbound] זוהה plus-address אך הקליטה לא הצליחה')
       }
 
-      // ── החזרת טופס חתימת רב חתום ──
+      // ── החזרת טופס אישור רב חתום ──
       //
       // 🔴 שלוש שכבות זיהוי (ראה lib/rabbiFormReturn.ts): כותרות שרשור,
       // קוד בנושא, וכתובת השולח. שכבה אחת לא הספיקה — Google Workspace
@@ -933,7 +933,7 @@ export async function POST(request: NextRequest) {
           if (!doc?.url) {
             // ⚠️ נרשם כשגיאה: המבקש השיב, אבל בלי קובץ — הבקשה תקועה
             // והוא אינו יודע. זה חייב להיות נראה בלוגים.
-            console.error(`[resend-inbound] 🔴 החזרת טופס חתימת רב בלי קובץ מצורף — ${from.email}`)
+            console.error(`[resend-inbound] 🔴 החזרת טופס אישור רב בלי קובץ מצורף — ${from.email}`)
           } else {
             const match = await findLoanForReturnedForm(admin, from.email, subject)
             if (match) {
@@ -948,13 +948,13 @@ export async function POST(request: NextRequest) {
                 .eq('status', 'awaiting_rabbi_form')
 
               if (!upErr) {
-                console.log(`[resend-inbound] טופס חתימת רב נקלט (${match.matchedBy}) → ${match.loanId}`)
+                console.log(`[resend-inbound] טופס אישור רב נקלט (${match.matchedBy}) → ${match.loanId}`)
                 return NextResponse.json({ ok: true, routed: 'rabbi_form' })
               }
-              console.error('[resend-inbound] שמירת טופס חתימת רב נכשלה:', upErr.message)
+              console.error('[resend-inbound] שמירת טופס אישור רב נכשלה:', upErr.message)
             } else {
               console.error(
-                `[resend-inbound] 🔴 טופס חתימת רב חזר אך לא שויך — ${from.email}, נושא: ${subject}`,
+                `[resend-inbound] 🔴 טופס אישור רב חזר אך לא שויך — ${from.email}, נושא: ${subject}`,
               )
             }
           }

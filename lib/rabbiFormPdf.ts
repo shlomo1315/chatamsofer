@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// טופס בקשת הלוואה לחתימת רב — הטמעת השדות על הבלאנק המעוצב.
+// טופס בקשת הלוואה לאישור רב — הטמעת השדות על הבלאנק המעוצב.
 //
 // 🔴 מה זה פותר: עד היום המבקש הוריד טופס ריק ומילא בכתב יד את שמו, ת"ז,
 // הסכום, וסדר הדורות — ואז החתים רב. כל שדה בכתב יד הוא מקום שבו המידע
@@ -28,9 +28,15 @@ const FONT_PATH = path.join(process.cwd(), 'public', 'fonts', 'Heebo.ttf')
 export interface RabbiFormData {
   applicantName: string
   idNumber: string
-  /** סכום מבוקש בדולרים. */
-  amount: number
-  installments: number
+  /**
+   * מצב ריק — טופס להדפסה ומילוי ביד.
+   *
+   * ⚠️ קיים עבור מסלול המייל: שם אין למערכת את פרטי הפונה בזמן שהיא
+   * שולחת את ההנחיות, ולכן הטופס יוצא עם שורות ריקות (שם, ת"ז, ו-10
+   * שורות דורות ממוספרות). בפורטל, לעומת זאת, הטופס מגיע מלא מהמערכת —
+   * וזה ההבדל שהופך את מסלול האתר לעדיף עבור המבקש.
+   */
+  blank?: boolean
   /**
    * סדר הדורות מהמבקש כלפי מעלה, עד החת"ם סופר.
    *
@@ -84,10 +90,13 @@ export function validateRabbiForm(d: Partial<RabbiFormData>): FormValidation {
   const missing: string[] = []
   if (!String(d.applicantName ?? '').trim()) missing.push('שם המבקש')
   if (!String(d.idNumber ?? '').trim()) missing.push('מספר תעודת זהות')
-  if (!d.amount || Number(d.amount) <= 0) missing.push('סכום ההלוואה המבוקש')
-  if (!d.installments || Number(d.installments) <= 0) missing.push('מספר התשלומים')
-  // ⚠️ סדר הדורות הוא לב הטופס: הרב מאשר את הייחוס, ובלי השרשרת אין על
-  // מה לחתום.
+  // ⚠️ הסכום ומספר התשלומים הוסרו מהטופס.
+  //
+  // הרב מאשר את *הייחוס*, לא את תנאי ההלוואה — ואלה גם הפרטים היחידים
+  // שהמבקש טרם קבע כשהוא מוריד את הטופס. דרישתם כאן היא שכפתה את הסדר
+  // הישן (מילוי → הגשה → קבלת טופס → חזרה), כי אי אפשר היה להפיק טופס
+  // לפני שנקבע סכום. בלעדיהם הטופס מופק מיד עם ההנחיות, וההגשה נעשית
+  // ברצף אחד.
   if (!Array.isArray(d.lineage) || d.lineage.length === 0) missing.push('סדר הדורות עד רבינו החתם סופר')
   return { ok: missing.length === 0, missing }
 }
@@ -262,14 +271,19 @@ export async function buildRabbiFormPdf(
     }
   }
 
-  labeled('שם המבקש:', data.applicantName, layout.name)
-  labeled('מספר זהות:', data.idNumber, layout.idNumber, true)
-  labeled('סכום ההלוואה המבוקש:', `$${Math.round(data.amount).toLocaleString('en-US')}`, layout.amount, true)
-  labeled('מספר התשלומים:', String(data.installments), layout.installments, true)
+  // ⚠️ במצב ריק מצוירת התווית עם קו למילוי ביד, ובלעדיו — הערך מהמערכת.
+  const isBlank = data.blank === true
+  const RULE = '____________________'
+  labeled('שם המבקש:', isBlank ? RULE : data.applicantName, layout.name)
+  labeled('מספר זהות:', isBlank ? RULE : data.idNumber, layout.idNumber, !isBlank)
+  // 🔴 הסכום ומספר התשלומים אינם מודפסים עוד: הרב מאשר את הייחוס, לא את
+  // תנאי ההלוואה. ראה ההערה ב-validateRabbiForm — הסרתם היא מה שמאפשר
+  // להפיק את הטופס לפני שהמבקש קבע סכום, ולכן גם את ההגשה ברצף אחד.
   // ⚠️ הסוגריים כתובים הפוך במכוון: pdf-lib מצייר תווים לפי סדרם ואינו
   // מיישם bidi, ולכן סוגר-פותח בטקסט עברי מצויר כפי שהוא — כלומר ")$("
   // בקוד הוא "($)" על הדף. כתיבה "נכונה" כאן הייתה מתהפכת בפלט.
-  R('שימו לב: ההלוואה והתשלום מתבצעים בשקלים לפי ערך מטבע דולר )$(.', layout.currencyNote, font, GREY)
+  // ⚠️ הערת המטבע הוסרה יחד עם שדה הסכום — בלי סכום על הטופס אין למה
+  // שהיא תתייחס.
 
   // ── סדר הדורות ──
   // 🔴 מודפס מהמערכת ולא כשורות ריקות: זו הנקודה שבה הטופס הישן הכי נכשל —
@@ -285,8 +299,16 @@ export async function buildRabbiFormPdf(
   // "דור N:" · השם · "(בן)". הגרסה הקודמת פיזרה את המספר והכינוי
   // לעמודות בקצה השמאלי של הדף, והתוצאה נראתה כשלוש רשימות נפרדות
   // במקום שורה אחת — ובעברית גם קפצו לצד הלא נכון.
+  // ⚠️ במצב ריק — 10 שורות ממוספרות עם קו למילוי ביד. במסלול המייל אין
+  // למערכת את פרטי הפונה בזמן שליחת ההנחיות, ולכן הוא ממלא את השרשרת
+  // בעצמו. עשר שורות מכסות את מרב המשפחות; מי שזקוק ליותר ימשיך בשוליים.
+  const BLANK_ROWS = 10
+  const entries: RabbiFormData['lineage'] = isBlank
+    ? Array.from({ length: BLANK_ROWS }, () => ({ name: '__________________________', relation: '' }))
+    : data.lineage
+
   let ly = layout.lineageStart.y
-  for (const [i, entry] of data.lineage.entries()) {
+  for (const [i, entry] of entries.entries()) {
     const size = layout.lineageStart.size
     const { name, relation } = typeof entry === 'string'
       ? { name: entry, relation: i === 0 ? 'המבקש' : '' }

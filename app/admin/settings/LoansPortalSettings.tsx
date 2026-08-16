@@ -315,13 +315,13 @@ export default function LoansPortalSettings() {
         </p>
       </div>
 
-      {/* ─── טופס חתימת רב — כיול מיקומי השדות על הבלאנק ───
+      {/* ─── טופס אישור רב — כיול מיקומי השדות על הבלאנק ───
           ⚠️ מסך הכיול היה קיים אך לא היה מקושר משום מקום, ולכן לא היה
           דרך להגיע אליו בלי לדעת את הכתובת בעל-פה. */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <FileSignature size={16} className="text-indigo-600" />
-          <h3 className="font-bold text-slate-900 text-sm">טופס חתימת רב</h3>
+          <h3 className="font-bold text-slate-900 text-sm">טופס אישור רב</h3>
         </div>
         <p className="text-xs text-slate-500 leading-relaxed">
           עריכת מיקום כל שדה על גבי הבלאנק — שם המבקש, תעודת זהות, סכום ומספר תשלומים.

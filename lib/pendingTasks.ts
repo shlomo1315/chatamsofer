@@ -62,7 +62,7 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
   const handledBenIds = new Set<string>()
   if (pendingBenIds.length) {
     const decided = await Promise.all([
-      // ⚠️ טיוטה שממתינה לטופס חתימת רב אינה "בקשה שהוכרעה": היא טרם
+      // ⚠️ טיוטה שממתינה לטופס אישור רב אינה "בקשה שהוכרעה": היא טרם
       // הוגשה כלל. בלי ההחרגה היא הייתה מוציאה את המשפחה מרשימת
       // הממתינים לאישור, כאילו כבר טופלה.
       supabase.from('loans').select('beneficiary_id').in('beneficiary_id', pendingBenIds).not('status', 'in', '(pending,awaiting_rabbi_form)'),

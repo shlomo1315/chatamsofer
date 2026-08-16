@@ -8,7 +8,7 @@ import {
 import { useToast } from '@/components/ui/Toast'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// כיול טופס חתימת הרב.
+// כיול טופס אישור הרב.
 //
 // 🔴 המסך מציג את הטופס האמיתי (עם נתוני דוגמה) ומאפשר להזיז כל שדה
 // ולראות מיד איך זה נראה. בלעדיו, כל התאמה של מיקום הייתה מחייבת שינוי
@@ -248,7 +248,7 @@ export default function RabbiFormSettingsPage() {
         <div className="flex items-center gap-3">
           <Link href="/admin/settings" className="text-slate-400 hover:text-slate-600"><ArrowRight size={20} /></Link>
           <div>
-            <h1 className="text-xl font-extrabold text-slate-900">טופס חתימת רב</h1>
+            <h1 className="text-xl font-extrabold text-slate-900">טופס אישור רב</h1>
             <p className="text-xs text-slate-500 mt-0.5">כיול מיקום השדות על הבלאנק — התצוגה מימין היא הטופס האמיתי</p>
           </div>
         </div>

@@ -25,7 +25,7 @@ async function getLoans(): Promise<Loan[]> {
     // ו-status הוא מצב הפתיחה + הגלגול-לאחור בכשל עדכון.
     // ⚠️ id: גם למפתח השורה, גם לניווט, וגם ל-DeleteLoanButton ולקריאות ה-API.
     .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
-    // 🔴 טיוטות שממתינות לטופס חתימת רב אינן בקשות שהוגשו, ולכן אינן
+    // 🔴 טיוטות שממתינות לטופס אישור רב אינן בקשות שהוגשו, ולכן אינן
     // מוצגות כאן כלל. הן נוצרות ברגע שהמבקש מוריד את הטופס — לפני שהוא
     // החתים רב והחזיר אותו — וכניסתן לרשימה הייתה מציגה למזכיר תיקים
     // שאיש לא ביקש ממנו לטפל בהם, ומנפחת את מוני "ממתין לטיפול".

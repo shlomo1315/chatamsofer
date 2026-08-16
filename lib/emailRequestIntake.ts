@@ -64,11 +64,11 @@ async function reject(
     name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type], greeting,
   })
 
-  // ⚠️ בבקשת הלוואה שנדחתה בגלל טופס חתימת רב חסר — מצרפים את הטופס הריק
+  // ⚠️ בבקשת הלוואה שנדחתה בגלל טופס אישור רב חסר — מצרפים את הטופס הריק
   // עצמו. בלעדיו הדחייה אומרת למבקש "חסר טופס" בלי לתת לו דרך להשיג אותו,
   // והוא נתקע: בפורטל יש כפתור הורדה, במייל אין.
   let attachments: Awaited<ReturnType<typeof blankRabbiFormAttachment>> = undefined
-  if (type === 'loan' && errors.some(e => e.includes('טופס-חתימת-רב') || e.includes('טופס חתימת רב'))) {
+  if (type === 'loan' && errors.some(e => e.includes('טופס-אישור-רב') || e.includes('טופס אישור רב'))) {
     attachments = await blankRabbiFormAttachment()
   }
 
@@ -86,7 +86,7 @@ async function blankRabbiFormAttachment() {
     const file = path.join(process.cwd(), 'public', 'forms', 'loan-form-blank.pdf')
     const content = await readFile(file)
     return [{
-      filename: 'טופס-חתימת-רב.pdf',
+      filename: 'טופס-אישור-רב.pdf',
       mimeType: 'application/pdf',
       contentB64: content.toString('base64'),
     }]
@@ -333,7 +333,7 @@ export async function handleEmailRequest(admin: SupabaseClient, msg: Msg): Promi
       // ⚠️ הטופס החתום נשמר בשדה הייעודי (rabbi_form_url) ולא רק ברשימת
       // המסמכים: המזכיר צריך לראות שהוא קיים, ואותו שדה משמש גם בהגשה
       // דרך הפורטל — אחרת אותו נתון היה יושב בשני מקומות שונים לפי הערוץ.
-      const rabbiForm = matched['טופס-חתימת-רב'] ?? null
+      const rabbiForm = matched['טופס-אישור-רב'] ?? null
       const docs = [
         matched['מסמך-אחר'], matched['הזמנה-לחתונה'], matched['צילום-תעודות-זהות'],
       ].filter(Boolean) as string[]

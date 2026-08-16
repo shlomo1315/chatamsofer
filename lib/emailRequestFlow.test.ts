@@ -171,12 +171,12 @@ describe('טופס פגום מחזיר שגיאה מפורטת (ולא נקלט 
   })
 })
 
-describe('טופס חתימת רב — חובה גם בהגשה במייל', () => {
+describe('טופס אישור רב — חובה גם בהגשה במייל', () => {
   it('מופיע כצרופת חובה בטופס בקשת ההלוואה', () => {
     // ⚠️ בלי זה ההגשה במייל הופכת לעקיפה של הדרישה: בפורטל אי אפשר
     // להגיש בלי הטופס החתום, ומי שמגיש במייל היה נכנס לתור בלעדיו.
     const atts = attachmentsFor('loan', ctx)
-    const rabbi = atts.find(a => a.name === 'טופס-חתימת-רב')
+    const rabbi = atts.find(a => a.name === 'טופס-אישור-רב')
     expect(rabbi).toBeDefined()
     expect(rabbi?.required).toBe(true)
   })
@@ -185,12 +185,12 @@ describe('טופס חתימת רב — חובה גם בהגשה במייל', () 
     // אם הוא לא מופיע בטיוטה, המבקש אינו יודע שהוא נדרש — והבקשה
     // נדחית על משהו שמעולם לא ביקשנו ממנו.
     const draft = buildDraftBody('loan', '318344884', ctx)
-    expect(draft).toContain('טופס-חתימת-רב')
+    expect(draft).toContain('טופס-אישור-רב')
   })
 
   it('בקשות אחרות אינן דורשות אותו', () => {
-    expect(attachmentsFor('birth', ctx).some(a => a.name === 'טופס-חתימת-רב')).toBe(false)
-    expect(attachmentsFor('financial_aid', ctx).some(a => a.name === 'טופס-חתימת-רב')).toBe(false)
+    expect(attachmentsFor('birth', ctx).some(a => a.name === 'טופס-אישור-רב')).toBe(false)
+    expect(attachmentsFor('financial_aid', ctx).some(a => a.name === 'טופס-אישור-רב')).toBe(false)
   })
 })
 

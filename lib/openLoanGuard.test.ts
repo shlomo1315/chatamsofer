@@ -33,7 +33,7 @@ describe('אילו סטטוסים חוסמים בקשה נוספת', () => {
     expect(OPEN_LOAN_STATUSES).not.toContain('rejected')
   })
 
-  it('טיוטה שממתינה לטופס חתימת רב אינה חוסמת', () => {
+  it('טיוטה שממתינה לטופס אישור רב אינה חוסמת', () => {
     // 🔴 אחרת המבקש ננעל מחוץ לטיוטה של עצמו: לא יכול להשלים אותה
     // ולא יכול להתחיל חדשה.
     expect(OPEN_LOAN_STATUSES).not.toContain(AWAITING_RABBI_FORM)
