@@ -1,9 +1,9 @@
 // מתזמן פנימי (in-process) — מתאים לסביבת שרת מתמשכת כמו Railway, שבה אין cron מובנה.
 // Next.js קורא ל-register() פעם אחת בעליית השרת.
-//  • מענה אוטומטי לתיבת המשרד — כל 15 דקות.
 //  • פריקת כרטיסים שעברו 6 שבועות מהלידה — מדי יום בחצות (שעון ישראל).
+//
+// ⚠️ המענה האוטומטי אינו מתוזמן: הוא מופעל מה-webhook של הדואר הנכנס.
 
-const AUTOREPLY_INTERVAL_MS = 15 * 60 * 1000
 const INITIAL_DELAY_MS = 60 * 1000
 const HOURLY_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
@@ -31,24 +31,10 @@ export async function register() {
 
   if (process.env.NODE_ENV !== 'production') return
 
-  // ── סורק ה-Gmail הישן (autoReply) — מכובה כברירת מחדל ──
-  // ⚠️ המענה האוטומטי עבר למנגנון per-mailbox ב-webhook הנכנס (resend-inbound +
-  // maintenanceReply per-תיבה). הסורק הישן רץ במקביל וענה על אותו דואר משרד —
-  // מה שגרם לשני מענים על אותה פנייה. מכובה כברירת מחדל; להפעלה מפורשת בלבד
-  // עם AUTO_REPLY_LEGACY=1 (למקרה חירום).
-  if (process.env.AUTO_REPLY_LEGACY === '1') {
-    const { runAutoReply } = await import('@/lib/autoReply')
-    const tick = async () => {
-      try {
-        const res = await runAutoReply()
-        if (res.replied || res.skipped) {
-          console.log(`[auto-reply] scanned=${res.scanned} replied=${res.replied} skipped=${res.skipped}` + (res.error ? ` error=${res.error}` : ''))
-        }
-      } catch (err) { console.error('[auto-reply] scheduler tick failed', err) }
-    }
-    setTimeout(() => { void tick(); setInterval(() => { void tick() }, AUTOREPLY_INTERVAL_MS) }, INITIAL_DELAY_MS)
-    console.log('[auto-reply] LEGACY Gmail scheduler started (every 15m)')
-  }
+  // ⚠️ סורק ה-Gmail הישן (lib/autoReply) הוסר. הוא סרק את תיבת Gmail כל 15
+  // דקות וענה בעצמו, לפי מכסה של 2 לשבוע — סותרת את המכסה שבמנגנון החי.
+  // כל המענה האוטומטי נמצא היום ב-lib/autoReplySender, מונע מהגדרות שנערכות
+  // במסך ההגדרות ומופעל מה-webhook הנכנס בלבד.
 
   // ── פריקה אוטומטית בתום 6 שבועות — מדי יום בחצות שעון ישראל ──
   if (process.env.UNLOAD_EXPIRED_DISABLED !== '1') {

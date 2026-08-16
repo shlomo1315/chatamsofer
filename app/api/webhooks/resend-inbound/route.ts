@@ -2,11 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 import { deliverMail, urlToAttachment, type MailAttachment } from '@/lib/sendMail'
-import { departmentByEmail, BRAND_NAME, mailFor } from '@/lib/departments'
-import { shouldSendGenericReply } from '@/lib/autoReplyRouting'
-import { shell, benefitsLinkEmail } from '@/lib/emailTemplates'
+import { departmentByEmail, BRAND_NAME } from '@/lib/departments'
+import { sendAutoReply } from '@/lib/autoReplySender'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
-import { handleEmailRequest, isRequestSubject, buildDraftLinks } from '@/lib/emailRequestIntake'
+import { handleEmailRequest, isRequestSubject } from '@/lib/emailRequestIntake'
 import { resolveMailbox } from '@/lib/mailRouting'
 import { verifySvixSignature, hasSvixHeaders, safeEqual } from '@/lib/svix'
 
@@ -67,288 +66,15 @@ async function maybeForwardToGmail(admin: SupabaseClient, msg: {
   })
 }
 
-// מענה אוטומטי לפניות שמגיעות לתיבת "יריד" — "פנייתך התקבלה ותטופל בהקדם"
-async function maybeAutoReplyYerid(msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string }) {
-  if (departmentByEmail(msg.toEmail)?.key !== 'yerid') return
-  const from = (msg.fromEmail || '').toLowerCase()
-  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
-  if (!from || from.endsWith('@chasamsofer.info')) return
-  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
-
-  const greet = msg.fromName ? ` ${msg.fromName}` : ''
-  const body = `
-    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">אישור קבלה</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">פנייתך התקבלה</h2>
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.8;">
-      שלום${greet},<br/>
-      תודה על פנייתך לאגף היריד של <strong>היכל החתם סופר</strong>. הודעתך התקבלה במערכת ותטופל בהקדם על ידי הצוות.
-    </p>
-    ${msg.subject ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
-      <tr><td style="background:#f0f9ff;border-right:4px solid #0ea5e9;border-radius:0 10px 10px 0;padding:12px 16px;color:#075985;font-size:14px;">
-        נושא פנייתך: <strong>${msg.subject.replace(/</g, '&lt;')}</strong>
-      </td></tr></table>` : ''}
-    <p style="margin:0;color:#94a3b8;font-size:13px;">זהו מענה אוטומטי — אין צורך להשיב להודעה זו.</p>`
-  const html = shell({ preheader: 'פנייתך התקבלה ותטופל בהקדם', accent: '#0ea5e9', title: 'פנייתך התקבלה', subtitle: 'היכל החתם סופר · יריד', body })
-  await deliverMail(from, 'פנייתך התקבלה — היכל החתם סופר · יריד', html, undefined, { ...mailFor('yerid'), skipLog: true })
-}
-
-// מענה אוטומטי לפניות שמגיעות לתיבה 8 — הודעה על הגרלת כרטיסי טיסה
-async function maybeAutoReplyInbox8(msg: { fromEmail: string; fromName: string | null; toEmail: string }) {
-  if (departmentByEmail(msg.toEmail)?.key !== 'inbox8') return
-  const from = (msg.fromEmail || '').toLowerCase()
-  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
-  if (!from || from.endsWith('@chasamsofer.info')) return
-  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
-
-  const body = `
-    <p style="margin:0 0 8px;color:#0d9488;font-size:13px;font-weight:700;letter-spacing:0.5px;">בעזרת ה'</p>
-    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">הגרלת כרטיסי טיסה</h2>
-
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.9;">
-      בעזרת ה' בימים הקרובים יתקיימו הגרלות על כרטיסי טיסה<br/>
-      לציונו הקדוש של רבינו מרן החתם סופר זי"ע בפרשבורג
-    </p>
-
-    <p style="margin:0 0 16px;color:#475569;font-size:15px;line-height:1.9;">
-      ההגרלה היא לכל מגידי השיעורים בתורתו של מרן החת"ס<br/>
-      וכן לכל המשתתפים הקבועים בשיעורים
-    </p>
-
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
-      <tr><td style="background:#f0fdfa;border-right:4px solid #14b8a6;border-radius:0 12px 12px 0;padding:16px 20px;">
-        <p style="margin:0 0 8px;color:#0f766e;font-size:15px;font-weight:900;">שימו לב!</p>
-        <p style="margin:0;color:#115e59;font-size:14px;line-height:1.9;">
-          כדי שנוכל לערוך את ההגרלה לכל משתתפי השיעור עליכם לשלוח
-          <strong>עד יום רביעי בלילה בשבוע זה פרשת בלק</strong>
-          את שמות המשתתפים הקבועים בשיעורים לאימייל
-          <a href="mailto:8@chasamsofer.info" style="color:#0d9488;font-weight:700;text-decoration:none;">8@chasamsofer.info</a>
-        </p>
-      </td></tr>
-    </table>
-
-    <p style="margin:0;color:#334155;font-size:15px;line-height:1.8;text-align:center;font-weight:700;">
-      בברכת התורה<br/>
-      היכל החתם סופר
-    </p>`
-  const html = shell({
-    preheader: 'הגרלת כרטיסי טיסה לציונו הקדוש של מרן החתם סופר זי"ע בפרשבורג',
-    accent: '#14b8a6',
-    title: 'הגרלת כרטיסי טיסה',
-    subtitle: 'היכל החתם סופר',
-    body,
-  })
-  await deliverMail(from, 'הגרלת כרטיסי טיסה — היכל החתם סופר', html, undefined, { ...mailFor('inbox8'), skipLog: true })
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// מענה אוטומטי לפניות שמגיעות לתיבת גמ"ח (g@chasamsofer.info).
+// המענים האוטומטיים המקודדים-קשיח שהיו כאן (yerid, inbox8, gemach, igud) אוחדו
+// למנגנון אחד מונחה-הגדרות: lib/autoReplyConfig.ts (הנוסחים) + lib/autoReplySender.ts
+// (השליחה). הנוסחים שרצו כאן נשמרו כברירות המחדל שם, ונערכים במסך ההגדרות.
 //
-// מציג שני מסלולי הגשה: האתר (מועדף — הטופס מגיע מלא מהמערכת) והמייל
-// (עם קישור לטופס ריק למילוי ביד).
-//
-// ⚠️ נשלח לפונה *ראשון בלבד*, ולכן עובר דרך underAutoReplyCap: מי שכבר
-// באמצע התכתבות על בקשה קיימת לא אמור לקבל את הנחיות ההגשה שוב בכל
-// תשובה שהוא שולח — זה מרעיש ונראה כתקלה.
-//
-// ⚠️ אינו עונה להחזרת טופס אישור רב: מי שמשיב עם הטופס החתום נמצא כבר
-// בתוך התהליך, והנחיות "איך להגיש" בשלב הזה מבלבלות.
+// ⚠️ התיבות הן נקודות כניסה, לא כלי עבודה: המענה מאשר קבלה ומפנה לאגף הנכון.
+// מענה igud שהחזיר פרטים אישיים וקישורי הגשה חתומים הוסר בכוונה — ואיתו נעלם
+// גם הצורך בשער הבעלות, שכן מייל שאינו מכיל נתונים אישיים אינו יכול לדלוף.
 // ─────────────────────────────────────────────────────────────────────────────
-async function maybeAutoReplyGemach(
-  admin: SupabaseClient,
-  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown },
-) {
-  if (departmentByEmail(msg.toEmail)?.key !== 'gemach') return
-  const from = (msg.fromEmail || '').toLowerCase()
-  // הגנות לולאה: לא עונים לדואר פנימי/אוטומטי/כתובת לא תקינה
-  if (!from || from.endsWith('@chasamsofer.info')) return
-  if (/(^|[._-])(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|bounces)/i.test(from)) return
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
-
-  // ⚠️ החזרת טופס חתום אינה פנייה חדשה — ראה ההערה בראש הפונקציה.
-  const { looksLikeRabbiFormReturn } = await import('@/lib/rabbiFormReturn')
-  if (looksLikeRabbiFormReturn(msg.subject || '')) return
-
-  const { shouldSkipAutoReply, isAutoSubmittedMail, underAutoReplyCap } =
-    await import('@/lib/maintenanceReply')
-  if (shouldSkipAutoReply(from)) return
-  if (isAutoSubmittedMail(msg.headers)) return
-  if (!(await underAutoReplyCap(admin, from))) return
-
-  const { gemachIntakeEmail } = await import('@/lib/emailTemplates')
-  const mail = gemachIntakeEmail()
-  const res = await deliverMail(from, mail.subject, mail.html, undefined, { ...mailFor('gemach'), skipLog: true })
-  if (!res.ok) {
-    console.error('[gemach-auto-reply] שליחה נכשלה:', res.error)
-    return
-  }
-  // 🔴 רישום המענה — בלעדיו תקרת המענים סופרת אפס לנצח, והבולם האחרון
-  // מפני לולאה פשוט אינו קיים.
-  await admin.from('auto_reply_log').insert({ to_email: from, subject: mail.subject })
-    .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
-}
-
-// מענה אוטומטי לפניות שמגיעות לתיבת "איגוד" — מייל חדש עם הפרטים של הפונה +
-// קישורי הגשת בקשות. הזיהוי: מספר ת"ז מלא (9 ספרות, כולל ספרת ביקורת) בשורת
-// הנושא — של הרשום או של בן/בת הזוג; אם אין ת"ז בנושא, ננסה לפי כתובת השולח.
-async function maybeAutoReplyIgud(
-  admin: SupabaseClient,
-  msg: { fromEmail: string; fromName: string | null; toEmail: string; subject: string; headers?: unknown; messageId?: string },
-) {
-  if (departmentByEmail(msg.toEmail)?.key !== 'igud') return
-  const from = (msg.fromEmail || '').toLowerCase()
-  if (!from || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from)) return
-
-  // 🔴 נעילה לפי ההודעה עצמה — מחליפה את isNew שהשתיק את המענה לגמרי.
-  //
-  // ⚠️ isNew היה גס מדי: הוא חסם כל ריצה שנייה של ה-webhook, כולל כזו
-  // שבה המענה מעולם לא נשלח. הנעילה כאן ממוקדת — היא חוסמת *מענה שני
-  // לאותה הודעה*, ולא נוגעת בהודעות אחרות מאותו שולח.
-  //
-  // ⚠️ נופלת-לאחור לשולח+נושא כשאין message_id: בלי מפתח יציב הנעילה
-  // חסרת ערך, ושני עותקים של אותו מייל היו מייצרים שני מענים.
-  const lockKey = `igud_reply:${(msg.messageId || `${from}|${msg.subject}`)}`.slice(0, 200)
-  const LOCK_TTL_MS = 10 * 60 * 1000
-  const nowMs = Date.now()
-  const { data: prevLock } = await admin
-    .from('app_settings').select('value').eq('key', lockKey).maybeSingle()
-  const prevAt = prevLock?.value ? Date.parse(String(prevLock.value)) : NaN
-  if (!isNaN(prevAt) && (nowMs - prevAt) < LOCK_TTL_MS) {
-    console.log(`[igud-auto-reply] כבר נענה על ההודעה הזו — מדלג (${from})`)
-    return
-  }
-  await admin.from('app_settings').upsert(
-    { key: lockKey, value: new Date(nowMs).toISOString(), updated_at: new Date(nowMs).toISOString() },
-    { onConflict: 'key' },
-  )
-
-  // 🔴 הגנות הלולאה — משותפות עם maintenanceReply ולא מקומיות.
-  //
-  // הרשימה המקומית שהייתה כאן כללה רק noreply/mailer-daemon/bounce, ולכן
-  // *לא* חסמה את helpdesk@make.com — הכתובת שגרמה ללולאה האינסופית:
-  // המענה שלנו נחת אצלה, היא ענתה אוטומטית, וזה נקלט כפנייה חדשה.
-  //
-  // שלוש שכבות, לפי סדר עלות:
-  //   1. דפוס הכתובת (help@, support@, ticket@, info@...).
-  //   2. כותרות Auto-Submitted / Precedence — המייל מצהיר שהוא אוטומטי.
-  //   3. תקרת מענים — הבולם האחרון, שאינו מנחש לפי דפוס אלא סופר.
-  // ⚠️ כל דילוג נרשם עם סיבתו. כשהמענה נדם לשלושה ימים, השתיקה הייתה
-  // מוחלטת — אף לוג לא אמר מדוע, והאבחון דרש קריאת קוד במקום קריאת לוג.
-  const { shouldSkipAutoReply, isAutoSubmittedMail, underAutoReplyCap } =
-    await import('@/lib/maintenanceReply')
-  if (shouldSkipAutoReply(from)) {
-    console.log(`[igud-auto-reply] דילוג: דפוס כתובת חסומה — ${from}`)
-    return
-  }
-  if (isAutoSubmittedMail(msg.headers)) {
-    console.log(`[igud-auto-reply] דילוג: המייל מצהיר שהוא אוטומטי — ${from}`)
-    return
-  }
-  if (!(await underAutoReplyCap(admin, from))) {
-    console.log(`[igud-auto-reply] דילוג: תקרת מענים שבועית — ${from}`)
-    return
-  }
-
-  const COLS = 'id_number, full_name, family_name, email, phone, city, address, marital_status, spouse_name, children_count, eligibility_status'
-  type Ben = { id_number: string | null; full_name: string | null; family_name: string | null; email: string | null; phone: string | null; city: string | null; address: string | null; marital_status: string | null; spouse_name: string | null; children_count: number | null; eligibility_status: string | null }
-  let ben: Ben | null = null
-
-  // 1) זיהוי לפי ת"ז מלאה (9 ספרות) בשורת הנושא — של הרשום או של בן/בת הזוג
-  const idMatch = String(msg.subject ?? '').match(/\d{9}/)
-  if (idMatch) {
-    const id = idMatch[0]
-    const { data } = await admin
-      .from('beneficiaries')
-      .select(COLS)
-      .or(`id_number.eq.${id},spouse_id_number.eq.${id}`)
-      .maybeSingle()
-    ben = (data as Ben) ?? null
-  }
-  // 🔴 שער הבעלות — הת"ז שבנושא אינה הוכחת זהות.
-  //
-  // בלי הבדיקה הזו כל אדם בעולם יכול לשלוח מייל ל-igud@ עם ת"ז בשורת
-  // הנושא ולקבל בחזרה, לכתובת שלו, את התיק המלא של אותו אדם: שם, ת"ז,
-  // טלפון, כתובת, מצב משפחתי, בן/בת זוג ומספר ילדים — ובנוסף קישורי
-  // הגשה חתומים המשויכים לת"ז שלו, שמאפשרים לפתוח בקשות בשמו.
-  //
-  // ⚠️ ת"ז ישראלית אינה סוד, וספרת ביקורת מאפשרת ייצור סיטונאי של
-  // מספרים תקינים — כלומר אפשר לסרוק את המאגר בשיטתיות.
-  //
-  // ⚠️ תקרת המענים אינה עוזרת כאן: היא נספרת לפי כתובת הנמען, ותוקף
-  // שמחליף כתובת שולח בכל פנייה אינו נספר כלל.
-  //
-  // ההגנה זהה לזו שכבר קיימת ב-handleEmailRequest (קליטת בקשות במייל):
-  // המענה נשלח רק אם כתובת השולח היא הכתובת הרשומה על הכרטסת.
-  if (ben && String(ben.email ?? '').toLowerCase().trim() !== from) {
-    console.warn(`[igud-auto-reply] 🔴 נחסם: ${from} ביקש ת"ז שאינה שלו`)
-    ben = null
-  }
-
-  // 2) נפילה-לאחור — לפי כתובת השולח.
-  // ⚠️ בטוחה מעצם הגדרתה: היא מתאימה לכתובת השולח עצמו, ולכן המענה
-  // חוזר לבעל הכרטסת בלבד.
-  if (!ben) {
-    const { data } = await admin.from('beneficiaries').select(COLS).ilike('email', from).maybeSingle()
-    ben = (data as Ben) ?? null
-  }
-
-  // 🔴 פונה שאינו מזוהה — הזמנה להרשמה, ולא שתיקה.
-  //
-  // ⚠️ עד כה היה כאן `return` בלבד: מי שאינו רשום (או ששלח מכתובת שאינה
-  // על הכרטסת) לא קיבל דבר, ולא ידע אם המייל בכלל הגיע. התבנית
-  // registrationInviteEmail הייתה קיימת כל הזמן, אך נותרה מחוברת רק
-  // ל-lib/autoReply.ts — המנגנון הישן שסרק את תיבת Gmail ואינו רץ עוד
-  // מאז המעבר ל-webhook של Resend. בכתיבה מחדש היא פשוט לא חוברה.
-  //
-  // ⚠️ אינה חושפת דבר: המענה גנרי לחלוטין — בלי שם, ת"ז או פרטים — ולכן
-  // אינו מאפשר את סריקת המאגר שההגנה מעליו נועדה למנוע.
-  if (!ben) {
-    const { registrationInviteEmail } = await import('@/lib/emailTemplates')
-    const invite = registrationInviteEmail()
-    const r = await deliverMail(from, invite.subject, invite.html, undefined, { ...mailFor('igud'), skipLog: true })
-    if (!r.ok) {
-      console.error('[igud-auto-reply] שליחת הזמנה להרשמה נכשלה:', r.error)
-      return
-    }
-    await admin.from('auto_reply_log').insert({ to_email: from, subject: invite.subject })
-      .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
-    return
-  }
-
-  const name = [ben.family_name, ben.full_name].filter(Boolean).join(' ')
-  const details: [string, string | number | null | undefined][] = [
-    ['שם מלא', name], ['ת.ז.', ben.id_number], ['טלפון', ben.phone], ['דוא״ל', ben.email],
-    ['מצב משפחתי', ben.marital_status], ['בן/בת זוג', ben.spouse_name],
-    ['כתובת', [ben.address, ben.city].filter(Boolean).join(', ')],
-    ['מספר ילדים', ben.children_count != null ? String(ben.children_count) : ''],
-  ]
-  const draftLinks = ben.id_number
-    ? await buildDraftLinks(admin, String(ben.id_number).replace(/\D/g, ''), ben.eligibility_status !== 'approved', ben.marital_status)
-    : []
-  // מצב המחלקות — לא מציגים כפתור בקשה למחלקה סגורה
-  const { getDepartmentGates } = await import('@/lib/departmentGates')
-  const gates = await getDepartmentGates(admin)
-  // ⚠️ חלוקת החגים נבדקת בזמן שליחת המייל ולא בהגדרות: הכפתור חייב לשקף את
-  // מצב הרישום *כרגע*, אחרת נשלח קישור לחלוקה שנסגרה.
-  const { getOpenDistribution } = await import('@/lib/holidayDistributions')
-  const openDist = await getOpenDistribution()
-  const mail = benefitsLinkEmail(name, undefined, details, draftLinks, ben.marital_status, gates,
-    openDist ? { open: true, name: [openDist.name, openDist.year].filter(Boolean).join(' ') } : null)
-  // מייל חדש (לא reply), עם הת"ז בשורת הנושא
-  const subject = ben.id_number ? `${mail.subject} · ת.ז ${ben.id_number}` : mail.subject
-  const res = await deliverMail(from, subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
-  if (!res.ok) {
-    console.error('[igud-auto-reply] שליחה נכשלה:', res.error)
-    return
-  }
-  // 🔴 רישום המענה — בלעדיו תקרת המענים (underAutoReplyCap) סופרת אפס
-  // לנצח, והבולם האחרון מפני לולאה פשוט אינו קיים.
-  // ⚠️ נרשם רק אחרי שליחה מוצלחת: רישום מראש היה סוגר את התקרה על
-  // כתובת שמעולם לא קיבלה מענה.
-  await admin.from('auto_reply_log').insert({ to_email: from, subject })
-    .then(undefined, () => { /* הלוג אינו חוסם את המענה עצמו */ })
-}
 
 // פענוח MIME encoded-words בכותרות (Subject וכו') — =?charset?B?base64?= / =?charset?Q?quoted?=.
 // בלי זה נושא בעברית מקודד לא מזוהה כבקשה ("בקשת לידה") והבקשה לא נקלטת.
@@ -1137,26 +863,9 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       console.error('[resend-inbound] gmail forward error:', e instanceof Error ? e.message : String(e))
     }
-    // מענה אוטומטי לפניות יריד — "פנייתך התקבלה"
-    try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyYerid({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject })
-    } catch (e) {
-      console.error('[resend-inbound] yerid auto-reply error:', e instanceof Error ? e.message : String(e))
-    }
-    // מענה אוטומטי לפניות תיבה 8 — הודעה על הגרלת כרטיסי טיסה
-    try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyInbox8({ fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail })
-    } catch (e) {
-      console.error('[resend-inbound] inbox8 auto-reply error:', e instanceof Error ? e.message : String(e))
-    }
-    // מענה אוטומטי לפניות גמ"ח — שני מסלולי ההגשה (אתר / מייל)
-    // ⚠️ אותם תנאים כמו השאר: לא על תשובה לשרשור שלנו ולא על בירור
-    // הלוואה קיים — הפונה כבר בתוך תהליך, והנחיות הגשה יבלבלו אותו.
-    try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyGemach(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers })
-    } catch (e) {
-      console.error('[resend-inbound] gemach auto-reply error:', e instanceof Error ? e.message : String(e))
-    }
+    // ⚠️ המענה האוטומטי אינו כאן אלא בסוף הטיפול, מחוץ ל-isNew.
+    // אותה תקלה כבר תוקנה כאן פעמיים (ניתוב מכתבי הברכה, קליטת בקשות
+    // במייל): מייל שכבר קיים בטבלה מדלג על הבלוק הזה, והמענה לא נשלח.
     // אבחון קליטה — שומר את הנושא והחלטת הניתוב, לאבחון כשל זיהוי בקשה.
     try {
       await admin.from('app_settings').upsert({
@@ -1226,81 +935,48 @@ export async function POST(request: NextRequest) {
         { onConflict: 'key' },
       )
       try {
-        const handled = await handleEmailRequest(admin, {
+        await handleEmailRequest(admin, {
           fromEmail: from.email,
           subject: requestSubject,
           body: requestBody,
           attachments,
         })
-        if (!handled && isIgud) {
-          if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers, messageId: String(messageId) })
-        }
       } catch (e) {
         console.error('[resend-inbound] email-request intake error:', e instanceof Error ? e.message : String(e))
         // משחררים את הנעילה כדי שניסיון חוזר של Resend יוכל לטפל בכל זאת
         await admin.from('app_settings').delete().eq('key', lockKey)
       }
     }
-  } else if (isIgud) {
-    // 🔴 בלי isNew.
-    //
-    // ⚠️ זה הבאג שהשתיק את המענה: Resend שולח את ה-webhook יותר מפעם אחת
-    // (retry על timeout, ו-dual-delivery). בריצה השנייה ה-upsert מדלג
-    // בגלל ignoreDuplicates, isNew הופך ל-false, והמענה דולג — בשקט.
-    // ההודעה נקלטה בתיבה כרגיל, ולכן שום דבר לא *נראה* שבור.
-    //
-    // אותה תקלה בדיוק כבר תוקנה כאן פעמיים — בניתוב מכתבי הברכה
-    // ובקליטת בקשות במייל (ראו ההערות "חייב לרוץ מחוץ ל-if (isNew)").
-    // המענה האוטומטי נשאר מאחור.
-    //
-    // ⚠️ הכפילות נמנעת ב-underAutoReplyCap ולא ב-isNew: הוא סופר מענים
-    // שיצאו בפועל, ולכן retry אינו מייצר מענה שני — ואילו מייל אמיתי
-    // חדש כן מקבל מענה, גם אם ההודעה כבר הייתה בטבלה.
-    try {
-      if (!isReplyToUs && !looksLikeLoanInquiry) await maybeAutoReplyIgud(admin, { fromEmail: from.email, fromName: from.name, toEmail: resolvedToEmail, subject, headers: data.headers, messageId: String(messageId) })
-    } catch (e) {
-      console.error('[resend-inbound] igud auto-reply error:', e instanceof Error ? e.message : String(e))
-    }
   }
 
-  // ── מענה אוטומטי זמני ("המערכת בפיתוח") ──
-  // נשלח רק אם ההגדרה מופעלת, ורק לשולח שאינו מזוהה כמוטב במערכת.
+  // ── מענה אוטומטי — מנגנון אחד לכל התיבות ──
   //
-  // ⚠️ נשלח *רק* לתיבת המשרד (office / main). שאר התיבות (8, 9, 10, יריד וכו')
-  // פעילות ומקבלות טיפול רגיל — אסור לענות להן "המערכת בהרצה".
+  // 🔴 רץ *מחוץ* ל-isNew. זה היה הבאג שהשתיק את המענה: Resend שולח את
+  // ה-webhook יותר מפעם אחת (retry על timeout, ו-dual-delivery). בריצה
+  // השנייה ה-upsert מדלג בגלל ignoreDuplicates, isNew הופך ל-false, והמענה
+  // דולג — בשקט. ההודעה נקלטה בתיבה כרגיל, ולכן שום דבר לא *נראה* שבור.
   //
-  // ⚠️ לא נשלח על מיילים שהם בקשה (לידה/הלוואה/סיוע) — הם מקבלים מענה
-  // ייעודי (אישור קליטה או פירוט מה חסר), ומענה גנרי היה מסתיר אותו.
+  // ⚠️ הכפילות נמנעת בנעילה לפי messageId ובתקרת המענים, ולא ב-isNew: הן
+  // בודקות מה יצא בפועל, ולכן retry אינו מייצר מענה שני — ואילו מייל אמיתי
+  // חדש כן מקבל מענה, גם אם ההודעה כבר הייתה בטבלה.
+  //
+  // ⚠️ אין יותר שני מענים שרצים ברצף על אותו מייל, ולכן אין יותר צורך
+  // ב-autoReplyRouting: הבאג שבו הגנרי אכל את מכסת המענים של הייעודי אינו
+  // יכול לחזור כשיש מנגנון אחד בלבד.
+  //
+  // ⚠️ לא נשלח על בקשות (מקבלות מענה ייעודי — אישור קליטה או פירוט מה חסר),
+  // ולא על תשובות בשרשור שלנו או בירורי הלוואה — הפונה כבר בתוך תהליך.
   try {
-    const isRequest = isRequestSubject(subject)
-    // ⚠️ מענה אוטומטי per-mailbox — לכל תיבה שהמענה שלה מופעל (לא רק המשרד).
-    // התיבה נקבעת לפי הנמען (resolvedToEmail). נשלח *תמיד* כשמופעל — גם למוטב
-    // רשום — ולכן אין יותר בדיקת beneficiaryId. עדיין לא על בקשות (מקבלות מענה
-    // ייעודי) ולא על replies/בירורי הלוואה (מונע לולאה).
-    const dept = departmentByEmail(resolvedToEmail)?.key ?? null
-
-    // 🔴 לא על תיבת האיגוד — היא כבר קיבלה מענה ייעודי למעלה.
-    //
-    // ⚠️ זה היה הבאג: שני המענים רצו ברצף על אותו מייל. הגנרי ("קיבלנו
-    // את פנייתכם") רץ אחרון, נרשם ל-auto_reply_log, ואכל את תקרת
-    // המענים — כך שמייל ההטבות, שרץ *לפניו*, נחסם ב-underAutoReplyCap
-    // בפנייה הבאה. הלוג מראה את התוצאה במלואה: כל השורות הן "קיבלנו
-    // את פנייתכם", ואף אחת אינה מייל ההטבות.
-    //
-    // ⚠️ וגם בלי התקרה זה היה שגוי: הפונה קיבל שני מיילים על פנייה
-    // אחת — אחד עם הפרטים והקישורים, ומיד אחריו "נשוב אליכם בהקדם".
-    // ⚠️ ההחלטה ב-lib/autoReplyRouting ולא כתנאי ידני כאן: מענה ייעודי
-    // חדש שיתווסף בעתיד חייב להופיע ברשימה שם, אחרת הוא נולד עם אותו באג.
-    if (!isRequest && !isReplyToUs && !looksLikeLoanInquiry && shouldSendGenericReply(dept)) {
-      const { maybeSendMaintenanceReply } = await import('@/lib/maintenanceReply')
-      await maybeSendMaintenanceReply(admin, {
+    if (!isRequestSubject(subject) && !isReplyToUs && !looksLikeLoanInquiry) {
+      await sendAutoReply(admin, {
         fromEmail: from.email,
-        department: dept,
+        department: departmentByEmail(resolvedToEmail)?.key ?? null,
         headers: data.headers,
+        messageId: String(messageId),
       })
     }
   } catch (e) {
-    console.error('[resend-inbound] maintenance reply error:', e instanceof Error ? e.message : String(e))
+    console.error('[resend-inbound] auto-reply error:', e instanceof Error ? e.message : String(e))
   }
 
   return NextResponse.json({ ok: true })

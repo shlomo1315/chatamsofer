@@ -26,7 +26,7 @@ export const RABBI_FORM_BLANK_URL =
   || 'https://drive.google.com/file/d/1Q--ShoskoYagSZkmRNKbuDrV074tmLEU/view?usp=sharing'
 
 // מנטרל תווי HTML בערכים מבוססי-משתמש לפני שילובם ב-HTML של המייל (מניעת הזרקת HTML)
-function escapeHtml(s: unknown): string {
+export function escapeHtml(s: unknown): string {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 

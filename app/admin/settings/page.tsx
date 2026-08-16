@@ -34,7 +34,7 @@ import SendAccountSettings from './SendAccountSettings'
 import DepartmentGatesSettings from './DepartmentGatesSettings'
 import GovDataSettings from './GovDataSettings'
 import LegacyMailSettings from './LegacyMailSettings'
-import MaintenanceReplySettings from './MaintenanceReplySettings'
+import AutoReplySettings from './AutoReplySettings'
 import CardStockAlertSettings from './CardStockAlertSettings'
 import CardReminderSettings from './CardReminderSettings'
 
@@ -197,9 +197,9 @@ export default async function SettingsPage() {
           <EmailTemplatesManager />
         </Collapsible>
 
-        {/* Legacy Gmail sync */}
-        <Collapsible title="מענה אוטומטי זמני" icon={<MailWarning size={16} className="text-amber-500" />}>
-          <MaintenanceReplySettings />
+        {/* מענה אוטומטי — נוסח, כפתורים וסעיפים לכל תיבת מייל */}
+        <Collapsible title="מענה אוטומטי לתיבות המייל" icon={<MailWarning size={16} className="text-amber-500" />}>
+          <AutoReplySettings />
         </Collapsible>
 
         <Collapsible title="סנכרון מייל קודם" icon={<Mail size={16} className="text-orange-500" />}>
