@@ -351,6 +351,23 @@ export function emailIntakeRejectedEmail(opts: {
   const draftBlock = draftHref ? `
     <p style="margin:18px 0 8px;color:#334155;font-size:14px;font-weight:700;">${T('draft_note')}</p>
     <p style="margin:0;"><a href="${draftHref}" style="display:inline-block;color:#c2410c;font-size:15px;font-weight:700;text-decoration:underline;">${T('draft_button')}</a></p>` : ''
+
+  // 🔴 טופס אישור רב כקישור, כשזו בדיוק הסיבה לדחייה.
+  //
+  // ⚠️ עד כה הטופס נשלח כצרופה בכל דחייה כזו — מאות קילובייטים בכל ניסיון
+  // חוזר. הקישור עצמו חייב להישאר: מי שהגיש במייל לא עבר בפורטל, ואין לו
+  // שום דרך אחרת להשיג את הטופס שהדחייה דורשת ממנו.
+  const needsRabbiForm = errors.some(e => e.includes('טופס-אישור-רב') || e.includes('טופס אישור רב'))
+  const rabbiFormBlock = needsRabbiForm ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 0;">
+      <tr><td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px 20px;">
+        <p style="margin:0 0 10px;color:#166534;font-size:14px;font-weight:900;">טופס אישור רב</p>
+        <p style="margin:0 0 12px;color:#15803d;font-size:13px;line-height:1.8;">
+          יש להוריד את הטופס, למלא שם, מספר זהות וסדר הדורות, להחתים את הרב, ולצרף את הטופס החתום להגשה החוזרת.
+        </p>
+        <a href="${RABBI_FORM_BLANK_URL}" style="display:inline-block;padding:11px 24px;background:#16a34a;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:10px;font-family:'Heebo',Arial,sans-serif;">להורדת הטופס</a>
+      </td></tr>
+    </table>` : ''
   const body = `
     ${autoReplyNote()}
     <p style="margin:0 0 16px;color:#0f172a;font-size:16px;font-weight:700;font-family:'Heebo',Arial,sans-serif;">${greet}</p>
@@ -363,6 +380,7 @@ export function emailIntakeRejectedEmail(opts: {
     </table>
     <p style="margin:0 0 6px;color:#334155;font-size:14px;line-height:1.7;">${T('digital_note')}</p>
     ${btn(digitalUrl, textFor('email_intake_rejected', 'digital_button'), '#4f46e5')}
+    ${rabbiFormBlock}
     ${draftBlock}
     ${noReplyBox()}`
   const title = textFor('email_intake_rejected', 'title')

@@ -274,13 +274,25 @@ export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pi
                   )}
                 </p>
               </div>
+              {/* 🔴 משפחה מאושרת — הודעה במקום שאלה.
+                  ⚠️ לא רק הסתרה של הבורר: מזכיר שרואה מסך ריק אינו יודע
+                  אם הייחוס אושר או שהשאלה נשמטה. אמירה מפורשת חוסכת לו
+                  את הבדיקה בכרטסת המשפחה לפני כל אישור. */}
+              {familyApproved && (
+                <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="text-xs leading-relaxed text-emerald-800">
+                    <span className="font-bold">שים לב — משפחה זו מאושרת באיגוד הצאצאים.</span>
+                    <span className="block text-emerald-700">אין צורך באישור ייחוס; האישור חל על ההלוואה בלבד.</span>
+                  </span>
+                </div>
+              )}
+
               {/* ── היקף האישור ──
                   ⚠️ שתי אפשרויות מפורשות ולא תיבת סימון: תיבה שאינה
                   מסומנת נקראת כ"טרם החלטתי", ואילו כאן ברירת המחדל היא
                   החלטה בפני עצמה — לאשר את ההלוואה בלבד.
 
-                  🔴 אינו מוצג כשהמשפחה כבר מאושרת: אין מה לאשר, והשאלה
-                  "לאשר גם את הייחוס?" מטילה ספק במצב קיים ומאטה כל אישור.
                   ⚠️ `familyApproved` הגיע כאן מהדף מלכתחילה אך לא חולץ
                   מה-props כלל, ולכן נשמט בשקט וההיצג היה תמידי. */}
               {!familyApproved && (

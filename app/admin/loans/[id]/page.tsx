@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { Loan } from '@/types'
 import { docViewUrl } from '@/lib/docUrl'
+import { docTypeLabel } from '@/lib/docTypes'
 import { loanSourceLabel } from '@/lib/loanSubmissionSource'
 import LoanDecisionPanel from './LoanDecisionPanel'
 import { ViewDocButton } from '@/components/ui/DocViewer'
@@ -35,18 +36,28 @@ async function getLoan(id: string): Promise<Loan | null> {
   return data
 }
 
-async function getBeneficiaryIdDocs(beneficiaryId: string): Promise<{ doc_type: string; file_url: string | null; file_name: string | null }[]> {
+/**
+ * מסמכי המשפחה המוצגים בכרטסת ההלוואה.
+ *
+ * 🔴 היה כאן `.in()` על ארבעה סוגי ת"ז בלבד, ולכן כל מסמך אחר שהמבקש
+ * העלה — ובראשו **טופס אישור רב** — סונן החוצה בשקט. המסמך נשמר במערכת
+ * כראוי אך לא היה דרך לראותו, וזה בדיוק המסמך שההחלטה נשענת עליו.
+ *
+ * ⚠️ אין סינון סוגים: כל מה שצורף לתיק שייך לכרטסת. סוג חדש שיתווסף
+ * בעתיד יופיע מאליו, במקום להיעלם עד שמישהו יזכור להוסיפו לרשימה.
+ *
+ * ⚠️ הכפילות אינה מסוננת עוד — ריבוי קבצים לאותו סוג הוא מצב נתמך
+ * (אדם עם שני עמודי ת"ז), ושמירת האחרון בלבד הסתירה קבצים אמיתיים.
+ */
+async function getBeneficiaryDocs(beneficiaryId: string): Promise<{ doc_type: string; file_url: string | null; file_name: string | null }[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
   const { data } = await supabase
     .from('documents')
     .select('doc_type, file_url, file_name')
     .eq('beneficiary_id', beneficiaryId)
-    .in('doc_type', ['id_husband', 'id_husband_appx', 'id_wife', 'id_wife_appx'])
     .order('uploaded_at', { ascending: false })
-  if (!data) return []
-  const seen = new Set<string>()
-  return data.filter(d => { if (seen.has(d.doc_type)) return false; seen.add(d.doc_type); return true })
+  return (data ?? []).filter(d => d.file_url)
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
@@ -57,7 +68,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params
   const loan = await getLoan(id)
   const beneficiaryId = (loan?.beneficiary as { id?: string } | undefined)?.id
-  const idDocs = beneficiaryId ? await getBeneficiaryIdDocs(beneficiaryId) : []
+  const famDocs = beneficiaryId ? await getBeneficiaryDocs(beneficiaryId) : []
 
   if (!loan && isSupabaseConfigured()) notFound()
 
@@ -81,17 +92,44 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   // ⚠️ הגלריה כוללת גם את המסמכים המצורפים וגם את צילומי הת"ז: מבחינת
   // המזכירות זו רשימה אחת שעוברים עליה, וההפרדה לשני כרטיסים היא תצוגה
   // בלבד. גלריות נפרדות היו עוצרות את הניווט באמצע.
+  // ── מסמכי התיק, מסודרים לפי מקור ──
+  //
+  // 🔴 טופס אישור רב נשמר בשלושה מקומות שונים לפי מסלול ההגשה:
+  // `loans.rabbi_form_url` (פורטל ומייל), טבלת `documents` עם
+  // doc_type='rabbi_form' (העלאה מהפורטל), ולעיתים ב-document_urls.
+  // אף אחד משלושתם לא הוצג — המסמך שההחלטה נשענת עליו היה בלתי נגיש.
+  const ID_LABELS: Record<string, string> = {
+    id_husband: 'ת.ז. הבעל', id_husband_appx: 'ספח ת.ז. הבעל',
+    id_wife: 'ת.ז. האישה', id_wife_appx: 'ספח ת.ז. האישה',
+  }
+  const idDocs = famDocs.filter(d => d.doc_type in ID_LABELS)
+  // ⚠️ מסמכים שאינם ת"ז — טופס אישור רב, אישורים, כל השאר. עד כה סוננו.
+  const otherDocs = famDocs.filter(d => !(d.doc_type in ID_LABELS) && d.doc_type !== 'rabbi_form')
+  const rabbiDocs = famDocs.filter(d => d.doc_type === 'rabbi_form')
+
+  // טופס אישור רב מהשדה הייעודי — אם אינו כבר ברשימת המסמכים
+  const rabbiFromField = loan.rabbi_form_url
+    && !rabbiDocs.some(d => d.file_url === loan.rabbi_form_url)
+    ? loan.rabbi_form_url : null
+
+  const rabbiForms = [
+    ...(rabbiFromField ? [{ url: rabbiFromField, name: 'טופס אישור רב' }] : []),
+    ...rabbiDocs.map(d => ({ url: d.file_url as string, name: d.file_name || 'טופס אישור רב' })),
+  ]
+
   const docGallery = [
     ...(Array.isArray(loan.document_urls)
       ? loan.document_urls.map((d, i) => ({ url: d.url, name: d.name || `מסמך ${i + 1}` }))
       : []),
-    ...idDocs.filter(d => d.file_url).map(d => ({
+    ...rabbiForms,
+    ...otherDocs.map(d => ({ url: d.file_url as string, name: d.file_name ?? docTypeLabel(d.doc_type) })),
+    ...idDocs.map(d => ({
       url: d.file_url as string,
-      name: d.doc_type === 'id_husband' ? 'ת.ז. הבעל'
-        : d.doc_type === 'id_wife' ? 'ת.ז. האישה'
-        : (d.file_name ?? 'מסמך'),
+      name: ID_LABELS[d.doc_type] ?? (d.file_name ?? 'מסמך'),
     })),
   ]
+
+  const hasAnyDoc = docGallery.length > 0
 
   return (
     <div className="flex flex-col gap-5">
@@ -219,12 +257,33 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
           {/* 4 · מסמכים מצורפים */}
           {/* ⚠️ מוצג רק כשיש מסמכים: כותרת ריקה נראית כתקלה ומעלה את השאלה
               היכן הם, בעוד שבפועל פשוט לא צורפו. */}
-          {((Array.isArray(loan.document_urls) && loan.document_urls.length > 0) || idDocs.length > 0) && (
+          {hasAnyDoc && (
             <section className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-sky-600 border-t border-slate-200 pt-5">
                 <FileText size={16} />
                 <h2 className="text-sm font-bold text-slate-700">מסמכים מצורפים</h2>
               </div>
+
+              {/* 🔴 טופס אישור רב ראשון ובכרטיס משלו — הוא המסמך שההחלטה
+                  נשענת עליו, ועד כה לא הוצג בכרטסת כלל. */}
+              {rabbiForms.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 text-emerald-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">טופס אישור רב</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {rabbiForms.map((d, i) => (
+                      <div key={`rf-${i}`} className="flex flex-col gap-1 w-24">
+                        <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name} size={96}
+                          gallery={docGallery} index={(Array.isArray(loan.document_urls) ? loan.document_urls.length : 0) + i} />
+                        <span className="text-[11px] text-slate-600 truncate" title={d.name}>{d.name}</span>
+                        <DownloadDocButton url={d.url} docType="טופס אישור רב" person={borrower} name={d.name} variant="icon" className="self-start" />
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
                 <Card>
@@ -256,19 +315,45 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                 </Card>
               )}
 
+              {/* ⚠️ מסמכים נוספים שהמבקש העלה — עד כה סוננו החוצה לגמרי
+                  על ידי רשימת סוגים קשיחה. */}
+              {otherDocs.length > 0 && (
+                <Card>
+                  <div className="flex items-center gap-2 text-amber-600 mb-3">
+                    <FileText size={16} />
+                    <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים נוספים</span>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {otherDocs.map((d, i) => {
+                      const name = d.file_name ?? docTypeLabel(d.doc_type)
+                      return (
+                        <div key={`od-${i}`} className="flex flex-col gap-1 w-24">
+                          <DocThumb href={docViewUrl(d.file_url as string)} rawUrl={d.file_url as string} name={name} size={96}
+                            gallery={docGallery}
+                            index={(Array.isArray(loan.document_urls) ? loan.document_urls.length : 0) + rabbiForms.length + i} />
+                          <span className="text-[11px] text-slate-600 truncate" title={name}>{docTypeLabel(d.doc_type)}</span>
+                          <DownloadDocButton url={d.file_url as string} docType={docTypeLabel(d.doc_type)} person={borrower} name={name} variant="icon" className="self-start" />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              )}
+
               {idDocs.length > 0 && (
                 <Card>
                   <div className="flex items-center gap-2 text-indigo-600 mb-3">
                     <FileText size={16} />
                     <span className="text-xs font-semibold text-slate-500 uppercase">תעודות זהות</span>
                   </div>
+                  {/* ⚠️ כל צילומי הת"ז, כולל הספחים וכולל קובץ שני לאותו סוג:
+                      עד כה הוצגו שני כרטיסים בלבד (בעל/אישה) והשאר נשלפו
+                      מהמסד רק כדי להיעלם. */}
                   <div className="grid grid-cols-2 gap-4 max-w-2xl">
-                    {idDocs.find(d => d.doc_type === 'id_husband') && (
-                      <LoanDocCard label="ת.ז. הבעל" person={borrower} url={idDocs.find(d => d.doc_type === 'id_husband')!.file_url ?? undefined} />
-                    )}
-                    {idDocs.find(d => d.doc_type === 'id_wife') && (
-                      <LoanDocCard label="ת.ז. האישה" person={borrower} url={idDocs.find(d => d.doc_type === 'id_wife')!.file_url ?? undefined} />
-                    )}
+                    {idDocs.map((d, i) => (
+                      <LoanDocCard key={`id-${i}`} label={ID_LABELS[d.doc_type] ?? d.doc_type}
+                        person={borrower} url={d.file_url ?? undefined} />
+                    ))}
                   </div>
                 </Card>
               )}

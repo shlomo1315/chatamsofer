@@ -61,6 +61,13 @@ export async function sendGmailMessage(gmail: any, opts: {
   // ⚠️ כתובת לתשובות. חיונית כשהשולח הוא חשבון שליחה ייעודי: בלעדיה תשובה
   // של נמען נוחתת בתיבה שאיש אינו קורא. עם הכותרת היא מגיעה לתיבה מאוישת.
   replyTo?: string
+  // 🔴 כותרות שרשור. בלעדיהן כל תשובה נפתחת כשרשור חדש אצל הנמען.
+  //
+  // ⚠️ זה היה הבאג: המסלול הזה משרת את *רוב* הנמענים (כל כתובות Gmail),
+  // והוא היחיד שלא העביר אותן — בעוד המסלול של Resend כן. התוצאה: תשובה
+  // לבירור הלוואה הגיעה כמייל חדש בדיוק לנמענים שהם הרוב.
+  inReplyTo?: string
+  references?: string
 }) {
   const from = opts.from || process.env.GMAIL_EMAIL || 'office@chasamsofer.info'
   const fromName = opts.fromName || 'היכל החתם סופר משרד ראשי'
@@ -70,6 +77,8 @@ export async function sendGmailMessage(gmail: any, opts: {
     `To: ${opts.to}`,
     ...(opts.replyTo ? [`Reply-To: ${opts.replyTo}`] : []),
     `Subject: ${_encodeHeader(opts.subject)}`,
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
+    ...(opts.references ? [`References: ${opts.references}`] : []),
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=UTF-8',
     'Content-Transfer-Encoding: base64',

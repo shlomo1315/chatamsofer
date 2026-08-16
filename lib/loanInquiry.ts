@@ -104,7 +104,11 @@ export async function sendLoanInquiry(
     // ⚠️ עוגן השרשור נשלח כבר בהודעה הראשונה: הודעות ההמשך מצמידות אליו
     // את עצמן (References), וגם אם ה-Message-ID של תשובת המבקש לא ייקלט —
     // כל השיחה תתקבץ יחד אצלו.
+    //
+    // ⚠️ גם In-Reply-To ולא References בלבד: לקוחות דואר רבים מקבצים לפי
+    // In-Reply-To, ובלעדיו ההודעה השנייה נפתחה כשרשור נפרד מהראשונה.
     thread.references = `<loan-${loanId}@${INBOUND_DOMAIN}>`
+    thread.inReplyTo = thread.references
     const greet = greetByStatus(ben?.family_name, ben?.full_name, ben?.marital_status)
     html = shell({
       preheader: 'נדרשת השלמת פרטים בבקשת ההלוואה',

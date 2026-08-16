@@ -162,6 +162,9 @@ function noteIfRateLimited(email: string, e: unknown): boolean {
 async function trySendViaGmail(
   to: string, subject: string, html: string, fallbackFrom: string, fromName: string, cap: number,
   replyTo?: string,
+  // 🔴 כותרות שרשור — ראו ההערה ב-sendGmailMessage. הושמטו כאן, ולכן כל
+  // תשובה לנמען Gmail (הרוב המכריע) נפתחה אצלו כשרשור חדש.
+  thread?: { inReplyTo?: string; references?: string },
 ): Promise<string | null> {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -204,7 +207,13 @@ async function trySendViaGmail(
         const from = acc.token ? acc.email : fallbackFrom
         await sendGmailMessage(gmail, {
           to, subject, from, fromName, replyTo,
-          html: withAutomatedNotice(html, replyTo || from),
+          inReplyTo: thread?.inReplyTo,
+          references: thread?.references,
+          // ⚠️ מייל בשרשור אינו מקבל את הודעת "אין להשיב": הוא נשלח דווקא
+          // כדי שהנמען ישיב עליו, והתוספת סתרה את גוף ההודעה עצמו.
+          html: thread?.inReplyTo || thread?.references
+            ? html
+            : withAutomatedNotice(html, replyTo || from),
         })
         return acc.email
       } catch (e) {
@@ -305,6 +314,9 @@ export async function deliverMail(
       // ⚠️ תשובות מופנות לתיבה המאוישת. חשבונות השליחה ייעודיים ואיש אינו
       // קורא בהם, ובלי הכותרת תשובה של נמען הייתה נעלמת.
       options?.replyTo || REPLY_TO_FALLBACK,
+      // 🔴 כותרות השרשור נמסרות גם כאן. השמטתן הייתה השורש לכך שתשובות
+      // בירור נפתחו כשרשור חדש אצל נמעני Gmail — כלומר אצל הרוב.
+      { inReplyTo: options?.inReplyTo, references: options?.references },
     )
     if (sentBy) {
       console.log(`[mail] נשלח דרך Workspace · ${sentBy} → ${to}`)

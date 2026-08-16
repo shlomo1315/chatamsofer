@@ -29,6 +29,9 @@ export const DOC_LABELS: Record<string, string> =
 // (birth_cert) שנוצר מבקשת הלידה — הוצג עד כה כ-"birth_cert" באנגלית.
 export const SYSTEM_DOC_LABELS: Record<string, string> = {
   birth_cert: 'אישור לידה',
+  // ⚠️ נוצר מהעלאת הטופס החתום בפורטל (PublicPortalPage) והוצג עד כה
+  // כמחרוזת הגולמית "rabbi_form".
+  rabbi_form: 'טופס אישור רב',
 }
 
 export const docTypeLabel = (v: string, types: DocTypeOption[] = DEFAULT_DOC_TYPES) =>

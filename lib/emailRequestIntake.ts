@@ -64,36 +64,14 @@ async function reject(
     name, typeLabel: SUBJECT_PREFIX[type], errors, draftHref, action: ACTION_PARAM[type], greeting,
   })
 
-  // ⚠️ בבקשת הלוואה שנדחתה בגלל טופס אישור רב חסר — מצרפים את הטופס הריק
-  // עצמו. בלעדיו הדחייה אומרת למבקש "חסר טופס" בלי לתת לו דרך להשיג אותו,
-  // והוא נתקע: בפורטל יש כפתור הורדה, במייל אין.
-  let attachments: Awaited<ReturnType<typeof blankRabbiFormAttachment>> = undefined
-  if (type === 'loan' && errors.some(e => e.includes('טופס-אישור-רב') || e.includes('טופס אישור רב'))) {
-    attachments = await blankRabbiFormAttachment()
-  }
-
-  return deliverMail(to, mail.subject, mail.html, attachments, { ...mailFor('igud'), skipLog: true })
-}
-
-/**
- * הטופס הריק כצרופה. מחזיר undefined אם הקובץ אינו זמין — דחייה בלי
- * הצרופה עדיפה על כישלון שליחה שמשאיר את המבקש בלי שום תשובה.
- */
-async function blankRabbiFormAttachment() {
-  try {
-    const { readFile } = await import('node:fs/promises')
-    const path = await import('node:path')
-    const file = path.join(process.cwd(), 'public', 'forms', 'loan-form-blank.pdf')
-    const content = await readFile(file)
-    return [{
-      filename: 'טופס-אישור-רב.pdf',
-      mimeType: 'application/pdf',
-      contentB64: content.toString('base64'),
-    }]
-  } catch (e) {
-    console.error('[emailRequestIntake] הטופס הריק לא נטען:', e)
-    return undefined
-  }
+  // ⚠️ הטופס הריק אינו מצורף עוד כקובץ אלא מוצע כקישור בגוף ההודעה
+  // (ראו emailIntakeRejectedEmail). הצרופה ניפחה כל דחייה במאות קילובייטים
+  // ונשלחה שוב בכל ניסיון חוזר.
+  //
+  // 🔴 הקישור עצמו *חייב* להישאר: הדחייה הזו נשלחת דווקא כשהטופס חסר, ומי
+  // שהגיש במייל לא עבר בפורטל ואין לו מאיפה להוריד אותו. הודעת "חסר טופס"
+  // בלי דרך להשיגו משאירה את המבקש תקוע.
+  return deliverMail(to, mail.subject, mail.html, undefined, { ...mailFor('igud'), skipLog: true })
 }
 
 // מחזיר true אם המייל זוהה כבקשה וטופל (כדי לדלג על מענה אוטומטי אחר).

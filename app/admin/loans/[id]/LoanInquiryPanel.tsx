@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, Loader2, MessageSquare, AlertCircle, Mail, CheckCircle2 } from 'lucide-react'
+import { Send, Loader2, MessageSquare, AlertCircle, Mail, CheckCircle2, ArrowLeft } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { goToNextPending } from '@/lib/nextPending'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שרשור הבירור עם מבקש ההלוואה.
@@ -36,11 +38,14 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
   onSent?: () => void
 }) {
   const router = useRouter()
+  const supabase = createClient()
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState('')
+  // מוצג בזמן ההשהיה שלפני המעבר לבקשה הבאה — כדי שהקפיצה לא תפתיע.
+  const [advancing, setAdvancing] = useState(false)
 
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -111,6 +116,22 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
       // ה-Server Component כדי שתווית הסטטוס בראש הדף תתעדכן מיד.
       router.refresh()
       onSent?.()
+
+      // ── מעבר לבקשה הממתינה הבאה ──
+      //
+      // ⚠️ שליחת בירור היא סיום הטיפול בבקשה הזו לעת עתה: הכדור אצל
+      // המבקש, ואין מה לעשות בה עד שישיב. אותו דפוס בדיוק כמו אחרי
+      // הכרעה (LoanControls) — כדי שסבב טיפול לא ידרוש חזרה לרשימה.
+      //
+      // ⚠️ ההשהיה מאפשרת לראות שההודעה נוספה לשרשור לפני שהדף מתחלף.
+      // ⚠️ הבקשה עברה כבר ל-'inquiry' ולכן אינה נבחרת שוב כ'ממתין'.
+      setAdvancing(true)
+      setTimeout(() => {
+        void goToNextPending(supabase, router, {
+          table: 'loans', statusColumn: 'status', pendingValues: ['pending'],
+          currentId: loanId, detailBase: '/admin/loans', listPath: '/admin/loans',
+        })
+      }, 1500)
     } catch {
       setErr('שגיאת תקשורת')
     } finally {
@@ -228,9 +249,15 @@ export default function LoanInquiryPanel({ loanId, hasEmail, applicantName, onSe
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </div>
-          <p className="text-[11px] text-slate-400">
-            ההודעה תישלח למייל של המבקש. תשובתו תיכנס לכאן, והבקשה תחזור לרשימת ההמתנה לאישור.
-          </p>
+          {advancing ? (
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-sky-600">
+              <ArrowLeft size={12} /> ההודעה נשלחה — עוברים לבקשה הממתינה הבאה…
+            </p>
+          ) : (
+            <p className="text-[11px] text-slate-400">
+              ההודעה תישלח למייל של המבקש. תשובתו תיכנס לכאן, והבקשה תחזור לרשימת ההמתנה לאישור.
+            </p>
+          )}
         </div>
       )}
     </div>
