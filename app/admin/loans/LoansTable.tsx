@@ -240,7 +240,13 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}><LoanStatusControl loan={loan} /></td>
+                    {/* ⚠️ familyApproved מועבר גם כאן ולא רק בכרטסת: בלעדיו הוא
+                        undefined, ובורר "היקף האישור" היה ממשיך להופיע ברשימה
+                        למשפחה מאושרת. */}
+                    <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}>
+                      <LoanStatusControl loan={loan}
+                        familyApproved={(loan.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status === 'approved'} />
+                    </td>
                     <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         <Link href={`/admin/loans/${loan.id}`}

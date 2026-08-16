@@ -24,7 +24,10 @@ async function getLoans(): Promise<Loan[]> {
     // תקרת "הסכום שאושר" במודל האישור, approved_amount הוא ערך ברירת המחדל בו,
     // ו-status הוא מצב הפתיחה + הגלגול-לאחור בכשל עדכון.
     // ⚠️ id: גם למפתח השורה, גם לניווט, וגם ל-DeleteLoanButton ולקריאות ה-API.
-    .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number)')
+    // ⚠️ eligibility_status: מודל האישור מסתיר את בורר "היקף האישור" כשהמשפחה
+    // כבר מאושרת. בלי השדה הזה הרשימה הייתה מציגה את השאלה תמיד, בעוד הכרטסת
+    // מסתירה אותה — אותו אישור, שתי התנהגויות.
+    .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number, eligibility_status)')
     // 🔴 טיוטות שממתינות לטופס אישור רב אינן בקשות שהוגשו, ולכן אינן
     // מוצגות כאן כלל. הן נוצרות ברגע שהמבקש מוריד את הטופס — לפני שהוא
     // החתים רב והחזיר אותו — וכניסתן לרשימה הייתה מציגה למזכיר תיקים

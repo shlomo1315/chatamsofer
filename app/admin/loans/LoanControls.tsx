@@ -27,7 +27,7 @@ const PILL: Record<string, { label: string; cls: string; icon: typeof Clock }> =
  * הסיבה: בכרטסת ההחלטה היא הפעולה המרכזית, ותפריט נפתח מסתיר אותה מאחורי
  * לחיצה נוספת. ברשימה, לעומת זאת, התפריט חוסך מקום בכל שורה.
  */
-export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: Loan; advance?: boolean; familyApproved?: boolean; variant?: 'pill' | 'buttons' }) {
+export function LoanStatusControl({ loan, advance, familyApproved, variant = 'pill' }: { loan: Loan; advance?: boolean; familyApproved?: boolean; variant?: 'pill' | 'buttons' }) {
   const router = useRouter()
   const supabase = createClient()
   const toast = useToast()
@@ -277,7 +277,13 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
               {/* ── היקף האישור ──
                   ⚠️ שתי אפשרויות מפורשות ולא תיבת סימון: תיבה שאינה
                   מסומנת נקראת כ"טרם החלטתי", ואילו כאן ברירת המחדל היא
-                  החלטה בפני עצמה — לאשר את ההלוואה בלבד. */}
+                  החלטה בפני עצמה — לאשר את ההלוואה בלבד.
+
+                  🔴 אינו מוצג כשהמשפחה כבר מאושרת: אין מה לאשר, והשאלה
+                  "לאשר גם את הייחוס?" מטילה ספק במצב קיים ומאטה כל אישור.
+                  ⚠️ `familyApproved` הגיע כאן מהדף מלכתחילה אך לא חולץ
+                  מה-props כלל, ולכן נשמט בשקט וההיצג היה תמידי. */}
+              {!familyApproved && (
               <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-3">
                 <span className="text-xs font-bold text-slate-600">היקף האישור</span>
 
@@ -303,6 +309,7 @@ export function LoanStatusControl({ loan, advance, variant = 'pill' }: { loan: L
                   </span>
                 </label>
               </div>
+              )}
 
               <div className="flex gap-3 mt-1">
                 <button onClick={confirmApprove} disabled={saving}
