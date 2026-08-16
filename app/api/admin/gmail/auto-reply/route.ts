@@ -1,9 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getGmailClient } from '@/lib/gmail'
 import { existingContactEmail, registrationInviteEmail, type ContactBeneficiary } from '@/lib/emailTemplates'
 import { buildRawEmail, encodeForGmail } from '@/lib/buildEmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,7 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const { fromEmail, fromName, threadId, messageId: gmailMsgId, subject: origSubject } = await request.json()
@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
   const client = getSupabase()
   if (!client) return NextResponse.json({ error: 'server error' }, { status: 500 })
 
-  // מענה אוטומטי נשלח רק על מייל חדש (תחילת שרשור). אם בשרשור כבר קיימת
-  // הודעה שיצאה מאיתנו (SENT) — סימן שכבר ענינו, ואין לשלוח מענה אוטומטי נוסף.
+  // ׳׳¢׳ ׳” ׳׳•׳˜׳•׳׳˜׳™ ׳ ׳©׳׳— ׳¨׳§ ׳¢׳ ׳׳™׳™׳ ׳—׳“׳© (׳×׳—׳™׳׳× ׳©׳¨׳©׳•׳¨). ׳׳ ׳‘׳©׳¨׳©׳•׳¨ ׳›׳‘׳¨ ׳§׳™׳™׳׳×
+  // ׳”׳•׳“׳¢׳” ׳©׳™׳¦׳׳” ׳׳׳™׳×׳ ׳• (SENT) ג€” ׳¡׳™׳׳ ׳©׳›׳‘׳¨ ׳¢׳ ׳™׳ ׳•, ׳•׳׳™׳ ׳׳©׳׳•׳— ׳׳¢׳ ׳” ׳׳•׳˜׳•׳׳˜׳™ ׳ ׳•׳¡׳£.
   let originalMessageId: string | undefined
   if (threadId) {
     try {
@@ -52,13 +52,13 @@ export async function POST(request: NextRequest) {
       if (alreadyReplied) {
         return NextResponse.json({ skipped: true, reason: 'already replied in thread' })
       }
-      // מזהה ה-Message-ID של ההודעה הנכנסת — לצורך שרשור תקין של התשובה
+      // ׳׳–׳”׳” ׳”-Message-ID ׳©׳ ׳”׳”׳•׳“׳¢׳” ׳”׳ ׳›׳ ׳¡׳× ג€” ׳׳¦׳•׳¨׳ ׳©׳¨׳©׳•׳¨ ׳×׳§׳™׳ ׳©׳ ׳”׳×׳©׳•׳‘׳”
       const incoming = msgs.find(m => m.id === gmailMsgId) ?? msgs[0]
       originalMessageId = incoming?.payload?.headers?.find(h => h.name?.toLowerCase() === 'message-id')?.value ?? undefined
     } catch { /* best-effort */ }
   }
 
-  // נפילה אחורה: אם לא הצלחנו לקרוא את השרשור, ננסה לקרוא את ההודעה הבודדת
+  // ׳ ׳₪׳™׳׳” ׳׳—׳•׳¨׳”: ׳׳ ׳׳ ׳”׳¦׳׳—׳ ׳• ׳׳§׳¨׳•׳ ׳׳× ׳”׳©׳¨׳©׳•׳¨, ׳ ׳ ׳¡׳” ׳׳§׳¨׳•׳ ׳׳× ׳”׳”׳•׳“׳¢׳” ׳”׳‘׳•׳“׳“׳×
   if (!originalMessageId) {
     try {
       const gmail = await getGmailClient()
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
   const from = process.env.GMAIL_EMAIL ?? 'office@chasamsofer.info'
   const raw = buildRawEmail({
     from,
-    fromName: 'היכל החתם סופר',
+    fromName: '׳”׳™׳›׳ ׳”׳—׳×׳ ׳¡׳•׳₪׳¨',
     to: fromEmail,
     subject: replySubject,
     html: email.html,

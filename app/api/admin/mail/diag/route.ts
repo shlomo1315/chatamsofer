@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
-// אבחון מצב מערכת המייל: בודק שהטבלאות קיימות, סופר שורות,
-// ומחזיר את ההגדרות הסביבתיות (ללא חשיפת ערכים סודיים).
+// ׳׳‘׳—׳•׳ ׳׳¦׳‘ ׳׳¢׳¨׳›׳× ׳”׳׳™׳™׳: ׳‘׳•׳“׳§ ׳©׳”׳˜׳‘׳׳׳•׳× ׳§׳™׳™׳׳•׳×, ׳¡׳•׳₪׳¨ ׳©׳•׳¨׳•׳×,
+// ׳•׳׳—׳–׳™׳¨ ׳׳× ׳”׳”׳’׳“׳¨׳•׳× ׳”׳¡׳‘׳™׳‘׳×׳™׳•׳× (׳׳׳ ׳—׳©׳™׳₪׳× ׳¢׳¨׳›׳™׳ ׳¡׳•׳“׳™׳™׳).
 export async function GET() {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -27,7 +27,7 @@ export async function GET() {
   const inbound = await admin.from('inbound_emails').select('id', { count: 'exact', head: true })
   const sent = await admin.from('sent_emails').select('id', { count: 'exact', head: true })
 
-  // דגימת השורות האחרונות + אורך הגוף (לאבחון מיילים שמגיעים "ריקים")
+  // ׳“׳’׳™׳׳× ׳”׳©׳•׳¨׳•׳× ׳”׳׳—׳¨׳•׳ ׳•׳× + ׳׳•׳¨׳ ׳”׳’׳•׳£ (׳׳׳‘׳—׳•׳ ׳׳™׳™׳׳™׳ ׳©׳׳’׳™׳¢׳™׳ "׳¨׳™׳§׳™׳")
   const lastInbound = await admin
     .from('inbound_emails')
     .select('from_email,to_email,subject,received_at,is_read,html,plain_text,attachments')
@@ -39,7 +39,7 @@ export async function GET() {
     .order('sent_at', { ascending: false })
     .limit(5)
 
-  // אבחון: ה-payload האחרון שהגיע ל-webhook הנכנס (כדי לאתר היכן נמצא גוף ההודעה)
+  // ׳׳‘׳—׳•׳: ׳”-payload ׳”׳׳—׳¨׳•׳ ׳©׳”׳’׳™׳¢ ׳-webhook ׳”׳ ׳›׳ ׳¡ (׳›׳“׳™ ׳׳׳×׳¨ ׳”׳™׳›׳ ׳ ׳׳¦׳ ׳’׳•׳£ ׳”׳”׳•׳“׳¢׳”)
   let lastPayload: unknown = null
   let lastBodyDiag: unknown = null
   try {

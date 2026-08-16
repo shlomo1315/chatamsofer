@@ -1,6 +1,9 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
-export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid' | 'newsletter'
+// ⚠️ 'mail' נוסף כמחלקה מלאה ולא נשאר "פתוח לכל איש צוות": עד אז מסלולי
+// /api/admin/mail בדקו requireStaff() בלבד, כלומר כל איש צוות פעיל קרא את
+// תיבות כל המחלקות — בלי שהיה מפתח כלשהו לסמן אותו במסך ההרשאות.
+export type SectionKey = 'beneficiaries' | 'lineage' | 'maternity' | 'maternity_cards' | 'loans' | 'distributions' | 'reports' | 'widows' | 'financial_aid' | 'newsletter' | 'mail'
 export type PermissionLevel = 'none' | 'view' | 'edit' | 'add'
 export type UserPermissions = Partial<Record<SectionKey, PermissionLevel>>
 export type EligibilityStatus = 'pending' | 'approved' | 'rejected' | 'review' | 'docs_pending' | 'docs_returned' | 'deep_review'

@@ -1,22 +1,22 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
-// סימון מייל לטיפול-בהמשך במועד מסוים (או ביטול עם followUpAt=null).
-// כשהמועד מגיע, המייל קופץ לראש רשימת הדואר הנכנס.
+// ׳¡׳™׳׳•׳ ׳׳™׳™׳ ׳׳˜׳™׳₪׳•׳-׳‘׳”׳׳©׳ ׳‘׳׳•׳¢׳“ ׳׳¡׳•׳™׳ (׳׳• ׳‘׳™׳˜׳•׳ ׳¢׳ followUpAt=null).
+// ׳›׳©׳”׳׳•׳¢׳“ ׳׳’׳™׳¢, ׳”׳׳™׳™׳ ׳§׳•׳₪׳¥ ׳׳¨׳׳© ׳¨׳©׳™׳׳× ׳”׳“׳•׳׳¨ ׳”׳ ׳›׳ ׳¡.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const { messageId, followUpAt } = await request.json()
-  if (!messageId) return NextResponse.json({ error: 'messageId חסר' }, { status: 400 })
+  if (!messageId) return NextResponse.json({ error: 'messageId ׳—׳¡׳¨' }, { status: 400 })
 
   let value: string | null = null
   if (followUpAt) {
     const t = new Date(followUpAt).getTime()
-    if (!Number.isFinite(t)) return NextResponse.json({ error: 'תאריך לא תקין' }, { status: 400 })
+    if (!Number.isFinite(t)) return NextResponse.json({ error: '׳×׳׳¨׳™׳ ׳׳ ׳×׳§׳™׳' }, { status: 400 })
     value = new Date(t).toISOString()
   }
 

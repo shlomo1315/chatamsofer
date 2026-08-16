@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, requireNonMailStaff, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
+import { requireMailAccess, requireNonMailStaff, unauthorized, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { syncAccount, type SyncResult } from '@/lib/gmailIndexSync'
 
 export const dynamic = 'force-dynamic'
@@ -33,8 +33,8 @@ interface AccountRow {
 }
 
 export async function GET() {
-  // תואם לשאר נתיבי הדואר: איש צוות מזוהה. המסך הזה מציג מצב סנכרון בלבד.
-  const staff = await requireStaff()
+  // תואם לשאר נתיבי הדואר: נדרשת הרשאת דואר. המסך מציג מצב סנכרון של התיבות.
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })

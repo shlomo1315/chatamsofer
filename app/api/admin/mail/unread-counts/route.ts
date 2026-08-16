@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized, allowedMailboxKeys } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, allowedMailboxKeys } from '@/lib/apiAuth'
 import { DEPARTMENTS } from '@/lib/departments'
 
 export const dynamic = 'force-dynamic'
@@ -11,24 +11,24 @@ function getAdminClient() {
   return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } })
 }
 
-// מחזיר { byDepartment: { [deptKey]: count }, total: number }
+// ׳׳—׳–׳™׳¨ { byDepartment: { [deptKey]: count }, total: number }
 export async function GET() {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const admin = getAdminClient()
 
-  // משתמש מוגבל רואה ספירות רק לתיבות שהוקצו לו
+  // ׳׳©׳×׳׳© ׳׳•׳’׳‘׳ ׳¨׳•׳׳” ׳¡׳₪׳™׳¨׳•׳× ׳¨׳§ ׳׳×׳™׳‘׳•׳× ׳©׳”׳•׳§׳¦׳• ׳׳•
   const allowed = allowedMailboxKeys(staff)
-  // ⚠️ תיבות noReply מדולגות לגמרי: הן אוטומטיות ואיש אינו עונה בהן, ואלפי
-  // ההודעות שנצברו בהן ניפחו את "כל המחלקות" והסתירו את מה שבאמת ממתין.
-  // גם חוסך שאילתת count אחת בכל סקר (רץ כל 3 דקות לכל מנהל מחובר).
+  // ג ן¸ ׳×׳™׳‘׳•׳× noReply ׳׳“׳•׳׳’׳•׳× ׳׳’׳׳¨׳™: ׳”׳ ׳׳•׳˜׳•׳׳˜׳™׳•׳× ׳•׳׳™׳© ׳׳™׳ ׳• ׳¢׳•׳ ׳” ׳‘׳”׳, ׳•׳׳׳₪׳™
+  // ׳”׳”׳•׳“׳¢׳•׳× ׳©׳ ׳¦׳‘׳¨׳• ׳‘׳”׳ ׳ ׳™׳₪׳—׳• ׳׳× "׳›׳ ׳”׳׳—׳׳§׳•׳×" ׳•׳”׳¡׳×׳™׳¨׳• ׳׳× ׳׳” ׳©׳‘׳׳׳× ׳׳׳×׳™׳.
+  // ׳’׳ ׳—׳•׳¡׳ ׳©׳׳™׳׳×׳× count ׳׳—׳× ׳‘׳›׳ ׳¡׳§׳¨ (׳¨׳¥ ׳›׳ 3 ׳“׳§׳•׳× ׳׳›׳ ׳׳ ׳”׳ ׳׳—׳•׳‘׳¨).
   const deps = Object.values(DEPARTMENTS)
     .filter(dep => !dep.noReply)
     .filter(dep => allowed === null || allowed.includes(dep.key))
 
-  // ספירה בצד ה-DB לכל תיבה במקביל (head:true — מחזיר count בלבד, בלי להעביר שורות).
-  // מחליף משיכה של כל השורות הלא-נקראות וספירתן ב-JS — חוסך העברת מאות/אלפי שורות בכל קריאה.
+  // ׳¡׳₪׳™׳¨׳” ׳‘׳¦׳“ ׳”-DB ׳׳›׳ ׳×׳™׳‘׳” ׳‘׳׳§׳‘׳™׳ (head:true ג€” ׳׳—׳–׳™׳¨ count ׳‘׳׳‘׳“, ׳‘׳׳™ ׳׳”׳¢׳‘׳™׳¨ ׳©׳•׳¨׳•׳×).
+  // ׳׳—׳׳™׳£ ׳׳©׳™׳›׳” ׳©׳ ׳›׳ ׳”׳©׳•׳¨׳•׳× ׳”׳׳-׳ ׳§׳¨׳׳•׳× ׳•׳¡׳₪׳™׳¨׳×׳ ׳‘-JS ג€” ׳—׳•׳¡׳ ׳”׳¢׳‘׳¨׳× ׳׳׳•׳×/׳׳׳₪׳™ ׳©׳•׳¨׳•׳× ׳‘׳›׳ ׳§׳¨׳™׳׳”.
   const results = await Promise.all(deps.map(async dep => {
     const { count, error } = await admin
       .from('inbound_emails')

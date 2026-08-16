@@ -1,6 +1,6 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 import { DEFAULT_LABELS, type MailLabel } from '@/lib/mailLabels'
 
 export const dynamic = 'force-dynamic'
@@ -23,9 +23,9 @@ async function setSetting(key: string, value: unknown) {
   await adminClient().from('app_settings').upsert({ key, value: JSON.stringify(value), updated_at: new Date().toISOString() })
 }
 
-// GET → { labels, assignments, internalEmails }
+// GET ג†’ { labels, assignments, internalEmails }
 export async function GET() {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const [labels, assignments, internalEmails] = await Promise.all([
@@ -47,7 +47,7 @@ export async function GET() {
 //  { action: 'unassign', messageId, labelId }
 //  { action: 'save_internal_emails', emails: [{name,email}] }
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const body = await request.json()
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ error: 'unknown action' }, { status: 400 })
 }
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-// DEFAULT_LABELS ו-MailLabel מיובאים מ-lib/mailLabels (מקור אמת יחיד).
+// ג”€ג”€ג”€ Types ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
+// DEFAULT_LABELS ׳•-MailLabel ׳׳™׳•׳‘׳׳™׳ ׳-lib/mailLabels (׳׳§׳•׳¨ ׳׳׳× ׳™׳—׳™׳“).
 
 interface InternalEmail { name: string; email: string }

@@ -1,17 +1,17 @@
-import { type NextRequest } from 'next/server'
+﻿import { type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
-// Close connection after 55s — before Vercel's 60s serverless timeout.
+// Close connection after 55s ג€” before Vercel's 60s serverless timeout.
 // EventSource reconnects automatically on the client side.
 const CONN_LIFETIME_MS = 55_000
 const POLL_INTERVAL_MS = 4_000
 const HEARTBEAT_INTERVAL_MS = 20_000
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
             send({ type: 'new', count: newCount })
           }
         } catch {
-          // Gmail not connected or quota — don't crash the stream
+          // Gmail not connected or quota ג€” don't crash the stream
         }
       }
 

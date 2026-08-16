@@ -4,19 +4,14 @@ import { useRouter } from 'next/navigation'
 import { X, Loader2, Check, AlertTriangle, Pencil, Trash2 } from 'lucide-react'
 import { ROLE_LABELS, type UserRole, type Profile, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
 import { DEPARTMENTS } from '@/lib/departments'
+import { ALL_SECTIONS } from '@/lib/permissions'
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
-const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'beneficiaries', label: 'צאצאים' },
-  { key: 'maternity',     label: 'עזר יולדות' },
-  { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
-  { key: 'loans',         label: 'הלוואות' },
-  { key: 'financial_aid', label: 'סיוע רפואי' },
-  { key: 'distributions', label: 'חלוקות' },
-  { key: 'reports',       label: 'דוחות' },
-  { key: 'lineage',       label: 'עץ הדורות' },
-]
+// ⚠️ מגיע מ-lib/permissions ואינו מוגדר כאן: הרשימה המקומית פספסה את
+// widows ו-newsletter, ומחלקה שאינה במסך אינה ניתנת לסימון — ולכן נשארה
+// פתוחה לכולם. מקור אמת אחד מונע את חזרת התקלה עם המחלקה הבאה שתתווסף.
+const SECTIONS = ALL_SECTIONS
 
 const LEVELS: { value: PermissionLevel; label: string; color: string }[] = [
   { value: 'none', label: 'ללא',    color: 'bg-red-100 text-red-600 border-red-300' },
@@ -25,8 +20,12 @@ const LEVELS: { value: PermissionLevel; label: string; color: string }[] = [
   { value: 'add',  label: 'הוספה', color: 'bg-green-100 text-green-700 border-green-200' },
 ]
 
+// ⚠️ 'none' ולא 'view': משתמש חדש נולד סגור, והמנהל פותח לו במפורש את מה
+// שהוא צריך. ברירת מחדל מתירנית כאן הייתה מחזירה בדלת האחורית בדיוק את
+// הדליפה שנסגרה — לחיצת "שמור" על משתמש ותיק הייתה פותחת לו את כל 11
+// המחלקות, כולל תיבות הדואר.
 const defaultPerms = (): UserPermissions =>
-  Object.fromEntries(SECTIONS.map(s => [s.key, 'view' as PermissionLevel])) as UserPermissions
+  Object.fromEntries(SECTIONS.map(s => [s.key, 'none' as PermissionLevel])) as UserPermissions
 
 export default function EditUserButton({ profile }: { profile: Profile }) {
   const router = useRouter()
@@ -241,7 +240,7 @@ export default function EditUserButton({ profile }: { profile: Profile }) {
                     </div>
                     <div className="rounded-xl border border-slate-200 overflow-hidden">
                       {SECTIONS.map((section, idx) => {
-                        const current = permissions[section.key] ?? 'view'
+                        const current = permissions[section.key] ?? 'none'
                         return (
                           <div key={section.key} className={`flex items-center justify-between px-4 py-2.5 ${idx < SECTIONS.length - 1 ? 'border-b border-slate-100' : ''}`}>
                             <span className="text-sm font-medium text-slate-700">{section.label}</span>

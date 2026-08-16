@@ -1,36 +1,36 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { deliverMail, type MailAttachment } from '@/lib/sendMail'
 import { DEPARTMENTS, BRAND_NAME, type DepartmentKey } from '@/lib/departments'
-import { requireStaff, unauthorized, forbidden, allowedMailboxKeys } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized, forbidden, allowedMailboxKeys } from '@/lib/apiAuth'
 import { storagePath } from '@/lib/docUrl'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const { to, subject, body, threadId, department, attachments, templateUrls, scheduledAt } = await request.json()
 
-  // תזמון: חייב להיות תאריך עתידי תקין; אחרת מתעלמים ושולחים מיד
+  // ׳×׳–׳׳•׳: ׳—׳™׳™׳‘ ׳׳”׳™׳•׳× ׳×׳׳¨׳™׳ ׳¢׳×׳™׳“׳™ ׳×׳§׳™׳; ׳׳—׳¨׳× ׳׳×׳¢׳׳׳™׳ ׳•׳©׳•׳׳—׳™׳ ׳׳™׳“
   const scheduledIso = (() => {
     if (!scheduledAt) return undefined
     const t = new Date(scheduledAt).getTime()
     return Number.isFinite(t) && t > Date.now() + 30_000 ? new Date(t).toISOString() : undefined
   })()
 
-  // המייל נשלח מכתובת המחלקה הנבחרת (לא מ-noreply), ותשובות חוזרות אליה.
-  // אכיפה: משתמש מוגבל יכול לשלוח רק מתיבה שהוקצתה לו.
+  // ׳”׳׳™׳™׳ ׳ ׳©׳׳— ׳׳›׳×׳•׳‘׳× ׳”׳׳—׳׳§׳” ׳”׳ ׳‘׳—׳¨׳× (׳׳ ׳-noreply), ׳•׳×׳©׳•׳‘׳•׳× ׳—׳•׳–׳¨׳•׳× ׳׳׳™׳”.
+  // ׳׳›׳™׳₪׳”: ׳׳©׳×׳׳© ׳׳•׳’׳‘׳ ׳™׳›׳•׳ ׳׳©׳׳•׳— ׳¨׳§ ׳׳×׳™׳‘׳” ׳©׳”׳•׳§׳¦׳×׳” ׳׳•.
   const allowed = allowedMailboxKeys(staff)
   let deptKey = (department as DepartmentKey) ?? 'main'
   if (allowed !== null) {
-    if (allowed.length === 0) return forbidden('אין לך תיבת מייל מורשית לשליחה')
+    if (allowed.length === 0) return forbidden('׳׳™׳ ׳׳ ׳×׳™׳‘׳× ׳׳™׳™׳ ׳׳•׳¨׳©׳™׳× ׳׳©׳׳™׳—׳”')
     if (!department) deptKey = allowed[0] as DepartmentKey
-    else if (!allowed.includes(department)) return forbidden('אין הרשאה לשלוח מתיבה זו')
+    else if (!allowed.includes(department)) return forbidden('׳׳™׳ ׳”׳¨׳©׳׳” ׳׳©׳׳•׳— ׳׳×׳™׳‘׳” ׳–׳•')
   }
   const dept = DEPARTMENTS[deptKey] ?? DEPARTMENTS.main
-  const fromName = `${BRAND_NAME} · ${dept.label}`
+  const fromName = `${BRAND_NAME} ֲ· ${dept.label}`
   const fromEmail = dept.email
   const replyTo = dept.email
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
   }
   if (Array.isArray(templateUrls)) {
-    // קבצי טמפלייט מאוחסנים בדלי 'documents' — הורדה דרך service-role כדי שתעבוד גם כשהדלי פרטי
+    // ׳§׳‘׳¦׳™ ׳˜׳׳₪׳׳™׳™׳˜ ׳׳׳•׳—׳¡׳ ׳™׳ ׳‘׳“׳׳™ 'documents' ג€” ׳”׳•׳¨׳“׳” ׳“׳¨׳ service-role ׳›׳“׳™ ׳©׳×׳¢׳‘׳•׳“ ׳’׳ ׳›׳©׳”׳“׳׳™ ׳₪׳¨׳˜׳™
     const docAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { autoRefreshToken: false, persistSession: false } })
     for (const t of templateUrls) {
       if (!t?.url) continue
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   const result = await deliverMail(to, subject, html, allAttachments.length > 0 ? allAttachments : undefined, { replyTo, fromName, fromEmail, skipLog: true, scheduledAt: scheduledIso })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 })
 
-  // תיעוד המייל היוצא ב-Supabase (לא חוסם)
+  // ׳×׳™׳¢׳•׳“ ׳”׳׳™׳™׳ ׳”׳™׳•׳¦׳ ׳‘-Supabase (׳׳ ׳—׳•׳¡׳)
   try {
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

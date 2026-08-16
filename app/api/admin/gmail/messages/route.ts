@@ -1,11 +1,11 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient, parseMessage } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const folder = request.nextUrl.searchParams.get('folder') ?? 'INBOX'
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const combinedQ = [q, deptFilter].filter(Boolean).join(' ')
 
     const gmail = await getGmailClient()
-    // folder=ALL → search all mail (no label filter), used for beneficiary threads
+    // folder=ALL ג†’ search all mail (no label filter), used for beneficiary threads
     const labelIds = folder === 'ALL' ? undefined
       : folder === 'SENT' ? ['SENT']
       : folder === 'INBOX' ? ['INBOX']

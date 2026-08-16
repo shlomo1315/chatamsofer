@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import type { UserPermissions, SectionKey, UserRole } from '@/types'
-import { effectiveLevel } from '@/lib/permissions'
+import { sectionVisible } from '@/lib/permissions'
 import { DEPARTMENTS } from '@/lib/departments'
 
 function LogoBadge() {
@@ -118,18 +118,18 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
   // משתמש "מייל בלבד" — פתח אוטומטית את תפריט המייל
   useEffect(() => { if (mailOnly) setMailOpen(true) }, [mailOnly])
 
-  const canSee = (section?: SectionKey) => {
-    if (!section) return true
-    if (isAdmin) return true
-    // ברירת המחדל ההיסטורית נשמרת: מסך ללא סימון כלל — גלוי.
-    if ((permissions?.[section] ?? 'view') !== 'none') return true
-    // ובנוסף — רצפת התפקיד גוברת על סימון 'none', כדי שמסך שהמשתמש מורשה
-    // לערוך (מזכירות → צאצאים) לא ייעלם מהתפריט.
-    return effectiveLevel(role, permissions, section) !== 'none'
-  }
+  // ⚠️ ההכרעה עברה ל-lib/permissions (sectionVisible) — אותה פונקציה שהשרת
+  // מריץ. קודם הייתה כאן ברירת מחדל מתירנית משלה ("ללא סימון = גלוי"), ולכן
+  // הסרגל הציג מחלקות שהמשתמש מעולם לא הורשה אליהן.
+  const canSee = (section?: SectionKey) => sectionVisible(!!isAdmin, role, permissions, section)
   const topVisible = navTop.filter(i => canSee(i.section))
   const bottomVisible = navBottom.filter(i => canSee(i.section))
   const maternityVisible = maternityChildren.filter(c => canSee(c.section))
+
+  // ⚠️ משתמש "מייל בלבד" רואה את המייל גם ללא סימון מפורש: זו כל מהות
+  // ההגדרה שלו, ובלעדיה נוצר חשבון בלי אף מסך — הוא נכנס ומקבל סרגל ריק.
+  // בכל שאר המקרים נדרש סימון 'mail', בדיוק כמו בשרת.
+  const canSeeMail = canSee('mail') || mailOnly
 
   // ⚠️ מסכי Gmail יושבים תחת /admin/mail, ולכן היו מדליקים גם את "מייל
   // Resend". בתקופת המעבר דווקא ההבחנה בין השניים היא כל העניין.
@@ -233,6 +233,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         </>)}
 
         {/* Mail accordion */}
+        {canSeeMail && (<>
         <div className="pt-0.5">
           <button
             onClick={() => setMailOpen(o => !o)}
@@ -314,6 +315,7 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
             </span>
           </Link>
         </div>
+        </>)}
 
         {/* Section divider: מערכת */}
         {!mailOnly && (<>

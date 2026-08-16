@@ -177,6 +177,30 @@ export async function requireNonMailStaff(allowedRoles?: StaffRole[]): Promise<S
   return staff
 }
 
+/**
+ * גישה לתיבות הדואר.
+ *
+ * ⚠️ עד כה כל מסלולי /api/admin/mail ו-/api/admin/gmail בדקו requireStaff()
+ * בלבד — כלומר *כל* איש צוות פעיל קרא את תיבות כל המחלקות, גם מי שסומן לו
+ * במסך ההרשאות "הלוואות בלבד". לא הייתה שום דרך לצמצם זאת, כי 'mail' כלל
+ * לא היה מפתח במטריצת ההרשאות. הסתרת התפריט בסרגל לא הועילה: קריאת fetch
+ * ישירה מהקונסול החזירה את המיילים במלואם.
+ *
+ * חריג "מייל בלבד": משתמש כזה מוגדר מעצם טיבו לעבודה בתיבות בלבד — הדרישה
+ * לסמן לו גם 'mail' הייתה הופכת כל חשבון קיים כזה לחשבון בלי אף מסך.
+ *
+ * ⚠️ סינון התיבות עצמן נשאר באחריות הקורא (allowedMailboxKeys) — הפונקציה
+ * הזו מכריעה *אם* יש גישה לדואר, לא *לאילו* תיבות.
+ */
+export async function requireMailAccess(action: PermAction = 'view'): Promise<StaffContext | null> {
+  const staff = await requireStaff()
+  if (!staff) return null
+  if (staff.role === 'admin') return staff
+  if (staff.mailOnly) return staff
+  if (!roleAllows(staff.role, staff.permissions, 'mail', action)) return null
+  return staff
+}
+
 export function forbidden(message = 'אין הרשאה לבצע פעולה זו') {
   return NextResponse.json({ error: message }, { status: 403 })
 }

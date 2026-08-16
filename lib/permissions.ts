@@ -8,6 +8,29 @@ import type { SectionKey, PermissionLevel, UserPermissions, UserRole } from '@/t
 // מחיקה דורשת 'edit' — 'add' אינו מספיק.
 export type PermAction = 'view' | 'add' | 'edit' | 'delete'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// רשימת המחלקות — מקור אמת יחיד.
+//
+// ⚠️ למה כאן ולא במסך ההגדרות: הרשימה הייתה משוכפלת ב-EditUserButton
+// וב-AddUserButton, ושתיהן פספסו את widows ו-newsletter. מחלקה שאינה
+// ברשימה אינה ניתנת לסימון — ומה שלא ניתן לסמן נשאר פתוח לכולם. זו הייתה
+// הדליפה בפועל: "הרשאת הלוואות רואה אלמנות וניוזלטר".
+// כל SectionKey חדש חייב להופיע כאן, אחרת הוא נולד דולף.
+// ─────────────────────────────────────────────────────────────────────────────
+export const ALL_SECTIONS: { key: SectionKey; label: string }[] = [
+  { key: 'beneficiaries',   label: 'צאצאים' },
+  { key: 'lineage',         label: 'עץ הדורות' },
+  { key: 'maternity',       label: 'עזר יולדות' },
+  { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
+  { key: 'loans',           label: 'הלוואות' },
+  { key: 'financial_aid',   label: 'סיוע רפואי' },
+  { key: 'distributions',   label: 'חלוקות חגים' },
+  { key: 'widows',          label: 'אלמנות ויתומים' },
+  { key: 'reports',         label: 'דוחות' },
+  { key: 'newsletter',      label: 'ניוזלטר' },
+  { key: 'mail',            label: 'תיבות דואר' },
+]
+
 export function levelAllows(level: PermissionLevel | undefined, action: PermAction): boolean {
   const l = level ?? 'none'
   switch (action) {
@@ -70,4 +93,27 @@ export function roleAllows(
   action: PermAction
 ): boolean {
   return levelAllows(effectiveLevel(role, perms, section), action)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// האם פריט ניווט מוצג למשתמש.
+//
+// ⚠️ הסרגל הכריע קודם לפי `(permissions?.[section] ?? 'view') !== 'none'` —
+// כלומר מחלקה ללא סימון כלל נחשבה *מותרת*. ביחד עם widows/newsletter/mail
+// שכלל לא היו ניתנים לסימון, זו הייתה הדליפה: המשתמש סימן 'הלוואות' והניח
+// שסגר את השאר, בעוד שכל מה שלא נגע בו נשאר פתוח.
+//
+// עכשיו ההכרעה זהה לזו של השרת (requirePermission) — אותה פונקציה בדיוק.
+// פער בין השניים גרוע משני הכיוונים: פריט שמוצג ומחזיר 403, או פריט מוסתר
+// שה-API בכל זאת מגיש למי שיודע לקרוא לו ישירות.
+// ─────────────────────────────────────────────────────────────────────────────
+export function sectionVisible(
+  isAdmin: boolean,
+  role: UserRole | undefined,
+  perms: UserPermissions | undefined,
+  section: SectionKey | undefined
+): boolean {
+  if (isAdmin) return true
+  if (!section) return true // פריט ללא שיוך למחלקה (למשל קישור מערכת) — לא נבדק כאן
+  return roleAllows(role, perms, section, 'view')
 }

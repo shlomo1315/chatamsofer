@@ -1,12 +1,12 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { getGmailClient } from '@/lib/gmail'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
-// בניית כותרת Content-Disposition תקינה לשם קובץ (כולל עברית וסיומת):
-// filename= עם גרסת ASCII בטוחה (בלי גרשיים/תווי בקרה), ובנוסף filename*= לפי RFC 5987
-// עם קידוד UTF-8 מלא — כך הדפדפן שומר את השם המקורי כולל הסיומת.
+// ׳‘׳ ׳™׳™׳× ׳›׳•׳×׳¨׳× Content-Disposition ׳×׳§׳™׳ ׳” ׳׳©׳ ׳§׳•׳‘׳¥ (׳›׳•׳׳ ׳¢׳‘׳¨׳™׳× ׳•׳¡׳™׳•׳׳×):
+// filename= ׳¢׳ ׳’׳¨׳¡׳× ASCII ׳‘׳˜׳•׳—׳” (׳‘׳׳™ ׳’׳¨׳©׳™׳™׳/׳×׳•׳•׳™ ׳‘׳§׳¨׳”), ׳•׳‘׳ ׳•׳¡׳£ filename*= ׳׳₪׳™ RFC 5987
+// ׳¢׳ ׳§׳™׳“׳•׳“ UTF-8 ׳׳׳ ג€” ׳›׳ ׳”׳“׳₪׳“׳₪׳ ׳©׳•׳׳¨ ׳׳× ׳”׳©׳ ׳”׳׳§׳•׳¨׳™ ׳›׳•׳׳ ׳”׳¡׳™׳•׳׳×.
 function contentDisposition(name: string): string {
   const clean = (name || 'attachment').replace(/[\r\n"]/g, '').trim() || 'attachment'
   const ascii = clean.replace(/[^\x20-\x7e]/g, '_')
@@ -15,7 +15,7 @@ function contentDisposition(name: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const { searchParams } = request.nextUrl

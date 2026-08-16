@@ -1,6 +1,6 @@
-import { NextResponse, type NextRequest } from 'next/server'
+﻿import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,11 +12,11 @@ function getClient() {
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const body = await request.json()
-  // user_id נלקח מהסשן המאומת ולא מגוף הבקשה — מניעת ייחוס אירועים למשתמש אחר
+  // user_id ׳ ׳׳§׳— ׳׳”׳¡׳©׳ ׳”׳׳׳•׳׳× ׳•׳׳ ׳׳’׳•׳£ ׳”׳‘׳§׳©׳” ג€” ׳׳ ׳™׳¢׳× ׳™׳™׳—׳•׳¡ ׳׳™׳¨׳•׳¢׳™׳ ׳׳׳©׳×׳׳© ׳׳—׳¨
   const { message_id, thread_id, event_type, label_ids, from_email, subject } = body
   const user_id = staff.userId
 
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('[mail/events] insert failed:', error.message)
-    return NextResponse.json({ error: 'שגיאה בשמירת האירוע' }, { status: 500 })
+    return NextResponse.json({ error: '׳©׳’׳™׳׳” ׳‘׳©׳׳™׳¨׳× ׳”׳׳™׳¨׳•׳¢' }, { status: 500 })
   }
   return NextResponse.json({ ok: true })
 }

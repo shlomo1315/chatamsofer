@@ -1,22 +1,22 @@
-import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, unauthorized, getServiceClient } from '@/lib/apiAuth'
+﻿import { NextResponse, type NextRequest } from 'next/server'
+import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { getGmailClientForToken, sendGmailMessage } from '@/lib/gmail'
 
 export const dynamic = 'force-dynamic'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// פעולות על הודעות — שליחה, סימון נקרא, תוויות, מחיקה.
+// ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
+// ׳₪׳¢׳•׳׳•׳× ׳¢׳ ׳”׳•׳“׳¢׳•׳× ג€” ׳©׳׳™׳—׳”, ׳¡׳™׳׳•׳ ׳ ׳§׳¨׳, ׳×׳•׳•׳™׳•׳×, ׳׳—׳™׳§׳”.
 //
-// 🔴 כל פעולה נכתבת ל-Gmail *וגם* לאינדקס. כתיבה לאינדקס בלבד הייתה נמחקת
-// בסנכרון הבא, שמושך את מצב האמת מ-Gmail — והמשתמש היה רואה את הסימון שלו
-// נעלם בלי הסבר. Gmail הוא מקור האמת, והאינדקס משקף אותו.
+// נ”´ ׳›׳ ׳₪׳¢׳•׳׳” ׳ ׳›׳×׳‘׳× ׳-Gmail *׳•׳’׳* ׳׳׳™׳ ׳“׳§׳¡. ׳›׳×׳™׳‘׳” ׳׳׳™׳ ׳“׳§׳¡ ׳‘׳׳‘׳“ ׳”׳™׳™׳×׳” ׳ ׳׳—׳§׳×
+// ׳‘׳¡׳ ׳›׳¨׳•׳ ׳”׳‘׳, ׳©׳׳•׳©׳ ׳׳× ׳׳¦׳‘ ׳”׳׳׳× ׳-Gmail ג€” ׳•׳”׳׳©׳×׳׳© ׳”׳™׳” ׳¨׳•׳׳” ׳׳× ׳”׳¡׳™׳׳•׳ ׳©׳׳•
+// ׳ ׳¢׳׳ ׳‘׳׳™ ׳”׳¡׳‘׳¨. Gmail ׳”׳•׳ ׳׳§׳•׳¨ ׳”׳׳׳×, ׳•׳”׳׳™׳ ׳“׳§׳¡ ׳׳©׳§׳£ ׳׳•׳×׳•.
 //
-// ⚠️ הסדר קבוע: קודם Gmail, ורק אחרי הצלחה — האינדקס. הפוך היה מייצר מצב
-// שבו המסך מראה "נקרא" בעוד שבטלפון ההודעה עדיין מודגשת.
-// ─────────────────────────────────────────────────────────────────────────────
+// ג ן¸ ׳”׳¡׳“׳¨ ׳§׳‘׳•׳¢: ׳§׳•׳“׳ Gmail, ׳•׳¨׳§ ׳׳—׳¨׳™ ׳”׳¦׳׳—׳” ג€” ׳”׳׳™׳ ׳“׳§׳¡. ׳”׳₪׳•׳ ׳”׳™׳” ׳׳™׳™׳¦׳¨ ׳׳¦׳‘
+// ׳©׳‘׳• ׳”׳׳¡׳ ׳׳¨׳׳” "׳ ׳§׳¨׳" ׳‘׳¢׳•׳“ ׳©׳‘׳˜׳׳₪׳•׳ ׳”׳”׳•׳“׳¢׳” ׳¢׳“׳™׳™׳ ׳׳•׳“׳’׳©׳×.
+// ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 
-/** התווית שמסמנת "לטיפול בהמשך" — נוצרת ב-Gmail בפעם הראשונה. */
-const FOLLOWUP_LABEL = 'לטיפול'
+/** ׳”׳×׳•׳•׳™׳× ׳©׳׳¡׳׳ ׳× "׳׳˜׳™׳₪׳•׳ ׳‘׳”׳׳©׳" ג€” ׳ ׳•׳¦׳¨׳× ׳‘-Gmail ׳‘׳₪׳¢׳ ׳”׳¨׳׳©׳•׳ ׳”. */
+const FOLLOWUP_LABEL = '׳׳˜׳™׳₪׳•׳'
 
 async function accountFor(
   db: NonNullable<ReturnType<typeof getServiceClient>>,
@@ -37,7 +37,7 @@ async function accountFor(
   return (data as { id: string; email: string; refresh_token: string } | null) ?? null
 }
 
-/** מוצא או יוצר תווית ב-Gmail ומחזיר את המזהה שלה. */
+/** ׳׳•׳¦׳ ׳׳• ׳™׳•׳¦׳¨ ׳×׳•׳•׳™׳× ׳‘-Gmail ׳•׳׳—׳–׳™׳¨ ׳׳× ׳”׳׳–׳”׳” ׳©׳׳”. */
 async function labelId(gmail: ReturnType<typeof getGmailClientForToken>, name: string): Promise<string | null> {
   try {
     const list = await gmail.users.labels.list({ userId: 'me' })
@@ -49,7 +49,7 @@ async function labelId(gmail: ReturnType<typeof getGmailClientForToken>, name: s
     })
     return created.data?.id ? String(created.data.id) : null
   } catch (e) {
-    console.error('[inbox/actions] תווית נכשלה:', e instanceof Error ? e.message : e)
+    console.error('[inbox/actions] ׳×׳•׳•׳™׳× ׳ ׳›׳©׳׳”:', e instanceof Error ? e.message : e)
     return null
   }
 }
@@ -64,29 +64,29 @@ interface Body {
   subject?: string
   html?: string
   attachments?: Attachment[]
-  /** התיבה שממנה לשלוח — לבחירת השולח כשיש כמה. */
+  /** ׳”׳×׳™׳‘׳” ׳©׳׳׳ ׳” ׳׳©׳׳•׳— ג€” ׳׳‘׳—׳™׳¨׳× ׳”׳©׳•׳׳— ׳›׳©׳™׳© ׳›׳׳”. */
   accountId?: string
 }
 
-/** כותרת מקודדת ל-UTF-8 — נושא/שם קובץ בעברית מגיע כג'יבריש בלעדיה. */
+/** ׳›׳•׳×׳¨׳× ׳׳§׳•׳“׳“׳× ׳-UTF-8 ג€” ׳ ׳•׳©׳/׳©׳ ׳§׳•׳‘׳¥ ׳‘׳¢׳‘׳¨׳™׳× ׳׳’׳™׳¢ ׳›׳’'׳™׳‘׳¨׳™׳© ׳‘׳׳¢׳“׳™׳”. */
 const enc = (s: string) => `=?UTF-8?B?${Buffer.from(s, 'utf8').toString('base64')}?=`
 
 /**
- * שליחה עם צירופים — multipart/mixed.
+ * ׳©׳׳™׳—׳” ׳¢׳ ׳¦׳™׳¨׳•׳₪׳™׳ ג€” multipart/mixed.
  *
- * ⚠️ נפרד מ-sendGmailMessage כי המבנה שונה לגמרי: הודעה עם צירופים חייבת
- * גבול (boundary) בין החלקים, וניסיון להוסיף צירוף להודעה פשוטה שובר את
- * ה-MIME בשקט — גמייל שולח, והנמען מקבל הודעה ריקה עם זבל.
+ * ג ן¸ ׳ ׳₪׳¨׳“ ׳-sendGmailMessage ׳›׳™ ׳”׳׳‘׳ ׳” ׳©׳•׳ ׳” ׳׳’׳׳¨׳™: ׳”׳•׳“׳¢׳” ׳¢׳ ׳¦׳™׳¨׳•׳₪׳™׳ ׳—׳™׳™׳‘׳×
+ * ׳’׳‘׳•׳ (boundary) ׳‘׳™׳ ׳”׳—׳׳§׳™׳, ׳•׳ ׳™׳¡׳™׳•׳ ׳׳”׳•׳¡׳™׳£ ׳¦׳™׳¨׳•׳£ ׳׳”׳•׳“׳¢׳” ׳₪׳©׳•׳˜׳” ׳©׳•׳‘׳¨ ׳׳×
+ * ׳”-MIME ׳‘׳©׳§׳˜ ג€” ׳’׳׳™׳™׳ ׳©׳•׳׳—, ׳•׳”׳ ׳׳¢׳ ׳׳§׳‘׳ ׳”׳•׳“׳¢׳” ׳¨׳™׳§׳” ׳¢׳ ׳–׳‘׳.
  */
 async function sendWithAttachments(
   gmail: ReturnType<typeof getGmailClientForToken>,
   o: { to: string; subject: string; html: string; from: string; threadId?: string; attachments: Attachment[] },
 ) {
-  // ⚠️ גבול אקראי מספיק כדי שלא יופיע בתוכן. הופעה מקרית שלו הייתה קוטעת
-  // את ההודעה באמצע.
+  // ג ן¸ ׳’׳‘׳•׳ ׳׳§׳¨׳׳™ ׳׳¡׳₪׳™׳§ ׳›׳“׳™ ׳©׳׳ ׳™׳•׳₪׳™׳¢ ׳‘׳×׳•׳›׳. ׳”׳•׳₪׳¢׳” ׳׳§׳¨׳™׳× ׳©׳׳• ׳”׳™׳™׳×׳” ׳§׳•׳˜׳¢׳×
+  // ׳׳× ׳”׳”׳•׳“׳¢׳” ׳‘׳׳׳¦׳¢.
   const boundary = `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
   const parts: string[] = [
-    `From: ${enc('היכל החתם סופר')} <${o.from}>`,
+    `From: ${enc('׳”׳™׳›׳ ׳”׳—׳×׳ ׳¡׳•׳₪׳¨')} <${o.from}>`,
     `To: ${o.to}`,
     `Reply-To: ${o.from}`,
     `Subject: ${enc(o.subject)}`,
@@ -122,16 +122,16 @@ async function sendWithAttachments(
 }
 
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
   const db = getServiceClient()
-  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+  if (!db) return NextResponse.json({ error: '׳©׳’׳™׳׳× ׳©׳¨׳×' }, { status: 500 })
 
   let body: Body
-  try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
+  try { body = await request.json() } catch { return NextResponse.json({ error: '׳‘׳§׳©׳” ׳׳ ׳×׳§׳™׳ ׳”' }, { status: 400 }) }
 
-  // ⚠️ תיבת השליחה נבחרת לפי ההודעה שעליה פועלים, ולא תמיד הראשונה: תשובה
-  // מתיבת עזר יולדות שנשלחה מהמשרד הראשי מגיעה למשפחה מהכתובת הלא נכונה.
+  // ג ן¸ ׳×׳™׳‘׳× ׳”׳©׳׳™׳—׳” ׳ ׳‘׳—׳¨׳× ׳׳₪׳™ ׳”׳”׳•׳“׳¢׳” ׳©׳¢׳׳™׳” ׳₪׳•׳¢׳׳™׳, ׳•׳׳ ׳×׳׳™׳“ ׳”׳¨׳׳©׳•׳ ׳”: ׳×׳©׳•׳‘׳”
+  // ׳׳×׳™׳‘׳× ׳¢׳–׳¨ ׳™׳•׳׳“׳•׳× ׳©׳ ׳©׳׳—׳” ׳׳”׳׳©׳¨׳“ ׳”׳¨׳׳©׳™ ׳׳’׳™׳¢׳” ׳׳׳©׳₪׳—׳” ׳׳”׳›׳×׳•׳‘׳× ׳”׳׳ ׳ ׳›׳•׳ ׳”.
   const acc = body.accountId
     ? await (async () => {
         const { data } = await db.from('gmail_accounts')
@@ -140,23 +140,23 @@ export async function POST(request: NextRequest) {
       })()
     : await accountFor(db, body.messageId)
 
-  if (!acc) return NextResponse.json({ error: 'אין תיבת Gmail פעילה' }, { status: 404 })
+  if (!acc) return NextResponse.json({ error: '׳׳™׳ ׳×׳™׳‘׳× Gmail ׳₪׳¢׳™׳׳”' }, { status: 404 })
   const gmail = getGmailClientForToken(acc.refresh_token)
 
   try {
     switch (body.action) {
-      // ── שליחה ותשובה ──
+      // ג”€ג”€ ׳©׳׳™׳—׳” ׳•׳×׳©׳•׳‘׳” ג”€ג”€
       case 'send':
       case 'reply': {
         const to = String(body.to ?? '').trim()
-        if (!to) return NextResponse.json({ error: 'חסרה כתובת נמען' }, { status: 400 })
-        const subject = String(body.subject ?? '').trim() || '(ללא נושא)'
+        if (!to) return NextResponse.json({ error: '׳—׳¡׳¨׳” ׳›׳×׳•׳‘׳× ׳ ׳׳¢׳' }, { status: 400 })
+        const subject = String(body.subject ?? '').trim() || '(׳׳׳ ׳ ׳•׳©׳)'
         const html = String(body.html ?? '')
         if (!html.replace(/<[^>]*>/g, '').trim()) {
-          return NextResponse.json({ error: 'ההודעה ריקה' }, { status: 400 })
+          return NextResponse.json({ error: '׳”׳”׳•׳“׳¢׳” ׳¨׳™׳§׳”' }, { status: 400 })
         }
-        // ⚠️ threadId בתשובה בלבד: בהודעה חדשה הוא היה משרשר אותה לשיחה
-        // אקראית, וההודעה הייתה נעלמת בתוך שרשור שאינו קשור אליה.
+        // ג ן¸ threadId ׳‘׳×׳©׳•׳‘׳” ׳‘׳׳‘׳“: ׳‘׳”׳•׳“׳¢׳” ׳—׳“׳©׳” ׳”׳•׳ ׳”׳™׳” ׳׳©׳¨׳©׳¨ ׳׳•׳×׳” ׳׳©׳™׳—׳”
+        // ׳׳§׳¨׳׳™׳×, ׳•׳”׳”׳•׳“׳¢׳” ׳”׳™׳™׳×׳” ׳ ׳¢׳׳׳× ׳‘׳×׳•׳ ׳©׳¨׳©׳•׳¨ ׳©׳׳™׳ ׳• ׳§׳©׳•׳¨ ׳׳׳™׳”.
         const atts = Array.isArray(body.attachments) ? body.attachments : []
         if (atts.length) {
           await sendWithAttachments(gmail, {
@@ -172,14 +172,14 @@ export async function POST(request: NextRequest) {
             replyTo: acc.email,
           })
         }
-        console.log(`[inbox/actions] נשלח מ-${acc.email} אל ${to}`)
+        console.log(`[inbox/actions] ׳ ׳©׳׳— ׳-${acc.email} ׳׳ ${to}`)
         return NextResponse.json({ ok: true })
       }
 
-      // ── מצב קריאה ──
+      // ג”€ג”€ ׳׳¦׳‘ ׳§׳¨׳™׳׳” ג”€ג”€
       case 'mark-read':
       case 'mark-unread': {
-        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
         const unread = body.action === 'mark-unread'
         await gmail.users.messages.modify({
           userId: 'me', id: body.messageId,
@@ -190,19 +190,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      // ── לטיפול בהמשך ──
+      // ג”€ג”€ ׳׳˜׳™׳₪׳•׳ ׳‘׳”׳׳©׳ ג”€ג”€
       case 'followup':
       case 'unfollowup': {
-        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
         const id = await labelId(gmail, FOLLOWUP_LABEL)
-        if (!id) return NextResponse.json({ error: 'יצירת התווית נכשלה' }, { status: 500 })
+        if (!id) return NextResponse.json({ error: '׳™׳¦׳™׳¨׳× ׳”׳×׳•׳•׳™׳× ׳ ׳›׳©׳׳”' }, { status: 500 })
         const add = body.action === 'followup'
         await gmail.users.messages.modify({
           userId: 'me', id: body.messageId,
           requestBody: add ? { addLabelIds: [id] } : { removeLabelIds: [id] },
         })
-        // ⚠️ התווית נשמרת גם באינדקס כדי שהסינון במסך יעבוד בלי לפנות
-        // ל-Gmail בכל טעינה.
+        // ג ן¸ ׳”׳×׳•׳•׳™׳× ׳ ׳©׳׳¨׳× ׳’׳ ׳‘׳׳™׳ ׳“׳§׳¡ ׳›׳“׳™ ׳©׳”׳¡׳™׳ ׳•׳ ׳‘׳׳¡׳ ׳™׳¢׳‘׳•׳“ ׳‘׳׳™ ׳׳₪׳ ׳•׳×
+        // ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”.
         const { data: cur } = await db.from('gmail_messages')
           .select('labels').eq('gmail_message_id', body.messageId).maybeSingle()
         const labels = ((cur as { labels?: string[] } | null)?.labels ?? []).filter(l => l !== FOLLOWUP_LABEL)
@@ -211,14 +211,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      // ── מחיקה / ארכוב ──
+      // ג”€ג”€ ׳׳—׳™׳§׳” / ׳׳¨׳›׳•׳‘ ג”€ג”€
       case 'trash':
       case 'archive': {
-        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
         if (body.action === 'trash') {
           await gmail.users.messages.trash({ userId: 'me', id: body.messageId })
-          // ⚠️ מחיקה רכה באינדקס: השיוך לכרטסת והתיעוד שנבנו על ההודעה
-          // נשארים. מחיקה קשה הייתה מוחקת עבודה אנושית.
+          // ג ן¸ ׳׳—׳™׳§׳” ׳¨׳›׳” ׳‘׳׳™׳ ׳“׳§׳¡: ׳”׳©׳™׳•׳ ׳׳›׳¨׳˜׳¡׳× ׳•׳”׳×׳™׳¢׳•׳“ ׳©׳ ׳‘׳ ׳• ׳¢׳ ׳”׳”׳•׳“׳¢׳”
+          // ׳ ׳©׳׳¨׳™׳. ׳׳—׳™׳§׳” ׳§׳©׳” ׳”׳™׳™׳×׳” ׳׳•׳—׳§׳× ׳¢׳‘׳•׳“׳” ׳׳ ׳•׳©׳™׳×.
           await db.from('gmail_messages')
             .update({ deleted_at: new Date().toISOString() }).eq('gmail_message_id', body.messageId)
         } else {
@@ -234,11 +234,11 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json({ error: 'פעולה לא מוכרת' }, { status: 400 })
+        return NextResponse.json({ error: '׳₪׳¢׳•׳׳” ׳׳ ׳׳•׳›׳¨׳×' }, { status: 400 })
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[inbox/actions] ${body.action} נכשל:`, msg)
-    return NextResponse.json({ error: `הפעולה נכשלה: ${msg}` }, { status: 500 })
+    console.error(`[inbox/actions] ${body.action} ׳ ׳›׳©׳:`, msg)
+    return NextResponse.json({ error: `׳”׳₪׳¢׳•׳׳” ׳ ׳›׳©׳׳”: ${msg}` }, { status: 500 })
   }
 }

@@ -4,22 +4,15 @@ import { useRouter } from 'next/navigation'
 import { X, Loader2, UserPlus, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import EmailInput from '@/components/ui/EmailInput'
 import { ROLE_LABELS, type UserRole, type SectionKey, type PermissionLevel, type UserPermissions } from '@/types'
+import { ALL_SECTIONS } from '@/lib/permissions'
 
 interface MailLabel { id: string; name: string; color: string }
 interface MailAccount { name: string; email: string }
 
 const ROLES: UserRole[] = ['admin', 'secretary']
 
-const SECTIONS: { key: SectionKey; label: string }[] = [
-  { key: 'beneficiaries', label: 'צאצאים' },
-  { key: 'maternity',     label: 'עזר יולדות' },
-  { key: 'maternity_cards', label: 'כרטיסי מזון יולדות' },
-  { key: 'loans',         label: 'הלוואות' },
-  { key: 'financial_aid', label: 'סיוע רפואי' },
-  { key: 'distributions', label: 'חלוקות' },
-  { key: 'reports',       label: 'דוחות' },
-  { key: 'lineage',       label: 'עץ הדורות' },
-]
+// ראה ההערה ב-lib/permissions — מקור אמת אחד לרשימת המחלקות.
+const SECTIONS = ALL_SECTIONS
 
 const LEVELS: { value: PermissionLevel; label: string; color: string }[] = [
   { value: 'none', label: 'ללא',    color: 'bg-red-100 text-red-600 border-red-300' },
@@ -28,8 +21,11 @@ const LEVELS: { value: PermissionLevel; label: string; color: string }[] = [
   { value: 'add',  label: 'הוספה', color: 'bg-green-100 text-green-700 border-green-200' },
 ]
 
+// ⚠️ 'none' ולא 'view' — משתמש חדש נולד סגור. ראה ההערה המקבילה
+// ב-EditUserButton: ברירת מחדל מתירנית כאן פותחת אוטומטית 11 מחלקות,
+// כולל תיבות הדואר, לכל משתמש שנוצר.
 const defaultPerms = (): UserPermissions =>
-  Object.fromEntries(SECTIONS.map(s => [s.key, 'view' as PermissionLevel])) as UserPermissions
+  Object.fromEntries(SECTIONS.map(s => [s.key, 'none' as PermissionLevel])) as UserPermissions
 
 export default function AddUserButton() {
   const router = useRouter()
@@ -173,7 +169,7 @@ export default function AddUserButton() {
                     </div>
                     <div className="rounded-xl border border-slate-200 overflow-hidden">
                       {SECTIONS.map((section, idx) => {
-                        const current = permissions[section.key] ?? 'view'
+                        const current = permissions[section.key] ?? 'none'
                         return (
                           <div key={section.key} className={`flex items-center justify-between px-4 py-2.5 ${idx < SECTIONS.length - 1 ? 'border-b border-slate-100' : ''}`}>
                             <span className="text-sm font-medium text-slate-700">{section.label}</span>

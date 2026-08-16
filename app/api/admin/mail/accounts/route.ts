@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requireMailAccess, unauthorized } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // Returns all mail accounts: the main connected Gmail + any profiles with domain email
 export async function GET() {
-  const staff = await requireStaff()
+  const staff = await requireMailAccess()
   if (!staff) return unauthorized()
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -28,7 +28,7 @@ export async function GET() {
   seen.add(mainEmail)
 
   const accounts: { name: string; email: string; isMain: boolean; profileId?: string }[] = [
-    { name: 'משרד ראשי', email: mainEmail, isMain: true },
+    { name: '׳׳©׳¨׳“ ׳¨׳׳©׳™', email: mainEmail, isMain: true },
   ]
 
   for (const p of profiles ?? []) {
