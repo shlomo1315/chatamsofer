@@ -130,6 +130,13 @@ const PORTAL_CONTACTS = [
   { label: 'עזר יולדות',      email: 'y@chasamsofer.info',      color: '#ec4899' },
 ]
 
+// תת-טאבים בכרטיס "בית" — שלושתם עונים על "מי אני במערכת".
+const HOME_TABS = [
+  { key: 'details'  as const, label: 'פרטים אישיים' },
+  { key: 'children' as const, label: 'פרטי הילדים' },
+  { key: 'lineage'  as const, label: 'פרטי הייחוס' },
+]
+
 // ⚠️ הדור המוקדם ביותר שבו ניתן לסמן "זה אני". אין אדם חי שהוא עצמו דור 2־5
 // לחתם סופר זיע״א — סימון כזה הוא תמיד טעות, והוא היה קוטע את השרשרת באמצע
 // ומשייך את הנרשם לאב-קדמון במקום לעצמו.
@@ -1721,6 +1728,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // ⚠️ 'home' הוא ברירת המחדל ולא 'requests': הפרטים והייחוס הם מה
   // שהמשפחה נכנסת לראות, והתזכורות הפעילות חייבות להופיע בכניסה.
   const [dashTab, setDashTab] = useState<'home' | 'requests' | 'docs' | 'contact'>('home')
+
+  // תת-טאבים בתוך "בית" — הפרטים, הילדים והייחוס.
+  // ⚠️ הכרטיס היחיד היה ארוך מדי: פרטים אישיים, רשימת ילדים ושרשרת
+  // דורות זה מתחת לזה דחקו את כל השאר מתחת לקו הקיפול בנייד.
+  const [homeTab, setHomeTab] = useState<'details' | 'children' | 'lineage'>('details')
 
   // בקשת תיקון סדר הדורות — ראו lib/lineageFixRequest.
   const [lineageFixOpen, setLineageFixOpen] = useState(false)
@@ -5244,8 +5256,26 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 </div>
               </div>
 
+              {/* ── תת-טאבים ─────────────────────────────────────────────
+                  ⚠️ בתוך הכרטיס ולא כטאבים ראשיים: שלושתם עונים על "מי
+                  אני במערכת", והפרדתם לטאבים עליונים הייתה מפזרת שאלה
+                  אחת על פני שלושה מסכים. */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1 overflow-x-auto">
+                {HOME_TABS.map(t => (
+                  <button key={t.key} type="button" onClick={() => setHomeTab(t.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors ${
+                      homeTab === t.key
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                    }`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Personal details */}
-              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+              {homeTab === 'details' && (
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
                 {beneficiary.id_number && (
                   <div><EditableText k="dash.field.id" className="text-slate-400 text-xs block" /><span className="text-slate-700" dir="ltr">{beneficiary.id_number}</span></div>
                 )}
@@ -5282,13 +5312,52 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   <div><EditableText k="dash.field.children" className="text-slate-400 text-xs block" /><span className="text-slate-700">{beneficiary.children_count}</span></div>
                 )}
               </div>
+              )}
 
-              {/* ── סדר הדורות ──────────────────────────────────────────
-                  ⚠️ רשימה ממוספרת ולא שרשרת צ'יפים: הדורות הם רצף שהסדר
-                  בו נושא מידע, ושרשרת צ'יפים נקטעת באמצע שורה ומאבדת
-                  אותו. המספור אמיתי — הוא הדור עצמו. */}
-              {Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-slate-100">
+              {/* ── תת-טאב: פרטי הילדים ─────────────────────────────────
+                  ⚠️ ילד שנרשם דרך תיק לידה נושא birth_status. "ממתין
+                  לאישור" מוצג במפורש — משפחה שראתה את הילד ברשימה הניחה
+                  שהלידה כבר אושרה, ולא היא. */}
+              {homeTab === 'children' && (
+                <div className="mt-3">
+                  {Array.isArray(beneficiary.children) && beneficiary.children.length > 0 ? (
+                    <ul className="flex flex-col">
+                      {beneficiary.children.map((ch, i) => (
+                        <li key={i} className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
+                          <span className="w-8 h-8 shrink-0 rounded-lg bg-slate-100 flex items-center justify-center">
+                            <Baby size={15} className="text-slate-500" />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm font-semibold text-slate-800 truncate">
+                              {ch.name || 'ללא שם'}
+                            </span>
+                            <span className="block text-[11px] text-slate-500">
+                              {ch.id_number ? <span dir="ltr">{ch.id_number}</span> : 'ללא ת״ז'}
+                              {ch.birth_date && ` · ${new Date(ch.birth_date).toLocaleDateString('he-IL')}`}
+                            </span>
+                          </span>
+                          {/* ⚠️ birth_status אינו בטיפוס המקומי של הפורטל (הוא
+                              נוסף בכרטסת), אבל כן מגיע מהשרת. */}
+                          {(ch as { birth_status?: string }).birth_status === 'pending' && (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
+                              ממתין לאישור
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-slate-500 py-3">לא רשומים ילדים במערכת.</p>
+                  )}
+                </div>
+              )}
+
+              {/* ── תת-טאב: פרטי הייחוס ─────────────────────────────────
+                  ⚠️ תצוגת עץ ולא רשימה שטוחה: זו אותה צורה שבה הייחוס
+                  מוצג בממשק הניהול, והמשפחה רואה את השרשרת כפי שהמשרד
+                  רואה אותה — כולל היכן היא מסתעפת. */}
+              {homeTab === 'lineage' && Array.isArray(beneficiary.lineage_chain) && beneficiary.lineage_chain.length > 0 && (
+                <div className="mt-3">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <EditableText k="dash.field.lineage" className="text-slate-400 text-xs" />
                     <button type="button" onClick={() => { setLineageFixOpen(o => !o); setLineageFixDone(false) }}
@@ -5297,21 +5366,40 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                     </button>
                   </div>
 
-                  <ol className="flex flex-col">
-                    {beneficiary.lineage_chain.map((c, i) => (
-                      <li key={i} className="flex items-center gap-2.5 py-1.5 border-b border-slate-50 last:border-0">
-                        <span className="w-6 h-6 shrink-0 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center justify-center tabular-nums">
-                          {i + 1}
-                        </span>
-                        <span className="flex-1 min-w-0 text-sm font-semibold text-slate-800">{c.name}</span>
-                        {(c.relation === 'son' || c.relation === 'son_in_law') && (
-                          <span className="text-[11px] text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">
-                            {c.relation === 'son' ? 'בן' : 'חתן'}
+                  {/* ⚠️ עץ יורד עם קו מקשר, כמו בממשק הניהול: הקו הוא מה
+                      שהופך רשימה לשרשרת — בלעדיו הדורות נראים כפריטים
+                      נפרדים ולא כרצף שכל אחד בו נגזר מקודמו.
+                      ⚠️ צבע הדור נלקח מ-GEN_COLORS, אותה פלטה שהעץ בניהול
+                      משתמש בה. פלטה משוכפלת הייתה יוצרת שני עצים שנראים
+                      שונה על אותם נתונים. */}
+                  <div className="relative pr-3">
+                    {beneficiary.lineage_chain.map((c, i, arr) => {
+                      const gen = GEN_COLORS[i % GEN_COLORS.length]
+                      const isLast = i === arr.length - 1
+                      return (
+                        <div key={i} className="relative flex items-start gap-3 pb-3 last:pb-0">
+                          {/* הקו המחבר — נעצר בדור האחרון */}
+                          {!isLast && (
+                            <span className="absolute right-[13px] top-7 bottom-0 w-px bg-slate-200" />
+                          )}
+                          <span className={`relative z-10 w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums border-2 bg-white ${gen.border} ${gen.text}`}>
+                            {i + 1}
                           </span>
-                        )}
-                      </li>
-                    ))}
-                  </ol>
+                          <span className={`flex-1 min-w-0 rounded-xl border px-3 py-2 ${gen.border} ${gen.bg}`}>
+                            <span className={`block text-sm font-bold ${gen.text}`}>{c.name}</span>
+                            {(c.relation === 'son' || c.relation === 'son_in_law') && (
+                              <span className={`block text-[11px] opacity-70 ${gen.text}`}>
+                                {c.relation === 'son' ? 'בן' : 'חתן'} של הדור הקודם
+                              </span>
+                            )}
+                            {isLast && (
+                              <span className="block text-[11px] font-semibold text-slate-500 mt-0.5">— זה אתם</span>
+                            )}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
 
                   {/* ⚠️ בקשה ולא עריכה ישירה: הייחוס קובע זכאות, ושינוי
                       שלו עובר בדיקה במשרד לפני שהוא נכנס לעץ. */}
@@ -5585,86 +5673,11 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 {/* ⚠️ מחלקה סגורה — לא מוזכרת כלל (לא כפתור, לא "תיפתח בקרוב"):
                     בקשת המנהל היא ששום מחלקה סגורה לא תופיע באתר. כשפתוחה,
                     הכפתור מוצג ומסביר על הכפתור אם יש חסם אחר (מצב משפחתי/מסמכים). */}
-                {/* ─────────────────────────────────────────────────────────────
-                    🔴 כפתורי ההגשה מוצגים *רק* למי שהגיע מקישור ייעודי (?action=).
-                    באזור האישי עצמו הם אינם מופיעים כלל.
-
-                    ⚠️ ההגשה נעשית ממחלקה — הקישור מגיע במייל, לכל מחלקה משלה.
-                    האזור האישי מציג את הפרטים ואת מצב הבקשות, ומשם ניתן לבקש
-                    את הקישורים למייל. כך כל בקשה נפתחת מתוך ההקשר שלה, ולא
-                    מרשימת כפתורים כללית שאינה יודעת מי המחלקה הרלוונטית.
-                    ───────────────────────────────────────────────────────── */}
-                {arrivedFor === 'birth' && deptGates.maternity && (() => {
-                  const blocked =
-                    !canRequestBirth ? 'זמין לרשומים במצב משפחתי "נשואים" בלבד'
-                    : isDocsPending ? 'יש להשלים תחילה את המסמכים הנדרשים'
-                    : ''
-                  return (
-                    <button
-                      onClick={goToBirthForm}
-                      disabled={!!blocked}
-                      className={`flex items-center gap-4 rounded-2xl border-2 p-5 text-right shadow-sm group transition-all duration-150 ${
-                        blocked
-                          ? 'bg-slate-50 border-slate-200 opacity-70 cursor-not-allowed'
-                          : 'bg-pink-50 border-pink-200 hover:border-pink-400'
-                      }`}
-                    >
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${blocked ? 'bg-slate-100' : 'bg-pink-100 group-hover:bg-pink-200'}`}>
-                        <Baby size={22} className={blocked ? 'text-slate-400' : 'text-pink-600'} />
-                      </div>
-                      <div className="flex-1">
-                        <p className={`font-semibold ${blocked ? 'text-slate-500' : 'text-slate-900'}`}>בקשת הבראה ליולדת</p>
-                        <p className={`text-xs mt-0.5 ${blocked ? 'text-amber-700 font-medium' : 'text-slate-500'}`}>
-                          {blocked || 'ימי החלמה וכרטיס מזון לאחר לידה'}
-                        </p>
-                      </div>
-                      {!blocked && <ChevronLeft size={18} className="text-slate-300 group-hover:text-pink-400" />}
-                    </button>
-                  )
-                })()}
-
-                {arrivedFor === 'loan' && deptGates.gemach && (
-                  <button
-                    onClick={goToLoanForm}
-                    className="flex items-center gap-4 bg-sky-50 rounded-2xl border-2 border-sky-200 p-5 hover:border-sky-400 transition-all duration-150 text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-sky-200 transition-all duration-150">
-                      <Landmark size={22} className="text-sky-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">בקשת הלוואה</p>
-                      <p className="text-xs text-slate-500 mt-0.5">גמ״ח חתם סופר</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-sky-400" />
-                  </button>
-                )}
-
-                {/* ⚠️ מחליף את כפתורי ההגשה שהוסרו: בלי שורה כזו האזור
-                    האישי נראה כמסך ללא מוצא — הפרטים מוצגים, ואין שום רמז
-                    כיצד מגישים בקשה. הכפתור לקבלת הקישורים יושב בכרטיס
-                    שמעל, וזו ההפניה אליו. */}
-                {!arrivedFor && (
-                  <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                    להגשת בקשה — לחצו על <strong>״קבלת קישור להגשת בקשות במייל״</strong> שלמעלה.
-                    הקישורים נשלחים לכתובת הרשומה, ומשם ניתן להגיש בקשה לכל מחלקה.
-                  </p>
-                )}
-
-                {arrivedFor === 'aid' && deptGates.financial_aid && (
-                  <button
-                    onClick={goToAidForm}
-                    className="flex items-center gap-4 bg-emerald-50 rounded-2xl border-2 border-emerald-200 p-5 hover:border-emerald-400 transition-all duration-150 text-right shadow-sm group"
-                  >
-                    <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 transition-all duration-150">
-                      <HandCoins size={22} className="text-emerald-600" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold text-slate-900">בקשת סיוע רפואי</p>
-                      <p className="text-xs text-slate-500 mt-0.5">סיוע רפואי או כספי</p>
-                    </div>
-                    <ChevronLeft size={18} className="text-slate-300 group-hover:text-emerald-400" />
-                  </button>
-                )}
+                {/* 🔴 אין כאן כפתורי הגשה.
+                    כניסה מקישור ייעודי (?action=) פותחת את הטופס אוטומטית,
+                    ולכן כפתור נוסף רק שכפל את הפעולה — והוא נחת בטאב "מסמכים"
+                    שאינו קשור אליה. ההגשה מהאזור האישי נעשית דרך הקישורים
+                    שנשלחים למייל, לכל מחלקה קישור משלה. */}
 
                 {/* ── רישום לחלוקת חגים ──
                     מוצג רק כשהרישום פתוח בניהול. מי שכבר רשום רואה אישור ולא
