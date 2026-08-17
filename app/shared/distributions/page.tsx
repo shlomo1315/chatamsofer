@@ -287,45 +287,44 @@ function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
 // ── טבלת נרשמים לדף השיתוף — table-fixed + colgroup בפיקסלים ──────────────────
 // ✅ נבנתה מחדש נקי: table-fixed עם רוחב קבוע *מובטח* לכל עמודה (colgroup),
 // whitespace-nowrap + truncate על הטקסטואליות (מלל ארוך נחתך עם title, לא דוחף),
-// ומגלילה אופקית בתוך הכרטיס. 10 עמודות בלבד (בלי אישור/כרטיס/ערוץ/סכום).
+// 🔴 בלי גלילה אופקית כלל — גם לא בתוך הכרטיס. עמודות מאוחדות במקום.
 function SharedRecipientsTable({ rows }: { rows: Recipient[] }) {
   if (!rows.length) return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="text-[12px] border-collapse table-fixed min-w-[1080px] w-full">
-        <colgroup>
-          <col className="w-[150px]" />{/* שם המשפחה */}
-          <col className="w-[95px]" />{/* ת"ז */}
-          <col className="w-[120px]" />{/* בן/בת זוג */}
-          <col className="w-[105px]" />{/* טלפון */}
-          <col className="w-[170px]" />{/* מייל */}
-          <col className="w-[150px]" />{/* כתובת */}
-          <col className="w-[85px]" />{/* עיר */}
-          <col className="w-[50px]" />{/* גיל */}
-          <col className="w-[55px]" />{/* ילדים */}
-          <col className="w-[140px]" />{/* תאריך רישום */}
-        </colgroup>
+    // 🔴 אין גלילה לרוחב. עמודות מאוחדות (שם+זוג, טלפון+מייל, עיר+כתובת),
+    // בדיוק כמו ב-HolidayRecipientsTable — אותה טבלה, אותה התנהגות.
+    <div className="w-full">
+      <table className="w-full table-auto text-[12px] border-collapse">
         <thead className="bg-slate-50 text-slate-500">
-          <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-            <th>שם המשפחה</th><th>ת״ז</th><th>בן/בת זוג</th><th>טלפון</th><th>מייל</th>
-            <th>כתובת</th><th>עיר</th><th>גיל</th><th>ילדים</th><th>תאריך רישום</th>
+          <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+            <th>שם ובן/בת זוג</th><th>ת״ז</th><th>טלפון ומייל</th>
+            <th>עיר וכתובת</th><th className="text-center">גיל · ילדים</th><th>תאריך רישום</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map(r => {
             const b = r.beneficiary
             return (
-              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
-                <td className="font-semibold text-slate-800"><span className="block truncate" title={benName(b)}>{benName(b)}</span></td>
-                <td className="font-mono text-slate-600"><span className="block truncate ltr-num">{b?.id_number ?? '—'}</span></td>
-                <td className="text-slate-600"><span className="block truncate" title={b?.spouse_name ?? undefined}>{b?.spouse_name ?? '—'}</span></td>
-                <td className="font-mono text-slate-600"><span className="block truncate ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</span></td>
-                <td className="text-slate-600"><span className="block truncate" title={b?.email ?? undefined} dir="ltr">{b?.email ?? '—'}</span></td>
-                <td className="text-slate-600"><span className="block truncate" title={b?.address ?? undefined}>{b?.address ?? '—'}</span></td>
-                <td className="text-slate-600"><span className="block truncate" title={b?.city ?? undefined}>{b?.city ?? '—'}</span></td>
-                <td className="text-slate-600 ltr-num">{ageOf(b) ?? '—'}</td>
-                <td className="text-slate-600 ltr-num">{b?.children_count ?? '—'}</td>
-                <td className="text-slate-500 ltr-num text-[11px]">{fmtDateTime(r.registered_at)}</td>
+              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+                <td className="max-w-[190px]">
+                  <div className="truncate font-semibold text-slate-800" title={benName(b)}>{benName(b)}</div>
+                  {b?.spouse_name && <div className="truncate text-[11px] text-slate-500" title={b.spouse_name}>{b.spouse_name}</div>}
+                </td>
+                <td className="font-mono text-slate-600 ltr-num whitespace-nowrap">{b?.id_number ?? '—'}</td>
+                <td className="max-w-[180px]">
+                  <div className="font-mono text-slate-700 ltr-num whitespace-nowrap">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</div>
+                  {b?.email && <div className="truncate text-[11px] text-slate-500 text-right" dir="ltr" title={b.email}>{b.email}</div>}
+                </td>
+                <td className="max-w-[170px]">
+                  <div className="truncate text-slate-700" title={b?.city ?? undefined}>{b?.city ?? '—'}</div>
+                  {b?.address && <div className="truncate text-[11px] text-slate-500" title={b.address}>{b.address}</div>}
+                </td>
+                <td className="text-center whitespace-nowrap">
+                  <span className="text-slate-700 ltr-num">{ageOf(b) ?? '—'}</span>
+                  <span className="text-slate-300 mx-1">·</span>
+                  <span className="text-slate-700 ltr-num">{b?.children_count ?? '—'}</span>
+                </td>
+                <td className="text-slate-500 ltr-num text-[11px] whitespace-nowrap">{fmtDateTime(r.registered_at)}</td>
               </tr>
             )
           })}
@@ -530,8 +529,9 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
             <span className="text-[13px] font-extrabold text-[#6b5d3e]">סיכום לפי בית החלמה</span>
             <span className="text-[11px] text-[#8a7a56]">{byHome.length} בתים · {filtered.length} רשומות</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse min-w-[640px]">
+          {/* ⚠️ בלי overflow-x ובלי min-w: 5 עמודות נכנסות בלי כפייה. */}
+          <div className="w-full">
+            <table className="w-full table-auto text-[12px] border-collapse">
               <thead>
                 <tr className="bg-[#fdfaf3] text-[#8a7a56] text-[11px]">
                   <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">בית החלמה</th>
@@ -588,13 +588,15 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
         {filtered.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-[#8a7a56]">לא נמצאו רשומות</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse min-w-[880px]">
+          // 🔴 בלי overflow-x: 11 עמודות אוחדו ל-7 (שם+ת"ז, עיר+תינוק,
+          // בית החלמה+הגעה, לילות+קבלות).
+          <div className="w-full">
+            <table className="w-full table-auto text-[12px] border-collapse">
               <thead className="bg-[#faf7ef] text-[#8a7a56]">
-                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-[#efe7d4] [&>th:last-child]:border-l-0">
-                  <th>מצב</th><th>שם המשפחה</th><th>ת״ז</th><th>עיר</th>
-                  <th>תאריך לידה</th><th>תינוק</th><th>בית החלמה</th>
-                  <th>הגעה</th><th>לילות</th><th>סכום</th><th>קבלות</th>
+                <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-[#efe7d4] [&>th:last-child]:border-l-0">
+                  <th>מצב</th><th>שם המשפחה</th><th>עיר ותינוק</th>
+                  <th>תאריך לידה</th><th>בית החלמה</th>
+                  <th className="text-center">לילות · קבלות</th><th>סכום</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f4efe2]">
@@ -603,24 +605,36 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
                   const b = r.beneficiary
                   const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'
                   return (
-                    <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-nowrap [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
-                      <td>
+                    <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
+                      <td className="whitespace-nowrap">
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STYLE[s]}`}>
                           {LABEL[s]}
                         </span>
                       </td>
-                      <td className="font-bold text-[#3a3630]">{name}</td>
-                      <td className="text-[#6b5d3e] ltr-num">{b?.id_number ?? '—'}</td>
-                      <td className="text-[#6b5d3e]">{b?.city ?? '—'}</td>
-                      <td className="text-[#6b5d3e] ltr-num">{d(r.birth_date)}</td>
-                      <td className="text-[#6b5d3e]">{r.baby_name || '—'}</td>
-                      <td className="text-[#6b5d3e]">{r.recovery_home || '—'}</td>
-                      <td className="text-[#6b5d3e] ltr-num">{r.recovery_arrived ? d(r.recovery_arrived_at) : '—'}</td>
-                      <td className="text-[#6b5d3e] ltr-num">{r.recovery_nights ?? '—'}</td>
-                      <td className="font-bold text-emerald-700 ltr-num">
+                      <td className="max-w-[170px]">
+                        <div className="truncate font-bold text-[#3a3630]" title={name}>{name}</div>
+                        <div className="text-[11px] text-[#8a7a56] ltr-num">{b?.id_number ?? '—'}</div>
+                      </td>
+                      <td className="max-w-[140px]">
+                        <div className="truncate text-[#6b5d3e]" title={b?.city ?? undefined}>{b?.city ?? '—'}</div>
+                        {r.baby_name && <div className="truncate text-[11px] text-[#8a7a56]" title={r.baby_name}>{r.baby_name}</div>}
+                      </td>
+                      <td className="text-[#6b5d3e] ltr-num whitespace-nowrap">{d(r.birth_date)}</td>
+                      {/* ⚠️ ההגעה מתחת לבית ההחלמה — היא חסרת משמעות בלעדיו. */}
+                      <td className="max-w-[150px]">
+                        <div className="truncate text-[#6b5d3e]" title={r.recovery_home || undefined}>{r.recovery_home || '—'}</div>
+                        {r.recovery_arrived && (
+                          <div className="text-[11px] text-emerald-700 ltr-num">הגיעה {d(r.recovery_arrived_at)}</div>
+                        )}
+                      </td>
+                      <td className="text-center whitespace-nowrap">
+                        <span className="text-[#6b5d3e] ltr-num">{r.recovery_nights ?? '—'}</span>
+                        <span className="text-[#d9cdb0] mx-1">·</span>
+                        <span className="text-[#6b5d3e] ltr-num">{(r.receiptCount ?? 0) || '—'}</span>
+                      </td>
+                      <td className="font-bold text-emerald-700 ltr-num whitespace-nowrap">
                         {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
                       </td>
-                      <td className="text-[#6b5d3e] ltr-num">{(r.receiptCount ?? 0) || '—'}</td>
                     </tr>
                   )
                 })}
