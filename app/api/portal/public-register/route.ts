@@ -15,7 +15,7 @@ import { normalizeLineageNodeName } from '@/lib/lineageNameFormat'
 import { invalidateLineageCache } from '@/lib/lineageSync'
 import { normalizePhone } from '@/lib/phone'
 import { attachOrphanMailToBeneficiary } from '@/lib/legacyMailSync'
-import { getStreets } from '@/lib/govData'
+import { getStreets, isKnownCity } from '@/lib/govData'
 import { registerToOpenDistribution } from '@/lib/holidayDistributions'
 import type { RegisterSource } from '@/lib/distributionSources'
 
@@ -108,6 +108,26 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // כתובת מלאה חובה — עיר, רחוב ומספר בית (הכתובת מגיעה כמחרוזת "רחוב מספר")
   if (!city || !String(city).trim()) {
     return NextResponse.json({ error: 'יש להזין עיר מגורים' }, { status: 400 })
+  }
+
+  // 🔴 העיר חייבת להיות מהמאגר הרשמי של משרד הפנים — בדיוק כמו הרחוב.
+  //
+  // ⚠️ עד כה נבדק כאן רק ש*השדה אינו ריק*, ולכן נשמרו במאגר ערים כמו
+  // "יר", "ירו", "ירוש", "בית ש", "בית שמ" ו-"Jerusalem" — הקלדות
+  // חלקיות שנקטעו באמצע ומילוי אוטומטי של הדפדפן. האירוניה: הרחוב כן
+  // נאכף מול המאגר 20 שורות מכאן, והעיר — שהיא המפתח לרשימת הרחובות —
+  // לא נבדקה כלל.
+  //
+  // ⚠️ חל גם על טופס נדרים (matara.pro) שפונה ישירות ל-API ואינו עובר
+  // את בורר הערים בממשק — שם לא היה שום מסנן.
+  {
+    const adminDb = getAdminClient()
+    if (adminDb && !(await isKnownCity(adminDb, String(city).trim()))) {
+      return NextResponse.json({
+        error: 'יש לבחור עיר מתוך הרשימה. לא ניתן להזין עיר שאינה קיימת.',
+        field: 'city',
+      }, { status: 400 })
+    }
   }
 
   // ⚠️ השתייכות קהילתית — שדה חובה. נאכף בשרת כדי לכסות גם את טופס הנדרים

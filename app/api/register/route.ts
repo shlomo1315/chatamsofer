@@ -100,6 +100,21 @@ export async function POST(request: NextRequest) {
     .eq('email', String(email))
     .maybeSingle()
 
+  // 🔴 אכיפת שם עיר מהמאגר הרשמי — אותה בדיקה כמו ב-public-register.
+  //
+  // ⚠️ המסלול הזה ציבורי ולא היה בו שום אימות עיר, ולכן כל מחרוזת
+  // נשמרה כמו-שהיא. שני מסלולי רישום עם שתי רמות אכיפה = הפרצה נשארת
+  // פתוחה גם אחרי שסוגרים אחד מהם.
+  if (city && String(city).trim()) {
+    const { isKnownCity } = await import('@/lib/govData')
+    if (!(await isKnownCity(adminClient, String(city).trim()))) {
+      return NextResponse.json({
+        error: 'יש לבחור עיר מתוך הרשימה. לא ניתן להזין עיר שאינה קיימת.',
+        field: 'city',
+      }, { status: 400 })
+    }
+  }
+
   if (existingByEmail) {
     return NextResponse.json({ error: 'כתובת אימייל זו כבר רשומה במערכת' }, { status: 409 })
   }

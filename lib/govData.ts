@@ -429,3 +429,47 @@ async function getStreetsUncached(admin: SupabaseClient, city: string): Promise<
     return data.map(r => r.street)
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// אימות שם עיר מול המאגר הרשמי.
+//
+// 🔴 למה זה נחוץ: הרישום אכף שהרחוב יהיה מהרשימה הרשמית, אבל על העיר בדק
+// רק ש"השדה אינו ריק". לכן נשמרו במאגר ערים כמו "יר", "ירו", "ירוש",
+// "בית ש", "בית שמ" ו-"Jerusalem" — הקלדות חלקיות שנקטעו באמצע, ומילוי
+// אוטומטי של הדפדפן באנגלית.
+//
+// ⚠️ ההשוואה מנורמלת (normalizeCityName): גרשים ורווחים כפולים נפוצים
+// בשמות יישובים ("כפר חב"ד", "בני ברק"), והשוואה גולמית הייתה פוסלת שמות
+// תקינים לגמרי.
+//
+// ⚠️ מחזיר true כשהמאגר ריק — נפילה *פתוחה* במכוון. אם הסנכרון מול משרד
+// הפנים נכשל, עדיף לקבל רישום עם עיר לא מאומתת מאשר לחסום את כל ההרשמות
+// במערכת. חסימה גורפת בגלל תקלת צד-שלישי גרועה מרישום אחד לא מדויק.
+// ─────────────────────────────────────────────────────────────────────────────
+let _cityNamesCache: { at: number; set: Set<string> } | null = null
+const CITY_NAMES_TTL = 6 * 60 * 60 * 1000
+
+export async function knownCityNames(admin: SupabaseClient): Promise<Set<string>> {
+  if (_cityNamesCache && Date.now() - _cityNamesCache.at < CITY_NAMES_TTL) {
+    return _cityNamesCache.set
+  }
+  // ⚠️ limit גבוה: יש ~1,300 יישובים, וברירת המחדל של PostgREST (1000)
+  // הייתה קוטעת את הרשימה ופוסלת יישובים אמיתיים בשקט.
+  const { data } = await admin.from('gov_streets').select('city').limit(100000)
+  const set = new Set<string>()
+  for (const r of data ?? []) {
+    const c = normalizeCityName((r as { city: string }).city)
+    if (c) set.add(c)
+  }
+  if (set.size) _cityNamesCache = { at: Date.now(), set }
+  return set
+}
+
+/** האם שם העיר קיים במאגר הרשמי. ראה הערת הפתיחה לגבי נפילה פתוחה. */
+export async function isKnownCity(admin: SupabaseClient, city: string): Promise<boolean> {
+  const want = normalizeCityName(city)
+  if (!want) return false
+  const names = await knownCityNames(admin)
+  if (!names.size) return true   // המאגר ריק/לא סונכרן — לא חוסמים
+  return names.has(want)
+}
