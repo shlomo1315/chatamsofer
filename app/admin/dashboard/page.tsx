@@ -180,6 +180,21 @@ const getStats = unstable_cache(
 // ("₪20,000"), וזה נקרא הפוך בעברית.
 const fmtCur = (n: number) =>
   `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
+
+// 🔴 ההלוואות מתנהלות בדולרים, לא בשקלים — התקרה היא 10,000$ וכל מסכי
+// הגמ"ח (הרשימה, הכרטסת, פורטל הביצוע) מציגים "$" לפני המספר. הדשבורד
+// היה המקום היחיד שהציג את אותו סכום בדיוק כ-"₪", כלומר אותו נתון בשתי
+// מטבעות בשני מסכים — ומספר תקציבי שנקרא במטבע הלא נכון הוא טעות של
+// פי 3.5 בהערכת החשיפה.
+//
+// ⚠️ פונקציה נפרדת ולא שינוי של fmtCur: הקורא השני שלה הוא הצפי התקציבי
+// של חלוקות החגים, שבאמת מתנהל בשקלים. החלפה במקום הייתה מתקנת מספר אחד
+// ושוברת אחר.
+//
+// ⚠️ הסימן לפני המספר, בשונה מהשקל: כך זה נכתב בכל שאר מסכי ההלוואות,
+// ואחידות חשובה כאן יותר מהעדפת הכיווניות בעברית.
+const fmtUsd = (n: number) =>
+  `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)}`
 const fmt = (n: number) => n.toLocaleString('he-IL')
 
 function getGreeting() {
@@ -287,7 +302,7 @@ export default async function DashboardPage() {
         {can('loans') && (
           <KpiCard
             label="הלוואות פעילות"
-            value={fmtCur(s.totalLoanAmount)}
+            value={fmtUsd(s.totalLoanAmount)}
             sub={`${fmt(s.activeLoans)} תיקים פעילים`}
             icon={<Landmark size={18} />}
             color="blue"

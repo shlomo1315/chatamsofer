@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   sanitizeButtons, sanitizeSections, normalizeConfig, buildAutoReplyBody,
-  defaultAutoReplyMap, MAX_BUTTONS, MAX_SECTIONS,
+  defaultAutoReplyMap, activeReplyContent, MAX_BUTTONS, MAX_SECTIONS,
+  type AutoReplySettings,
 } from './autoReplyConfig'
 import { DEPARTMENTS } from './departments'
 
@@ -215,6 +216,100 @@ describe('נרמול ההגדרות', () => {
   })
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// הודעה זמנית — נוסח קצר שיוצא בזמן שהמענה הראשי עדיין נבנה.
+//
+// 🔴 הסיכון המרכזי כאן הוא *שקט*: תיבה שהמנהל חושב שהיא עונה ואינה עונה,
+// או נוסח שנשלח בפועל ואינו זה שהוצג לו במסך.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('בחירת הנוסח הפעיל', () => {
+  const base = (over: Partial<AutoReplySettings> = {}): AutoReplySettings => ({
+    enabled: true, mode: 'full',
+    tempSubject: 'נושא זמני', tempMessage: 'טקסט זמני',
+    subject: 'נושא ראשי', message: 'טקסט ראשי',
+    buttons: [{ label: 'כפתור', url: 'https://x.co' }],
+    sections: [{ title: 'סעיף', text: 'תיאור', buttons: [] }],
+    footnote: 'הערה', weeklyCap: 10, ...over,
+  })
+
+  it('מצב מלא — יוצא הנוסח הראשי על כל חלקיו', () => {
+    const a = activeReplyContent(base({ mode: 'full' }))
+    expect(a.subject).toBe('נושא ראשי')
+    expect(a.message).toBe('טקסט ראשי')
+    expect(a.sections).toHaveLength(1)
+    expect(a.isTemp).toBe(false)
+  })
+
+  it('מצב זמני — יוצא הנוסח הזמני', () => {
+    const a = activeReplyContent(base({ mode: 'temp' }))
+    expect(a.subject).toBe('נושא זמני')
+    expect(a.message).toBe('טקסט זמני')
+    expect(a.isTemp).toBe(true)
+  })
+
+  // 🔴 זו כל התכלית: אפשר להדליק זמני בזמן שהראשי עדיין ריק לגמרי.
+  it('זמני פעיל גם כשהמענה הראשי עדיין לא נכתב', () => {
+    const a = activeReplyContent(base({ mode: 'temp', message: '', subject: '', sections: [] }))
+    expect(a.message).toBe('טקסט זמני')
+    expect(a.isTemp).toBe(true)
+  })
+
+  // ⚠️ ההודעה הזמנית היא "קיבלנו, נחזור אליכם" — כל המידע המפורט שייך לראשי.
+  it('הזמני אינו גורר סעיפים, כפתורים והערת סיום מהראשי', () => {
+    const a = activeReplyContent(base({ mode: 'temp' }))
+    expect(a.buttons).toEqual([])
+    expect(a.sections).toEqual([])
+    expect(a.footnote).toBe('')
+  })
+
+  it('זמני בלי נושא משלו — נופל לנושא הראשי ולא נשלח בלי נושא', () => {
+    const a = activeReplyContent(base({ mode: 'temp', tempSubject: '  ' }))
+    expect(a.subject).toBe('נושא ראשי')
+  })
+
+  // 🔴 מצב חצי-גמור: 'זמני' בלי טקסט. מייל ריק גרוע מהנוסח המלא.
+  it('זמני ריק נופל לנוסח המלא ולא שולח מייל ריק', () => {
+    const a = activeReplyContent(base({ mode: 'temp', tempMessage: '   ' }))
+    expect(a.message).toBe('טקסט ראשי')
+    expect(a.isTemp).toBe(false)
+  })
+
+  it('שני הנוסחים נשמרים במקביל — מעבר בין מצבים אינו מוחק', () => {
+    const s = base({ mode: 'temp' })
+    expect(activeReplyContent(s).message).toBe('טקסט זמני')
+    expect(activeReplyContent({ ...s, mode: 'full' }).message).toBe('טקסט ראשי')
+  })
+})
+
+describe('נרמול המצבים', () => {
+  // 🔴 ההגדרות בפרודקשן נשמרו לפני שהמצבים נוספו ואינן מכילות `mode`.
+  // ברירת מחדל שאינה 'full' הייתה משנה בשקט את המייל שפונים מקבלים.
+  it('הגדרות ישנות בלי mode נקראות כמענה ראשי', () => {
+    const map = normalizeConfig({ gemach: { enabled: true, message: 'נוסח קיים' } })
+    expect(map.gemach?.mode).toBe('full')
+    expect(activeReplyContent(map.gemach!).message).toBe('נוסח קיים')
+  })
+
+  it('mode לא מוכר נופל למענה ראשי', () => {
+    expect(normalizeConfig({ main: { mode: 'bogus' } }).main?.mode).toBe('full')
+  })
+
+  it('mode תקין נשמר', () => {
+    expect(normalizeConfig({ main: { mode: 'temp' } }).main?.mode).toBe('temp')
+    expect(normalizeConfig({ main: { mode: 'off' } }).main?.mode).toBe('off')
+  })
+
+  // ⚠️ מנהל שמחק את ההודעה הזמנית התכוון לכך — שחזור שקט היה מחזיר
+  // לאוויר נוסח שהוא בכוונה הסיר.
+  it('הודעה זמנית שנמחקה במפורש אינה משוחזרת', () => {
+    expect(normalizeConfig({ main: { tempMessage: '' } }).main?.tempMessage).toBe('')
+  })
+
+  it('הודעה זמנית חסרה לגמרי נופלת לברירת המחדל', () => {
+    expect(normalizeConfig({ main: { enabled: true } }).main?.tempMessage.trim()).toBeTruthy()
+  })
+})
+
 describe('ברירות המחדל', () => {
   const defaults = defaultAutoReplyMap()
 
@@ -231,6 +326,18 @@ describe('ברירות המחדל', () => {
   it('האגפים שהיה להם מענה פעיל נשארים פעילים', () => {
     for (const key of ['yerid', 'inbox8', 'gemach', 'igud'] as const) {
       expect(defaults[key]?.enabled, `${key} כבוי אחרי המעבר`).toBe(true)
+    }
+  })
+
+  // ⚠️ כולל את שש התיבות שהוגדרו ידנית (main/yerid/inbox8/gemach/maternity/
+  // igud): הן דורסות את מה שהלולאה בנתה, ובלי פריסת הבסיס הן היו נולדות
+  // בלי הודעה זמנית כלל.
+  it('כל אגף נולד עם הודעה זמנית מוכנה ובמצב מענה ראשי', () => {
+    for (const key of Object.keys(DEPARTMENTS)) {
+      const d = defaults[key as keyof typeof defaults]
+      expect(d?.mode, `mode חסר ב-${key}`).toBe('full')
+      expect(d?.tempSubject.trim(), `נושא זמני חסר ב-${key}`).toBeTruthy()
+      expect(d?.tempMessage.trim(), `הודעה זמנית חסרה ב-${key}`).toBeTruthy()
     }
   })
 

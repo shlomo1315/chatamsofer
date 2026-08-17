@@ -1,10 +1,12 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import {
-  Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail,
+  Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, FileText,
 } from 'lucide-react'
 import { REQUEST_MAILTO_PRESETS, requestMailtoUrl } from '@/lib/autoReplyConfig'
-import type { AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection } from '@/lib/autoReplyConfig'
+import type {
+  AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection, AutoReplyMode,
+} from '@/lib/autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף התשתית של המענה האוטומטי — נוסח, כפתורים וסעיפים לכל תיבה, עם תצוגה
@@ -150,6 +152,19 @@ export default function AutoReplySettings() {
                   <span className="text-xs text-slate-400 truncate hidden sm:inline">{dept.email}</span>
                   <ChevronDown size={16} className={`text-slate-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
+                {/* ⚠️ תווית המצב מוצגת בשורה הסגורה: רשימת התיבות היא המקום
+                    שבו בודקים "מה שולחים כרגע", ובלי התווית היה צריך לפתוח
+                    כל תיבה בנפרד כדי לגלות שהיא על נוסח זמני. */}
+                {s.enabled && s.mode === 'temp' && (
+                  <span className="hidden sm:flex items-center gap-1 shrink-0 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded-full px-2 py-0.5">
+                    <Clock size={10} /> זמני
+                  </span>
+                )}
+                {s.enabled && s.mode === 'off' && (
+                  <span className="hidden sm:flex items-center gap-1 shrink-0 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-300 rounded-full px-2 py-0.5">
+                    <Ban size={10} /> ללא מענה
+                  </span>
+                )}
                 <label className="flex items-center gap-2 shrink-0 cursor-pointer">
                   <span className={`text-xs font-bold ${s.enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
                     {s.enabled ? 'פעיל' : 'כבוי'}
@@ -166,6 +181,62 @@ export default function AutoReplySettings() {
                 <div className="border-t border-slate-100 p-4 flex flex-col lg:flex-row gap-5">
                   {/* ── עריכה ── */}
                   <div className="flex-1 min-w-0 flex flex-col gap-4">
+                    {/* ⚠️ הבורר ראשון: הוא קובע *מה* נשלח, וכל שדות העריכה
+                        שמתחתיו נקראים אחרת לפי הבחירה בו. */}
+                    <ModePicker mode={s.mode} onChange={m => patch(dept.key, { mode: m })} />
+
+                    {/* ── ההודעה הזמנית ── */}
+                    {/* ⚠️ מוצגת תמיד, גם במצב 'מלא': היא נשמרת במקביל ולא
+                        נמחקת במעבר, וזו כל התכלית — לחזור אליה בלחיצה
+                        כשצריך שוב. הסתרתה הייתה מרמזת שהיא אבדה. */}
+                    <details open={s.mode === 'temp'}
+                      className="rounded-xl border border-amber-200 bg-amber-50/40 overflow-hidden">
+                      <summary className="flex items-center gap-2 px-3 py-2.5 cursor-pointer select-none">
+                        <Clock size={14} className="text-amber-600 shrink-0" />
+                        <span className="text-xs font-bold text-amber-900">הודעה זמנית</span>
+                        {s.mode === 'temp' && (
+                          <span className="text-[10px] font-bold text-white bg-amber-500 rounded-full px-2 py-0.5">
+                            נשלחת כעת
+                          </span>
+                        )}
+                      </summary>
+                      <div className="px-3 pb-3 flex flex-col gap-3">
+                        <p className="text-[11px] text-amber-800/80 leading-relaxed">
+                          נוסח קצר לשליחה בינתיים — טקסט בלבד, בלי סעיפים וכפתורים.
+                          נשמר בנפרד מהמענה הראשי ואינו נמחק במעבר ביניהם.
+                        </p>
+                        <Field label="שורת הנושא">
+                          <input value={s.tempSubject}
+                            onChange={e => patch(dept.key, { tempSubject: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white text-sm focus:border-amber-400 outline-none" />
+                        </Field>
+                        <Field label="תוכן ההודעה">
+                          <textarea value={s.tempMessage} rows={4}
+                            onChange={e => patch(dept.key, { tempMessage: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg border border-amber-200 bg-white text-sm leading-relaxed focus:border-amber-400 outline-none resize-y" />
+                        </Field>
+                        {/* 🔴 מצב 'זמני' עם טקסט ריק אינו משתיק את התיבה אלא
+                            נופל לנוסח המלא (activeReplyContent). בלי האזהרה
+                            הזו המנהל היה רואה "זמני" ומקבל מייל אחר לגמרי. */}
+                        {s.mode === 'temp' && !s.tempMessage.trim() && (
+                          <p className="flex items-start gap-1.5 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 rounded-lg px-2.5 py-2 leading-relaxed">
+                            <AlertCircle size={13} className="shrink-0 mt-px" />
+                            ההודעה הזמנית ריקה — עד שיוזן בה טקסט, יישלח המענה הראשי.
+                          </p>
+                        )}
+                      </div>
+                    </details>
+
+                    {/* ── המענה הראשי ── */}
+                    <div className="flex items-center gap-2 border-t border-slate-100 pt-4">
+                      <span className="text-xs font-black text-slate-700">המענה הראשי</span>
+                      {s.mode === 'full' && (
+                        <span className="text-[10px] font-bold text-white bg-emerald-500 rounded-full px-2 py-0.5">
+                          נשלח כעת
+                        </span>
+                      )}
+                    </div>
+
                     <Field label="שורת הנושא">
                       <input value={s.subject} onChange={e => patch(dept.key, { subject: e.target.value })}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
@@ -248,6 +319,45 @@ export default function AutoReplySettings() {
                 </div>
               )}
             </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// בורר מצב המענה.
+//
+// ⚠️ שלושה כפתורים גלויים ולא תפריט נפתח: זו הבחירה שקובעת איזה מייל
+// יוצא לפונים, והיא צריכה להיות קריאה במבט אחד — כולל *מה לא* נבחר.
+// ─────────────────────────────────────────────────────────────────────────────
+const MODES: { key: AutoReplyMode; label: string; hint: string; icon: typeof Clock; active: string }[] = [
+  { key: 'off',  label: 'ללא מענה', hint: 'לא נשלח כלום', icon: Ban,
+    active: 'bg-slate-100 border-slate-400 text-slate-700' },
+  { key: 'temp', label: 'הודעה זמנית', hint: 'נוסח קצר בינתיים', icon: Clock,
+    active: 'bg-amber-50 border-amber-400 text-amber-800' },
+  { key: 'full', label: 'מענה ראשי', hint: 'הנוסח המלא', icon: FileText,
+    active: 'bg-emerald-50 border-emerald-400 text-emerald-800' },
+]
+
+function ModePicker({ mode, onChange }: { mode: AutoReplyMode; onChange: (m: AutoReplyMode) => void }) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-600 mb-1.5">מה נשלח לפונים</label>
+      <div className="grid grid-cols-3 gap-2">
+        {MODES.map(m => {
+          const on = mode === m.key
+          const Icon = m.icon
+          return (
+            <button key={m.key} type="button" onClick={() => onChange(m.key)}
+              aria-pressed={on}
+              className={`flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 transition-colors ${
+                on ? m.active : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+              <Icon size={16} className="shrink-0" />
+              <span className="text-xs font-bold leading-tight text-center">{m.label}</span>
+              <span className="text-[10px] leading-tight text-center opacity-70">{m.hint}</span>
+            </button>
           )
         })}
       </div>

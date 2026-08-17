@@ -124,8 +124,44 @@ export interface AutoReplySection {
   buttons: AutoReplyButton[]
 }
 
+/**
+ * מצב המענה של התיבה.
+ *
+ * 🔴 `temp` קיים כדי שאפשר יהיה להפעיל תיבה *לפני* שהנוסח המלא מוכן.
+ * בלעדיו היו רק שתי אפשרויות: להשאיר את התיבה שותקת עד שכל הסעיפים
+ * והכפתורים נכתבו, או לפרסם נוסח חלקי ולערוך אותו על אנשים חיים. שתיהן
+ * גרועות — הראשונה משאירה פונים בלי אישור קבלה, השנייה שולחת להם מייל
+ * שיודעים שאינו נכון.
+ *
+ * ⚠️ שני הנוסחים נשמרים במקביל תמיד, וזו כל הנקודה: המעבר בין זמני
+ * למלא הוא החלפת מצב, לא כתיבה מחדש. הנוסח המלא נבנה ברקע בלי לגעת
+ * במה שיוצא בפועל, והזמני נשאר שמור אחרי המעבר — למקרה הבא.
+ */
+export type AutoReplyMode = 'off' | 'temp' | 'full'
+
 export interface AutoReplySettings {
+  /**
+   * ⚠️ נשאר כמקור האמת ל"האם התיבה עונה בכלל", ואינו נגזר מ-mode בזמן
+   * קריאה: הגדרות שנשמרו לפני שהמצבים נוספו אינן מכילות `mode`, והפיכת
+   * `enabled` לשדה נגזר הייתה משתיקה כל תיבה פעילה ברגע הפריסה.
+   */
   enabled: boolean
+  /**
+   * איזה נוסח יוצא בפועל כשהתיבה פעילה.
+   * ⚠️ 'off' כאן שקול ל-enabled=false — שניהם נשמרים כדי שכיבוי לא ימחק
+   * את הידיעה איזה נוסח היה פעיל, והדלקה מחדש תחזיר אותו.
+   */
+  mode: AutoReplyMode
+  /** נושא ההודעה הזמנית. */
+  tempSubject: string
+  /**
+   * גוף ההודעה הזמנית — טקסט בלבד.
+   *
+   * ⚠️ בלי סעיפים וכפתורים במכוון: ההודעה הזמנית היא "קיבלנו, נחזור
+   * אליכם". כל המידע המפורט — ההפניות לאגפים והקישורים — שייך לנוסח
+   * המלא, ושכפול המבנה כאן היה יוצר שני מקומות לתחזק את אותו מידע.
+   */
+  tempMessage: string
   subject: string
   /** פסקת פתיחה — לפני הסעיפים. */
   message: string
@@ -137,6 +173,34 @@ export interface AutoReplySettings {
   footnote: string
   /** מכסת מענים שבועית לאותו שולח — הבולם האחרון מפני לולאה. */
   weeklyCap: number
+}
+
+/**
+ * הנוסח שיוצא בפועל — מכריע בין הזמני למלא לפי המצב.
+ *
+ * 🔴 נקודת ההכרעה היחידה. השולח, התצוגה המקדימה ובדיקת "הנוסח ריק"
+ * חייבים לשאול אותה ולא להסיק בעצמם — ברגע ששניים מהם מחליטים בנפרד,
+ * המנהל רואה בתצוגה המקדימה נוסח אחד ופונה מקבל אחר.
+ *
+ * ⚠️ נופל לנוסח המלא כשההודעה הזמנית ריקה: מצב 'temp' בלי טקסט הוא
+ * הגדרה חצי-גמורה, ושליחת מייל ריק גרועה משליחת הנוסח המלא.
+ */
+export function activeReplyContent(s: AutoReplySettings): {
+  subject: string; message: string; buttons: AutoReplyButton[]
+  sections: AutoReplySection[]; footnote: string; isTemp: boolean
+} {
+  if (s.mode === 'temp' && s.tempMessage.trim()) {
+    return {
+      subject: s.tempSubject.trim() || s.subject,
+      message: s.tempMessage,
+      buttons: [], sections: [], footnote: '',
+      isTemp: true,
+    }
+  }
+  return {
+    subject: s.subject, message: s.message, buttons: s.buttons,
+    sections: s.sections, footnote: s.footnote, isTemp: false,
+  }
 }
 
 export type AutoReplyMap = Partial<Record<DepartmentKey, AutoReplySettings>>
@@ -265,10 +329,20 @@ export function defaultAutoReplyMap(): AutoReplyMap {
     `הודעתכם התקבלה במערכת ותטופל בהקדם על ידי הצוות.\n\n` +
     `לפנייה בנושא ספציפי, ניתן לפנות ישירות לאגף הרלוונטי בקישורים שלהלן.`
 
+  // ⚠️ נוסח זמני מוכן לכל תיבה, ולא שדה ריק: המצב הזמני נועד לשימוש
+  // מיידי ("תפעיל בינתיים משהו"), ותיבה שנולדת עם זמני ריק מאלצת לכתוב
+  // נוסח ברגע שבו רוצים רק להדליק.
+  const genericTemp = (label: string) =>
+    `תודה על פנייתכם ל${label} של היכל החתם סופר.\n\n` +
+    `הודעתכם התקבלה במערכת ותטופל בהקדם על ידי הצוות.`
+
   const map: AutoReplyMap = {}
   for (const d of Object.values(DEPARTMENTS)) {
     map[d.key] = {
       enabled: false,
+      mode: 'full',
+      tempSubject: `פנייתכם התקבלה · ${d.label}`,
+      tempMessage: genericTemp(d.label),
       subject: `פנייתכם התקבלה · ${d.label}`,
       message: generic(d.label),
       buttons: [],
@@ -282,6 +356,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
   // ⚠️ מקומות שסומנו "---" בנוסח שנמסר הם קישורים שטרם נמסרו. סעיף בלי
   // קישור מוצג כטקסט בלבד, כדי שלא ייווצר כפתור שמוביל לשום מקום.
   map.main = {
+    ...map.main!,
     enabled: true,
     subject: 'דרכי פנייה לאגפי היכל החתם סופר',
     message:
@@ -344,6 +419,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
 
   // ── התיבות שהיה להן מענה פעיל עד המעבר ──
   map.yerid = {
+    ...map.yerid!,
     enabled: true,
     subject: 'פנייתך התקבלה — היכל החתם סופר · יריד',
     message:
@@ -357,6 +433,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
   }
 
   map.inbox8 = {
+    ...map.inbox8!,
     enabled: true,
     subject: 'הגרלת כרטיסי טיסה — היכל החתם סופר',
     message:
@@ -374,6 +451,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
   }
 
   map.gemach = {
+    ...map.gemach!,
     enabled: true,
     subject: 'פנייתכם התקבלה · גמ"ח',
     message:
@@ -388,6 +466,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
   // ⚠️ תיבת הבירורים של עזר יולדות — אינה תיבת הרשמה. הרישום נעשה בטופס
   // ממוחשב, ולכן המענה מפנה אליו ומבהיר שכאן ניתן מענה לבירורים בלבד.
   map.maternity = {
+    ...map.maternity!,
     enabled: true,
     subject: 'הגעתם לאגף עזר יולדות · היכל החתם סופר',
     message:
@@ -415,6 +494,7 @@ export function defaultAutoReplyMap(): AutoReplyMap {
   // מזוהה את פרטיו וקישורי הגשה חתומים; זה הוסר בכוונה — התיבה מפנה לאגף
   // הנכון, ואינה משמשת להגשת בקשות.
   map.igud = {
+    ...map.igud!,
     enabled: true,
     subject: 'דרכי פנייה לאגפי איגוד הצאצאים',
     message:
@@ -517,9 +597,28 @@ export function normalizeConfig(raw: Record<string, unknown> | null | undefined)
       ? rec.message.slice(0, MAX_MESSAGE_LEN)
       : base.message
 
+    // ⚠️ הגדרות שנשמרו לפני שהמצבים נוספו אינן מכילות `mode`. נפילה
+    // ל-'full' ולא ל-'off': הן נשמרו כשהנוסח המלא היה היחיד שקיים, וזה
+    // מה שיצא מהן עד עכשיו. ברירת מחדל אחרת הייתה משנה בשקט את המייל
+    // שפונים מקבלים, בלי שאיש נגע בהגדרות.
+    const mode: AutoReplyMode =
+      rec.mode === 'temp' || rec.mode === 'off' || rec.mode === 'full'
+        ? rec.mode
+        : 'full'
+
     map[d.key] = {
       // ⚠️ enabled === true בלבד: מחרוזת 'yes' או ערך חסר נקראים ככבוי.
       enabled: rec.enabled === true,
+      mode,
+      tempSubject: typeof rec.tempSubject === 'string' && rec.tempSubject.trim()
+        ? rec.tempSubject.trim().slice(0, 200)
+        : base.tempSubject,
+      // ⚠️ בשונה מ-message: מחרוזת ריקה מפורשת מכובדת ואינה נופלת
+      // לברירת המחדל. מנהל שמחק את ההודעה הזמנית התכוון לכך, ושחזור
+      // שקט של נוסח שהוא מחק היה שולח מייל שהוא בכוונה הסיר.
+      tempMessage: typeof rec.tempMessage === 'string'
+        ? rec.tempMessage.slice(0, MAX_MESSAGE_LEN)
+        : base.tempMessage,
       subject: typeof rec.subject === 'string' && rec.subject.trim()
         ? rec.subject.trim().slice(0, 200)
         : base.subject,

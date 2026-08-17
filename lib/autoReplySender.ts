@@ -3,7 +3,7 @@ import { deliverMail } from './sendMail'
 import { mailFor, DEPARTMENTS, type DepartmentKey } from './departments'
 import { shell } from './emailTemplates'
 import { shouldSkipAutoReply, isAutoSubmittedMail } from './maintenanceReply'
-import { getAutoReplyConfig, buildAutoReplyBody, type AutoReplySettings } from './autoReplyConfig'
+import { getAutoReplyConfig, buildAutoReplyBody, activeReplyContent, type AutoReplySettings } from './autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליחת המענה האוטומטי — נקודת הכניסה היחידה.
@@ -40,17 +40,25 @@ async function underCap(db: SupabaseClient, email: string, cap: number): Promise
   return true
 }
 
-/** בונה את המייל המלא בעיצוב האחיד, עם צבע האגף. */
+/**
+ * בונה את המייל המלא בעיצוב האחיד, עם צבע האגף.
+ *
+ * ⚠️ התוכן נלקח מ-activeReplyContent ולא מהשדות ישירות: התיבה מחזיקה
+ * שני נוסחים (זמני ומלא), והבחירה ביניהם שייכת למקום אחד. התצוגה
+ * המקדימה במסך ההגדרות עוברת דרך אותה פונקציה, ולכן מראה בדיוק את מה
+ * שיישלח.
+ */
 export function renderAutoReply(dept: DepartmentKey, settings: AutoReplySettings) {
   const d = DEPARTMENTS[dept] ?? DEPARTMENTS.main
+  const active = activeReplyContent(settings)
   return {
-    subject: settings.subject,
+    subject: active.subject,
     html: shell({
-      preheader: settings.message.replace(/\s+/g, ' ').slice(0, 90),
+      preheader: active.message.replace(/\s+/g, ' ').slice(0, 90),
       accent: d.color,
       title: 'פנייתכם התקבלה',
       subtitle: `היכל החתם סופר · ${d.label}`,
-      body: buildAutoReplyBody(settings, d.color),
+      body: buildAutoReplyBody(active, d.color),
     }),
   }
 }
@@ -84,8 +92,18 @@ export async function sendAutoReply(
     const config = await getAutoReplyConfig(db)
     const settings = config[dept]
     if (!settings?.enabled) return false
-    if (!settings.message.trim()) {
-      console.warn(`[auto-reply] ${dept} מופעל אך הנוסח ריק — לא נשלח`)
+    // ⚠️ 'off' חוסם גם כשהמתג דלוק: הבורר הוא ההכרעה של המנהל על *מה*
+    // יוצא, ומצב 'off' פירושו "לא לשלוח כלום מהתיבה הזו בינתיים".
+    if (settings.mode === 'off') {
+      console.log(`[auto-reply] דילוג (${dept}): המצב מוגדר 'ללא מענה'`)
+      return false
+    }
+    // ⚠️ נבדק הנוסח *הפעיל* ולא settings.message: במצב זמני הנוסח המלא
+    // עשוי להיות ריק לגמרי (עדיין לא נכתב) — וזה בדיוק המצב שהמנגנון
+    // נועד לשרת. בדיקה על השדה הלא-נכון הייתה משתיקה את מי שהכי צריך.
+    const active = activeReplyContent(settings)
+    if (!active.message.trim()) {
+      console.warn(`[auto-reply] ${dept} מופעל אך הנוסח ${active.isTemp ? 'הזמני' : 'המלא'} ריק — לא נשלח`)
       return false
     }
 
