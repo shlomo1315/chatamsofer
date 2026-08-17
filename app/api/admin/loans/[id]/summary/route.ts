@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
 import { signedDocUrl } from '@/lib/docUrl'
+import { getLegacyLoansFor } from '@/lib/legacyLoans'
 
 // סיכום המשפחה שמאחורי בקשת ההלוואה — כדי שההחלטה תתקבל עם כל התמונה,
 // בלי לצאת מהמסך: פרטים אישיים, ילדים, סדר הדורות, צילומי ת"ז,
@@ -112,6 +113,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     (sum, l) => sum + Number(l.approved_amount ?? l.amount ?? 0), 0,
   )
 
+  // ── הלוואות מהמערכת הקודמת ──
+  //
+  // 🔴 נשלפות לפי ת"ז ולא לפי beneficiary_id: הן קיימות במסד בלי קשר לשאלה
+  // אם המשפחה כבר רשומה כצאצא ומתי נרשמה. כך מוטב שנרשם *אחרי* הייבוא רואה
+  // את ההיסטוריה שלו מיד, בלי שום פעולת שיוך.
+  //
+  // ⚠️ שתי הת"ז — הבעל והאישה: במערכת הקודמת ההלוואה נרשמה לעיתים על שם
+  // האישה, וחיפוש לפי הבעל בלבד היה מחמיץ אותה.
+  //
+  // ⚠️ אינו מעכב את התשובה אם נכשל: זו הרחבה של התמונה, לא ליבה. שגיאה כאן
+  // (למשל לפני שהמיגרציה רצה) לא אמורה להשבית את כל מסך הסיכום.
+  const legacy = await getLegacyLoansFor(db, [b.id_number, b.spouse_id_number])
+    .catch(() => ({ loans: [], count: 0, takenCount: 0, totalApproved: 0, totalTaken: 0 }))
+
   return NextResponse.json({
     beneficiary: {
       id: b.id,
@@ -145,6 +160,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       approvedCount: approved.length,
       totalApproved,
       loans: history.slice(0, 10),
+    },
+    // ⚠️ בלוק נפרד ולא מוזג לתוך loanHistory: אלה רשומות היסטוריות ללא
+    // סטטוס חי ובלי כרטסת לפתוח, ומיזוגן היה מציג אותן כבקשות פעילות.
+    legacyLoans: {
+      count: legacy.count,
+      takenCount: legacy.takenCount,
+      totalApproved: legacy.totalApproved,
+      totalTaken: legacy.totalTaken,
+      loans: legacy.loans.map(l => ({
+        id: l.id,
+        fileNumber: l.file_number,
+        borrowerName: l.borrower_name,
+        approvedAmount: l.approved_amount,
+        // ⚠️ null = אושר ומעולם לא נלקח. הלקוח מבחין בין זה לבין אפס.
+        takenAmount: l.taken_amount,
+        installments: l.installments,
+      })),
     },
   })
 }

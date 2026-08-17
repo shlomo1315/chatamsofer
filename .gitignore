@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+
+# ⚠️ קובצי נתונים לייבוא — מכילים ת"ז, טלפונים ומיילים של מוטבים.
+# הקובץ נקרא מקומית על ידי scripts/import-legacy-loans.mjs ואינו שייך למאגר.
+*.xlsx
+~$*.xlsx

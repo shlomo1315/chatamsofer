@@ -34,6 +34,22 @@ interface Summary {
     totalApproved: number
     loans: { id: string; amount: number; approved_amount?: number | null; status: string; created_at: string }[]
   }
+  /** הלוואות מהמערכת הקודמת, משויכות לפי ת"ז. ראה lib/legacyLoans. */
+  legacyLoans?: {
+    count: number
+    takenCount: number
+    totalApproved: number
+    totalTaken: number
+    loans: {
+      id: string
+      fileNumber: string | null
+      borrowerName: string | null
+      approvedAmount: number | null
+      /** ⚠️ null = אושר ומעולם לא נלקח. אפס = בוצע בסכום אפס. */
+      takenAmount: number | null
+      installments: number | null
+    }[]
+  }
 }
 
 const STATUS_HE: Record<string, string> = {
@@ -76,6 +92,11 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
   if (!data) return null
 
   const { beneficiary: b, children, lineage, idDocs, loanHistory } = data
+  // ⚠️ ברירת מחדל: תשובה מ-API ישן (לפני המיגרציה) אינה כוללת את השדה.
+  const legacy = data.legacyLoans ?? { count: 0, takenCount: 0, totalApproved: 0, totalTaken: 0, loans: [] }
+  // 🔴 "בקשה ראשונה" חייב להביא בחשבון גם את הישנות — אחרת המסך מצהיר
+  // "זו הבקשה הראשונה" למשפחה שכבר לקחה הלוואה במערכת הקודמת.
+  const anyHistory = loanHistory.count > 0 || legacy.count > 0
   const family = [b.familyName, b.husbandName].filter(Boolean).join(' ')
 
   return (
@@ -159,7 +180,7 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
           שכבר קיבלה או ביקשה בעבר. על בקשה ראשונה ההבהוב היה רעש. */}
       {section !== 'family' && (
       <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
-        loanHistory.count > 0 ? 'border-amber-300 animate-soft-attention' : 'border-slate-200'
+        anyHistory ? 'border-amber-300 animate-soft-attention' : 'border-slate-200'
       }`}>
         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -173,9 +194,15 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
           )}
         </div>
 
-        {loanHistory.count === 0 ? (
+        {!anyHistory ? (
           <p className="px-4 py-5 text-center text-sm text-slate-400">
             זו הבקשה הראשונה של המשפחה
+          </p>
+        ) : loanHistory.count === 0 ? (
+          // ⚠️ יש היסטוריה ישנה בלבד — נאמר במפורש, כדי שהמזכיר לא יסיק
+          // מהיעדר בקשות במערכת שזו משפחה חדשה.
+          <p className="px-4 py-3 text-center text-xs text-slate-500">
+            אין בקשות במערכת הנוכחית — ראו הלוואות קודמות למטה
           </p>
         ) : (
           <>
@@ -210,6 +237,72 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
               ))}
             </div>
           </>
+        )}
+
+        {/* ── הלוואות מהמערכת הקודמת ── */}
+        {/* ⚠️ בתוך אותו כרטיס אבל מופרד בקו: מבחינת המזכיר זו אותה שאלה
+            ("מה היה עם המשפחה הזו"), אבל אלה רשומות היסטוריות בלי סטטוס
+            חי ובלי כרטסת לפתוח — ולכן אינן נראות כבקשות פעילות. */}
+        {legacy.count > 0 && (
+          <div className="border-t border-slate-100 bg-slate-50/60">
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">
+                הלוואות במערכת הקודמת
+              </span>
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-extrabold text-slate-700">
+                {legacy.count}
+              </span>
+            </div>
+
+            {/* 🔴 שתי הקוביות שמסבירות את ההבחנה: אושר מול נלקח בפועל.
+                כמעט מחצית מההלוואות ההיסטוריות אושרו ומעולם לא נלקחו,
+                וסכום אחד מאוחד היה מטשטש בדיוק את זה. */}
+            <div className="px-4 pb-2.5 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center">
+                <p className="text-base font-extrabold text-slate-800 leading-none tabular-nums">
+                  {fmtCur(legacy.totalApproved)}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1">אושר · {legacy.count} הלוואות</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center">
+                <p className="text-base font-extrabold text-emerald-800 leading-none tabular-nums">
+                  {fmtCur(legacy.totalTaken)}
+                </p>
+                <p className="text-[10px] text-emerald-700 mt-1">נלקח בפועל · {legacy.takenCount} הלוואות</p>
+              </div>
+            </div>
+
+            <div className="px-4 pb-4 flex flex-col gap-1.5">
+              {legacy.loans.map(l => {
+                // ⚠️ null בלבד = לא נלקח. אפס הוא ערך אמיתי ("בוצע בסכום
+                // אפס") ואינו אותו דבר.
+                const taken = l.takenAmount !== null && l.takenAmount !== undefined
+                return (
+                  <div key={l.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2">
+                    <span className="text-[11px] text-slate-400 tabular-nums flex-shrink-0">
+                      {l.fileNumber ? `תיק ${l.fileNumber}` : '—'}
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <span className="text-xs text-slate-500 tabular-nums">
+                        אושר {fmtCur(Number(l.approvedAmount ?? 0))}
+                      </span>
+                      {taken ? (
+                        <span className="text-xs font-semibold text-emerald-700 tabular-nums">
+                          בוצע {fmtCur(Number(l.takenAmount))}
+                        </span>
+                      ) : (
+                        // 🔴 העובדה שביקשת שתהיה גלויה: אושר ולא נלקח.
+                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                          לא נלקח
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
       </div>
       )}
