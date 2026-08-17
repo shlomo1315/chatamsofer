@@ -33,6 +33,7 @@ import LineageReliabilityPanel from './LineageReliabilityPanel'
 import LineageReliabilityHeaderButton from './LineageReliabilityHeaderButton'
 import SendLineageLinkButton from '../SendLineageLinkButton'
 import BeneficiaryMailThread from './BeneficiaryMailThread'
+import InquiryPanel from './InquiryPanel'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { nodeIsSelf } from '@/lib/beneficiaryNode'
 import { ViewDocButton } from '@/components/ui/DocViewer'
@@ -62,7 +63,7 @@ const SELECT_COLUMNS =
   'phone, phone2, email, email_verified_at, address, city, ' +
   'spouse_name, spouse_id_number, spouse_doc_type, spouse_birth_date, ' +
   'notes, past_benefits, eligibility_status, rejection_reason, rejected_at, ' +
-  'deep_review_reason, is_special, required_docs, ' +
+  'deep_review_reason, is_special, required_docs, docs_notes, ' +
   'lineage_node_id, lineage_chain, lineage_manual, lineage_manual_marks, ' +
   'docs_sent_at, docs_returned_at, lineage_chain_before_fix, lineage_fixed_at, lineage_fix_note, ' +
   'signature'
@@ -935,6 +936,20 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // עץ הדורות — מוסתר לאדם חריג (אינו צאצא, אין לו ייחוס)
         ...(isSpecial ? [] : [{ key: 'lineage', label: 'עץ הדורות', accent: 'violet' as const, icon: <GitBranch size={15} />, content: lineageTab }]),
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
+        // 🔴 חלון אחד לשאלה שנשאלת בכל פנייה: למה דחו, מי דחה, ומה
+        // נכתב למשפחה. המידע היה פזור בארבעה מקומות.
+        { key: 'inquiry', label: 'בירורים והתכתבות', accent: 'rose', icon: <MessageSquare size={15} />, content: (
+          <InquiryPanel beneficiaryId={id} state={{
+            status: beneficiary.eligibility_status,
+            rejectionReason: beneficiary.rejection_reason,
+            rejectedAt: (beneficiary as { rejected_at?: string | null }).rejected_at,
+            rejectedBy: (beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name ?? null,
+            docsNotes: (beneficiary as { docs_notes?: string | null }).docs_notes,
+            requiredDocs: (beneficiary as { required_docs?: string | null }).required_docs,
+            deepReviewReason: (beneficiary as { deep_review_reason?: string | null }).deep_review_reason,
+            lineageFixNote: (beneficiary as { lineage_fix_note?: string | null }).lineage_fix_note,
+          }} />
+        ) },
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
         { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
         ...(beneficiary.email ? [{
