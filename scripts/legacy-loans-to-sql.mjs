@@ -113,12 +113,24 @@ const sql = `-- ייבוא הלוואות מהמערכת הקודמת · ${value
 -- ⚠️ הסכום שבוצע נשמר חיובי (באקסל הוא שלילי — חיוב חשבונאי).
 -- ⚠️ taken_amount = NULL פירושו "אושר ומעולם לא נלקח" (${values.length - takenCount} שורות).
 
+-- ── רשת ביטחון ──
+-- ⚠️ ה-ON CONFLICT למטה נשען על האינדקס הזה. אם המיגרציה רצה חלקית
+-- (למשל הופסקה באמצע), ההרצה הייתה נכשלת ב-42P10. IF NOT EXISTS הופך
+-- את זה לבטוח גם כשהאינדקס כבר קיים.
+create unique index if not exists legacy_loans_file_number_idx
+  on public.legacy_loans (file_number)
+  where file_number is not null;
+
 insert into public.legacy_loans
   (file_number, fund, id_number, borrower_name, address, city, phone, email,
    approved_amount, taken_amount, installments, source_row)
 values
 ${values.join(',\n')}
-on conflict (file_number) do update set
+-- 🔴 תנאי האינדקס חוזר כאן במפורש (where file_number is not null).
+-- האינדקס הייחודי הוא *חלקי*, ו-PostgreSQL אינו מתאים אינדקס חלקי
+-- ל-ON CONFLICT אלא אם התנאי מצוין — אחרת:
+--   42P10: there is no unique or exclusion constraint matching...
+on conflict (file_number) where file_number is not null do update set
   fund            = excluded.fund,
   id_number       = excluded.id_number,
   borrower_name   = excluded.borrower_name,

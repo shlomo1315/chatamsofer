@@ -182,11 +182,18 @@ const CHUNK = 500
 let written = 0
 for (let i = 0; i < toWrite.length; i += CHUNK) {
   const batch = toWrite.slice(i, i + CHUNK)
+  // ⚠️ onConflict מול אינדקס *חלקי* (where file_number is not null):
+  // PostgREST אינו מעביר את תנאי האינדקס, ולכן ההתאמה עלולה להיכשל ב-42P10
+  // בדיוק כמו ב-SQL ידני. אם זה קורה — ראה scripts/legacy-loans-to-sql.mjs,
+  // שמייצר INSERT עם `on conflict (file_number) where file_number is not null`.
   const { error } = await db
     .from('legacy_loans')
     .upsert(batch, { onConflict: 'file_number', ignoreDuplicates: false })
   if (error) {
     console.error(`\nשגיאה במנה ${i / CHUNK + 1}: ${error.message}`)
+    if (String(error.message).includes('ON CONFLICT') || String(error.code) === '42P10') {
+      console.error('→ השתמש ב-scripts/legacy-loans-to-sql.mjs והדבק את הפלט ב-SQL Editor.')
+    }
     process.exit(1)
   }
   written += batch.length
