@@ -149,6 +149,23 @@ th.ltr-num {
 }
 .animate-save-pulse { animation: save-pulse 1.6s ease-out infinite; }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   תג "חזר מבירור" ברשימת ההלוואות.
+
+   ⚠️ הילה פועמת ולא הבהוב של הצבע או השקיפות: התג מכיל טקסט שצריך
+   להיקרא, ושקיפות מתנדנדת הופכת אותו לקשה לקריאה בדיוק ברגע שמסתכלים
+   עליו. ההילה מושכת את העין בלי לגעת בקריאוּת.
+
+   ⚠️ 2 שניות — מהיר מ-soft-attention (3 שניות) כי זה סימן לפעולה
+   שממתינה, ואיטי מ-save-pulse (1.6) כי יכולות להיות כמה שורות כאלה
+   בו-זמנית והמסך היה הופך לרועש.
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes returned-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.5); }
+  50%      { box-shadow: 0 0 0 5px rgba(217, 119, 6, 0); }
+}
+.animate-returned-pulse { animation: returned-pulse 2s ease-out infinite; }
+
 /* כיבוד העדפת המשתמש להפחתת תנועה */
 @media (prefers-reduced-motion: reduce) {
   .animate-ping-slow { animation: none; }
@@ -160,4 +177,6 @@ th.ltr-num {
     animation: none;
     border-color: rgb(252, 211, 77);
   }
+  /* ⚠️ התג עצמו נשאר — הטקסט "חזר מבירור" הוא המידע, לא התנועה. */
+  .animate-returned-pulse { animation: none; }
 }

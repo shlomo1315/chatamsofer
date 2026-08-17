@@ -208,11 +208,27 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                 <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
               ) : visibleRows.map(loan => {
                 const b = loan.beneficiary as BenRef | undefined
+                // 🔴 הבקשה חזרה אלינו: נשלח בירור והמבקש ענה. הסטטוס נשאר
+                // 'inquiry' (במכוון — ראה lib/loanInquiry), ולכן בלי הסימון
+                // הזה השורה נראית ברשימה בדיוק כמו בקשה שממתינים *לו*,
+                // בזמן שהיא דורשת טיפול מיידי.
+                const returned = isReturned(loan)
                 return (
                   <tr key={loan.id}
                     onClick={() => router.push(`/admin/loans/${loan.id}`)}
                     className="even:bg-slate-50/50 hover:bg-indigo-50/50 transition-colors cursor-pointer">
-                    <td className="px-4 py-3.5 align-middle text-right font-medium text-slate-800 whitespace-nowrap">{borrowerName(b)}</td>
+                    <td className="px-4 py-3.5 align-middle text-right font-medium text-slate-800 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span>{borrowerName(b)}</span>
+                        {returned && (
+                          <span title="המבקש השיב לבירור — הבקשה ממתינה לטיפולכם"
+                            className="animate-returned-pulse inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800 flex-shrink-0">
+                            <MessageSquare size={10} className="flex-shrink-0" />
+                            חזר מבירור
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3.5 align-middle text-right text-xs font-mono text-slate-500"><span className="ltr-num">{b?.id_number ?? '—'}</span></td>
                     <td className="px-4 py-3.5 align-middle text-right font-semibold text-slate-900"><span className="ltr-num">{fmtCur(loan.amount)}</span></td>
                     <td className="px-4 py-3.5 align-middle text-right">

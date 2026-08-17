@@ -51,16 +51,33 @@ async function getReplied(): Promise<string[]> {
   // ⚡ אין יותר תלות ברשימת ה-IDs מ-getLoans — הסינון ל"בבירור" נעשה ב-DB דרך
   // join פנימי על ההלוואה (loans!inner). כך שתי השאילתות רצות ב-Promise.all
   // במקבץ אחד במקום בטור, ומחצית מזמן ההמתנה של הדף נחסכת.
-  // ⚠️ created_at לא נשלף אלא רק ממיין: ה-JS קורא רק loan_id+direction, וה-Map
-  // שומר את האחרון בסדר העולה — כלומר את ההודעה האחרונה בשרשור.
+  //
+  // 🔴 מיון *יורד* ולא עולה, ו-Map ששומר את הראשון ולא את האחרון.
+  //
+  // ⚠️ למה זה קריטי: PostgREST קוטע כל select ב-1000 שורות בשקט, בלי שגיאה
+  // ובלי ש-.limit() יעקוף. בסדר עולה הקטיעה מפילה דווקא את ההודעות
+  // *האחרונות* — בדיוק אלה שקובעות מי השיב — ולכן מעל 1000 הודעות בירור
+  // התג "חזר מבירור" היה נעלם מהבקשות החדשות ביותר. בסדר יורד ההודעה
+  // האחרונה של כל שרשור מגיעה ראשונה, והקטיעה מפילה רק היסטוריה ישנה
+  // שאינה משנה את התוצאה.
+  //
+  // ⚠️ לא fetchAllRows כאן במכוון: די בהודעה אחת לכל הלוואה, ושליפת כל
+  // ההיסטוריה בדפים הייתה עבודה מיותרת בכל טעינת דף.
+  //
+  // ⚠️ created_at לא נשלף אלא רק ממיין: ה-JS קורא רק loan_id+direction.
   const { data } = await supabase
     .from('loan_messages')
     .select('loan_id, direction, loans!inner(status)')
     .eq('loans.status', 'inquiry')
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
 
   const last = new Map<string, string>()
-  for (const m of data ?? []) last.set(String(m.loan_id), String(m.direction))
+  // ⚠️ הראשון שנראה לכל הלוואה = האחרון בזמן (המיון יורד). set חוזר היה
+  // דורס אותו בהודעה ישנה יותר והופך את התשובה על פיה.
+  for (const m of data ?? []) {
+    const id = String(m.loan_id)
+    if (!last.has(id)) last.set(id, String(m.direction))
+  }
   return [...last.entries()].filter(([, dir]) => dir === 'applicant').map(([id]) => id)
 }
 
