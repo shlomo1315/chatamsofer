@@ -45,3 +45,5 @@ next-env.d.ts
 # הקובץ נקרא מקומית על ידי scripts/import-legacy-loans.mjs ואינו שייך למאגר.
 *.xlsx
 ~$*.xlsx
+# ⚠️ פלט legacy-loans-to-sql.mjs — אותו PII בדיוק, בצורת INSERT.
+scripts/legacy-loans-import.sql
