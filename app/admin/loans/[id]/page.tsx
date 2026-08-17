@@ -103,8 +103,26 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
     id_wife: 'ת.ז. האישה', id_wife_appx: 'ספח ת.ז. האישה',
   }
   const idDocs = famDocs.filter(d => d.doc_type in ID_LABELS)
+  // ⚠️ ת"ז מול ספח — שתי קבוצות בעלות משקל שונה בתצוגה: הת"ז הן מה
+  // שמסתכלים עליו, הספח הוא אימות משני. הפרדה כאן ולא ב-CSS, כדי שהסדר
+  // (בעל, אישה, ואז הספחים) יהיה קבוע ולא תלוי בסדר ההעלאה למסד.
+  const ID_ORDER = ['id_husband', 'id_wife', 'id_husband_appx', 'id_wife_appx']
+  const byIdOrder = (a: { doc_type: string }, b: { doc_type: string }) =>
+    ID_ORDER.indexOf(a.doc_type) - ID_ORDER.indexOf(b.doc_type)
+  const idPrimary = idDocs.filter(d => !d.doc_type.endsWith('_appx')).sort(byIdOrder)
+  const idAppendix = idDocs.filter(d => d.doc_type.endsWith('_appx')).sort(byIdOrder)
   // ⚠️ מסמכים שאינם ת"ז — טופס אישור רב, אישורים, כל השאר. עד כה סוננו.
-  const otherDocs = famDocs.filter(d => !(d.doc_type in ID_LABELS) && d.doc_type !== 'rabbi_form')
+  //
+  // 🔴 רשימת *חסימה* צרה ולא רשימת היתר: בדיוק כאן ישבה קודם רשימה קשיחה
+  // שהעלימה את טופס אישור הרב (ראה getBeneficiaryDocs). סוג חדש חייב
+  // להופיע מאליו — ולכן חוסמים רק את מה שידוע שאינו שייך.
+  //
+  // 'birth_cert' נוצר מבקשת *לידה* של אותה משפחה ואינו נוגע להלוואה.
+  // הוא הופיע בכרטסת כ"אישור לידה" ונראה כאילו צורף לבקשה הזו.
+  // המסמך אינו נמחק — הוא נשאר בתיק הלידה ובכרטסת המוטב.
+  const NON_LOAN_DOC_TYPES = new Set(['birth_cert'])
+  const otherDocs = famDocs.filter(d =>
+    !(d.doc_type in ID_LABELS) && d.doc_type !== 'rabbi_form' && !NON_LOAN_DOC_TYPES.has(d.doc_type))
   const rabbiDocs = famDocs.filter(d => d.doc_type === 'rabbi_form')
 
   // טופס אישור רב מהשדה הייעודי — אם אינו כבר ברשימת המסמכים
@@ -117,17 +135,44 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
     ...rabbiDocs.map(d => ({ url: d.file_url as string, name: d.file_name || 'טופס אישור רב' })),
   ]
 
-  const docGallery = [
+  // ── "מסמכים נוספים": רשימה אחת משתי מקורות ──
+  //
+  // מה שצורף לבקשה (document_urls) ומה שבתיק המשפחה (otherDocs) הם אותה
+  // קטגוריה מבחינת מי שקורא את התיק. `label` הוא מה שמוצג תחת התמונונת,
+  // `name` הוא שם הקובץ לצורך הורדה וזיהוי סוג.
+  const extraDocs: { url: string; name: string; label: string; addedInInquiry?: boolean }[] = [
     ...(Array.isArray(loan.document_urls)
-      ? loan.document_urls.map((d, i) => ({ url: d.url, name: d.name || `מסמך ${i + 1}` }))
+      ? loan.document_urls.map((d, i) => ({
+          url: d.url,
+          name: d.name || `מסמך ${i + 1}`,
+          label: d.name || `מסמך ${i + 1}`,
+          addedInInquiry: Boolean(d.added_in_inquiry),
+        }))
       : []),
+    ...otherDocs.map(d => ({
+      url: d.file_url as string,
+      name: d.file_name ?? docTypeLabel(d.doc_type),
+      label: docTypeLabel(d.doc_type),
+    })),
+  ]
+
+  const docGallery = [
+    ...extraDocs.map(d => ({ url: d.url, name: d.label })),
     ...rabbiForms,
-    ...otherDocs.map(d => ({ url: d.file_url as string, name: d.file_name ?? docTypeLabel(d.doc_type) })),
-    ...idDocs.map(d => ({
+    // ⚠️ בסדר המוצג (ת"ז ואז ספחים) ולא בסדר המסד: הניווט בחצים חייב
+    // לעקוב אחרי מה שהעין רואה משמאל לימין.
+    ...[...idPrimary, ...idAppendix].map(d => ({
       url: d.file_url as string,
       name: ID_LABELS[d.doc_type] ?? (d.file_name ?? 'מסמך'),
     })),
   ]
+
+  // 🔴 מיקום מסמך בגלריה לפי הכתובת, לא לפי חישוב היסטים ידני. חישוב כזה
+  // (אורך document_urls + rabbiForms + …) חוזר בכל כרטיס ונשבר בשקט בכל
+  // פעם שמשנים את סדר הכרטיסים — קליק פותח מסמך אחר מזה שנלחץ.
+  const galleryIndexOf = (url?: string | null) =>
+    url ? docGallery.findIndex(g => g.url === url) : -1
+  const idIndexOf = (d: { file_url: string | null }) => galleryIndexOf(d.file_url)
 
   const hasAnyDoc = docGallery.length > 0
 
@@ -276,7 +321,7 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                     {rabbiForms.map((d, i) => (
                       <div key={`rf-${i}`} className="flex flex-col gap-1 w-24">
                         <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name} size={96}
-                          gallery={docGallery} index={(Array.isArray(loan.document_urls) ? loan.document_urls.length : 0) + i} />
+                          gallery={docGallery} index={galleryIndexOf(d.url)} />
                         <span className="text-[11px] text-slate-600 truncate" title={d.name}>{d.name}</span>
                         <DownloadDocButton url={d.url} docType="טופס אישור רב" person={borrower} name={d.name} variant="icon" className="self-start" />
                       </div>
@@ -285,57 +330,42 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                 </Card>
               )}
 
-              {Array.isArray(loan.document_urls) && loan.document_urls.length > 0 && (
-                <Card>
-                  {loan.document_urls.length > 1 && (
-                    <p className="text-[11px] text-slate-400 mb-2.5">
-                      לחיצה פותחת את המסמך · מעבר בין מסמכים בחיצי המקלדת או בחצים שבצדדים
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-3">
-                    {loan.document_urls.map((d, i) => (
-                      <div key={i} className="flex flex-col gap-1 w-24">
-                        {/* ⚠️ הגלריה מועברת לכל תמונונת: המציג צריך את *כל*
-                            הרשימה כדי לדעת מה הבא, ואת המיקום כדי לדעת מהיכן
-                            להתחיל. */}
-                        <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name || `מסמך ${i + 1}`} size={96}
-                          gallery={docGallery} index={i} />
-                        <span className="text-[11px] text-slate-600 truncate" title={d.name || ''}>{d.name || `מסמך ${i + 1}`}</span>
-                        {/* ⚠️ תווית למסמך שלא הגיע עם הבקשה המקורית אלא
-                            הושלם בבירור — כדי שלא ייראה כאילו היה שם מלכתחילה. */}
-                        {d.added_in_inquiry && (
-                          <span className="inline-block rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 leading-tight text-center">
-                            הושלם בתהליך הבירור
-                          </span>
-                        )}
-                        <DownloadDocButton url={d.url} docType={(d.name || `מסמך ${i + 1}`).replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name || d.url} variant="icon" className="self-start" />
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-
-              {/* ⚠️ מסמכים נוספים שהמבקש העלה — עד כה סוננו החוצה לגמרי
-                  על ידי רשימת סוגים קשיחה. */}
-              {otherDocs.length > 0 && (
+              {/* 🔴 כרטיס אחד לכל המסמכים הנוספים.
+                  עד כה היו כאן *שני* כרטיסים נפרדים: מה שצורף לבקשה
+                  (loan.document_urls) ומה שבתיק המשפחה (otherDocs). מסמך
+                  שהושלם בבירור נחת בראשון ונראה מנותק מ"מסמכים נוספים"
+                  שמתחתיו — אותה קטגוריה בעיני המזכיר, בשני מקומות במסך.
+                  ⚠️ התווית "הושלם בתהליך הבירור" היא שמבחינה, לא הכרטיס. */}
+              {extraDocs.length > 0 && (
                 <Card>
                   <div className="flex items-center gap-2 text-amber-600 mb-3">
                     <FileText size={16} />
                     <span className="text-xs font-semibold text-slate-500 uppercase">מסמכים נוספים</span>
                   </div>
+                  {extraDocs.length > 1 && (
+                    <p className="text-[11px] text-slate-400 mb-2.5">
+                      לחיצה פותחת את המסמך · מעבר בין מסמכים בחיצי המקלדת או בחצים שבצדדים
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-3">
-                    {otherDocs.map((d, i) => {
-                      const name = d.file_name ?? docTypeLabel(d.doc_type)
-                      return (
-                        <div key={`od-${i}`} className="flex flex-col gap-1 w-24">
-                          <DocThumb href={docViewUrl(d.file_url as string)} rawUrl={d.file_url as string} name={name} size={96}
-                            gallery={docGallery}
-                            index={(Array.isArray(loan.document_urls) ? loan.document_urls.length : 0) + rabbiForms.length + i} />
-                          <span className="text-[11px] text-slate-600 truncate" title={name}>{docTypeLabel(d.doc_type)}</span>
-                          <DownloadDocButton url={d.file_url as string} docType={docTypeLabel(d.doc_type)} person={borrower} name={name} variant="icon" className="self-start" />
-                        </div>
-                      )
-                    })}
+                    {extraDocs.map((d, i) => (
+                      <div key={`ex-${i}`} className="flex flex-col gap-1 w-24">
+                        {/* ⚠️ הגלריה מועברת לכל תמונונת: המציג צריך את *כל*
+                            הרשימה כדי לדעת מה הבא, ואת המיקום כדי לדעת מהיכן
+                            להתחיל. */}
+                        <DocThumb href={docViewUrl(d.url)} rawUrl={d.url} name={d.name} size={96}
+                          gallery={docGallery} index={galleryIndexOf(d.url)} />
+                        <span className="text-[11px] text-slate-600 truncate" title={d.name}>{d.label}</span>
+                        {/* ⚠️ תווית למסמך שלא הגיע עם הבקשה המקורית אלא
+                            הושלם בבירור — כדי שלא ייראה כאילו היה שם מלכתחילה. */}
+                        {d.addedInInquiry && (
+                          <span className="inline-block rounded-full bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[9px] font-bold text-amber-800 leading-tight text-center">
+                            הושלם בתהליך הבירור
+                          </span>
+                        )}
+                        <DownloadDocButton url={d.url} docType={d.label.replace(/\.[^.\s]+$/, '')} person={borrower} name={d.name} variant="icon" className="self-start" />
+                      </div>
+                    ))}
                   </div>
                 </Card>
               )}
@@ -348,11 +378,30 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                   </div>
                   {/* ⚠️ כל צילומי הת"ז, כולל הספחים וכולל קובץ שני לאותו סוג:
                       עד כה הוצגו שני כרטיסים בלבד (בעל/אישה) והשאר נשלפו
-                      מהמסד רק כדי להיעלם. */}
-                  <div className="grid grid-cols-2 gap-4 max-w-2xl">
-                    {idDocs.map((d, i) => (
+                      מהמסד רק כדי להיעלם.
+
+                      🔴 שורה אחת בלי גלילה. עד כה grid-cols-2 נתן לספח את
+                      אותו רוחב כמו לת"ז, וארבעה מסמכים ירדו לשתי שורות של
+                      כרטיסים ענקיים — המזכיר גלל כדי לראות ת"ז מול ספח.
+                      עכשיו הת"ז מקבלות את המקום (flex-[2]) והספחים חצי
+                      ממנו (flex-[1]), הכל בשורה אחת.
+
+                      ⚠️ `flex-wrap` עם רצפת רוחב ולא שורה נוקשה: המקרה
+                      הרגיל (2 ת"ז + 2 ספחים) נכנס לשורה אחת כמבוקש, אבל
+                      משפחה שהעלתה שני עמודים לכל ת"ז תקבל ירידת שורה
+                      במקום ארבעה כרטיסים דחוסים עד כדי חוסר קריאות. */}
+                  <div className="flex flex-wrap items-stretch gap-3">
+                    {idPrimary.map((d, i) => (
                       <LoanDocCard key={`id-${i}`} label={ID_LABELS[d.doc_type] ?? d.doc_type}
-                        person={borrower} url={d.file_url ?? undefined} />
+                        person={borrower} url={d.file_url ?? undefined}
+                        gallery={docGallery} index={idIndexOf(d)}
+                        className="flex-[2] min-w-[180px]" imgClass="h-64" />
+                    ))}
+                    {idAppendix.map((d, i) => (
+                      <LoanDocCard key={`ax-${i}`} label={ID_LABELS[d.doc_type] ?? d.doc_type}
+                        person={borrower} url={d.file_url ?? undefined}
+                        gallery={docGallery} index={idIndexOf(d)}
+                        className="flex-[1] min-w-[110px]" imgClass="h-64" />
                     ))}
                   </div>
                 </Card>
@@ -387,27 +436,36 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
   )
 }
 
-function LoanDocCard({ label, url, person }: { label: string; url?: string; person?: string }) {
+// כרטיס מסמך זהות. `className` קובע את הרוחב היחסי בשורה (ת"ז מול ספח),
+// `imgClass` את הגובה — כדי שכל הכרטיסים יתיישרו לאותו קו בסיס.
+function LoanDocCard({ label, url, person, gallery, index, className = '', imgClass = 'h-72' }: {
+  label: string; url?: string; person?: string
+  gallery?: { url: string; name?: string | null }[]
+  index?: number
+  className?: string
+  imgClass?: string
+}) {
   if (!url) return null
-  const href = docViewUrl(url)
   const isImage = /\.(jpe?g|png|webp|gif|heic)(\?|$)/i.test(url)
   const isPdf = /\.pdf(\?|$)/i.test(url)
   return (
-    <div className="flex flex-col gap-1.5">
-    <ViewDocButton url={url}
+    <div className={`flex flex-col gap-1.5 ${className}`}>
+    {/* ⚠️ הגלריה מועברת גם מכאן: בלעדיה הת"ז נפתחת כמסמך בודד והחצים
+        נעלמים — המזכיר נאלץ לסגור ולפתוח כל מסמך בנפרד. */}
+    <ViewDocButton url={url} name={label} gallery={gallery} index={index}
        className="flex flex-col gap-2 p-2 border border-slate-200 rounded-xl bg-white hover:border-indigo-300 hover:shadow-sm transition-all group">
       {isImage ? (
-        <SafeDocImage path={url} name={label} alt={label} className="w-full h-72 object-contain rounded-lg bg-slate-50" />
+        <SafeDocImage path={url} name={label} alt={label} className={`w-full ${imgClass} object-contain rounded-lg bg-slate-50`} />
       ) : isPdf ? (
         // תצוגה מקדימה אמיתית — העמוד הראשון מצויר על canvas
-        <PdfCanvasView url={url} name={label} maxPages={1} cover className="w-full h-72 rounded-lg overflow-hidden bg-white" />
+        <PdfCanvasView url={url} name={label} maxPages={1} cover className={`w-full ${imgClass} rounded-lg overflow-hidden bg-white`} />
       ) : (
-        <div className="w-full h-28 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center">
+        <div className={`w-full ${imgClass} bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center`}>
           <FileText size={28} className="text-slate-400" />
         </div>
       )}
-      <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1">
-        {label} <ExternalLink size={11} />
+      <span className="text-xs font-medium text-slate-600 group-hover:text-indigo-600 flex items-center justify-center gap-1 text-center">
+        <span className="truncate" title={label}>{label}</span> <ExternalLink size={11} className="flex-shrink-0" />
       </span>
     </ViewDocButton>
       <DownloadDocButton url={url} docType={label} person={person} variant="button" className="justify-center" />

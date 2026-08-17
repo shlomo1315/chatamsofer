@@ -186,11 +186,29 @@ export function DocViewerProvider({ children }: { children: React.ReactNode }) {
                 <ChevronLeft size={26} />
               </button>
 
-              {/* מונה מיקום — כדי לדעת כמה עוד נשארו */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full bg-black/70 px-3.5 py-1.5 text-xs font-bold text-white ltr-num">
-                {index + 1} / {gallery.length}
-              </div>
             </>
+          )}
+
+          {/* ── שם המסמך + מונה המיקום ── */}
+          {/* 🔴 בלי הכיתוב הזה המסמך המוגדל היה אנונימי: תחת התמונונת כתוב
+              "ת.ז. הבעל", אבל ברגע שנפתח נשארה תמונה בלבד — ומי שדילג
+              בחצים כמה מסמכים כבר לא ידע במה הוא מסתכל. זו בדיוק הנקודה
+              שבה צריך לדעת, כי כאן מתקבלת ההחלטה.
+              ⚠️ מוצג גם על מסמך בודד (בשונה מהחצים): השם רלוונטי תמיד. */}
+          {(doc.name || gallery.length > 1) && (
+            // ⚠️ בראש ולא בתחתית: תצוגת ה-PDF תופסת 90vh ומחזיקה כפתורים
+            // בתחתיתה, וכיתוב תחתון היה נוחת עליהם. הראש פנוי בשני הסוגים
+            // (ה-X יושב בשמאל), ולכן זה המיקום היחיד שעובד לשניהם.
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 rounded-full bg-black/70 px-4 py-1.5 max-w-[70vw]">
+              {doc.name && (
+                <span className="text-sm font-semibold text-white truncate" title={doc.name}>{doc.name}</span>
+              )}
+              {gallery.length > 1 && (
+                <span className="text-xs font-bold text-white/70 ltr-num flex-shrink-0">
+                  {index + 1} / {gallery.length}
+                </span>
+              )}
+            </div>
           )}
 
           {/* הקובץ עצמו — עצירת בועה כדי שלחיצה עליו לא תסגור */}
