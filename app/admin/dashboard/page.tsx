@@ -24,7 +24,11 @@ interface DashData {
   pending: number
   activeLoans: number
   pendingLoans: number
-  defaultedLoans: number
+  loansApprovedTotal: number
+  loansDisbursed: number
+  disbursedAmount: number
+  legacyCount: number
+  legacyTakenCount: number
   loansApprovedWeek: number
   totalLoanAmount: number
   maternityActive: number
@@ -50,7 +54,8 @@ interface DashData {
 
 const EMPTY: DashData = {
   totalBeneficiaries: 0, newBeneficiariesWeek: 0, approved: 0, pending: 0,
-  activeLoans: 0, pendingLoans: 0, defaultedLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
+  activeLoans: 0, pendingLoans: 0, loansApprovedWeek: 0, totalLoanAmount: 0,
+  loansApprovedTotal: 0, loansDisbursed: 0, disbursedAmount: 0, legacyCount: 0, legacyTakenCount: 0,
   maternityActive: 0, maternityPending: 0, maternityDeepReview: 0, cardsLoaded: 0, cardsPending: 0, cardsRemaining: 0,
   widowPending: 0, widowInProgress: 0, distributionsPlanned: 0,
   holidayName: null, holidayRegistered: 0, holidayExpected: 0, holidayOpen: false,
@@ -68,7 +73,8 @@ const getStats = unstable_cache(
     const headCount = { count: 'exact' as const, head: true }
     const [
       totalBeneficiaries, newBeneficiariesWeek, approved, pending,
-      activeLoans, pendingLoans, defaultedLoans, loansApprovedWeek,
+      activeLoans, pendingLoans, loansApprovedWeek,
+      loansApprovedTotal, disbursedRows, legacyRows,
       maternityActive, maternityPending, maternityDeepReview, activeAidRows,
       widowPending, widowInProgress, distributionsPlanned,
       aidPending, aidAwaiting, aidApproved,
@@ -80,8 +86,15 @@ const getStats = unstable_cache(
       supabase.from('beneficiaries').select('id', headCount).eq('eligibility_status', 'pending'),
       supabase.from('loans').select('id', headCount).eq('status', 'active'),
       supabase.from('loans').select('id', headCount).in('status', ['pending', 'inquiry']),
-      supabase.from('loans').select('id', headCount).eq('status', 'defaulted'),
       supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']).gte('created_at', weekAgo),
+      // סך ההלוואות שאושרו אי-פעם (לא רק השבוע)
+      supabase.from('loans').select('id', headCount).in('status', ['active', 'approved', 'completed']),
+      // 🔴 "בוצעו" = disbursed_at, שנקבע בפורטל הביצוע — ולא סטטוס הבקשה.
+      // אישור ההלוואה וביצוע התשלום הם שני אירועים נפרדים, ובדיוק הפער
+      // ביניהם הוא מה שהמנהל צריך לראות.
+      supabase.from('loans').select('approved_amount, amount').not('disbursed_at', 'is', null),
+      // ארכיון ההלוואות מהמערכת הקודמת
+      supabase.from('legacy_loans').select('taken_amount'),
       // ⚠️ לידות שקטות מוצגות בלשונית נפרדת ומסוננות ממסך היולדות, ולכן הן
       // מוחרגות גם כאן: אחרת "תיקים פעילים" בדשבורד מציג 50 והמסך 49.
       supabase.from('maternity_aids').select('id', headCount).eq('status', 'active').or('birth_type.is.null,birth_type.neq.silent'),
@@ -138,8 +151,14 @@ const getStats = unstable_cache(
       pending: pending.count ?? 0,
       activeLoans: activeLoans.count ?? 0,
       pendingLoans: pendingLoans.count ?? 0,
-      defaultedLoans: defaultedLoans.count ?? 0,
       loansApprovedWeek: loansApprovedWeek.count ?? 0,
+      loansApprovedTotal: loansApprovedTotal.count ?? 0,
+      loansDisbursed: (disbursedRows.data ?? []).length,
+      // ⚠️ approved_amount ולא amount: המבוקש והמאושר נבדלים, ומה שבוצע
+      // בפועל הוא הסכום שאושר. נפילה-לאחור ל-amount לרשומות ישנות.
+      disbursedAmount: (disbursedRows.data ?? []).reduce((sum, x) => sum + (Number((x as { approved_amount?: number | null }).approved_amount ?? (x as { amount?: number | null }).amount) || 0), 0),
+      legacyCount: (legacyRows.data ?? []).length,
+      legacyTakenCount: (legacyRows.data ?? []).filter(x => (x as { taken_amount?: number | null }).taken_amount != null).length,
       totalLoanAmount: (activeLoanAmounts.data ?? []).reduce((s, x) => s + (Number(x.amount) || 0), 0),
       maternityActive: maternityActive.count ?? 0,
       maternityPending: maternityPending.count ?? 0,
@@ -301,9 +320,12 @@ export default async function DashboardPage() {
         )}
         {can('loans') && (
           <KpiCard
-            label="הלוואות פעילות"
-            value={fmtUsd(s.totalLoanAmount)}
-            sub={`${fmt(s.activeLoans)} תיקים פעילים`}
+            // 🔴 סכום שנמסר בפועל (disbursed_at) ולא סכום התיקים הפעילים:
+            // "כמה כסף באמת יצא" הוא המספר שמחפשים, וסכום הפעילים החמיץ את
+            // מה שאושר, נמסר והושלם.
+            label="סכום ההלוואות בפועל"
+            value={fmtUsd(s.disbursedAmount)}
+            sub={`${fmt(s.loansDisbursed)} קיבלו שטר · ${fmt(s.activeLoans)} פעילות`}
             icon={<Landmark size={18} />}
             color="blue"
             href="/admin/loans"
@@ -362,8 +384,16 @@ export default async function DashboardPage() {
             accent="#3b82f6"
             rows={[
               { label: 'בקשות לאישור', value: fmt(s.pendingLoans), tone: s.pendingLoans > 0 ? 'warning' : 'neutral' },
-              { label: 'הלוואות פעילות', value: fmt(s.activeLoans), tone: 'success' },
-              { label: 'בפיגור', value: fmt(s.defaultedLoans), tone: s.defaultedLoans > 0 ? 'danger' : 'neutral' },
+              // ⚠️ "בפיגור" הוסר — לא רלוונטי לגמ"ח הזה (החלטת המשתמש).
+              { label: 'אושרו', value: fmt(s.loansApprovedTotal), tone: 'success' },
+              // 🔴 "קיבלו שטר" = disbursed_at מפורטל הביצוע, ולא סטטוס הבקשה.
+              // אישור ומסירת השטר הם שני אירועים נפרדים, והפער ביניהם הוא
+              // מה שצריך להיראות.
+              { label: 'קיבלו שטר', value: fmt(s.loansDisbursed), tone: 'info' },
+              { label: 'סכום ההלוואות בפועל', value: fmtUsd(s.disbursedAmount), tone: 'info' },
+              { label: 'הלוואות פעילות', value: fmt(s.activeLoans), tone: 'neutral' },
+              // ארכיון: כמה נלקחו בפועל מתוך סך ההלוואות ההיסטוריות.
+              { label: 'ארכיון (מערכת קודמת)', value: `${fmt(s.legacyTakenCount)} / ${fmt(s.legacyCount)}`, tone: 'neutral' },
             ]}
           />
           )}
