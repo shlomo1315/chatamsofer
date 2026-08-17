@@ -10,6 +10,41 @@ import ExportExcelButton from '@/components/admin/ExportExcelButton'
 import LoansPortalEmailButton from './LoansPortalEmailButton'
 import { AdminOnly } from '@/components/StaffPermissions'
 import { AWAITING_RABBI_FORM } from '@/lib/openLoanGuard'
+import Tabs from '@/components/ui/Tabs'
+import LegacyLoansTable, { type LegacyRow } from './LegacyLoansTable'
+import { fetchAllRows } from '@/lib/fetchAllRows'
+
+/**
+ * ההלוואות מהמערכת הקודמת.
+ *
+ * 🔴 fetchAllRows ולא select רגיל: יש 1,148 שורות, ו-PostgREST קוטע כל
+ * שאילתה ב-1000 בשקט — בלי שגיאה ובלי ש-.limit() יעקוף. בלי זה 148
+ * הלוואות היו נעלמות מהמסך בלי שום רמז.
+ */
+async function getLegacyLoans(): Promise<LegacyRow[]> {
+  if (!isSupabaseConfigured()) return []
+  const supabase = await createClient()
+  const { rows } = await fetchAllRows<LegacyRow>((from, to) =>
+    supabase
+      .from('legacy_loans')
+      .select('id, file_number, fund, id_number, borrower_name, address, city, phone, email, approved_amount, taken_amount, installments, source_row, manually_edited')
+      .order('file_number', { ascending: true })
+      .range(from, to),
+  )
+  return rows
+}
+
+function EmptyLoans() {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
+      <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <CreditCard size={28} className="text-slate-400" />
+      </div>
+      <p className="text-slate-500 font-medium">לא נמצאו הלוואות</p>
+      <p className="text-slate-400 text-sm mt-1">הוסף הלוואה חדשה להתחלה</p>
+    </div>
+  )
+}
 
 async function getLoans(): Promise<Loan[]> {
   if (!isSupabaseConfigured()) return []
@@ -84,7 +119,15 @@ async function getReplied(): Promise<string[]> {
 export default async function LoansPage() {
   await guardPage('loans')
   // ⚡ במקביל ולא בטור — getReplied כבר לא צריך את ה-IDs מ-getLoans (ראו שם)
-  const [loans, replied] = await Promise.all([getLoans(), getReplied()])
+  //
+  // ⚠️ ההלוואות הקודמות נשלפות כאן ולא בלשונית עצמה: הלשונית היא רכיב
+  // לקוח, ושליפה בתוכה הייתה מוסיפה קפיצת רשת בכל מעבר לשונית.
+  // אינה מעכבת אם נכשלה (למשל לפני שהמיגרציה רצה) — הלשונית פשוט ריקה.
+  const [loans, replied, legacy] = await Promise.all([
+    getLoans(),
+    getReplied(),
+    getLegacyLoans().catch(() => [] as LegacyRow[]),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -107,14 +150,26 @@ export default async function LoansPage() {
         </AdminOnly>
       </PageHeader>
 
-      {loans.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-16 text-center">
-          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <CreditCard size={28} className="text-slate-400" />
-          </div>
-          <p className="text-slate-500 font-medium">לא נמצאו הלוואות</p>
-          <p className="text-slate-400 text-sm mt-1">הוסף הלוואה חדשה להתחלה</p>
-        </div>
+      {/* ⚠️ הלשונית השנייה מוצגת רק כשיש נתונים היסטוריים: לשונית ריקה
+          מעלה את השאלה "איפה הם" ומרמזת על תקלה, בעוד שבפועל פשוט טרם
+          יובאו. */}
+      {legacy.length > 0 ? (
+        <Tabs tabs={[
+          {
+            key: 'current',
+            label: `הלוואות (${loans.length.toLocaleString('he-IL')})`,
+            accent: 'indigo',
+            content: loans.length === 0 ? <EmptyLoans /> : <LoansTable data={loans} repliedIds={replied} />,
+          },
+          {
+            key: 'legacy',
+            label: `הלוואות קודמות (${legacy.length.toLocaleString('he-IL')})`,
+            accent: 'amber',
+            content: <LegacyLoansTable rows={legacy} />,
+          },
+        ]} />
+      ) : loans.length === 0 ? (
+        <EmptyLoans />
       ) : (
         <LoansTable data={loans} repliedIds={replied} />
       )}
