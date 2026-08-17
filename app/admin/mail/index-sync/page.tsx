@@ -103,15 +103,30 @@ export default function IndexSyncPage() {
     } finally { setSyncing(null) }
   }
 
-  const neverSynced = accounts.filter(a => a.neverSynced).length
+  // ⚠️ תיבות פעילות בלבד: תיבה מושבתת לא אמורה להסתנכרן, וספירתה כ"טרם
+  // סונכרנה" הדליקה התראה כתומה קבועה על מצב תקין לחלוטין — בדיוק סוג
+  // ההתראה שמאמנת להתעלם ממנה.
+  const neverSynced = accounts.filter(a => a.neverSynced && a.is_active !== false).length
 
   // ⚠️ "פעיל" נגזר מתפוגה *עתידית* ולא מעצם קיומה: מנוי שפג לפני יומיים
   // היה מוצג כפעיל, וזה בדיוק המצב שבו המערכת נדמה בשקט.
   //
   // ⚠️ ה"עכשיו" נלקח מ-state שנקבע בטעינה ולא מקריאה בזמן הרינדור: קריאה
   // כזו הופכת את הרינדור ללא-דטרמיניסטי, ומייצרת אי-התאמה בין השרת ללקוח.
-  const liveAccounts = accounts.filter(a => a.watch_expires_at && new Date(a.watch_expires_at).getTime() > now)
-  const liveOn = liveAccounts.length > 0 && liveAccounts.length === accounts.length
+  //
+  // 🔴 ההשוואה מול התיבות ה*פעילות* בלבד, ולא מול כל התיבות ברשימה.
+  //
+  // הבאג שזה מתקן: /api/admin/gmail/watch נרשם רק לתיבות שסומנו is_active,
+  // אבל התנאי כאן דרש ש-liveAccounts ישווה ל-accounts *כולן* — כולל תיבות
+  // מושבתות. די בתיבה מושבתת אחת ברשימה כדי שהתנאי לא יתקיים לעולם:
+  // המנוי נרשם בגוגל בהצלחה, המסך המשיך להציג "כבוי", והמנהל לחץ "הפעל
+  // סנכרון מיידי" שוב ושוב בלי שדבר ישתנה — כי הכשל היה בתצוגה, לא בהפעלה.
+  //
+  // ⚠️ is_active !== false ולא === true: השדה אופציונלי בטיפוס, ותיבה ותיקה
+  // שאין בה ערך היא פעילה כברירת מחדל — בדיוק כמו בשאר המסך.
+  const activeAccounts = accounts.filter(a => a.is_active !== false)
+  const liveAccounts = activeAccounts.filter(a => a.watch_expires_at && new Date(a.watch_expires_at).getTime() > now)
+  const liveOn = liveAccounts.length > 0 && liveAccounts.length === activeAccounts.length
   const nearestExpiry = liveAccounts
     .map(a => a.watch_expires_at!)
     .sort((x, y) => new Date(x).getTime() - new Date(y).getTime())[0] ?? null
@@ -232,7 +247,10 @@ export default function IndexSyncPage() {
             <Inbox size={19} className="text-slate-600" />
           </div>
           <div>
-            <p className="text-2xl font-black text-slate-900 ltr-num">{accounts.length}</p>
+            {/* ⚠️ התווית אומרת "פעילות" ולכן הספירה חייבת להיות של הפעילות
+                בלבד: תיבה מושבתת אינה מסתנכרנת, וספירתה כאן הציגה "2 תיבות
+                פעילות" כשבפועל אחת מהן מושבתת. */}
+            <p className="text-2xl font-black text-slate-900 ltr-num">{activeAccounts.length}</p>
             <p className="text-xs text-slate-500">תיבות פעילות</p>
           </div>
         </div>
