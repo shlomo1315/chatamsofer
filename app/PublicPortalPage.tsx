@@ -19,6 +19,7 @@ import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS, LOAN_MAX_AMOUNT } from '@/lib/emailRequestForms'
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import { composeLineageName, findTitles } from '@/lib/lineageNameFormat'
+import { genTone } from '@/lib/lineagePalette'
 import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
@@ -142,18 +143,31 @@ const HOME_TABS = [
 // ומשייך את הנרשם לאב-קדמון במקום לעצמו.
 const SELF_MIN_GENERATION = 6
 
-// פלטת צבעים לדורות — כל דור בגוון שונה (לציר הייחוס)
-const GEN_COLORS = [
-  { bg: 'bg-indigo-50', text: 'text-indigo-800', border: 'border-indigo-200', dot: 'bg-indigo-500' },
-  { bg: 'bg-sky-50', text: 'text-sky-800', border: 'border-sky-200', dot: 'bg-sky-500' },
-  { bg: 'bg-teal-50', text: 'text-teal-800', border: 'border-teal-200', dot: 'bg-teal-500' },
-  { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  { bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200', dot: 'bg-amber-500' },
-  { bg: 'bg-orange-50', text: 'text-orange-800', border: 'border-orange-200', dot: 'bg-orange-500' },
-  { bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-200', dot: 'bg-rose-500' },
-  { bg: 'bg-violet-50', text: 'text-violet-800', border: 'border-violet-200', dot: 'bg-violet-500' },
-  { bg: 'bg-fuchsia-50', text: 'text-fuchsia-800', border: 'border-fuchsia-200', dot: 'bg-fuchsia-500' },
-]
+// ─────────────────────────────────────────────────────────────────────────────
+// גוון הדור בציר הייחוס — נגזר מ-lib/lineagePalette, לא מוגדר כאן.
+//
+// 🔴 כאן ישבה **הפלטה השביעית**: אינדיגו/תכלת/טורקיז/ורוד/פוקסיה — בדיוק
+// סוג העותק המשוכפל שאיחוד הפלטות (14.08) בא לחסל. ששת רכיבי העץ בניהול
+// עברו ל-genTone, והפורטל הציבורי — המסך שהמשפחות עצמן רואות — נשאר מאחור
+// עם צבעים מעולם אחר לגמרי. ההערה בתת-טאב הייחוס אף טענה שזו "אותה פלטה
+// שהעץ בניהול משתמש בה", וזה פשוט לא היה נכון.
+//
+// התוצאה בפועל: אותו אדם, אותו דור — ורוד בפורטל, זהב בכרטסת.
+//
+// ⚠️ המרה ל-style ולא ל-מחלקות Tailwind: הסולם "קלף וחותם" בנוי על
+// מדרגים (linear-gradient) וצללים בגוון הצומת, ואין להם מקבילה במחלקות
+// הסטנדרטיות. ניסיון לקרב אותם למחלקה הקרובה ביותר היה מייצר בדיוק את
+// הסטייה שהאיחוד נועד למנוע — פלטה שמנסה להיראות כמו האחרת.
+const genStyle = (i: number) => {
+  const t = genTone(i)
+  return {
+    // ⚠️ הגוון הבהיר (light) ולא ה-bg: ה-bg הוא מדרג רווי לצומת בקנבס
+    // ה-SVG, וטקסט כהה עליו אינו קריא. בכרטיסי הציר הרקע בהיר והטקסט כהה.
+    card:  { background: t.light, borderColor: t.ring },
+    text:  { color: t.text },
+    dot:   { background: t.ring },
+  }
+}
 
 const LOAN_PURPOSES = [
   { value: 'נישואי הבן/הבת' },
@@ -1051,16 +1065,16 @@ function LineageBuilder({ selfName, onChange }: { selfName: string; onChange: (r
     <div className="flex flex-col">
       {/* סיכום הדורות שנבחרו — דור 1 קבוע ואז השרשרת */}
       {[{ name: root?.name ?? 'רבינו החתם סופר זיע״א', relation: null as 'son' | 'son_in_law' | null, fixed: true, isNew: false }, ...chain.map(c => ({ ...c, fixed: false }))].map((row, i, arr) => {
-        const col = GEN_COLORS[i % GEN_COLORS.length]
+        const col = genStyle(i)
         return (
           <div key={i} className="flex items-stretch gap-3">
             <div className="flex flex-col items-center w-5 flex-shrink-0">
-              <span className={`w-3 h-3 rounded-full mt-2.5 ${col.dot}`} />
+              <span className="w-3 h-3 rounded-full mt-2.5" style={col.dot} />
               <span className="w-0.5 flex-1 bg-slate-200 my-0.5" />
             </div>
-            <div className={`flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2 ${col.bg} ${col.border}`}>
-              <span className={`text-[10px] font-bold flex-shrink-0 ${col.text} opacity-70`}>דור {i + 1}</span>
-              <span className={`text-sm font-semibold flex-1 truncate ${col.text}`}>{row.name}</span>
+            <div className="flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2" style={col.card}>
+              <span className="text-[10px] font-bold flex-shrink-0 opacity-70" style={col.text}>דור {i + 1}</span>
+              <span className="text-sm font-semibold flex-1 truncate" style={col.text}>{row.name}</span>
               {row.fixed && <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded-full px-2 py-0.5 flex-shrink-0">קבוע</span>}
               {!row.fixed && (row as { isNew: boolean }).isNew && <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">ממתין לאימות</span>}
               {!row.fixed && (row as { id?: string | null }).id === selfExistingId && selfExistingId && (
@@ -4688,19 +4702,27 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                       return (
                         <div className="flex flex-col">
                           {rows.map((row, i) => {
-                            const col = GEN_COLORS[i % GEN_COLORS.length]
+                            const col = genStyle(i)
                             const last = i === rows.length - 1
                             return (
                               <div key={i} className="flex items-stretch gap-3">
                                 {/* עמודת הקו + הנקודה */}
+                                {/* ⚠️ סימון "זה אתם" נשאר ירוק ואינו נגזר מהפלטה:
+                                    הוא אומר *מי אתה בשרשרת*, לא *באיזה דור* —
+                                    בדיוק ההפרדה בין גוון-דור לסטטוס שהפלטה
+                                    המשותפת שומרת עליה במפורש. */}
                                 <div className="flex flex-col items-center w-5 flex-shrink-0">
-                                  <span className={`w-3 h-3 rounded-full mt-2.5 ${row.isSelf ? 'bg-green-600 ring-2 ring-green-200' : col.dot}`} />
+                                  <span className={`w-3 h-3 rounded-full mt-2.5 ${row.isSelf ? 'bg-green-600 ring-2 ring-green-200' : ''}`}
+                                    style={row.isSelf ? undefined : col.dot} />
                                   {!last && <span className="w-0.5 flex-1 bg-slate-200 my-0.5" />}
                                 </div>
                                 {/* כרטיס הדור */}
-                                <div className={`flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2 ${row.isSelf ? 'bg-green-600 border-green-600' : `${col.bg} ${col.border}`}`}>
-                                  <span className={`text-[10px] font-bold flex-shrink-0 ${row.isSelf ? 'text-green-100' : col.text} opacity-70`}>דור {i + 1}</span>
-                                  <span className={`text-sm font-semibold flex-1 truncate ${row.isSelf ? 'text-white' : col.text}`}>{row.name}</span>
+                                <div className={`flex-1 mb-2 rounded-xl border px-3 py-2 flex items-center gap-2 ${row.isSelf ? 'bg-green-600 border-green-600' : ''}`}
+                                  style={row.isSelf ? undefined : col.card}>
+                                  <span className={`text-[10px] font-bold flex-shrink-0 opacity-70 ${row.isSelf ? 'text-green-100' : ''}`}
+                                    style={row.isSelf ? undefined : col.text}>דור {i + 1}</span>
+                                  <span className={`text-sm font-semibold flex-1 truncate ${row.isSelf ? 'text-white' : ''}`}
+                                    style={row.isSelf ? undefined : col.text}>{row.name}</span>
                                   {(row.relation === 'son' || row.relation === 'son_in_law') && (
                                     <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 flex-shrink-0 ${row.relation === 'son' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{row.relation === 'son' ? 'בן' : 'חתן'}</span>
                                   )}
@@ -5480,12 +5502,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   {/* ⚠️ עץ יורד עם קו מקשר, כמו בממשק הניהול: הקו הוא מה
                       שהופך רשימה לשרשרת — בלעדיו הדורות נראים כפריטים
                       נפרדים ולא כרצף שכל אחד בו נגזר מקודמו.
-                      ⚠️ צבע הדור נלקח מ-GEN_COLORS, אותה פלטה שהעץ בניהול
-                      משתמש בה. פלטה משוכפלת הייתה יוצרת שני עצים שנראים
-                      שונה על אותם נתונים. */}
+                      ⚠️ צבע הדור נגזר מ-genTone (lib/lineagePalette) — מקור
+                      האמת היחיד שכל ששת רכיבי העץ בניהול משתמשים בו.
+                      🔴 עד כה נקרא כאן GEN_COLORS, פלטה מקומית באינדיגו-ורוד,
+                      וההערה טענה שזו "אותה פלטה שהעץ בניהול משתמש בה" — לא
+                      נכון. אותו אדם באותו דור נצבע ורוד כאן וזהב בכרטסת. */}
                   <div className="relative pr-3">
                     {beneficiary.lineage_chain.map((c, i, arr) => {
-                      const gen = GEN_COLORS[i % GEN_COLORS.length]
+                      const gen = genStyle(i)
                       const isLast = i === arr.length - 1
                       return (
                         <div key={i} className="relative flex items-start gap-3 pb-3 last:pb-0">
@@ -5493,13 +5517,14 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                           {!isLast && (
                             <span className="absolute right-[13px] top-7 bottom-0 w-px bg-slate-200" />
                           )}
-                          <span className={`relative z-10 w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums border-2 bg-white ${gen.border} ${gen.text}`}>
+                          <span className="relative z-10 w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold tabular-nums border-2 bg-white"
+                            style={{ borderColor: gen.card.borderColor, color: gen.text.color }}>
                             {i + 1}
                           </span>
-                          <span className={`flex-1 min-w-0 rounded-xl border px-3 py-2 ${gen.border} ${gen.bg}`}>
-                            <span className={`block text-sm font-bold ${gen.text}`}>{c.name}</span>
+                          <span className="flex-1 min-w-0 rounded-xl border px-3 py-2" style={gen.card}>
+                            <span className="block text-sm font-bold" style={gen.text}>{c.name}</span>
                             {(c.relation === 'son' || c.relation === 'son_in_law') && (
-                              <span className={`block text-[11px] opacity-70 ${gen.text}`}>
+                              <span className="block text-[11px] opacity-70" style={gen.text}>
                                 {c.relation === 'son' ? 'בן' : 'חתן'} של הדור הקודם
                               </span>
                             )}
