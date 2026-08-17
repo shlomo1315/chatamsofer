@@ -17,12 +17,33 @@ export const MATERNITY_LOAD_AMOUNT = 600
 // שיוך הכרטיס הפיזי/מוקד נעשה בהמשך ידנית. best-effort — לא חוסם את אישור הלידה.
 export async function loadMaternityCardOnApproval(
   admin: SupabaseClient, aidId: string, amount = MATERNITY_LOAD_AMOUNT,
-): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; error?: string; clientId?: string | null }> {
+): Promise<{ ok: boolean; notConfigured?: boolean; already?: boolean; awaitingStock?: boolean; notWanted?: boolean; error?: string; clientId?: string | null }> {
   const { data: aid } = await admin
     .from('maternity_aids')
-    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date')
+    .select('id, beneficiary_id, card_balance, card_load_status, card_tlush_id, birth_date, wants_food_card')
     .eq('id', aidId).maybeSingle()
   if (!aid) return { ok: false, error: 'התיק לא נמצא' }
+
+  // 🔴 יולדת שסימנה "הבראה בלבד" אינה מקבלת כרטיס — לא טעינה ולא שובר.
+  //
+  // הבדיקה הזו לא הייתה כאן כלל: הפונקציה כלל לא שלפה את wants_food_card,
+  // ולכן כל קריאה אליה הטעינה 600 ₪ ללא תלות בבחירת היולדת. התוצאה בשטח:
+  // יולדת שביקשה הבראה בלבד קיבלה כרטיס נטען *וגם* מייל עם שובר כרטיס מזון.
+  // מעבר להטרדה, זו הוצאה של כרטיס מהמלאי המוגבל על מי שלא ביקשה אותו.
+  //
+  // ⚠️ הבדיקה כאן ולא רק אצל הקורא: יש ארבעה קוראים (אישור בקשה, שינוי
+  // סטטוס ידני, ניסיון חוזר לכרטיסים שנכשלו, וחידוש מלאי). תיקון אצל אחד
+  // מהם היה משאיר את השאר פתוחים — וזה בדיוק מה שקרה כאן.
+  //
+  // ⚠️ !== false ולא === true: בקשות שנוצרו לפני הוספת השדה שומרות
+  // undefined/null, ופירושן "רוצה" — תאימות לאחור, כמו בכל שאר המערכת.
+  if ((aid as { wants_food_card?: boolean | null }).wants_food_card === false) {
+    await logActivity(admin, {
+      action: 'maternity_card_skipped_not_wanted', entityType: 'maternity_aid', entityId: aid.id,
+      details: { reason: 'wants_food_card=false' },
+    })
+    return { ok: true, notWanted: true }
+  }
   // ⚠️ 'unloaded' אינו "כבר נטען": זהו תיק שהטעינה שלו *בוטלה* (שינוי סטטוס או
   // תום שישה שבועות), ו-card_tlush_id נשמר בו לתיעוד. בלי הבדיקה הזו אישור
   // מחודש של אותה לידה היה מחזיר "כבר נטען", המשפחה הייתה נשארת עם כרטיס ריק
@@ -282,11 +303,23 @@ export async function sendCardVoucher(
   try {
     const { data: aid } = await admin
       .from('maternity_aids')
-      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, voucher_serial, birth_type, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
+      .select('birth_date, recovery_home, recovery_eligibility_days, is_twins, voucher_serial, birth_type, wants_food_card, beneficiary:beneficiaries(full_name, family_name, spouse_name, id_number, spouse_id_number, address, city, email, phone, spouse_phone)')
       .eq('id', aidId)
       .maybeSingle()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const a = aid as any
+
+    // 🔴 שובר כרטיס מזון ליולדת שביקשה הבראה בלבד — לא נשלח.
+    //
+    // זו הזרימה השנייה של אותו באג: כאן השובר נשלח ידנית מהמסך (שיוך
+    // מוקד / שליחה חוזרת), והבדיקה לא הייתה כאן יותר מאשר בטעינה. יולדת
+    // שסימנה "הבראה בלבד" קיבלה מייל עם שובר לכרטיס שאינה אמורה לקבל.
+    //
+    // ⚠️ !== false ולא === true: רשומות מלפני הוספת השדה = "רוצה".
+    if (a?.wants_food_card === false) {
+      return { ok: false, error: 'היולדת ביקשה הבראה בלבד — שובר כרטיס מזון לא נשלח' }
+    }
+
     const ben = a?.beneficiary
     if (!ben?.email) return { ok: false, error: 'אין כתובת מייל ליולדת — השובר לא נשלח' }
 

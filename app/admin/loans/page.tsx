@@ -24,13 +24,17 @@ import { fetchAllRows } from '@/lib/fetchAllRows'
 async function getLegacyLoans(): Promise<LegacyRow[]> {
   if (!isSupabaseConfigured()) return []
   const supabase = await createClient()
-  const { rows } = await fetchAllRows<LegacyRow>((from, to) =>
+  const { rows, error } = await fetchAllRows<LegacyRow>((from, to) =>
     supabase
       .from('legacy_loans')
       .select('id, file_number, fund, id_number, borrower_name, address, city, phone, email, approved_amount, taken_amount, installments, source_row, manually_edited')
       .order('file_number', { ascending: true })
       .range(from, to),
   )
+  // 🔴 השגיאה נרשמת ולא נבלעת. כשהטבלה נוצרה בלי מדיניות RLS היא החזירה
+  // אפס שורות *בלי* שגיאה, הלשונית נעלמה, ולא היה שום עקבות לחפש לפיו.
+  // ריק ושגיאה נראים זהים מבחוץ — ולכן מה שכן מגיע חייב להירשם.
+  if (error) console.error('[loans] legacy_loans query failed:', error)
   return rows
 }
 

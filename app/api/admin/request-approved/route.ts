@@ -108,7 +108,11 @@ export async function POST(request: NextRequest) {
         // awaitingStock בלבד, וכל כישלון אחר (נדרים לא מוגדר, הטעינה נדחתה)
         // נבלע — cardInStock נשאר true, וליולדת נשלח שובר כרטיס מזון עבור
         // כרטיס שמעולם לא הוטען. היא הגיעה למוקד עם שובר חסר כיסוי.
-        if (r.awaitingStock || !r.ok) cardInStock = false
+        // ⚠️ notWanted נכלל: יולדת שביקשה הבראה בלבד לא נטענה, ולכן אין
+        // כרטיס שעליו יכול להיות שובר. הצירוף עצמו נחסם שוב למטה
+        // (wantsCard), אך הסימון כאן שומר על משמעות אחת למשתנה — "יש
+        // כרטיס טעון" — במקום שתי בדיקות שעלולות להתפצל בשינוי הבא.
+        if (r.awaitingStock || r.notWanted || !r.ok) cardInStock = false
         if (!r.ok) {
           console.error('[request-approved] maternity card load failed:', {
             aidId: id, error: r.error, notConfigured: r.notConfigured,
