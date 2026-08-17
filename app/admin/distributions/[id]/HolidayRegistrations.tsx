@@ -11,6 +11,7 @@ import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
+import AddRecipientDialog from './AddRecipientDialog'
 
 export interface RegistrationRow {
   id: string
@@ -119,9 +120,14 @@ export default function HolidayRegistrations({
     const kids: Record<string, number> = {}
     const approval: Record<ApprovalStatus, number> = { pending: 0, approved: 0, rejected: 0 }
     let cardsLinked = 0
+    // מי כבר רשום — לסימון בדיאלוג ההוספה הידנית.
+    // ⚠️ נאסף במעבר המשותף ולא בלולאה נפרדת: זה בדיוק המעבר שהוקם כדי
+    // להימנע מ-12 סריקות של ~6,000 שורות בכל רינדור.
+    const registered = new Set<string>()
 
     for (const r of rows) {
       bySource[r.source] = (bySource[r.source] ?? 0) + 1
+      if (r.beneficiary_id) registered.add(String(r.beneficiary_id))
       const c = r.community?.trim() || 'לא צוין'
       communityMap.set(c, (communityMap.get(c) ?? 0) + 1)
       // ⚠️ הדלי הראשון שמתאים בלבד — הטווחים זרים זה לזה, ולכן אין טעם
@@ -139,10 +145,12 @@ export default function HolidayRegistrations({
       kidsCounts: KIDS_BUCKETS.map(b => ({ ...b, count: kids[b.key] ?? 0 })),
       approval,
       cardsLinked,
+      registered,
     }
   }, [rows])
 
   const { bySource, communities, ageCounts, kidsCounts } = facets
+  const registeredIds = facets.registered
 
   // ⚠️ נגזר מהשורות בכל טעינה: הכרטיסים האלה הם מה שהמנהל בודק לפניהם ("כמה
   // ממתינים לאישור", "כמה מאושרים כבר שייכו כרטיס"), ומונה שמור היה מתיישן.
@@ -448,6 +456,11 @@ export default function HolidayRegistrations({
         <span className="text-xs font-bold text-slate-500">
           מוצגים {filtered.length.toLocaleString('he-IL')} · {fmtCur(expectedFiltered)}
         </span>
+        {/* ⚠️ מוצג גם כשהרישום סגור — זו כל מטרתו: לצרף משפחה שלא נרשמה
+            בזמן, בלי לפתוח מחדש את הרישום לכולם. */}
+        {canEdit && (
+          <AddRecipientDialog distributionId={distributionId} existingIds={registeredIds} />
+        )}
         {canEdit && approvalCounts.approved > 0 && (
           <button type="button" disabled={notifying} onClick={() => void notify([])}
             title="מייל וצינתוק לכל מי שאושר וטרם קיבל הודעה"
