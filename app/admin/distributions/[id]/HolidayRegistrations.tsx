@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send } from 'lucide-react'
@@ -12,6 +12,8 @@ import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
 import AddRecipientDialog from './AddRecipientDialog'
+import Pagination from '@/components/ui/Pagination'
+import CityBreakdown from './CityBreakdown'
 
 export interface RegistrationRow {
   id: string
@@ -101,6 +103,11 @@ export default function HolidayRegistrations({
   const [ageBucket, setAgeBucket] = useState<string>('all')
   const [kidsBucket, setKidsBucket] = useState<string>('all')
   const [approval, setApproval] = useState<ApprovalStatus | 'all'>('all')
+  const [city, setCity] = useState<string>('all')
+  const [cityOpen, setCityOpen] = useState(false)   // רשימת הערים מכווצת כברירת מחדל
+  // ⚡ דפדוף אמיתי: 50 שורות כברירת מחדל במקום כל ~6,000 בבת אחת.
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const [toggling, setToggling] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -116,6 +123,7 @@ export default function HolidayRegistrations({
   const facets = useMemo(() => {
     const bySource: Record<string, number> = { portal: 0, phone: 0, email: 0, nedarim: 0, admin: 0 }
     const communityMap = new Map<string, number>()
+    const cityMap = new Map<string, number>()
     const age: Record<string, number> = {}
     const kids: Record<string, number> = {}
     const approval: Record<ApprovalStatus, number> = { pending: 0, approved: 0, rejected: 0 }
@@ -130,6 +138,9 @@ export default function HolidayRegistrations({
       if (r.beneficiary_id) registered.add(String(r.beneficiary_id))
       const c = r.community?.trim() || 'לא צוין'
       communityMap.set(c, (communityMap.get(c) ?? 0) + 1)
+      // ⚠️ נאסף באותו מעבר יחיד — ראה ההערה למעלה.
+      const ct = r.city?.trim() || 'לא צוין'
+      cityMap.set(ct, (cityMap.get(ct) ?? 0) + 1)
       // ⚠️ הדלי הראשון שמתאים בלבד — הטווחים זרים זה לזה, ולכן אין טעם
       // להמשיך לבדוק את השאר.
       for (const b of AGE_BUCKETS) if (b.test(r.age)) { age[b.key] = (age[b.key] ?? 0) + 1; break }
@@ -141,6 +152,8 @@ export default function HolidayRegistrations({
     return {
       bySource,
       communities: [...communityMap.entries()].sort((a, b) => b[1] - a[1]),
+      // ממוין מהגבוה לנמוך — משמש גם לפילטר וגם לגרף הפילוח.
+      cities: [...cityMap.entries()].sort((a, b) => b[1] - a[1]),
       ageCounts: AGE_BUCKETS.map(b => ({ ...b, count: age[b.key] ?? 0 })),
       kidsCounts: KIDS_BUCKETS.map(b => ({ ...b, count: kids[b.key] ?? 0 })),
       approval,
@@ -149,7 +162,7 @@ export default function HolidayRegistrations({
     }
   }, [rows])
 
-  const { bySource, communities, ageCounts, kidsCounts } = facets
+  const { bySource, communities, cities, ageCounts, kidsCounts } = facets
   const registeredIds = facets.registered
 
   // ⚠️ נגזר מהשורות בכל טעינה: הכרטיסים האלה הם מה שהמנהל בודק לפניהם ("כמה
@@ -181,12 +194,30 @@ export default function HolidayRegistrations({
       if (source !== 'all' && r.source !== source) return false
       if (approval !== 'all' && r.approval_status !== approval) return false
       if (community !== 'all' && (r.community?.trim() || 'לא צוין') !== community) return false
+      if (city !== 'all' && (r.city?.trim() || 'לא צוין') !== city) return false
       if (ageTest && !ageTest(r.age)) return false
       if (kidsTest && !kidsTest(r.children_count)) return false
       if (!q) return true
       return (haystacks.get(r.id) ?? '').includes(q)
     })
-  }, [rows, haystacks, query, source, community, ageBucket, kidsBucket, approval])
+  }, [rows, haystacks, query, source, community, city, ageBucket, kidsBucket, approval])
+
+  // ⚡ הדף המוצג בפועל.
+  //
+  // 🔴 הסינון והחיפוש רצים על *כל* השורות (filtered למעלה), והחיתוך לעמוד
+  // קורה רק אחריהם. כך תיבת החיפוש מחזירה תוצאה מכל ~6,000 הרשומות ולא
+  // מתוך 50 המוצגות — זו הייתה דרישה מפורשת.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  // ⚠️ עמוד מחוץ לטווח אחרי סינון (היינו בעמוד 40 ונשארו 3) — נצמד לאחרון.
+  const safePage = Math.min(page, pageCount)
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  )
+
+  // ⚠️ חזרה לעמוד 1 בכל שינוי סינון/חיפוש: להישאר בעמוד 12 אחרי סינון
+  // שהותיר 2 עמודים מציג מסך ריק שנראה כתקלה.
+  useEffect(() => { setPage(1) }, [query, source, community, city, ageBucket, kidsBucket, approval, pageSize])
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
   const expectedAll = rows.length * amountPerFamily
@@ -393,6 +424,9 @@ export default function HolidayRegistrations({
           )}
         </div>
       </div>
+
+      {/* ── פילוח לפי עיר ── */}
+      <CityBreakdown cities={cities} selected={city} onSelect={setCity} />
 
       {/* ── פילוחים לחיצים ── */}
       <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col gap-3">
