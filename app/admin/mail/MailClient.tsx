@@ -76,6 +76,22 @@ function formatDate(raw: string) {
   } catch { return raw }
 }
 
+/**
+ * תאריך ושעה מלאים — ל-tooltip בלבד.
+ *
+ * ⚠️ formatDate מקצר בכוונה (שעה להיום, יום בשבוע לשבוע האחרון) כדי
+ * שהעמודה תישאר צרה, אבל אז "יום שלישי 14:20" אינו אומר באיזה תאריך.
+ * הריחוף משלים את מה שהקיצור השמיט, בלי להרחיב את העמודה.
+ */
+function fullDateTime(raw: string) {
+  try {
+    return new Date(raw).toLocaleString('he-IL', {
+      weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
+  } catch { return raw }
+}
+
 // ─── Compose Modal ────────────────────────────────────────────────────────────
 
 interface FoundBeneficiary { id: string; name: string; email: string; matchedAs?: 'husband' | 'wife' }
@@ -1623,8 +1639,14 @@ export default function MailClient() {
                       ${selected?.id === msg.id ? 'bg-indigo-50 border-r-2 border-r-indigo-500'
                         : !msg.isRead ? 'bg-indigo-50/40 hover:bg-indigo-50/70'
                         : 'hover:bg-slate-50'}`}>
-                    <button className="flex-1 min-w-0 text-right px-4 py-3" onClick={() => openMessage(msg)}>
-                      <div className="flex items-start justify-between gap-2 mb-0.5">
+                    {/* ⚠️ הכפתור עצמו הוא ה-flex: התאריך יושב כעמודה אחות
+                        לתוכן ההודעה, ולא בתוך שורת השולח. קודם הוא היה
+                        צלע ב-justify-between של שורת השולח — כלומר נדחק
+                        ונחתך ככל ששם השולח ארוך יותר, ובכתובות gmail מלאות
+                        הוא נעלם למעשה. עכשיו רוחבו קבוע והוא תמיד גלוי. */}
+                    <button className="flex-1 min-w-0 flex items-start gap-3 text-right px-4 py-3" onClick={() => openMessage(msg)}>
+                      <span className="flex-1 min-w-0 block">
+                      <div className="flex items-start gap-2 mb-0.5">
                         <span className="flex items-center gap-2 min-w-0">
                           {!msg.isRead && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" title="לא נקרא" />}
                           <span className={`text-sm truncate leading-tight ${!msg.isRead ? 'font-bold text-slate-900' : 'font-normal text-slate-500'}`}>
@@ -1635,7 +1657,6 @@ export default function MailClient() {
                               : senderDisplay(msg)}
                           </span>
                         </span>
-                        <span className={`text-sm flex-shrink-0 tabular-nums ${!msg.isRead ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>{formatDate(msg.date)}</span>
                       </div>
                       <p className={`text-xs truncate mb-0.5 ${!msg.isRead ? 'font-semibold text-slate-800' : 'text-slate-500'}`}>{msg.subject}</p>
                       <div className="flex items-center gap-1 flex-wrap">
@@ -1674,6 +1695,15 @@ export default function MailClient() {
                         )}
                         <p className={`text-xs truncate ${!msg.isRead ? 'text-slate-600' : 'text-slate-400'}`}>{msg.snippet}</p>
                       </div>
+                      </span>
+                      {/* ── עמודת התאריך — קצה השורה, כמו בגימייל ──
+                          ⚠️ title עם התאריך והשעה המלאים: התצוגה מקוצרת
+                          (רק שעה להיום, יום בשבוע לשבוע האחרון), ולעיתים
+                          צריך לדעת את התאריך המדויק בלי לפתוח את ההודעה. */}
+                      <span className={`shrink-0 text-xs tabular-nums leading-tight whitespace-nowrap pt-0.5 ${!msg.isRead ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}
+                        title={fullDateTime(msg.date)}>
+                        {formatDate(msg.date)}
+                      </span>
                     </button>
                     {/* עמודת פעולות נפרדת — אינה חופפת את התוכן */}
                     <div className="flex flex-col items-center justify-center gap-1 w-9 flex-shrink-0 border-r border-slate-100 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
