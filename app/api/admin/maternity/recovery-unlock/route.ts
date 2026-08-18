@@ -1,12 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireStaff, getServiceClient } from '@/lib/apiAuth'
+import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
 // המשרד פותח רשומת החלמה נעולה לעריכה מחדש בצד בית ההחלמה.
 export async function POST(request: NextRequest) {
-  const staff = await requireStaff()
-  if (!staff) return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+  // 🔴 requirePermission ולא requireStaff: הנעילה היא בקרה כספית — היא מונעת
+  // מבית ההחלמה לשנות סכום שכבר הוגש ואושר. עם requireStaff כל איש צוות,
+  // כולל מי שסומן במפורש "ללא גישה ליולדות", יכול היה לפתוח כל רשומה נעולה
+  // בקריאה אחת. זהה לכל 20 נתיבי maternity האחרים.
+  const staff = await requirePermission('maternity', 'edit')
+  if (!staff) return forbidden()
 
   const { aidId } = await request.json()
   if (!aidId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })

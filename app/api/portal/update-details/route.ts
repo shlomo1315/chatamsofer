@@ -165,8 +165,16 @@ export async function POST(request: NextRequest) {
       seen.add(cid)
       if (existingChildIds.has(cid)) continue   // ילד קיים — ת"ז לא השתנתה, אין מה לבדוק
       // כבר קיים במערכת על רשומה אחרת (כמוטב, כבן/בת זוג, או כילד) — לא כולל המשפחה הנוכחית
-      const { data: asBen } = await admin.from('beneficiaries').select('id')
-        .or(`id_number.eq.${cid},spouse_id_number.eq.${cid}`).neq('id', String(beneficiary_id)).limit(1)
+      // 🔴 .in() ולא .or() עם מחרוזת — אותו חור אבטחה שתוקן ב-public-register.
+      // ערך דרכון עובר trim() בלבד (הוא מכיל אותיות), ולכן פסיקים ונקודות
+      // בתוכו היו מזריקים תנאים למחרוזת ה-.or() ומאפשרים למוטב מאומת אחד
+      // לחלץ נתונים של כל המשפחות במאגר. .in() מעביר פרמטרים ואינו ניתן
+      // להזרקה.
+      const [{ data: asBenSelf }, { data: asBenSpouse }] = await Promise.all([
+        admin.from('beneficiaries').select('id').in('id_number', [cid]).neq('id', String(beneficiary_id)).limit(1),
+        admin.from('beneficiaries').select('id').in('spouse_id_number', [cid]).neq('id', String(beneficiary_id)).limit(1),
+      ])
+      const asBen = [...(asBenSelf ?? []), ...(asBenSpouse ?? [])]
       const { data: asChild } = await admin.from('beneficiaries').select('id')
         .contains('children', [{ id_number: cid }]).neq('id', String(beneficiary_id)).limit(1)
       if (asBen?.length || asChild?.length) {

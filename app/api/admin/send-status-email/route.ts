@@ -5,7 +5,7 @@ import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
 import { mailFor } from '@/lib/departments'
 import { getDocTypes } from '@/lib/serverDocTypes'
-import { requireStaff, unauthorized } from '@/lib/apiAuth'
+import { requirePermission, forbidden } from '@/lib/apiAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,8 +17,13 @@ function getClient() {
 
 export async function POST(request: NextRequest) {
   await ensureEmailTexts()
-  const staff = await requireStaff()
-  if (!staff) return unauthorized()
+  // 🔴 requirePermission ולא requireStaff: ה-handler כותב את החלטת הדחייה
+  // (rejected_by / rejected_at / rejection_reason) על רשומת המוטב, ו-reason
+  // הוא טקסט חופשי מהקורא. עם requireStaff כל איש צוות יכול היה לקבוע סיבת
+  // דחייה על כל מוטב — וסיבה זו אף מוצגת למוטב במסך הזיהוי הציבורי
+  // (portal/lookup). זהה לשאר נתיבי החלטות הזכאות.
+  const staff = await requirePermission('beneficiaries', 'edit')
+  if (!staff) return forbidden()
 
   const { id, status, reason, docsNotes } = await request.json()
   if (!id || !status) return NextResponse.json({ error: 'missing fields' }, { status: 400 })

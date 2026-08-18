@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
 
   const headers = new Headers()
   headers.set('Content-Type', contentType)
+  // ⚠️ מונע מהדפדפן לנחש סוג לפי התוכן ולהריץ קובץ שהוגש כסוג אחר.
+  headers.set('X-Content-Type-Options', 'nosniff')
   headers.set('Content-Length', String(buf.length))
   // מטמון פרטי קצר — מזרז תצוגות חוזרות בלי לחשוף בין משתמשים
   headers.set('Cache-Control', 'private, max-age=300')

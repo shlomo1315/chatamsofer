@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { rateLimit } from '@/lib/rateLimit'
 import { registrationReceivedEmail } from '@/lib/emailTemplates'
 import { ensureEmailTexts } from '@/lib/emailTextsStore'
 import { deliverMail } from '@/lib/sendMail'
@@ -68,6 +69,21 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
   // בקוד + אימות טלפון בשיחה (אסימונים חתומים שנבדקים למטה), ת"ז ייחודית
   // במסד עם ספרת ביקורת, רחוב מרשימת העיר הרשמית ושער ההרשמה. אותה מסקנה
   // כבר הוסקה בערוץ נדרים ובערוץ האימות (lib/verifyChannel.ts).
+  //
+  // 🔴 מה שכן קיים: גג-על *גלובלי*, לא per-IP.
+  //
+  // ⚠️ הוא אינו סותר את האמור למעלה — הוא מכוון גבוה בהרבה מכל גל רישום
+  // אמיתי, ולכן נרשם לגיטימי לא ייתקל בו לעולם. תפקידו היחיד הוא לעצור
+  // הצפה אוטומטית: כל רישום כותב למסד, שולח מייל, ולעיתים מפעיל שיחה
+  // יוצאת *בתשלום*. בלי שום תקרה זו נקודת הקצה היקרה ביותר במערכת,
+  // פתוחה לאינטרנט. גל של אלפי נרשמים בדקות עדיין עובר בנוחות.
+  if (!rateLimit('public-register:global', 4000, 60 * 60 * 1000)) {
+    console.error('[public-register] גג-העל הגלובלי נחצה — ייתכן ניסיון הצפה')
+    return NextResponse.json(
+      { error: 'המערכת עמוסה כרגע. אנא נסו שוב בעוד מספר דקות.' },
+      { status: 429 },
+    )
+  }
 
   let body: Record<string, unknown>
   try {
@@ -343,14 +359,28 @@ export async function handlePublicRegister(request: NextRequest, channel?: Regis
     }
     if (childIds.length) {
       // שאילתה אחת: האם מי מת"ז הילדים כבר קיימת כבעל/אשה של רשומה קיימת.
-      const orExpr = childIds.flatMap(id => [`id_number.eq.${id}`, `spouse_id_number.eq.${id}`]).join(',')
-      const [{ data: asBen }, ...childHits] = await Promise.all([
-        admin.from('beneficiaries').select('id_number, spouse_id_number').or(orExpr).limit(childIds.length * 2),
+      //
+      // 🔴 .in() ולא .or() עם מחרוזת מורכבת.
+      //
+      // ⚠️ זו הייתה חור אבטחה חמור: ערך *דרכון* עובר trim() בלבד (בכוונה —
+      // דרכון מכיל אותיות), ונשתל ישירות במחרוזת ה-.or(). הנתיב הזה פתוח
+      // לאינטרנט ללא שום אימות, ולכן תוקף יכול היה לשלוח דרכון ובו פסיקים
+      // ונקודות ולהזריק תנאים על עמודות אחרות — למשל
+      // `portal_password_hash.like.$2b$10$a*` — ולקבל תשובה בוליאנית
+      // (409 מול המשך רישום). כלומר חילוץ תו-אחר-תו של גיבובי סיסמאות
+      // הפורטל ושל תעודות זהות מכל המאגר.
+      //
+      // .in() מעביר את הערכים כפרמטרים ואינו ניתן להזרקה. שתי שאילתות
+      // במקום אחת — מחיר זניח מול הפער שנסגר.
+      const [{ data: asBenSelf }, { data: asBenSpouse }, ...childHits] = await Promise.all([
+        admin.from('beneficiaries').select('id_number, spouse_id_number').in('id_number', childIds).limit(childIds.length),
+        admin.from('beneficiaries').select('id_number, spouse_id_number').in('spouse_id_number', childIds).limit(childIds.length),
         // בדיקת "רשום כילד אצל אחר" — שאילתה אחת לכל ת"ז (contains דורש ערך יחיד)
         ...childIds.map(id => admin.from('beneficiaries').select('id').contains('children', [{ id_number: id }]).limit(1)),
       ])
       const takenAsBen = new Set<string>()
-      for (const row of (asBen ?? []) as { id_number?: string; spouse_id_number?: string }[]) {
+      const asBen = [...(asBenSelf ?? []), ...(asBenSpouse ?? [])]
+      for (const row of asBen as { id_number?: string; spouse_id_number?: string }[]) {
         if (row.id_number) takenAsBen.add(String(row.id_number).replace(/\D/g, ''))
         if (row.spouse_id_number) takenAsBen.add(String(row.spouse_id_number).replace(/\D/g, ''))
       }

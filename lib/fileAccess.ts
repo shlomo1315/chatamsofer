@@ -73,7 +73,13 @@ export async function loadDocument(request: NextRequest): Promise<LoadedDoc | Lo
 
   const safeName = resolveSafeName(path, request.nextUrl.searchParams.get('name') ?? '')
   const pathExt = (path.split('/').pop() ?? '').match(/\.[^.\s]+$/)?.[0] ?? ''
-  const contentType = blob.type || EXT_CONTENT_TYPES[pathExt.toLowerCase()] || 'application/octet-stream'
+  // 🔴 מפת הסיומות גוברת על blob.type — ולא להפך.
+  //
+  // ⚠️ blob.type מגיע ממטא-דאטה של האחסון, ובהעלאות ממסכי הניהול הוא נקבע
+  // בדפדפן של המעלה. קובץ שהועלה כ-text/html היה מוגש עם Content-Type
+  // כזה ו-Content-Disposition: inline — כלומר מורץ במקור (origin) של
+  // האתר, עם גישה לעוגיות הסשן. הסיומת נגזרת מהנתיב בשרת ולכן אמינה.
+  const contentType = EXT_CONTENT_TYPES[pathExt.toLowerCase()] || blob.type || 'application/octet-stream'
 
   return { buf: Buffer.from(await blob.arrayBuffer()), contentType, safeName, path }
 }
