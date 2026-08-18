@@ -1,6 +1,6 @@
 import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift, CalendarClock } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -26,6 +26,7 @@ import YemotMaternitySettings from './YemotMaternitySettings'
 import YemotHolidaySettings from './YemotHolidaySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
+import DailyDigestSettings from './DailyDigestSettings'
 import LineageRejectionRepair from './LineageRejectionRepair'
 import EmailVerificationManager from './EmailVerificationManager'
 import LineageNodeBackfill from './LineageNodeBackfill'
@@ -265,6 +266,11 @@ export default async function SettingsPage() {
         {/* תיקון חד-פעמי: משפחות שנדחו אוטומטית מעץ הדורות (04/08-10/08) */}
         <Collapsible title="תיקון דחיות אוטומטיות מעץ הדורות" icon={<Wrench size={16} className="text-amber-600" />}>
           <LineageRejectionRepair />
+        </Collapsible>
+
+        {/* סיכום יומי למנהל — פעילות היום + מה שממתין לאישור */}
+        <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-indigo-600" />} defaultOpen>
+          <DailyDigestSettings />
         </Collapsible>
 
         {/* Full system backup (DB + files) to Google Drive */}

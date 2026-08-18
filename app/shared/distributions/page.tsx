@@ -295,40 +295,31 @@ function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
 function SharedRecipientsTable({ rows }: { rows: Recipient[] }) {
   if (!rows.length) return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
   return (
-    // 🔴 אין גלילה לרוחב. עמודות מאוחדות (שם+זוג, טלפון+מייל, עיר+כתובת),
-    // בדיוק כמו ב-HolidayRecipientsTable — אותה טבלה, אותה התנהגות.
+    // 🔴 כל נתון בעמודה נפרדת. איחוד עמודות נוסה ונפסל — הוא ערבב ערכים
+    // שונים בתא אחד והפך את הטבלה לקשה לסריקה.
+    // ⚠️ ובלי גלילה לרוחב: כאן יש 8 עמודות בלבד (בלי אישור/כרטיס/ערוץ),
+    // והן נכנסות לרוחב המסך.
     <div className="w-full">
       <table className="w-full table-auto text-[12px] border-collapse">
         <thead className="bg-slate-50 text-slate-500">
-          <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-            <th>שם ובן/בת זוג</th><th>ת״ז</th><th>טלפון ומייל</th>
-            <th>עיר וכתובת</th><th className="text-center">גיל · ילדים</th><th>תאריך רישום</th>
+          <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+            <th>שם משפחה</th><th>שם פרטי</th><th>ת״ז</th><th>טלפון</th>
+            <th>עיר</th><th className="text-center">גיל</th><th className="text-center">ילדים</th><th>תאריך רישום</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map(r => {
             const b = r.beneficiary
             return (
-              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
-                <td className="max-w-[190px]">
-                  <div className="truncate font-semibold text-slate-800" title={benName(b)}>{benName(b)}</div>
-                  {b?.spouse_name && <div className="truncate text-[11px] text-slate-500" title={b.spouse_name}>{b.spouse_name}</div>}
-                </td>
-                <td className="font-mono text-slate-600 ltr-num whitespace-nowrap">{b?.id_number ?? '—'}</td>
-                <td className="max-w-[180px]">
-                  <div className="font-mono text-slate-700 ltr-num whitespace-nowrap">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</div>
-                  {b?.email && <div className="truncate text-[11px] text-slate-500 text-right" dir="ltr" title={b.email}>{b.email}</div>}
-                </td>
-                <td className="max-w-[170px]">
-                  <div className="truncate text-slate-700" title={b?.city ?? undefined}>{b?.city ?? '—'}</div>
-                  {b?.address && <div className="truncate text-[11px] text-slate-500" title={b.address}>{b.address}</div>}
-                </td>
-                <td className="text-center whitespace-nowrap">
-                  <span className="text-slate-700 ltr-num">{ageOf(b) ?? '—'}</span>
-                  <span className="text-slate-300 mx-1">·</span>
-                  <span className="text-slate-700 ltr-num">{b?.children_count ?? '—'}</span>
-                </td>
-                <td className="text-slate-500 ltr-num text-[11px] whitespace-nowrap">{fmtDateTime(r.registered_at)}</td>
+              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
+                <td className="font-semibold text-slate-800">{b?.family_name ?? '—'}</td>
+                <td className="text-slate-700">{b?.full_name || b?.spouse_name || '—'}</td>
+                <td className="font-mono text-slate-600 ltr-num">{b?.id_number ?? '—'}</td>
+                <td className="font-mono text-slate-600 ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</td>
+                <td className="text-slate-600">{b?.city ?? '—'}</td>
+                <td className="text-center text-slate-600 ltr-num">{ageOf(b) ?? '—'}</td>
+                <td className="text-center text-slate-600 ltr-num">{b?.children_count ?? '—'}</td>
+                <td className="text-slate-500 ltr-num text-[11px]">{fmtDateTime(r.registered_at)}</td>
               </tr>
             )
           })}

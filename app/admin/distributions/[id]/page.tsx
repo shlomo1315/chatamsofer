@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Gift, CalendarDays, Pencil } from 'lucide-react'
 import { notFound } from 'next/navigation'
@@ -39,23 +40,29 @@ interface BenRow {
   spouse_birth_date?: string | null
 }
 
+// 🔴 שאילתה קלה שרצה מיד — כותרת החלוקה בלבד.
+// ⚠️ נפרדת מ-getData במכוון: קודם הדף חיכה לשתיהן יחד, והמסך נשאר ריק
+// שניות ארוכות למרות שהכותרת הייתה מוכנה כמעט מיד.
+async function getDistribution(id: string) {
+  if (!isSupabaseConfigured()) return null
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('distributions').select('*').eq('id', id).single()
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
+  return (data as Distribution | null) ?? null
+}
+
 async function getData(id: string) {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
   // ⚠️ הנרשמים נשלפים בדפים: תקרת השורות של PostgREST נאכפת בצד השרת ואינה
   // ניתנת לעקיפה ב-limit, ולכן הרשימה נחתכה ב-1,000 בלי שגיאה ובלי סימן.
   // ראו lib/fetchAllRows.
-  const [distRes, recRes] = await Promise.all([
-    supabase.from('distributions').select('*').eq('id', id).single(),
-    fetchAllRows<Record<string, unknown>>((from, to) => supabase
+  const recRes = await fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
       .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
-      .range(from, to)),
-  ])
-  if (distRes.error && distRes.error.code !== 'PGRST116' && distRes.error.code !== '22P02') throw distRes.error
-  if (!distRes.data) return null
+      .range(from, to))
   if (recRes.error) {
     console.error(`[admin/distributions/${id}] recipients query failed:`, recRes.error)
     throw new Error(recRes.error)
@@ -107,7 +114,7 @@ async function getData(id: string) {
     }
   })
 
-  return { distribution: distRes.data as Distribution, rows }
+  return { rows }
 }
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy', { locale: he }) : '—'
@@ -130,11 +137,11 @@ export default async function DistributionDetailPage({ params }: { params: Promi
   // רישום וביטולם — פעולות שפותחות רישום סגור, ולכן אינן נגזרות מהרשאת הצפייה.
   const canEditDistribution = !!(await requirePermission('distributions', 'edit'))
 
-  const data = await getData(id)
-  if (!data && isSupabaseConfigured()) notFound()
-  if (!data) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>
-
-  const { distribution: d, rows } = data
+  // ⚡ רק כותרת החלוקה נטענת כאן — שאילתה אחת קלה. רשימת הנרשמים
+  // זורמת בנפרד ב-Suspense, ולכן המסך מופיע מיד.
+  const d = await getDistribution(id)
+  if (!d && isSupabaseConfigured()) notFound()
+  if (!d) return <div className="p-8 text-center text-slate-400">הגדר Supabase לצפייה</div>
   const amount = Number(d.amount_per_family ?? 0)
 
   return (
@@ -172,13 +179,59 @@ export default async function DistributionDetailPage({ params }: { params: Promi
 
       <InviteLinkPanel distributionId={d.id} canEdit={canEditDistribution} />
 
-      <HolidayRegistrations
-        distributionId={d.id}
-        rows={rows}
-        amountPerFamily={amount}
-        registrationOpen={d.registration_open === true}
-        distributionName={`${d.name}${d.year ? ` ${d.year}` : ''}`}
-      />
+      {/* ⚡ הרשימה זורמת: הכותרת והקישורים כבר על המסך, והשלד הזה
+          מתחלף בנתונים כשהם מגיעים — במקום דף ריק לכל משך השליפה. */}
+      <Suspense fallback={<RegistrationsSkeleton />}>
+        <RegistrationsLoader
+          id={d.id}
+          amount={amount}
+          registrationOpen={d.registration_open === true}
+          distributionName={`${d.name}${d.year ? ` ${d.year}` : ''}`}
+        />
+      </Suspense>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// טוען את רשימת הנרשמים — רץ בתוך Suspense, ולכן אינו חוסם את הכותרת.
+//
+// ⚠️ רכיב נפרד ולא await בגוף הדף: Suspense עוצר רק על גבול רכיב. await
+// ישיר בדף היה משהה את *כל* הדף בדיוק כמו קודם.
+// ─────────────────────────────────────────────────────────────────────────────
+async function RegistrationsLoader({ id, amount, registrationOpen, distributionName }: {
+  id: string; amount: number; registrationOpen: boolean; distributionName: string
+}) {
+  const data = await getData(id)
+  if (!data) return null
+  return (
+    <HolidayRegistrations
+      distributionId={id}
+      rows={data.rows}
+      amountPerFamily={amount}
+      registrationOpen={registrationOpen}
+      distributionName={distributionName}
+    />
+  )
+}
+
+/** שלד הרשימה — צורת המסך האמיתית, כדי שהמעבר לא יקפיץ את הפריסה. */
+function RegistrationsSkeleton() {
+  return (
+    <div className="flex flex-col gap-5 animate-pulse">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-24 rounded-2xl border border-slate-200 bg-white" />
+        ))}
+      </div>
+      <div className="h-32 rounded-2xl border border-slate-200 bg-white" />
+      <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div className="h-11 bg-slate-50 border-b border-slate-200" />
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="h-12 border-b border-slate-100 last:border-0" />
+        ))}
+      </div>
+      <p className="text-center text-xs text-slate-400">טוען את רשימת הנרשמים…</p>
     </div>
   )
 }
