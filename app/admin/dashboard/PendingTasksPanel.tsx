@@ -2,14 +2,14 @@
 import { useState, useCallback } from 'react'
 import {
   Clock, ArrowUpRight, Users, Landmark, Baby,
-  HeartHandshake, HandCoins, X, Loader2, ExternalLink, Trash2,
+  HeartHandshake, HandCoins, X, Loader2, ExternalLink, Trash2, UserPen,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useStaffPermissions } from '@/components/StaffPermissions'
 
 interface PendingTask {
   id: string
-  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid'
+  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change'
   name: string
   detail: string
   href: string
@@ -22,6 +22,7 @@ const typeConfig: Record<PendingTask['type'], { label: string; icon: React.Eleme
   maternity:     { label: 'יולדות',          icon: Baby,           color: 'text-pink-600 bg-pink-50' },
   widow:         { label: 'אלמנות ויתומים',  icon: HeartHandshake, color: 'text-violet-600 bg-violet-50' },
   financial_aid: { label: 'סיוע רפואי',     icon: HandCoins,      color: 'text-teal-600 bg-teal-50' },
+  name_change:   { label: 'תיקון שם',        icon: UserPen,        color: 'text-amber-600 bg-amber-50' },
 }
 
 function formatDate(iso: string) {

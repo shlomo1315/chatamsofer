@@ -45,12 +45,13 @@ export default function RecoveryAmountApprovals({ items }: { items: PendingAmoun
         <span className="text-xs font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">{items.length}</span>
       </div>
       {err && <p className="px-5 pt-3 text-sm text-red-600">{err}</p>}
-      <div className="overflow-x-auto">
+      {/* בלי גלילה אופקית: שמות ארוכים גולשים לשורה נוספת במקום לדחוף את הדף. */}
+      <div className="w-full">
         <table className="w-full text-sm text-right">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50">
               {['שם היולדת', 'תינוק', 'בית החלמה', 'סכום שמומש', 'נשלח בתאריך', 'פעולות'].map(h => (
-                <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500">{h}</th>
               ))}
             </tr>
           </thead>
@@ -59,14 +60,14 @@ export default function RecoveryAmountApprovals({ items }: { items: PendingAmoun
               const b = busy === it.id
               return (
                 <tr key={it.id} className="hover:bg-amber-50/30">
-                  <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{it.motherName}</td>
-                  <td className="px-4 py-3 text-slate-700">{it.babyName ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{it.recovery_home ?? '—'}</td>
-                  <td className="px-4 py-3 font-bold text-emerald-700">{ils(it.recovery_amount)}</td>
-                  <td className="px-4 py-3 text-slate-500 ltr-num">{fmt(it.recovery_amount_at)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-medium text-slate-800 whitespace-normal break-words align-top">{it.motherName}</td>
+                  <td className="px-4 py-3 text-slate-700 whitespace-normal break-words align-top">{it.babyName ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 whitespace-normal break-words align-top">{it.recovery_home ?? '—'}</td>
+                  <td className="px-4 py-3 font-bold text-emerald-700 align-top">{ils(it.recovery_amount)}</td>
+                  <td className="px-4 py-3 text-slate-500 ltr-num align-top">{fmt(it.recovery_amount_at)}</td>
+                  <td className="px-4 py-3 align-top">
                     {b ? <Loader2 size={15} className="animate-spin text-slate-400" /> : canEdit && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button onClick={() => decide(it.id, 'approve')}
                           className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5"><Check size={14} /> אשר</button>
                         <button onClick={() => decide(it.id, 'reject')}

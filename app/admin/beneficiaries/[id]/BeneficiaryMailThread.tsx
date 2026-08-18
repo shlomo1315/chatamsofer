@@ -158,11 +158,13 @@ export default function BeneficiaryMailThread({ email, name }: Props) {
 
         {/* Subject + meta */}
         <div className="px-5 pt-4 pb-3 border-b border-slate-100">
-          <h3 className="font-bold text-slate-900 text-base mb-1">{selected.subject}</h3>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="font-medium text-slate-700">{selected.from.replace(/<.*>/, '').trim() || selected.fromEmail}</span>
+          <h3 className="font-bold text-slate-900 text-base mb-1 break-words">{selected.subject}</h3>
+          {/* flex-wrap + break-all: כתובת מייל ארוכה היא מילה אחת בלי רווחים, ובלי
+              זה היא מרחיבה את הפאנל וגוררת את הדף לגלילה אופקית. */}
+          <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap min-w-0">
+            <span className="font-medium text-slate-700 break-words">{selected.from.replace(/<.*>/, '').trim() || selected.fromEmail}</span>
             <span>·</span>
-            <span>{selected.fromEmail}</span>
+            <span className="break-all">{selected.fromEmail}</span>
             <span>·</span>
             <span>{formatDate(selected.date)}</span>
           </div>

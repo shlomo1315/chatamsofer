@@ -122,7 +122,7 @@ export default function UnlinkedPanel({ onDone }: { onDone: () => void }) {
                     <td className="px-3 py-2 font-medium text-slate-800">
                       {r.name}
                       {r.chainTail && (
-                        <span className="block text-[10px] text-slate-400 truncate max-w-[220px]">
+                        <span className="block text-[10px] text-slate-400 break-words">
                           הזין: {r.chainTail}
                         </span>
                       )}
@@ -149,7 +149,10 @@ export default function UnlinkedPanel({ onDone }: { onDone: () => void }) {
                             ? <>הזין {r.chainLength} דורות, אף אחד לא בעץ</>
                             : 'לא הזין שרשרת'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    {/* flex-wrap ולא nowrap — שני הכפתורים יורדים שורה במסך צר
+                        במקום להרחיב את הטבלה ולגרור את הדף לרוחב. */}
+                    <td className="px-3 py-2 align-top">
+                      <div className="flex flex-wrap items-center gap-1">
                       {!linked[r.id] && r.suggestion && !r.suggestion.ambiguous && (
                         <button onClick={() => assign(r)} disabled={busy === r.id}
                           className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-2.5 py-1 rounded-lg transition-colors">
@@ -163,6 +166,7 @@ export default function UnlinkedPanel({ onDone }: { onDone: () => void }) {
                         className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 px-2 py-1">
                         <ExternalLink size={12} /> כרטסת
                       </a>
+                      </div>
                     </td>
                   </tr>
                 ))}

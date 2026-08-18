@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast'
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Group { fromDomain: string; toDomain: string; count: number }
+interface Unfixable { id: string; name: string; email: string; problem: string; verified: boolean }
 interface Fix {
   id: string; name: string; original: string; fixed: string
   fromDomain: string; toDomain: string; verified: boolean
@@ -26,7 +27,7 @@ export default function EmailDomainFixPanel() {
   const [open, setOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [applying, setApplying] = useState<string | null>(null)
-  const [data, setData] = useState<{ total: number; fixable: number; groups: Group[]; fixes: Fix[] } | null>(null)
+  const [data, setData] = useState<{ total: number; fixable: number; groups: Group[]; fixes: Fix[]; unfixableCount?: number; unfixable?: Unfixable[] } | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const scan = useCallback(async () => {
@@ -60,15 +61,19 @@ export default function EmailDomainFixPanel() {
 
   // ⚠️ ייצוא של מה שנשאר: כתובת עם דומיין תקין ושם שגוי אינה ניתנת לתיקון
   // אוטומטי, והרשימה הזו היא מה שבאמת דורש טיפול אנושי.
+  // ⚠️ מיוצאת הרשימה שאי אפשר לתקן אוטומטית — היא זו שדורשת אדם.
+  // ייצוא של מה שממילא מתוקן בלחיצה לא היה עוזר לאיש.
   const exportCsv = () => {
-    if (!data?.fixes.length) return
-    const head = 'שם,כתובת נוכחית,תיקון מוצע,מאומת\n'
-    const body = data.fixes.map(f =>
-      `"${f.name}","${f.original}","${f.fixed}","${f.verified ? 'כן' : 'לא'}"`).join('\n')
+    const rows = data?.unfixable ?? []
+    if (!rows.length) return
+    const head = 'שם,כתובת,הבעיה,מאומת\n'
+    const body = rows.map(f =>
+      `"${f.name}","${f.email}","${f.problem}","${f.verified ? 'כן' : 'לא'}"`
+    ).join('\n')
     const blob = new Blob(['﻿' + head + body], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'כתובות-לתיקון.csv'
+    a.download = 'כתובות-לתיקון-ידני.csv'
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -118,10 +123,10 @@ export default function EmailDomainFixPanel() {
               {scanning ? <Loader2 size={13} className="animate-spin" /> : <Wrench size={13} />}
               סריקת כל המאגר
             </button>
-            {data && data.fixes.length > 0 && (
+            {data && (data.unfixableCount ?? 0) > 0 && (
               <button type="button" onClick={exportCsv}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600">
-                <Download size={13} /> ייצוא לאקסל
+                <Download size={13} /> ייצוא {data.unfixableCount} לתיקון ידני
               </button>
             )}
           </div>
@@ -132,6 +137,32 @@ export default function EmailDomainFixPanel() {
                 נסרקו <b className="text-slate-700">{data.total.toLocaleString('he-IL')}</b> כתובות ·
                 נמצאו <b className={data.fixable ? 'text-emerald-700' : 'text-slate-700'}>{data.fixable}</b> שגיאות כתיב ניתנות לתיקון
               </p>
+
+              {/* 🔴 נאמר גם מה *לא* ניתן לתקן: בלי זה "תוקנו 47" יוצר
+                  רושם שהבעיה נסגרה, בעוד שהכתובות שבאמת שגויות עדיין שם. */}
+              {(data.unfixableCount ?? 0) > 0 && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3">
+                  <p className="text-[12px] font-bold text-rose-900">
+                    {data.unfixableCount} כתובות פגומות שאי אפשר לתקן אוטומטית
+                  </p>
+                  <p className="mt-1 text-[11.5px] text-rose-800">
+                    השם שלפני ה-@ שגוי, או הדומיין אינו מוכר. אי אפשר לנחש —
+                    ייצאו לאקסל ותקנו ידנית, או שלחו להם ב-SMS.
+                  </p>
+                  <div className="mt-2 max-h-40 overflow-y-auto flex flex-col gap-1">
+                    {(data.unfixable ?? []).slice(0, 60).map(u => (
+                      <p key={u.id} className="text-[11px] text-rose-900">
+                        <span className="font-medium">{u.name}</span>
+                        <span className="mx-1.5 text-rose-400">·</span>
+                        <span className="ltr-num">{u.email || "—"}</span>
+                        <span className="mr-1.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[10px] font-bold">
+                          {u.problem}
+                        </span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {data.groups.map(g => (
                 <div key={g.fromDomain} className="rounded-xl border border-slate-200 overflow-hidden">

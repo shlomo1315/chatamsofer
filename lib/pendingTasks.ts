@@ -15,11 +15,20 @@ const WIDOW_TYPE_LABELS: Record<string, string> = {
 
 export interface PendingTask {
   id: string
-  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid'
+  type: 'beneficiary' | 'loan' | 'maternity' | 'widow' | 'financial_aid' | 'name_change'
   name: string
   detail: string
   href: string
   createdAt: string
+}
+
+interface NameChangeRow {
+  id: string
+  beneficiary_id: string
+  target: 'self' | 'spouse'
+  old_name: string | null
+  new_name: string
+  requested_at: string
 }
 
 type Ben = { full_name?: string; family_name?: string } | null
@@ -27,7 +36,7 @@ const benName = (b: Ben) => [b?.family_name, b?.full_name].filter(Boolean).join(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<PendingTask[]> {
-  const [beneficiaries, loans, maternity, widows, financial, dismissed] = await Promise.all([
+  const [beneficiaries, loans, maternity, widows, financial, dismissed, nameChanges] = await Promise.all([
     supabase.from('beneficiaries')
       .select('id, full_name, family_name, created_at')
       .eq('eligibility_status', 'pending')
@@ -45,6 +54,17 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
       .select('id, created_at, beneficiary:beneficiary_id(full_name, family_name)')
       .eq('status', 'pending').order('created_at', { ascending: false }).limit(100),
     supabase.from('dismissed_pending_tasks').select('entity_type, entity_id'),
+    // ⚠️ בקשות תיקון שם — נשלפות בנפרד ובתוך catch משלהן: אין כאן embed של
+    // המוטב (השם נפתר בהמשך), וכשל בשליפה מחזיר רשימה ריקה במקום להפיל את
+    // כל לוח הבקרה יחד איתו.
+    supabase.from('name_change_requests')
+      .select('id, beneficiary_id, target, old_name, new_name, requested_at')
+      .eq('status', 'pending')
+      .order('requested_at', { ascending: false }).limit(100)
+      .then(
+        r => (r.error ? { data: [] as NameChangeRow[] } : { data: (r.data ?? []) as NameChangeRow[] }),
+        () => ({ data: [] as NameChangeRow[] }),
+      ),
   ])
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -81,6 +101,20 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
     (dismissed?.data ?? []).map((d: { entity_type: string; entity_id: string }) => `${d.entity_type}:${d.entity_id}`),
   )
 
+  // שמות המשפחה של בקשות תיקון השם — שאילתה נפרדת רק אם יש בקשות ממתינות.
+  // ⚠️ גם היא מוגנת: הרשימה נשארת עם "לא ידוע" ולא מפילה את הלוח.
+  const nameChangeRows = nameChanges.data ?? []
+  const ncNames = new Map<string, string>()
+  if (nameChangeRows.length) {
+    const ids = [...new Set(nameChangeRows.map(r => String(r.beneficiary_id)))]
+    const bens = await supabase.from('beneficiaries')
+      .select('id, full_name, family_name').in('id', ids)
+      .then(r => (r.error ? [] : (r.data ?? [])), () => [])
+    for (const b of bens as { id: string; full_name?: string; family_name?: string }[]) {
+      ncNames.set(String(b.id), benName({ full_name: b.full_name, family_name: b.family_name }))
+    }
+  }
+
   const tasks: PendingTask[] = [
     ...(beneficiaries.data ?? []).filter(b => !handledBenIds.has(b.id)).map((b): PendingTask => ({
       id: b.id, type: 'beneficiary', name: benName({ full_name: b.full_name, family_name: b.family_name }),
@@ -101,6 +135,17 @@ export async function getPendingTasks(supabase: SupabaseClient<any>): Promise<Pe
     ...(financial.data ?? []).map((f): PendingTask => ({
       id: f.id, type: 'financial_aid', name: benName(f.beneficiary as Ben),
       detail: 'סיוע רפואי/כספי', href: `/admin/financial-aid/${f.id}`, createdAt: f.created_at,
+    })),
+    ...nameChangeRows.map((n): PendingTask => ({
+      id: n.id, type: 'name_change',
+      name: ncNames.get(String(n.beneficiary_id)) ?? 'לא ידוע',
+      // התיאור נושא את השינוי המבוקש עצמו: בלעדיו המנהל היה נאלץ להיכנס
+      // לכרטסת רק כדי לדעת מה בכלל מתבקש.
+      detail: `תיקון שם ${n.target === 'spouse' ? 'בן/בת הזוג' : 'פרטי'}: ${n.old_name || '—'} ← ${n.new_name}`,
+      // הקישור לכרטסת ולא למסך ייעודי — ההכרעה עצמה נעשית בחלונית שקופצת
+      // בכניסה, וכאן העניין הוא לראות את מי זה נוגע.
+      href: `/admin/beneficiaries/${n.beneficiary_id}`,
+      createdAt: n.requested_at,
     })),
   ]
     .filter(t => !dismissedSet.has(`${t.type}:${t.id}`))

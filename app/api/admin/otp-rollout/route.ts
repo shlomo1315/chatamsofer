@@ -21,7 +21,18 @@ export async function GET() {
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
   const { data } = await db.from('app_settings').select('value').eq('key', KEY).maybeSingle()
-  const percent = Math.max(0, Math.min(100, Math.round(Number((data?.value as { percent?: number })?.percent) || 0)))
+  // 🔴 app_settings.value היא עמודת text ולא jsonb. שמירת אובייקט גולמי
+  // עוברת בלי שגיאה אך מאחסנת "[object Object]", וכל קריאה חוזרת לאפס.
+  // הכישלון שקט: ה-upsert מצליח והמסך מציג "נשמר".
+  const parsed = (() => {
+    const v = data?.value
+    if (v && typeof v === 'object') return v as { percent?: number }
+    if (typeof v === 'string' && v.trim().startsWith('{')) {
+      try { return JSON.parse(v) as { percent?: number } } catch { return {} }
+    }
+    return {}
+  })()
+  const percent = Math.max(0, Math.min(100, Math.round(Number(parsed.percent) || 0)))
 
   // ── מדדי 14 הימים האחרונים ──
   // ⚠️ המספרים האלה הם מה שמצדיק (או שולל) העלאת האחוז. בלעדיהם ההחלטה
@@ -69,7 +80,7 @@ export async function PUT(request: NextRequest) {
   const percent = Math.max(0, Math.min(100, Math.round(Number(body.percent) || 0)))
 
   const { error } = await db.from('app_settings')
-    .upsert({ key: KEY, value: { percent }, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    .upsert({ key: KEY, value: JSON.stringify({ percent }), updated_at: new Date().toISOString() }, { onConflict: 'key' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // ⚠️ ניקוי המטמון מיד: בלעדיו השינוי נכנס לתוקף רק בעוד דקה, והמנהל

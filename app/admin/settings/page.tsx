@@ -279,7 +279,7 @@ export default async function SettingsPage() {
           <OtpRolloutSettings />
         </Collapsible>
 
-        <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-indigo-600" />} defaultOpen>
+        <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-indigo-600" />}>
           <DailyDigestSettings />
         </Collapsible>
 
@@ -309,7 +309,7 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* Department gates — פתיחה/סגירה לפי מחלקה (עליית אוויר הדרגתית) */}
-        <Collapsible title="הגדרות בקשות — פתיחה/סגירה לפי מחלקה" icon={<UserPlus size={16} className="text-emerald-500" />} defaultOpen>
+        <Collapsible title="הגדרות בקשות — פתיחה/סגירה לפי מחלקה" icon={<UserPlus size={16} className="text-emerald-500" />}>
           <DepartmentGatesSettings />
         </Collapsible>
 

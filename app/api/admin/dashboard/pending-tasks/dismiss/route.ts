@@ -5,7 +5,7 @@ import { requireAdmin, getServiceClient, forbidden } from '@/lib/apiAuth'
 // מוסיף שורה ל-dismissed_pending_tasks, וה-GET מסנן החוצה בקשות שהוסתרו.
 export const dynamic = 'force-dynamic'
 
-const VALID_TYPES = ['beneficiary', 'loan', 'maternity', 'widow', 'financial_aid']
+const VALID_TYPES = ['beneficiary', 'loan', 'maternity', 'widow', 'financial_aid', 'name_change']
 
 export async function POST(request: NextRequest) {
   const staff = await requireAdmin()          // מנהל מלא בלבד

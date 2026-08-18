@@ -18,6 +18,7 @@ const ALL: TaskLike[] = [
   t('maternity', 'מזרחי'),
   t('widow', 'אלמנה'),
   t('financial_aid', 'פרידמן'),
+  t('name_change', 'שוורץ'),
 ]
 
 describe('visibleTasks', () => {
@@ -34,7 +35,7 @@ describe('visibleTasks', () => {
   })
 
   it('מנהל רואה הכל', () => {
-    expect(visibleTasks(ALL, 'admin', {}, true)).toHaveLength(5)
+    expect(visibleTasks(ALL, 'admin', {}, true)).toHaveLength(ALL.length)
   })
 
   it('משתמש בלי הרשאות אינו רואה דבר', () => {
@@ -52,6 +53,20 @@ describe('visibleTasks', () => {
     const types = out.map(x => x.type)
     expect(types).not.toContain('beneficiary')
     expect(out.every(t => TASK_TYPE_SECTION[t.type] === 'loans')).toBe(true)
+  })
+
+  it('בקשת תיקון שם נשלטת בהרשאת הצאצאים', () => {
+    // האישור עצמו דורש requirePermission('beneficiaries') — הרשימה חייבת
+    // להיחשף לאותם אנשים בדיוק, לא לרחבים מהם.
+    const out = visibleTasks(ALL, 'reviewer', { beneficiaries: 'view' }, false)
+    expect(out.map(x => x.type)).toContain('name_change')
+    expect(TASK_TYPE_SECTION.name_change).toBe('beneficiaries')
+  })
+
+  it('🔴 בקשת תיקון שם אינה דולפת למי שמורשה להלוואות בלבד', () => {
+    const out = visibleTasks(ALL, 'reviewer', { loans: 'edit' }, false)
+    expect(out.some(x => x.type === 'name_change')).toBe(false)
+    expect(out.some(x => x.name === 'שוורץ')).toBe(false)
   })
 
   it('כל סוג משימה ממופה למחלקה — אין סוג יתום שידלוף', () => {

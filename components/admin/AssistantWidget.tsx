@@ -226,7 +226,7 @@ export default function AssistantWidget() {
               return (
                 <div key={i} className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === 'user' ? 'self-start' : 'self-end'}`}>
                   <div
-                    className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                    className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words ${
                       m.role === 'user'
                         ? 'bg-indigo-600 text-white rounded-br-md'
                         : 'bg-white border border-slate-200 text-slate-800 rounded-bl-md'

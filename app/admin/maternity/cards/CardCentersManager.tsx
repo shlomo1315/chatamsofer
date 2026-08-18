@@ -83,7 +83,8 @@ export default function CardCentersManager() {
       ) : centers.length === 0 ? (
         <p className="text-sm text-slate-400 py-3 text-center">אין מוקדים עדיין — לחצו על הוסף מוקד כדי להתחיל.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="w-full rounded-xl border border-slate-200">
+          {/* בלי גלילה אופקית: כתובת/שעות ארוכות גולשות לשורה נוספת. */}
           <table className="w-full text-[16px] text-right border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b-2 border-slate-200 text-[15px] font-bold text-slate-600">
@@ -96,16 +97,17 @@ export default function CardCentersManager() {
             <tbody>
               {centers.map(c => (
                 <tr key={c.id} className="border-b border-slate-100 hover:bg-emerald-50/30">
-                  <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{c.name}</td>
-                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100">
+                  <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100 whitespace-normal break-words align-top">{c.name}</td>
+                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100 whitespace-normal break-words align-top">
+                    {/* flex ולא inline-flex: inline-flex אינו נשבר לשורה, והכתובת הייתה מרחיבה את העמודה. */}
                     {fullAddress(c) ? (
-                      <span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-slate-400" />{fullAddress(c)}</span>
+                      <span className="flex items-start gap-1.5"><MapPin size={14} className="text-slate-400 shrink-0 mt-1" /><span className="min-w-0 break-words">{fullAddress(c)}</span></span>
                     ) : <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100">
+                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100 whitespace-normal break-words align-top">
                     {schedule(c) || <span className="text-slate-300">—</span>}
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-5 py-4 align-top">
                     <div className="flex items-center gap-1">
                       {canEdit && (
                         <button onClick={() => { setErr(''); setModal({ id: c.id, name: c.name, city: c.city ?? '', address: c.address ?? '', pickup_days: c.pickup_days ?? '', pickup_hours: c.pickup_hours ?? '' }) }}

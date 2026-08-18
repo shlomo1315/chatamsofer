@@ -3,6 +3,7 @@ import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
 import { fetchAllRows } from '@/lib/fetchAllRows'
 import { suggestDomainFix, groupFixes, type DomainFix } from '@/lib/emailDomainFix'
+import { isValidEmail, emailProblem } from '@/lib/emailVerification'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -55,9 +56,21 @@ export async function GET() {
   if (error) return NextResponse.json({ error }, { status: 500 })
 
   const fixes: (DomainFix & { id: string; name: string; verified: boolean })[] = []
+  const unfixable: { id: string; name: string; email: string; problem: string; verified: boolean }[] = []
   for (const r of rows) {
     const fix = suggestDomainFix(r.email)
     if (fix) fixes.push({ ...fix, id: r.id, name: displayName(r), verified: Boolean(r.email_verified_at) })
+    else if (!isValidEmail(r.email)) {
+      // 🔴 פגומה ואין תיקון ודאי — זו הרשימה שדורשת אדם. הכתובת
+      // שגויה בחלק שלפני ה-@, או בדומיין שאינו ברשימת השגיאות
+      // המוכרות, ולנחש שם פירושו להמציא כתובת.
+      unfixable.push({
+        id: r.id, name: displayName(r),
+        email: (r.email ?? '').trim(),
+        problem: emailProblem(r.email) ?? 'כתובת לא תקינה',
+        verified: Boolean(r.email_verified_at),
+      })
+    }
   }
 
   return NextResponse.json({
@@ -67,6 +80,10 @@ export async function GET() {
     // ⚠️ מוחזרת גם הרשימה המלאה: המנהל רוצה לראות שמות לפני שהוא מאשר
     // שינוי על עשרות רשומות, לא רק מספר מסכם.
     fixes: fixes.slice(0, 500),
+    // ⚠️ מוחזרות גם הכתובות שאין להן תיקון: בלעדיהן המסך מציג "תוקנו
+    // 47" ויוצר רושם שהבעיה נסגרה, בעוד שהאמיתיות שבהן עדיין שם.
+    unfixableCount: unfixable.length,
+    unfixable: unfixable.slice(0, 500),
   })
 }
 

@@ -39,7 +39,13 @@ export async function getOtpRollout(): Promise<OtpRollout> {
   if (!db) return DEFAULT
   try {
     const { data } = await db.from('app_settings').select('value').eq('key', KEY).maybeSingle()
-    const raw = (data?.value ?? {}) as Partial<OtpRollout>
+    // 🔴 העמודה היא text — ראו ההערה בנתיב otp-rollout.
+    const rawValue = data?.value
+    let raw: Partial<OtpRollout> = {}
+    if (rawValue && typeof rawValue === 'object') raw = rawValue as Partial<OtpRollout>
+    else if (typeof rawValue === 'string' && rawValue.trim().startsWith('{')) {
+      try { raw = JSON.parse(rawValue) as Partial<OtpRollout> } catch { raw = {} }
+    }
     const percent = Math.max(0, Math.min(100, Math.round(Number(raw.percent) || 0)))
     const value = { percent }
     cache = { at: Date.now(), value }

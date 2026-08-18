@@ -87,22 +87,23 @@ export default function RecoveryBillingSummary({ aids }: { aids: MaternityAid[] 
       {rows.length === 0 ? (
         <p className="px-5 pb-5 text-sm text-slate-400">אין חיובים בתקופה זו.</p>
       ) : (
-        <div className="overflow-x-auto">
+        // בלי גלילה אופקית: שם בית החלמה גולש לשורה נוספת במקום להרחיב את הדף.
+        <div className="w-full">
           <table className="w-full text-sm text-right">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50">
                 {['בית החלמה', 'יולדות', 'לילות', 'סה״כ חויב'].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-4 py-2.5 text-xs font-semibold text-slate-500">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map(r => (
                 <tr key={r.home} className="hover:bg-emerald-50/30">
-                  <td className="px-4 py-2.5 font-medium text-slate-800">{r.home}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{r.count}</td>
-                  <td className="px-4 py-2.5 text-slate-600">{r.nights.toLocaleString('he-IL')}</td>
-                  <td className="px-4 py-2.5 font-bold text-emerald-700">{ils(r.amount)}</td>
+                  <td className="px-4 py-2.5 font-medium text-slate-800 whitespace-normal break-words align-top">{r.home}</td>
+                  <td className="px-4 py-2.5 text-slate-600 align-top">{r.count}</td>
+                  <td className="px-4 py-2.5 text-slate-600 align-top">{r.nights.toLocaleString('he-IL')}</td>
+                  <td className="px-4 py-2.5 font-bold text-emerald-700 align-top">{ils(r.amount)}</td>
                 </tr>
               ))}
             </tbody>

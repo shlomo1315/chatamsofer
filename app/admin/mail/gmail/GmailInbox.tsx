@@ -506,14 +506,14 @@ export default function GmailInbox() {
               </div>
 
               <div className="border-b border-slate-100 px-5 py-4">
-                <h2 className="font-extrabold text-slate-900 leading-snug">{selected.subject || '(ללא נושא)'}</h2>
+                <h2 className="font-extrabold text-slate-900 leading-snug break-words">{selected.subject || '(ללא נושא)'}</h2>
                 <div className="mt-2.5 flex items-center gap-2 flex-wrap text-xs">
                   <span className="flex items-center gap-1.5 text-slate-700">
                     <User size={12} className="text-slate-400" />
                     <strong>{selected.from_name || selected.from_email}</strong>
                   </span>
                   {selected.from_name && selected.from_email && (
-                    <span dir="ltr" className="text-slate-400">{selected.from_email}</span>
+                    <span dir="ltr" className="text-slate-400 break-all">{selected.from_email}</span>
                   )}
                   <span className="text-slate-300">·</span>
                   <span className="text-slate-500">{fmtDate(selected.sent_at)}</span>
@@ -525,7 +525,7 @@ export default function GmailInbox() {
                   )}
                 </div>
                 {(selected.original_to || selected.to_email) && (
-                  <p dir="ltr" className="text-[11px] text-slate-400 mt-1 text-right">
+                  <p dir="ltr" className="text-[11px] text-slate-400 mt-1 text-right break-all">
                     אל: {selected.original_to || selected.to_email}
                   </p>
                 )}

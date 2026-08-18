@@ -223,10 +223,11 @@ export default function AutoApprovedPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="w-full">
+            {/* בלי גלילה אופקית: התאים גולשים לשורה נוספת במקום לדחוף את הדף לרוחב. */}
             <table className="w-full text-[12px] border-collapse">
               <thead className="bg-slate-50 text-slate-500">
-                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap">
+                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right">
                   <th>
                     <input type="checkbox" checked={allShown} onChange={toggleAll}
                       className="h-4 w-4 accent-amber-600" aria-label="סימון הכל" />
@@ -236,7 +237,7 @@ export default function AutoApprovedPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {rows.map(r => (
-                  <tr key={r.id} className={`hover:bg-slate-50 [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-nowrap ${selected.has(r.id) ? 'bg-amber-50' : ''}`}>
+                  <tr key={r.id} className={`hover:bg-slate-50 [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-normal [&>td]:break-words [&>td]:align-top ${selected.has(r.id) ? 'bg-amber-50' : ''}`}>
                     <td>
                       <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)}
                         className="h-4 w-4 accent-amber-600" aria-label={`סימון ${r.name}`} />
