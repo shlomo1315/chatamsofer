@@ -2,7 +2,7 @@
 
 // מסך אימות כתובות המייל: מספרים מדויקים, הרשימה המלאה של מי שטרם אימת,
 // סימון כתובות פגומות, ושליחת בקשה לאמת.
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, Search, MailCheck, AlertTriangle, Send, CheckCircle2, RefreshCw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -100,6 +100,27 @@ export default function EmailVerificationManager() {
     } catch (e) { if (!quiet) toast.error(e instanceof Error ? e.message : 'שגיאה') }
     finally { setLoading(false) }
   }
+
+  // 🔴 רענון אוטומטי אחרי שהרשימה נטענה.
+  //
+  // הסינון עצמו תקין — listUnverified מסננת `.is('email_verified_at', null)`,
+  // כלומר מי שאימת אכן יורד. אבל הרשימה נטענה רק בלחיצה ידנית, ולכן משפחה
+  // שאימתה את המייל *אחרי* הטעינה המשיכה להופיע על המסך — ונראה כאילו
+  // האימות לא נקלט. הרענון סוגר את הפער בלי לחיצה.
+  //
+  // ⚠️ רק אחרי הטעינה הראשונה (loaded): הסריקה עוברת על כל טבלת המוטבים,
+  // ואין סיבה שכל פתיחה של מסך ההגדרות תשלם עליה.
+  // ⚠️ מדלג כשהלשונית מוסתרת, ומרענן מיד בחזרה אליה.
+  // ⚠️ לא בזמן שליחה (sending): רשימה שמתחלפת תוך כדי מנה מאפסת את
+  // הבחירה ומקפיצה את המסך מתחת לידיים.
+  useEffect(() => {
+    if (!loaded) return
+    const tick = () => { if (!document.hidden && !sending) void load(true) }
+    const t = setInterval(tick, 30_000)
+    window.addEventListener('focus', tick)
+    return () => { clearInterval(t); window.removeEventListener('focus', tick) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, sending])
 
   /**
    * שליחת בקשות אימות, עם מונה חי.
