@@ -3,6 +3,8 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { Search, Eye, Phone, Mail, MapPin, Clock, Check, X, Users, FileText, ClipboardCheck, ShieldAlert } from 'lucide-react'
 import DataTable, { Column } from '@/components/ui/DataTable'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 import SortButtons, { SortMode } from '@/components/ui/SortButtons'
 import Pagination from '@/components/ui/Pagination'
 import QuickEmailModal from '@/components/QuickEmailModal'
@@ -178,6 +180,19 @@ const buildColumns = (onEmail: (row: Beneficiary) => void): Column<Beneficiary>[
       ) : (
         <span className="text-slate-300">—</span>
       ),
+  },
+  {
+    key: 'approval_label',
+    header: 'סיבת אישור',
+    className: 'min-w-[110px]',
+    // ⚠️ מסביר למה אדם שאינו צאצא רשאי להגיש בקשות. רוב הרשומות הן
+    // צאצאים רגילים בלי תווית, ולכן התא ריק ברובן ואינו תופס מקום.
+    render: (row) => {
+      const label = approvalLabelOf(row)
+      return label
+        ? <ApprovalLabelTag label={label} size="xs" />
+        : <span className="text-slate-300">—</span>
+    },
   },
   {
     key: 'children_count',

@@ -53,30 +53,25 @@ export default function AssignLabelPanel({ people }: { people: Person[] }) {
     return n
   })
 
+  // 🔴 בקשה אחת לכל האצווה. קודם נשלחה בקשה נפרדת לכל אדם, ו-50 סימונים
+  // הפכו לעשרות שניות של המתנה בלי שום חיווי.
   const apply = async (clear = false) => {
     if (!picked.size || (!clear && !labelId)) return
     setBusy(true)
-    let ok = 0, failed = 0
     try {
-      // ⚠️ בזה אחר זה: זו פעולה על עשרות בודדות, והמסד מעדכן שורה אחת
-      // בכל קריאה. נתיב אצווה כאן היה מורכבות בלי רווח מדיד.
-      for (const id of picked) {
-        try {
-          const r = await fetch('/api/admin/approval-labels', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ beneficiary_id: id, label_id: clear ? null : labelId }),
-          })
-          if (r.ok) ok++; else failed++
-        } catch { failed++ }
-      }
-      if (ok) {
-        toast.success(clear ? `התווית הוסרה מ-${ok} רשומות` : `${ok} שויכו לתווית`)
-        setPicked(new Set())
-        router.refresh()
-      }
-      if (failed) toast.error(`${failed} עדכונים נכשלו`)
-    } finally { setBusy(false) }
+      const r = await fetch('/api/admin/approval-labels', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beneficiary_ids: [...picked], label_id: clear ? null : labelId }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(d?.error || 'העדכון נכשל'); return }
+      const n = Number(d.updated ?? picked.size)
+      toast.success(clear ? `התווית הוסרה מ-${n} רשומות` : `${n} שויכו לתווית`)
+      setPicked(new Set())
+      router.refresh()
+    } catch { toast.error('העדכון נכשל') }
+    finally { setBusy(false) }
   }
 
   const label = labels.find(l => l.id === labelId)

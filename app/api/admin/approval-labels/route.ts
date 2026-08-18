@@ -26,6 +26,8 @@ interface Body {
   notes?: string
   /** שיוך: התווית לאדם. null מנתק. */
   beneficiary_id?: string
+  /** מסלול אצווה — שיוך תווית לרשימת אנשים בבקשה אחת. */
+  beneficiary_ids?: unknown[]
   label_id?: string | null
 }
 
@@ -106,6 +108,32 @@ export async function PATCH(request: NextRequest) {
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   // ── מסלול א׳: שיוך תווית לאדם ──
+  // ── מסלול אצווה: תווית אחת לרשימת אנשים ──
+  //
+  // 🔴 בקשה אחת לכל הקבוצה. הלקוח שלח בקשה נפרדת לכל אדם, ו-50 סימונים
+  // הפכו לעשרות שניות שבהן הכפתור נראה תקוע בלי שום חיווי.
+  if (Array.isArray(body.beneficiary_ids)) {
+    const ids = [...new Set(body.beneficiary_ids.map(v => String(v ?? '').trim()).filter(Boolean))]
+    if (!ids.length) return NextResponse.json({ error: 'לא נבחרו רשומות' }, { status: 400 })
+    if (ids.length > 500) return NextResponse.json({ error: 'אפשר לשייך עד 500 בכל פעם' }, { status: 400 })
+    const labelId = body.label_id ? String(body.label_id).trim() : null
+
+    const { error } = await db
+      .from('beneficiaries')
+      .update({ approval_label_id: labelId })
+      .in('id', ids)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // ⚠️ שורת יומן אחת לאצווה — 50 שורות זהות הופכות את היומן לבלתי
+    // קריא בדיוק ביום שמחפשים בו את הפעולה.
+    await logActivity(db, {
+      userId: staff.userId, action: labelId ? 'approval_label_assigned_bulk' : 'approval_label_cleared_bulk',
+      entityType: 'beneficiary', entityId: null,
+      details: { count: ids.length, label_id: labelId },
+    }).catch(() => {})
+    return NextResponse.json({ ok: true, updated: ids.length })
+  }
+
   if (body.beneficiary_id !== undefined) {
     const benId = String(body.beneficiary_id ?? '').trim()
     if (!benId) return NextResponse.json({ error: 'חסר מזהה המשפחה' }, { status: 400 })

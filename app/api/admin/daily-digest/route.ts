@@ -27,7 +27,20 @@ const DEFAULTS: DigestSettings = { enabled: false, emails: [] }
 export async function loadDigestSettings(db: ReturnType<typeof getServiceClient>): Promise<DigestSettings> {
   if (!db) return DEFAULTS
   const { data } = await db.from('app_settings').select('value').eq('key', KEY).maybeSingle()
-  const v = (data?.value ?? {}) as Partial<DigestSettings>
+  // 🔴 העמודה `value` היא text ולא jsonb (ראו 20260630_loans_portal).
+  // כל שאר המערכת שומרת בה JSON.stringify — כאן נשמר אובייקט גולמי,
+  // Postgres אחסן "[object Object]", וכל קריאה חזרה לברירות המחדל.
+  // הכישלון היה שקט לגמרי: ה-upsert הצליח והמסך הראה "נשמר".
+  //
+  // ⚠️ מתקבלים שני הפורמטים — ההגדרות שנשמרו לפני התיקון נשארו
+  // כמחרוזת פגומה, ורשומה כזו לא אמורה להפיל את הטעינה.
+  let v: Partial<DigestSettings> = {}
+  const rawValue = data?.value
+  if (rawValue && typeof rawValue === 'object') {
+    v = rawValue as Partial<DigestSettings>
+  } else if (typeof rawValue === 'string' && rawValue.trim().startsWith('{')) {
+    try { v = JSON.parse(rawValue) as Partial<DigestSettings> } catch { v = {} }
+  }
   return {
     enabled: v.enabled === true,
     emails: Array.isArray(v.emails) ? v.emails.filter(e => typeof e === 'string' && e.includes('@')) : [],
@@ -61,7 +74,7 @@ export async function PUT(request: NextRequest) {
   const value: DigestSettings = { enabled: body.enabled === true, emails }
 
   const { error } = await db.from('app_settings')
-    .upsert({ key: KEY, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    .upsert({ key: KEY, value: JSON.stringify(value), updated_at: new Date().toISOString() }, { onConflict: 'key' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await logActivity(db, {
