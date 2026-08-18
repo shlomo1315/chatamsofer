@@ -34,8 +34,13 @@ export interface DigestSection {
   ink: string
   /** מה קרה היום. */
   today: { label: string; value: number | string }[]
-  /** מה ממתין להכרעה. ⚠️ מוצג גם כשאפס — "אין ממתינים" הוא מידע. */
-  pending: { label: string; value: number | string; urgent?: boolean }[]
+  /**
+   * מה ממתין להכרעה. ⚠️ מוצג גם כשאפס — "אין ממתינים" הוא מידע.
+   *
+   * ⚠️ info=true: שורה שהיא *מידע* ולא משימה יומית, ולכן אינה נספרת
+   * בסך הכולל. ראה totalPending.
+   */
+  pending: { label: string; value: number | string; urgent?: boolean; info?: boolean }[]
 }
 
 export interface DigestData {
@@ -111,10 +116,13 @@ export async function buildDigestData(db: SupabaseClient, ref = new Date()): Pro
       title: 'איגוד הצאצאים',
       ink: '#6366f1',
       today: [{ label: 'משפחות שנרשמו', value: he(n(newBens)) }],
+      // 🔴 שורות מידע ולא משימות: אלפי צאצאים "ממתינים לאישור" הם מצב
+      // מתמשך של המאגר ולא עבודה של היום. ספירתם בסך הכולל הציגה 12,879
+      // "פריטים ממתינים לטיפול" והטביעה את מה שבאמת דורש הכרעה.
       pending: [
-        { label: 'ממתינות לאישור', value: he(n(pendingBens)), urgent: n(pendingBens) > 0 },
-        { label: 'בבדיקה מעמיקה', value: he(n(deepReview)), urgent: n(deepReview) > 0 },
-        { label: 'ממתינות להשלמת מסמכים', value: he(n(docsPending)) },
+        { label: 'ממתינות לאישור', value: he(n(pendingBens)), info: true },
+        { label: 'בבדיקה מעמיקה', value: he(n(deepReview)), info: true },
+        { label: 'ממתינות להשלמת מסמכים', value: he(n(docsPending)), info: true },
       ],
     },
     {
@@ -136,7 +144,8 @@ export async function buildDigestData(db: SupabaseClient, ref = new Date()): Pro
       today: [{ label: 'לידות חדשות', value: he(n(newBirths)) }],
       pending: [
         { label: 'ממתינות לאישור', value: he(n(birthsPending)), urgent: n(birthsPending) > 0 },
-        { label: 'בבדיקה מעמיקה', value: he(n(birthsDeepReview)) },
+        // ⚠️ deep_review ביולדות = "ממתין לאישור מנהל" (ראה lib/maternityBuckets).
+        { label: 'הועבר לאישור מנהל', value: he(n(birthsDeepReview)), urgent: n(birthsDeepReview) > 0 },
       ],
     },
     {
@@ -156,8 +165,11 @@ export async function buildDigestData(db: SupabaseClient, ref = new Date()): Pro
     },
   ]
 
-  const totalPending = n(pendingBens) + n(deepReview) + n(loansPending)
-    + n(loansAwaitingDisburse) + n(birthsPending) + n(recipientsPending)
+  // 🔴 הסך כולל *רק* משימות שדורשות הכרעה — בלי שורות המידע של הצאצאים.
+  // עם הצאצאים המספר היה 12,879, כלומר "יש אלפי דברים לטפל" — וזה הפך
+  // את הכותרת לחסרת שימוש.
+  const totalPending = n(loansPending) + n(loansAwaitingDisburse)
+    + n(birthsPending) + n(birthsDeepReview) + n(recipientsPending)
     + n(widowPending) + n(aidPending)
 
   return { dateLabel, sections, totalPending }
@@ -173,14 +185,14 @@ export async function buildDigestData(db: SupabaseClient, ref = new Date()): Pro
  */
 export function renderDigestHtml(d: DigestData): string {
   const card = (s: DigestSection) => {
-    const row = (label: string, value: number | string, urgent?: boolean) => `
+    const row = (label: string, value: number | string, urgent?: boolean, info?: boolean) => `
       <tr>
         <td style="padding:7px 0;font-size:13px;color:#475569;border-bottom:1px solid #f1f5f9;">${label}</td>
-        <td style="padding:7px 0;font-size:14px;font-weight:700;text-align:left;border-bottom:1px solid #f1f5f9;color:${urgent ? '#b45309' : '#0f172a'};" dir="ltr">${value}</td>
+        <td style="padding:7px 0;font-size:14px;font-weight:700;text-align:left;border-bottom:1px solid #f1f5f9;color:${urgent ? '#b45309' : info ? '#64748b' : '#0f172a'};" dir="ltr">${value}</td>
       </tr>`
 
     const todayRows = s.today.map(t => row(t.label, t.value)).join('')
-    const pendingRows = s.pending.map(p => row(p.label, p.value, p.urgent)).join('')
+    const pendingRows = s.pending.map(p => row(p.label, p.value, p.urgent, p.info)).join('')
 
     return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl"
@@ -202,7 +214,7 @@ export function renderDigestHtml(d: DigestData): string {
       </td></tr>` : ''}
       ${s.pending.length ? `
       <tr><td style="padding:10px 18px 16px;">
-        <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:.04em;padding-bottom:2px;">ממתין לטיפול</div>
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:.04em;padding-bottom:2px;">${s.pending.every(p => p.info) ? 'מצב המאגר' : 'ממתין לטיפול'}</div>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" dir="rtl">${pendingRows}</table>
       </td></tr>` : ''}
     </table>`
