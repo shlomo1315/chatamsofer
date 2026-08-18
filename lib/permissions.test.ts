@@ -64,21 +64,30 @@ describe('mail כמחלקה מלאה', () => {
   })
 })
 
-describe('רצפת התפקיד נשמרת', () => {
-  it('מזכירות — צאצאים תמיד בעריכה גם ללא סימון', () => {
-    expect(roleAllows('secretary', {}, 'beneficiaries', 'edit')).toBe(true)
+describe('רצפת התפקיד בוטלה — הסימון הוא מקור האמת', () => {
+  it('מזכירות ללא סימון — אין גישה לשום מחלקה', () => {
+    // 🔴 עד כה מזכירה קיבלה צאצאים וחלוקות חגים אוטומטית. סימון 'ללא'
+    // לא נאכף, והמסך הראה מצב שאינו המצב בפועל.
+    expect(roleAllows('secretary', {}, 'beneficiaries', 'view')).toBe(false)
+    expect(roleAllows('secretary', {}, 'distributions', 'view')).toBe(false)
   })
 
-  it('רצפת התפקיד אינה פותחת את המחלקות החדשות', () => {
-    // ⚠️ הרצפה נועדה למנוע חסימה של יכולת ששייכת לתפקיד — לא להחזיר
-    // בדלת האחורית את הדליפה שהטסט הזה סוגר.
-    expect(roleAllows('secretary', {}, 'widows', 'view')).toBe(false)
-    expect(roleAllows('secretary', {}, 'newsletter', 'view')).toBe(false)
-    expect(roleAllows('secretary', {}, 'mail', 'view')).toBe(false)
+  it("סימון מפורש של 'ללא' חוסם", () => {
+    expect(roleAllows('secretary', { beneficiaries: 'none' }, 'beneficiaries', 'view')).toBe(false)
+    expect(roleAllows('secretary', { distributions: 'none' }, 'distributions', 'view')).toBe(false)
   })
 
-  it('סימון גבוה מהרצפה גובר על הרצפה', () => {
+  it('סימון מפורש פותח בדיוק את מה שסומן', () => {
     expect(effectiveLevel('secretary', { distributions: 'edit' }, 'distributions')).toBe('edit')
+    expect(roleAllows('secretary', { beneficiaries: 'view' }, 'beneficiaries', 'view')).toBe(true)
+    expect(roleAllows('secretary', { beneficiaries: 'view' }, 'beneficiaries', 'edit')).toBe(false)
+  })
+
+  it('מחלקות שלא סומנו נשארות סגורות', () => {
+    expect(roleAllows('secretary', { loans: 'add' }, 'widows', 'view')).toBe(false)
+    expect(roleAllows('secretary', { loans: 'add' }, 'newsletter', 'view')).toBe(false)
+    expect(roleAllows('secretary', { loans: 'add' }, 'mail', 'view')).toBe(false)
+    expect(roleAllows('secretary', { loans: 'add' }, 'loans', 'add')).toBe(true)
   })
 })
 

@@ -41,9 +41,17 @@ describe('visibleTasks', () => {
     expect(visibleTasks(ALL, 'reviewer', {}, false)).toHaveLength(0)
   })
 
-  it('רצפת התפקיד נספרת — מזכירות רואה צאצאים גם ללא סימון', () => {
-    const out = visibleTasks(ALL, 'secretary', {}, false)
-    expect(out.map(x => x.type)).toContain('beneficiary')
+  it('מזכירות ללא סימון אינה רואה משימות — הרצפה בוטלה', () => {
+    // 🔴 עד כה מזכירה קיבלה צאצאים אוטומטית, וכרטיס 'ממתינים לטיפול'
+    // ספר לה משימות ממחלקה שלא סומנה לה. הסימון הוא מקור האמת היחיד.
+    expect(visibleTasks(ALL, 'secretary', {}, false)).toHaveLength(0)
+  })
+
+  it('הספירה מוגבלת למחלקות שסומנו בלבד', () => {
+    const out = visibleTasks(ALL, 'secretary', { loans: 'add' }, false)
+    const types = out.map(x => x.type)
+    expect(types).not.toContain('beneficiary')
+    expect(out.every(t => TASK_TYPE_SECTION[t.type] === 'loans')).toBe(true)
   })
 
   it('כל סוג משימה ממופה למחלקה — אין סוג יתום שידלוף', () => {

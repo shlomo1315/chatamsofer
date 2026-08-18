@@ -288,6 +288,9 @@ export default async function DashboardPage() {
           <h1 className="text-2xl font-bold text-slate-900">{getGreeting()}</h1>
           <p className="text-slate-500 mt-1 text-sm">ברוך הבא ללוח הבקרה של היכל החתם סופר</p>
         </div>
+        {/* ⚠️ נבדק כמו כל שאר הלוח: הכפתור הוביל למסך הדוחות גם למי שאין
+            לו הרשאת דוחות, והמסך עצמו חסם — כלומר הבטחה שנשברת בלחיצה. */}
+        {can('reports') && (
         <Link href="/admin/reports"
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-white text-sm
                      bg-gradient-to-b from-indigo-500 to-indigo-600 ring-1 ring-inset ring-white/15
@@ -296,6 +299,7 @@ export default async function DashboardPage() {
           <Download size={15} />
           הורדת דוחות
         </Link>
+        )}
       </div>
 
       {!isSupabaseConfigured() && (
