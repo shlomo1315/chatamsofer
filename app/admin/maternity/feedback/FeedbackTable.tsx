@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Star, Globe, Mail, X, Home, MessageSquare, Trash2, Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 export interface SurveyQuestion {
   id: string
@@ -67,6 +68,19 @@ function fmtDateTime(iso: string): string {
   })
 }
 
+// ── הגדרת העמודות ──
+// ⚠️ עמודת המחיקה (אחרונה, בלי כותרת) אינה בבורר — ראו extraCols.
+type ColKey = 'date' | 'mother' | 'home' | 'avg' | 'source' | 'notes'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'date', label: 'תאריך', def: true },
+  { key: 'mother', label: 'שם היולדת', def: true },
+  { key: 'home', label: 'בית החלמה', def: true },
+  { key: 'avg', label: 'ציון ממוצע', def: true },
+  { key: 'source', label: 'מקור', def: true },
+  { key: 'notes', label: 'הערות', def: true },
+]
+
 export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]; questions: SurveyQuestion[] }) {
   const router = useRouter()
   const toast = useToast()
@@ -116,6 +130,41 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
       }))
       .sort((a, b) => (b.avg ?? -1) - (a.avg ?? -1))
   }, [rows, scaleQuestions])
+
+  // ⚠️ לפני ה-return המוקדם של "אין תשובות" — hook חייב לרוץ בכל רינדור.
+  // extraCols: 1 — עמודת המחיקה, שאינה בבורר.
+  const tc = useTableColumns<ColKey>('maternity-feedback', COLUMNS, { extraCols: 1 })
+
+  // תוכן התא לפי מפתח העמודה
+  const cell = (key: ColKey, row: FeedbackRow) => {
+    switch (key) {
+      case 'date': return <span className="text-slate-500 text-xs">{fmtDate(row.created_at)}</span>
+      case 'mother': return <span className="font-semibold text-slate-800">{motherName(row)}</span>
+      case 'home': return <span className="text-slate-600">{row.recovery_home || '—'}</span>
+      case 'avg': {
+        const avg = rowAvg(row)
+        const tone = scoreTone(avg ?? 0)
+        return (
+          <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ltr-num ${
+            avg != null ? `${tone.bg} ${tone.text}` : 'bg-slate-100 text-slate-400'
+          }`}>
+            {avg != null ? avg.toFixed(1) : '—'}
+          </span>
+        )
+      }
+      case 'source': {
+        const meta = SOURCE_META[row.source] ?? SOURCE_META.web
+        const Icon = meta.icon
+        return (
+          <span className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium ${meta.color}`}>
+            <Icon size={13} />
+            {meta.label}
+          </span>
+        )
+      }
+      case 'notes': return <span className="text-slate-600">{row.free_text || '—'}</span>
+    }
+  }
 
   if (!rows.length) {
     return (
@@ -170,50 +219,33 @@ export default function FeedbackTable({ rows, questions }: { rows: FeedbackRow[]
         })}
       </div>
 
-      {/* טבלת התשובות */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
-        <table className="w-full text-sm">
+      {/* בורר העמודות — מעל הטבלה */}
+      <div className="mb-3">{tc.picker}</div>
+
+      {/* טבלת התשובות — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm" style={tc.rt.tableStyle}>
+          <colgroup>{tc.rt.cols}</colgroup>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-right text-xs text-slate-500">
-              <th className="px-4 py-3 font-semibold">תאריך</th>
-              <th className="px-4 py-3 font-semibold">שם היולדת</th>
-              <th className="px-4 py-3 font-semibold">בית החלמה</th>
-              <th className="px-4 py-3 font-semibold">ציון ממוצע</th>
-              <th className="px-4 py-3 font-semibold">מקור</th>
-              <th className="px-4 py-3 font-semibold">הערות</th>
-              <th className="w-12" />
+              {tc.shown.map((c, i) => (
+                <th key={c.key} className={`px-4 py-3 font-semibold ${tc.headClass(c)}`}>
+                  {c.label}{tc.rt.handle(i)}
+                </th>
+              ))}
+              <th className="relative w-12">{tc.rt.handle(tc.shown.length)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map(row => {
-              const avg = rowAvg(row)
-              const tone = scoreTone(avg ?? 0)
-              const meta = SOURCE_META[row.source] ?? SOURCE_META.web
-              const Icon = meta.icon
               return (
                 <tr key={row.id} onClick={() => setOpen(row)} className="hover:bg-slate-50 cursor-pointer transition">
-                  <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{fmtDate(row.created_at)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{motherName(row)}</td>
-                  <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{row.recovery_home || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-bold ltr-num ${
-                      avg != null ? `${tone.bg} ${tone.text}` : 'bg-slate-100 text-slate-400'
-                    }`}>
-                      {avg != null ? avg.toFixed(1) : '—'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium ${meta.color}`}>
-                      <Icon size={13} />
-                      {meta.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 max-w-xs">
-                    <span className="line-clamp-1">{row.free_text || '—'}</span>
-                  </td>
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c.key, row)}</td>
+                  ))}
 
                   {/* מחיקה — עוצר את ה-propagation כדי שלא ייפתח המודל */}
-                  <td className="px-2 py-3" onClick={e => e.stopPropagation()}>
+                  <td className="px-2 py-3 align-top" onClick={e => e.stopPropagation()}>
                     {deleting === row.id ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
                     ) : (

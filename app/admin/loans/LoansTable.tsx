@@ -9,7 +9,7 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
-import { useResizableColumns } from '@/components/ui/ResizableTable'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // 🔴 ההלוואות נקובות בדולר: הסכום מוקלד בדולרים, וההחזר בשקלים לפי שער
@@ -44,6 +44,25 @@ const CARD_DEFS: CardDef[] = [
   { key: 'sent', label: 'נשלח לבירור', icon: MessageSquare, base: 'border-sky-200 hover:border-sky-300', active: 'border-sky-400 ring-2 ring-sky-200 bg-sky-50', iconCls: 'bg-sky-100 text-sky-700' },
   { key: 'approved', label: 'מאושרות', icon: Check, base: 'border-green-200 hover:border-green-300', active: 'border-green-400 ring-2 ring-green-200 bg-green-50', iconCls: 'bg-green-100 text-green-700' },
   { key: 'rejected', label: 'לא מאושרות', icon: X, base: 'border-red-200 hover:border-red-300', active: 'border-red-400 ring-2 ring-red-200 bg-red-50', iconCls: 'bg-red-100 text-red-700' },
+]
+
+// ── הגדרת העמודות ──
+// ⚠️ "פעולות" אינה בבורר: היא הדרך היחידה למחוק ולצפות, והסתרתה משאירה
+// את השורה בלי מוצא. לכן extraCols: 1 והידיות מוסטות באחד.
+type ColKey =
+  | 'borrower' | 'id_number' | 'amount' | 'approved_amount'
+  | 'installments' | 'purpose' | 'created_at' | 'disbursed' | 'status'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'borrower', label: 'שם הלווה', def: true },
+  { key: 'id_number', label: 'ת.ז.', def: true },
+  { key: 'amount', label: 'סכום מבוקש', def: true },
+  { key: 'approved_amount', label: 'סכום מאושר', def: true },
+  { key: 'installments', label: 'תשלומים', def: false, align: 'center' },
+  { key: 'purpose', label: 'מטרה', def: false },
+  { key: 'created_at', label: 'תאריך הגשה', def: true },
+  { key: 'disbursed', label: 'ביצוע', def: true },
+  { key: 'status', label: 'סטטוס', def: true },
 ]
 
 const haystack = (l: Loan) => {
@@ -122,10 +141,78 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   // עמודות לשורה, כולל LoanStatusControl שהוא קומפוננטת state מלאה לכל שורה),
   // וכל הקלדה בחיפוש/מיון בנתה הכל מחדש. שום שורה לא נעלמת — היא רק נטענת
   // כשמגיעים אליה בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
-  // גרירת רוחב עמודות — רכיב מערכתי משותף.
-  const rt = useResizableColumns('loans', 10)
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
+  // ⚠️ המזהה נשאר 'loans' כדי לא לאבד כיוונון רוחב קיים; ה-hook מוסיף לו
+  // את מספר העמודות הנראות בעצמו.
+  const tc = useTableColumns('loans', COLUMNS, { extraCols: 1 })
 
   const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+
+  // ── תוכן התא לפי עמודה ──
+  // ⚠️ מקור אמת יחיד: הכותרת, התא וברירת המחדל יושבים יחד ב-COLUMNS.
+  const cell = (c: ColDef<ColKey>, loan: Loan) => {
+    const b = loan.beneficiary as BenRef | undefined
+    switch (c.key) {
+      case 'borrower':
+        return (
+          <div className="flex items-center gap-2 flex-wrap font-medium text-slate-800">
+            <span>{borrowerName(b)}</span>
+            {/* 🔴 הבקשה חזרה אלינו: נשלח בירור והמבקש ענה. הסטטוס נשאר
+                'inquiry' (במכוון — ראה lib/loanInquiry), ולכן בלי הסימון
+                הזה השורה נראית ברשימה בדיוק כמו בקשה שממתינים *לו*,
+                בזמן שהיא דורשת טיפול מיידי. */}
+            {isReturned(loan) && (
+              <span title="המבקש השיב לבירור — הבקשה ממתינה לטיפולכם"
+                className="animate-returned-pulse inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                <MessageSquare size={10} className="flex-shrink-0" />
+                חזר מבירור
+              </span>
+            )}
+          </div>
+        )
+      case 'id_number':
+        return <span className="ltr-num text-xs font-mono text-slate-500">{b?.id_number ?? '—'}</span>
+      case 'amount':
+        return <span className="ltr-num font-semibold text-slate-900">{fmtCur(loan.amount)}</span>
+      case 'approved_amount':
+        return loan.approved_amount != null
+          ? <span className="ltr-num font-semibold text-green-700">{fmtCur(loan.approved_amount)}</span>
+          : <span className="text-slate-300">—</span>
+      case 'installments':
+        return <span className="text-slate-600">{loan.installments}</span>
+      case 'purpose':
+        return <span className="text-slate-600">{loan.purpose ?? '—'}</span>
+      case 'created_at':
+        return <span className="ltr-num text-slate-500 text-xs">{fmtDate(loan.created_at)}</span>
+      case 'disbursed':
+        return loan.disbursed_at ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+              <CheckCircle2 size={13} className="flex-shrink-0" />
+              בוצע
+            </span>
+            <span className="text-[11px] text-slate-400 ltr-num">{fmtDate(loan.disbursed_at)}</span>
+            {loan.disbursed_by && <span className="text-[11px] text-slate-400">{loan.disbursed_by}</span>}
+          </div>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+            <Minus size={13} />
+            טרם בוצע
+          </span>
+        )
+      case 'status':
+        // ⚠️ familyApproved מועבר גם כאן ולא רק בכרטסת: בלעדיו הוא
+        // undefined, ובורר "היקף האישור" היה ממשיך להופיע ברשימה
+        // למשפחה מאושרת.
+        return (
+          <LoanStatusControl loan={loan}
+            familyApproved={(loan.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status === 'approved'} />
+        )
+    }
+  }
+
+  // עמודות שהלחיצה בהן פותחת בורר/כפתור ולא אמורה לנווט לכרטיס ההלוואה.
+  const stopsNavigation = (k: ColKey) => k === 'status'
 
   return (
     <div className="flex flex-col gap-5">
@@ -198,94 +285,54 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
             )}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right" style={rt.tableStyle}>
-            <colgroup>{rt.cols}</colgroup>
+        {/* ── בורר העמודות ── */}
+        <div className="px-5 py-3 border-b border-slate-200">{tc.picker}</div>
+
+        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
+        <div className="w-full">
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
-              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200">
-                {['שם הלווה', 'ת.ז.', 'סכום מבוקש', 'סכום מאושר', 'תשלומים', 'מטרה', 'תאריך הגשה', 'ביצוע', 'סטטוס', 'פעולות'].map((h, i) => (
-                  <th key={h} className="relative px-4 py-3.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 align-middle text-right">
-                    {h}{rt.handle(i)}
-                  </th>
+              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
+                             [&>th]:px-4 [&>th]:py-3.5 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
+                             [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:align-middle [&>th]:text-right">
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
                 ))}
+                {/* ⚠️ הידית של "פעולות" היא האחרונה — האינדקס כולל את כל
+                    העמודות הנראות שלפניה. */}
+                <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
-              ) : visibleRows.map(loan => {
-                const b = loan.beneficiary as BenRef | undefined
-                // 🔴 הבקשה חזרה אלינו: נשלח בירור והמבקש ענה. הסטטוס נשאר
-                // 'inquiry' (במכוון — ראה lib/loanInquiry), ולכן בלי הסימון
-                // הזה השורה נראית ברשימה בדיוק כמו בקשה שממתינים *לו*,
-                // בזמן שהיא דורשת טיפול מיידי.
-                const returned = isReturned(loan)
-                return (
-                  <tr key={loan.id}
-                    onClick={() => router.push(`/admin/loans/${loan.id}`)}
-                    className="even:bg-slate-50/50 hover:bg-indigo-50/50 transition-colors cursor-pointer">
-                    <td className="px-4 py-3.5 align-middle text-right font-medium text-slate-800 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{borrowerName(b)}</span>
-                        {returned && (
-                          <span title="המבקש השיב לבירור — הבקשה ממתינה לטיפולכם"
-                            className="animate-returned-pulse inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800 flex-shrink-0">
-                            <MessageSquare size={10} className="flex-shrink-0" />
-                            חזר מבירור
-                          </span>
-                        )}
-                      </div>
+                <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו הלוואות בסינון זה</td></tr>
+              ) : visibleRows.map(loan => (
+                <tr key={loan.id}
+                  onClick={() => router.push(`/admin/loans/${loan.id}`)}
+                  className="even:bg-slate-50/50 hover:bg-indigo-50/50 transition-colors cursor-pointer
+                             [&>td]:px-4 [&>td]:py-3.5 [&>td]:text-right">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={tc.cellClass(c)}
+                      onClick={stopsNavigation(c.key) ? e => e.stopPropagation() : undefined}>
+                      {cell(c, loan)}
                     </td>
-                    <td className="px-4 py-3.5 align-middle text-right text-xs font-mono text-slate-500"><span className="ltr-num">{b?.id_number ?? '—'}</span></td>
-                    <td className="px-4 py-3.5 align-middle text-right font-semibold text-slate-900"><span className="ltr-num">{fmtCur(loan.amount)}</span></td>
-                    <td className="px-4 py-3.5 align-middle text-right">
-                      {loan.approved_amount != null
-                        ? <span className="ltr-num font-semibold text-green-700">{fmtCur(loan.approved_amount)}</span>
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-4 py-3.5 align-middle text-right text-slate-600">{loan.installments}</td>
-                    <td className="px-4 py-3.5 align-middle text-right text-slate-600 break-words">{loan.purpose ?? '—'}</td>
-                    <td className="px-4 py-3.5 align-middle text-right text-slate-500 text-xs"><span className="ltr-num">{fmtDate(loan.created_at)}</span></td>
-                    <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                      {loan.disbursed_at ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                            <CheckCircle2 size={13} className="flex-shrink-0" />
-                            בוצע
-                          </span>
-                          <span className="text-[11px] text-slate-400 ltr-num">{fmtDate(loan.disbursed_at)}</span>
-                          {loan.disbursed_by && <span className="text-[11px] text-slate-400 truncate max-w-[100px]">{loan.disbursed_by}</span>}
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                          <Minus size={13} />
-                          טרם בוצע
-                        </span>
-                      )}
-                    </td>
-                    {/* ⚠️ familyApproved מועבר גם כאן ולא רק בכרטסת: בלעדיו הוא
-                        undefined, ובורר "היקף האישור" היה ממשיך להופיע ברשימה
-                        למשפחה מאושרת. */}
-                    <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}>
-                      <LoanStatusControl loan={loan}
-                        familyApproved={(loan.beneficiary as { eligibility_status?: string } | undefined)?.eligibility_status === 'approved'} />
-                    </td>
-                    <td className="px-4 py-3.5 align-middle" onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
-                        <Link href={`/admin/loans/${loan.id}`}
-                          className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
-                          <Eye size={14} /> צפייה
-                        </Link>
-                        <DeleteLoanButton loanId={loan.id} />
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
+                  ))}
+                  <td className={tc.rt.cellClass} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/admin/loans/${loan.id}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
+                        <Eye size={14} /> צפייה
+                      </Link>
+                      <DeleteLoanButton loanId={loan.id} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {/* זקיף הגלילה — colSpan נדיב במכוון: מספר העמודות משתנה. */}
               {hasMore && (
                 <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={10} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                  <td colSpan={20} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
                     <Loader2 size={14} className="inline animate-spin ml-1.5" />
                     טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
                   </td>

@@ -5,9 +5,21 @@ import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, C
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
 const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
+
+type ColKey = 'name' | 'id_number' | 'city' | 'children' | 'monthly' | 'total'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'שם המשפחה', def: true },
+  { key: 'id_number', label: 'ת.ז.', def: true },
+  { key: 'city', label: 'עיר', def: true },
+  { key: 'children', label: 'ילדים', def: true, align: 'center' },
+  { key: 'monthly', label: 'תמיכה חודשית', def: true },
+  { key: 'total', label: 'סך תמיכות', def: true },
+]
 
 export default function WidowsDashboard({
   widows, requests, payments,
@@ -57,6 +69,29 @@ export default function WidowsDashboard({
   // הן חייבות להישאר סכום כללי ולא להשתנות עם הגלילה.
   const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
 
+  // ⚠️ extraCols=1 — עמודת החץ בקצה אינה בבורר אך נספרת לגרירה. היא האחרונה,
+  // ולכן האינדקסים של העמודות שבבורר נשארים 0..n-1.
+  const tc = useTableColumns('widows', COLUMNS, { extraCols: 1 })
+
+  const cell = (c: ColDef<ColKey>, w: Beneficiary) => {
+    switch (c.key) {
+      case 'name': {
+        const pend = pendingByFamily[w.id] ?? 0
+        return (
+          <span className="flex items-center gap-2 font-medium text-slate-800">
+            {fullName(w)}
+            {pend > 0 && <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pend} בקשות</span>}
+          </span>
+        )
+      }
+      case 'id_number': return <span className="font-mono text-xs text-slate-500 ltr-num">{w.id_number}</span>
+      case 'city': return w.city ? <span className="flex items-center gap-1 text-slate-600"><MapPin size={12} className="shrink-0" />{w.city}</span> : <span className="text-slate-600">—</span>
+      case 'children': return <span className="inline-flex items-center gap-1 text-slate-600"><Baby size={13} className="shrink-0" />{w.children_count ?? 0}</span>
+      case 'monthly': return <span className="text-blue-700 font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</span>
+      case 'total': return <span className="text-emerald-700 font-bold ltr-num">{totalsByFamily[w.id] ? fmtCur(totalsByFamily[w.id]) : '—'}</span>
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* שלוש סטטיסטיקות */}
@@ -93,46 +128,35 @@ export default function WidowsDashboard({
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+        <div className="px-5 pt-3">{tc.picker}</div>
+        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
+        <div className="w-full px-1 pt-2">
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-3">שם המשפחה</th>
-                <th className="px-4 py-3">ת.ז.</th>
-                <th className="px-4 py-3">עיר</th>
-                <th className="px-4 py-3">ילדים</th>
-                <th className="px-4 py-3">תמיכה חודשית</th>
-                <th className="px-4 py-3">סך תמיכות</th>
-                <th className="px-4 py-3" />
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={`px-4 py-3 ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
+                ))}
+                <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
+                <tr><td colSpan={tc.shown.length + 1} className="text-center py-10 text-slate-400">אין תיקים</td></tr>
               )}
-              {visibleRows.map(w => {
-                const pend = pendingByFamily[w.id] ?? 0
-                return (
-                  <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      <span className="flex items-center gap-2">
-                        {fullName(w)}
-                        {pend > 0 && <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pend} בקשות</span>}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500 ltr-num">{w.id_number}</td>
-                    <td className="px-4 py-3 text-slate-600">{w.city ? <span className="flex items-center gap-1"><MapPin size={12} />{w.city}</span> : '—'}</td>
-                    <td className="px-4 py-3"><span className="flex items-center gap-1 text-slate-600"><Baby size={13} />{w.children_count ?? 0}</span></td>
-                    <td className="px-4 py-3 text-blue-700 font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</td>
-                    <td className="px-4 py-3 text-emerald-700 font-bold ltr-num">{totalsByFamily[w.id] ? fmtCur(totalsByFamily[w.id]) : '—'}</td>
-                    <td className="px-4 py-3 text-slate-300"><ChevronLeft size={16} /></td>
-                  </tr>
-                )
-              })}
+              {visibleRows.map(w => (
+                <tr key={w.id} onClick={() => router.push(`/admin/widows/${w.id}`)} className="hover:bg-purple-50/40 cursor-pointer transition-colors">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c, w)}</td>
+                  ))}
+                  <td className="px-4 py-3 text-slate-300 align-top"><ChevronLeft size={16} /></td>
+                </tr>
+              ))}
               {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
               {hasMore && (
                 <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={7} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                  <td colSpan={tc.shown.length + 1} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
                     <Loader2 size={14} className="inline animate-spin ml-1.5" />
                     טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
                   </td>

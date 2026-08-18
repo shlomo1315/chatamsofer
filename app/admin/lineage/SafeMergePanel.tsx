@@ -7,6 +7,7 @@
 // בין "בטוח בוודאות" לבין "מקורב, דורש בדיקה".
 import { useState, useCallback } from 'react'
 import { ShieldCheck, Loader2, Search, AlertTriangle, CheckCircle2, GitMerge } from 'lucide-react'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Stats = {
   groups: number
@@ -34,6 +35,17 @@ type Result = {
 
 const he = (n: number) => n.toLocaleString('he-IL')
 
+type ColKey = 'name' | 'generation' | 'parent' | 'copies' | 'children' | 'families'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'שם', def: true },
+  { key: 'generation', label: 'דור', def: true, align: 'center' },
+  { key: 'parent', label: 'תחת', def: true },
+  { key: 'copies', label: 'עותקים', def: true, align: 'center' },
+  { key: 'children', label: 'ילדים', def: true, align: 'center' },
+  { key: 'families', label: 'משפחות', def: true, align: 'center' },
+]
+
 export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
@@ -44,6 +56,23 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
   const [result, setResult] = useState<Result | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [err, setErr] = useState('')
+
+  const tc = useTableColumns('lineage-safe-merge', COLUMNS)
+
+  const cell = (c: ColDef<ColKey>, g: Group) => {
+    switch (c.key) {
+      case 'name': return <span className="font-medium text-slate-800">{g.name}</span>
+      case 'generation': return <span className="text-slate-500">{g.generation}</span>
+      case 'parent': return <span className="text-slate-500">{g.parentName}</span>
+      case 'copies': return (
+        <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-800">
+          {g.copies}
+        </span>
+      )
+      case 'children': return <span className="text-slate-500">{g.children || '—'}</span>
+      case 'families': return <span className="text-slate-500">{g.families || '—'}</span>
+    }
+  }
 
   const scan = useCallback(async () => {
     setLoading(true); setErr(''); setDone(null)
@@ -281,31 +310,24 @@ export default function SafeMergePanel({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
+          <div className="mb-2">{tc.picker}</div>
+          {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
           <div className="max-h-72 overflow-y-auto rounded-lg border border-emerald-200 bg-white mb-3">
-            <table className="w-full text-right text-sm">
+            <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
+              <colgroup>{tc.rt.cols}</colgroup>
               <thead className="sticky top-0 bg-emerald-50 text-slate-600">
                 <tr>
-                  <th className="px-3 py-2 font-medium">שם</th>
-                  <th className="px-3 py-2 font-medium">דור</th>
-                  <th className="px-3 py-2 font-medium">תחת</th>
-                  <th className="px-3 py-2 font-medium">עותקים</th>
-                  <th className="px-3 py-2 font-medium">ילדים</th>
-                  <th className="px-3 py-2 font-medium">משפחות</th>
+                  {tc.shown.map((c, i) => (
+                    <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {groups.map((g, i) => (
                   <tr key={`${g.name}-${g.generation}-${i}`} className="hover:bg-emerald-50/50">
-                    <td className="px-3 py-2 font-medium text-slate-800">{g.name}</td>
-                    <td className="px-3 py-2 text-slate-500">{g.generation}</td>
-                    <td className="px-3 py-2 text-slate-500 max-w-[180px] truncate">{g.parentName}</td>
-                    <td className="px-3 py-2">
-                      <span className="inline-flex items-center rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[11px] font-bold text-amber-800">
-                        {g.copies}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-slate-500">{g.children || '—'}</td>
-                    <td className="px-3 py-2 text-slate-500">{g.families || '—'}</td>
+                    {tc.shown.map(c => (
+                      <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, g)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

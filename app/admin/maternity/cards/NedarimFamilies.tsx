@@ -5,7 +5,8 @@ import {
   Pencil, Check, AlertTriangle, Coins, Users, Receipt, TrendingDown, ArrowDownCircle,
 } from 'lucide-react'
 import ExtendEligibility from '../ExtendEligibility'
-import { AdminOnly } from '@/components/StaffPermissions'
+import { AdminOnly, useIsAdmin } from '@/components/StaffPermissions'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Stats = {
   configured?: boolean
@@ -81,7 +82,27 @@ async function api(action: string, params: Record<string, string> = {}): Promise
   return res.json()
 }
 
+// ── הגדרת עמודות טבלת המשפחות ──
+// ⚠️ עמודת הצ׳קבוקס (למנהל בלבד) אינה בבורר — ראו extraCols למטה.
+type FamColKey =
+  | 'name' | 'clientId' | 'zeout' | 'card' | 'birth'
+  | 'center' | 'phone' | 'groupe' | 'balance' | 'unload'
+
+const FAMILY_COLUMNS: ColDef<FamColKey>[] = [
+  { key: 'name', label: 'שם משפחה', def: true },
+  { key: 'clientId', label: 'מזהה משפחה', def: false },
+  { key: 'zeout', label: 'ת.ז', def: true },
+  { key: 'card', label: 'מספר כרטיס', def: true },
+  { key: 'birth', label: 'תאריך לידה', def: true },
+  { key: 'center', label: 'מוקד לאיסוף', def: false },
+  { key: 'phone', label: 'טלפון', def: true },
+  { key: 'groupe', label: 'קטגוריה', def: false },
+  { key: 'balance', label: 'יתרה בכרטיס', def: true },
+  { key: 'unload', label: 'ימים לפריקה', def: true },
+]
+
 export default function NedarimFamilies() {
+  const isAdmin = useIsAdmin()
   const [families, setFamilies] = useState<Family[]>([])
   const [total, setTotal] = useState<string | number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -169,6 +190,40 @@ export default function NedarimFamilies() {
     setChecked(new Set())
     await load(); await loadStats()
     if (failed > 0) setError(`${failed} מתוך ${targets.length} משפחות לא נמחקו. נסה שוב.`)
+  }
+
+  // ⚠️ extraCols תלוי בהרשאה: עמודת הצ׳קבוקס מוצגת למנהל בלבד, ולכן גם
+  // האינדקס שמועבר לידית הגרירה מוסט בהתאם (ראו colOffset למטה).
+  const tc = useTableColumns<FamColKey>('nedarim-families', FAMILY_COLUMNS, { extraCols: isAdmin ? 1 : 0 })
+  const colOffset = isAdmin ? 1 : 0
+
+  // תוכן התא לפי מפתח העמודה
+  const famCell = (key: FamColKey, f: Family, info?: UnloadInfo) => {
+    switch (key) {
+      case 'name': return <span className="font-semibold text-slate-800">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</span>
+      case 'clientId': return <span className="ltr-num font-mono text-slate-600">{f.ClientId}</span>
+      case 'zeout': return <span className="ltr-num text-slate-600">{f.Zeout || '—'}</span>
+      case 'card': return stats?.cardByClientId?.[String(f.ClientId)]
+        ? <span className="ltr-num font-mono text-slate-700">{stats.cardByClientId[String(f.ClientId)]}</span>
+        : <span className="text-amber-600 text-sm">לא בוצע שיוך</span>
+      case 'birth': return <span className="ltr-num text-slate-600">{fmtBirth(info?.birthDate)}</span>
+      case 'center': return <span className="text-slate-600">{info?.centerName || '—'}</span>
+      case 'phone': return <span className="ltr-num text-slate-600">{cleanPhone(f.Phone)}</span>
+      case 'groupe': return <span className="text-slate-600">{f.Groupe || '—'}</span>
+      case 'balance': return <span className="font-bold text-emerald-700">{ils(f.Ytra)}</span>
+      case 'unload': return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <UnloadCell info={info} />
+          {info?.aidId && (
+            <ExtendEligibility
+              aid={{ id: info.aidId, birth_date: info.birthDate ?? '', six_weeks_end: info.sixWeeksEnd, eligibility_extended: info.extended, eligibility_extension_reason: info.reason }}
+              variant="icon"
+              onDone={() => { load(); loadStats() }}
+            />
+          )}
+        </div>
+      )
+    }
   }
 
   return (
@@ -264,67 +319,50 @@ export default function NedarimFamilies() {
             <CreditCard size={28} /><span className="text-sm">{error ? 'לא ניתן לטעון נתונים' : q ? 'לא נמצאו תוצאות' : 'אין משפחות'}</span>
           </div>
         ) : (
-          <div className="overflow-auto max-h-[70vh]">
-            <table className="w-full text-[16px] border-collapse" dir="rtl">
-              <thead className="sticky top-0 z-10">
-                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 [&>th]:bg-slate-50">
-                  <AdminOnly><th className="px-4 py-4 border-l border-slate-200 w-px">
-                    <input type="checkbox" checked={allFilteredChecked} onChange={toggleAll}
-                      title="בחר הכל" className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
-                  </th></AdminOnly>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">שם משפחה</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">מזהה משפחה</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">ת.ז</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">מספר כרטיס</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">תאריך לידה</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">מוקד לאיסוף</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">טלפון</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">קטגוריה</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">יתרה בכרטיס</th>
-                  <th className="px-5 py-4 font-bold">ימים לפריקה</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(f => {
-                  const info = f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
-                  const isChecked = checked.has(String(f.ClientId))
-                  return (
-                  <tr key={f.ClientId} onClick={() => setSelected(f)} className={`border-b border-slate-100 cursor-pointer transition-colors ${isChecked ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-emerald-50/40'}`}>
-                    <AdminOnly><td className="px-4 py-4 border-l border-slate-100 w-px" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={isChecked} onChange={() => toggleOne(String(f.ClientId))}
-                        className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
-                    </td></AdminOnly>
-                    <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{[f.FamilyName, f.FirstName].filter(Boolean).join(' ') || '—'}</td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num font-mono">{f.ClientId}</span></td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{f.Zeout || '—'}</span></td>
-                    <td className="px-5 py-4 text-right border-l border-slate-100">
-                      {stats?.cardByClientId?.[String(f.ClientId)]
-                        ? <span className="ltr-num font-mono text-slate-700">{stats.cardByClientId[String(f.ClientId)]}</span>
-                        : <span className="text-amber-600 text-sm">לא בוצע שיוך</span>}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{fmtBirth(info?.birthDate)}</span></td>
-                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{info?.centerName || '—'}</td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{cleanPhone(f.Phone)}</span></td>
-                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{f.Groupe || '—'}</td>
-                    <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{ils(f.Ytra)}</td>
-                    <td className="px-5 py-4" onClick={info?.aidId ? (e => e.stopPropagation()) : undefined}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <UnloadCell info={info} />
-                        {info?.aidId && (
-                          <ExtendEligibility
-                            aid={{ id: info.aidId, birth_date: info.birthDate ?? '', six_weeks_end: info.sixWeeksEnd, eligibility_extended: info.extended, eligibility_extension_reason: info.reason }}
-                            variant="icon"
-                            onDone={() => { load(); loadStats() }}
-                          />
-                        )}
-                      </div>
-                    </td>
+          <>
+            {/* בורר העמודות — מעל הטבלה */}
+            <div className="px-4 py-3 border-b border-slate-100">{tc.picker}</div>
+            {/* ⚠️ גלילה אנכית בלבד — אין גלילה לרוחב בשום טבלה. */}
+            <div className="overflow-y-auto max-h-[70vh]">
+              <table className="w-full text-[16px] border-collapse" dir="rtl" style={tc.rt.tableStyle}>
+                <colgroup>{tc.rt.cols}</colgroup>
+                <thead className="sticky top-0 z-10">
+                  <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 [&>th]:bg-slate-50 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+                    <AdminOnly><th className="px-4 py-4 w-px">
+                      <input type="checkbox" checked={allFilteredChecked} onChange={toggleAll}
+                        title="בחר הכל" className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
+                    </th></AdminOnly>
+                    {tc.shown.map((c, i) => (
+                      <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i + colOffset)}</th>
+                    ))}
                   </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map(f => {
+                    const info = f.Zeout ? stats?.unloadByZeout?.[String(f.Zeout).trim()] : undefined
+                    const isChecked = checked.has(String(f.ClientId))
+                    return (
+                    <tr key={f.ClientId} onClick={() => setSelected(f)}
+                      className={`border-b border-slate-100 cursor-pointer transition-colors [&>td]:px-5 [&>td]:py-4 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 ${isChecked ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-emerald-50/40'}`}>
+                      <AdminOnly><td className="px-4 py-4 w-px align-top" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(String(f.ClientId))}
+                          className="w-4 h-4 accent-rose-600 cursor-pointer align-middle" />
+                      </td></AdminOnly>
+                      {tc.shown.map(c => (
+                        // ⚠️ עצירת ה-propagation רק בעמודת הפריקה, שיש בה כפתור
+                        // הארכת זכאות — אחרת לחיצה עליו הייתה פותחת גם את המודאל.
+                        <td key={c.key} className={tc.cellClass(c)}
+                          onClick={c.key === 'unload' && info?.aidId ? (e => e.stopPropagation()) : undefined}>
+                          {famCell(c.key, f, info)}
+                        </td>
+                      ))}
+                    </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
       </>
@@ -762,12 +800,36 @@ function PeriodCard({ label, amount, count, loading }: { label: string; amount: 
   )
 }
 
+// ── עמודות טבלת העסקאות ──
+type TxColKey = 'family' | 'store' | 'date' | 'amount'
+
+const TX_COLUMNS: ColDef<TxColKey>[] = [
+  { key: 'family', label: 'משפחה', def: true },
+  { key: 'store', label: 'חנות', def: true },
+  { key: 'date', label: 'תאריך', def: true },
+  { key: 'amount', label: 'סכום', def: true },
+]
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TransactionsHistory({ transactions, loading }: { transactions: any[]; loading?: boolean }) {
   const [q, setQ] = useState('')
   const filtered = q.trim()
     ? transactions.filter(t => [t.familyName, t.store, t.date].filter(Boolean).join(' ').includes(q.trim()))
     : transactions
+
+  const tc = useTableColumns<TxColKey>('nedarim-transactions', TX_COLUMNS)
+
+  // תוכן התא לפי מפתח העמודה
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cell = (key: TxColKey, t: any) => {
+    switch (key) {
+      case 'family': return <span className="font-semibold text-slate-800">{t.familyName || '—'}</span>
+      case 'store': return <span className="text-slate-600">{t.store || '—'}</span>
+      case 'date': return <span className="ltr-num text-slate-600">{t.date || '—'}</span>
+      case 'amount': return <span className="font-bold text-slate-800">{Number.isFinite(Number(t.amount)) ? `₪${Number(t.amount).toLocaleString('he-IL')}` : '—'}</span>
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-2">
@@ -780,28 +842,32 @@ function TransactionsHistory({ transactions, loading }: { transactions: any[]; l
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 gap-2"><Receipt size={28} /><span className="text-sm">אין עסקאות</span></div>
         ) : (
-          <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
-            <table className="w-full text-[16px] border-collapse" dir="rtl">
-              <thead className="sticky top-0 bg-slate-50">
-                <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200">
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">משפחה</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">חנות</th>
-                  <th className="px-5 py-4 font-bold border-l border-slate-200">תאריך</th>
-                  <th className="px-5 py-4 font-bold">סכום</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((t, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-5 py-4 font-semibold text-slate-800 border-l border-slate-100">{t.familyName || '—'}</td>
-                    <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{t.store || '—'}</td>
-                    <td className="px-5 py-4 text-slate-600 text-right border-l border-slate-100"><span className="ltr-num">{t.date || '—'}</span></td>
-                    <td className="px-5 py-4 font-bold text-slate-800">{Number.isFinite(Number(t.amount)) ? `₪${Number(t.amount).toLocaleString('he-IL')}` : '—'}</td>
+          <>
+            {/* בורר העמודות — מעל הטבלה */}
+            <div className="px-4 py-3 border-b border-slate-100">{tc.picker}</div>
+            {/* ⚠️ גלילה אנכית בלבד — אין גלילה לרוחב בשום טבלה. */}
+            <div className="max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-[16px] border-collapse" dir="rtl" style={tc.rt.tableStyle}>
+                <colgroup>{tc.rt.cols}</colgroup>
+                <thead className="sticky top-0 bg-slate-50">
+                  <tr className="text-right text-[15px] font-bold text-slate-600 border-b-2 border-slate-200 [&>th]:bg-slate-50 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+                    {tc.shown.map((c, i) => (
+                      <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map((t, i) => (
+                    <tr key={i} className="border-b border-slate-100 hover:bg-slate-50 [&>td]:px-5 [&>td]:py-4 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+                      {tc.shown.map(c => (
+                        <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, t)}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

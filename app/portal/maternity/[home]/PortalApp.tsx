@@ -10,6 +10,7 @@ import { babiesOf, babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import RecoveryDatePicker from './RecoveryDatePicker'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
 import { extractUrl } from '@/lib/extractUrl'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import { he } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,6 +82,20 @@ const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yyyy') : '—'
 // ימי הזכאות של היולדת בבית ההחלמה — הערך שאושר, ובהיעדרו ברירת המחדל לפי סוג הלידה
 // (לידה רגילה = 2 · לידת תאומים = 4).
 const recoveryDays = (a: Aid) => a.recovery_eligibility_days ?? (a.is_twins ? 4 : 2)
+
+// ⚠️ ממשק לבתי החלמה שמופעל גם מהנייד: ברירת המחדל צומצמה לארבע עמודות
+// שנכנסות במסך צר — השם, התינוק, ימי הזכאות והגעה (העמודה שעליה עובדים).
+// ת״ז ותאריך לידה זמינים בבורר ובחלונית "פרטים".
+type ColKey = 'mother' | 'motherId' | 'baby' | 'birthDate' | 'days' | 'arrival'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true },
+  { key: 'motherId', label: 'ת.ז.', def: false },
+  { key: 'baby', label: 'שם התינוק', def: true },
+  { key: 'birthDate', label: 'תאריך לידה', def: false },
+  { key: 'days', label: 'ימי זכאות', def: true, align: 'center' },
+  { key: 'arrival', label: 'הגעה לבית החלמה', def: true, align: 'center' },
+]
 
 // ─── Login Form ───────────────────────────────────────────────────────────────
 function LoginForm({ home, onSuccess }: { home: string; onSuccess: () => void }) {
@@ -559,6 +574,114 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
     pending: aids.filter(a => !isCompleted(a.id) && (arrived[a.id] ?? null) !== false).length,
   }
 
+  // תא "הגעה" — הפעולה עצמה: סימון ההגעה, המצב הנעול וטופס המילוי.
+  // ⚠️ נשאר כאן ולא הועבר לרכיב נפרד: הוא נשען על עשרות פריטי state מקומיים.
+  const arrivalCell = (aid: Aid) => {
+    const a = arrived[aid.id] ?? null
+    const saving = savingId === aid.id
+    const status = amountStatus[aid.id] ?? null
+    const editing = editingAmt[aid.id] ?? false
+    const amountVal = Number(amountInput[aid.id])
+    return (
+      <>
+    {status && !editing ? (
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="inline-flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2 max-w-xs mx-auto">
+          <Check size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+          <span className="text-sm font-semibold text-emerald-800 text-right leading-relaxed">
+            היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
+          </span>
+        </div>
+        {/* פירוט הקבלות — מוצג רק כשיש יותר מאחת, כלומר אחרי
+            תשלום משלים. אחרת זה רעש על רשומה רגילה. */}
+        {(receipts[aid.id]?.length ?? 0) > 1 && (
+          <div className="text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 max-w-xs">
+            {receipts[aid.id].map((r, i) => (
+              <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
+                className="hover:text-indigo-600 underline decoration-dotted">
+                קבלה {i + 1}: ₪{Number(r.amount).toLocaleString('he-IL')}
+              </a>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          {status === 'rejected'
+            ? <span className="text-xs font-medium text-red-600">נדחה</span>
+            : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
+          {/* ⚠️ הפעולה הראשית על רשומה נעולה היא "תיקון / תשלום
+              משלים" — הוספת קבלה שמצטברת לחשבון. זה מחליף את
+              "בקש תיקון", שרק שלח מייל והשאיר את בית ההחלמה נעול
+              בלי דרך לגבות הפרש (המקרה: לילה שני שלא נגבה). */}
+          {locked[aid.id]
+            ? <button type="button" onClick={() => openTopup(aid.id)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-cyan-700 hover:text-cyan-900 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 rounded-lg px-2.5 py-1 transition-colors">
+                <Plus size={12} /> תיקון / תשלום משלים
+              </button>
+            : <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>}
+        </div>
+        {/* בקשת תיקון מלאה (שינוי הנתונים עצמם, לא הוספת סכום) —
+            נשארת כמסלול משני למקרים שדורשים התערבות המשרד. */}
+        {locked[aid.id] && (
+          editRequested[aid.id] || requesting === aid.id
+            ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600"><Lock size={11} /> בקשת תיקון נשלחה למשרד</span>
+            : <button type="button" onClick={() => requestEdit(aid.id)}
+                className="text-[11px] text-slate-400 hover:text-slate-600 underline">צריך לתקן פרטים אחרים?</button>
+        )}
+      </div>
+    ) : (
+      <div className={`flex flex-col items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
+       <div className="flex items-center justify-center gap-2">
+        {/* "הגיעה" — כשמסומן אך טרם הושלם המילוי, הכפתור בצבע
+            אמבר ("ממתין להשלמה"), לא ירוק. הירוק המלא ("בוצע ✓")
+            מופיע רק אחרי מילוי כל הפרטים ואישור השליחה. */}
+        <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
+          className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
+          {a === true ? <Clock size={15} /> : <Check size={15} />} הגיעה
+        </button>
+        <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
+          className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
+          <X size={15} /> לא הגיעה
+        </button>
+       </div>
+       {/* כל עוד סומן "הגיעה" אך טרם הושלמו הפרטים — חיווי ברור
+           שהרישום עדיין לא נגמר (מונע בלבול "כבר סומן ירוק"). */}
+       {a === true && (
+         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
+           <AlertCircle size={12} /> ממתין להשלמת הפרטים ואישור
+         </span>
+       )}
+      </div>
+    )}
+      </>
+    )
+  }
+  // ⚠️ extraCols=1 — עמודת "פרטים" בקצה אינה בבורר אך נספרת לגרירה. היא
+  // האחרונה, ולכן האינדקסים של עמודות הבורר נשארים 0..n-1.
+  const tc = useTableColumns('portal-maternity', COLUMNS, { extraCols: 1 })
+
+  // התא של כל עמודה. "הגעה" נשאר כאן ולא הוצא החוצה כי הוא הפעולה עצמה —
+  // סימון, טופס המילוי והמצב הנעול — ולא תצוגת נתון.
+  const cell = (c: ColDef<ColKey>, aid: Aid) => {
+    const m = aid.beneficiary
+    switch (c.key) {
+      case 'mother': return <span className="font-medium text-slate-800">{motherName(m)}</span>
+      case 'motherId': return <span className="font-mono text-slate-500 ltr-num">{m?.spouse_id_number ?? '—'}</span>
+      case 'baby': {
+        const nm = babyNameLabel(aid as AidNameFields)
+        return (
+          <span className="inline-flex flex-wrap items-center justify-center gap-1.5 text-slate-700">
+            {nm.pending ? <span className="font-semibold text-amber-700">⏳ {nm.text}</span> : <span>{nm.text}</span>}
+            {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"><Baby size={12} /> תאומים</span>}
+          </span>
+        )
+      }
+      case 'birthDate': return <span className="text-slate-600 ltr-num">{fmtDate(aid.birth_date)}</span>
+      case 'days': return <span className="inline-block text-sm font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות שאושרו לבית ההחלמה">{recoveryDays(aid)} ימים</span>
+      case 'arrival': return arrivalCell(aid)
+    }
+  }
+
   return (
     <div className="portal16 min-h-screen bg-gradient-to-br from-sky-50 via-white to-indigo-50" dir="rtl">
       {/* טיפוגרפיה נעימה וריווח נדיב — בלי font-size גלובלי שמנפח את הטבלה וגורם לגלישה */}
@@ -806,117 +929,43 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-center">
+            <div className="px-4 pt-3">{tc.picker}</div>
+            {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. בנייד
+                המשתמש מסתיר עמודות בבורר במקום לגלול הצידה. */}
+            <div className="w-full">
+              <table className="w-full text-sm text-center" style={tc.rt.tableStyle}>
+                <colgroup>{tc.rt.cols}</colgroup>
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    {['שם היולדת', 'ת.ז.', 'שם התינוק', 'תאריך לידה', 'ימי זכאות', 'הגעה לבית החלמה', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap text-center">{h}</th>
+                    {tc.shown.map((c, i) => (
+                      <th key={c.key} className={`px-4 py-3 text-xs font-semibold text-slate-500 text-center ${tc.headClass(c)}`}>
+                        {c.label}{tc.rt.handle(i)}
+                      </th>
                     ))}
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 text-center" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map(aid => {
-                    const m = aid.beneficiary
                     const a = arrived[aid.id] ?? null
-                    const saving = savingId === aid.id
                     const status = amountStatus[aid.id] ?? null
                     const editing = editingAmt[aid.id] ?? false
-                    const amountVal = Number(amountInput[aid.id])
                     // הטופס המורחב נפתח רק כשהשורה מורחבת (accordion) — לא אוטומטית
                     const isExpanded = expandedId === aid.id
                     const showForm = isExpanded && a === true && !(status && !editing)
                     return (
                       <Fragment key={aid.id}>
-                      <tr className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:align-middle [&>td]:text-center"
+                      <tr className="hover:bg-indigo-50/40 transition-colors cursor-pointer [&>td]:text-center"
                         onClick={() => setExpandedId(prev => prev === aid.id ? null : aid.id)}>
-                        <td className="px-4 py-3.5 font-medium text-slate-800 whitespace-nowrap text-center align-middle">{motherName(m)}</td>
-                        <td className="px-4 py-3.5 font-mono text-slate-500 text-center align-middle"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                        <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap text-center align-middle">
-                          <span className="inline-flex items-center gap-1.5">
-                            {(() => {
-                              const nm = babyNameLabel(aid as AidNameFields)
-                              return nm.pending ? <span className="text-amber-700 font-semibold whitespace-nowrap">⏳ {nm.text}</span> : <span>{nm.text}</span>
-                            })()}
-                            {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700"><Baby size={12} /> תאומים</span>}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap text-center align-middle"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
-                        <td className="px-4 py-3.5 text-center align-middle">
-                          <span className="inline-block text-sm font-bold px-3 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות שאושרו לבית ההחלמה">{recoveryDays(aid)} ימים</span>
-                        </td>
-                        <td className="px-4 py-3.5 text-center align-middle" onClick={e => e.stopPropagation()}>
-                          {status && !editing ? (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <div className="inline-flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2 max-w-xs mx-auto">
-                                <Check size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                                <span className="text-sm font-semibold text-emerald-800 text-right leading-relaxed">
-                                  היולדת מימשה את הזכאות בסכום {Number.isFinite(amountVal) ? `₪${amountVal.toLocaleString('he-IL')}` : ''}{nightsInput[aid.id] ? ` · ${nightsInput[aid.id]} לילות` : ''}
-                                </span>
-                              </div>
-                              {/* פירוט הקבלות — מוצג רק כשיש יותר מאחת, כלומר אחרי
-                                  תשלום משלים. אחרת זה רעש על רשומה רגילה. */}
-                              {(receipts[aid.id]?.length ?? 0) > 1 && (
-                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 max-w-xs">
-                                  {receipts[aid.id].map((r, i) => (
-                                    <a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
-                                      className="hover:text-indigo-600 underline decoration-dotted">
-                                      קבלה {i + 1}: ₪{Number(r.amount).toLocaleString('he-IL')}
-                                    </a>
-                                  ))}
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                {status === 'rejected'
-                                  ? <span className="text-xs font-medium text-red-600">נדחה</span>
-                                  : <span className="text-xs font-medium text-green-600">בוצע ✓</span>}
-                                {/* ⚠️ הפעולה הראשית על רשומה נעולה היא "תיקון / תשלום
-                                    משלים" — הוספת קבלה שמצטברת לחשבון. זה מחליף את
-                                    "בקש תיקון", שרק שלח מייל והשאיר את בית ההחלמה נעול
-                                    בלי דרך לגבות הפרש (המקרה: לילה שני שלא נגבה). */}
-                                {locked[aid.id]
-                                  ? <button type="button" onClick={() => openTopup(aid.id)}
-                                      className="inline-flex items-center gap-1 text-xs font-bold text-cyan-700 hover:text-cyan-900 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 rounded-lg px-2.5 py-1 transition-colors">
-                                      <Plus size={12} /> תיקון / תשלום משלים
-                                    </button>
-                                  : <button type="button" onClick={() => setEditingAmt(mm => ({ ...mm, [aid.id]: true }))}
-                                      className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline">ערוך</button>}
-                              </div>
-                              {/* בקשת תיקון מלאה (שינוי הנתונים עצמם, לא הוספת סכום) —
-                                  נשארת כמסלול משני למקרים שדורשים התערבות המשרד. */}
-                              {locked[aid.id] && (
-                                editRequested[aid.id] || requesting === aid.id
-                                  ? <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600"><Lock size={11} /> בקשת תיקון נשלחה למשרד</span>
-                                  : <button type="button" onClick={() => requestEdit(aid.id)}
-                                      className="text-[11px] text-slate-400 hover:text-slate-600 underline">צריך לתקן פרטים אחרים?</button>
-                              )}
-                            </div>
-                          ) : (
-                            <div className={`flex flex-col items-center gap-1.5 ${saving ? 'opacity-50 pointer-events-none' : ''}`}>
-                             <div className="flex items-center justify-center gap-2">
-                              {/* "הגיעה" — כשמסומן אך טרם הושלם המילוי, הכפתור בצבע
-                                  אמבר ("ממתין להשלמה"), לא ירוק. הירוק המלא ("בוצע ✓")
-                                  מופיע רק אחרי מילוי כל הפרטים ואישור השליחה. */}
-                              <button type="button" onClick={() => markArrived(aid.id, a === true ? null : true)}
-                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === true ? 'bg-amber-100 text-amber-700 border-amber-300' : 'bg-white text-slate-500 border-slate-200 hover:bg-green-50 hover:text-green-700 hover:border-green-200'}`}>
-                                {a === true ? <Clock size={15} /> : <Check size={15} />} הגיעה
-                              </button>
-                              <button type="button" onClick={() => markArrived(aid.id, a === false ? null : false)}
-                                className={`flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-lg border transition-all ${a === false ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200'}`}>
-                                <X size={15} /> לא הגיעה
-                              </button>
-                             </div>
-                             {/* כל עוד סומן "הגיעה" אך טרם הושלמו הפרטים — חיווי ברור
-                                 שהרישום עדיין לא נגמר (מונע בלבול "כבר סומן ירוק"). */}
-                             {a === true && (
-                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600">
-                                 <AlertCircle size={12} /> ממתין להשלמת הפרטים ואישור
-                               </span>
-                             )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-center align-middle">
+                        {tc.shown.map(c => (
+                          <td key={c.key} className={`px-4 py-3.5 ${tc.cellClass(c)}`}
+                            // ⚠️ עצירת ההתפשטות רק על עמודת ההגעה: לחיצה על שורה
+                            // מרחיבה אותה, אך הכפתורים בעמודה הזו הם הפעולה עצמה.
+                            onClick={c.key === 'arrival' ? (e => e.stopPropagation()) : undefined}>
+                            {cell(c, aid)}
+                          </td>
+                        ))}
+                        <td className="px-4 py-3.5 text-center align-top">
                           <button type="button" onClick={e => { e.stopPropagation(); setSelected(aid) }}
                             className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium hover:text-indigo-800">
                             <ChevronLeft size={13} /> פרטים
@@ -927,7 +976,7 @@ function DataView({ home, aids, onLogout }: { home: string; aids: Aid[]; onLogou
                       {/* שורת טופס מלאה-רוחב — כך עמודות הנתונים נשארות מיושרות וקצרות */}
                       {showForm && (
                         <tr className="bg-emerald-50/30" onClick={e => e.stopPropagation()}>
-                          <td colSpan={7} className="px-4 pb-5 pt-1">
+                          <td colSpan={tc.shown.length + 1} className="px-4 pb-5 pt-1">
                             <div className="flex flex-col gap-3 bg-emerald-50/60 border border-emerald-100 rounded-2xl p-4 w-full max-w-sm mx-auto">
                               <label className="flex flex-col gap-1.5 text-right">
                                 <span className="text-sm font-semibold text-slate-600">סכום שמומש (₪)</span>

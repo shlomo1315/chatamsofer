@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
 import { useToast } from '@/components/ui/Toast'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דוח מימוש בתי החלמה.
@@ -66,6 +67,25 @@ const STATE_STYLE: Record<State, string> = {
   'none': 'bg-slate-50 text-slate-400 border-slate-100',
 }
 
+// ── הגדרת העמודות ──
+type ColKey = 'state' | 'home' | 'name' | 'idNumber' | 'phone' | 'city' | 'birth' | 'arrived' | 'nights' | 'amount' | 'receipts'
+
+// ⚠️ "טלפון" נוסף כעמודה בבורר: הוא כבר היה בחיפוש ובייצוא לאקסל, אבל
+// לא הוצג בטבלה — מי שסינן לפי טלפון לא ראה אותו על המסך.
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'state', label: 'מצב', def: true },
+  { key: 'home', label: 'בית החלמה', def: true },
+  { key: 'name', label: 'שם המשפחה', def: true },
+  { key: 'idNumber', label: 'ת״ז', def: true },
+  { key: 'phone', label: 'טלפון', def: false },
+  { key: 'city', label: 'עיר', def: true },
+  { key: 'birth', label: 'לידה', def: true },
+  { key: 'arrived', label: 'הגעה', def: true },
+  { key: 'nights', label: 'לילות', def: true, align: 'center' },
+  { key: 'amount', label: 'סכום', def: true },
+  { key: 'receipts', label: 'קבלות', def: true, align: 'center' },
+]
+
 export default function RecoveryReportPage() {
   const toast = useToast()
   const [rows, setRows] = useState<Row[]>([])
@@ -108,6 +128,31 @@ export default function RecoveryReportPage() {
         .filter(Boolean).join(' ').toLowerCase().includes(needle)
     })
   }, [rows, homeFilter, stateFilter, q])
+
+  const tc = useTableColumns<ColKey>('maternity-recovery-report', COLUMNS)
+
+  // תוכן התא לפי מפתח העמודה
+  const cell = (key: ColKey, r: Row) => {
+    switch (key) {
+      case 'state': return <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATE_STYLE[r.state]}`}>{r.stateLabel}</span>
+      case 'home': return <span className="font-medium text-slate-700">{r.recovery_home ?? '—'}</span>
+      case 'name': return <span className="font-bold text-slate-800">{r.name}</span>
+      case 'idNumber': return <span className="text-slate-500 ltr-num">{r.id_number ?? '—'}</span>
+      case 'phone': return <span className="text-slate-500 ltr-num">{r.phone ?? '—'}</span>
+      case 'city': return <span className="text-slate-500">{r.city ?? '—'}</span>
+      case 'birth': return <span className="text-slate-500 ltr-num">{fmtDate(r.birth_date)}</span>
+      case 'arrived': return <span className="text-slate-500 ltr-num">{r.arrived ? fmtDate(r.arrived_at) : '—'}</span>
+      case 'nights': return <span className="text-slate-600 ltr-num">{r.nights ?? '—'}</span>
+      case 'amount': return <span className="font-bold text-emerald-700 ltr-num">{r.amount ? fmtCur(r.amount) : '—'}</span>
+      case 'receipts': return (
+        <span className="text-slate-500 ltr-num">
+          {r.receiptCount > 0
+            ? <span className="inline-flex items-center gap-1"><Receipt size={11} />{r.receiptCount}</span>
+            : '—'}
+        </span>
+      )
+    }
+  }
 
   async function exportXlsx() {
     setExporting(true)
@@ -277,38 +322,24 @@ export default function RecoveryReportPage() {
         ) : filtered.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-slate-400">לא נמצאו רשומות</p>
         ) : (
-          /* ⚠️ גלילה בתוך הכרטיס ולא בדף, ורוחב מינימלי בפיקסלים לכל עמודה —
-             כך כל ערך נשאר מתחת לכותרת שלו. */
-          <div className="overflow-x-auto">
-            <table className="w-full text-[12px] border-collapse">
-              <thead className="bg-slate-50 text-slate-500 sticky top-0">
-                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap">
-                  <th>מצב</th><th>בית החלמה</th><th>שם המשפחה</th><th>ת״ז</th>
-                  <th>עיר</th><th>לידה</th><th>הגעה</th><th>לילות</th>
-                  <th>סכום</th><th>קבלות</th>
+          /* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */
+          <div className="w-full">
+            <div className="px-5 py-3 border-b border-slate-100">{tc.picker}</div>
+            <table className="w-full text-[12px] border-collapse" style={tc.rt.tableStyle}>
+              <colgroup>{tc.rt.cols}</colgroup>
+              <thead className="bg-slate-50 text-slate-500">
+                <tr className="[&>th]:px-3 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right">
+                  {tc.shown.map((c, i) => (
+                    <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50 [&>td]:px-3 [&>td]:py-2.5 [&>td]:whitespace-nowrap">
-                    <td>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STATE_STYLE[r.state]}`}>
-                        {r.stateLabel}
-                      </span>
-                    </td>
-                    <td className="font-medium text-slate-700">{r.recovery_home ?? '—'}</td>
-                    <td className="font-bold text-slate-800">{r.name}</td>
-                    <td className="text-slate-500 ltr-num">{r.id_number ?? '—'}</td>
-                    <td className="text-slate-500">{r.city ?? '—'}</td>
-                    <td className="text-slate-500 ltr-num">{fmtDate(r.birth_date)}</td>
-                    <td className="text-slate-500 ltr-num">{r.arrived ? fmtDate(r.arrived_at) : '—'}</td>
-                    <td className="text-slate-600 ltr-num">{r.nights ?? '—'}</td>
-                    <td className="font-bold text-emerald-700 ltr-num">{r.amount ? fmtCur(r.amount) : '—'}</td>
-                    <td className="text-slate-500 ltr-num">
-                      {r.receiptCount > 0
-                        ? <span className="inline-flex items-center gap-1"><Receipt size={11} />{r.receiptCount}</span>
-                        : '—'}
-                    </td>
+                  <tr key={r.id} className="hover:bg-slate-50 [&>td]:px-3 [&>td]:py-2.5">
+                    {tc.shown.map(c => (
+                      <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, r)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

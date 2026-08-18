@@ -1,6 +1,21 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { Lock, LogIn, LogOut, CreditCard, CheckCircle2, Clock3, Loader2, Calendar, User, RefreshCw, Download, Send, Search, X, RotateCcw } from 'lucide-react'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+
+// ── הגדרת עמודות טבלת ההלוואות ──
+// ⚠️ עמודת הסטטוס אינה בבורר: היא נושאת את כפתורי הביצוע/הביטול, והסתרתה
+// משאירה את הפורטל בלי הפעולה שהוא קיים בשבילה. לכן extraCols: 1.
+type LoanColKey = 'name' | 'id_number' | 'address' | 'phone' | 'email' | 'amount'
+
+const LOAN_COLUMNS: ColDef<LoanColKey>[] = [
+  { key: 'name', label: 'שם', def: true },
+  { key: 'id_number', label: 'ת.ז.', def: true },
+  { key: 'address', label: 'כתובת', def: true },
+  { key: 'phone', label: 'טלפון', def: true },
+  { key: 'email', label: 'מייל', def: false },
+  { key: 'amount', label: 'סכום מאושר', def: true },
+]
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface PortalLoan {
@@ -354,6 +369,37 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
     done: 'בוצעו',
   }
 
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
+  const tc = useTableColumns('shared-loans', LOAN_COLUMNS, { extraCols: 1 })
+
+  const cell = (c: ColDef<LoanColKey>, l: PortalLoan) => {
+    const b = l.beneficiary
+    switch (c.key) {
+      case 'name':
+        return <span className="font-semibold text-slate-900">{borrowerName(b)}</span>
+      case 'id_number':
+        return <span className="tabular-nums text-slate-500" dir="ltr">{b?.id_number ?? '—'}</span>
+      // כתובת — רחוב ועיר בתא אחד, זה מעל זה.
+      case 'address':
+        return b?.address || b?.city ? (
+          <span className="block text-slate-600">
+            <span className="block">{b?.address || '—'}</span>
+            {b?.city && <span className="block text-xs text-slate-400">{b.city}</span>}
+          </span>
+        ) : <span className="text-slate-300">—</span>
+      case 'phone':
+        return b?.phone
+          ? <a href={`tel:${b.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{b.phone}</a>
+          : <span className="text-slate-300">—</span>
+      case 'email':
+        return b?.email
+          ? <a href={`mailto:${b.email}`} dir="ltr" className="block text-right text-slate-700 hover:text-indigo-600">{b.email}</a>
+          : <span className="text-slate-300">—</span>
+      case 'amount':
+        return <span className="font-bold text-emerald-700 tabular-nums">{fmtCur(shownAmount(l))}</span>
+    }
+  }
+
   // ייצוא ההלוואות המסוננות לקובץ אקסל אמיתי (.xlsx) — מעוצב, RTL, כותרת קפואה.
   //
   // ⚠️ הקובץ נבנה בשרת ולא כאן. הגרסה הקודמת בנתה CSV בדפדפן, ומכאן שתי תקלות
@@ -481,77 +527,38 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                     הורד אקסל
                   </button>
                 </div>
-                {/* min-w נמוך מרוחב המכל (1280 פחות padding) — כך הטבלה נמתחת
-                    לרוחב המלא בלי גלילה אופקית, ורק במסך צר באמת היא נגללת. */}
-                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  {/* 🔴 ללא min-w: הטבלה נכנסת לרוחב המסך ואינה נגללת לצד.
-                      ⚠️ הכתובת אוחדה לעמודה אחת (רחוב + עיר) — שמונה עמודות
-                      חייבו רוחב מינימלי של 880px, וכל מסך צר מזה נגלל. שתי
-                      השורות של הכתובת קריאות יותר משתי עמודות צרות ממילא. */}
-                  <table className="w-full table-fixed text-sm text-right border-collapse">
-                    {/* ⚠️ עמודת הסטטוס מקבלת 14%: היא מכילה גם את התג
-                        "בוצעה" וגם כפתור "ביטול", ו-6% דחקו אותם מעבר
-                        לרוחב הטבלה — מה שהחזיר את הגלילה האופקית דרך
-                        הדלת האחורית. עמודה שאינה יכולה להתכווץ חייבת
-                        מקום מובטח, ולא שארית. */}
-                    <colgroup>
-                      <col style={{ width: '18%' }} />  {/* שם */}
-                      <col style={{ width: '12%' }} />  {/* ת.ז. */}
-                      <col style={{ width: '17%' }} />  {/* כתובת — רחוב + עיר */}
-                      <col style={{ width: '13%' }} />  {/* טלפון — nowrap */}
-                      <col style={{ width: '16%' }} />  {/* מייל — נשבר */}
-                      <col style={{ width: '10%' }} />  {/* סכום — nowrap */}
-                      <col style={{ width: '14%' }} />  {/* סטטוס — תג + כפתור ביטול */}
-                    </colgroup>
+                {/* ── בורר העמודות ── */}
+                <div className="mb-3">{tc.picker}</div>
+
+                {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
+                <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <table className="w-full text-sm text-right border-collapse" style={tc.rt.tableStyle}>
+                    <colgroup>{tc.rt.cols}</colgroup>
                     <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500">
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">שם</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">ת.ז.</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">כתובת</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">טלפון</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">מייל</th>
-                        <th className="px-3 py-3.5 border-l border-slate-100 font-semibold">סכום מאושר</th>
-                        <th className="px-3 py-3.5 font-semibold">סטטוס</th>
+                      <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-500
+                                     [&>th]:px-3 [&>th]:py-3.5 [&>th]:font-semibold [&>th]:text-right
+                                     [&>th]:border-l [&>th]:border-slate-100 [&>th:last-child]:border-l-0">
+                        {tc.shown.map((c, i) => (
+                          <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
+                        ))}
+                        {/* ⚠️ עמודת הסטטוס אחרונה — האינדקס שלה הוא מספר העמודות הנראות. */}
+                        <th className="relative">סטטוס{tc.rt.handle(tc.shown.length)}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {visibleLoans.map((l, i) => {
                         const isDone = !!l.disbursed_at
                         return (
-                          <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle">
-                              <div className="font-semibold text-slate-900 break-words">{borrowerName(l.beneficiary)}</div>
-                            </td>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle tabular-nums text-slate-500 whitespace-nowrap" dir="ltr">{l.beneficiary?.id_number ?? '—'}</td>
-
-                            {/* כתובת — רחוב ועיר בתא אחד, זה מעל זה.
-                                ⚠️ אוחדו כדי לחסוך עמודה: שמונה עמודות חייבו
-                                גלילה אופקית בכל מסך צר מ-880px. */}
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle text-slate-600 break-words">
-                              {l.beneficiary?.address || l.beneficiary?.city ? (
-                                <>
-                                  <span className="block">{l.beneficiary?.address || '—'}</span>
-                                  {l.beneficiary?.city && (
-                                    <span className="block text-xs text-slate-400">{l.beneficiary.city}</span>
-                                  )}
-                                </>
-                              ) : '—'}
-                            </td>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle whitespace-nowrap">
-                              {l.beneficiary?.phone
-                                ? <a href={`tel:${l.beneficiary.phone}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 tabular-nums">{l.beneficiary.phone}</a>
-                                : <span className="text-slate-300">—</span>}
-                            </td>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle">
-                              {l.beneficiary?.email
-                                ? <a href={`mailto:${l.beneficiary.email}`} dir="ltr" className="text-slate-700 hover:text-indigo-600 break-all">{l.beneficiary.email}</a>
-                                : <span className="text-slate-300">—</span>}
-                            </td>
-                            <td className="px-3 py-3.5 border-l border-slate-100 align-middle font-bold text-emerald-700 tabular-nums whitespace-nowrap">{fmtCur(shownAmount(l))}</td>
+                          <tr key={l.id} className={`border-b border-slate-100 last:border-0 transition-colors
+                            [&>td]:px-3 [&>td]:py-3.5 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0
+                            ${isDone ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : `${i % 2 ? 'bg-slate-50/40' : 'bg-white'} hover:bg-indigo-50/40`}`}>
+                            {tc.shown.map(c => (
+                              <td key={c.key} className={tc.cellClass(c)}>{cell(c, l)}</td>
+                            ))}
                             {/* שני שלבי הביצוע: שליחת השטר, ואז ההפקדה.
                                 ⚠️ "נשלח שטר" הוא מתג ולא פעולה חד-כיוונית —
                                 אפשר לבטלו אם סומן בטעות, כל עוד לא הופקד. */}
-                            <td className="px-3 py-3.5 align-middle">
+                            <td className={tc.rt.cellClass}>
                               {isDone ? (
                                 /* ⚠️ ביטול הסימון אפשרי: הרשימה מוצגת כטבלה
                                    והשורות דומות זו לזו, וסימון של השורה הלא
@@ -559,7 +566,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                    דרך לתקן — ההלוואה נותרה מסומנת כמבוצעת,
                                    וההפקדה האמיתית נעלמה מהתור. */
                                 <div className="flex flex-col items-start gap-1.5">
-                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
                                     <CheckCircle2 size={13} /> בוצעה {fmtDate(l.disbursed_at)}
                                   </span>
                                   {/* ⚠️ כפתור מלא ולא קישור-טקסט: הפעולה מחזירה
@@ -569,7 +576,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                     onClick={() => undoDisburse(l)}
                                     disabled={undoing === l.id}
                                     title="סומן בטעות? החזרת ההלוואה לרשימת הממתינות לביצוע"
-                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 transition-colors disabled:opacity-50"
                                   >
                                     {undoing === l.id
                                       ? <Loader2 size={13} className="animate-spin" />
@@ -583,7 +590,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                     onClick={() => toggleNoteSent(l)}
                                     disabled={noteSaving === l.id}
                                     title={l.note_sent_at ? `נשלח ${fmtDate(l.note_sent_at)} — לחצו לביטול` : 'סמנו לאחר שליחת השטר לחתימה'}
-                                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border text-xs font-medium px-2.5 py-1.5 transition-colors whitespace-nowrap disabled:opacity-50 ${
+                                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border text-xs font-medium px-2.5 py-1.5 transition-colors disabled:opacity-50 ${
                                       l.note_sent_at
                                         ? 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100'
                                         : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -596,7 +603,7 @@ function PortalScreen({ onLogout }: { onLogout: () => void }) {
                                   </button>
                                   <button
                                     onClick={() => setActiveModal(l)}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-1.5 hover:bg-indigo-100 transition-colors whitespace-nowrap"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-1.5 hover:bg-indigo-100 transition-colors"
                                   >
                                     <CreditCard size={13} /> בוצע הפקדה
                                   </button>

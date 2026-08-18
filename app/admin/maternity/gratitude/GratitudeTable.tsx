@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Globe, Mail, FileImage, Check, X, Download, Loader2, Send, CheckCircle2 } from 'lucide-react'
 import SafeDocImage from '@/components/ui/SafeDocImage'
 import { openDocInNewTab } from '@/lib/docBlob'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 export interface GratitudeRow {
   id: string
@@ -50,6 +51,19 @@ function fmtDate(iso: string): string {
   const d = new Date(iso)
   return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('he-IL')
 }
+
+// ── הגדרת העמודות ──
+// ⚠️ עמודת הצ׳קבוקס (ראשונה) ועמודת "שלח" (אחרונה) אינן בבורר — ראו extraCols.
+type ColKey = 'date' | 'mother' | 'source' | 'body' | 'status' | 'sent'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'date', label: 'תאריך', def: true },
+  { key: 'mother', label: 'שם היולדת', def: true },
+  { key: 'source', label: 'מקור', def: true },
+  { key: 'body', label: 'הברכה', def: true },
+  { key: 'status', label: 'סטטוס', def: true },
+  { key: 'sent', label: 'נשלח לנדיב', def: true },
+]
 
 export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
   const [items, setItems] = useState(rows)
@@ -108,6 +122,43 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
       if (isBulk) alert(`נשלחו ${d.sent}, דילוג ${d.skipped}${d.failed ? `, נכשלו ${d.failed}` : ''}`)
     } finally {
       setSending(false)
+    }
+  }
+
+  // extraCols: 2 — צ׳קבוקס (לפני) וכפתור השליחה (אחרי), שאינם בבורר.
+  const tc = useTableColumns<ColKey>('maternity-gratitude', COLUMNS, { extraCols: 2 })
+
+  // תוכן התא לפי מפתח העמודה
+  const cell = (key: ColKey, row: GratitudeRow) => {
+    switch (key) {
+      case 'date': return <span className="text-slate-500 text-xs">{fmtDate(row.created_at)}</span>
+      case 'mother': return (
+        <span className="font-semibold text-slate-800">
+          {motherName(row)}
+          {row.is_anonymous && <span className="mr-2 text-[10px] text-slate-400 font-normal">(אנונימי)</span>}
+        </span>
+      )
+      case 'source': {
+        const meta = SOURCE_META[row.source]
+        const Icon = meta.icon
+        return (
+          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
+            <Icon size={13} />
+            {meta.label}
+          </span>
+        )
+      }
+      case 'body': return <span className="text-slate-600">{row.body?.slice(0, 80) || (row.scan_url ? '— שובר סרוק —' : '—')}</span>
+      case 'status': return (
+        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_META[row.status].color}`}>
+          {STATUS_META[row.status].label}
+        </span>
+      )
+      case 'sent': return row.sent_to_donor_at ? (
+        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+          <CheckCircle2 size={13} /> {fmtDate(row.sent_to_donor_at)}
+        </span>
+      ) : <span className="text-slate-300">—</span>
     }
   }
 
@@ -180,9 +231,13 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
         </button>
       </div>
 
-      {/* טבלה */}
+      {/* בורר העמודות — מעל הטבלה */}
+      <div className="mb-3">{tc.picker}</div>
+
+      {/* טבלה — ⚠️ בלי overflow-x: אין גלילה לרוחב בשום טבלה. */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" style={tc.rt.tableStyle}>
+          <colgroup>{tc.rt.cols}</colgroup>
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr className="text-right text-xs text-slate-500">
               <th className="px-3 py-3 w-10">
@@ -195,19 +250,17 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                   className="accent-pink-600 cursor-pointer disabled:cursor-not-allowed"
                 />
               </th>
-              <th className="px-4 py-3 font-semibold">תאריך</th>
-              <th className="px-4 py-3 font-semibold">שם היולדת</th>
-              <th className="px-4 py-3 font-semibold">מקור</th>
-              <th className="px-4 py-3 font-semibold">הברכה</th>
-              <th className="px-4 py-3 font-semibold">סטטוס</th>
-              <th className="px-4 py-3 font-semibold">נשלח לנדיב</th>
-              <th className="px-4 py-3 font-semibold"></th>
+              {/* ⚠️ האינדקס לידית מוסט ב-1 בגלל עמודת הצ׳קבוקס שלפניה. */}
+              {tc.shown.map((c, i) => (
+                <th key={c.key} className={`px-4 py-3 font-semibold ${tc.headClass(c)}`}>
+                  {c.label}{tc.rt.handle(i + 1)}
+                </th>
+              ))}
+              <th className="relative px-4 py-3 font-semibold">{tc.rt.handle(tc.shown.length + 1)}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.map(row => {
-              const meta = SOURCE_META[row.source]
-              const Icon = meta.icon
               const canSend = row.status === 'approved'
               return (
                 <tr
@@ -215,7 +268,7 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                   onClick={() => { setOpen(row); setPdf(null) }}
                   className="hover:bg-slate-50 cursor-pointer transition"
                 >
-                  <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                  <td className="px-3 py-3 align-top" onClick={e => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selected.has(row.id)}
@@ -225,45 +278,16 @@ export default function GratitudeTable({ rows }: { rows: GratitudeRow[] }) {
                       className="accent-pink-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
                     />
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{fmtDate(row.created_at)}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-800">
-                    {motherName(row)}
-                    {row.is_anonymous && (
-                      <span className="mr-2 text-[10px] text-slate-400 font-normal">(אנונימי)</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium ${meta.color}`}>
-                      <Icon size={13} />
-                      {meta.label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 max-w-xs">
-                    <span className="line-clamp-1">
-                      {row.body?.slice(0, 80) || (row.scan_url ? '— שובר סרוק —' : '—')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_META[row.status].color}`}>
-                      {STATUS_META[row.status].label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs whitespace-nowrap">
-                    {row.sent_to_donor_at ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
-                        <CheckCircle2 size={13} /> {fmtDate(row.sent_to_donor_at)}
-                      </span>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c.key, row)}</td>
+                  ))}
+                  <td className="px-4 py-3 align-top" onClick={e => e.stopPropagation()}>
                     {canSend && (
                       <button
                         onClick={() => openSend([row.id])}
                         title="שליחת הברכה לנדיב במייל"
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-white border border-pink-200 text-pink-600 hover:bg-pink-50 transition whitespace-nowrap"
+                                   bg-white border border-pink-200 text-pink-600 hover:bg-pink-50 transition"
                       >
                         <Send size={13} /> שלח
                       </button>

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download, Loader2, FileBarChart } from 'lucide-react'
 import { downloadXlsx, todayStamp, type XlsxColumn } from '@/lib/downloadXlsx'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Row = {
   id: string; motherName: string; motherId: string; city: string; babyName: string
@@ -14,6 +15,23 @@ const BIRTH_STATUS: Record<string, string> = { pending: 'ממתין לאישור
 const CARD_STATUS: Record<string, string> = { pending: 'ממתין', approved: 'אושר', awaiting_stock: 'ממתין למלאי', loaded: 'נטען', rejected: 'נדחה' }
 const ils = (n: number) => `₪${(Number(n) || 0).toLocaleString('he-IL')}`
 const fmtD = (d: string) => (d ? new Date(d).toLocaleDateString('he-IL') : '')
+
+// ⚠️ עמודות התצוגה בלבד. הן *אינן* משפיעות על הייצוא לאקסל: הדוח המיוצא
+// חייב להישאר מלא גם כשהמשתמש הסתיר עמודה על המסך.
+type ColKey = 'motherName' | 'motherId' | 'babyName' | 'birthDate' | 'recoveryHome'
+  | 'arrived' | 'recoveryAmount' | 'recoveryNights' | 'cardStatus'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'motherName', label: 'שם היולדת', def: true },
+  { key: 'motherId', label: 'ת.ז', def: true },
+  { key: 'babyName', label: 'תינוק', def: true },
+  { key: 'birthDate', label: 'תאריך לידה', def: true },
+  { key: 'recoveryHome', label: 'בית החלמה', def: true },
+  { key: 'arrived', label: 'הגעה', def: true, align: 'center' },
+  { key: 'recoveryAmount', label: 'סכום שמומש', def: true },
+  { key: 'recoveryNights', label: 'לילות', def: true, align: 'center' },
+  { key: 'cardStatus', label: 'סטטוס כרטיס', def: false },
+]
 
 export default function ReportBuilder() {
   const [rows, setRows] = useState<Row[]>([])
@@ -98,6 +116,22 @@ export default function ReportBuilder() {
     setExporting(false)
   }
 
+  const tc = useTableColumns('reports-maternity', COLUMNS)
+
+  const cell = (c: ColDef<ColKey>, r: Row) => {
+    switch (c.key) {
+      case 'motherName': return <span className="font-medium text-slate-800">{r.motherName}</span>
+      case 'motherId': return <span className="text-slate-500 ltr-num">{r.motherId || '—'}</span>
+      case 'babyName': return <span className="text-slate-600">{r.babyName || '—'}</span>
+      case 'birthDate': return <span className="text-slate-500 ltr-num">{fmtD(r.birthDate) || '—'}</span>
+      case 'recoveryHome': return <span className="text-slate-600">{r.recoveryHome || '—'}</span>
+      case 'arrived': return <span>{r.arrived === true ? '✓' : r.arrived === false ? '✗' : '—'}</span>
+      case 'recoveryAmount': return <span className="font-semibold text-emerald-700">{r.recoveryAmount != null ? ils(r.recoveryAmount) : '—'}</span>
+      case 'recoveryNights': return <span className="text-slate-600">{r.recoveryNights ?? '—'}</span>
+      case 'cardStatus': return <span className="text-slate-600">{CARD_STATUS[r.cardStatus] ?? r.cardStatus}</span>
+    }
+  }
+
   const selCls = 'rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300'
 
   return (
@@ -159,8 +193,11 @@ export default function ReportBuilder() {
         ))}
       </div>
 
+      {!loading && !err && filtered.length > 0 && <div className="px-4 pb-3">{tc.picker}</div>}
+
       {/* table */}
-      <div className="overflow-x-auto max-h-[60vh] overflow-y-auto border-t border-slate-100">
+      {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
+      <div className="max-h-[60vh] overflow-y-auto border-t border-slate-100">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-slate-400 text-sm"><Loader2 size={18} className="animate-spin" /> טוען…</div>
         ) : err ? (
@@ -168,26 +205,21 @@ export default function ReportBuilder() {
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-slate-400 text-sm">אין תוצאות בסינון זה</div>
         ) : (
-          <table className="w-full text-sm text-right">
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead className="sticky top-0 bg-slate-50">
               <tr className="border-b border-slate-100 text-xs text-slate-500">
-                {['שם היולדת', 'ת.ז', 'תינוק', 'תאריך לידה', 'בית החלמה', 'הגעה', 'סכום שמומש', 'לילות', 'סטטוס כרטיס'].map(h => (
-                  <th key={h} className="px-3 py-2.5 font-medium whitespace-nowrap">{h}</th>
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={`px-3 py-2.5 font-medium ${tc.headClass(c)}`}>{c.label}{tc.rt.handle(i)}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map(r => (
                 <tr key={r.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-2 font-medium text-slate-800 whitespace-nowrap">{r.motherName}</td>
-                  <td className="px-3 py-2 text-slate-500 ltr-num text-right">{r.motherId || '—'}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.babyName || '—'}</td>
-                  <td className="px-3 py-2 text-slate-500 ltr-num text-right">{fmtD(r.birthDate) || '—'}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.recoveryHome || '—'}</td>
-                  <td className="px-3 py-2">{r.arrived === true ? '✓' : r.arrived === false ? '✗' : '—'}</td>
-                  <td className="px-3 py-2 font-semibold text-emerald-700">{r.recoveryAmount != null ? ils(r.recoveryAmount) : '—'}</td>
-                  <td className="px-3 py-2 text-slate-600">{r.recoveryNights ?? '—'}</td>
-                  <td className="px-3 py-2 text-slate-600">{CARD_STATUS[r.cardStatus] ?? r.cardStatus}</td>
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>

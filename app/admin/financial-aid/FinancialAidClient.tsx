@@ -10,11 +10,22 @@ import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan, AdminOnly } from '@/components/StaffPermissions'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
+
+type ColKey = 'name' | 'id_number' | 'reason' | 'amount' | 'status'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'שם', def: true },
+  { key: 'id_number', label: 'ת.ז.', def: true },
+  { key: 'reason', label: 'סיבת הבקשה', def: true },
+  { key: 'amount', label: 'סכום מאושר', def: true },
+  { key: 'status', label: 'סטטוס', def: true },
+]
 
 const CARD_DEFS: { key: FinancialAidStatus | 'all'; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }[] = [
   { key: 'all', label: 'הכל', icon: Layers, base: 'border-slate-200 hover:border-slate-300', active: 'border-slate-400 ring-2 ring-slate-200 bg-slate-50', iconCls: 'bg-slate-100 text-slate-600' },
@@ -136,6 +147,21 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   // לא נחתכת: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
   const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
 
+  // ⚠️ extraCols=1 — עמודת הפעולות ("פרטים"/מחיקה) אינה בבורר אך נספרת לגרירה.
+  // היא האחרונה, ולכן האינדקסים של עמודות הבורר נשארים 0..n-1.
+  const tc = useTableColumns('financial-aid', COLUMNS, { extraCols: 1 })
+
+  const cell = (c: ColDef<ColKey>, r: FinancialAidRequest) => {
+    const b = r.beneficiary as Ben | undefined
+    switch (c.key) {
+      case 'name': return <span className="font-medium text-slate-800">{name(b)}</span>
+      case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{b?.id_number ?? b?.spouse_id_number ?? '—'}</span>
+      case 'reason': return <span className="text-slate-600">{r.reason ?? '—'}</span>
+      case 'amount': return <span className="font-bold text-slate-800 ltr-num">{r.status === 'approved' ? fmtCur(r.amount) : '—'}</span>
+      case 'status': return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[r.status]}`}>{FINANCIAL_AID_STATUS_LABELS[r.status]}</span>
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* הגדרת מייל גורם מאשר */}
@@ -197,42 +223,43 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+        <div className="px-5 pt-3">{tc.picker}</div>
+        {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
+        <div className="w-full px-1 pt-2">
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם', 'ת.ז.', 'סיבת הבקשה', 'סכום מאושר', 'סטטוס', ''].map(h => (
-                  <th key={h} className="px-4 py-3 text-xs font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={`px-4 py-3 text-xs font-semibold text-slate-500 ${tc.headClass(c)}`}>
+                    {c.label}{tc.rt.handle(i)}
+                  </th>
                 ))}
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
-              ) : visibleRows.map(r => {
-                const b = r.beneficiary as Ben | undefined
-                return (
-                  <tr key={r.id} onClick={() => router.push(`/admin/financial-aid/${r.id}`)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">{name(b)}</td>
-                    <td className="px-4 py-3 text-xs font-mono text-slate-600"><span className="ltr-num">{b?.id_number ?? b?.spouse_id_number ?? '—'}</span></td>
-                    <td className="px-4 py-3 text-slate-600 max-w-xs truncate">{r.reason ?? '—'}</td>
-                    <td className="px-4 py-3 font-bold text-slate-800 ltr-num">{r.status === 'approved' ? fmtCur(r.amount) : '—'}</td>
-                    <td className="px-4 py-3"><span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[r.status]}`}>{FINANCIAL_AID_STATUS_LABELS[r.status]}</span></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span>
-                        {canEdit && (
-                          <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
+              ) : visibleRows.map(r => (
+                <tr key={r.id} onClick={() => router.push(`/admin/financial-aid/${r.id}`)} className="hover:bg-emerald-50/40 cursor-pointer transition-colors">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={`px-4 py-3 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
+                  ))}
+                  <td className="px-4 py-3 align-top">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><Eye size={13} /> פרטים</span>
+                      {canEdit && (
+                        <button onClick={e => del(e, r.id)} className="text-slate-300 hover:text-red-500 transition-colors" title="מחק בקשה"><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
               {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
               {hasMore && (
                 <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={6} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                  <td colSpan={tc.shown.length + 1} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
                     <Loader2 size={14} className="inline animate-spin ml-1.5" />
                     טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
                   </td>

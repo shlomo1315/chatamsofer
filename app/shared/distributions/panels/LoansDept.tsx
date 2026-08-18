@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { DeptHeader, Stat, BarList, Section } from './Chrome'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מחלקת גמ"ח הלוואות — תצוגה בלבד.
@@ -61,6 +62,20 @@ const monthLabel = (k: string) => {
 }
 
 type View = 'all' | 'disbursed' | 'approved_only' | 'pending'
+
+// ── הגדרת עמודות רשימת ההלוואות ──
+type ColKey = 'name' | 'city' | 'purpose' | 'amount' | 'installments' | 'created' | 'state'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'שם הלווה', def: true },
+  // ⚠️ העיר הופרדה מהשם לעמודה משלה: איחוד עמודות ערבב שני ערכים בתא אחד.
+  { key: 'city', label: 'עיר', def: false },
+  { key: 'purpose', label: 'מטרה', def: true },
+  { key: 'amount', label: 'סכום', def: true },
+  { key: 'installments', label: 'תשלומים', def: true, align: 'center' },
+  { key: 'created', label: 'הוגש', def: true },
+  { key: 'state', label: 'מצב', def: true },
+]
 
 export default function LoansDept({ rows, legacy, onBack }: {
   rows: LoanRow[]
@@ -126,6 +141,35 @@ export default function LoansDept({ rows, legacy, onBack }: {
       purposes: [...byPurpose.entries()].sort((a, b) => b[1] - a[1]),
     }
   }, [filtered])
+
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
+  const tc = useTableColumns('loans-dept', COLUMNS)
+
+  const cell = (c: ColDef<ColKey>, r: LoanRow) => {
+    const b = r.beneficiary
+    switch (c.key) {
+      case 'name':
+        return <span className="font-bold text-[#3a3630]">
+          {[b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'}
+        </span>
+      case 'city': return <span className="text-[#a08a5a]">{b?.city || '—'}</span>
+      case 'purpose': return <span className="text-[#6b5d3e]">{r.purpose || '—'}</span>
+      case 'amount':
+        return <span className="ltr-num font-bold text-[#3a3630]">{usd(Number(r.approved_amount ?? r.amount ?? 0))}</span>
+      case 'installments': return <span className="ltr-num text-[#6b5d3e]">{r.installments ?? '—'}</span>
+      case 'created': return <span className="ltr-num text-[#6b5d3e]">{d(r.created_at)}</span>
+      case 'state':
+        return r.disbursed_at ? (
+          <span className="inline-block rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+            נמסר {d(r.disbursed_at)}
+          </span>
+        ) : (
+          <span className="inline-block rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+            {STATUS_HE[String(r.status)] ?? r.status}
+          </span>
+        )
+    }
+  }
 
   const chip = (on: boolean) =>
     `rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
@@ -202,49 +246,27 @@ export default function LoansDept({ rows, legacy, onBack }: {
         </Section>
       )}
 
-      {/* ⚠️ בלי גלילה לרוחב: עמודות מאוחדות. */}
+      {/* ⚠️ בלי גלילה לרוחב: הבורר קובע מה נכנס למסך. */}
       <Section title="רשימת ההלוואות" hint={`${filtered.length.toLocaleString('he-IL')} רשומות`}>
         <div className="w-full">
-          <table className="w-full table-auto text-[12px] border-collapse">
+          <div className="pb-3">{tc.picker}</div>
+          <table className="w-full text-[12px] border-collapse" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
               <tr className="bg-[#fdfaf3] text-[#8a7a56] [&>th]:px-2.5 [&>th]:py-2 [&>th]:text-right [&>th]:font-bold [&>th]:border-l [&>th]:border-[#f0e9d8] [&>th:last-child]:border-l-0">
-                <th>שם הלווה</th><th>מטרה</th><th>סכום</th>
-                <th className="text-center">תשלומים</th><th>הוגש</th><th>מצב</th>
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f4efe2]">
-              {filtered.slice(0, 300).map(r => {
-                const b = r.beneficiary
-                const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'
-                const out = !!r.disbursed_at
-                return (
-                  <tr key={r.id} className="[&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
-                    <td className="max-w-[170px]">
-                      <div className="truncate font-bold text-[#3a3630]" title={name}>{name}</div>
-                      {b?.city && <div className="truncate text-[11px] text-[#a08a5a]">{b.city}</div>}
-                    </td>
-                    <td className="max-w-[140px]">
-                      <div className="truncate text-[#6b5d3e]" title={r.purpose ?? ''}>{r.purpose || '—'}</div>
-                    </td>
-                    <td className="ltr-num font-bold text-[#3a3630] whitespace-nowrap">
-                      {usd(Number(r.approved_amount ?? r.amount ?? 0))}
-                    </td>
-                    <td className="text-center ltr-num text-[#6b5d3e]">{r.installments ?? '—'}</td>
-                    <td className="ltr-num text-[#6b5d3e] whitespace-nowrap">{d(r.created_at)}</td>
-                    <td className="whitespace-nowrap">
-                      {out ? (
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
-                          נמסר {d(r.disbursed_at)}
-                        </span>
-                      ) : (
-                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                          {STATUS_HE[String(r.status)] ?? r.status}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {filtered.slice(0, 300).map(r => (
+                <tr key={r.id} className="[&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
           {filtered.length > 300 && (

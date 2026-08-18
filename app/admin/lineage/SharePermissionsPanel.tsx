@@ -1,6 +1,18 @@
 'use client'
 import { useEffect, useState, useCallback, Fragment } from 'react'
 import { X, Loader2, Link2, Check, Trash2, ShieldCheck, RotateCcw, GitBranch, ChevronDown, ChevronLeft, Undo2 } from 'lucide-react'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+
+type ColKey = 'branch' | 'recipient' | 'sent' | 'lastUsed' | 'status' | 'actions'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'branch', label: 'ענף (דור)', def: true },
+  { key: 'recipient', label: 'נמען', def: true },
+  { key: 'sent', label: 'נשלח', def: true },
+  { key: 'lastUsed', label: 'כניסה אחרונה', def: false },
+  { key: 'status', label: 'סטטוס', def: true },
+  { key: 'actions', label: 'פעולות', def: true },
+]
 
 interface Invite {
   token: string
@@ -102,6 +114,59 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
   const shown = invites.filter(i => statusFilter === 'all' ? true : statusFilter === 'revoked' ? !isActive(i) : isActive(i))
   const activeCount = invites.filter(isActive).length
 
+  // ⚠️ extraCols=1 — עמודת חץ ההרחבה היא הראשונה ואינה בבורר, ולכן ידית
+  // הגרירה של כל עמודה מקבלת i+1.
+  const tc = useTableColumns('lineage-share-permissions', COLUMNS, { extraCols: 1 })
+
+  const cell = (c: ColDef<ColKey>, i: Invite) => {
+    switch (c.key) {
+      case 'branch':
+        return (
+          <div className="flex items-start gap-1.5">
+            <GitBranch size={13} className="mt-0.5 shrink-0 text-violet-400" />
+            <span className="font-medium text-slate-800">{i.node_name ?? '—'}</span>
+            {i.node_generation != null && <span className="text-[11px] text-slate-400">דור {i.node_generation}</span>}
+          </div>
+        )
+      case 'recipient':
+        return (
+          <>
+            <div className="text-slate-800">{i.recipient_name || '—'}</div>
+            <div className="text-[11px] text-slate-400" dir="ltr" style={{ textAlign: 'right' }}>{i.recipient_email}</div>
+          </>
+        )
+      case 'sent': return <span className="text-xs text-slate-500">{fmt(i.created_at)}</span>
+      case 'lastUsed': return <span className="text-xs text-slate-500">{i.last_used_at ? fmt(i.last_used_at) : '—'}</span>
+      case 'status': {
+        const st = statusOf(i)
+        return st === 'active' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">פעיל</span>
+          : st === 'revoked' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">בוטל</span>
+          : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">פג תוקף</span>
+      }
+      case 'actions':
+        // ⚠️ עצירת ההתפשטות נשארת כאן ולא על ה-<td>: לחיצה על שורה מרחיבה אותה,
+        // ולחיצה על כפתור פעולה אינה אמורה להרחיב.
+        return (
+          <div onClick={e => e.stopPropagation()}>
+            {isActive(i) ? (
+              <div className="flex items-center gap-1">
+                <button onClick={() => copyLink(i.token)} title="העתק קישור"
+                  className={`p-1.5 rounded-lg border transition-colors ${copied === i.token ? 'border-green-300 bg-green-50 text-green-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                  {copied === i.token ? <Check size={14} /> : <Link2 size={14} />}
+                </button>
+                <button onClick={() => revoke(i.token)} title="ביטול הרשאה"
+                  className="p-1.5 rounded-lg border border-transparent text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ) : (
+              <span className="text-[11px] text-slate-300">—</span>
+            )}
+          </div>
+        )
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" dir="rtl" onClick={onClose}>
       <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[88vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
@@ -122,22 +187,25 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
           ))}
         </div>
 
-        <div className="overflow-auto flex-1">
+        {!loading && shown.length > 0 && <div className="px-5 py-2.5 border-b border-slate-100">{tc.picker}</div>}
+
+        {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
+        <div className="overflow-y-auto flex-1">
           {loading ? (
             <div className="py-16 text-center"><Loader2 size={22} className="animate-spin text-slate-400 inline" /></div>
           ) : shown.length === 0 ? (
             <div className="py-16 text-center text-sm text-slate-400">אין הרשאות להצגה.</div>
           ) : (
-            <table className="w-full text-sm text-right">
+            <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+              <colgroup>{tc.rt.cols}</colgroup>
               <thead className="sticky top-0 bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
                 <tr>
                   <th className="text-right px-4 py-2 font-semibold w-8"></th>
-                  <th className="text-right px-4 py-2 font-semibold">ענף (דור)</th>
-                  <th className="text-right px-4 py-2 font-semibold">נמען</th>
-                  <th className="text-right px-4 py-2 font-semibold">נשלח</th>
-                  <th className="text-right px-4 py-2 font-semibold">כניסה אחרונה</th>
-                  <th className="text-right px-4 py-2 font-semibold">סטטוס</th>
-                  <th className="text-right px-4 py-2 font-semibold">פעולות</th>
+                  {tc.shown.map((c, i) => (
+                    <th key={c.key} className={`text-right px-4 py-2 font-semibold ${tc.headClass(c)}`}>
+                      {c.label}{tc.rt.handle(i + 1)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -149,46 +217,15 @@ export default function SharePermissionsPanel({ onClose }: { onClose: () => void
                     <Fragment key={i.token}>
                       <tr className={`${st === 'active' ? '' : 'opacity-60'} ${isOpen ? 'bg-indigo-50/40' : 'hover:bg-slate-50'} cursor-pointer align-top`} onClick={() => toggleExpand(i.token)}>
                         <td className="px-4 py-2.5 text-slate-400">{isOpen ? <ChevronDown size={15} /> : <ChevronLeft size={15} />}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          <div className="flex items-center gap-1.5">
-                            <GitBranch size={13} className="text-violet-400 flex-shrink-0" />
-                            <span className="font-medium text-slate-800">{i.node_name ?? '—'}</span>
-                            {i.node_generation != null && <span className="text-[11px] text-slate-400">דור {i.node_generation}</span>}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <div className="text-slate-800">{i.recipient_name || '—'}</div>
-                          <div className="text-[11px] text-slate-400" dir="ltr" style={{ textAlign: 'right' }}>{i.recipient_email}</div>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmt(i.created_at)}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{i.last_used_at ? fmt(i.last_used_at) : '—'}</td>
-                        <td className="px-4 py-2.5">
-                          {st === 'active' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">פעיל</span>
-                            : st === 'revoked' ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">בוטל</span>
-                            : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">פג תוקף</span>}
-                        </td>
-                        <td className="px-4 py-2.5" onClick={e => e.stopPropagation()}>
-                          {isActive(i) ? (
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => copyLink(i.token)} title="העתק קישור"
-                                className={`p-1.5 rounded-lg border transition-colors ${copied === i.token ? 'border-green-300 bg-green-50 text-green-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                                {copied === i.token ? <Check size={14} /> : <Link2 size={14} />}
-                              </button>
-                              <button onClick={() => revoke(i.token)} title="ביטול הרשאה"
-                                className="p-1.5 rounded-lg border border-transparent text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-slate-300">—</span>
-                          )}
-                        </td>
+                        {tc.shown.map(c => (
+                          <td key={c.key} className={`px-4 py-2.5 ${tc.cellClass(c)}`}>{cell(c, i)}</td>
+                        ))}
                       </tr>
 
                       {/* שורת פירוט — מה בן המשפחה עשה (אישר/דחה/תיקן) + ביטול לכל פעולה */}
                       {isOpen && (
                         <tr key={`${i.token}-details`} className="bg-slate-50/60">
-                          <td colSpan={7} className="px-6 py-3">
+                          <td colSpan={tc.shown.length + 1} className="px-6 py-3">
                             {actLoading === i.token ? (
                               <div className="py-3 text-center text-slate-400"><Loader2 size={16} className="animate-spin inline" /></div>
                             ) : acts.length === 0 ? (

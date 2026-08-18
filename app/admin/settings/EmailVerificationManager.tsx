@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { Loader2, Search, MailCheck, AlertTriangle, Send, CheckCircle2, RefreshCw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type Family = {
   id: string
@@ -35,6 +36,16 @@ type Stats = {
 const he = (n: number) => n.toLocaleString('he-IL')
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('he-IL') : '—')
 
+type ColKey = 'name' | 'email' | 'phone' | 'createdAt' | 'requestedAt'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'משפחה', def: true },
+  { key: 'email', label: 'כתובת מייל', def: true },
+  { key: 'phone', label: 'טלפון', def: true },
+  { key: 'createdAt', label: 'נרשם', def: true },
+  { key: 'requestedAt', label: 'נשלחה בקשה', def: true },
+]
+
 export default function EmailVerificationManager() {
   const toast = useToast()
   const [loading, setLoading] = useState(false)
@@ -44,6 +55,31 @@ export default function EmailVerificationManager() {
   const [sending, setSending] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [onlyProblems, setOnlyProblems] = useState(false)
+
+  // ⚠️ ה-hook לפני ה-return המוקדם (`!loaded`) — hook אחרי return מותנה
+  // משנה את סדר ה-hooks בין רינדורים ושובר את React.
+  // extraCols=1: תיבת הסימון היא הראשונה ואינה בבורר, ולכן ידית הגרירה מקבלת i+1.
+  const tc = useTableColumns('email-verification', COLUMNS, { extraCols: 1 })
+
+  const cell = (c: ColDef<ColKey>, f: Family) => {
+    switch (c.key) {
+      case 'name': return <span>{f.name}</span>
+      case 'email':
+        return (
+          <>
+            <span dir="ltr" className="break-all text-slate-700">{f.email}</span>
+            {f.problem && (
+              <span className={`inline-flex items-center gap-1 mr-2 align-middle text-[10px] font-bold rounded-full px-1.5 py-0.5 border ${f.sendable ? 'text-amber-800 bg-amber-100 border-amber-200' : 'text-red-700 bg-red-100 border-red-200'}`}>
+                <AlertTriangle size={9} /> {f.problem}
+              </span>
+            )}
+          </>
+        )
+      case 'phone': return <span className="text-slate-500" dir="ltr">{f.phone || '—'}</span>
+      case 'createdAt': return <span className="text-slate-500">{date(f.createdAt)}</span>
+      case 'requestedAt': return <span className="text-slate-500">{date(f.requestedAt)}</span>
+    }
+  }
 
   // נטען בלחיצה ולא באפקט — הסריקה עוברת על כל טבלת הצאצאים, ואין סיבה
   // שכל פתיחה של מסך ההגדרות תשלם עליה.
@@ -167,50 +203,46 @@ export default function EmailVerificationManager() {
           <CheckCircle2 size={16} /> {onlyProblems ? 'אין כתובות פגומות.' : 'כל הכתובות אומתו.'}
         </div>
       ) : (
-        <div className="max-h-96 overflow-y-auto rounded-lg border border-slate-200">
-          <table className="w-full text-right text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-slate-600">
-              <tr>
-                <th className="px-2 py-2 w-8">
-                  <input type="checkbox"
-                    checked={picked.size > 0 && picked.size === shown.filter(f => f.sendable).length}
-                    onChange={e => setPicked(e.target.checked ? new Set(shown.filter(f => f.sendable).map(f => f.id)) : new Set())} />
-                </th>
-                <th className="px-3 py-2 font-medium">משפחה</th>
-                <th className="px-3 py-2 font-medium">כתובת מייל</th>
-                <th className="px-3 py-2 font-medium">טלפון</th>
-                <th className="px-3 py-2 font-medium">נרשם</th>
-                <th className="px-3 py-2 font-medium">נשלחה בקשה</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {shown.map(f => (
-                <tr key={f.id} className={!f.sendable ? 'bg-red-50/60' : 'hover:bg-slate-50'}>
-                  <td className="px-2 py-2">
-                    <input type="checkbox" disabled={!f.sendable} checked={picked.has(f.id)}
-                      title={!f.sendable ? 'כתובת פגומה — לא ניתן לשלוח' : undefined}
-                      onChange={e => setPicked(p => {
-                        const next = new Set(p)
-                        if (e.target.checked) next.add(f.id); else next.delete(f.id)
-                        return next
-                      })} />
-                  </td>
-                  <td className="px-3 py-2">{f.name}</td>
-                  <td className="px-3 py-2">
-                    <span dir="ltr" className="break-all text-slate-700">{f.email}</span>
-                    {f.problem && (
-                      <span className={`inline-flex items-center gap-1 mr-2 align-middle text-[10px] font-bold rounded-full px-1.5 py-0.5 border ${f.sendable ? 'text-amber-800 bg-amber-100 border-amber-200' : 'text-red-700 bg-red-100 border-red-200'}`}>
-                        <AlertTriangle size={9} /> {f.problem}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-slate-500" dir="ltr">{f.phone || '—'}</td>
-                  <td className="px-3 py-2 text-slate-500">{date(f.createdAt)}</td>
-                  <td className="px-3 py-2 text-slate-500">{date(f.requestedAt)}</td>
+        <div className="flex flex-col gap-2">
+          {tc.picker}
+          {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
+          <div className="max-h-96 overflow-y-auto rounded-lg border border-slate-200">
+            <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
+              <colgroup>{tc.rt.cols}</colgroup>
+              <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="px-2 py-2 w-8">
+                    <input type="checkbox"
+                      checked={picked.size > 0 && picked.size === shown.filter(f => f.sendable).length}
+                      onChange={e => setPicked(e.target.checked ? new Set(shown.filter(f => f.sendable).map(f => f.id)) : new Set())} />
+                  </th>
+                  {tc.shown.map((c, i) => (
+                    <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
+                      {c.label}{tc.rt.handle(i + 1)}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {shown.map(f => (
+                  <tr key={f.id} className={!f.sendable ? 'bg-red-50/60' : 'hover:bg-slate-50'}>
+                    <td className="px-2 py-2 align-top">
+                      <input type="checkbox" disabled={!f.sendable} checked={picked.has(f.id)}
+                        title={!f.sendable ? 'כתובת פגומה — לא ניתן לשלוח' : undefined}
+                        onChange={e => setPicked(p => {
+                          const next = new Set(p)
+                          if (e.target.checked) next.add(f.id); else next.delete(f.id)
+                          return next
+                        })} />
+                    </td>
+                    {tc.shown.map(c => (
+                      <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, f)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

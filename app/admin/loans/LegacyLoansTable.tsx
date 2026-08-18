@@ -7,7 +7,7 @@ import { validateIsraeliId } from '@/lib/validation'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
-import { useResizableColumns } from '@/components/ui/ResizableTable'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ההלוואות מהמערכת הקודמת — צפייה, עריכה ומחיקה.
@@ -55,6 +55,22 @@ const badId = (v: string | null) => {
 }
 
 type Filter = 'all' | 'taken' | 'not_taken' | 'unlinkable' | 'linked' | 'unlinked'
+
+// ── הגדרת העמודות ──
+// ⚠️ עמודת הפעולות (עריכה/מחיקה) אינה בבורר — היא הדרך היחידה לתקן שורה.
+// לכן extraCols: 1, והידית שלה מקבלת את האינדקס האחרון.
+type ColKey = 'file' | 'borrower' | 'id_number' | 'linked' | 'city' | 'approved' | 'taken' | 'installments'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'file', label: 'תיק', def: false },
+  { key: 'borrower', label: 'שם הלווה', def: true },
+  { key: 'id_number', label: 'ת.ז.', def: true },
+  { key: 'linked', label: 'כרטסת', def: true },
+  { key: 'city', label: 'עיר', def: true },
+  { key: 'approved', label: 'אושר', def: true },
+  { key: 'taken', label: 'נלקח בפועל', def: true },
+  { key: 'installments', label: 'תשלומים', def: false, align: 'center' },
+]
 
 export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
   const router = useRouter()
@@ -106,10 +122,68 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
     })
   }, [rows, query, filter, haystacks])
 
-  // גרירת רוחב עמודות — רכיב מערכתי משותף.
-  const rt = useResizableColumns('legacy-loans', 9)
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
+  // ⚠️ המזהה נשאר 'legacy-loans' כדי לא לאבד כיוונון רוחב קיים; ה-hook
+  // מוסיף לו את מספר העמודות הנראות בעצמו.
+  const tc = useTableColumns('legacy-loans', COLUMNS, { extraCols: 1 })
 
   const { rows: visible, sentinelRef, hasMore, shown, total } = useIncrementalRows(filtered)
+
+  // ── תוכן התא לפי עמודה ──
+  const cell = (c: ColDef<ColKey>, r: LegacyRow) => {
+    switch (c.key) {
+      case 'file':
+        return <span className="text-xs text-slate-400 tabular-nums">{r.file_number ?? '—'}</span>
+      case 'borrower':
+        return (
+          <div className="flex items-center gap-2 flex-wrap font-medium text-slate-800">
+            <span>{r.borrower_name ?? '—'}</span>
+            {/* ⚠️ מסומן כדי שיהיה ברור שהשורה לא תשויך לאף משפחה
+                עד שהת"ז תתוקן — אחרת היעדרה מהכרטסת נראה כתקלה. */}
+            {badId(r.id_number) && (
+              <span title="ת״ז חסרה או שגויה — הרשומה אינה משויכת למשפחה"
+                className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                <AlertTriangle size={10} /> דורש תיקון
+              </span>
+            )}
+            {r.manually_edited && (
+              <span title="נערך ידנית — ייבוא חוזר לא ידרוס את השינוי"
+                className="inline-flex items-center rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-700">
+                נערך
+              </span>
+            )}
+          </div>
+        )
+      case 'id_number':
+        return <span className="ltr-num text-xs font-mono text-slate-500">{r.id_number ?? '—'}</span>
+      // 🔴 עמודת השיוך: מי כבר מחובר לכרטסת ומי לא.
+      // משויך → קישור ישיר לכרטסת. לא משויך → כפתור שיוך ידני.
+      case 'linked':
+        if (r.beneficiary_id) return (
+          <Link href={`/admin/beneficiaries/${r.beneficiary_id}`}
+            className="inline-flex items-center gap-1 rounded-lg bg-sky-50 border border-sky-200 px-2 py-1 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition">
+            <ExternalLink size={10} /> לכרטסת
+          </Link>
+        )
+        if (canEdit) return (
+          <button type="button" onClick={() => setLinking(r)}
+            className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-[10px] font-bold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition">
+            <UserPlus size={10} /> שייך
+          </button>
+        )
+        return <span className="text-[10px] text-slate-400">—</span>
+      case 'city':
+        return <span className="text-slate-600">{r.city ?? '—'}</span>
+      case 'approved':
+        return <span className="font-semibold text-slate-900 tabular-nums">{fmtCur(r.approved_amount)}</span>
+      case 'taken':
+        return r.taken_amount !== null && r.taken_amount !== undefined
+          ? <span className="font-semibold text-emerald-700 tabular-nums">{fmtCur(r.taken_amount)}</span>
+          : <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">לא נלקח</span>
+      case 'installments':
+        return <span className="text-slate-600 tabular-nums">{r.installments ?? '—'}</span>
+    }
+  }
 
   const save = async (form: LegacyRow) => {
     setSaving(true)
@@ -209,93 +283,52 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
 
       {/* ── הטבלה ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200">{tc.picker}</div>
+
         {/* 🔴 בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="w-full">
-          <table className="w-full text-sm text-right" style={rt.tableStyle}>
-            <colgroup>{rt.cols}</colgroup>
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
-              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200">
-                {['תיק', 'שם הלווה', 'ת.ז.', 'כרטסת', 'עיר', 'אושר', 'נלקח בפועל', 'תשלומים', ''].map((h, i) => (
-                  <th key={h || i} className="relative px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 text-right">
-                    {h}{rt.handle(i)}
-                  </th>
+              <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200
+                             [&>th]:px-3 [&>th]:py-3 [&>th]:text-[11px] [&>th]:font-bold [&>th]:uppercase
+                             [&>th]:tracking-wide [&>th]:text-slate-500 [&>th]:text-right">
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
                 ))}
+                {/* ⚠️ עמודת הפעולות אחרונה — האינדקס שלה הוא מספר העמודות הנראות. */}
+                <th className="relative">{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-slate-400">לא נמצאו רשומות</td></tr>
-              ) : visible.map(r => {
-                const taken = r.taken_amount !== null && r.taken_amount !== undefined
-                const problem = badId(r.id_number)
-                return (
-                  <tr key={r.id} className="even:bg-slate-50/50 hover:bg-indigo-50/40 transition-colors">
-                    <td className="px-4 py-3 text-xs text-slate-400 tabular-nums whitespace-nowrap">{r.file_number ?? '—'}</td>
-                    <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span>{r.borrower_name ?? '—'}</span>
-                        {/* ⚠️ מסומן כדי שיהיה ברור שהשורה לא תשויך לאף משפחה
-                            עד שהת"ז תתוקן — אחרת היעדרה מהכרטסת נראה כתקלה. */}
-                        {problem && (
-                          <span title="ת״ז חסרה או שגויה — הרשומה אינה משויכת למשפחה"
-                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-                            <AlertTriangle size={10} /> דורש תיקון
-                          </span>
-                        )}
-                        {r.manually_edited && (
-                          <span title="נערך ידנית — ייבוא חוזר לא ידרוס את השינוי"
-                            className="inline-flex items-center rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-700">
-                            נערך
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-xs font-mono text-slate-500"><span className="ltr-num">{r.id_number ?? '—'}</span></td>
-                    {/* 🔴 עמודת השיוך: מי כבר מחובר לכרטסת ומי לא.
-                        משויך → קישור ישיר לכרטסת. לא משויך → כפתור שיוך ידני. */}
-                    <td className={`px-3 py-3 ${rt.cellClass}`}>
-                      {r.beneficiary_id ? (
-                        <Link href={`/admin/beneficiaries/${r.beneficiary_id}`}
-                          className="inline-flex items-center gap-1 rounded-lg bg-sky-50 border border-sky-200 px-2 py-1 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition">
-                          <ExternalLink size={10} /> לכרטסת
-                        </Link>
-                      ) : canEdit ? (
-                        <button type="button" onClick={() => setLinking(r)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2 py-1 text-[10px] font-bold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition">
-                          <UserPlus size={10} /> שייך
+                <tr><td colSpan={20} className="px-4 py-12 text-center text-slate-400">לא נמצאו רשומות</td></tr>
+              ) : visible.map(r => (
+                <tr key={r.id} className="even:bg-slate-50/50 hover:bg-indigo-50/40 transition-colors
+                                          [&>td]:px-3 [&>td]:py-3">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
+                  ))}
+                  <td className={tc.rt.cellClass}>
+                    {canEdit && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onClick={() => setEditing(r)}
+                          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-indigo-300 transition">
+                          <Pencil size={12} /> עריכה
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{r.city ?? '—'}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-900 tabular-nums whitespace-nowrap">{fmtCur(r.approved_amount)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {taken
-                        ? <span className="font-semibold text-emerald-700 tabular-nums">{fmtCur(r.taken_amount)}</span>
-                        : <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">לא נלקח</span>}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 tabular-nums">{r.installments ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      {canEdit && (
-                        <div className="flex items-center gap-1.5">
-                          <button type="button" onClick={() => setEditing(r)}
-                            className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-indigo-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-indigo-300 transition">
-                            <Pencil size={12} /> עריכה
-                          </button>
-                          <button type="button" onClick={() => void remove(r)} disabled={deletingId === r.id}
-                            className="inline-flex items-center text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-rose-300 transition disabled:opacity-50">
-                            {deletingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+                        <button type="button" onClick={() => void remove(r)} disabled={deletingId === r.id}
+                          className="inline-flex items-center text-xs text-slate-400 hover:text-rose-600 px-2 py-1 rounded-lg border border-slate-200 hover:border-rose-300 transition disabled:opacity-50">
+                          {deletingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {/* זקיף הגלילה — colSpan נדיב במכוון: מספר העמודות משתנה. */}
               {hasMore && (
                 <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={8} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
+                  <td colSpan={20} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
                     טוען עוד… ({shown} מתוך {total})
                   </td>
                 </tr>

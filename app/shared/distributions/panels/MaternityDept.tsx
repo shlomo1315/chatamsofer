@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { DeptHeader, Stat, BarList, Section, Ils } from './Chrome'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מחלקת עזר יולדות — תצוגה בלבד.
@@ -39,6 +40,20 @@ export interface MaternityRow {
 // ⚠️ רכיב ולא מחרוזת — ראה Ils ב-Chrome.
 const cur = (n: number) => <Ils value={n} />
 const d = (s?: string | null) => (s ? new Date(s).toLocaleDateString('he-IL') : '—')
+
+// ── הגדרת עמודות רשימת היולדות ──
+type ColKey = 'name' | 'city' | 'birth' | 'home' | 'nights' | 'amount' | 'state'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'name', label: 'שם המשפחה', def: true },
+  // ⚠️ העיר הופרדה מהשם לעמודה משלה: איחוד עמודות ערבב שני ערכים בתא אחד.
+  { key: 'city', label: 'עיר', def: false },
+  { key: 'birth', label: 'תאריך לידה', def: true },
+  { key: 'home', label: 'בית החלמה', def: true },
+  { key: 'nights', label: 'לילות', def: true, align: 'center' },
+  { key: 'amount', label: 'סכום', def: true },
+  { key: 'state', label: 'מצב', def: true },
+]
 
 const monthKey = (s?: string | null) => {
   if (!s) return null
@@ -115,6 +130,45 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1])
   }, [rows])
+
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף.
+  const tc = useTableColumns('maternity-dept', COLUMNS)
+
+  const cell = (c: ColDef<ColKey>, r: MaternityRow) => {
+    const b = r.beneficiary
+    const has = (r.receiptCount ?? 0) > 0
+    switch (c.key) {
+      case 'name':
+        return <span className="font-bold text-[#3a3630]">
+          {[b?.family_name, b?.spouse_name || b?.full_name].filter(Boolean).join(' ') || '—'}
+        </span>
+      case 'city': return <span className="text-[#a08a5a]">{b?.city || '—'}</span>
+      case 'birth': return <span className="ltr-num text-[#6b5d3e]">{d(r.birth_date)}</span>
+      case 'home':
+        return (
+          <span className="block text-[#6b5d3e]">
+            {r.recovery_home || '—'}
+            {r.recovery_arrived && (
+              <span className="block text-[11px] text-emerald-700 ltr-num">הגיעה {d(r.recovery_arrived_at)}</span>
+            )}
+          </span>
+        )
+      case 'nights': return <span className="ltr-num text-[#6b5d3e]">{r.recovery_nights ?? '—'}</span>
+      case 'amount':
+        return <span className="ltr-num font-bold" style={{ color: has ? '#047857' : '#a08a5a' }}>
+          {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
+        </span>
+      case 'state':
+        return (
+          <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+            has ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : r.recovery_arrived ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
+            {has ? 'חויב' : r.recovery_arrived ? 'ממתין לקבלה' : 'טרם מומש'}
+          </span>
+        )
+    }
+  }
 
   const homeChip = (on: boolean) =>
     `rounded-full border px-3 py-1 text-[11px] font-bold transition ${
@@ -199,49 +253,27 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
         </Section>
       </div>
 
-      {/* ⚠️ בלי גלילה לרוחב: עמודות מאוחדות (שם+עיר, בית החלמה+הגעה). */}
+      {/* ⚠️ בלי גלילה לרוחב: הבורר קובע מה נכנס למסך. */}
       <Section title="רשימת היולדות" hint={`${filtered.length.toLocaleString('he-IL')} רשומות`}>
         <div className="w-full">
-          <table className="w-full table-auto text-[12px] border-collapse">
+          <div className="pb-3">{tc.picker}</div>
+          <table className="w-full text-[12px] border-collapse" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
               <tr className="bg-[#fdfaf3] text-[#8a7a56] [&>th]:px-2.5 [&>th]:py-2 [&>th]:text-right [&>th]:font-bold [&>th]:border-l [&>th]:border-[#f0e9d8] [&>th:last-child]:border-l-0">
-                <th>שם המשפחה</th><th>תאריך לידה</th><th>בית החלמה</th>
-                <th className="text-center">לילות</th><th>סכום</th><th>מצב</th>
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
+                ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f4efe2]">
-              {filtered.slice(0, 300).map(r => {
-                const b = r.beneficiary
-                const name = [b?.family_name, b?.spouse_name || b?.full_name].filter(Boolean).join(' ') || '—'
-                const has = (r.receiptCount ?? 0) > 0
-                return (
-                  <tr key={r.id} className="[&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
-                    <td className="max-w-[170px]">
-                      <div className="truncate font-bold text-[#3a3630]" title={name}>{name}</div>
-                      {b?.city && <div className="truncate text-[11px] text-[#a08a5a]">{b.city}</div>}
-                    </td>
-                    <td className="ltr-num text-[#6b5d3e] whitespace-nowrap">{d(r.birth_date)}</td>
-                    <td className="max-w-[150px]">
-                      <div className="truncate text-[#6b5d3e]" title={r.recovery_home ?? ''}>{r.recovery_home || '—'}</div>
-                      {r.recovery_arrived && (
-                        <div className="text-[11px] text-emerald-700 ltr-num">הגיעה {d(r.recovery_arrived_at)}</div>
-                      )}
-                    </td>
-                    <td className="text-center ltr-num text-[#6b5d3e]">{r.recovery_nights ?? '—'}</td>
-                    <td className="ltr-num font-bold whitespace-nowrap" style={{ color: has ? '#047857' : '#a08a5a' }}>
-                      {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
-                    </td>
-                    <td className="whitespace-nowrap">
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
-                        has ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-                          : r.recovery_arrived ? 'border-amber-200 bg-amber-50 text-amber-800'
-                            : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                        {has ? 'חויב' : r.recovery_arrived ? 'ממתין לקבלה' : 'טרם מומש'}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
+              {filtered.slice(0, 300).map(r => (
+                <tr key={r.id} className="[&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={tc.cellClass(c)}>{cell(c, r)}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
           {filtered.length > 300 && (

@@ -10,6 +10,36 @@ import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
 import type { RegisterSource } from '@/lib/distributionSources'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+
+// ── עמודות סיכום בתי ההחלמה ──
+type HomeColKey = 'home' | 'arrived' | 'nights' | 'paid' | 'unbilled'
+
+const HOME_COLUMNS: ColDef<HomeColKey>[] = [
+  { key: 'home', label: 'בית החלמה', def: true },
+  { key: 'arrived', label: 'יולדות שהגיעו', def: true },
+  { key: 'nights', label: 'לילות', def: true },
+  { key: 'paid', label: 'שולם', def: true },
+  { key: 'unbilled', label: 'טרם חויבו', def: true },
+]
+
+// ── עמודות הרשימה השמית ──
+type MatColKey = 'state' | 'name' | 'id_number' | 'city' | 'baby' | 'birth' | 'home' | 'nights' | 'receipts' | 'amount'
+
+const MAT_COLUMNS: ColDef<MatColKey>[] = [
+  { key: 'state', label: 'מצב', def: true },
+  { key: 'name', label: 'שם המשפחה', def: true },
+  // ⚠️ הערכים שאוחדו קודם (ת"ז, עיר, תינוק, קבלות) הופרדו לעמודות משלהם —
+  // הבורר הוא שמחליט מה נכנס למסך, ולא איחוד שמערבב שני ערכים בתא אחד.
+  { key: 'id_number', label: 'ת״ז', def: false },
+  { key: 'city', label: 'עיר', def: true },
+  { key: 'baby', label: 'שם התינוק', def: false },
+  { key: 'birth', label: 'תאריך לידה', def: true },
+  { key: 'home', label: 'בית החלמה', def: true },
+  { key: 'nights', label: 'לילות', def: true, align: 'center' },
+  { key: 'receipts', label: 'קבלות', def: false, align: 'center' },
+  { key: 'amount', label: 'סכום', def: true },
+]
 
 // ─────────────────────────────────────────────────────────────────────────────
 // דף שיתוף חלוקות חגים — תצוגה בלבד, מוגן בסיסמה, מבודד משאר האתר.
@@ -439,6 +469,84 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
   }
   const cur = (n: number) => `${new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(n)} ₪`
 
+  // בורר עמודות + גרירת רוחב — רכיב מערכתי משותף, אחד לכל טבלה.
+  const htc = useTableColumns('shared-recovery-homes', HOME_COLUMNS)
+  const mtc = useTableColumns('shared-maternity-rows', MAT_COLUMNS)
+
+  const homeCell = (c: ColDef<HomeColKey>, h: typeof byHome[number]) => {
+    switch (c.key) {
+      case 'home':
+        return (
+          <span className="block">
+            <span className="block font-bold text-[#3a3630]">{h.home}</span>
+            {/* ⚠️ השמות מוצגים כאן ולא רק בטבלה למטה: הבקשה הייתה
+                לראות "כמה יולדות הגיעו עם שמות" בלי לחפש. */}
+            {h.names.length > 0 && (
+              <span className="block text-[11px] text-[#8a7a56] leading-relaxed mt-0.5">
+                {h.names.join(' · ')}
+              </span>
+            )}
+          </span>
+        )
+      case 'arrived': return <span className="font-bold text-[#3a3630] tabular-nums">{h.arrived}</span>
+      case 'nights': return <span className="tabular-nums text-[#6b5d3e]">{h.nights || '—'}</span>
+      case 'paid':
+        return <span className="font-bold text-emerald-800 tabular-nums">
+          {h.amount ? `₪${Math.round(h.amount).toLocaleString('he-IL')}` : '—'}
+        </span>
+      case 'unbilled':
+        return h.unbilled
+          ? <span className="inline-block rounded-full bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 font-bold tabular-nums">{h.unbilled}</span>
+          : <span className="text-[#b3a382]">—</span>
+    }
+  }
+
+  // סכום העמודה בשורת הסה״כ — נגזר מאותה הגדרת עמודות, כדי שהסה״כ
+  // יישאר מיושר לכותרת גם כשמסתירים עמודות.
+  const homeTotal = (c: ColDef<HomeColKey>) => {
+    switch (c.key) {
+      case 'home': return 'סה״כ'
+      case 'arrived': return byHome.reduce((s, h) => s + h.arrived, 0)
+      case 'nights': return byHome.reduce((s, h) => s + h.nights, 0) || '—'
+      case 'paid': return `₪${Math.round(byHome.reduce((s, h) => s + h.amount, 0)).toLocaleString('he-IL')}`
+      case 'unbilled': return byHome.reduce((s, h) => s + h.unbilled, 0) || '—'
+    }
+  }
+
+  const matCell = (c: ColDef<MatColKey>, r: MaternityRow) => {
+    const b = r.beneficiary
+    switch (c.key) {
+      case 'state': {
+        const s = stateOf(r)
+        return <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${STYLE[s]}`}>{LABEL[s]}</span>
+      }
+      case 'name':
+        return <span className="font-bold text-[#3a3630]">
+          {[b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'}
+        </span>
+      case 'id_number': return <span className="text-[#8a7a56] ltr-num">{b?.id_number ?? '—'}</span>
+      case 'city': return <span className="text-[#6b5d3e]">{b?.city ?? '—'}</span>
+      case 'baby': return <span className="text-[#8a7a56]">{r.baby_name || '—'}</span>
+      case 'birth': return <span className="text-[#6b5d3e] ltr-num">{d(r.birth_date)}</span>
+      case 'home':
+        return (
+          <span className="block text-[#6b5d3e]">
+            {r.recovery_home || '—'}
+            {/* ⚠️ ההגעה מתחת לבית ההחלמה — היא חסרת משמעות בלעדיו. */}
+            {r.recovery_arrived && (
+              <span className="block text-[11px] text-emerald-700 ltr-num">הגיעה {d(r.recovery_arrived_at)}</span>
+            )}
+          </span>
+        )
+      case 'nights': return <span className="text-[#6b5d3e] ltr-num">{r.recovery_nights ?? '—'}</span>
+      case 'receipts': return <span className="text-[#6b5d3e] ltr-num">{(r.receiptCount ?? 0) || '—'}</span>
+      case 'amount':
+        return <span className="font-bold text-emerald-700 ltr-num">
+          {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
+        </span>
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* סיכום */}
@@ -513,53 +621,36 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
             <span className="text-[13px] font-extrabold text-[#6b5d3e]">סיכום לפי בית החלמה</span>
             <span className="text-[11px] text-[#8a7a56]">{byHome.length} בתים · {filtered.length} רשומות</span>
           </div>
-          {/* ⚠️ בלי overflow-x ובלי min-w: 5 עמודות נכנסות בלי כפייה. */}
+          {/* ⚠️ בלי overflow-x ובלי min-w: אין גלילה לרוחב בשום טבלה. */}
           <div className="w-full">
-            <table className="w-full table-auto text-[12px] border-collapse">
+            <div className="px-3 py-3">{htc.picker}</div>
+            <table className="w-full text-[12px] border-collapse" style={htc.rt.tableStyle}>
+              <colgroup>{htc.rt.cols}</colgroup>
               <thead>
-                <tr className="bg-[#fdfaf3] text-[#8a7a56] text-[11px]">
-                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">בית החלמה</th>
-                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">יולדות שהגיעו</th>
-                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">לילות</th>
-                  <th className="px-3 py-2 text-right font-bold border-l border-[#f0e9d8]">שולם</th>
-                  <th className="px-3 py-2 text-right font-bold">טרם חויבו</th>
+                <tr className="bg-[#fdfaf3] text-[#8a7a56] text-[11px]
+                               [&>th]:px-3 [&>th]:py-2 [&>th]:text-right [&>th]:font-bold
+                               [&>th]:border-l [&>th]:border-[#f0e9d8] [&>th:last-child]:border-l-0">
+                  {htc.shown.map((c, i) => (
+                    <th key={c.key} className={htc.headClass(c)}>{c.label}{htc.rt.handle(i)}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {byHome.map(h => (
-                  <tr key={h.home} className="border-t border-[#f4efe1] align-top">
-                    <td className="px-3 py-2.5 border-l border-[#f0e9d8]">
-                      <div className="font-bold text-[#3a3630]">{h.home}</div>
-                      {/* ⚠️ השמות מוצגים כאן ולא רק בטבלה למטה: הבקשה הייתה
-                          לראות "כמה יולדות הגיעו עם שמות" בלי לחפש. */}
-                      {h.names.length > 0 && (
-                        <div className="text-[11px] text-[#8a7a56] leading-relaxed mt-0.5">
-                          {h.names.join(' · ')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] font-bold text-[#3a3630] tabular-nums">{h.arrived}</td>
-                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums text-[#6b5d3e]">{h.nights || '—'}</td>
-                    <td className="px-3 py-2.5 border-l border-[#f0e9d8] font-bold text-emerald-800 tabular-nums">
-                      {h.amount ? `₪${Math.round(h.amount).toLocaleString('he-IL')}` : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 tabular-nums">
-                      {h.unbilled
-                        ? <span className="rounded-full bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 font-bold">{h.unbilled}</span>
-                        : <span className="text-[#b3a382]">—</span>}
-                    </td>
+                  <tr key={h.home} className="border-t border-[#f4efe1]
+                    [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-[#f0e9d8] [&>td:last-child]:border-l-0">
+                    {htc.shown.map(c => (
+                      <td key={c.key} className={htc.cellClass(c)}>{homeCell(c, h)}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-[#faf6ec] border-t-2 border-[#e8dfc9] font-extrabold text-[#3a3630]">
-                  <td className="px-3 py-2.5 border-l border-[#f0e9d8]">סה״כ</td>
-                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums">{byHome.reduce((s, h) => s + h.arrived, 0)}</td>
-                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums">{byHome.reduce((s, h) => s + h.nights, 0) || '—'}</td>
-                  <td className="px-3 py-2.5 border-l border-[#f0e9d8] tabular-nums text-emerald-800">
-                    ₪{Math.round(byHome.reduce((s, h) => s + h.amount, 0)).toLocaleString('he-IL')}
-                  </td>
-                  <td className="px-3 py-2.5 tabular-nums">{byHome.reduce((s, h) => s + h.unbilled, 0) || '—'}</td>
+                <tr className="bg-[#faf6ec] border-t-2 border-[#e8dfc9] font-extrabold text-[#3a3630]
+                  [&>td]:px-3 [&>td]:py-2.5 [&>td]:border-l [&>td]:border-[#f0e9d8] [&>td:last-child]:border-l-0">
+                  {htc.shown.map(c => (
+                    <td key={c.key} className={`${htc.cellClass(c)} tabular-nums`}>{homeTotal(c)}</td>
+                  ))}
                 </tr>
               </tfoot>
             </table>
@@ -572,56 +663,26 @@ function MaternityPanel({ rows }: { rows: MaternityRow[] }) {
         {filtered.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-[#8a7a56]">לא נמצאו רשומות</p>
         ) : (
-          // 🔴 בלי overflow-x: 11 עמודות אוחדו ל-7 (שם+ת"ז, עיר+תינוק,
-          // בית החלמה+הגעה, לילות+קבלות).
+          // 🔴 בלי overflow-x: הבורר קובע אילו עמודות נכנסות למסך.
           <div className="w-full">
-            <table className="w-full table-auto text-[12px] border-collapse">
+            <div className="px-2.5 py-3">{mtc.picker}</div>
+            <table className="w-full text-[12px] border-collapse" style={mtc.rt.tableStyle}>
+              <colgroup>{mtc.rt.cols}</colgroup>
               <thead className="bg-[#faf7ef] text-[#8a7a56]">
                 <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-[#efe7d4] [&>th:last-child]:border-l-0">
-                  <th>מצב</th><th>שם המשפחה</th><th>עיר ותינוק</th>
-                  <th>תאריך לידה</th><th>בית החלמה</th>
-                  <th className="text-center">לילות · קבלות</th><th>סכום</th>
+                  {mtc.shown.map((c, i) => (
+                    <th key={c.key} className={mtc.headClass(c)}>{c.label}{mtc.rt.handle(i)}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f4efe2]">
-                {filtered.map(r => {
-                  const s = stateOf(r)
-                  const b = r.beneficiary
-                  const name = [b?.family_name, b?.full_name || b?.spouse_name].filter(Boolean).join(' ') || '—'
-                  return (
-                    <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
-                      <td className="whitespace-nowrap">
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${STYLE[s]}`}>
-                          {LABEL[s]}
-                        </span>
-                      </td>
-                      <td className="max-w-[170px]">
-                        <div className="truncate font-bold text-[#3a3630]" title={name}>{name}</div>
-                        <div className="text-[11px] text-[#8a7a56] ltr-num">{b?.id_number ?? '—'}</div>
-                      </td>
-                      <td className="max-w-[140px]">
-                        <div className="truncate text-[#6b5d3e]" title={b?.city ?? undefined}>{b?.city ?? '—'}</div>
-                        {r.baby_name && <div className="truncate text-[11px] text-[#8a7a56]" title={r.baby_name}>{r.baby_name}</div>}
-                      </td>
-                      <td className="text-[#6b5d3e] ltr-num whitespace-nowrap">{d(r.birth_date)}</td>
-                      {/* ⚠️ ההגעה מתחת לבית ההחלמה — היא חסרת משמעות בלעדיו. */}
-                      <td className="max-w-[150px]">
-                        <div className="truncate text-[#6b5d3e]" title={r.recovery_home || undefined}>{r.recovery_home || '—'}</div>
-                        {r.recovery_arrived && (
-                          <div className="text-[11px] text-emerald-700 ltr-num">הגיעה {d(r.recovery_arrived_at)}</div>
-                        )}
-                      </td>
-                      <td className="text-center whitespace-nowrap">
-                        <span className="text-[#6b5d3e] ltr-num">{r.recovery_nights ?? '—'}</span>
-                        <span className="text-[#d9cdb0] mx-1">·</span>
-                        <span className="text-[#6b5d3e] ltr-num">{(r.receiptCount ?? 0) || '—'}</span>
-                      </td>
-                      <td className="font-bold text-emerald-700 ltr-num whitespace-nowrap">
-                        {Number(r.recovery_amount ?? 0) > 0 ? cur(Number(r.recovery_amount)) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {filtered.map(r => (
+                  <tr key={r.id} className="hover:bg-[#faf7ef] [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-[#f4efe2] [&>td:last-child]:border-l-0">
+                    {mtc.shown.map(c => (
+                      <td key={c.key} className={mtc.cellClass(c)}>{matCell(c, r)}</td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

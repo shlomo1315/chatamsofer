@@ -6,6 +6,7 @@ import { Check, X, CreditCard, Loader2, Search, RotateCcw } from 'lucide-react'
 import type { MaternityAid, CardCenter, CardStatus } from '@/types'
 import ExtendEligibility from '../ExtendEligibility'
 import { useCan } from '@/components/StaffPermissions'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 const STATUS_META: Record<CardStatus, { label: string; cls: string }> = {
   pending:        { label: 'ממתין לאישור',     cls: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -50,6 +51,22 @@ const FILTERS: { key: CardStatus | 'all'; label: string }[] = [
   { key: 'awaiting_stock', label: 'ממתין למלאי' },
   { key: 'loaded', label: 'נטען' },
   { key: 'rejected', label: 'נדחה' },
+]
+
+// ── הגדרת העמודות ──
+// עמודת "פעולות" אינה בבורר (קבועה) — ראו extraCols למטה.
+type ColKey = 'mother' | 'wifeId' | 'baby' | 'birth' | 'center' | 'status' | 'loaded' | 'balance' | 'countdown'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true },
+  { key: 'wifeId', label: 'ת.ז. האישה', def: true },
+  { key: 'baby', label: 'תינוק', def: true },
+  { key: 'birth', label: 'תאריך לידה', def: true },
+  { key: 'center', label: 'מוקד', def: true },
+  { key: 'status', label: 'סטטוס כרטיס', def: true },
+  { key: 'loaded', label: 'סכום שהוטען', def: false },
+  { key: 'balance', label: 'יתרה בכרטיס', def: true },
+  { key: 'countdown', label: 'ימים לפריקה', def: true },
 ]
 
 export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
@@ -109,6 +126,41 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
     return hay.includes(query.trim().toLowerCase())
   })
 
+  // extraCols: 1 — עמודת הפעולות קבועה ואינה בבורר, אך נספרת לגרירה.
+  const tc = useTableColumns<ColKey>('maternity-cards', COLUMNS, { extraCols: 1 })
+
+  // תוכן התא לפי מפתח העמודה
+  const cell = (key: ColKey, aid: MaternityAid) => {
+    const b = aid.beneficiary as Ben | undefined
+    const s = (aid.card_status ?? 'pending') as CardStatus
+    switch (key) {
+      case 'mother': return <span className="font-semibold text-slate-800">{motherName(b)}</span>
+      case 'wifeId': return <span className="ltr-num font-mono text-slate-600">{b?.spouse_id_number ?? '—'}</span>
+      case 'baby': {
+        const nm = babyNameLabel(aid as AidNameFields)
+        return nm.missing
+          ? <span className="text-slate-300">—</span>
+          : <span className={nm.pending ? 'text-amber-700 font-semibold' : 'text-slate-700'}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
+      }
+      case 'birth': return <span className="ltr-num text-slate-600">{fmtDate(aid.birth_date)}</span>
+      case 'center': return (aid as { card_center?: { name?: string } }).card_center?.name ?? <span className="text-slate-300">—</span>
+      case 'status': return <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span>
+      case 'loaded': return aid.card_load_amount != null ? <span className="text-slate-700">{ils(aid.card_load_amount)}</span> : <span className="text-slate-300">—</span>
+      case 'balance': return aid.card_status === 'loaded' && aid.card_balance != null
+        ? <span className="font-bold text-emerald-700">{ils(aid.card_balance)}</span>
+        : <span className="text-slate-300">—</span>
+      case 'countdown': {
+        const countdown = s === 'loaded' ? unloadCountdown(aid.six_weeks_end) : null
+        return (
+          <div className="flex flex-col items-start gap-1">
+            {countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}
+            {aid.eligibility_extended && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>}
+          </div>
+        )
+      }
+    }
+  }
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
       <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
@@ -140,45 +192,34 @@ export default function CardsTable({ aids }: { aids: MaternityAid[] }) {
       )}
       {err && <p className="px-5 mt-3 text-sm text-red-600">{err}</p>}
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-[16px] text-right border-collapse">
+      {/* בורר העמודות — מעל הטבלה */}
+      <div className="px-5 py-3">{tc.picker}</div>
+
+      {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
+      <div className="w-full">
+        <table className="w-full text-[16px] text-right border-collapse" style={tc.rt.tableStyle}>
+          <colgroup>{tc.rt.cols}</colgroup>
           <thead>
-            <tr className="border-b-2 border-slate-200 bg-slate-50 text-[15px] font-bold text-slate-600">
-              {['שם היולדת', 'ת.ז. האישה', 'תינוק', 'תאריך לידה', 'מוקד', 'סטטוס כרטיס', 'סכום שהוטען', 'יתרה בכרטיס', 'ימים לפריקה', 'פעולות'].map((h, i, arr) => (
-                <th key={h} className={`px-5 py-4 font-bold whitespace-nowrap ${i < arr.length - 1 ? 'border-l border-slate-200' : ''}`}>{h}</th>
+            <tr className="border-b-2 border-slate-200 bg-slate-50 text-[15px] font-bold text-slate-600 [&>th]:px-5 [&>th]:py-4 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+              {tc.shown.map((c, i) => (
+                <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
               ))}
+              <th className="relative">פעולות{tc.rt.handle(tc.shown.length)}</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-5 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
+              <tr><td colSpan={tc.shown.length + 1} className="px-5 py-12 text-center text-slate-400">אין בקשות בסינון זה</td></tr>
             ) : filtered.map(aid => {
-              const b = aid.beneficiary as Ben | undefined
               const s = (aid.card_status ?? 'pending') as CardStatus
-              const center = (aid as { card_center?: { name?: string } }).card_center
               const busy = busyId === aid.id
-              const countdown = (s === 'loaded') ? unloadCountdown(aid.six_weeks_end) : null
               return (
                 <tr key={aid.id} onClick={() => router.push(`/admin/maternity/${aid.id}`)}
-                  className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer">
-                  <td className="px-5 py-4 font-semibold text-slate-800 whitespace-nowrap border-l border-slate-100">{motherName(b)}</td>
-                  <td className="px-5 py-4 font-mono text-slate-600 border-l border-slate-100"><span className="ltr-num">{b?.spouse_id_number ?? '—'}</span></td>
-                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{(() => {
-                    const nm = babyNameLabel(aid as AidNameFields)
-                    return nm.missing ? <span className="text-slate-300">—</span> : <span className={nm.pending ? 'text-amber-700 font-semibold whitespace-nowrap' : ''}>{nm.pending ? `⏳ ${nm.text}` : nm.text}</span>
-                  })()}</td>
-                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100"><span className="ltr-num">{fmtDate(aid.birth_date)}</span></td>
-                  <td className="px-5 py-4 text-slate-600 border-l border-slate-100">{center?.name ?? <span className="text-slate-300">—</span>}</td>
-                  <td className="px-5 py-4 border-l border-slate-100"><span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full border ${STATUS_META[s].cls}`}>{STATUS_META[s].label}</span></td>
-                  <td className="px-5 py-4 text-slate-700 border-l border-slate-100">{aid.card_load_amount != null ? ils(aid.card_load_amount) : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-5 py-4 font-bold text-emerald-700 border-l border-slate-100">{aid.card_status === 'loaded' && aid.card_balance != null ? ils(aid.card_balance) : <span className="text-slate-300">—</span>}</td>
-                  <td className="px-5 py-4 border-l border-slate-100">
-                    <div className="flex flex-col items-start gap-1">
-                      {countdown ? <span className={`inline-block text-[13px] font-semibold px-2.5 py-1 rounded-full ${countdown.cls}`}>{countdown.text}</span> : <span className="text-slate-300">—</span>}
-                      {aid.eligibility_extended && <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">הוארך ידנית</span>}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4" onClick={e => e.stopPropagation()}>
+                  className="border-b border-slate-100 hover:bg-emerald-50/40 transition-colors cursor-pointer [&>td]:px-5 [&>td]:py-4 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
+                  {tc.shown.map(c => (
+                    <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, aid)}</td>
+                  ))}
+                  <td className="align-top" onClick={e => e.stopPropagation()}>
                     {busy ? (
                       <Loader2 size={15} className="animate-spin text-slate-400" />
                     ) : !canEdit ? (

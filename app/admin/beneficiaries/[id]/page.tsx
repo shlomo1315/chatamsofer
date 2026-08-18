@@ -36,8 +36,8 @@ import BeneficiaryMailThread from './BeneficiaryMailThread'
 import InquiryPanel from './InquiryPanel'
 import { pathToRoot, NODE_SELECT, type TreeNodeRow } from '@/lib/lineageSync'
 import { nodeIsSelf } from '@/lib/beneficiaryNode'
-import { ViewDocButton } from '@/components/ui/DocViewer'
 import EmailRow from './EmailRow'
+import ChildrenTable from './ChildrenTable'
 import PhoneActivity from './PhoneActivity'
 import { registrationSourceLabel } from '@/lib/distributionSources'
 import { genColor, deviatingGens, isNodeVerified } from '@/lib/lineageDeviation'
@@ -544,39 +544,18 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           )}
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-right">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-100 text-xs text-slate-500">
-              <th className="px-4 py-2">#</th><th className="px-4 py-2">שם</th><th className="px-4 py-2">מין</th><th className="px-4 py-2">סטטוס</th><th className="px-4 py-2">תאריך לידה</th><th className="px-4 py-2">מספר זהות</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {kids.map((c, i) => (
-              <tr key={i} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5 text-slate-400 tabular-nums">{i + 1}</td>
-                <td className="px-4 py-2.5 font-medium text-slate-800">{c.name}</td>
-                <td className="px-4 py-2.5">
-                  {c.gender ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${c.gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>{c.gender === 'male' ? 'בן' : 'בת'}</span> : <span className="text-slate-300">—</span>}
-                </td>
-                <td className="px-4 py-2.5">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {c.birth_status === 'pending' && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">ממתין לאישור לידה</span>}
-                    {c.birth_status === 'approved' && <span className="inline-block text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-800">לידה מאושרת</span>}
-                    {c.maternity_aid_id && birthCerts[c.maternity_aid_id] && (
-                      <ViewDocButton url={birthCerts[c.maternity_aid_id]} name="אישור לידה"
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-full text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors"><FileText size={13} /></ViewDocButton>
-                    )}
-                    {maritalLabel(c) ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${c.marital_status === 'married' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{maritalLabel(c)}</span> : (!c.birth_status && <span className="text-slate-300">—</span>)}
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-slate-600">{c.birth_date ? formatDate(c.birth_date) : <span className="text-slate-300">—</span>}</td>
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-600 ltr-num">{c.id_number || <span className="text-slate-300">—</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* ⚠️ הטבלה הועברה לרכיב לקוח (בורר עמודות + גרירת רוחב הם hooks, והדף
+          הזה הוא Server Component). השורות מגיעות מפורמטות מכאן. */}
+      <ChildrenTable kids={kids.map(c => ({
+        name: c.name,
+        id_number: c.id_number,
+        gender: c.gender,
+        birth_date_label: c.birth_date ? formatDate(c.birth_date) : '—',
+        marital_status: c.marital_status,
+        marital_label: maritalLabel(c),
+        birth_status: c.birth_status,
+        birth_cert_url: c.maternity_aid_id ? birthCerts[c.maternity_aid_id] ?? null : null,
+      }))} />
     </Card>
   )
 

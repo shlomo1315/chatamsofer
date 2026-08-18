@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 type GhostGroup = 'no_card' | 'card_unlinked' | 'card_elsewhere'
 
@@ -119,6 +120,18 @@ const STATUS: Record<string, { txt: string; cls: string }> = {
  */
 const isRemovable = (r: Row) => r.group === 'card_elsewhere' || r.twinNodeId != null
 
+// ⚠️ הגדרה אחת לשלוש טבלאות הקבוצות — הן זהות במבנה, וכיוונון עמודות באחת
+// אמור לחול על כולן.
+type ColKey = 'node' | 'generation' | 'idNumber' | 'parent' | 'inCard'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'node', label: 'שם הצומת', def: true },
+  { key: 'generation', label: 'דור', def: true, align: 'center' },
+  { key: 'idNumber', label: 'ת״ז', def: true },
+  { key: 'parent', label: 'תחת', def: true },
+  { key: 'inCard', label: 'נכתב בכרטסת', def: true },
+]
+
 export default function GhostChildrenPanel({ onLocate, onFixed }: {
   onLocate: (id: string) => void
   onFixed: () => void
@@ -167,6 +180,49 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
     } catch { toast.error('שגיאת רשת') }
     setRemoving(false)
   }, [picked, toast, onFixed, scan])
+
+  // ⚠️ extraCols=2 — תיבת הסימון (הראשונה) ועמודת הקישורים (האחרונה) אינן
+  // בבורר. הסימון קודם לכולן, ולכן ידית הגרירה של כל עמודה מקבלת i+1.
+  const tc = useTableColumns('lineage-ghosts', COLUMNS, { extraCols: 2 })
+
+  const cell = (c: ColDef<ColKey>, r: Row) => {
+    switch (c.key) {
+      case 'node': {
+        const st = STATUS[r.status ?? 'pending'] ?? STATUS.pending
+        return (
+          <>
+            <button onClick={() => onLocate(r.nodeId)}
+              className="text-right font-medium text-slate-800 hover:text-violet-700">
+              {r.nodeName || '(ללא שם)'}
+            </button>
+            <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>{st.txt}</span>
+            {/* ציר התאום — אח שהשם המלא שלו מכיל את שמו. הסימן החזק ביותר
+                לכך שזה אותו אדם פעמיים, והוא בלתי תלוי בשאלה איפה הכרטסת. */}
+            {r.twinName && (
+              <button onClick={() => r.twinNodeId && onLocate(r.twinNodeId)}
+                title="אח שהשם המלא שלו מכיל את שמו של הצומת — ככל הנראה אותו אדם"
+                className="mt-1 flex items-start gap-1 text-right text-[10px] leading-tight text-rose-600 hover:text-rose-800">
+                <Copy size={10} className="mt-0.5 shrink-0" />
+                <span>עותק של: {r.twinName}</span>
+              </button>
+            )}
+          </>
+        )
+      }
+      case 'generation': return <span className="text-xs text-slate-400">{r.generation}</span>
+      case 'idNumber': return <span className="ltr-num font-mono text-xs text-slate-500">{r.idNumber || '—'}</span>
+      case 'parent': return <span className="text-xs text-slate-600">{r.parentNodeName}</span>
+      case 'inCard':
+        return (
+          <span className="text-xs text-slate-500">
+            {r.childNameInCard || '—'}
+            {/* הכרטסת של האדם עצמו — קיימת רק בשתי הקבוצות האחרונות,
+                וזו הראיה שהוא באמת קיים במערכת. */}
+            {r.cardBenName && <span className="block text-[10px] text-slate-400">כרטסת: {r.cardBenName}</span>}
+          </span>
+        )
+    }
+  }
 
   return (
     <div className="rounded-2xl border-2 border-slate-300 bg-slate-50/60 p-4 mb-4" dir="rtl">
@@ -334,94 +390,64 @@ export default function GhostChildrenPanel({ onLocate, onFixed }: {
                 {open === g.key && (
                   <div className="rounded-b-xl border border-t-0 border-slate-200 bg-white">
                     <p className="border-b border-slate-100 px-3 py-2 text-[11px] leading-relaxed text-slate-500">{g.hint}</p>
+                    <div className="border-b border-slate-100 px-3 py-2">{tc.picker}</div>
+                    {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
                     <div className="max-h-[26rem] overflow-y-auto">
-                      <table className="w-full text-right text-sm">
+                      <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
+                        <colgroup>{tc.rt.cols}</colgroup>
                         <thead className="sticky top-0 bg-slate-50 text-slate-600">
                           <tr>
                             <th className="w-8 px-3 py-2"></th>
-                            <th className="px-3 py-2 font-medium">שם הצומת</th>
-                            <th className="px-3 py-2 font-medium">דור</th>
-                            <th className="px-3 py-2 font-medium">ת״ז</th>
-                            <th className="px-3 py-2 font-medium">תחת</th>
-                            <th className="px-3 py-2 font-medium">נכתב בכרטסת</th>
+                            {tc.shown.map((c, i) => (
+                              <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
+                                {c.label}{tc.rt.handle(i + 1)}
+                              </th>
+                            ))}
                             <th className="px-3 py-2 font-medium"></th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {rows.map(r => {
-                            const st = STATUS[r.status ?? 'pending'] ?? STATUS.pending
-                            return (
-                              <tr key={r.nodeId} className={picked.has(r.nodeId) ? 'bg-rose-50/60' : 'hover:bg-slate-50'}>
-                                <td className="px-3 py-2">
-                                  {/* ⚠️ תיבת סימון רק לעותק מוכח. שורה בלי ראיה
-                                      אינה ניתנת לסימון — זו ההגנה, לא עיצוב. */}
-                                  {isRemovable(r) ? (
-                                    <input type="checkbox" checked={picked.has(r.nodeId)}
-                                      onChange={() => setPicked(p => {
-                                        const n = new Set(p)
-                                        if (n.has(r.nodeId)) n.delete(r.nodeId); else n.add(r.nodeId)
-                                        return n
-                                      })}
-                                      className="h-4 w-4 accent-rose-700" />
-                                  ) : (
-                                    <span title="אין ראיה שהאדם קיים במקום אחר — הצומת נשאר"
-                                      className="block h-4 w-4 rounded border border-slate-200 bg-slate-50" />
-                                  )}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <button onClick={() => onLocate(r.nodeId)}
-                                    className="text-right font-medium text-slate-800 hover:text-violet-700">
-                                    {r.nodeName || '(ללא שם)'}
-                                  </button>
-                                  <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>
-                                    {st.txt}
-                                  </span>
-                                  {/* ציר התאום — אח שהשם המלא שלו מכיל את שמו.
-                                      הסימן החזק ביותר לכך שזה אותו אדם פעמיים,
-                                      והוא בלתי תלוי בשאלה איפה הכרטסת. */}
-                                  {r.twinName && (
-                                    <button onClick={() => r.twinNodeId && onLocate(r.twinNodeId)}
-                                      title="אח שהשם המלא שלו מכיל את שמו של הצומת — ככל הנראה אותו אדם"
-                                      className="mt-1 flex items-start gap-1 text-right text-[10px] leading-tight text-rose-600 hover:text-rose-800">
-                                      <Copy size={10} className="mt-0.5 shrink-0" />
-                                      <span>עותק של: {r.twinName}</span>
-                                    </button>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 text-xs text-slate-400">{r.generation}</td>
-                                <td className="ltr-num px-3 py-2 font-mono text-xs text-slate-500">{r.idNumber || '—'}</td>
-                                <td className="max-w-[200px] truncate px-3 py-2 text-xs text-slate-600">{r.parentNodeName}</td>
-                                <td className="px-3 py-2 text-xs text-slate-500">
-                                  {r.childNameInCard || '—'}
-                                  {/* הכרטסת של האדם עצמו — קיימת רק בשתי הקבוצות
-                                      האחרונות, וזו הראיה שהוא באמת קיים במערכת. */}
-                                  {r.cardBenName && (
-                                    <span className="block text-[10px] text-slate-400">
-                                      כרטסת: {r.cardBenName}
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2">
-                                  <button onClick={() => onLocate(r.nodeId)}
-                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-violet-700">
-                                    <Search size={12} /> בעץ
-                                  </button>
-                                  {r.parentBenId && (
-                                    <a href={`/admin/beneficiaries/${r.parentBenId}`} target="_blank" rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-slate-800">
-                                      <ExternalLink size={12} /> כרטסת ההורה
-                                    </a>
-                                  )}
-                                  {r.cardBenId && (
-                                    <a href={`/admin/beneficiaries/${r.cardBenId}`} target="_blank" rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800">
-                                      <ExternalLink size={12} /> הכרטסת שלו
-                                    </a>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
+                          {rows.map(r => (
+                            <tr key={r.nodeId} className={picked.has(r.nodeId) ? 'bg-rose-50/60' : 'hover:bg-slate-50'}>
+                              <td className="px-3 py-2 align-top">
+                                {/* ⚠️ תיבת סימון רק לעותק מוכח. שורה בלי ראיה
+                                    אינה ניתנת לסימון — זו ההגנה, לא עיצוב. */}
+                                {isRemovable(r) ? (
+                                  <input type="checkbox" checked={picked.has(r.nodeId)}
+                                    onChange={() => setPicked(p => {
+                                      const n = new Set(p)
+                                      if (n.has(r.nodeId)) n.delete(r.nodeId); else n.add(r.nodeId)
+                                      return n
+                                    })}
+                                    className="h-4 w-4 accent-rose-700" />
+                                ) : (
+                                  <span title="אין ראיה שהאדם קיים במקום אחר — הצומת נשאר"
+                                    className="block h-4 w-4 rounded border border-slate-200 bg-slate-50" />
+                                )}
+                              </td>
+                              {tc.shown.map(c => (
+                                <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
+                              ))}
+                              <td className="px-3 py-2 align-top">
+                                <button onClick={() => onLocate(r.nodeId)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-violet-700">
+                                  <Search size={12} /> בעץ
+                                </button>
+                                {r.parentBenId && (
+                                  <a href={`/admin/beneficiaries/${r.parentBenId}`} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-slate-800">
+                                    <ExternalLink size={12} /> כרטסת ההורה
+                                  </a>
+                                )}
+                                {r.cardBenId && (
+                                  <a href={`/admin/beneficiaries/${r.cardBenId}`} target="_blank" rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800">
+                                    <ExternalLink size={12} /> הכרטסת שלו
+                                  </a>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>

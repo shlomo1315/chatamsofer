@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 interface Row {
   benId: string
@@ -53,6 +54,15 @@ const STATUS: Record<string, { txt: string; cls: string }> = {
   pending: { txt: 'ממתין', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
   rejected: { txt: 'נדחה', cls: 'text-red-700 bg-red-50 border-red-200' },
 }
+
+type ColKey = 'ben' | 'idNumber' | 'dup' | 'keep'
+
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'ben', label: 'הכרטסת', def: true },
+  { key: 'idNumber', label: 'ת״ז', def: true },
+  { key: 'dup', label: 'העותק שיימחק', def: true },
+  { key: 'keep', label: 'הצומת שיישאר', def: true },
+]
 
 export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
   onLocate: (id: string) => void
@@ -108,6 +118,40 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
     if (n.has(id)) n.delete(id); else n.add(id)
     return n
   })
+
+  // ⚠️ extraCols=2 — תיבת הסימון (הראשונה) ועמודת הקישור לכרטסת (האחרונה)
+  // אינן בבורר. הסימון קודם לכולן, ולכן ידית הגרירה מקבלת i+1.
+  const tc = useTableColumns('lineage-self-duplicates', COLUMNS, { extraCols: 2 })
+
+  const cell = (c: ColDef<ColKey>, r: Row) => {
+    switch (c.key) {
+      case 'ben': return <span className="font-medium text-slate-800">{r.benName}</span>
+      case 'idNumber': return <span className="ltr-num font-mono text-xs text-slate-500">{r.benIdNumber || '—'}</span>
+      case 'dup': {
+        const st = STATUS[r.dupStatus ?? 'pending'] ?? STATUS.pending
+        return (
+          <>
+            <button onClick={() => onLocate(r.dupNodeId)}
+              className="text-right text-xs text-rose-700 hover:text-rose-900">
+              דור {r.dupGeneration} · {r.dupNodeName}
+            </button>
+            <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>{st.txt}</span>
+          </>
+        )
+      }
+      case 'keep':
+        return (
+          <>
+            <button onClick={() => onLocate(r.keepNodeId)}
+              className="flex items-start gap-1 text-right text-xs text-emerald-700 hover:text-emerald-900">
+              <ArrowLeft size={11} className="mt-0.5 shrink-0" />
+              דור {r.keepGeneration} · {r.keepNodeName}
+            </button>
+            {r.willCopyIdNumber && <span className="block text-[10px] text-slate-400">הת״ז תסומן עליו</span>}
+          </>
+        )
+    }
+  }
 
   return (
     <div className="mb-4 rounded-2xl border-2 border-fuchsia-300 bg-fuchsia-50/40 p-4" dir="rtl">
@@ -181,58 +225,43 @@ export default function SelfDuplicatesPanel({ onLocate, onFixed }: {
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white">
+                <div className="border-b border-slate-100 px-3 py-2">{tc.picker}</div>
+                {/* ⚠️ גלילה אנכית בלבד — הכלל: אין גלילה לרוחב בשום טבלה. */}
                 <div className="max-h-[26rem] overflow-y-auto">
-                  <table className="w-full text-right text-sm">
+                  <table className="w-full text-right text-sm" style={tc.rt.tableStyle}>
+                    <colgroup>{tc.rt.cols}</colgroup>
                     <thead className="sticky top-0 bg-slate-50 text-slate-600">
                       <tr>
                         <th className="w-8 px-3 py-2"></th>
-                        <th className="px-3 py-2 font-medium">הכרטסת</th>
-                        <th className="px-3 py-2 font-medium">ת״ז</th>
-                        <th className="px-3 py-2 font-medium">העותק שיימחק</th>
-                        <th className="px-3 py-2 font-medium">הצומת שיישאר</th>
+                        {tc.shown.map((c, i) => (
+                          <th key={c.key} className={`px-3 py-2 font-medium ${tc.headClass(c)}`}>
+                            {c.label}{tc.rt.handle(i + 1)}
+                          </th>
+                        ))}
                         <th className="px-3 py-2 font-medium"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {rows.map(r => {
-                        const st = STATUS[r.dupStatus ?? 'pending'] ?? STATUS.pending
-                        return (
-                          <tr key={r.dupNodeId} className={picked.has(r.dupNodeId) ? 'bg-fuchsia-50/60' : 'hover:bg-slate-50'}>
-                            <td className="px-3 py-2">
-                              <input type="checkbox" checked={picked.has(r.dupNodeId)}
-                                onChange={() => toggle(r.dupNodeId)}
-                                className="h-4 w-4 accent-fuchsia-700" />
-                            </td>
-                            <td className="max-w-[180px] truncate px-3 py-2 font-medium text-slate-800">{r.benName}</td>
-                            <td className="ltr-num px-3 py-2 font-mono text-xs text-slate-500">{r.benIdNumber || '—'}</td>
-                            <td className="px-3 py-2">
-                              <button onClick={() => onLocate(r.dupNodeId)}
-                                className="text-right text-xs text-rose-700 hover:text-rose-900">
-                                דור {r.dupGeneration} · {r.dupNodeName}
-                              </button>
-                              <span className={`mr-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${st.cls}`}>{st.txt}</span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <button onClick={() => onLocate(r.keepNodeId)}
-                                className="flex items-center gap-1 text-right text-xs text-emerald-700 hover:text-emerald-900">
-                                <ArrowLeft size={11} className="shrink-0" />
-                                דור {r.keepGeneration} · {r.keepNodeName}
-                              </button>
-                              {r.willCopyIdNumber && (
-                                <span className="block text-[10px] text-slate-400">הת״ז תסומן עליו</span>
-                              )}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2">
-                              {r.benId && (
-                                <a href={`/admin/beneficiaries/${r.benId}`} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-slate-800">
-                                  <ExternalLink size={12} /> כרטסת
-                                </a>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {rows.map(r => (
+                        <tr key={r.dupNodeId} className={picked.has(r.dupNodeId) ? 'bg-fuchsia-50/60' : 'hover:bg-slate-50'}>
+                          <td className="px-3 py-2 align-top">
+                            <input type="checkbox" checked={picked.has(r.dupNodeId)}
+                              onChange={() => toggle(r.dupNodeId)}
+                              className="h-4 w-4 accent-fuchsia-700" />
+                          </td>
+                          {tc.shown.map(c => (
+                            <td key={c.key} className={`px-3 py-2 ${tc.cellClass(c)}`}>{cell(c, r)}</td>
+                          ))}
+                          <td className="px-3 py-2 align-top">
+                            {r.benId && (
+                              <a href={`/admin/beneficiaries/${r.benId}`} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-slate-500 hover:text-slate-800">
+                                <ExternalLink size={12} /> כרטסת
+                              </a>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

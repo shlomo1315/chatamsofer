@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Clock, Check, X, Baby, Eye, Loader2, Search, FileText, Trash2, AlertTriangle, PencilLine } from 'lucide-react'
@@ -17,6 +17,7 @@ import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { matchesBucket, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -124,6 +125,37 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
   rejected: { label: 'נדחה',    cls: 'bg-red-100 text-red-800' },
 }
 
+// ── הגדרת העמודות ──
+// ⚠️ מקור אמת יחיד: הכותרת, מצב ברירת המחדל והתא (בפונקציית cell) יושבים
+// לפי אותו מפתח. קודם הכותרות היו במערך נפרד מהתאים, וכל הוספת עמודה
+// במקום אחד ושכחה באחר הסיטה את כל השורה.
+type ColKey =
+  | 'mother' | 'wifeId' | 'baby' | 'benefit' | 'babyId' | 'birth'
+  | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
+  | 'loadStatus' | 'loadDate' | 'cardLink' | 'status'
+
+// ⚠️ ברירת המחדל צומצמה לתשע עמודות שנכנסות בנוחות למסך רגיל. השאר
+// (ת"ז התינוק, אישור לידה, אופן הגשה) זמינות בבורר — קודם כל 12–19
+// העמודות נדחסו יחד והטקסט נחתך.
+const COLUMNS: ColDef<ColKey>[] = [
+  { key: 'mother', label: 'שם היולדת', def: true },
+  { key: 'wifeId', label: 'ת.ז. האישה', def: true },
+  { key: 'baby', label: 'שם התינוק', def: true },
+  { key: 'benefit', label: 'הטבה', def: true },
+  { key: 'babyId', label: 'ת.ז. התינוק', def: false },
+  { key: 'birth', label: 'תאריך לידה', def: true },
+  { key: 'recovery', label: 'בית החלמה', def: true },
+  { key: 'days', label: 'ימי זכאות', def: true, align: 'center' },
+  { key: 'arrived', label: 'הגעה', def: true },
+  { key: 'amount', label: 'סכום בית החלמה', def: true },
+  { key: 'cert', label: 'אישור לידה', def: false, align: 'center' },
+  { key: 'source', label: 'אופן הגשה', def: false },
+  { key: 'loadStatus', label: 'סטטוס טעינה', def: true },
+  { key: 'loadDate', label: 'תאריך ושעת טעינה', def: false },
+  { key: 'cardLink', label: 'שיוך כרטיס', def: true },
+  { key: 'status', label: 'סטטוס', def: true },
+]
+
 export default function MaternityTable({ data, showCard, showArrived, hideFilters, emptyMessage, defaultFilter = 'all' }: { data: MaternityAid[]; showCard?: boolean; showArrived?: boolean; hideFilters?: boolean; emptyMessage?: string; defaultFilter?: Filter }) {
   const router = useRouter()
   // ברירת המחדל של הסינון — בלשונית הראשית מתחילים ב"ממתין לאישור" (defaultFilter='pending'),
@@ -168,6 +200,109 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // ⚡ גלילה אינסופית — הטבלה רינדרה את כל השורות המסוננות בבת אחת (עד ~1000
   // שורות × 15 עמודות = ~15,000 תאים), וכל סינון/מיון/הקלדה בנה אותן מחדש.
   const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+
+  // ⚠️ העמודות שהמסך המארח כיבה (showCard/showArrived) יורדות מהבורר עצמו
+  // ולא רק מהטבלה — אחרת המשתמש מסמן עמודה ושום דבר לא קורה.
+  const colFilter = useCallback((c: ColDef<ColKey>) => {
+    if ((c.key === 'arrived' || c.key === 'amount') && !showArrived) return false
+    if ((c.key === 'loadStatus' || c.key === 'loadDate' || c.key === 'cardLink') && !showCard) return false
+    return true
+  }, [showArrived, showCard])
+
+  // extraCols: 1 — עמודת הפעולות קבועה ואינה בבורר, אך נספרת לגרירה.
+  const tc = useTableColumns<ColKey>('maternity', COLUMNS, { filter: colFilter, extraCols: 1 })
+
+  // תוכן התא לפי מפתח העמודה
+  const cell = (key: ColKey, aid: MaternityAid, m?: MotherRef) => {
+    switch (key) {
+      case 'mother': return <span className="font-medium text-slate-800">{motherName(m)}</span>
+      case 'wifeId': return <span className="ltr-num text-xs font-mono text-slate-600">{m?.spouse_id_number ?? '—'}</span>
+      case 'baby': return (
+        <span className="inline-flex items-center gap-1.5 flex-wrap text-slate-700">
+          {(() => {
+            const nm = babyNameLabel(aid as AidNameFields)
+            if (nm.missing) return <span className="text-slate-300">—</span>
+            return nm.pending
+              ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">⏳ {nm.text}</span>
+              : <span>{nm.text}</span>
+          })()}
+          {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
+        </span>
+      )
+      case 'benefit': {
+        const wc = aid.wants_food_card !== false
+        const wr = aid.wants_recovery !== false
+        const label = wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : '—'
+        const cls = wc && wr ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+        return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${cls}`} title="הטבות שהיולדת ביקשה">{label}</span>
+      }
+      case 'babyId': return <span className="ltr-num text-xs font-mono text-slate-600">{aid.baby_id_number ?? '—'}</span>
+      case 'birth': return <span className="ltr-num text-slate-600">{formatDate(aid.birth_date)}</span>
+      case 'recovery': return <span className="text-slate-600">{aid.recovery_home ?? '—'}</span>
+      case 'days': return <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
+      case 'arrived':
+        return aid.recovery_arrived === true
+          ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">הגיעה</span>
+          : aid.recovery_arrived === false
+            ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-800">לא הגיעה</span>
+            : <span className="text-slate-300">—</span>
+      case 'amount':
+        return aid.recovery_amount != null ? (
+          <span className="inline-flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
+            {aid.recovery_amount_status === 'rejected'
+              ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">נדחה</span>
+              : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{aid.recovery_amount_status === 'approved' ? 'אושר' : 'מומש'}</span>}
+          </span>
+        ) : <span className="text-slate-300">—</span>
+      case 'cert':
+        return aid.birth_certificate_url ? (
+          <span className="inline-flex items-center gap-1" title="צפייה באישור הלידה" onClick={e => e.stopPropagation()}>
+            {/* אייקונים קומפקטיים (בלי טקסט) — נשארים בשורה אחת בעמודה צרה */}
+            <ViewDocButton url={aid.birth_certificate_url}
+              className="inline-flex items-center justify-center w-7 h-7 text-indigo-600 hover:text-indigo-700 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
+              <FileText size={14} />
+            </ViewDocButton>
+            <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName(m)} name={aid.birth_certificate_url} variant="icon" />
+          </span>
+        ) : <span className="text-slate-300">—</span>
+      case 'source': {
+        const src = (aid as { source?: string | null }).source
+        if (src === 'portal') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">האתר</span>
+        if (src === 'email') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">מייל</span>
+        if (src === 'admin') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">הזנה ידנית</span>
+        return <span className="text-[11px] text-slate-400">—</span>
+      }
+      case 'loadStatus': {
+        // ⚠️ "נטען" אמיתי = יש card_tlush_id, שהוא ה-ID שנדרים החזיר
+        // בתגובה ל-AddTlush מוצלח (lib/nedarim.ts addTlush). הוא נכתב
+        // רק אחרי אישור נדרים, ולכן הוא ההוכחה שהכסף אכן הוטען שם.
+        // מציגים את הסכום שנטען בפועל (card_load_amount).
+        if (aid.card_tlush_id) {
+          const amt = Number(aid.card_load_amount ?? 0)
+          return <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800" title={`מזהה טעינה בנדרים: ${aid.card_tlush_id}`}>
+            {amt > 0 ? `נטען ₪${amt.toLocaleString('he-IL')}` : 'נטען'}
+          </span>
+        }
+        const pill = CARD_STATUS_PILL[aid.card_status ?? 'pending'] ?? CARD_STATUS_PILL.pending
+        return <span className={`inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full ${pill.cls}`}>{pill.label}</span>
+      }
+      case 'loadDate':
+        // תאריך ושעת הטעינה בפועל — נכתב יחד עם אישור נדרים (card_loaded_at).
+        // מוצג רק כשהטעינה אומתה (card_tlush_id), אחרת "—".
+        return aid.card_tlush_id && aid.card_loaded_at
+          ? <span className="ltr-num text-xs text-slate-600">{format(new Date(aid.card_loaded_at), 'dd/MM/yy', { locale: he })}<br />{format(new Date(aid.card_loaded_at), 'HH:mm', { locale: he })}</span>
+          : <span className="text-slate-300">—</span>
+      case 'cardLink':
+        // שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at)
+        return aid.card_picked_up_at ? (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800"><Check size={12} /> שויך</span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500"><X size={12} /> לא שויך</span>
+        )
+      case 'status': return <span onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></span>
+    }
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -232,57 +367,26 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
             </div>
           </div>
         </div>
-        <div className="overflow-hidden">
-          {/* ⚠️ table-fixed + colgroup ברוחבי אחוזים: הדרישה היא שהכל ייכנס לרוחב
-              המסך *בלי גלילה רוחבית בכלל*. עם 15 עמודות אי אפשר לשמור nowrap על
-              הכל — לכן עמודות הטקסט (שמות, בית החלמה) מקבלות wrap (break-words):
-              טקסט ארוך יורד שורה ומגביה את השורה, ואף עמודה לא "בורחת" מתחת
-              לכותרת הלא-נכונה. עמודות קצרות (ת"ז, תגיות, תאריכים) נשארות nowrap.
-              הרוחבים ב-colgroup מסתכמים ל-100% ומחולקים לפי חשיבות/אורך התוכן. */}
-          <table className="w-full table-fixed text-sm text-right">
-            {/* ⚠️ הרוחבים מסתכמים בדיוק ל-100% בכל שילוב (בסיס / +showCard / +showArrived),
-                אחרת table-fixed דוחס והתוכן נחתך/חופף. עמודות טקסט (שמות, בית החלמה)
-                מקבלות wrap ולכן יכולות לקבל פחות; סטטוס ופעולות מקבלות מספיק רוחב
-                לתגית+חצים ולזוג האייקונים. חושב לכל מצב בנפרד. */}
-            <colgroup>
-              {(() => {
-                // רוחבים בסיסיים (12 עמודות: בלי showCard/showArrived) — סכום 100
-                const base: Record<string, number> = {
-                  mother: 12, wifeId: 8, baby: 11, benefit: 9, babyId: 8, birth: 7,
-                  recovery: 9, days: 5, cert: 8, source: 7, status: 8, actions: 8,
-                }
-                // כשמופיעות עמודות נוספות, מקטינים את הטקסט הארוך כדי לפנות להן מקום
-                const w = { ...base }
-                if (showCard) {
-                  Object.assign(w, { mother: 10, baby: 9, benefit: 7, recovery: 7, cert: 6, source: 5, status: 7, actions: 7 })
-                }
-                if (showArrived) {
-                  Object.assign(w, { mother: 9, baby: 8, benefit: 6, recovery: 7, babyId: 7, wifeId: 7, cert: 6, source: 5, status: 6, actions: 6 })
-                }
-                const cols: { key: string; w: number }[] = [
-                  { key: 'mother', w: w.mother }, { key: 'wifeId', w: w.wifeId }, { key: 'baby', w: w.baby },
-                  { key: 'benefit', w: w.benefit }, { key: 'babyId', w: w.babyId }, { key: 'birth', w: w.birth },
-                  { key: 'recovery', w: w.recovery }, { key: 'days', w: w.days },
-                  ...(showArrived ? [{ key: 'arrived', w: 6 }, { key: 'amount', w: 7 }] : []),
-                  { key: 'cert', w: w.cert }, { key: 'source', w: w.source },
-                  ...(showCard ? [{ key: 'loadStatus', w: 6 }, { key: 'loadDate', w: 7 }, { key: 'cardLink', w: 6 }] : []),
-                  { key: 'status', w: w.status }, { key: 'actions', w: w.actions },
-                ]
-                const total = cols.reduce((s, c) => s + c.w, 0)
-                // מנרמלים ל-100% בדיוק כדי שלא תהיה גלישה/דחיסה
-                return cols.map(c => <col key={c.key} style={{ width: `${(c.w / total) * 100}%` }} />)
-              })()}
-            </colgroup>
+        {/* בורר העמודות — מעל הטבלה */}
+        <div className="px-5 py-3 border-b border-slate-100">
+          {tc.picker}
+        </div>
+        <div className="w-full">
+          {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. הרוחב מחולק
+              בין העמודות המוצגות, והטקסט גולש לשורה נוספת במקום להיחתך. */}
+          <table className="w-full text-sm text-right" style={tc.rt.tableStyle}>
+            <colgroup>{tc.rt.cols}</colgroup>
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {['שם היולדת', 'ת.ז. האישה', 'שם התינוק', 'הטבה', 'ת.ז. התינוק', 'תאריך לידה', 'בית החלמה', 'ימי זכאות', ...(showArrived ? ['הגעה', 'סכום בית החלמה'] : []), 'אישור לידה', 'אופן הגשה', ...(showCard ? ['סטטוס טעינה', 'תאריך ושעת טעינה', 'שיוך כרטיס'] : []), 'סטטוס', 'פעולות'].map(h => (
-                  <th key={h} className="px-2 py-3.5 text-xs font-semibold text-slate-500 align-middle leading-tight break-words">{h}</th>
+              <tr className="border-b border-slate-200 bg-slate-50 [&>th]:px-2 [&>th]:py-3.5 [&>th]:text-xs [&>th]:font-semibold [&>th]:text-slate-500 [&>th]:align-middle [&>th]:leading-tight">
+                {tc.shown.map((c, i) => (
+                  <th key={c.key} className={tc.headClass(c)}>{c.label}{tc.rt.handle(i)}</th>
                 ))}
+                <th className="relative text-center">פעולות{tc.rt.handle(tc.shown.length)}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {visible.length === 0 ? (
-                <tr><td colSpan={12 + (showCard ? 3 : 0) + (showArrived ? 2 : 0)} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
+                <tr><td colSpan={tc.shown.length + 1} className="px-4 py-12 text-center text-slate-400">{emptyMessage ?? 'לא נמצאו לידות בסינון זה'}</td></tr>
               ) : visibleRows.map(aid => {
                 const m = aid.beneficiary as MotherRef | undefined
                 return (
@@ -292,130 +396,14 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   // המקום היחיד שבו הוא עובר הלאה.
                   <tr key={aid.id}
                     onClick={() => router.push(`/admin/maternity/${aid.id}?st=${filter}`)}
-                    className="hover:bg-indigo-50/50 cursor-pointer transition-colors">
-                    <td className="px-2 py-3 align-middle font-medium text-slate-800 break-words">{motherName(m)}</td>
-                    <td className="px-2 py-3 align-middle text-xs font-mono text-slate-600 break-words"><span className="ltr-num">{m?.spouse_id_number ?? '—'}</span></td>
-                    <td className="px-2 py-3 align-middle text-slate-700 break-words">
-                      <span className="inline-flex items-center gap-1.5 flex-wrap">
-                        {(() => {
-                          const nm = babyNameLabel(aid as AidNameFields)
-                          if (nm.missing) return <span className="text-slate-300">—</span>
-                          return nm.pending
-                            ? <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">⏳ {nm.text}</span>
-                            : <span>{nm.text}</span>
-                        })()}
-                        {aid.is_twins && <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700" title="לידת תאומים"><Baby size={10} /> תאומים</span>}
-                      </span>
-                    </td>
-                    {/* עמודת ההטבה — נפרדת משם התינוק. מציגה תמיד מה היולדת ביקשה. */}
-                    <td className="px-2.5 py-3 align-middle">
-                      {(() => {
-                        const wc = aid.wants_food_card !== false
-                        const wr = aid.wants_recovery !== false
-                        const label = wc && wr ? 'כרטיס + הבראה' : wc ? 'כרטיס בלבד' : wr ? 'בית החלמה בלבד' : '—'
-                        const cls = wc && wr ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                        return <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${cls}`} title="הטבות שהיולדת ביקשה">{label}</span>
-                      })()}
-                    </td>
-                    <td className="px-2.5 py-3 align-middle text-xs font-mono text-slate-600"><span className="ltr-num">{aid.baby_id_number ?? '—'}</span></td>
-                    <td className="px-2.5 py-3 align-middle text-slate-600"><span className="ltr-num">{formatDate(aid.birth_date)}</span></td>
-                    <td className="px-2 py-3 align-middle text-slate-600 break-words">{aid.recovery_home ?? '—'}</td>
-                    <td className="px-2.5 py-3 align-middle">
-                      <span className="inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800" title="ימי זכאות בבית ההחלמה">{recoveryDaysOf(aid)}</span>
-                    </td>
-                    {showArrived && (
-                      <td className="px-2.5 py-3 align-middle">
-                        {aid.recovery_arrived === true
-                          ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">הגיעה</span>
-                          : aid.recovery_arrived === false
-                            ? <span className="inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-800">לא הגיעה</span>
-                            : <span className="text-slate-300">—</span>}
-                      </td>
-                    )}
-                    {showArrived && (
-                      <td className="px-2 py-3 align-middle">
-                        {aid.recovery_amount != null ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="font-bold text-emerald-700">₪{Number(aid.recovery_amount).toLocaleString('he-IL')}</span>
-                            {aid.recovery_amount_status === 'rejected'
-                              ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">נדחה</span>
-                              : <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{aid.recovery_amount_status === 'approved' ? 'אושר' : 'מומש'}</span>}
-                          </span>
-                        ) : <span className="text-slate-300">—</span>}
-                      </td>
-                    )}
-                    <td className="px-2 py-3 align-middle">
-                      {aid.birth_certificate_url ? (
-                        <span className="inline-flex items-center gap-1" title="צפייה באישור הלידה">
-                          {/* אייקונים קומפקטיים (בלי טקסט) — נשארים בשורה אחת בעמודה צרה */}
-                          <ViewDocButton url={aid.birth_certificate_url}
-                            className="inline-flex items-center justify-center w-7 h-7 text-indigo-600 hover:text-indigo-700 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors">
-                            <FileText size={14} />
-                          </ViewDocButton>
-                          <DownloadDocButton url={aid.birth_certificate_url} docType="אישור לידה" person={motherName(m)} name={aid.birth_certificate_url} variant="icon" />
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                    {/* אופן הגשת הבקשה — אתר / מייל / הזנה ידנית */}
-                    <td className="px-2 py-3 align-middle">
-                      {(() => {
-                        const src = (aid as { source?: string | null }).source
-                        if (src === 'portal') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">האתר</span>
-                        if (src === 'email') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">מייל</span>
-                        if (src === 'admin') return <span className="inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">הזנה ידנית</span>
-                        return <span className="text-[11px] text-slate-400">—</span>
-                      })()}
-                    </td>
-                    {showCard && (
-                      <td className="px-2 py-3 align-middle">
-                        {(() => {
-                          // ⚠️ "נטען" אמיתי = יש card_tlush_id, שהוא ה-ID שנדרים החזיר
-                          // בתגובה ל-AddTlush מוצלח (lib/nedarim.ts addTlush). הוא נכתב
-                          // רק אחרי אישור נדרים, ולכן הוא ההוכחה שהכסף אכן הוטען שם.
-                          // מציגים את הסכום שנטען בפועל (card_load_amount).
-                          const proven = !!aid.card_tlush_id
-                          if (proven) {
-                            const amt = Number(aid.card_load_amount ?? 0)
-                            return <span className="inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800" title={`מזהה טעינה בנדרים: ${aid.card_tlush_id}`}>
-                              {amt > 0 ? `נטען ₪${amt.toLocaleString('he-IL')}` : 'נטען'}
-                            </span>
-                          }
-                          const cs = aid.card_status ?? 'pending'
-                          const pill = CARD_STATUS_PILL[cs] ?? CARD_STATUS_PILL.pending
-                          return <span className={`inline-flex items-center whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ${pill.cls}`}>{pill.label}</span>
-                        })()}
-                      </td>
-                    )}
-                    {showCard && (
-                      <td className="px-2 py-3 align-middle text-slate-600">
-                        {/* תאריך ושעת הטעינה בפועל — נכתב יחד עם אישור נדרים (card_loaded_at).
-                            מוצג רק כשהטעינה אומתה (card_tlush_id), אחרת "—". */}
-                        {aid.card_tlush_id && aid.card_loaded_at
-                          ? <span className="ltr-num text-xs whitespace-nowrap">{format(new Date(aid.card_loaded_at), 'dd/MM/yy', { locale: he })}<br />{format(new Date(aid.card_loaded_at), 'HH:mm', { locale: he })}</span>
-                          : <span className="text-slate-300">—</span>}
-                      </td>
-                    )}
-                    {showCard && (
-                      <td className="px-2.5 py-3 align-middle">
-                        {/* שיוך כרטיס בפועל — נקבע רק כשהמשפחה חיברה כרטיס בשיחת ימות (card_picked_up_at) */}
-                        {aid.card_picked_up_at ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-800">
-                            <Check size={12} /> שויך
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">
-                            <X size={12} /> לא שויך
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}><StatusControl aid={aid} /></td>
-                    <td className="px-2 py-3 align-middle" onClick={e => e.stopPropagation()}>
+                    className="hover:bg-indigo-50/50 cursor-pointer transition-colors [&>td]:px-2 [&>td]:py-3">
+                    {tc.shown.map(c => (
+                      <td key={c.key} className={tc.cellClass(c)}>{cell(c.key, aid, m)}</td>
+                    ))}
+                    <td className="align-top text-center" onClick={e => e.stopPropagation()}>
                       {/* אייקונים קומפקטיים בשורה אחת — עמודה צרה, בלי עומס.
                           ⚠️ flex-nowrap + flex-shrink-0: בלעדיהם הכפתורים ירדו
-                          שורה או נדחסו כשהעמודה מצטמצמת (מסך צר / עמודות נוספות). */}
+                          שורה או נדחסו כשהעמודה מצטמצמת. */}
                       <div className="flex flex-nowrap items-center justify-center gap-1">
                         <Link href={`/admin/maternity/${aid.id}`} title="צפייה בתיק" aria-label="צפייה בתיק"
                           className="inline-flex items-center justify-center w-7 h-7 flex-shrink-0 text-slate-600 hover:text-indigo-600 rounded-lg border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-colors">
@@ -430,7 +418,7 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
               {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
               {hasMore && (
                 <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={20} className="px-3 py-4 text-center text-slate-400 text-[11px] font-medium">
+                  <td colSpan={tc.shown.length + 1} className="px-3 py-4 text-center text-slate-400 text-[11px] font-medium">
                     <Loader2 size={14} className="inline animate-spin ml-1.5" />
                     טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
                   </td>
