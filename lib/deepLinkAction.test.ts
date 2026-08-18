@@ -52,3 +52,42 @@ describe('resolveDeepLinkAction — כוונת deep-link מהמייל', () => {
     expect(resolveDeepLinkAction('holiday', ready).clearIntent).toBe(true)
   })
 })
+
+/**
+ * מגן הלולאה — סימולציה של ה-effect עצמו.
+ *
+ * ⚠️ הטסטים למעלה בודקים שההכרעה *נכונה*. הטסט הזה בודק משהו אחר:
+ * שגם אם ההכרעה תהיה שגויה (מסלול שמחזיר clearIntent=false לנצח),
+ * המונה עוצר את המחזור. זו ההגנה שמבטיחה "לא ייקרס אף פעם".
+ */
+describe('מגן מפני לולאה אינסופית', () => {
+  function runEffectLoop(alwaysWaiting: boolean) {
+    let tries = 0
+    let cleared = false
+    let renders = 0
+    // מדמה: כל setState מפעיל את ה-effect מחדש
+    for (let i = 0; i < 10_000; i++) {
+      renders++
+      if (cleared) break
+      if (tries > 3) break            // ← המגן
+      tries += 1
+      const d = alwaysWaiting
+        ? { clearIntent: false }
+        : resolveDeepLinkAction('birth', {
+            gatesLoaded: true, holidayLoaded: true,
+            canRequestBirth: true, gateOpen: false, isDocsPending: false,
+          })
+      if (d.clearIntent) cleared = true
+    }
+    return renders
+  }
+
+  it('מסלול תקין — נעצר מיד', () => {
+    expect(runEffectLoop(false)).toBeLessThan(5)
+  })
+
+  it('🔴 גם מסלול פגום שלעולם אינו מכריע — נעצר, ולא רץ לנצח', () => {
+    const renders = runEffectLoop(true)
+    expect(renders).toBeLessThan(10)     // לא 10,000
+  })
+})

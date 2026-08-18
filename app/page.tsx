@@ -1,6 +1,7 @@
 import Script from 'next/script'
 import { loadPublicTexts } from '@/lib/publicTextsStore'
 import PublicPortalPage from './PublicPortalPage'
+import PortalErrorBoundary from '@/components/ui/PortalErrorBoundary'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // עטיפת שרת דקה לממשק הציבורי.
@@ -36,7 +37,12 @@ export default async function Page() {
           gtag('config', '${GA_MEASUREMENT_ID}');
         `}
       </Script>
-      <PublicPortalPage texts={texts} />
+      {/* 🔴 רשת ביטחון: כל שגיאת רינדור בפורטל מוצגת כהודעה מסודרת עם
+          כפתור רענון, במקום מסך לבן ריק ("This page couldn't load"),
+          ומדווחת לשרת כדי שנדע עליה. ראו PortalErrorBoundary. */}
+      <PortalErrorBoundary>
+        <PublicPortalPage texts={texts} />
+      </PortalErrorBoundary>
     </>
   )
 }

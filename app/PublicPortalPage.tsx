@@ -2019,6 +2019,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
 
   // Deep-link action from email buttons (?action=birth|loan|docs) — applied after ID lookup
   const intendedAction = useRef<'birth' | 'loan' | 'docs' | 'aid' | 'details' | 'holiday' | null>(null)
+  // מונה ניסיונות לפתיחת ה-deep-link — מגן מפני לולאת רינדור (ראו ה-effect)
+  const deepLinkTries = useRef(0)
 
   // Loan modal
   const [loanModalOpen, setLoanModalOpen] = useState(false)
@@ -3360,6 +3362,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   useEffect(() => {
     if (!intendedAction.current || !beneficiary || step !== 'dashboard') return
     const a = intendedAction.current
+    // 🔴 מגן ברזל מפני לולאה אינסופית.
+    //
+    // ה-effect תלוי ב-`beneficiary` וב-`deptGates` — *אובייקטים*, שזהותם
+    // מתחלפת בכל טעינה מחדש — וגם קורא ל-setState. די בכך שאחד מהם ייווצר
+    // מחדש כדי שהמחזור יתחיל שוב. הניקוי הלוגי (clearIntent) מטפל במקרה
+    // הרגיל, אבל הוא נשען על כך שהחישוב תמיד מכריע נכון; אם מסלול כלשהו
+    // יחזיר "לא הוכרע" בטעות — הלשונית מתה.
+    // המונה חוסם את זה מכל כיוון: אחרי 3 ניסיונות מפסיקים לנצח, גם במחיר
+    // שהטופס לא ייפתח אוטומטית. דף שנשאר חי עדיף על לשונית שקורסת.
+    if (deepLinkTries.current > 3) return
+    deepLinkTries.current += 1
     // ⚠️ מנקים את הכוונה *רק אחרי* שהפעולה אכן נפתחה. קודם היא נוקתה מיד,
     // ולכן אם הפתיחה נחסמה (נתונים שטרם נטענו, שער מחלקה) — הכוונה אבדה
     // לתמיד והמשתמש נשאר באזור האישי בלי שהטופס ייפתח, בלי הסבר ובלי ניסיון
