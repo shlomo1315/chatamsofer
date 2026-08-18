@@ -10,6 +10,7 @@ import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
 import type { RegisterSource } from '@/lib/distributionSources'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
+import { BRAND } from './brand'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ── עמודות סיכום בתי ההחלמה ──
@@ -165,26 +166,32 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex items-center justify-center p-4" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-[#faf7f0] via-[#f5efe0] to-[#ece0c4] flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden">
-          <div className="bg-gradient-to-l from-indigo-600 to-violet-600 px-8 py-8 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4">
+        <div className="bg-white rounded-2xl overflow-hidden border" style={{ borderColor: BRAND.sand, boxShadow: '0 24px 60px -30px rgba(138,106,36,0.55)' }}>
+          {/* 🔴 זהב המותג ולא indigo/violet: זה המסך הראשון שרואים, וגרדיאנט
+              סגול גנרי הוא בדיוק מה שגורם לדף להיראות כתבנית ולא כזהות. */}
+          <div className="relative overflow-hidden px-8 py-9 text-center"
+            style={{ background: `linear-gradient(160deg, ${BRAND.goldDeep}, ${BRAND.gold} 60%, #9a7a2e)` }}>
+            <span aria-hidden className="pointer-events-none absolute -top-16 right-1/3 h-40 w-40 rounded-full"
+              style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%)' }} />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/25 ring-1 ring-white/30 mb-4">
               <Lock size={28} className="text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white">איגוד הצאצאים</h1>
-            <p className="text-indigo-200 text-sm mt-1">שעל ידי היכל החתם סופר</p>
+            <h1 className="relative text-xl font-extrabold text-white">איגוד הצאצאים</h1>
+            <p className="relative text-sm mt-1 text-white/75">שעל ידי היכל החתם סופר</p>
           </div>
           <form onSubmit={submit} className="px-8 py-7 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-700">סיסמת כניסה</label>
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="הזן סיסמה..." autoFocus
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 transition-shadow" />
+                className="w-full rounded-xl border border-[#e8dfc9] bg-[#faf7f0] px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d9b95c]/60 focus:border-[#b08d3f] transition-shadow" />
               {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
             </div>
             <button type="submit" disabled={loading || !password}
-              className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-l from-indigo-600 to-violet-600 text-white font-semibold py-3 text-sm shadow-md shadow-indigo-200 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center justify-center gap-2 rounded-xl text-white font-bold py-3 text-sm transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: `linear-gradient(90deg, ${BRAND.goldDeep}, ${BRAND.gold})`, boxShadow: '0 10px 24px -14px rgba(138,106,36,0.9)' }}>
               {loading ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
               כניסה
             </button>
@@ -878,17 +885,17 @@ export default function SharedDistributionsPage() {
   }, [distributions, query])
 
   if (state === 'checking') {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 size={28} className="animate-spin text-indigo-400" /></div>
+    return <div className="min-h-screen flex items-center justify-center bg-[#faf7f0]"><Loader2 size={28} className="animate-spin text-[#b08d3f]" /></div>
   }
   if (state === 'locked') {
     return <PasswordScreen onAuth={() => { setState('checking'); void load() }} />
   }
 
   return (
-    <div className="min-h-screen bg-[#FBF8F1]" dir="rtl"
-      style={{ backgroundImage: 'radial-gradient(70% 50% at 50% 0%, rgba(176,141,63,0.06), transparent 60%)' }}>
+    <div className="min-h-screen bg-[#faf7f0]" dir="rtl"
+      style={{ backgroundImage: 'radial-gradient(70% 50% at 50% 0%, rgba(176,141,63,0.10), transparent 60%)' }}>
       {/* Header — פס זהב עליון (חותם השושלת) + כותרת ספרותית */}
-      <div className="h-1 bg-gradient-to-l from-[#d9b95c] via-[#b08d3f] to-[#8a6a24]" />
+      <div className="h-1.5 bg-gradient-to-l from-[#d9b95c] via-[#b08d3f] to-[#8a6a24]" />
       <header className="bg-white/80 backdrop-blur border-b border-[#e8dfc9] sticky top-0 z-10">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 'use client'
 import { Gift, Baby, Landmark, GitBranch, ArrowLeft } from 'lucide-react'
+import { BRAND, DEPT_TONES } from '../brand'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מסך הבית של דף השיתוף — שלוש מחלקות, כניסה אחת לכל אחת.
@@ -29,19 +30,19 @@ const META = {
     title: 'חלוקות חגים',
     subtitle: 'רישום, אישורים וכרטיסי מזון',
     Icon: Gift,
-    ink: '#b45309', tint: '#fef6ec', ring: '#f3dcc0',
+    ...DEPT_TONES.holidays,
   },
   maternity: {
     title: 'עזר יולדות',
     subtitle: 'בתי החלמה, שוברים וכרטיסים',
     Icon: Baby,
-    ink: '#0f766e', tint: '#eefaf8', ring: '#c7e9e4',
+    ...DEPT_TONES.maternity,
   },
   loans: {
     title: 'גמ״ח הלוואות',
     subtitle: 'בקשות, אישורים ומסירת שטרות',
     Icon: Landmark,
-    ink: '#1d4ed8', tint: '#eff4ff', ring: '#cfdcfa',
+    ...DEPT_TONES.loans,
   },
   // ⚠️ עץ הדורות כמחלקה עצמאית ולא כלשונית בתוך חלוקות חגים: אין ביניהם
   // שום קשר, והוא גם הכבד ביותר לטעינה — ולכן נטען רק בכניסה אליו.
@@ -49,7 +50,7 @@ const META = {
     title: 'צאצאים ועץ הדורות',
     subtitle: 'שרשרת היוחסין המלאה',
     Icon: GitBranch,
-    ink: '#7c3aed', tint: '#f5f0ff', ring: '#ddd0fa',
+    ...DEPT_TONES.tree,
   },
 } as const
 
@@ -62,16 +63,27 @@ export default function Home({ summaries, onOpen }: {
       {/* ── כותרת ── */}
       {/* ⚠️ הברכה גדולה ושקטה, בלי תת-כותרת שיווקית: זה דף פנימי להנהלה
           ולא עמוד נחיתה. */}
-      <div className="text-center pt-2">
-        <p className="text-[12px] font-bold tracking-[0.2em] text-[#b08d3f] mb-3">
+      {/* 🔴 הכותרת נושאת את הזהות ולא רק את השם: רקע זהוב עמוק, מסגרת
+          וזוהר. קודם היא ישבה על לבן והזהב נבלע — הדף כולו קרא חיוור. */}
+      <div className="relative overflow-hidden rounded-3xl px-6 py-10 text-center"
+        style={{
+          background: `linear-gradient(160deg, ${BRAND.goldDeep} 0%, ${BRAND.gold} 55%, #9a7a2e 100%)`,
+          boxShadow: '0 18px 48px -24px rgba(138,106,36,0.65)',
+        }}>
+        {/* זוהר עדין — נותן עומק בלי להוסיף אלמנט. */}
+        <span aria-hidden className="pointer-events-none absolute -top-24 right-1/4 h-56 w-56 rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.22), transparent 70%)' }} />
+
+        <p className="relative text-[11px] font-bold tracking-[0.28em] text-white/70 mb-3">
           ברוכים הבאים
         </p>
-        <h1 className="text-3xl sm:text-[42px] font-extrabold text-[#3a3630] leading-tight">
+        <h1 className="relative text-3xl sm:text-[42px] font-extrabold text-white leading-tight">
           איגוד הצאצאים של
-          <span className="block text-[#8a6a24]">היכל החתם סופר</span>
+          <span className="block" style={{ color: BRAND.goldLight }}>היכל החתם סופר</span>
         </h1>
-        <div className="mx-auto mt-5 h-px w-24 bg-gradient-to-l from-transparent via-[#d9b95c] to-transparent" />
-        <p className="mt-4 text-sm text-[#8a7a56]">
+        <div className="relative mx-auto mt-5 h-px w-28"
+          style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)' }} />
+        <p className="relative mt-4 text-sm text-white/75">
           בחרו מחלקה לצפייה בנתונים המלאים
         </p>
       </div>
@@ -87,10 +99,13 @@ export default function Home({ summaries, onOpen }: {
               type="button"
               onClick={() => onOpen(s.key)}
               className="group relative flex flex-col overflow-hidden rounded-3xl border bg-white p-6 text-right transition-all duration-200 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              style={{ borderColor: m.ring, boxShadow: '0 1px 16px -10px rgba(58,54,48,0.35)' }}
+              style={{ borderColor: m.ring, boxShadow: '0 2px 20px -12px rgba(58,54,48,0.4)' }}
             >
               {/* פס הצבע של המחלקה — מזהה, לא קישוט */}
-              <span className="absolute inset-x-0 top-0 h-1" style={{ background: m.ink }} />
+              {/* פס הצבע — מזהה את המחלקה. גרדיאנט ולא צבע שטוח: הוא
+                  נותן לכרטיס עומק בלי להוסיף אלמנט נוסף. */}
+              <span className="absolute inset-x-0 top-0 h-1.5"
+                style={{ background: `linear-gradient(90deg, ${m.deep}, ${m.ink})` }} />
 
               <div className="flex items-start justify-between gap-3 mb-5">
                 <div>
@@ -106,7 +121,7 @@ export default function Home({ summaries, onOpen }: {
               </div>
 
               {/* המספר הראשי */}
-              <p className="text-[44px] font-extrabold leading-none ltr-num" style={{ color: m.ink }}>
+              <p className="text-[44px] font-extrabold leading-none ltr-num" style={{ color: m.deep }}>
                 {s.headline.toLocaleString('he-IL')}
               </p>
               <p className="mt-1 text-[11px] font-bold text-[#8a7a56]">{s.headlineLabel}</p>
