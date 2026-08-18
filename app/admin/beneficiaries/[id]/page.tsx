@@ -923,6 +923,16 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         </div>
       )}
 
+      {/* ─────────────────────────────────────────────────────────────────
+          🔴 הבירור אינו "עוד טאב" אלא ההקשר שבו קוראים את כל השאר: מה
+          נשאל, מה ענו, ומה עוד חסר. כשהוא היה טאב, כל בדיקה של פרט
+          בכרטסת הצריכה מעבר ללשונית אחרת וחזרה. זהה לאגף ההלוואות.
+
+          ⚠️ sticky ולא רק grid: הטור הימני ארוך (פרטים, ילדים, הטבות,
+          מסמכים, עץ), ובלי ההצמדה הבירור נעלם אחרי הגלילה הראשונה.
+       ───────────────────────────────────────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(320px,420px)] items-start">
+        <div className="min-w-0">
       <Tabs tabs={[
         { key: 'personal', label: 'פרטים אישיים', accent: 'indigo', icon: <User size={15} />, content: personalTab },
         { key: 'children', label: `ילדים (${kids.length})`, accent: 'emerald', icon: <Users size={15} />, content: childrenTab },
@@ -931,20 +941,8 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         // עץ הדורות — מוסתר לאדם חריג (אינו צאצא, אין לו ייחוס)
         ...(isSpecial ? [] : [{ key: 'lineage', label: 'עץ הדורות', accent: 'violet' as const, icon: <GitBranch size={15} />, content: lineageTab }]),
         { key: 'documents', label: 'מסמכים מצורפים', accent: 'sky', icon: <Paperclip size={15} />, content: <DocumentsManager beneficiaryId={id} beneficiaryName={fullName} /> },
-        // 🔴 חלון אחד לשאלה שנשאלת בכל פנייה: למה דחו, מי דחה, ומה
-        // נכתב למשפחה. המידע היה פזור בארבעה מקומות.
-        { key: 'inquiry', label: 'בירורים והתכתבות', accent: 'rose', icon: <MessageSquare size={15} />, content: (
-          <InquiryPanel beneficiaryId={id} state={{
-            status: beneficiary.eligibility_status,
-            rejectionReason: beneficiary.rejection_reason,
-            rejectedAt: (beneficiary as { rejected_at?: string | null }).rejected_at,
-            rejectedBy: (beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name ?? null,
-            docsNotes: (beneficiary as { docs_notes?: string | null }).docs_notes,
-            requiredDocs: (beneficiary as { required_docs?: string | null }).required_docs,
-            deepReviewReason: (beneficiary as { deep_review_reason?: string | null }).deep_review_reason,
-            lineageFixNote: (beneficiary as { lineage_fix_note?: string | null }).lineage_fix_note,
-          }} />
-        ) },
+        // ⚠️ "בירורים והתכתבות" הוצא מהטאבים והוקבע כעמודה צדדית — ראו
+        // ההערה מעל ה-grid. הוא אינו מופיע כאן יותר בכוונה.
         { key: 'activity', label: 'היסטוריית פעילות', accent: 'amber', icon: <Activity size={15} />, content: activityTab },
         { key: 'phone', label: 'פעילות טלפון', accent: 'rose', icon: <Phone size={15} />, content: <PhoneActivity beneficiaryId={id} /> },
         ...(beneficiary.email ? [{
@@ -955,6 +953,26 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
           content: <BeneficiaryMailThread email={beneficiary.email} name={fullName} beneficiaryId={id} />,
         }] : []),
       ]} />
+        </div>
+
+        {/* ── טור שמאל: הבירור, צמוד לכל הגובה ── */}
+        <aside className="flex flex-col gap-2 lg:sticky lg:top-4">
+          <div className="flex items-center gap-2 text-rose-600">
+            <MessageSquare size={16} />
+            <h2 className="text-sm font-bold text-slate-700">בירורים והתכתבות</h2>
+          </div>
+          <InquiryPanel beneficiaryId={id} state={{
+            status: beneficiary.eligibility_status,
+            rejectionReason: beneficiary.rejection_reason,
+            rejectedAt: (beneficiary as { rejected_at?: string | null }).rejected_at,
+            rejectedBy: (beneficiary as { rejecter?: { full_name?: string } | null }).rejecter?.full_name ?? null,
+            docsNotes: (beneficiary as { docs_notes?: string | null }).docs_notes,
+            requiredDocs: (beneficiary as { required_docs?: string | null }).required_docs,
+            deepReviewReason: (beneficiary as { deep_review_reason?: string | null }).deep_review_reason,
+            lineageFixNote: (beneficiary as { lineage_fix_note?: string | null }).lineage_fix_note,
+          }} />
+        </aside>
+      </div>
     </div>
   )
 }
