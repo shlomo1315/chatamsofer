@@ -98,6 +98,8 @@ export default function GmailInbox() {
   const [cTo, setCTo] = useState('')
   const [cSubject, setCSubject] = useState('')
   const [accountMenu, setAccountMenu] = useState(false)
+  /** תפריט קליק-ימני על שורת הודעה (כמו בג'ימייל). null = סגור. */
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; msg: Message } | null>(null)
 
   // ⚠️ ref ולא state: משמש בתוך ה-interval, ו-state היה מייצר interval חדש
   // בכל שינוי סינון ומאפס את השעון.
@@ -162,6 +164,23 @@ export default function GmailInbox() {
     }
   }, [load])
 
+  // סגירת תפריט ההקשר — לחיצה בכל מקום, גלילה, או Escape.
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null) }
+    // ⚠️ click ולא mousedown: mousedown היה סוגר את התפריט לפני
+    // ש-onClick של הפריט שנלחץ הספיק לרוץ.
+    window.addEventListener('click', close)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [ctxMenu])
+
   async function open(m: Message) {
     setSelected(m); setBody(''); setBodyError(null); setAttachments([]); setBodyLoading(true)
     try {
@@ -179,6 +198,31 @@ export default function GmailInbox() {
     } catch { setBodyError('שגיאת רשת') } finally { setBodyLoading(false) }
   }
 
+  /**
+   * פעולה על הודעה מסוימת — לא בהכרח זו שנבחרה.
+   *
+   * ⚠️ act() המקורית עובדת רק על `selected`, ולכן תפריט הקליק-הימני
+   * (שפועל על שורה כלשהי ברשימה, גם בלי לפתוח אותה) לא יכול היה
+   * להשתמש בה. זו אותה לוגיקה, עם ההודעה כפרמטר.
+   */
+  async function actOn(m: Message, action: string, extra: Record<string, unknown> = {}) {
+    setActing(true)
+    try {
+      const res = await fetch('/api/admin/gmail/inbox/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, messageId: m.gmail_message_id, threadId: m.thread_id, ...extra }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'הפעולה נכשלה'); return }
+      // ההודעה שנמחקה/אורכבה נעלמת — אם היא הייתה פתוחה, סוגרים
+      if ((action === 'trash' || action === 'archive') && selected?.gmail_message_id === m.gmail_message_id) {
+        setSelected(null)
+      }
+      await load(true)
+    } catch { setError('שגיאת רשת') } finally { setActing(false) }
+  }
+
   async function act(action: string, extra: Record<string, unknown> = {}) {
     if (!selected) return
     setActing(true)
@@ -193,6 +237,14 @@ export default function GmailInbox() {
       if (action === 'trash' || action === 'archive') setSelected(null)
       await load(true)
     } catch { setError('שגיאת רשת') } finally { setActing(false) }
+  }
+
+  /** תשובה להודעה מסוימת — לתפריט הקליק-הימני, שפועל גם על שורה שלא נפתחה. */
+  function startReplyTo(m: Message) {
+    setComposeMode('reply')
+    setCTo(m.from_email ?? '')
+    setCSubject(m.subject?.startsWith('Re:') ? m.subject : `Re: ${m.subject ?? ''}`)
+    setComposeOpen(true)
   }
 
   function startReply() {
@@ -232,6 +284,22 @@ export default function GmailInbox() {
     } catch { setError('שגיאת רשת'); return false }
   }
 
+  // 🔴 ברירת מחדל: תיבת המשרד, ולא "כל התיבות".
+  //
+  // ⚠️ "כל התיבות" ערבב דואר מכל האגפים למסך אחד, ואי אפשר היה לדעת
+  // באיזו תיבה מדובר בלי לפתוח כל הודעה. רוב העבודה היא בתיבת המשרד,
+  // ולכן היא נפתחת ראשונה. "כל התיבות" נשאר זמין בבורר.
+  //
+  // ⚠️ נבחר פעם אחת בלבד (didPickDefault) — אחרת בחירה ידנית ב"כל
+  // התיבות" הייתה נדרסת בכל טעינה מחדש.
+  const didPickDefault = useRef(false)
+  useEffect(() => {
+    if (didPickDefault.current || account || !accounts.length) return
+    didPickDefault.current = true
+    const office = accounts.find(a => /^office@/i.test(a.email)) ?? accounts.find(a => a.department === 'main')
+    if (office) { setAccount(office.id); setPage(0) }
+  }, [accounts, account])
+
   const totalUnread = Object.values(unreadByDept).reduce((a, b) => a + b, 0)
   const activeAccount = accounts.find(a => a.id === account) ?? null
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
@@ -259,6 +327,17 @@ export default function GmailInbox() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+
+          {/* ⚠️ "אימייל חדש" עבר לראש הסרגל הצדדי (מעל "דואר נכנס"), כמו
+              בג'ימייל. הוסר מכאן כדי לא להופיע פעמיים. */}
+          <button onClick={() => { setPage(0); void load() }} disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
+          </button>
+          <Link href="/admin/mail/index-sync"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
+            <Settings size={14} /> סנכרון
+          </Link>
           {/* ── בורר התיבות, בפינה כמו בגמייל ── */}
           {accounts.length > 0 && (
             <div className="relative">
@@ -310,19 +389,6 @@ export default function GmailInbox() {
               )}
             </div>
           )}
-
-          <button onClick={startNew}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-extrabold text-white hover:bg-indigo-700">
-            <PenSquare size={14} /> אימייל חדש
-          </button>
-          <button onClick={() => { setPage(0); void load() }} disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300 disabled:opacity-50">
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} רענן
-          </button>
-          <Link href="/admin/mail/index-sync"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:border-indigo-300">
-            <Settings size={14} /> סנכרון
-          </Link>
         </div>
       </div>
 
@@ -338,6 +404,13 @@ export default function GmailInbox() {
 
         {/* ── פאנל צדדי ── */}
         <aside className="hidden lg:block rounded-2xl border border-slate-200 bg-white p-2.5 h-fit sticky top-4">
+          {/* 🔴 "אימייל חדש" בראש הסרגל, מעל "דואר נכנס" — כמו בג'ימייל.
+              זו הפעולה שמתחילים ממנה, ומקומה לפני רשימת התיקיות ולא
+              מוסתר בין כפתורי הכותרת. */}
+          <button onClick={startNew}
+            className="w-full mb-2 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-[13px] font-extrabold text-white shadow-sm hover:bg-indigo-700 transition-colors">
+            <PenSquare size={15} /> אימייל חדש
+          </button>
           <nav className="space-y-0.5">
             {([
               { key: 'inbox', label: 'דואר נכנס', icon: Inbox, badge: totalUnread },
@@ -442,6 +515,18 @@ export default function GmailInbox() {
               <div className="divide-y divide-slate-50 max-h-[68vh] overflow-y-auto">
                 {messages.map(m => (
                   <button key={m.gmail_message_id} onClick={() => open(m)}
+                    // קליק ימני — תפריט פעולות מהיר, כמו בג'ימייל
+                    onContextMenu={e => {
+                      e.preventDefault()
+                      // ⚠️ מיקום מוגבל לגבולות החלון: תפריט שנפתח ליד הקצה
+                      // התחתון/השמאלי היה נחתך ופריטיו לא היו נגישים.
+                      const MW = 230, MH = 300
+                      setCtxMenu({
+                        x: Math.min(e.clientX, window.innerWidth - MW),
+                        y: Math.min(e.clientY, window.innerHeight - MH),
+                        msg: m,
+                      })
+                    }}
                     className={`w-full text-right px-4 py-3 transition-colors ${
                       selected?.gmail_message_id === m.gmail_message_id ? 'bg-indigo-50' :
                       m.is_unread ? 'bg-indigo-50/30 hover:bg-indigo-50/60' : 'hover:bg-slate-50'
@@ -597,6 +682,45 @@ export default function GmailInbox() {
           onClose={() => setComposeOpen(false)}
           onSent={sendMail}
         />
+      )}
+
+      {/* ── תפריט קליק-ימני על הודעה (כמו בג'ימייל) ── */}
+      {ctxMenu && (
+        <div
+          className="fixed z-[90] w-[230px] rounded-xl border border-slate-200 bg-white py-1.5 shadow-2xl"
+          style={{ top: ctxMenu.y, left: ctxMenu.x }}
+          // ⚠️ עוצר את ההתפשטות: בלי זה מאזין ה-click שסוגר את התפריט
+          // היה סוגר אותו לפני שהפריט שנלחץ הספיק לפעול.
+          onClick={e => e.stopPropagation()}
+          onContextMenu={e => e.preventDefault()}
+        >
+          {([
+            { icon: Reply, label: 'תשובה', run: () => { void open(ctxMenu.msg); startReplyTo(ctxMenu.msg) } },
+            { icon: ctxMenu.msg.is_unread ? MailOpen : Mail,
+              label: ctxMenu.msg.is_unread ? 'סימון כנקרא' : 'סימון כלא נקרא',
+              run: () => void actOn(ctxMenu.msg, ctxMenu.msg.is_unread ? 'mark-read' : 'mark-unread') },
+            { icon: Flag,
+              label: (ctxMenu.msg.labels ?? []).includes(FOLLOWUP) ? 'הסרה מטיפול' : FOLLOWUP,
+              run: () => void actOn(ctxMenu.msg, (ctxMenu.msg.labels ?? []).includes(FOLLOWUP) ? 'unfollowup' : 'followup') },
+            { icon: Archive, label: 'לארכיון', run: () => void actOn(ctxMenu.msg, 'archive'), sep: true },
+            { icon: Trash2, label: 'מחיקה', run: () => void actOn(ctxMenu.msg, 'trash'), danger: true },
+          ] as const).map((it, i) => (
+            <div key={i}>
+              {'sep' in it && it.sep && <div className="my-1 border-t border-slate-100" />}
+              <button type="button"
+                onClick={() => { it.run(); setCtxMenu(null) }}
+                disabled={acting}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-right text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+                  'danger' in it && it.danger
+                    ? 'text-rose-600 hover:bg-rose-50'
+                    : 'text-slate-700 hover:bg-slate-100'
+                }`}>
+                <it.icon size={14} className="flex-shrink-0" />
+                <span className="flex-1">{it.label}</span>
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
