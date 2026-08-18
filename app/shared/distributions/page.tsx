@@ -268,8 +268,35 @@ function BreakdownPanels({ recipients }: { recipients: Recipient[] }) {
 // ── עץ הדורות הוויזואלי המלא — לצפייה בלבד ────────────────────────────────────
 // שימוש חוזר ב-LineageTreeSvg (אותו מנוע בדיוק כמו עץ הניהול ודף הביקורת), עם
 // אותם נתונים בדיוק (lineageNodes מה-API). לצפייה בלבד — onSelect ריק, אין עריכה.
-function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
-  if (!nodes.length) return null
+// 🔴 קודם הוחזר `null` כשאין צמתים — כלומר מסך לבן לגמרי, בלי הבדל בין
+// "עדיין טוען", "הטעינה נכשלה" ו"אין נתונים". המצב חייב להיראות.
+function GenerationExplorer({ nodes, loading, onRetry }: {
+  nodes: LineageNode[]; loading?: boolean; onRetry?: () => void
+}) {
+  if (!nodes.length) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
+        {loading ? (
+          <>
+            <Loader2 size={22} className="mx-auto animate-spin text-indigo-500" />
+            <p className="mt-3 text-sm font-bold text-slate-600">טוען את עץ הדורות…</p>
+            <p className="mt-1 text-[12px] text-slate-400">אלפי צמתים — הטעינה עשויה לקחת כמה שניות</p>
+          </>
+        ) : (
+          <>
+            <GitBranch size={22} className="mx-auto text-slate-300" />
+            <p className="mt-3 text-sm font-bold text-slate-600">עץ הדורות לא נטען</p>
+            {onRetry && (
+              <button type="button" onClick={onRetry}
+                className="mt-3 rounded-xl border border-slate-200 px-4 py-2 text-[12px] font-bold text-indigo-600 transition hover:border-indigo-300">
+                נסה שוב
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    )
+  }
   // השורש — צומת דור 1 (החתם סופר). LineageTreeSvg יגזור את כל העץ ממנו.
   const root = nodes.find(n => n.generation === 1) ?? nodes.find(n => !n.parent_id) ?? null
   return (
@@ -626,7 +653,7 @@ export default function SharedDistributionsPage() {
   // ⚠️ החליף שורת טאבים: שלוש מחלקות שונות לגמרי (לא שלוש תצוגות של
   // אותו נתון) — טאבים היו מרמזים שמדובר בחתכים של אותו דבר.
   const [dept, setDept] = useState<null | 'holidays' | 'maternity' | 'loans' | 'tree'>(null)
-  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree' | 'maternity'>('distributions')
+  const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
@@ -712,8 +739,10 @@ export default function SharedDistributionsPage() {
   }, [])
 
   // ⚠️ נטען פעם אחת בכניסה למחלקת עץ הדורות, ולא ברענון האוטומטי.
-  const loadLineage = useCallback(async () => {
-    if (lineageLoaded || lineageLoading) return
+  // ⚠️ `force` נדרש ל"נסה שוב": איפוס `lineageLoaded` ב-state לא משנה את
+  // הערך שנתפס ב-closure של הפונקציה הזו, והניסיון החוזר היה יוצא מיד.
+  const loadLineage = useCallback(async (force = false) => {
+    if (!force && (lineageLoaded || lineageLoading)) return
     setLineageLoading(true)
     try {
       const r = await fetch('/api/shared/distributions/lineage', { cache: 'no-store' })
@@ -838,16 +867,27 @@ export default function SharedDistributionsPage() {
           <LoansDept rows={loans} legacy={legacyLoans} onBack={() => setDept(null)} />
         )}
 
+        {/* 🔴 המחלקה הזו לא רונדרה כלל: הכרטיס במסך הבית עדכן `dept` ל-'tree',
+            אך לא היה ענף שמציג משהו — ולכן המסך נראה ריק לחלוטין. */}
+        {dept === 'tree' && <>
+          <DeptHeader title="צאצאים ועץ הדורות" subtitle="שרשרת היוחסין המלאה" ink="#7c3aed" onBack={() => setDept(null)} />
+          <GenerationExplorer
+            nodes={lineageNodes}
+            loading={lineageLoading}
+            onRetry={() => void loadLineage(true)}
+          />
+        </>}
+
         {dept === 'holidays' && <>
         <DeptHeader title="חלוקות חגים" subtitle="רישום · אישורים · כרטיסי מזון" ink="#b45309" onBack={() => setDept(null)} />
 
-        {/* ⚠️ תת-הטאבים נשארו: כאן הם באמת חתכים של *אותו* נתון (נרשמים,
-            פילוחים, עץ), בשונה משלוש המחלקות שהן נושאים שונים. */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* ⚠️ תת-הטאבים הם חתכים של *אותו* נתון (נרשמים, פילוחים).
+            🔴 "עץ הדורות" הוסר מכאן: הוא מחלקה עצמאית במסך הבית ואין לו
+            שום קשר לחלוקות. הופעתו בשני מקומות רמזה שמדובר בשני דברים. */}
+        <div className="grid grid-cols-2 gap-3">
           {([
             { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={18} /> },
             { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={18} /> },
-            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={18} /> },
           ] as const).map(t => (
             <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
               className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[13px] font-bold transition-all ${
@@ -861,7 +901,6 @@ export default function SharedDistributionsPage() {
         </div>
 
         {activeTab === 'breakdown' && <BreakdownPanels recipients={recipients} />}
-        {activeTab === 'tree' && <GenerationExplorer nodes={lineageNodes} />}
 
         {activeTab === 'distributions' && <>
         {/* חיפוש */}

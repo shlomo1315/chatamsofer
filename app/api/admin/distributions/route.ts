@@ -24,6 +24,29 @@ interface Body {
   status?: string
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// שליפת כל החלוקות — לבוררי "לאיזו חלוקה" בממשקי הניהול.
+//
+// ⚠️ מוחזרות *כל* החלוקות, כולל סגורות. צירוף ידני (אישורים חריגים, למשל)
+// מכוון במפורש גם לחלוקה שהרישום בה נסגר, וסינון לפי registration_open היה
+// מרוקן את הבורר בדיוק במקרה שבשבילו הוא נבנה.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function GET() {
+  const staff = await requirePermission('distributions', 'view')
+  if (!staff) return forbidden()
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const { data, error } = await db
+    .from('distributions')
+    .select('id, name, year, registration_open, status, distribution_date, created_at')
+    .order('registration_open', { ascending: false }) // הפתוחה קודם — היא ברירת המחדל בבוררים
+    .order('created_at', { ascending: false })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  return NextResponse.json({ distributions: data ?? [] })
+}
+
 export async function POST(request: NextRequest) {
   const staff = await requirePermission('distributions', 'add')
   if (!staff) return forbidden()

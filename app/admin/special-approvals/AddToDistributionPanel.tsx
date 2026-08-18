@@ -37,23 +37,31 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [dists, setDists] = useState<Distribution[]>([])
+  const [distsLoading, setDistsLoading] = useState(false)
+  const [distsError, setDistsError] = useState<string | null>(null)
   const [distId, setDistId] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ added: number; already: number; failed: number } | null>(null)
 
+  // ⚠️ כשל בטעינה חייב להיראות. בגרסה קודמת `if (!r.ok) return` בלע את
+  // התשובה, והבורר נתקע לצמיתות על "טוען חלוקות…" — נראה כתלייה ולא כתקלה.
   const loadDists = useCallback(async () => {
+    setDistsLoading(true); setDistsError(null)
     try {
       const r = await fetch('/api/admin/distributions', { cache: 'no-store' })
-      if (!r.ok) return
-      const d = await r.json()
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setDistsError(d?.error || 'טעינת החלוקות נכשלה'); return }
       const list: Distribution[] = Array.isArray(d) ? d : (d.distributions ?? [])
       setDists(list)
+      if (!list.length) { setDistsError('לא נמצאו חלוקות במערכת'); return }
       // ⚠️ ברירת מחדל לחלוקה הפתוחה אם יש — זה המקרה הנפוץ.
       const openOne = list.find(x => x.registration_open)
       setDistId(openOne?.id ?? list[0]?.id ?? '')
-    } catch { /* הרשימה תישאר ריקה */ }
+    } catch {
+      setDistsError('טעינת החלוקות נכשלה')
+    } finally { setDistsLoading(false) }
   }, [])
 
   useEffect(() => { if (open && !dists.length) void loadDists() }, [open, dists.length, loadDists])
@@ -129,14 +137,28 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-bold text-slate-500">לאיזו חלוקה</span>
             <select value={distId} onChange={e => setDistId(e.target.value)}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400">
-              {!dists.length && <option value="">טוען חלוקות…</option>}
+              disabled={distsLoading || !dists.length}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400">
+              {!dists.length && (
+                <option value="">
+                  {distsLoading ? 'טוען חלוקות…' : distsError ?? 'אין חלוקות זמינות'}
+                </option>
+              )}
               {dists.map(d => (
                 <option key={d.id} value={d.id}>
                   {d.name}{d.year ? ` ${d.year}` : ''}{d.registration_open ? ' · פתוחה' : ' · סגורה'}
                 </option>
               ))}
             </select>
+            {distsError && !distsLoading && (
+              <span className="flex items-center gap-2 text-[11px] text-rose-600">
+                {distsError}
+                <button type="button" onClick={() => void loadDists()}
+                  className="font-bold text-indigo-600 underline underline-offset-2 hover:text-indigo-700">
+                  נסה שוב
+                </button>
+              </span>
+            )}
             {dist && !dist.registration_open && (
               // ⚠️ נאמר במפורש: הצירוף לחלוקה סגורה תקין ומכוון, אבל אסור
               // שייראה כתקלה או כמשהו שקרה בשוגג.
