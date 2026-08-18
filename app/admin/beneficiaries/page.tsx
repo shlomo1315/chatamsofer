@@ -40,6 +40,7 @@ export default async function BeneficiariesPage({ searchParams }: { searchParams
         status={p.status}
         sort={p.sort}
         marital={p.marital}
+        email={p.email}
         cardKeys={['all', 'pending', 'deep_review', 'approved', 'rejected']}
       />
     </div>

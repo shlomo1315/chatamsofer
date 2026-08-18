@@ -10,7 +10,7 @@ import type { readListParams } from '@/lib/listParams'
 // lineage_chain, lineage_manual וכו') מה-payload. כרטיס המוטב וייצוא האקסל מושכים בנפרד.
 export const LIST_COLUMNS =
   'id, created_at, full_name, family_name, id_number, phone, phone2, email, address, city, ' +
-  'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active, registration_source'
+  'marital_status, spouse_name, spouse_id_number, nedarim_id, notes, children_count, eligibility_status, is_active, registration_source, approval_label:approval_labels(id, name, color, notes)'
 
 // כרטיסי הסטטוס שהטבלה מציגה — ה-counts נשלפים לכל אחד בנפרד מ-DB.
 export const STATUS_KEYS = ['pending', 'docs_pending', 'docs_returned', 'deep_review', 'approved', 'rejected', 'review'] as const
@@ -188,12 +188,43 @@ export async function getBeneficiaries(p: ReturnType<typeof readListParams>, spe
     return special ? q.eq('is_special', true) : q.or('is_special.is.null,is_special.eq.false')
   }
 
+// ── סינון לפי מצב המייל ──
+//
+// הרקע: נרשמים רבים (בעיקר דרך נדרים) הקלידו כתובת שגויה, וכל מייל אליהם
+// נופל — כולל שובר החלוקה. הסינון מאפשר לאתר אותם ולטפל.
+//
+// ⚠️ "פגום" נבדק ב-SQL ולא בקוד: סינון בזיכרון היה עובד רק על העמוד
+// הנוכחי (50 שורות), והמונה "מתוך N" היה משקר.
+//
+// ⚠️ הבדיקה גסה במכוון — היעדר @ או נקודה בדומיין. כתובת שעוברת אותה
+// עדיין יכולה להיות שגויה (שם שאינו קיים), וזה בדיוק מה שאי אפשר לזהות
+// בשאילתה. ראו lib/emailDomainFix לזיהוי שגיאות הכתיב בדומיין.
+type EmailFilterQ = { is: (c: string, v: null) => EmailFilterQ; not: (c: string, o: string, v: null) => EmailFilterQ; or: (f: string) => EmailFilterQ; neq: (c: string, v: string) => EmailFilterQ }
+function applyEmailFilter<T extends EmailFilterQ>(q: T, mode: string): T {
+  switch (mode) {
+    case 'verified':
+      return q.not('email_verified_at', 'is', null) as T
+    case 'unverified':
+      // ⚠️ רק מי שיש לו כתובת בכלל — מי שאין לו מייל אינו "לא מאומת",
+      // הוא פשוט לא רלוונטי לטיפול הזה.
+      return q.is('email_verified_at', null).not('email', 'is', null).neq('email', '') as T
+    case 'invalid':
+      return q.not('email', 'is', null).neq('email', '')
+        .or('email.not.like.%@%,email.not.like.%.%') as T
+    case 'no_email':
+      return q.or('email.is.null,email.eq.') as T
+    default:
+      return q
+  }
+}
+
   // ── שאילתת הנתונים (עמוד אחד). סדר נכון: פילטרים (eq/or) קודם, ואז order+range. ──
   let dataQ = supabase.from('beneficiaries').select(LIST_COLUMNS)
   dataQ = applySpecial(dataQ)
   if (p.status === 'pending') dataQ = dataQ.or(PENDING_OR)
   else if (p.status !== 'all') dataQ = dataQ.eq('eligibility_status', p.status)
   if (maritalValues.length) dataQ = dataQ.in('marital_status', maritalValues)
+  if (p.email && p.email !== 'all') dataQ = applyEmailFilter(dataQ, p.email)
   if (p.q) dataQ = dataQ.or(searchOr(p.q))
   const { data, error } = await dataQ
     .order(orderCol, { ascending, nullsFirst: false })

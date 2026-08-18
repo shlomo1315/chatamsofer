@@ -256,6 +256,7 @@ interface Props {
   status: string
   sort: string
   marital: string
+  email?: string
   // אילו כרטיסי סינון סטטוס להציג (ברירת מחדל: כולם). דף החריגים מצמצם ל-3.
   cardKeys?: Filter[]
   // כפתור פעולה בראש הטבלה (למשל "רישום אדם חריג חדש" בדף החריגים)
@@ -274,9 +275,9 @@ const MARITAL_OPTIONS: { value: string; label: string }[] = [
   { value: 'גרושה', label: 'גרושה' },
 ]
 
-export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, cardKeys, headerAction }: Props) {
+export default function BeneficiariesTable({ data, counts, total, page, size, status, sort, marital, email = 'all', cardKeys, headerAction }: Props) {
   const [emailTarget, setEmailTarget] = useState<{ email: string; name: string } | null>(null)
-  const { qInput, setSearch, setStatus, setSort, setMarital, setSize, setPage } = useListParams()
+  const { qInput, setSearch, setStatus, setSort, setMarital, setEmail, setSize, setPage } = useListParams()
 
   const columns = useMemo(
     () => buildColumns((row) => setEmailTarget({ email: row.email!, name: fullName(row) })),
@@ -363,6 +364,26 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
               </div>
             )
           })()}
+        </div>
+        {/* ── סינון לפי מצב המייל ── */}
+        {/* הרקע: נרשמים רבים הקלידו כתובת שגויה, וכל מייל אליהם נופל —
+            כולל שובר החלוקה. הסינון מאתר אותם לטיפול. */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-slate-500">מייל:</span>
+          {([
+            { v: 'all', l: 'הכל' },
+            { v: 'verified', l: 'מאומת' },
+            { v: 'unverified', l: 'לא מאומת' },
+            { v: 'invalid', l: 'פגום' },
+            { v: 'no_email', l: 'ללא מייל' },
+          ] as const).map(o => (
+            <button key={o.v} type="button" onClick={() => setEmail(o.v)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                email === o.v
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                  : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'
+              }`}>{o.l}</button>
+          ))}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">מיון:</span>

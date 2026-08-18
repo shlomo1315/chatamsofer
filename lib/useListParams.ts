@@ -44,6 +44,7 @@ export function useListParams(opts?: { defaultStatus?: string; defaultSort?: str
     if ('status' in next) apply('status', next.status, opts?.defaultStatus ?? 'all')
     if ('sort' in next) apply('sort', next.sort, opts?.defaultSort ?? 'newest')
     if ('marital' in next) apply('marital', next.marital, 'all')
+    if ('email' in next) apply('email', next.email, 'all')
     if ('size' in next) apply('size', next.size, DEFAULT_PAGE_SIZE)
     if ('page' in next) apply('page', next.page, 1)
     // כל שינוי של חיפוש/סינון/מיון/גודל מאפס לעמוד 1 (אלא אם משנים page עצמו)
@@ -66,6 +67,7 @@ export function useListParams(opts?: { defaultStatus?: string; defaultSort?: str
     setStatus: (status: string) => pushParams({ status }),
     setSort: (sort: string) => pushParams({ sort }),
     setMarital: (marital: string) => pushParams({ marital }),
+    setEmail: (email: string) => pushParams({ email }),
     setSize: (size: number) => pushParams({ size }),
     setPage: (page: number) => pushParams({ page }, false),
   }

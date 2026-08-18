@@ -11,6 +11,8 @@ export interface ListParams {
   status: string
   sort: string
   marital: string   // סינון לפי מצב משפחתי ('all' = הכל)
+  /** סינון לפי מצב המייל: all | verified | unverified | invalid */
+  email: string
 }
 
 export function readListParams(
@@ -28,5 +30,6 @@ export function readListParams(
     status: sp.get('status') ?? opts?.defaultStatus ?? 'all',
     sort: sp.get('sort') ?? opts?.defaultSort ?? 'newest',
     marital: (sp.get('marital') ?? 'all').trim() || 'all',
+    email: (sp.get('email') ?? 'all').trim() || 'all',
   }
 }

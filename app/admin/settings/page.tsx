@@ -30,6 +30,7 @@ import DailyDigestSettings from './DailyDigestSettings'
 import OtpRolloutSettings from './OtpRolloutSettings'
 import LineageRejectionRepair from './LineageRejectionRepair'
 import EmailVerificationManager from './EmailVerificationManager'
+import EmailDomainFixPanel from './EmailDomainFixPanel'
 import LineageNodeBackfill from './LineageNodeBackfill'
 import RegistrationGate from './RegistrationGate'
 import SendAccountSettings from './SendAccountSettings'
@@ -262,6 +263,9 @@ export default async function SettingsPage() {
         {/* אימות כתובות מייל — מי אימת, מי לא, ושליחת בקשה לאמת */}
         <Collapsible title="אימות כתובות מייל" icon={<MailWarning size={16} className="text-indigo-500" />}>
           <EmailVerificationManager />
+          {/* תיקון שגיאות כתיב — לפני שליחת בקשות אימות: אין טעם לשלוח
+              בקשה לכתובת שהדומיין בה שגוי. */}
+          <EmailDomainFixPanel />
         </Collapsible>
 
         {/* תיקון חד-פעמי: משפחות שנדחו אוטומטית מעץ הדורות (04/08-10/08) */}
