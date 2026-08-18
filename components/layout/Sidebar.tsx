@@ -27,6 +27,17 @@ function LogoBadge() {
 
 type NavItem = { href: string; label: string; icon: React.ElementType; section?: SectionKey }
 
+/**
+ * האם להציג את "מייל Resend" בתפריט.
+ *
+ * 🔴 false = מוסתר מהתפריט בלבד. המסך (/admin/mail), ה-API והנתונים
+ * נשארים שלמים ונגישים בכתובת ישירה — שום דבר לא נמחק.
+ *
+ * ⚠️ הוסתר אחרי שמסלול ה-Gmail הפך למסלול העבודה. אם יתברר שחסרות
+ * הודעות ב-Gmail — מחזירים ל-true והתפריט חוזר כפי שהיה.
+ */
+const SHOW_RESEND_MAIL = false
+
 const navTop: NavItem[] = [
   { href: '/admin/dashboard',     label: 'לוח בקרה',   icon: LayoutDashboard },
   { href: '/admin/beneficiaries', label: 'צאצאים',      icon: Users,  section: 'beneficiaries' },
@@ -232,8 +243,15 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
         {bottomVisible.map(renderLink)}
         </>)}
 
-        {/* Mail accordion */}
+        {/* ── מייל Resend — מוסתר מהתפריט ──────────────────────────────────
+            🔴 הוסתר בלבד, **לא נמחק**: המסך (/admin/mail), ה-API והנתונים
+            נשארים כפי שהם ונגישים בכתובת ישירה. זו החלטה של תצוגה בלבד,
+            בהמשך למעבר ל-Gmail כמסלול היחיד בתפריט.
+
+            ⚠️ להחזרה: להחליף את SHOW_RESEND_MAIL ל-true. שום דבר אחר לא
+            צריך להשתנות — לכן זה דגל ולא מחיקה. */}
         {canSeeMail && (<>
+        {SHOW_RESEND_MAIL && (<>
         <div className="pt-0.5">
           <button
             onClick={() => setMailOpen(o => !o)}
@@ -290,11 +308,12 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
           )}
         </div>
 
-        {/* ── מייל Gmail — המסלול החדש, בתקופת המעבר ──────────────────────
-            🔴 מוצג לצד "מייל Resend" ולא במקומו, בכוונה: כל עוד הקליטה
-            מ-Gmail לא אומתה מקצה לקצה, החלפה שקטה של המקור הייתה מסתירה
-            הודעות שלא נקלטו — בלי שאיש ידע שהן חסרות.
-            שניהם זה לצד זה = אפשר להשוות, ורק אז לבטל את הישן. */}
+        </>)}
+
+        {/* ── מייל — מסלול העבודה ──
+            ⚠️ נמצא *מחוץ* לתנאי SHOW_RESEND_MAIL בכוונה: משתמש "מייל בלבד"
+            רואה אך ורק את לשונית המייל, ואילו הוא היה בתוך אותו תנאי —
+            הסתרת Resend הייתה מותירה אותו עם תפריט ריק לגמרי. */}
         <div className="pt-0.5">
           <Link
             href="/admin/mail/gmail"
