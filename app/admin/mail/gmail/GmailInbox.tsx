@@ -57,9 +57,14 @@ const deptColor = (k?: string | null) => DEPTS.find(d => d.key === k)?.color ?? 
 type Folder = 'inbox' | 'unread' | 'sent' | 'followup' | 'all'
 const FOLLOWUP = 'לטיפול'
 
-/** ⚠️ פרק זמן הרענון האוטומטי. קצר מדי מכביד על המסד ללא תועלת — הסנכרון
- *  עצמו מתרחש ב-Push, וזה רק מרענן את התצוגה. */
-const REFRESH_MS = 15_000
+/** ⚠️ פרק זמן הרענון האוטומטי. הסנכרון מול Gmail עצמו מתרחש ב-Push
+ *  (webhooks/gmail-push → syncAccount), וזה רק מרענן את *התצוגה* מהאינדקס.
+ *
+ *  🔴 קוצר מ-15 ל-5 שניות: הסנכרון בצד השרת אכן מיידי — בלוגים רואים
+ *  "[gmail-push] תוויות 1" שניות אחרי קריאת הודעה בטלפון — אבל המסך
+ *  המשיך להציג את המצב הישן עד 15 שניות, וזה נראה כאילו הסנכרון לא עובד.
+ *  שאילתה על אינדקס מקומי היא זולה; 5 שניות אינן מכבידות. */
+const REFRESH_MS = 5_000
 
 export default function GmailInbox() {
   const [folder, setFolder] = useState<Folder>('inbox')
@@ -141,8 +146,20 @@ export default function GmailInbox() {
   // ⚠️ silent: אינו מדליק ספינר ואינו מנקה את הרשימה, אחרת המסך היה
   // מהבהב כל 15 שניות בזמן שהמשתמש קורא.
   useEffect(() => {
-    const t = setInterval(() => { void load(true) }, REFRESH_MS)
-    return () => clearInterval(t)
+    // ⚠️ לא סוקרים כשהלשונית מוסתרת: זה בזבוז שאילתות על מסך שאיש אינו
+    // רואה, והמשתמש ממילא מקבל רענון מיידי כשהוא חוזר (למטה).
+    const t = setInterval(() => { if (!document.hidden) void load(true) }, REFRESH_MS)
+    // 🔴 רענון מיידי בחזרה ללשונית ובהתעוררות המסך. בלי זה, מנהל שקרא
+    // הודעה בטלפון וחזר למסך ראה את המצב הישן עד לטיק הבא — וזה בדיוק
+    // מה שנראה כמו "הסנכרון לא עובד".
+    const onWake = () => { if (!document.hidden) void load(true) }
+    window.addEventListener('focus', onWake)
+    document.addEventListener('visibilitychange', onWake)
+    return () => {
+      clearInterval(t)
+      window.removeEventListener('focus', onWake)
+      document.removeEventListener('visibilitychange', onWake)
+    }
   }, [load])
 
   async function open(m: Message) {
