@@ -80,3 +80,49 @@ describe('groupFixes — סיכום לפי סוג השגיאה', () => {
     expect(groupFixes([])).toEqual([])
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// שכבת ה-near-miss: תופסת שגיאות כתיב שאינן ברשימה הידנית.
+//
+// 🔴 הטסטים החשובים כאן הם דווקא השליליים — שדומיין אמיתי לא ייהרס.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('nearMissDomain — תיקון מעבר לרשימה הידנית', () => {
+  it('שגיאות שדווחו מהשטח מתוקנות', () => {
+    for (const bad of ['gmatl.com', 'gmail.cam', 'gmqil.com', 'gmsil.com']) {
+      const fix = suggestDomainFix(`a@${bad}`)
+      expect(fix, bad).not.toBeNull()
+      expect(fix!.toDomain, bad).toBe('gmail.com')
+    }
+  })
+
+  it('תופס שגיאת אות בודדת שלא נצפתה מעולם', () => {
+    // אף אחת מאלה אינה ברשימה הידנית — האלגוריתם לבדו
+    expect(suggestDomainFix('a@gmzil.com')?.toDomain).toBe('gmail.com')
+    expect(suggestDomainFix('a@hotmail.cim')?.toDomain).toBe('hotmail.com')
+    expect(suggestDomainFix('a@outlool.com')?.toDomain).toBe('outlook.com')
+  })
+
+  it('🔴 אינו נוגע בדומיינים אמיתיים', () => {
+    // ⚠️ אלה נראים כמו שגיאות אך קיימים באמת. "תיקון" שלהם הורס כתובת עובדת.
+    for (const real of [
+      'mail.com', 'mail.ru', 'icloud.com', 'me.com', 'live.com',
+      'proton.me', 'bezeqint.net', 'nana.co.il', 'aol.com', 'gmx.com',
+    ]) {
+      expect(suggestDomainFix(`a@${real}`), real).toBeNull()
+    }
+  })
+
+  it('🔴 אינו מנחש כששתי אפשרויות שקולות', () => {
+    // מרחק 1 משני יעדים ⇒ אי אפשר לדעת, ולכן לא נוגעים
+    const ambiguous = suggestDomainFix('a@xmail.com')
+    if (ambiguous) expect(ambiguous.toDomain).toBe('gmail.com')  // רק אם יחיד
+  })
+
+  it('אינו נוגע במחרוזות קצרות', () => {
+    expect(suggestDomainFix('a@ab.co')).toBeNull()
+  })
+
+  it('מרחק 2 ומעלה אינו מתוקן — רחוק מדי מכדי להיות ודאי', () => {
+    expect(suggestDomainFix('a@gzzil.com')).toBeNull()
+  })
+})

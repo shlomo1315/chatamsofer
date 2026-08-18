@@ -17,13 +17,27 @@ describe('מסלולי הרישום — ללא הגבלת קצב כלל', () => 
   ]
 
   for (const route of routes) {
-    it(`${route} אינו קורא ל-rateLimit`, () => {
+    it(`${route} אינו מגביל לפי IP`, () => {
       const src = readFileSync(new URL(`../${route}`, import.meta.url), 'utf8')
       // מתעלמים משורות הערה — התיעוד שם מזכיר את המילה rateLimit בכוונה.
       const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n')
-      expect(code).not.toMatch(/rateLimit\s*\(/)
+      // 🔴 מה שאסור הוא תקרה *לכל IP* — היא זו שחסמה משפחות לגיטימיות
+      // שחולקות כתובת דרך סינון. clientIp/clientIpOrNull הם הסימן לכך.
+      expect(code).not.toMatch(/clientIp/)
+      // וגם: אין מפתח הגבלה שנגזר מזהות הפונה (ת"ז / מייל / טלפון).
+      expect(code).not.toMatch(/rateLimit\s*\(\s*[`'"][^`'"]*\$\{/)
     })
   }
+
+  // ⚠️ גג-על *גלובלי* הוא כן מותר, ואינו סותר את האמור למעלה: הוא מכוון
+  // גבוה בהרבה מכל גל רישום אמיתי ולכן שקוף לנרשם לגיטימי, ותפקידו היחיד
+  // לעצור הצפה אוטומטית של נקודת קצה שכותבת למסד, שולחת מייל ומפעילה
+  // שיחה בתשלום. הבדיקה מוודאת שהוא נשאר גלובלי — מפתח קבוע, בלי IP.
+  it('public-register מגן בגג-על גלובלי (מפתח קבוע, לא לפי IP)', () => {
+    const src = readFileSync(new URL('../app/api/portal/public-register/route.ts', import.meta.url), 'utf8')
+    const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n')
+    expect(code).toMatch(/rateLimit\(\s*'public-register:global'/)
+  })
 })
 
 describe('rateLimit — ספירה בחלון (שאר המסלולים)', () => {

@@ -53,6 +53,44 @@ const DOMAIN_FIXES: Record<string, string> = {
   'gmail.clm': 'gmail.com',
   'gmail.con.il': 'gmail.com',
   'gmail.co.il': 'gmail.com',
+  // שגיאות מקלדת — אות סמוכה במקום הנכונה (דווחו מהמאגר בפועל):
+  // t↔i, q↔a, s↔a, k↔l, n↔m — כולן שכנות בפריסת QWERTY.
+  'gmatl.com': 'gmail.com',
+  'mqil.com': 'gmail.com',
+  'gmqil.com': 'gmail.com',
+  'gmsil.com': 'gmail.com',
+  'gmaik.com': 'gmail.com',
+  'gmaul.com': 'gmail.com',
+  'gmaol.com': 'gmail.com',
+  'gmaill.co.il': 'gmail.com',
+  'gmial.co.il': 'gmail.com',
+  'gnail.co.il': 'gmail.com',
+  'gmail.som': 'gmail.com',
+  'gmail.cok': 'gmail.com',
+  'gmail.con.': 'gmail.com',
+  'gmail.comn': 'gmail.com',
+  'gmail.copm': 'gmail.com',
+  'gmail.cmo': 'gmail.com',
+  'gmail.coma': 'gmail.com',
+  'gmail.comil': 'gmail.com',
+  'gmail.c0m': 'gmail.com',
+  'gmail.cam': 'gmail.com',
+  'gmail.cin': 'gmail.com',
+  'gmail.cpom': 'gmail.com',
+  'gmail.ccom': 'gmail.com',
+  'gmail.comm.il': 'gmail.com',
+  'gmail.con1': 'gmail.com',
+  'gemail.com': 'gmail.com',
+  'gmmail.com': 'gmail.com',
+  'ggmail.com': 'gmail.com',
+  'gmaii.com': 'gmail.com',
+  'gmaiil.com': 'gmail.com',
+  'gmailcom.com': 'gmail.com',
+  'gmail.email': 'gmail.com',
+  // ⚠️ בלי ה-g לגמרי — "mail.com" הוא דומיין אמיתי וקיים ולכן *אינו* כאן.
+  // רק צורות שאינן קיימות כדומיין עצמאי.
+  'maill.com': 'gmail.com',
+  'gmali.co.il': 'gmail.com',
 
   // ── Walla ──
   'wala.co.il': 'walla.co.il',
@@ -115,10 +153,72 @@ export function suggestDomainFix(email: string | null | undefined): DomainFix | 
   // וזה גרוע מלהשאיר אותה מסומנת כבעייתית.
   if (!/^[\x21-\x7E]+$/.test(local) || local.includes('..')) return null
 
-  const target = DOMAIN_FIXES[domain]
+  const target = DOMAIN_FIXES[domain] ?? nearMissDomain(domain)
   if (!target || target === domain) return null
 
   return { original: raw, fixed: `${local}@${target}`, fromDomain: domain, toDomain: target }
+}
+
+/**
+ * דומיינים אמיתיים שאין לגעת בהם לעולם.
+ *
+ * ⚠️ זו רשימת ההגנה של nearMissDomain. "gmail.co" נראה כמו שגיאה אבל
+ * הוא דומיין קולומביאני אמיתי; "mail.com" ו-"mail.ru" הם ספקים פעילים.
+ * בלי הרשימה הזו האלגוריתם היה "מתקן" כתובות עובדות והורס אותן.
+ */
+const REAL_DOMAINS = new Set([
+  'gmail.com', 'walla.co.il', 'walla.com', 'hotmail.com', 'yahoo.com',
+  'outlook.com', 'mail.com', 'mail.ru', 'icloud.com', 'me.com',
+  'live.com', 'msn.com', 'aol.com', 'proton.me', 'protonmail.com',
+  'bezeqint.net', 'netvision.net.il', '013net.net', 'zahav.net.il',
+  'barak.net.il', 'inter.net.il', 'actcom.net.il', 'neto.net.il',
+  'kd.co.il', 'nana.co.il', 'nana10.co.il', 'gmx.com', 'yandex.com',
+])
+
+/** הדומיינים שאליהם מותר "לתקן" — הנפוצים בלבד. */
+const COMMON_TARGETS = ['gmail.com', 'walla.co.il', 'hotmail.com', 'yahoo.com', 'outlook.com']
+
+/** מרחק עריכה (Levenshtein), עם עצירה מוקדמת כשעברנו את הסף. */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]
+    let rowMin = i
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+      if (cur[j] < rowMin) rowMin = cur[j]
+    }
+    if (rowMin > max) return max + 1   // כל השורה כבר מעבר לסף
+    prev = cur
+  }
+  return prev[b.length]
+}
+
+/**
+ * תופס שגיאות כתיב שאינן ברשימה הידנית.
+ *
+ * 🔴 למה זה נדרש: הרשימה הידנית מדויקת אך תמיד מפגרת אחרי המציאות —
+ * gmatl / mqil / gmail.cam הגיעו כולם מהשטח אחרי שהרשימה נכתבה. כל
+ * שגיאת הקלדה חדשה חייבה עדכון קוד.
+ *
+ * ⚠️ הריסון הוא כל העניין, ושלושה תנאים מצטברים:
+ *   1. הדומיין אינו ברשימת הדומיינים האמיתיים — לא נוגעים במה שעובד.
+ *   2. מרחק עריכה 1 בלבד מדומיין נפוץ. מרחק 2 כבר מייצר התנגשויות
+ *      (hotmail.co.il האמיתי מול hotmail.com), ומרחק 1 הוא בדיוק
+ *      "החליק אות אחת" — שזו שגיאת ההקלדה האופיינית.
+ *   3. התאמה יחידה. אם שני דומיינים נפוצים במרחק 1 — אי אפשר לדעת
+ *      לאיזה התכוונו, וניחוש כאן היה המצאה.
+ *
+ * ⚠️ אורך מזערי 6: מחרוזות קצרות קרובות זו לזו במקרה.
+ */
+function nearMissDomain(domain: string): string | null {
+  if (domain.length < 6) return null
+  if (REAL_DOMAINS.has(domain)) return null
+
+  const hits = COMMON_TARGETS.filter(t => editDistance(domain, t, 1) === 1)
+  return hits.length === 1 ? hits[0] : null
 }
 
 /** סיכום לפי סוג השגיאה — "gnail.com → gmail.com (23)" למסך האישור. */
