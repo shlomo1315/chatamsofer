@@ -108,7 +108,15 @@ export async function POST(request: NextRequest) {
     .eq('id', data.id)
   if (upErr) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const mail = await deliverMail(data.email, 'קוד אימות — אזור אישי היכל החתם סופר', codeEmailHtml(code))
+  // 🔴 gmailPriority: 'high' — חובה, ולא רק בשביל המכסה היומית.
+  //
+  // מנגנון ההעברה ההדרגתית ל-Resend (lib/resendRollout) חל על 'high' *בלבד*.
+  // הקריאה כאן הייתה בלי הדגל, ולכן נפלה ל-'normal': ההגדרה "100% דרך Resend"
+  // פשוט לא נבדקה במסלול הזה, וכל נמען ג'ימייל המשיך לקבל דרך Gmail — בעוד
+  // שהמסך במערכת הציג 100%. transactional: true מונע כותרות הסרה (קוד
+  // חד-פעמי אינו דיוור). זהה ל-lib/transactionalMail.
+  const mail = await deliverMail(data.email, 'קוד אימות — אזור אישי היכל החתם סופר', codeEmailHtml(code),
+    undefined, { transactional: true, gmailPriority: 'high' })
   if (!mail.ok) return NextResponse.json({ error: 'שליחת המייל נכשלה. נסה שוב מאוחר יותר.' }, { status: 502 })
 
   // cooldown — כמה שניות הכפתור צריך להישאר נעול. מגיע מהשרת ולא מקבוע בלקוח,
