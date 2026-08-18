@@ -40,7 +40,9 @@ interface Message {
 }
 
 interface Account { id: string; email: string; label?: string | null; department?: string | null }
-interface LabelStat { name: string; count: number }
+/** ⚠️ id ולא רק name: האינדקס שומר את *מזהי* התוויות, ולכן הסינון
+ *  חייב לרוץ על המזהה. השם משמש לתצוגה בלבד. */
+interface LabelStat { id: string; name: string; count: number }
 interface Attachment { filename?: string; mimeType?: string; size?: number }
 
 const fmtDate = (d?: string | null) => {
@@ -106,6 +108,8 @@ export default function GmailInbox() {
   //
   // ⚠️ מתעדכן ב-effect ולא בגוף הרינדור: כתיבה ל-ref בזמן רינדור הופכת
   // אותו ללא-דטרמיניסטי, ו-React עלול לרנדר פעמיים ולראות ערך חלקי.
+  /** ברירת המחדל (תיבת המשרד) נבחרת פעם אחת בלבד — ראו load(). */
+  const didPickDefault = useRef(false)
   const paramsRef = useRef({ folder, department, account, activeLabel, search, page })
   useEffect(() => {
     paramsRef.current = { folder, department, account, activeLabel, search, page }
@@ -128,7 +132,20 @@ export default function GmailInbox() {
       setHasMore(!!json.hasMore)
       setUnreadByDept(json.unreadByDept ?? {})
       setUnreadByAccount(json.unreadByAccount ?? {})
-      setAccounts(json.accounts ?? [])
+      const accs = (json.accounts ?? []) as Account[]
+      setAccounts(accs)
+      // 🔴 ברירת מחדל: תיבת המשרד ולא "כל התיבות", שערבבה דואר מכל
+      // האגפים במסך אחד בלי לדעת באיזו תיבה מדובר.
+      //
+      // ⚠️ נקבע כאן — ברגע שהנתונים מגיעים — ולא ב-effect נפרד: setState
+      // סינכרוני בתוך effect מייצר רינדורים מדורגים (וזה בדיוק הדפוס
+      // שהפיל היום את הפורטל). ⚠️ פעם אחת בלבד, אחרת בחירה ידנית
+      // ב"כל התיבות" הייתה נדרסת בכל רענון.
+      if (!didPickDefault.current && !paramsRef.current.account && accs.length) {
+        didPickDefault.current = true
+        const office = accs.find(a => /^office@/i.test(a.email)) ?? accs.find(a => a.department === 'main')
+        if (office) { setAccount(office.id); setPage(0) }
+      }
       setLabels(json.labels ?? [])
       setFollowupCount(json.followupCount ?? 0)
       setError(null)
@@ -163,6 +180,22 @@ export default function GmailInbox() {
       document.removeEventListener('visibilitychange', onWake)
     }
   }, [load])
+
+  // 🔴 חיפוש חי — תוצאות תוך כדי הקלדה, כמו בג'ימייל.
+  //
+  // ⚠️ קודם נדרש Enter (onSubmit): המשתמש הקליד, לא ראה כלום, והניח
+  // שהחיפוש לא עובד. Enter עדיין עובד ומחפש מיד.
+  // ⚠️ מושהה ב-350ms: בלי זה כל תו היה יורה שאילתה לשרת.
+  // ⚠️ מתעלם ממחרוזת של תו אחד — רועשת מדי ומחזירה כמעט הכול.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const v = q.trim()
+      if (v.length === 1) return
+      setSearch(prev => (prev === v ? prev : v))
+      setPage(0)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [q])
 
   // סגירת תפריט ההקשר — לחיצה בכל מקום, גלילה, או Escape.
   useEffect(() => {
@@ -292,15 +325,14 @@ export default function GmailInbox() {
   //
   // ⚠️ נבחר פעם אחת בלבד (didPickDefault) — אחרת בחירה ידנית ב"כל
   // התיבות" הייתה נדרסת בכל טעינה מחדש.
-  const didPickDefault = useRef(false)
-  useEffect(() => {
-    if (didPickDefault.current || account || !accounts.length) return
-    didPickDefault.current = true
-    const office = accounts.find(a => /^office@/i.test(a.email)) ?? accounts.find(a => a.department === 'main')
-    if (office) { setAccount(office.id); setPage(0) }
-  }, [accounts, account])
-
-  const totalUnread = Object.values(unreadByDept).reduce((a, b) => a + b, 0)
+  // 🔴 המונה חייב לכבד את התיבה הנבחרת.
+  //
+  // ⚠️ קודם נסכמו *כל* המחלקות תמיד: המסך הציג "735 לא נקראו" גם כשהיה
+  // מסונן לתיבת המשרד בלבד, כלומר מספר ששייך לתיבה אחרת. כשנבחרה תיבה,
+  // המונה נלקח מ-unreadByAccount שלה.
+  const totalUnread = account
+    ? (unreadByAccount[account] ?? 0)
+    : Object.values(unreadByDept).reduce((a, b) => a + b, 0)
   const activeAccount = accounts.find(a => a.id === account) ?? null
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
 
@@ -413,7 +445,12 @@ export default function GmailInbox() {
           </button>
           <nav className="space-y-0.5">
             {([
-              { key: 'inbox', label: 'דואר נכנס', icon: Inbox, badge: totalUnread },
+              // ⚠️ "דואר נכנס" ו"לא נקראו" הציגו את *אותו* מספר בדיוק
+              // (735 / 735), כי שניהם נגזרו מ-totalUnread. בג'ימייל המונה
+              // ליד "דואר נכנס" הוא הלא-נקראו שבתיקייה, ו"לא נקראו" היא
+              // תיקייה נפרדת — אבל שני מספרים זהים זה לצד זה נראים כתקלה
+              // ואינם מוסיפים מידע. עכשיו רק "לא נקראו" נושא מונה.
+              { key: 'inbox', label: 'דואר נכנס', icon: Inbox, badge: 0 },
               { key: 'unread', label: 'לא נקראו', icon: MailOpen, badge: totalUnread },
               { key: 'followup', label: FOLLOWUP, icon: Flag, badge: followupCount },
               { key: 'sent', label: 'נשלחו', icon: Send, badge: 0 },
@@ -463,9 +500,10 @@ export default function GmailInbox() {
               <p className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">תוויות</p>
               <div className="space-y-0.5 max-h-64 overflow-y-auto">
                 {labels.map(l => (
-                  <button key={l.name}
-                    onClick={() => { setActiveLabel(l.name === activeLabel ? '' : l.name); setPage(0); setSelected(null) }}
-                    className={navBtn(activeLabel === l.name)}>
+                  <button key={l.id}
+                    onClick={() => { setActiveLabel(l.id === activeLabel ? '' : l.id); setPage(0); setSelected(null) }}
+                    className={navBtn(activeLabel === l.id)}
+                    title={l.name}>
                     <Tag size={13} className="flex-shrink-0" />
                     <span className="flex-1 truncate text-[12px]">{l.name}</span>
                     <span className="text-[10px] text-slate-400">{l.count}</span>
@@ -686,42 +724,64 @@ export default function GmailInbox() {
 
       {/* ── תפריט קליק-ימני על הודעה (כמו בג'ימייל) ── */}
       {ctxMenu && (
-        <div
-          className="fixed z-[90] w-[230px] rounded-xl border border-slate-200 bg-white py-1.5 shadow-2xl"
-          style={{ top: ctxMenu.y, left: ctxMenu.x }}
-          // ⚠️ עוצר את ההתפשטות: בלי זה מאזין ה-click שסוגר את התפריט
-          // היה סוגר אותו לפני שהפריט שנלחץ הספיק לפעול.
-          onClick={e => e.stopPropagation()}
-          onContextMenu={e => e.preventDefault()}
-        >
-          {([
-            { icon: Reply, label: 'תשובה', run: () => { void open(ctxMenu.msg); startReplyTo(ctxMenu.msg) } },
-            { icon: ctxMenu.msg.is_unread ? MailOpen : Mail,
-              label: ctxMenu.msg.is_unread ? 'סימון כנקרא' : 'סימון כלא נקרא',
-              run: () => void actOn(ctxMenu.msg, ctxMenu.msg.is_unread ? 'mark-read' : 'mark-unread') },
-            { icon: Flag,
-              label: (ctxMenu.msg.labels ?? []).includes(FOLLOWUP) ? 'הסרה מטיפול' : FOLLOWUP,
-              run: () => void actOn(ctxMenu.msg, (ctxMenu.msg.labels ?? []).includes(FOLLOWUP) ? 'unfollowup' : 'followup') },
-            { icon: Archive, label: 'לארכיון', run: () => void actOn(ctxMenu.msg, 'archive'), sep: true },
-            { icon: Trash2, label: 'מחיקה', run: () => void actOn(ctxMenu.msg, 'trash'), danger: true },
-          ] as const).map((it, i) => (
-            <div key={i}>
-              {'sep' in it && it.sep && <div className="my-1 border-t border-slate-100" />}
-              <button type="button"
-                onClick={() => { it.run(); setCtxMenu(null) }}
-                disabled={acting}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-right text-[13px] font-semibold transition-colors disabled:opacity-50 ${
-                  'danger' in it && it.danger
-                    ? 'text-rose-600 hover:bg-rose-50'
-                    : 'text-slate-700 hover:bg-slate-100'
-                }`}>
-                <it.icon size={14} className="flex-shrink-0" />
-                <span className="flex-1">{it.label}</span>
-              </button>
-            </div>
-          ))}
-        </div>
+        <MessageContextMenu
+          x={ctxMenu.x} y={ctxMenu.y} msg={ctxMenu.msg} busy={acting}
+          onClose={() => setCtxMenu(null)}
+          onOpen={m => { void open(m); startReplyTo(m) }}
+          onAct={(m, a) => void actOn(m, a)}
+        />
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תפריט קליק-ימני על שורת הודעה — כמו בג'ימייל.
+//
+// ⚠️ רכיב נפרד ולא IIFE בתוך הרינדור: React אוסר גישה ל-ref בזמן רינדור,
+// ופונקציה אנונימית שנקראת שם נחשבת חלק ממנו.
+// ─────────────────────────────────────────────────────────────────────────────
+function MessageContextMenu({ x, y, msg, busy, onClose, onOpen, onAct }: {
+  x: number; y: number; msg: Message; busy: boolean
+  onClose: () => void
+  onOpen: (m: Message) => void
+  onAct: (m: Message, action: string) => void
+}) {
+  const isFu = (msg.labels ?? []).includes(FOLLOWUP)
+  const items = [
+    { icon: Reply, label: 'תשובה', run: () => onOpen(msg) },
+    {
+      icon: msg.is_unread ? MailOpen : Mail,
+      label: msg.is_unread ? 'סימון כנקרא' : 'סימון כלא נקרא',
+      run: () => onAct(msg, msg.is_unread ? 'mark-read' : 'mark-unread'),
+    },
+    { icon: Flag, label: isFu ? 'הסרה מטיפול' : FOLLOWUP, run: () => onAct(msg, isFu ? 'unfollowup' : 'followup') },
+    { icon: Archive, label: 'לארכיון', run: () => onAct(msg, 'archive'), sep: true },
+    { icon: Trash2, label: 'מחיקה', run: () => onAct(msg, 'trash'), danger: true },
+  ]
+
+  return (
+    <div
+      className="fixed z-[90] w-[230px] rounded-xl border border-slate-200 bg-white py-1.5 shadow-2xl"
+      style={{ top: y, left: x }}
+      // ⚠️ עוצר את ההתפשטות: בלי זה מאזין ה-click שסוגר את התפריט היה
+      // סוגר אותו לפני שהפריט שנלחץ הספיק לפעול.
+      onClick={e => e.stopPropagation()}
+      onContextMenu={e => e.preventDefault()}
+    >
+      {items.map((it, i) => (
+        <div key={i}>
+          {it.sep && <div className="my-1 border-t border-slate-100" />}
+          <button type="button" disabled={busy}
+            onClick={() => { it.run(); onClose() }}
+            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-right text-[13px] font-semibold transition-colors disabled:opacity-50 ${
+              it.danger ? 'text-rose-600 hover:bg-rose-50' : 'text-slate-700 hover:bg-slate-100'
+            }`}>
+            <it.icon size={14} className="flex-shrink-0" />
+            <span className="flex-1">{it.label}</span>
+          </button>
+        </div>
+      ))}
     </div>
   )
 }

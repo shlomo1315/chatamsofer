@@ -135,8 +135,11 @@ export async function GET(request: NextRequest) {
   }
 
   // ג”€ג”€ ׳”׳×׳™׳‘׳•׳× ׳•׳”׳×׳•׳•׳™׳•׳× ׳׳₪׳׳ ׳ ׳”׳¦׳“׳“׳™ ג”€ג”€
-  const { data: accounts } = await db.from('gmail_accounts')
-    .select('id, email, label, department').eq('is_active', true).order('email')
+  // ⚠️ refresh_token נשלף לשימוש *בשרת בלבד* (משיכת שמות התוויות למטה),
+  // ומנוקה לפני שהרשימה נשלחת ללקוח — אסור שיגיע לדפדפן.
+  const { data: accountsRaw } = await db.from('gmail_accounts')
+    .select('id, email, label, department, refresh_token').eq('is_active', true).order('email')
+  const accounts = (accountsRaw ?? []).map(({ refresh_token: _t, ...rest }) => rest)
 
   // ג ן¸ ׳”׳×׳•׳•׳™׳•׳× ׳ ׳’׳–׳¨׳•׳× ׳׳”׳׳™׳ ׳“׳§׳¡ ׳•׳׳ ׳ ׳©׳׳₪׳•׳× ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”: ׳©׳׳™׳₪׳” ׳׳©׳
   // ׳”׳™׳™׳×׳” ׳׳•׳¡׳™׳₪׳” ׳¡׳‘׳‘ ׳¨׳©׳× ׳׳›׳ ׳¨׳¢׳ ׳•׳, ׳•׳”׳×׳•׳•׳™׳•׳× ׳׳׳™׳׳ ׳׳¡׳•׳ ׳›׳¨׳ ׳•׳×.
@@ -151,8 +154,34 @@ export async function GET(request: NextRequest) {
       labelCounts[l] = (labelCounts[l] ?? 0) + 1
     }
   }
+  // 🔴 תרגום מזהי תוויות לשמות אמיתיים.
+  //
+  // Gmail מחזיר ב-labelIds *מזהים* ("Label_2", "924736508402…"), לא שמות,
+  // והם מה שנשמר באינדקס. המסך הציג אותם כפי שהם, ולכן במקום
+  // "רישום חגי תשרי" נראה "Label_2" — חסר משמעות למשתמש.
+  // השמות נמשכים מ-Gmail (labels.list) וממופים כאן, בעת ההצגה בלבד:
+  // הנתונים השמורים אינם משתנים, ולכן אין צורך במיגרציה או בסנכרון מחדש.
+  //
+  // ⚠️ כשל במשיכה אינו מפיל את המסך — נופלים בחזרה למזהה הגולמי.
+  const labelNames = new Map<string, string>()
+  try {
+    const acct = (accountsRaw ?? [])[0] as { refresh_token?: string } | undefined
+    if (acct?.refresh_token) {
+      const gmail = getGmailClientForToken(acct.refresh_token)
+      const list = await gmail.users.labels.list({ userId: 'me' })
+      for (const l of (list.data?.labels ?? []) as { id?: string | null; name?: string | null }[]) {
+        if (l.id && l.name) labelNames.set(String(l.id), String(l.name))
+      }
+    }
+  } catch (e) {
+    console.error('[inbox] משיכת שמות התוויות נכשלה:', e instanceof Error ? e.message : e)
+  }
+
   const labels = Object.entries(labelCounts)
-    .map(([name, n]) => ({ name, count: n }))
+    .map(([id, n]) => ({ id, name: labelNames.get(id) ?? id, count: n }))
+    // ⚠️ מסתירים תוויות שנותרו כמזהה גולמי ואינן קיימות עוד ב-Gmail
+    // (נמחקו שם אך נשארו על הודעות ישנות באינדקס) — הן רק רעש.
+    .filter(l => !/^Label_\d+$/.test(l.name))
     .sort((a, b) => b.count - a.count)
     .slice(0, 25)
 
