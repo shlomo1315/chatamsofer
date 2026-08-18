@@ -132,7 +132,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   // ── אישור: השם מוחל על הרשומה ──
-  const col = req.target === 'spouse' ? 'spouse_name' : 'full_name'
+  // ⚠️ שלושה יעדים: שם הבעל / שם האישה / שם המשפחה.
+  const col = req.target === 'spouse' ? 'spouse_name' : req.target === 'family' ? 'family_name' : 'full_name'
   const { error: upErr } = await db
     .from('beneficiaries')
     .update({ [col]: req.new_name, updated_at: now })

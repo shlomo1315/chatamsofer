@@ -83,11 +83,18 @@ export default function NotificationBell() {
         className="relative p-2 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors"
         title={items.length ? `${items.length} התראות` : 'אין התראות'}
       >
-        <Bell size={18} />
+        {/* ⚠️ הפעמון עצמו מהבהב כשיש התראות ממתינות — מונפש רק כשהחלונית
+            סגורה. הנקודה האדומה לבדה לא נתפסה בעין: מנהל שעובד במסך אחר
+            פשוט לא הבחין שהגיעה בקשה חדשה. ההבהוב נפסק ברגע שפותחים. */}
+        <Bell size={18} className={items.length > 0 && !open ? 'animate-bell-ring text-amber-500' : ''} />
         {items.length > 0 && (
-          <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+          <span className={`absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ${!open ? 'animate-pulse' : ''}`}>
             {items.length > 9 ? '9+' : items.length}
           </span>
+        )}
+        {/* הילה פועמת מאחורי הפעמון — נראית גם בראייה היקפית */}
+        {items.length > 0 && !open && (
+          <span className="absolute inset-0 rounded-xl bg-amber-400/25 animate-ping-slow pointer-events-none" />
         )}
       </button>
 

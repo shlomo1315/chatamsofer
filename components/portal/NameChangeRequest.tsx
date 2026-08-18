@@ -16,21 +16,23 @@ import { UserPen, Loader2, Clock, X, Check } from 'lucide-react'
 
 interface PendingRequest {
   id: string
-  target: 'self' | 'spouse'
+  target: 'self' | 'spouse' | 'family'
   new_name: string
   status: 'pending' | 'rejected'
   requested_at: string
   reject_reason?: string | null
 }
 
-export default function NameChangeRequest({ beneficiaryId, currentName, spouseName, hasSpouse }: {
+export default function NameChangeRequest({ beneficiaryId, currentName, spouseName, familyName, hasSpouse }: {
   beneficiaryId: string
   currentName: string
   spouseName?: string | null
+  /** שם המשפחה — יעד שלישי לבקשת תיקון (טעון אישור, כמו השאר). */
+  familyName?: string | null
   hasSpouse: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [target, setTarget] = useState<'self' | 'spouse'>('self')
+  const [target, setTarget] = useState<'self' | 'spouse' | 'family'>('self')
   const [value, setValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
@@ -46,7 +48,8 @@ export default function NameChangeRequest({ beneficiaryId, currentName, spouseNa
 
   useEffect(() => { void load() }, [load])
 
-  const currentFor = (t: 'self' | 'spouse') => (t === 'spouse' ? spouseName : currentName) ?? ''
+  const currentFor = (t: 'self' | 'spouse' | 'family') =>
+    (t === 'spouse' ? spouseName : t === 'family' ? familyName : currentName) ?? ''
 
   const submit = async () => {
     const v = value.trim()
@@ -85,7 +88,7 @@ export default function NameChangeRequest({ beneficiaryId, currentName, spouseNa
       {/* ⚠️ נאמר מראש שזה טעון אישור — משתמש שמצפה לשינוי מיידי ולא רואה
           אותו מניח שהמערכת לא עבדה, ומנסה שוב ושוב. */}
       <p className="text-[12px] text-slate-500">
-        שינוי שם פרטי טעון אישור ההנהלה. תעודת הזהות ושם המשפחה מתעדכנים במשרד בלבד.
+        שינוי שם טעון אישור ההנהלה — כולל שם המשפחה. תעודת הזהות מתעדכנת במשרד בלבד.
       </p>
 
       {/* בקשות ממתינות */}
@@ -93,7 +96,8 @@ export default function NameChangeRequest({ beneficiaryId, currentName, spouseNa
         <div key={p.id} className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
           <Clock size={13} className="shrink-0" />
           <span>
-            ממתין לאישור: {p.target === 'spouse' ? 'שם האישה' : 'שם הבעל'} → <b>{p.new_name}</b>
+            {/* ← ולא →: ממשק RTL, הקריאה מימין לשמאל */}
+            ממתין לאישור: {p.target === 'spouse' ? 'שם האישה' : p.target === 'family' ? 'שם המשפחה' : 'שם הבעל'} ← <b>{p.new_name}</b>
           </span>
         </div>
       ))}
@@ -122,11 +126,18 @@ export default function NameChangeRequest({ beneficiaryId, currentName, spouseNa
         </button>
       ) : (
         <div className="flex flex-col gap-2.5">
-          {hasSpouse && (
-            <div className="flex items-center gap-1.5">
+          {/* ⚠️ הבוררים מוצגים תמיד, ולא רק כשיש בן/בת זוג: שם המשפחה הוא
+              יעד חוקי גם למשפחה בלי בן/בת זוג רשומים. קודם כל הבורר היה
+              עטוף ב-hasSpouse, ומי שאין לו בן/בת זוג לא יכול היה לבחור
+              כלל — כולל את שם המשפחה. */}
+          {(hasSpouse || familyName) && (
+            <div className="flex flex-wrap items-center gap-1.5">
               {([
-                { v: 'self' as const, l: 'שם הבעל' },
-                { v: 'spouse' as const, l: 'שם האישה' },
+                ...(hasSpouse ? [
+                  { v: 'self' as const, l: 'שם הבעל' },
+                  { v: 'spouse' as const, l: 'שם האישה' },
+                ] : []),
+                ...(familyName ? [{ v: 'family' as const, l: 'שם המשפחה' }] : []),
               ]).map(o => (
                 <button key={o.v} type="button"
                   onClick={() => { setTarget(o.v); setValue(currentFor(o.v)) }}

@@ -34,7 +34,7 @@ interface BenInfo {
 interface Req {
   id: string
   beneficiary_id: string
-  target: 'self' | 'spouse'
+  target: 'self' | 'spouse' | 'family'
   old_name: string | null
   new_name: string
   requested_at: string
@@ -45,6 +45,13 @@ interface Req {
 /** ⚠️ נזכר ב-sessionStorage ולא ב-localStorage: "לא עכשיו" תקף לסשן הזה
  *  בלבד. בקשה שלא הוכרעה חייבת לחזור ולהופיע מחר. */
 const DISMISS_KEY = 'name-change-alert-dismissed'
+
+/** שם השדה המבוקש — מוצג בכותרת הבקשה ומדגיש את השורה המתאימה. */
+const TARGET_LABEL: Record<string, string> = {
+  self: 'שם הבעל',
+  spouse: 'שם האישה',
+  family: 'שם המשפחה',
+}
 
 /**
  * שורת פרט בכרטיס. ⚠️ ערך חסר מוצג כ־"—" ולא מוסתר: היעדר ת"ז או כתובת
@@ -132,10 +139,17 @@ export default function NameChangeAlert() {
           {reqs.map(r => (
             <div key={r.id} className="rounded-xl border border-slate-200 px-3.5 py-3">
               <p className="text-[13px] font-bold text-slate-800">{r.familyName}</p>
+              {/* ⚠️ שם השדה המבוקש נאמר במפורש — כולל שם המשפחה, שהוא
+                  היעד השלישי. בלעדיו אי אפשר לדעת מה עומד להשתנות. */}
               <p className="mt-1 text-[12px] text-slate-600">
-                {r.target === 'spouse' ? 'שם האישה' : 'שם הבעל'}:{' '}
+                <span className="inline-block rounded bg-slate-100 px-1.5 py-px font-bold text-slate-700">
+                  {TARGET_LABEL[r.target] ?? 'שם'}
+                </span>{' '}
                 <span className="text-rose-600 line-through">{r.old_name || '—'}</span>
-                <span className="mx-1.5 text-slate-400">→</span>
+                {/* ⚠️ ← ולא →: הממשק בעברית (RTL) והקריאה מימין לשמאל.
+                    הישן מופיע מימין והחדש משמאל, ולכן חץ ימינה מצביע
+                    הפוך מכיוון השינוי. */}
+                <span className="mx-1.5 text-slate-400">←</span>
                 <span className="font-bold text-emerald-700">{r.new_name}</span>
               </p>
 
@@ -145,7 +159,8 @@ export default function NameChangeAlert() {
                   באיזו משפחה מדובר. */}
               {r.beneficiary && (
                 <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-lg bg-slate-50 px-3 py-2.5 text-[11.5px]">
-                  <Detail label="שם משפחה" value={r.beneficiary.family_name} />
+                  <Detail label="שם משפחה" value={r.beneficiary.family_name}
+                    highlight={r.target === 'family'} />
                   <Detail label="תעודת זהות" value={r.beneficiary.id_number} ltr />
                   {/* ⚠️ בן/בת הזוג מודגש כשהוא *נושא השינוי* — זה השדה שעומד
                       להשתנות, והעין צריכה ליפול עליו. */}

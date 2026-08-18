@@ -205,3 +205,20 @@ th.ltr-num {
   opacity: 0.75;
   font-size: 0.85em;
 }
+
+/* צלצול הפעמון — התראה שממתינה לטיפול.
+   ⚠️ נדנוד קל ולא סיבוב מלא: הפעמון יושב בסרגל העליון שנמצא מול העיניים
+   כל הזמן, ותנועה אגרסיבית שם הופכת למטרד תוך דקות. ההבהוב נפסק ברגע
+   שפותחים את החלונית (ראו NotificationBell). */
+@keyframes bell-ring {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  60% { transform: rotate(11deg); }
+  67% { transform: rotate(-9deg); }
+  74% { transform: rotate(7deg); }
+  81% { transform: rotate(-5deg); }
+  88% { transform: rotate(3deg); }
+}
+.animate-bell-ring {
+  animation: bell-ring 2.4s ease-in-out infinite;
+  transform-origin: 50% 15%;
+}

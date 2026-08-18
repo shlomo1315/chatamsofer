@@ -14,8 +14,10 @@ export const dynamic = 'force-dynamic'
 // ⚠️ ת"ז אינה ניתנת לבקשה כלל: היא המפתח לזיהוי מול המשרד ומול העץ, ולא
 // שדה שמתקנים בו שגיאת כתיב.
 //
-// ⚠️ שם משפחה גם הוא לא: הוא משפיע על שיוך העץ ועל החלוקות, ושינוי שלו
-// הוא פעולה של המשרד ולא בקשה של הנרשם.
+// ⚠️ שם משפחה — ניתן לבקשה (target='family'), אך *רק כבקשה*. הוא משפיע
+// על שיוך העץ ועל החלוקות, ולכן אינו משתנה מאליו: ההנהלה מאשרת, ורק אז
+// הוא מתעדכן. קודם הוא נחסם לגמרי, ומשפחות שהשם שלהן נרשם שגוי נאלצו
+// לפנות טלפונית למשרד.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getAdminClient() {
@@ -45,7 +47,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'נדרש אימות מחדש — נא לבצע כניסה מחדש לפורטל' }, { status: 401 })
   }
 
-  const target = body.target === 'spouse' ? 'spouse' : 'self'
+  // ⚠️ שם המשפחה נוסף כיעד שלישי. הוא נשאר **בקשה טעונת אישור** ואינו
+  // משנה דבר בעצמו — כמו שם פרטי — כי הוא משפיע על שיוך העץ ועל החלוקות.
+  // ההנהלה מאשרת, ורק אז הוא מתעדכן.
+  const target = body.target === 'spouse' ? 'spouse' : body.target === 'family' ? 'family' : 'self'
   const newName = cleanName(body.new_name)
   if (!newName) return NextResponse.json({ error: 'יש להזין שם' }, { status: 400 })
   if (newName.length < 2) return NextResponse.json({ error: 'השם קצר מדי' }, { status: 400 })
@@ -56,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const { data: ben } = await admin
     .from('beneficiaries')
-    .select('id, full_name, spouse_name, eligibility_status')
+    .select('id, full_name, spouse_name, family_name, eligibility_status')
     .eq('id', benId)
     .maybeSingle()
   if (!ben) return NextResponse.json({ error: 'נרשם לא נמצא' }, { status: 404 })
@@ -64,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'הפעולה אינה זמינה עבור חשבון זה' }, { status: 403 })
   }
 
-  const oldName = String((target === 'spouse' ? ben.spouse_name : ben.full_name) ?? '')
+  const oldName = String((target === 'spouse' ? ben.spouse_name : target === 'family' ? ben.family_name : ben.full_name) ?? '')
   // ⚠️ בקשה שאינה משנה דבר נדחית כאן ולא מגיעה למנהל — אחרת החלונית
   // הייתה קופצת על "שינוי" משם לעצמו.
   if (cleanName(oldName) === newName) {
