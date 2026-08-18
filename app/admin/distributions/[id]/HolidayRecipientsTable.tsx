@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Columns3 } from 'lucide-react'
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useResizableColumns } from '@/components/ui/ResizableTable'
 
 export interface HolidayRow {
   id: string
@@ -137,6 +138,11 @@ export default function HolidayRecipientsTable({
     [available, visible],
   )
 
+  // 🔴 גרירת רוחב עמודות (כמו באקסל) — רכיב מערכתי משותף לכל הטבלאות.
+  // ⚠️ המזהה כולל את מספר העמודות הנראות: הסתרת עמודה מזיזה את כל
+  // האינדקסים, ורוחב שנשמר למצב אחר היה נדבק לעמודה הלא נכונה.
+  const rt = useResizableColumns(`holiday-recipients-${shown.length}${canEdit ? '-e' : ''}`, shown.length + (canEdit ? 1 : 0))
+
   const { rows: visibleRows, sentinelRef, hasMore, shown: shownCount, total } = useIncrementalRows(rows)
 
   if (!rows.length) {
@@ -231,15 +237,17 @@ export default function HolidayRecipientsTable({
 
   // ⚠️ עמודות ארוכות-תוכן מוגבלות ברוחב + truncate; הקצרות nowrap. כך
   // הטבלה נשארת בתוך הרוחב בלי גלילה, גם כשמסומנות עמודות רבות.
-  const cellClass = (k: ColKey) =>
-    k === 'email' ? 'max-w-[170px]'
-      : k === 'address' ? 'max-w-[150px]'
-        : 'whitespace-nowrap'
+  // 🔴 גלישה ולא חיתוך: הצרת עמודה שוברת את הטקסט לשורות ומגביהה את
+  // השורה — כמו באקסל. truncate/nowrap היו מעלימים מידע במקום להציג
+  // אותו אחרת, וזו בדיוק הנקודה של הגרירה.
+  const cellClass = () => rt.cellClass
 
   return (
     <div className="flex flex-col gap-2">
       {/* ── בורר העמודות ── */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      {/* ⚠️ "הצגת הכל" ליד הבורר ולא בקצה הנגדי: הוא פעולה *על* הבורר,
+          וריחוק ממנו נראה כפריט מנותק. */}
+      <div className="flex items-center gap-2 flex-wrap">
         <button type="button" onClick={() => setPicker(o => !o)}
           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-indigo-300 hover:text-indigo-600">
           <Columns3 size={13} />
@@ -248,8 +256,14 @@ export default function HolidayRecipientsTable({
         </button>
         {shown.length < available.length && (
           <button type="button" onClick={() => setVisible(new Set(available.map(c => c.key)))}
-            className="text-[11px] font-bold text-slate-400 hover:text-indigo-600 transition">
-            הצגת הכל
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600">
+            הצגת כל העמודות
+          </button>
+        )}
+        {rt.customized && (
+          <button type="button" onClick={rt.reset}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-500 transition hover:border-indigo-300 hover:text-indigo-600">
+            איפוס רוחב העמודות
           </button>
         )}
       </div>
@@ -272,17 +286,20 @@ export default function HolidayRecipientsTable({
 
       {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
       <div className="w-full">
-        <table className="w-full table-auto text-[12px] border-collapse">
+        <table className="w-full text-[12px] border-collapse" style={rt.tableStyle}>
+          <colgroup>{rt.cols}</colgroup>
           <thead className="bg-slate-50 text-slate-500">
-            <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+            <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
               {canEdit && (
                 <th className="w-8">
                   <input type="checkbox" checked={!!allShownSelected} onChange={() => toggleAllShown?.()}
                     className="h-4 w-4 accent-indigo-600" aria-label="סימון כל המוצגים" />
                 </th>
               )}
-              {shown.map(c => (
-                <th key={c.key} className={c.align === 'center' ? 'text-center' : undefined}>{c.label}</th>
+              {shown.map((c, i) => (
+                <th key={c.key} className={`relative ${c.align === 'center' ? 'text-center' : ''}`}>
+                  {c.label}{rt.handle(canEdit ? i + 1 : i)}
+                </th>
               ))}
             </tr>
           </thead>
@@ -296,7 +313,7 @@ export default function HolidayRecipientsTable({
                   </td>
                 )}
                 {shown.map(c => (
-                  <td key={c.key} className={`${cellClass(c.key)} ${c.align === 'center' ? 'text-center' : ''}`}>
+                  <td key={c.key} className={`${cellClass()} ${c.align === 'center' ? 'text-center' : ''}`}>
                     {cell(c, r)}
                   </td>
                 ))}

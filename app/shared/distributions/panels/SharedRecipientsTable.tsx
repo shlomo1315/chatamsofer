@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { Search, Columns3 } from 'lucide-react'
+import { useResizableColumns } from '@/components/ui/ResizableTable'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // טבלת הנרשמים בדף השיתוף.
@@ -72,6 +73,9 @@ export default function SharedRecipientsTable({ rows }: { rows: SharedRecipient[
 
   const shown = COLS.filter(c => cols.has(c.key))
 
+  // גרירת רוחב עמודות — רכיב מערכתי משותף.
+  const rt = useResizableColumns(`shared-recipients-${shown.length}`, shown.length)
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     if (!needle) return rows
@@ -97,9 +101,9 @@ export default function SharedRecipientsTable({ rows }: { rows: SharedRecipient[
       case 'phone': return <span className="font-mono text-slate-600 ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</span>
       // ⚠️ text-right מפורש: dir="ltr" הופך את ברירת המחדל לשמאל, והמייל
       // היה נצמד לצד ההפוך מהכותרת.
-      case 'email': return <span className="block truncate text-slate-600 text-right" dir="ltr" title={b?.email ?? ''}>{b?.email ?? '—'}</span>
+      case 'email': return <span className="block text-slate-600 text-right break-all" dir="ltr">{b?.email ?? '—'}</span>
       case 'city': return <span className="text-slate-600">{b?.city ?? '—'}</span>
-      case 'address': return <span className="block truncate text-slate-600" title={b?.address ?? ''}>{b?.address ?? '—'}</span>
+      case 'address': return <span className="block text-slate-600">{b?.address ?? '—'}</span>
       case 'age': return <span className="text-slate-600 ltr-num">{ageOf(b) ?? '—'}</span>
       case 'kids': return <span className="text-slate-600 ltr-num">{b?.children_count ?? '—'}</span>
       case 'registered': return <span className="text-slate-500 ltr-num text-[11px]">{fmtDateTime(r.registered_at)}</span>
@@ -148,19 +152,22 @@ export default function SharedRecipientsTable({ rows }: { rows: SharedRecipient[
 
       {/* ⚠️ בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
       <div className="w-full">
-        <table className="w-full table-auto text-[12px] border-collapse">
+        <table className="w-full text-[12px] border-collapse" style={rt.tableStyle}>
+          <colgroup>{rt.cols}</colgroup>
           <thead className="bg-slate-50 text-slate-500">
-            <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-              {shown.map(c => <th key={c.key} className={c.center ? 'text-center' : undefined}>{c.label}</th>)}
+            <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
+              {shown.map((c, i) => (
+                <th key={c.key} className={`relative ${c.center ? 'text-center' : ''}`}>
+                  {c.label}{rt.handle(i)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.slice(0, 500).map(r => (
               <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0">
                 {shown.map(c => (
-                  <td key={c.key} className={`${
-                    c.key === 'email' ? 'max-w-[170px]' : c.key === 'address' ? 'max-w-[150px]' : 'whitespace-nowrap'
-                  } ${c.center ? 'text-center' : ''}`}>
+                  <td key={c.key} className={`${rt.cellClass} ${c.center ? 'text-center' : ''}`}>
                     {cell(c.key, r)}
                   </td>
                 ))}

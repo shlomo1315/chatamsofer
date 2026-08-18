@@ -9,6 +9,7 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useResizableColumns } from '@/components/ui/ResizableTable'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // 🔴 ההלוואות נקובות בדולר: הסכום מוקלד בדולרים, וההחזר בשקלים לפי שער
@@ -121,6 +122,9 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   // עמודות לשורה, כולל LoanStatusControl שהוא קומפוננטת state מלאה לכל שורה),
   // וכל הקלדה בחיפוש/מיון בנתה הכל מחדש. שום שורה לא נעלמת — היא רק נטענת
   // כשמגיעים אליה בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
+  // גרירת רוחב עמודות — רכיב מערכתי משותף.
+  const rt = useResizableColumns('loans', 10)
+
   const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
 
   return (
@@ -195,11 +199,14 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-right">
+          <table className="w-full text-sm text-right" style={rt.tableStyle}>
+            <colgroup>{rt.cols}</colgroup>
             <thead>
               <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200">
-                {['שם הלווה', 'ת.ז.', 'סכום מבוקש', 'סכום מאושר', 'תשלומים', 'מטרה', 'תאריך הגשה', 'ביצוע', 'סטטוס', 'פעולות'].map(h => (
-                  <th key={h} className="px-4 py-3.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 whitespace-nowrap align-middle text-right">{h}</th>
+                {['שם הלווה', 'ת.ז.', 'סכום מבוקש', 'סכום מאושר', 'תשלומים', 'מטרה', 'תאריך הגשה', 'ביצוע', 'סטטוס', 'פעולות'].map((h, i) => (
+                  <th key={h} className="relative px-4 py-3.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 align-middle text-right">
+                    {h}{rt.handle(i)}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -237,7 +244,7 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                         : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-4 py-3.5 align-middle text-right text-slate-600">{loan.installments}</td>
-                    <td className="px-4 py-3.5 align-middle text-right text-slate-600 max-w-[140px] truncate">{loan.purpose ?? '—'}</td>
+                    <td className="px-4 py-3.5 align-middle text-right text-slate-600 break-words">{loan.purpose ?? '—'}</td>
                     <td className="px-4 py-3.5 align-middle text-right text-slate-500 text-xs"><span className="ltr-num">{fmtDate(loan.created_at)}</span></td>
                     <td className="px-4 py-3.5 align-middle whitespace-nowrap">
                       {loan.disbursed_at ? (

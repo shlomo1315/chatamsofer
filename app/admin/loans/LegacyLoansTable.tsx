@@ -7,6 +7,7 @@ import { validateIsraeliId } from '@/lib/validation'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useResizableColumns } from '@/components/ui/ResizableTable'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ההלוואות מהמערכת הקודמת — צפייה, עריכה ומחיקה.
@@ -104,6 +105,9 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
       return q === '' || (haystacks.get(r.id) ?? '').includes(q)
     })
   }, [rows, query, filter, haystacks])
+
+  // גרירת רוחב עמודות — רכיב מערכתי משותף.
+  const rt = useResizableColumns('legacy-loans', 9)
 
   const { rows: visible, sentinelRef, hasMore, shown, total } = useIncrementalRows(filtered)
 
@@ -207,11 +211,14 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         {/* 🔴 בלי overflow-x — הכלל: אין גלילה לרוחב בשום טבלה. */}
         <div className="w-full">
-          <table className="w-full table-auto text-sm text-right">
+          <table className="w-full text-sm text-right" style={rt.tableStyle}>
+            <colgroup>{rt.cols}</colgroup>
             <thead>
               <tr className="bg-gradient-to-b from-slate-50 to-slate-100/60 border-b border-slate-200">
-                {['תיק', 'שם הלווה', 'ת.ז.', 'כרטסת', 'עיר', 'אושר', 'נלקח בפועל', 'תשלומים', ''].map(h => (
-                  <th key={h} className="px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 text-right">{h}</th>
+                {['תיק', 'שם הלווה', 'ת.ז.', 'כרטסת', 'עיר', 'אושר', 'נלקח בפועל', 'תשלומים', ''].map((h, i) => (
+                  <th key={h || i} className="relative px-3 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500 text-right">
+                    {h}{rt.handle(i)}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -246,7 +253,7 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
                     <td className="px-3 py-3 text-xs font-mono text-slate-500"><span className="ltr-num">{r.id_number ?? '—'}</span></td>
                     {/* 🔴 עמודת השיוך: מי כבר מחובר לכרטסת ומי לא.
                         משויך → קישור ישיר לכרטסת. לא משויך → כפתור שיוך ידני. */}
-                    <td className="px-3 py-3 whitespace-nowrap">
+                    <td className={`px-3 py-3 ${rt.cellClass}`}>
                       {r.beneficiary_id ? (
                         <Link href={`/admin/beneficiaries/${r.beneficiary_id}`}
                           className="inline-flex items-center gap-1 rounded-lg bg-sky-50 border border-sky-200 px-2 py-1 text-[10px] font-bold text-sky-700 hover:bg-sky-100 transition">
