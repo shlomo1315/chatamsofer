@@ -27,6 +27,7 @@ import {
   Users, GitBranch, Heart, ArrowRight, Clock, Shield, Plus, Trash2, Check, X, Upload, FileText, HandCoins,
   AlertTriangle, Home, ClipboardList, Send,
 } from 'lucide-react'
+import NameChangeRequest from '@/components/portal/NameChangeRequest'
 
 // ─── Types ───
 
@@ -7029,6 +7030,16 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                   {beneficiary.spouse_name && <p><span className="text-slate-400 text-xs block">בן/בת זוג</span>{beneficiary.spouse_name}</p>}
                   {beneficiary.spouse_id_number && <p><span className="text-slate-400 text-xs block">ת.ז בן/זוג (לא ניתן לשינוי)</span><span className="ltr-num">{beneficiary.spouse_id_number}</span></p>}
                 </div>
+
+                {/* 🔴 תיקון שם — טעון אישור הנהלה ולכן רכיב נפרד: כל שאר
+                    השדות נשמרים מיד, וערבוב שדה שממתין לאישור ביניהם היה
+                    יוצר טופס שחציו נשמר וחציו לא. */}
+                <NameChangeRequest
+                  beneficiaryId={String(beneficiary.id)}
+                  currentName={beneficiary.full_name ?? ''}
+                  spouseName={beneficiary.spouse_name}
+                  hasSpouse={Boolean(beneficiary.spouse_name)}
+                />
 
                 <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                   אימות טלפון מאפשר לקבל אליו קוד כניסה בעתיד. ניתן לאמת כאן טלפון שעדיין לא אומת.

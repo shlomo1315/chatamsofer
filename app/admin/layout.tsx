@@ -4,6 +4,7 @@ export const metadata = { title: 'היכל החתם סופר - מערכת ניה
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
 import WelcomeModal from '@/components/ui/WelcomeModal'
+import NameChangeAlert from '@/components/admin/NameChangeAlert'
 import { ToastProvider } from '@/components/ui/Toast'
 import { StaffPermissionsProvider } from '@/components/StaffPermissions'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
@@ -33,6 +34,8 @@ export default async function DashboardLayout({
     <ToastProvider>
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <WelcomeModal />
+      {/* בקשות תיקון שם ממתינות — קופצת בכניסה לתוכנה. */}
+      <NameChangeAlert />
       <Sidebar
         isAdmin={profile?.role === 'admin'}
         role={profile?.role}
