@@ -32,23 +32,59 @@ export async function GET() {
     return NextResponse.json({ requests: [] })
   }
 
+  // 🔴 פרטי זיהוי מלאים ולא רק השם.
+  //
+  // ⚠️ החלונית הציגה "דבי → חיים" בלבד, ובלי ת"ז, שם משפחה, בן/בת זוג
+  // וכתובת אי אפשר לדעת *באיזו משפחה* מדובר — שמות פרטיים חוזרים על עצמם.
+  // המנהל נאלץ לפתוח את הכרטסת בחלון אחר כדי להכריע, או שאישר בעיוורון.
+  // ההכרעה נעשית כאן ולכן גם הנתונים צריכים להיות כאן.
   const ids = [...new Set((data ?? []).map(r => String(r.beneficiary_id)))]
-  const names = new Map<string, string>()
+  type BenInfo = {
+    familyName: string; id_number: string | null; family_name: string | null
+    full_name: string | null; spouse_name: string | null; spouse_id_number: string | null
+    city: string | null; address: string | null; phone: string | null
+    email: string | null; marital_status: string | null; children_count: number | null
+    lineage_chain: { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[] | null
+  }
+  const info = new Map<string, BenInfo>()
   if (ids.length) {
     const { data: bens } = await db
       .from('beneficiaries')
-      .select('id, full_name, family_name')
+      .select('id, full_name, family_name, id_number, spouse_name, spouse_id_number, city, address, phone, email, marital_status, children_count, lineage_chain')
       .in('id', ids)
     for (const b of bens ?? []) {
-      names.set(String(b.id), [b.family_name, b.full_name].filter(Boolean).join(' ') || 'ללא שם')
+      const r = b as Record<string, unknown>
+      info.set(String(b.id), {
+        familyName: [r.family_name, r.full_name].filter(Boolean).join(' ') || 'ללא שם',
+        id_number: (r.id_number as string) ?? null,
+        family_name: (r.family_name as string) ?? null,
+        full_name: (r.full_name as string) ?? null,
+        spouse_name: (r.spouse_name as string) ?? null,
+        spouse_id_number: (r.spouse_id_number as string) ?? null,
+        city: (r.city as string) ?? null,
+        address: (r.address as string) ?? null,
+        phone: (r.phone as string) ?? null,
+        email: (r.email as string) ?? null,
+        marital_status: (r.marital_status as string) ?? null,
+        children_count: (r.children_count as number) ?? null,
+        // סדר הדורות — מוצג בחלונית שורה אחרי שורה, כדי שההכרעה על השם
+        // תיעשה מול הייחוס ולא רק מול פרטי הזיהוי.
+        lineage_chain: Array.isArray(r.lineage_chain)
+          ? (r.lineage_chain as { generation: number; name: string; relation: 'son' | 'son_in_law' | null }[])
+          : null,
+      })
     }
   }
 
   return NextResponse.json({
-    requests: (data ?? []).map(r => ({
-      ...r,
-      familyName: names.get(String(r.beneficiary_id)) ?? 'ללא שם',
-    })),
+    requests: (data ?? []).map(r => {
+      const b = info.get(String(r.beneficiary_id))
+      return {
+        ...r,
+        familyName: b?.familyName ?? 'ללא שם',
+        beneficiary: b ?? null,
+      }
+    }),
   })
 }
 
