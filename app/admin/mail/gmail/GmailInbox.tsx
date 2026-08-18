@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   Inbox, Send, Search, Loader2, Paperclip, RefreshCw, Settings,
   ChevronLeft, Mail, MailOpen, X, AlertTriangle, User, PenSquare,
-  Reply, Trash2, Archive, Flag, Tag, Check, Circle, ChevronDown,
+  Reply, Trash2, Archive, Flag, Tag, Check, Circle, ChevronDown, Star,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -56,7 +56,7 @@ const DEPTS = Object.values(DEPARTMENTS)
 const deptLabel = (k?: string | null) => DEPTS.find(d => d.key === k)?.label ?? null
 const deptColor = (k?: string | null) => DEPTS.find(d => d.key === k)?.color ?? '#94a3b8'
 
-type Folder = 'inbox' | 'unread' | 'sent' | 'followup' | 'all'
+type Folder = 'inbox' | 'unread' | 'starred' | 'sent' | 'followup' | 'all'
 const FOLLOWUP = 'לטיפול'
 
 /** ⚠️ פרק זמן הרענון האוטומטי. הסנכרון מול Gmail עצמו מתרחש ב-Push
@@ -339,6 +339,8 @@ export default function GmailInbox() {
     : Object.values(unreadByDept).reduce((a, b) => a + b, 0)
   const activeAccount = accounts.find(a => a.id === account) ?? null
   const isFollowup = (m: Message) => (m.labels ?? []).includes(FOLLOWUP)
+  /** STARRED היא תווית מערכת של Gmail — נשמרת באינדקס כמו כל תווית. */
+  const isStarred = (m: Message) => (m.labels ?? []).includes('STARRED')
 
   const navBtn = (active: boolean) =>
     `w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-bold transition-colors text-right ${
@@ -456,6 +458,7 @@ export default function GmailInbox() {
               // ואינם מוסיפים מידע. עכשיו רק "לא נקראו" נושא מונה.
               { key: 'inbox', label: 'דואר נכנס', icon: Inbox, badge: 0 },
               { key: 'unread', label: 'לא נקראו', icon: MailOpen, badge: totalUnread },
+              { key: 'starred', label: 'מסומן בכוכב', icon: Star, badge: 0 },
               { key: 'followup', label: FOLLOWUP, icon: Flag, badge: followupCount },
               { key: 'sent', label: 'נשלחו', icon: Send, badge: 0 },
               { key: 'all', label: 'כל ההודעות', icon: Archive, badge: 0 },
@@ -575,6 +578,15 @@ export default function GmailInbox() {
                     }`}>
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <span className="flex items-center gap-1.5 min-w-0">
+                        {/* כוכב — ⚠️ span ולא button: השורה כולה היא <button>,
+                            וכפתור מקונן אינו חוקי ב-HTML. stopPropagation
+                            מונע פתיחת ההודעה בלחיצה על הכוכב. */}
+                        <span role="button" tabIndex={-1} title={isStarred(m) ? 'ביטול סימון' : 'סימון בכוכב'}
+                          onClick={e => { e.stopPropagation(); void actOn(m, isStarred(m) ? 'unstar' : 'star') }}
+                          className="flex-shrink-0 cursor-pointer">
+                          <Star size={12}
+                            className={isStarred(m) ? 'text-amber-400 fill-amber-400' : 'text-slate-300 hover:text-amber-400'} />
+                        </span>
                         {m.is_unread && <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />}
                         {isFollowup(m) && <Flag size={11} className="text-amber-500 flex-shrink-0" />}
                         <span className={`truncate text-[13px] ${m.is_unread ? 'font-extrabold text-slate-900' : 'font-medium text-slate-600'}`}>
@@ -755,6 +767,7 @@ function MessageContextMenu({ x, y, msg, busy, onClose, onOpen, onAct }: {
   onAct: (m: Message, action: string) => void
 }) {
   const isFu = (msg.labels ?? []).includes(FOLLOWUP)
+  const isStar = (msg.labels ?? []).includes('STARRED')
   const items = [
     { icon: Reply, label: 'תשובה', run: () => onOpen(msg) },
     {
@@ -762,6 +775,7 @@ function MessageContextMenu({ x, y, msg, busy, onClose, onOpen, onAct }: {
       label: msg.is_unread ? 'סימון כנקרא' : 'סימון כלא נקרא',
       run: () => onAct(msg, msg.is_unread ? 'mark-read' : 'mark-unread'),
     },
+    { icon: Star, label: isStar ? 'ביטול סימון בכוכב' : 'סימון בכוכב', run: () => onAct(msg, isStar ? 'unstar' : 'star') },
     { icon: Flag, label: isFu ? 'הסרה מטיפול' : FOLLOWUP, run: () => onAct(msg, isFu ? 'unfollowup' : 'followup') },
     { icon: Archive, label: 'לארכיון', run: () => onAct(msg, 'archive'), sep: true },
     { icon: Trash2, label: 'מחיקה', run: () => onAct(msg, 'trash'), danger: true },

@@ -57,7 +57,7 @@ async function labelId(gmail: ReturnType<typeof getGmailClientForToken>, name: s
 interface Attachment { name: string; type: string; data: string }
 
 interface Body {
-  action: 'send' | 'reply' | 'mark-read' | 'mark-unread' | 'followup' | 'unfollowup' | 'trash' | 'archive'
+  action: 'send' | 'reply' | 'mark-read' | 'mark-unread' | 'followup' | 'unfollowup' | 'trash' | 'archive' | 'star' | 'unstar'
   messageId?: string
   threadId?: string
   to?: string
@@ -200,6 +200,27 @@ export async function POST(request: NextRequest) {
       }
 
       // ג”€ג”€ לטיפול ׳‘׳”׳׳©׳ ג”€ג”€
+      // ── מסומן בכוכב ──
+      // ⚠️ STARRED היא תווית מערכת של Gmail — אין ליצור אותה (בניגוד
+      // ל"לטיפול" שהיא תווית שלנו), ולכן אין כאן קריאה ל-labelId.
+      case 'star':
+      case 'unstar': {
+        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
+        const add = body.action === 'star'
+        await gmail.users.messages.modify({
+          userId: 'me', id: body.messageId,
+          requestBody: add ? { addLabelIds: ['STARRED'] } : { removeLabelIds: ['STARRED'] },
+        })
+        // ⚠️ נשמר גם באינדקס, אחרת הסינון לפי "מסומן בכוכב" היה מחייב
+        // פנייה ל-Gmail בכל טעינה.
+        const { data: curS } = await db.from('gmail_messages')
+          .select('labels').eq('gmail_message_id', body.messageId).maybeSingle()
+        const nextLabels = ((curS as { labels?: string[] } | null)?.labels ?? []).filter(l => l !== 'STARRED')
+        if (add) nextLabels.push('STARRED')
+        await db.from('gmail_messages').update({ labels: nextLabels }).eq('gmail_message_id', body.messageId)
+        return NextResponse.json({ ok: true })
+      }
+
       case 'followup':
       case 'unfollowup': {
         if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
