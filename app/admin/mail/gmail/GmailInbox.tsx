@@ -106,6 +106,8 @@ export default function GmailInbox() {
   const [accountMenu, setAccountMenu] = useState(false)
   /** תפריט קליק-ימני על שורת הודעה (כמו בג'ימייל). null = סגור. */
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; msg: Message } | null>(null)
+  /** בחירה מרובה — מזהי ההודעות המסומנות, לפעולות קבוצתיות. */
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   // ⚠️ ref ולא state: משמש בתוך ה-interval, ו-state היה מייצר interval חדש
   // בכל שינוי סינון ומאפס את השעון.
@@ -258,6 +260,33 @@ export default function GmailInbox() {
       }
       await load(true)
     } catch { setError('שגיאת רשת') } finally { setActing(false) }
+  }
+
+  /**
+   * פעולה על כל ההודעות המסומנות.
+   *
+   * ⚠️ סדרתית ולא במקביל: כל פעולה פונה ל-Gmail API, ועשרות קריאות
+   * במקביל חוטפות חסימת קצב — ואז חלק מההודעות מסומנות וחלק לא, בלי
+   * שהמשתמש יודע אילו.
+   * ⚠️ רענון אחד בסוף ולא אחרי כל הודעה: רשימה שמתרעננת בכל צעד
+   * קופצת מתחת לידיים.
+   */
+  async function actOnPicked(action: string) {
+    const targets = messages.filter(m => picked.has(m.gmail_message_id))
+    if (!targets.length) return
+    setActing(true)
+    try {
+      for (const m of targets) {
+        await fetch('/api/admin/gmail/inbox/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, messageId: m.gmail_message_id, threadId: m.thread_id }),
+        }).catch(() => {})
+      }
+      if (action === 'trash' || action === 'archive') setSelected(null)
+      setPicked(new Set())
+      await load(true)
+    } finally { setActing(false) }
   }
 
   async function act(action: string, extra: Record<string, unknown> = {}) {
@@ -555,6 +584,37 @@ export default function GmailInbox() {
             </div>
           ) : (
             <>
+              {/* ── סרגל פעולות קבוצתי — מופיע רק כשיש בחירה, כמו בג'ימייל ── */}
+              {picked.size > 0 && (
+                <div className="flex items-center gap-1 border-b border-slate-100 bg-indigo-50/60 px-3 py-2">
+                  <span className="text-[11px] font-extrabold text-indigo-800">
+                    {picked.size} נבחרו
+                  </span>
+                  <span className="w-px h-4 bg-indigo-200 mx-1" />
+                  {([
+                    { icon: MailOpen, label: 'סימון כנקרא', action: 'mark-read' },
+                    { icon: Mail, label: 'סימון כלא נקרא', action: 'mark-unread' },
+                    { icon: Star, label: 'סימון בכוכב', action: 'star' },
+                    { icon: Flag, label: FOLLOWUP, action: 'followup' },
+                    { icon: Archive, label: 'לארכיון', action: 'archive' },
+                  ] as const).map(b => (
+                    <button key={b.action} type="button" disabled={acting} title={b.label}
+                      onClick={() => void actOnPicked(b.action)}
+                      className="p-1.5 rounded-lg text-slate-600 hover:bg-white hover:text-indigo-700 disabled:opacity-50 transition-colors">
+                      <b.icon size={14} />
+                    </button>
+                  ))}
+                  <button type="button" disabled={acting} title="מחיקה"
+                    onClick={() => void actOnPicked('trash')}
+                    className="p-1.5 rounded-lg text-rose-600 hover:bg-white disabled:opacity-50 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                  <button type="button" onClick={() => setPicked(new Set())}
+                    className="mr-auto text-[11px] font-bold text-slate-500 hover:text-slate-800">
+                    ביטול הבחירה
+                  </button>
+                </div>
+              )}
               <div className="divide-y divide-slate-50 max-h-[68vh] overflow-y-auto">
                 {messages.map(m => (
                   <button key={m.gmail_message_id} onClick={() => open(m)}
@@ -576,6 +636,26 @@ export default function GmailInbox() {
                     }`}>
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <span className="flex items-center gap-1.5 min-w-0">
+                        {/* תיבת סימון — ⚠️ span ולא input: השורה כולה היא
+                            <button>, ו-input אינטראקטיבי בתוכו נלחץ יחד
+                            איתה. stopPropagation מונע פתיחת ההודעה. */}
+                        <span role="checkbox" aria-checked={picked.has(m.gmail_message_id)} tabIndex={-1}
+                          onClick={e => {
+                            e.stopPropagation()
+                            setPicked(prev => {
+                              const next = new Set(prev)
+                              if (next.has(m.gmail_message_id)) next.delete(m.gmail_message_id)
+                              else next.add(m.gmail_message_id)
+                              return next
+                            })
+                          }}
+                          className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center cursor-pointer transition-colors ${
+                            picked.has(m.gmail_message_id)
+                              ? 'bg-indigo-600 border-indigo-600 text-white'
+                              : 'border-slate-300 hover:border-indigo-400'
+                          }`}>
+                          {picked.has(m.gmail_message_id) && <Check size={11} strokeWidth={3} />}
+                        </span>
                         {/* כוכב — ⚠️ span ולא button: השורה כולה היא <button>,
                             וכפתור מקונן אינו חוקי ב-HTML. stopPropagation
                             מונע פתיחת ההודעה בלחיצה על הכוכב. */}
