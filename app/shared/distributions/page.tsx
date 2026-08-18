@@ -804,8 +804,7 @@ export default function SharedDistributionsPage() {
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="היכל החתם סופר" width={46} height={46} className="rounded-xl ring-1 ring-[#e8dfc9]" />
             <div>
-              <h1 className="text-xl font-extrabold text-[#3a3630] tracking-tight">חלוקות חגים</h1>
-              <p className="text-[11px] text-[#a08a5a] font-semibold flex items-center gap-1 tracking-wide"><ShieldCheck size={12} /> היכל החתם סופר · מרכז השושלת</p>
+              <h1 className="text-xl font-extrabold text-[#3a3630] tracking-tight">איגוד הצאצאים · היכל החתם סופר</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">

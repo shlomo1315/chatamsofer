@@ -1,6 +1,6 @@
 import { guardAdminPage } from '@/lib/pageGuard'
 import { redirect } from 'next/navigation'
-import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift, CalendarClock } from 'lucide-react'
+import { Bell, Database, Users, UserPlus, GitBranch, Home, FileText, MapPin, Mail, CreditCard, Banknote, Phone, ScrollText, HardDriveDownload, MailWarning, Sparkles, Package, Wrench, Gift, CalendarClock , ShieldCheck } from 'lucide-react'
 import Collapsible from '@/components/ui/Collapsible'
 import PageHeader from '@/components/ui/PageHeader'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -27,6 +27,7 @@ import YemotHolidaySettings from './YemotHolidaySettings'
 import RegistrationCallSettings from './RegistrationCallSettings'
 import BackupSettings from './BackupSettings'
 import DailyDigestSettings from './DailyDigestSettings'
+import OtpRolloutSettings from './OtpRolloutSettings'
 import LineageRejectionRepair from './LineageRejectionRepair'
 import EmailVerificationManager from './EmailVerificationManager'
 import LineageNodeBackfill from './LineageNodeBackfill'
@@ -269,6 +270,11 @@ export default async function SettingsPage() {
         </Collapsible>
 
         {/* סיכום יומי למנהל — פעילות היום + מה שממתין לאישור */}
+        {/* העברה הדרגתית של קודי האימות ל-Resend */}
+        <Collapsible title="קודי אימות — מעבר ל-Resend" icon={<ShieldCheck size={16} className="text-amber-600" />}>
+          <OtpRolloutSettings />
+        </Collapsible>
+
         <Collapsible title="סיכום יומי למנהל (מייל)" icon={<CalendarClock size={16} className="text-indigo-600" />} defaultOpen>
           <DailyDigestSettings />
         </Collapsible>

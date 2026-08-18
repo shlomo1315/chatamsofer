@@ -313,7 +313,24 @@ export async function deliverMail(
   // ⚠️ הפעלה מפורשת בלבד: רק קוד אימות מסומן 'high'. כל השאר — כולל דואר
   // תפעולי אחר — ממשיך ב-Resend, כדי לא לחסל את המכסה היומית הקטנה.
   const gmailPriority = options?.gmailPriority ?? 'normal'
-  if (gmailPriority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
+
+  // 🔴 העברה הדרגתית של קודי האימות ל-Resend.
+  //
+  // ⚠️ חל על 'high' בלבד (= קוד אימות): רק הוא נמצא בתהליך ההעברה, ורק
+  // הוא מספיק קריטי כדי להצדיק שליטה באחוזים. שאר הדואר ממשיך כרגיל.
+  //
+  // ⚠️ ההכרעה לפני בדיקת Gmail ולא בתוכה: כשהמשתמש בקבוצת ההעברה, אנחנו
+  // רוצים לדלג על מסלול Gmail *לגמרי* — לא לנסות ולנפול אליו.
+  let forceResend = false
+  if (gmailPriority === 'high') {
+    try {
+      const { otpViaResend } = await import('./resendRollout')
+      forceResend = await otpViaResend(to)
+      if (forceResend) console.log(`[mail] קוד אימות דרך Resend (rollout) → ${to}`)
+    } catch { /* תקלה בהגדרה — נשארים ב-Gmail, הערוץ המוכח */ }
+  }
+
+  if (!forceResend && gmailPriority !== 'never' && !options?.unsubscribeUrl && !options?.scheduledAt
       && !attachments?.length && isGmailAddress(to)) {
     const cap = gmailPriority === 'high' ? GMAIL_CAP_HIGH : GMAIL_CAP_NORMAL
     const sentBy = await trySendViaGmail(
