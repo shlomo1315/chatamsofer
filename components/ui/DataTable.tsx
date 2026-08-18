@@ -1,7 +1,8 @@
 'use client'
-import { ReactNode, useState } from 'react'
+import { ReactNode, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronUp, ChevronDown, Search, Inbox } from 'lucide-react'
+import { useTableColumns, type ColDef } from './TableColumns'
 
 export interface Column<T> {
   key: keyof T | string
@@ -24,6 +25,14 @@ interface DataTableProps<T> {
   // serverMode: הנתונים כבר מסוננים/ממוינים/מפויינים בצד השרת. DataTable רק מרנדר
   // אותם כמו שהם — בלי חיפוש/מיון/pagination פנימיים (אלה מנוהלים ע"י ההורה דרך ה-URL).
   serverMode?: boolean
+  /**
+   * מזהה יציב לטבלה. כשהוא ניתן — הטבלה מקבלת בורר עמודות, גרירת רוחב
+   * וגלישת טקסט, והכיוונון נשמר למשתמש.
+   *
+   * ⚠️ בלעדיו נשמרת ההתנהגות הישנה (כל העמודות, בלי גרירה) — כדי שצרכן
+   * שטרם הוסב לא ישבר.
+   */
+  tableId?: string
 }
 
 export default function DataTable<T extends { id: string }>({
@@ -37,6 +46,7 @@ export default function DataTable<T extends { id: string }>({
   actions,
   rowHref,
   serverMode,
+  tableId,
 }: DataTableProps<T>) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -44,6 +54,20 @@ export default function DataTable<T extends { id: string }>({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(1)
   const pageSize = 20
+
+  // 🔴 בורר עמודות + גרירת רוחב + גלישה — הכלל המערכתי לכל הטבלאות.
+  // ⚠️ ה-Column הקיים אינו יודע על `def`, ולכן כל העמודות מוצגות כברירת
+  //    מחדל: הסבה של צרכן קיים לא אמורה להעלים ממנו עמודות בלי שביקש.
+  const colDefs = useMemo<ColDef[]>(
+    () => columns.map(c => ({ key: String(c.key), label: c.header, def: true })),
+    [columns],
+  )
+  const tc = useTableColumns(tableId ?? "", colDefs, {
+    extraCols: actions ? 1 : 0,
+  })
+  const view = tableId
+    ? tc.shown.map(c => columns.find(x => String(x.key) === c.key)!).filter(Boolean)
+    : columns
 
   const q = search.trim().toLowerCase()
   const filtered = serverMode || q.length < 2
@@ -103,14 +127,21 @@ export default function DataTable<T extends { id: string }>({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-max text-sm text-right border-collapse">
+      {/* בורר העמודות — מוצג רק כשניתן tableId. */}
+      {tableId && tc.picker}
+
+      {/* 🔴 בלי overflow-x: הכלל במערכת הוא שאין גלילה לרוחב בשום טבלה.
+          הגרירה מחלקת מחדש את הרוחב הקיים ואינה מרחיבה מעבר למסך. */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-sm text-right border-collapse"
+          style={tableId ? tc.rt.tableStyle : undefined}>
+          {tableId && <colgroup>{tc.rt.cols}</colgroup>}
           <thead className="sticky top-0 z-10">
             <tr className="bg-slate-50 border-b-2 border-slate-200">
-              {columns.map((col) => (
+              {view.map((col, i) => (
                 <th
                   key={String(col.key)}
-                  className={`bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
+                  className={`bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 ${tableId ? "relative" : "whitespace-nowrap"} ${col.className ?? ''} ${(col.sortable && !serverMode) ? 'cursor-pointer hover:text-indigo-600 select-none transition-colors' : ''}`}
                   onClick={() => col.sortable && toggleSort(String(col.key))}
                 >
                   <div className="flex items-center gap-1">
@@ -119,16 +150,17 @@ export default function DataTable<T extends { id: string }>({
                       sortDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />
                     )}
                   </div>
+                  {tableId && tc.rt.handle(i)}
                 </th>
               ))}
-              {actions && <th className="bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap text-center sticky left-0 bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">פעולות</th>}
+              {actions && <th className="bg-slate-50 px-3 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">פעולות</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {columns.map((col) => (
+                  {view.map((col) => (
                     <td key={String(col.key)} className="px-5 py-4">
                       <div className="h-4 bg-slate-100 rounded-md animate-pulse" />
                     </td>
@@ -138,7 +170,7 @@ export default function DataTable<T extends { id: string }>({
               ))
             ) : paged.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + (actions ? 1 : 0)} className="px-5 py-16 text-center">
+                <td colSpan={view.length + (actions ? 1 : 0)} className="px-5 py-16 text-center">
                   <div className="flex flex-col items-center gap-3 text-slate-400">
                     <Inbox size={36} strokeWidth={1.5} className="text-slate-300" />
                     <p className="text-sm font-medium">{emptyMessage}</p>
@@ -150,17 +182,18 @@ export default function DataTable<T extends { id: string }>({
                 <tr key={row.id}
                   onClick={rowHref ? () => router.push(rowHref(row)) : undefined}
                   className={`hover:bg-indigo-50/40 transition-colors duration-100 ${rowHref ? 'cursor-pointer' : ''}`}>
-                  {columns.map((col) => (
-                    <td key={String(col.key)} className={`px-3 py-3.5 text-slate-700 align-middle whitespace-nowrap ${col.className ?? ''}`}>
+                  {view.map((col) => (
+                    <td key={String(col.key)} className={`px-3 py-3.5 text-slate-700 align-middle ${tableId ? tc.rt.cellClass : "whitespace-nowrap"} ${col.className ?? ''}`}>
                       {col.render
                         ? col.render(row)
                         : String((row as Record<string, unknown>)[String(col.key)] ?? '—')}
                     </td>
                   ))}
                   {actions && (
-                    // ⚠️ עמודת הפעולות נצמדת לקצה (sticky) כך שהיא תמיד נראית גם
-                    // כשהטבלה רחבה וגוללת — קודם היא נחתכה מחוץ למסך.
-                    <td className="px-3 py-3.5 align-middle text-center whitespace-nowrap sticky left-0 bg-white shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
+                    // ⚠️ ה-sticky הוסר יחד עם הגלילה לרוחב: הוא נועד לשמור
+                    // את עמודת הפעולות נראית בטבלה שגוללת, ובלי גלילה הוא רק
+                    // הוסיף צל על עמודה שממילא במסך.
+                    <td className="px-3 py-3.5 align-middle text-center" onClick={(e) => e.stopPropagation()}>{actions(row)}</td>
                   )}
                 </tr>
               ))

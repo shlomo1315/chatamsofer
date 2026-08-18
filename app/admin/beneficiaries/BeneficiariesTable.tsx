@@ -373,6 +373,7 @@ export default function BeneficiariesTable({ data, counts, total, page, size, st
       <DataTable
         data={data}
         columns={columns}
+        tableId="beneficiaries"
         rowHref={(row) => `/admin/beneficiaries/${row.id}`}
         serverMode
         emptyMessage={qInput ? 'לא נמצאו תוצאות לחיפוש.' : "לא נמצאו צאצאים. לחץ על 'רישום צאצא חדש' להוספה."}
