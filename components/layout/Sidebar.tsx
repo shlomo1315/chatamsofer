@@ -309,10 +309,10 @@ export default function Sidebar({ isAdmin, role, permissions, mailOnlyFlag, allo
               <span className="absolute right-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-indigo-300 rounded-full" />
             )}
             <Mail size={18} className="flex-shrink-0" />
-            <span className="flex-1 text-right">מייל Gmail</span>
-            <span className="text-[9px] font-bold bg-amber-400/90 text-amber-950 rounded-full px-1.5 py-0.5 flex-shrink-0">
-              חדש
-            </span>
+            {/* ⚠️ "מייל" ולא "מייל Gmail": זהו מסלול המייל של המערכת, ושם
+                הספק אינו מעניין את המשתמש. תווית "חדש" הוסרה — הוא כבר
+                לא חדש. */}
+            <span className="flex-1 text-right">מייל</span>
           </Link>
         </div>
         </>)}

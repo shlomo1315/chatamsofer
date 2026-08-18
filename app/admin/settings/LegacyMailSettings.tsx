@@ -165,6 +165,78 @@ export default function LegacyMailSettings() {
     }
   }
 
+  /**
+   * 🔴 העברה מלאה בלחיצה אחת — סנכרון → תיוג → ייבוא.
+   *
+   * ⚠️ עד כה זו הייתה עבודה בת שלושה שלבים ידניים, בסדר שחייב להישמר,
+   * וכל שלב בכפתור נפרד. מי שדילג על "סנכרון" קיבל "אין מיילים לייבוא"
+   * בלי להבין למה, ומי שדילג על "תיוג" ייבא מיילים בלי שיוך למחלקה.
+   * הסדר קבוע וידוע — ולכן אין סיבה שהמשתמש ינהל אותו.
+   *
+   * ⚠️ הכתובת נשאלת *פעם אחת* בהתחלה. השאלה באמצע רצף ארוך הייתה
+   * עוצרת אותו בהמתנה לתשובה.
+   */
+  async function migrateAll(box: Mailbox) {
+    if (!box.id) return
+    const target = window.prompt(
+      `העברה מלאה של "${box.label}" ל-Gmail.\n\n` +
+      `יבוצעו ברצף: סנכרון מהתיבה הישנה ← תיוג ← ייבוא ל-Gmail.\n\n` +
+      `לאיזו כתובת Gmail לייבא? (ריק = כתובת המחלקה: ${box.departmentLabel})`,
+      box.importTargetEmail ?? '',
+    )
+    if (target === null) return
+
+    setSyncingId(box.id)
+    try {
+      // 1 · סנכרון מהתיבה הישנה
+      toast.success('שלב 1/3 — מסנכרן מהתיבה הישנה…')
+      const sres = await fetch('/api/admin/legacy-mail/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: box.id, department: box.department, full: true }),
+      })
+      const sd = await sres.json()
+      if (!sres.ok) throw new Error(sd.error || 'הסנכרון נכשל')
+
+      // 2 · תיוג — ⚠️ כשל כאן אינו עוצר: הייבוא עדיין שווה משהו,
+      // והתיוג ניתן להרצה חוזרת בנפרד.
+      toast.success(`שלב 2/3 — מתייג… (נקלטו ${sd.imported ?? 0})`)
+      await fetch('/api/admin/legacy-mail/apply-label', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: box.id }),
+      }).catch(() => {})
+
+      // 3 · ייבוא ל-Gmail, במנות עד שנגמר
+      await fetch('/api/admin/legacy-mail/set-import-target', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: box.id, email: target.trim() || null }),
+      })
+      toast.success('שלב 3/3 — מייבא ל-Gmail…')
+      let total = 0
+      let lastNote: string | null = null
+      for (let guard = 0; guard < 1000; guard++) {
+        const res = await fetch('/api/admin/legacy-mail/import-to-gmail', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountId: box.id }),
+        })
+        const d = await res.json()
+        if (!res.ok) throw new Error(d.detail ? `${d.error}\n${d.detail}` : (d.error || 'הייבוא נכשל'))
+        total += d.imported ?? 0
+        lastNote = d.note ?? null
+        if (d.done || (d.imported === 0)) break
+        toast.success(`מייבא… ${total} עד כה (נותרו ${d.remaining})`)
+      }
+
+      if (total > 0) toast.success(`✅ הושלם — ${total} מיילים הועברו ל-${box.importTargetEmail || box.departmentLabel}`)
+      else if (lastNote) toast.error(lastNote)
+      else toast.success('הכל כבר מסונכרן — אין מיילים חדשים להעברה')
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="py-6 text-center text-slate-400">
@@ -241,6 +313,19 @@ export default function LegacyMailSettings() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* 🔴 הפעולה הראשית — מריצה את שלושת השלבים ברצף.
+                      שאר הכפתורים נשארים להרצה נקודתית של שלב בודד. */}
+                  {box.connected && box.id && (
+                    <Button
+                      variant="primary"
+                      onClick={() => migrateAll(box)}
+                      disabled={isSyncing || syncingId !== null}
+                      title="סנכרון מהתיבה הישנה ← תיוג ← ייבוא ל-Gmail, ברצף אחד"
+                    >
+                      {isSyncing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                      {isSyncing ? 'מעביר…' : 'העברה מלאה ל-Gmail'}
+                    </Button>
+                  )}
                   <Button
                     variant="secondary"
                     onClick={() => sync(box)}
