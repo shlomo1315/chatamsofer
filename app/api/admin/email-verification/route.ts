@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
   const admin = getServiceClient()
   if (!admin) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  let body: { ids?: unknown; all?: unknown }
+  let body: { ids?: unknown; all?: unknown; limit?: unknown; stream?: unknown }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'בקשה לא תקינה' }, { status: 400 }) }
 
   const { rows, error } = await listUnverified(admin)
@@ -48,7 +48,17 @@ export async function POST(request: NextRequest) {
   const wanted = Array.isArray(body.ids) ? new Set(body.ids.map(String)) : null
   // ⚠️ כתובת פגומה מסוננת תמיד, גם ב"שלח לכולם": שליחה אליה נכשלת בוודאות,
   // צורכת ממכסת השליחה היומית, ומסמנת "נשלחה בקשה" על מי שלא קיבל דבר.
-  const targets = rows.filter(r => isValidEmail(r.email) && (!wanted || wanted.has(r.id)))
+  let targets = rows.filter(r => isValidEmail(r.email) && (!wanted || wanted.has(r.id)))
+
+  // 🔴 הגבלת כמות — חימום הדומיין.
+  //
+  // שליחה בבת אחת לרשימה שלא אומתה מעולם מייצרת שיעור bounce גבוה, וזה
+  // הסיגנל החזק ביותר שיש לספקים (Gmail/Outlook) ל"שולח ספאם". התוצאה
+  // אינה נפילה של Resend אלא ירידה בדירוג הדומיין — ואז *גם* קודי האימות,
+  // המייל היחיד שחוסם אדם מלהיכנס לפורטל, מתחילים ליפול לספאם.
+  // מנה יומית מבוקרת מאפשרת לראות את שיעור ה-bounce לפני שנגרם נזק.
+  const limit = Number(body.limit)
+  if (Number.isFinite(limit) && limit > 0) targets = targets.slice(0, Math.floor(limit))
 
   if (!targets.length) {
     return NextResponse.json({ sent: 0, failed: 0, skipped: rows.length, summary: 'לא נמצאו כתובות תקינות לשליחה.' })
@@ -58,6 +68,60 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
   let sent = 0
   const failures: { email: string; error: string }[] = []
+
+  // ── מצב זרימה: מונה חי במקום עיגול מסתובב ──
+  //
+  // ⚠️ השליחה סדרתית ואורכת דקות. בלי זה המסך מציג "שולח…" בלי שום
+  // אינדיקציה כמה כבר יצאו, ואי אפשר לדעת אם התהליך מתקדם או תקוע.
+  // כל מייל משדר שורת JSON אחת (NDJSON), והלקוח מעדכן את המונה.
+  if (body.stream === true) {
+    const encoder = new TextEncoder()
+    const total = targets.length
+    const stream = new ReadableStream({
+      async start(controller) {
+        const line = (o: unknown) => {
+          try { controller.enqueue(encoder.encode(JSON.stringify(o) + '\n')) } catch { /* הלקוח ניתק */ }
+        }
+        line({ type: 'start', total })
+        for (const target of targets) {
+          const mail = emailVerifyRequestEmail(target.name)
+          const res = await deliverMail(target.email, mail.subject, mail.html, undefined, from)
+          if (!res.ok) {
+            failures.push({ email: target.email, error: res.error || 'השליחה נכשלה' })
+          } else {
+            sent++
+            await admin.from('beneficiaries')
+              .update({ email_verify_requested_at: now })
+              .eq('id', target.id)
+              .then(undefined, () => {})
+          }
+          line({ type: 'progress', sent, failed: failures.length, total, name: target.name })
+        }
+        await logActivity(admin, {
+          userId: staff.userId,
+          action: 'email_verification_requests_sent',
+          entityType: 'beneficiary',
+          details: { sent, failed: failures.length, requested: total },
+        }).catch(() => {})
+        console.log(`[email-verification] נשלחו ${sent} בקשות אימות · ${failures.length} כשלים`)
+        line({
+          type: 'done', sent, failed: failures.length, total,
+          failures: failures.slice(0, 20),
+          summary: `נשלחו ${sent} בקשות` + (failures.length ? ` · ${failures.length} נכשלו` : ''),
+        })
+        controller.close()
+      },
+    })
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson; charset=utf-8',
+        'Cache-Control': 'no-store, no-transform',
+        // ⚠️ מונע באפרינג של פרוקסי — בלעדיו כל השורות מגיעות יחד בסוף,
+        // וה"עדכון החי" מאבד את כל תכליתו.
+        'X-Accel-Buffering': 'no',
+      },
+    })
+  }
 
   // ⚠️ סדרתי ולא במקביל: שליחה מקבילה לאלפי כתובות חוטפת חסימת קצב מהספק,
   // ואז חלק מהמשפחות מסומנות כ"נשלח" בלי שההודעה יצאה.

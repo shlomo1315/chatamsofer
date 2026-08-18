@@ -55,6 +55,10 @@ export default function EmailVerificationManager() {
   const [sending, setSending] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [onlyProblems, setOnlyProblems] = useState(false)
+  // התקדמות חיה בזמן שליחה — null כשלא שולחים
+  const [progress, setProgress] = useState<{ sent: number; failed: number; total: number } | null>(null)
+  // גודל מנת החימום. '' = בלי הגבלה (הכל).
+  const [batchSize, setBatchSize] = useState<number | ''>(50)
 
   // ⚠️ ה-hook לפני ה-return המוקדם (`!loaded`) — hook אחרי return מותנה
   // משנה את סדר ה-hooks בין רינדורים ושובר את React.
@@ -97,23 +101,71 @@ export default function EmailVerificationManager() {
     finally { setLoading(false) }
   }
 
-  async function send(ids: string[] | 'all') {
-    const count = ids === 'all' ? (stats?.sendable ?? 0) : ids.length
+  /**
+   * שליחת בקשות אימות, עם מונה חי.
+   *
+   * ⚠️ קורא תשובת NDJSON ומעדכן את ההתקדמות מייל-מייל. קודם הוצג עיגול
+   * מסתובב בלבד: השליחה סדרתית ואורכת דקות, ולא הייתה שום דרך לדעת כמה
+   * כבר יצאו או אם התהליך בכלל מתקדם.
+   *
+   * limit — מנת חימום. ראו ההערה בצד השרת: המגבלה אינה טכנית אלא מוניטין
+   * הדומיין, שקודי האימות תלויים בו.
+   */
+  async function send(ids: string[] | 'all', limit?: number) {
+    const available = ids === 'all' ? (stats?.sendable ?? 0) : ids.length
+    const count = limit ? Math.min(limit, available) : available
     if (!count) { toast.error('אין כתובות תקינות לשליחה'); return }
-    if (!confirm(`לשלוח בקשת אימות ל-${count} משפחות?\n\nכתובות פגומות מדולגות אוטומטית.`)) return
+    if (!confirm(
+      `לשלוח בקשת אימות ל-${count} משפחות?` +
+      (limit && available > limit ? `\n\n(מתוך ${available} שטרם אימתו — מנה מבוקרת לחימום הדומיין)` : '') +
+      '\n\nכתובות פגומות מדולגות אוטומטית.'
+    )) return
+
     setSending(true)
+    setProgress({ sent: 0, failed: 0, total: count })
     try {
       const res = await fetch('/api/admin/email-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ids === 'all' ? { all: true } : { ids }),
+        body: JSON.stringify({
+          ...(ids === 'all' ? { all: true } : { ids }),
+          ...(limit ? { limit } : {}),
+          stream: true,
+        }),
       })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'שגיאה')
-      toast.success(d.summary)
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || 'שגיאה')
+      }
+
+      // קריאת NDJSON שורה-שורה. ⚠️ שומרים שארית: מנה מהרשת עלולה להיחתך
+      // באמצע שורה, ו-JSON.parse עליה ייכשל.
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      let final: { summary?: string } | null = null
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const l of lines) {
+          if (!l.trim()) continue
+          let ev: { type?: string; sent?: number; failed?: number; total?: number; summary?: string }
+          try { ev = JSON.parse(l) } catch { continue }
+          if (ev.type === 'progress' || ev.type === 'start') {
+            setProgress({ sent: ev.sent ?? 0, failed: ev.failed ?? 0, total: ev.total ?? count })
+          } else if (ev.type === 'done') {
+            setProgress({ sent: ev.sent ?? 0, failed: ev.failed ?? 0, total: ev.total ?? count })
+            final = ev
+          }
+        }
+      }
+      toast.success(final?.summary ?? 'השליחה הסתיימה')
       await load(true)
     } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה') }
-    finally { setSending(false) }
+    finally { setSending(false); setProgress(null) }
   }
 
   if (!loaded) {
@@ -174,11 +226,79 @@ export default function EmailVerificationManager() {
         </div>
       )}
 
+      {/* ── מנת החימום ──
+          🔴 המגבלה אינה טכנית. Resend עומד בנפח (Batch API + throttle),
+          אבל שליחה בבת אחת לרשימה שלא אומתה מעולם מייצרת bounce גבוה,
+          והספקים מורידים את דירוג הדומיין — ואז גם קודי האימות נופלים
+          לספאם. מנה יומית מאפשרת לראות את שיעור ה-bounce לפני הנזק. */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <MailCheck size={15} className="text-amber-600" />
+          <p className="text-xs font-bold text-amber-900">כמות לשליחה (חימום הדומיין)</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {([25, 50, 100, 200, 300] as const).map(n => (
+            <button key={n} type="button" onClick={() => setBatchSize(n)} disabled={sending}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
+                batchSize === n
+                  ? 'border-amber-600 bg-amber-600 text-white'
+                  : 'border-amber-300 bg-white text-amber-800 hover:bg-amber-100'
+              }`}>{n}</button>
+          ))}
+          <input type="number" min={1} inputMode="numeric" disabled={sending}
+            value={batchSize === '' ? '' : batchSize}
+            onChange={e => {
+              const v = e.target.value
+              setBatchSize(v === '' ? '' : Math.max(1, Math.floor(Number(v) || 0)))
+            }}
+            placeholder="אחר"
+            className="w-24 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs text-amber-900 placeholder:text-amber-400 disabled:opacity-50" />
+          <button type="button" onClick={() => setBatchSize('')} disabled={sending}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors disabled:opacity-50 ${
+              batchSize === ''
+                ? 'border-red-600 bg-red-600 text-white'
+                : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-100'
+            }`}>ללא הגבלה</button>
+        </div>
+        <p className="mt-2 text-[10px] leading-relaxed text-amber-800">
+          מומלץ להתחיל ב-50 ליום, לבדוק את שיעור ה-bounce ב-Resend, ורק אז להעלות.
+          {batchSize === '' && <span className="font-bold"> ⚠️ &quot;ללא הגבלה&quot; שולח לכולם בבת אחת — מסכן את מוניטין הדומיין.</span>}
+        </p>
+      </div>
+
+      {/* ── מונה חי בזמן שליחה ── */}
+      {progress && (
+        <div className="rounded-xl border-2 border-indigo-300 bg-indigo-50 p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+              <Loader2 size={14} className="animate-spin" /> שולח…
+            </p>
+            <p className="text-sm font-black text-indigo-800 ltr-num" dir="ltr">
+              {he(progress.sent)} / {he(progress.total)}
+            </p>
+          </div>
+          <div className="h-2.5 w-full rounded-full bg-indigo-200 overflow-hidden">
+            <div className="h-full rounded-full bg-indigo-600 transition-all duration-200"
+              style={{ width: `${progress.total ? Math.round(((progress.sent + progress.failed) / progress.total) * 100) : 0}%` }} />
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 text-[11px] text-indigo-800">
+            <span>נשלחו: <strong>{he(progress.sent)}</strong></span>
+            {progress.failed > 0 && <span className="text-red-700">נכשלו: <strong>{he(progress.failed)}</strong></span>}
+            <span>נותרו: <strong>{he(Math.max(0, progress.total - progress.sent - progress.failed))}</strong></span>
+          </div>
+        </div>
+      )}
+
       {/* ── פעולות ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => send('all')} disabled={sending || !stats?.sendable}>
+        <Button onClick={() => send('all', batchSize === '' ? undefined : batchSize)}
+          disabled={sending || !stats?.sendable}>
           {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          שלח לכל {he(stats?.sendable ?? 0)} שטרם אימתו
+          {sending && progress
+            ? `שולח… ${he(progress.sent)}/${he(progress.total)}`
+            : batchSize === ''
+              ? `שלח לכל ${he(stats?.sendable ?? 0)} שטרם אימתו`
+              : `שלח ל-${he(Math.min(batchSize, stats?.sendable ?? 0))} (מתוך ${he(stats?.sendable ?? 0)})`}
         </Button>
         {picked.size > 0 && (
           <Button variant="ghost" onClick={() => send([...picked])} disabled={sending}>
