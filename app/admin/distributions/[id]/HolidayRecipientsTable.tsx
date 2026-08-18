@@ -105,13 +105,20 @@ const COLUMNS: ColDef[] = [
 ]
 
 export default function HolidayRecipientsTable({
-  rows, amountPerFamily, fmtDateTime, fmtCur, controls = {},
+  rows, amountPerFamily, fmtDateTime, fmtCur, controls = {}, paginated = false,
 }: {
   rows: HolidayRow[]
   amountPerFamily: number | null
   fmtDateTime: (d?: string | null) => string
   fmtCur: (n: number) => string
   controls?: HolidayTableControls
+  /**
+   * ⚠️ הקורא מדפדף בעצמו ומעביר עמוד מוכן — לכן הגלילה האינסופית מכובה.
+   * בלי זה שתי המכניקות רצות יחד: העמוד מוגבל ל-50 שורות, והגלילה
+   * האינסופית "טוענת עוד" מתוכן — כלומר כפתור שלא עושה כלום.
+   * דף השיתוף ממשיך בגלילה אינסופית (ברירת המחדל).
+   */
+  paginated?: boolean
 }) {
   const { canEdit = false, selected, toggleRow, allShownSelected, toggleAllShown,
     busyId, setApprovalFor, clearCard, showMessage = false,
@@ -143,7 +150,13 @@ export default function HolidayRecipientsTable({
   // האינדקסים, ורוחב שנשמר למצב אחר היה נדבק לעמודה הלא נכונה.
   const rt = useResizableColumns(`holiday-recipients-${shown.length}${canEdit ? '-e' : ''}`, shown.length + (canEdit ? 1 : 0))
 
-  const { rows: visibleRows, sentinelRef, hasMore, shown: shownCount, total } = useIncrementalRows(rows)
+  const inc = useIncrementalRows(rows)
+  // במצב מדופדף השורות כבר חתוכות לעמוד — מוצגות כולן, בלי sentinel.
+  const visibleRows = paginated ? rows : inc.rows
+  const sentinelRef = inc.sentinelRef
+  const hasMore = paginated ? false : inc.hasMore
+  const shownCount = inc.shown
+  const total = inc.total
 
   if (!rows.length) {
     return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>

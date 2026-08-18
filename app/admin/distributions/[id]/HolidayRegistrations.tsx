@@ -512,7 +512,12 @@ export default function HolidayRegistrations({
       {/* ── פעולה מרוכזת על המסומנים ── */}
       {canEdit && selected.size > 0 && (
         <div className="flex items-center gap-3 flex-wrap rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3">
-          <span className="text-[13px] font-bold text-indigo-900">סומנו {selected.size}</span>
+          <span className="text-[13px] font-bold text-indigo-900">{/* ⚠️ הסימון חוצה עמודים: "סימון הכל" מסמן את כל התוצאות המסוננות, לא רק את השורות שבעמוד הנוכחי. בלי לומר זאת, מונה של 800 מול 50 שורות על המסך נראה כתקלה. */}
+            סומנו {selected.size}
+            {selected.size > paged.length && (
+              <span className="mr-1.5 font-medium text-indigo-600">(כולל עמודים אחרים)</span>
+            )}
+          </span>
           <button type="button" disabled={busyId === 'bulk'}
             onClick={() => void setApprovalFor([...selected], 'approved')}
             className="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50">
@@ -537,7 +542,8 @@ export default function HolidayRegistrations({
       {/* ── טבלת הנרשמים — קומפוננטה משותפת עם דף השיתוף (זהות מובטחת) ── */}
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <HolidayRecipientsTable
-          rows={filtered}
+          rows={paged}
+          paginated
           amountPerFamily={amountPerFamily}
           fmtDateTime={fmtDateTime}
           fmtCur={fmtCur}
@@ -547,6 +553,12 @@ export default function HolidayRegistrations({
           }}
         />
       </div>
+
+      {/* ⚠️ הדפדוף היה מחושב אך לא מרונדר — הטבלה קיבלה את כל השורות.
+          החיפוש והסינון רצים על המערך המלא (filtered) והחיתוך לעמוד
+          קורה רק אחריהם, כך שתוצאה נמצאת מכל הרשומות ולא מתוך העמוד. */}
+      <Pagination page={safePage} size={pageSize} total={filtered.length}
+        onPage={setPage} onSize={setPageSize} />
     </div>
   )
 }
