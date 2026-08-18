@@ -264,24 +264,6 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
               </div>
             </Card>
 
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                {loan.disbursed_at
-                  ? <CheckCircle2 size={16} className="text-emerald-500" />
-                  : <Clock size={16} className="text-amber-500" />}
-                <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
-              </div>
-              {loan.disbursed_at ? (
-                <div className="space-y-1.5 text-sm">
-                  <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
-                  <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
-                  {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
-              )}
-            </Card>
-
             {loan.notes && (
               <Card>
                 <h2 className="text-xs font-semibold text-slate-500 uppercase mb-2">הערות</h2>
@@ -419,6 +401,30 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
                   "אישור או דחייה — סיבת הדחייה תישמר" מנוסח כהוראה לפעולה
                   שכבר בוצעה, והמזכיר לא ידע מהסתכלות אם הבקשה טופלה. */}
               <LoanDecisionPanel loan={loan} familyApproved={familyApproved} />
+            </Card>
+          </section>
+
+          {/* 6 · ביצוע ההלוואה */}
+          {/* ⚠️ הועבר לכאן מכרטיסי הפרטים למעלה: הביצוע הוא השלב שאחרי
+              ההכרעה, ומיקומו מעל לחצני האישור/דחייה הציג "טרם בוצע"
+              לפני שבכלל הוחלט אם לאשר — כלומר סטטוס של שלב שטרם הגיע. */}
+          <section className="border-t border-slate-200 pt-5">
+            <Card>
+            <div className="flex items-center gap-2 mb-3">
+            {loan.disbursed_at
+            ? <CheckCircle2 size={16} className="text-emerald-500" />
+            : <Clock size={16} className="text-amber-500" />}
+            <span className="text-xs font-semibold text-slate-500 uppercase">ביצוע הלוואה</span>
+            </div>
+            {loan.disbursed_at ? (
+            <div className="space-y-1.5 text-sm">
+            <p><span className="text-slate-500">סטטוס: </span><span className="font-semibold text-emerald-700">בוצע ✓</span></p>
+            <p><span className="text-slate-500">תאריך ביצוע: </span><span className="ltr-num">{fmtDate(loan.disbursed_at)}</span></p>
+            {loan.disbursed_by && <p><span className="text-slate-500">בוצע על ידי: </span>{loan.disbursed_by}</p>}
+            </div>
+            ) : (
+            <p className="text-sm text-slate-400">טרם בוצע — יסומן דרך פורטל הביצוע</p>
+            )}
             </Card>
           </section>
         </div>

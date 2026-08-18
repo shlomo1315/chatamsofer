@@ -31,6 +31,7 @@ interface Summary {
   loanHistory: {
     count: number
     approvedCount: number
+    approvedNotDisbursed?: number
     totalApproved: number
     loans: { id: string; amount: number; approved_amount?: number | null; status: string; created_at: string }[]
   }
@@ -209,15 +210,24 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
             <div className="px-4 py-3 grid grid-cols-2 gap-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center">
                 <p className="text-xl font-extrabold text-slate-800 leading-none">{loanHistory.approvedCount}</p>
-                <p className="text-[11px] text-slate-500 mt-1">הלוואות שאושרו בעבר</p>
+                <p className="text-[11px] text-slate-500 mt-1">הלוואות שהועבר בהן כסף</p>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-center">
                 <p className="text-xl font-extrabold text-emerald-800 leading-none tabular-nums">
                   {fmtCur(loanHistory.totalApproved)}
                 </p>
-                <p className="text-[11px] text-emerald-700 mt-1">סה״כ שאושר</p>
+                <p className="text-[11px] text-emerald-700 mt-1">סה״כ שהועבר בפועל</p>
               </div>
             </div>
+
+            {/* ⚠️ אישור שאין מאחוריו העברת כסף אינו נספר במונים, אבל גם לא
+                נעלם: בלי השורה הזו בקשה מאושרת שתקועה לפני הביצוע הייתה
+                נראית כאילו לא הוגשה מעולם. */}
+            {(loanHistory.approvedNotDisbursed ?? 0) > 0 && (
+              <p className="px-4 pb-1 text-[11px] text-amber-700">
+                ועוד {loanHistory.approvedNotDisbursed} שאושרו וטרם הועבר בהן כסף — ראו ברשימה
+              </p>
+            )}
 
             <div className="px-4 pb-4 flex flex-col gap-1.5">
               {loanHistory.loans.map(l => (

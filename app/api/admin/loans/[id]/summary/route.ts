@@ -108,10 +108,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // היסטוריית ההלוואות — בלי הבקשה הנוכחית
   const all = loansRes.data ?? []
   const history = all.filter(l => String(l.id) !== id)
-  const approved = history.filter(l => ['approved', 'active', 'completed'].includes(String(l.status)))
-  const totalApproved = approved.reduce(
+  // 🔴 המונים המובלטים סופרים רק הלוואות שהכסף בהן **הועבר בפועל**, כלומר
+  // שסומנו כבוצעו בפורטל הביצוע (disbursed_at). אישור לבדו אינו כסף שיצא:
+  // בפורטל יש שני שלבים — "נשלח שטר הפקדה" ו"בוצע" — ובקשה יכולה להיתקע
+  // ביניהם. ספירה לפי status בלבד הציגה חוב שהמשפחה מעולם לא קיבלה.
+  //
+  // ⚠️ בקשות שאושרו ולא בוצעו אינן נעלמות — הן מופיעות ברשימה שמתחת למונים.
+  const disbursed = history.filter(l => Boolean(l.disbursed_at))
+  const totalApproved = disbursed.reduce(
     (sum, l) => sum + Number(l.approved_amount ?? l.amount ?? 0), 0,
   )
+  // אושרו אך טרם הועבר בהן כסף — מוצג כהערה מתחת למונים.
+  const approvedNotDisbursed = history.filter(l =>
+    !l.disbursed_at && ['approved', 'active', 'completed'].includes(String(l.status)),
+  ).length
 
   // ── הלוואות מהמערכת הקודמת ──
   //
@@ -157,7 +167,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     idDocs: idDocs.filter(d => d.url),
     loanHistory: {
       count: history.length,
-      approvedCount: approved.length,
+      approvedCount: disbursed.length,
+      approvedNotDisbursed,
       totalApproved,
       loans: history.slice(0, 10),
     },
