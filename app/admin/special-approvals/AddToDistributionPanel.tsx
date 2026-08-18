@@ -44,6 +44,9 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
   const [q, setQ] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ added: number; already: number; failed: number } | null>(null)
+  // מי שכבר רשום לחלוקה הנבחרת — יורד מהרשימה.
+  const [enrolled, setEnrolled] = useState<Set<string>>(new Set())
+  const [enrolledLoading, setEnrolledLoading] = useState(false)
 
   // ⚠️ כשל בטעינה חייב להיראות. בגרסה קודמת `if (!r.ok) return` בלע את
   // התשובה, והבורר נתקע לצמיתות על "טוען חלוקות…" — נראה כתלייה ולא כתקלה.
@@ -66,7 +69,34 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
 
   useEffect(() => { if (open && !dists.length) void loadDists() }, [open, dists.length, loadDists])
 
+  // ⚠️ נטען מחדש בכל החלפת חלוקה: מי שרשום לחלוקה אחת אינו רשום לאחרת,
+  // ורשימה שנשארת מהחלוקה הקודמת הייתה מסתירה אנשים שדווקא צריך לצרף.
+  useEffect(() => {
+    if (!open || !distId) { setEnrolled(new Set()); return }
+    let alive = true
+    setEnrolledLoading(true)
+    void (async () => {
+      try {
+        const r = await fetch(`/api/admin/distributions/recipients?distribution_id=${encodeURIComponent(distId)}`, { cache: 'no-store' })
+        const d = await r.json().catch(() => ({}))
+        if (!alive) return
+        // ⚠️ בכשל הרשימה נשארת ריקה — כלומר לא מסתירים איש. עדיף להציג
+        // מישהו שכבר רשום (הנתיב יחזיר "כבר רשום") מאשר להעלים בשקט
+        // מישהו שצריך לצרף.
+        setEnrolled(r.ok && Array.isArray(d.beneficiaryIds) ? new Set(d.beneficiaryIds as string[]) : new Set())
+      } catch { if (alive) setEnrolled(new Set()) }
+      finally { if (alive) setEnrolledLoading(false) }
+    })()
+    return () => { alive = false }
+  }, [open, distId])
+
+  // ⚠️ הסימון מתאפס בהחלפת חלוקה: מי שסומן לחלוקה אחת עלול להיות כבר
+  // רשום באחרת, וסימון ששרד היה מצרף בלי שהמשתמש רואה את הרשימה.
+  useEffect(() => { setPicked(new Set()); setResult(null) }, [distId])
+
   const filtered = people.filter(p => {
+    // מי שכבר רשום לחלוקה הנבחרת אינו מוצג — אין מה לעשות איתו כאן.
+    if (enrolled.has(p.id)) return false
     const needle = q.trim().toLowerCase()
     if (!needle) return true
     return [p.name, p.id_number, p.city, p.phone].filter(Boolean).join(' ').toLowerCase().includes(needle)
@@ -191,6 +221,16 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
               </button>
             )}
             <span className="mr-auto font-bold text-slate-500">סומנו {picked.size}</span>
+            {/* ⚠️ נאמר כמה הוסתרו: רשימה שמצטמצמת בלי הסבר נראית כתקלה,
+                והמנהל היה מחפש אנשים שהמערכת הסתירה בכוונה. */}
+            {enrolled.size > 0 && (
+              <span className="text-[11px] font-medium text-slate-400">
+                {enrolled.size} כבר רשומים לחלוקה זו ואינם מוצגים
+              </span>
+            )}
+            {enrolledLoading && (
+              <span className="text-[11px] text-slate-400">בודק מי כבר רשום…</span>
+            )}
           </div>
 
           {/* הרשימה */}

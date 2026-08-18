@@ -9,6 +9,7 @@ import BeneficiariesTable from '@/app/admin/beneficiaries/BeneficiariesTable'
 import { readListParams } from '@/lib/listParams'
 import { getBeneficiaries } from '@/lib/beneficiariesList'
 import AddToDistributionPanel from './AddToDistributionPanel'
+import ApprovalLabelsPanel from './ApprovalLabelsPanel'
 
 // דף "אישורים חריגים" — אנשים שאינם צאצאים (נכדים) שהמנהל אישר להם להגיש
 // בקשות. משתמש חוזר באותה טבלה ובאותם מסכי פרטים כמו הצאצאים, מסונן
@@ -40,6 +41,8 @@ export default async function SpecialApprovalsPage({ searchParams }: { searchPar
 
       {/* ⚠️ פאנל נפרד מעל הטבלה ולא בתוכה: BeneficiariesTable משותפת עם
           מסך הצאצאים, ושינוי בה היה נוגע גם שם. */}
+      <ApprovalLabelsPanel />
+
       <AddToDistributionPanel
         people={rows.map(r => ({
           id: String(r.id),

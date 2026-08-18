@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, forbidden, getServiceClient } from '@/lib/apiAuth'
 import { logActivity } from '@/lib/activityLog'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +23,38 @@ interface Body {
   rejected_reason?: string
   /** ניקוי מספר הכרטיס מהשורה — כדי לאפשר שיוך מחדש אחרי טעות הקלדה */
   clear_card?: boolean
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// מי כבר רשום לחלוקה — מזהי המשפחות בלבד.
+//
+// ⚠️ מוחזרים מזהים ולא שורות מלאות: הקורא היחיד הוא בורר הצירוף הידני,
+// שרק צריך לדעת את מי להשמיט מהרשימה. שליפת השורות המלאות הייתה מושכת
+// אלפי רשומות עם JOIN לכל פתיחה של הפאנל.
+//
+// ⚠️ fetchAllRows ולא שאילתה בודדת — תקרת 1,000 של Supabase הייתה חותכת
+// את הרשימה בשקט בחלוקה גדולה, וכך משפחות שכבר רשומות היו מוצגות שוב.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function GET(request: NextRequest) {
+  const staff = await requirePermission('distributions', 'view')
+  if (!staff) return forbidden()
+  const db = getServiceClient()
+  if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
+
+  const distributionId = String(request.nextUrl.searchParams.get('distribution_id') ?? '').trim()
+  if (!distributionId) return NextResponse.json({ error: 'חסר מזהה החלוקה' }, { status: 400 })
+
+  const res = await fetchAllRows<{ beneficiary_id: string | null }>((from, to) => db
+    .from('distribution_recipients')
+    .select('beneficiary_id')
+    .eq('distribution_id', distributionId)
+    .range(from, to))
+
+  // ⚠️ שגיאה מוחזרת ולא נבלעת: רשימה חלקית הייתה מציגה משפחות רשומות
+  // כזמינות לצירוף — כלומר מזמינה בדיוק את הכפילות שהפאנל אמור למנוע.
+  if (res.error) return NextResponse.json({ error: res.error }, { status: 500 })
+  const ids = res.rows.map(r => r.beneficiary_id).filter(Boolean) as string[]
+  return NextResponse.json({ beneficiaryIds: ids })
 }
 
 export async function PATCH(request: NextRequest) {
