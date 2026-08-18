@@ -11,6 +11,7 @@ import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { downloadXlsx, type XlsxColumn } from '@/lib/downloadXlsx'
 import type { ApprovalStatus } from '@/lib/holidayCards'
 import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTable'
+import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
 import CityBreakdown from './CityBreakdown'
@@ -33,6 +34,8 @@ export interface RegistrationRow {
   family_name?: string | null
   first_name?: string | null
   id_number: string | null
+  /** תווית סיבת אישור — קיימת רק לאישורים חריגים; null אצל הרוב המוחלט. */
+  approval_label?: ApprovalLabel | null
   spouse_name: string | null
   ben_phone: string | null
   email: string | null

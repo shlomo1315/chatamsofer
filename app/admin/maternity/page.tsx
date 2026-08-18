@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { Can } from '@/components/StaffPermissions'
 import MaternityTable from './MaternityTable'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
+import { APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
 
 async function getMaternityAids(): Promise<MaternityAid[]> {
   if (!isSupabaseConfigured()) return []
@@ -14,7 +15,9 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
   // ⚡ עמודות מפורשות במקום select('*'): הרשימה משכה שדות כבדים שאינם בשימוש
   // בטבלה (children JSON, notes, deep_review_reason וכו') לכל אלפי השורות. כאן
   // רק העמודות שהטבלה באמת מציגה — מקטין דרסטית את ה-payload בכל טעינה.
-  const { data, error } = await supabase
+  // ⚠️ שתי גרסאות — עם תווית סיבת האישור ובלעדיה. ה-join אינו קיים עד
+  // שהמיגרציה רצה, ומסך היולדות כולו זורק כאן על שגיאה.
+  const run = (benFields: string) => supabase
     .from('maternity_aids')
     // ⚠️ babies + baby_gender + baby_id_type: דרושים ל-syncBabyStatusInFamily
     // (maternityStatus.tsx) שרץ מכפתור אישור הלידה *ברשימה עצמה*. בלעדיהם
@@ -24,10 +27,17 @@ async function getMaternityAids(): Promise<MaternityAid[]> {
     // בלעדיו existing=[] והעדכון דרס את רשימת הילדים של המשפחה כולה — כלומר
     // אישור לידה מהרשימה מחק את כל הילדים הרשומים ואיפס את children_count.
     // (מסכי בית ההחלמה והלידה השקטה שולפים אותו, ולכן שם זה עבד תקין.)
-    .select('id, beneficiary_id, birth_date, baby_name, baby_gender, baby_id_number, baby_id_type, babies, is_twins, recovery_home, recovery_nights, recovery_arrived, recovery_amount, recovery_amount_status, wants_food_card, wants_recovery, card_status, card_number, card_load_amount, card_loaded_at, card_tlush_id, card_picked_up_at, birth_certificate_url, six_weeks_end, source, status, birth_type, created_at, beneficiary:beneficiaries(id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status), card_center:card_centers(name)')
+    .select(`id, beneficiary_id, birth_date, baby_name, baby_gender, baby_id_number, baby_id_type, babies, is_twins, recovery_home, recovery_nights, recovery_arrived, recovery_amount, recovery_amount_status, wants_food_card, wants_recovery, card_status, card_number, card_load_amount, card_loaded_at, card_tlush_id, card_picked_up_at, birth_certificate_url, six_weeks_end, source, status, birth_type, created_at, beneficiary:beneficiaries(${benFields}), card_center:card_centers(name)`)
     // לידות שקטות מוצגות בלשונית נפרדת ("לידה שקטה") — מסננים ב-DB כדי לא למשוך שורות שנזרקות (כולל birth_type=NULL שנחשב "רגיל")
     .or('birth_type.is.null,birth_type.neq.silent')
     .order('created_at', { ascending: false })
+
+  const BEN_BASE = 'id, full_name, family_name, phone, spouse_name, spouse_id_number, children, children_count, eligibility_status'
+  let { data, error } = await run(`${BEN_BASE}, ${APPROVAL_LABEL_SELECT}`)
+  if (error) {
+    console.error('[maternity] approval label join failed, retrying without it:', error)
+    ;({ data, error } = await run(BEN_BASE))
+  }
   if (error) throw error
   // ⚡ select מצומצם לעמודות שהטבלה מציגה בלבד — לכן ה-cast דרך unknown:
   // שדות כבדים שאינם בשימוש בטבלה (card_balance, weekly_amount, total_weeks,

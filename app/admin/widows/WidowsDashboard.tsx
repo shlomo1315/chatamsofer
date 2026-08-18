@@ -6,15 +6,19 @@ import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 
 const fullName = (b: Beneficiary) => [b.family_name, b.full_name].filter(Boolean).join(' ')
 const fmtCur = (n: number) => `₪${Math.round(n).toLocaleString('he-IL')}`
 
-type ColKey = 'name' | 'id_number' | 'city' | 'children' | 'monthly' | 'total'
+type ColKey = 'name' | 'id_number' | 'approval_label' | 'city' | 'children' | 'monthly' | 'total'
 
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'name', label: 'שם המשפחה', def: true },
   { key: 'id_number', label: 'ת.ז.', def: true },
+  // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
+  { key: 'approval_label', label: 'סיבת אישור', def: true },
   { key: 'city', label: 'עיר', def: true },
   { key: 'children', label: 'ילדים', def: true, align: 'center' },
   { key: 'monthly', label: 'תמיכה חודשית', def: true },
@@ -78,13 +82,20 @@ export default function WidowsDashboard({
       case 'name': {
         const pend = pendingByFamily[w.id] ?? 0
         return (
-          <span className="flex items-center gap-2 font-medium text-slate-800">
+          <span className="flex items-center gap-2 flex-wrap font-medium text-slate-800">
             {fullName(w)}
             {pend > 0 && <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">{pend} בקשות</span>}
+            {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
+                שהמשפחה אינה צאצא רגיל. */}
+            <ApprovalLabelTag label={approvalLabelOf(w)} size="xs" />
           </span>
         )
       }
       case 'id_number': return <span className="font-mono text-xs text-slate-500 ltr-num">{w.id_number}</span>
+      case 'approval_label': {
+        const lbl = approvalLabelOf(w)
+        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
+      }
       case 'city': return w.city ? <span className="flex items-center gap-1 text-slate-600"><MapPin size={12} className="shrink-0" />{w.city}</span> : <span className="text-slate-600">—</span>
       case 'children': return <span className="inline-flex items-center gap-1 text-slate-600"><Baby size={13} className="shrink-0" />{w.children_count ?? 0}</span>
       case 'monthly': return <span className="text-blue-700 font-medium ltr-num">{w.monthly_support ? fmtCur(Number(w.monthly_support)) : '—'}</span>

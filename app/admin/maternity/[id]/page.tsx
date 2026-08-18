@@ -20,6 +20,8 @@ import { getDocTypes } from '@/lib/serverDocTypes'
 import { docTypeLabel } from '@/lib/docTypes'
 import { docViewUrl, docDownloadUrl, docDownloadName } from '@/lib/docUrl'
 import BackButton from '@/components/ui/BackButton'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 import DownloadDocButton from '@/components/ui/DownloadDocButton'
 import { ViewDocButton } from '@/components/ui/DocViewer'
 import PdfCanvasView from '@/components/ui/PdfCanvasView'
@@ -45,7 +47,7 @@ interface BeneficiaryDoc { doc_type: string; file_url: string | null; file_name:
 async function getAid(id: string): Promise<MaternityAid | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const run = () => supabase
     .from('maternity_aids')
     // ⚡ עמודות מפורשות למוטב במקום beneficiaries(*): השליפה משכה את החתימה
     // (data-URL בבסיס64, 20-80KB) ואת 8 עמודות ה-portal_* — בהן portal_phone_code_plain,
@@ -59,6 +61,24 @@ async function getAid(id: string): Promise<MaternityAid | null> {
     .select('*, beneficiary:beneficiaries(id, full_name, family_name, id_number, spouse_name, spouse_id_number, spouse_birth_date, phone, phone2, email, address, city, marital_status, children, children_count, eligibility_status, community_affiliation, registration_source, required_docs, is_special, lineage_node_id, lineage_chain, lineage_manual, lineage_manual_marks), card_center:card_centers(id, name)')
     .eq('id', id)
     .single()
+
+  // ⚠️ מחרוזת select נפרדת ומפורשת ולא תבנית עם משתנה: הטיפוסים של
+  // supabase-js נגזרים מהמחרוזת *הליטרלית*, ואינטרפולציה מבטלת את ההסקה.
+  const runWithLabel = () => supabase
+    .from('maternity_aids')
+    .select('*, beneficiary:beneficiaries(id, full_name, family_name, id_number, spouse_name, spouse_id_number, spouse_birth_date, phone, phone2, email, address, city, marital_status, children, children_count, eligibility_status, community_affiliation, registration_source, required_docs, is_special, lineage_node_id, lineage_chain, lineage_manual, lineage_manual_marks, approval_label:approval_labels(id, name, color, notes)), card_center:card_centers(id, name)')
+    .eq('id', id)
+    .single()
+
+  // ⚠️ קודם עם תווית סיבת האישור ובנפילה בלעדיה — הכרטסת חייבת להיפתח
+  // גם לפני שהמיגרציה של approval_labels רצה.
+  const withLabel = await runWithLabel()
+  let { data, error } = withLabel.error && withLabel.error.code !== 'PGRST116' && withLabel.error.code !== '22P02'
+    ? await run()
+    : withLabel
+  if (withLabel.error && withLabel.error.code !== 'PGRST116' && withLabel.error.code !== '22P02') {
+    console.error('[maternity/:id] approval label join failed, retrying without it:', withLabel.error)
+  }
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
   // נפילה-לאחור: אם אין birth_certificate_url ברשומה — שליפת אישור הלידה מטבלת המסמכים
@@ -319,6 +339,7 @@ export default async function MaternityDetailPage(
     ? [beneficiary.family_name, beneficiary.spouse_name].filter(Boolean).join(' ')
     : [beneficiary?.family_name, beneficiary?.full_name].filter(Boolean).join(' ') || 'תיק יולדת'
   const motherId = beneficiary?.spouse_id_number ?? beneficiary?.id_number
+  const approvalLabel = approvalLabelOf(beneficiary)
 
   return (
     <div className="flex flex-col gap-5 max-w-4xl">
@@ -326,8 +347,13 @@ export default async function MaternityDetailPage(
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/maternity" />
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{motherName}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">{motherName}</h1>
+              <ApprovalLabelTag label={approvalLabel} />
+            </div>
             {motherId && <p className="text-sm text-slate-500 ltr-num">ת.ז. {formatIsraeliId(motherId)}</p>}
+            {/* ההסבר המלא של התווית — בכרטסת יש מקום לשורה, בשורת טבלה אין. */}
+            {approvalLabel?.notes && <p className="text-xs text-slate-500 mt-0.5">{approvalLabel.notes}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">

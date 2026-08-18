@@ -20,6 +20,8 @@ const ACTIVE_LABEL: Record<string, string> = {
   pending: 'ממתינה', inquiry: 'בבירור', approved: 'אושרה', active: 'פעילה',
 }
 import BackButton from '@/components/ui/BackButton'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf, APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import BeneficiaryActions from './BeneficiaryActions'
@@ -74,16 +76,24 @@ async function getBeneficiary(id: string): Promise<Beneficiary | null> {
   // rejecter:profiles — שם המשתמש שדחה, להצגת "מי דחה" בבאנר הדחייה.
   // ⚠️ עמיד: אם ה-FK/עמודה rejected_by עדיין לא קיימים (המיגרציה טרם רצה),
   // ה-join נכשל — נופלים חזרה לאותן עמודות בלי ה-join, כדי שהכרטסת לא תקרוס.
-  const withJoin = await supabase
-    .from('beneficiaries')
-    .select(`${SELECT_COLUMNS}, rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)`)
-    .eq('id', id).single()
-  if (!withJoin.error) return trimSignature(withJoin.data)
-  if (withJoin.error.code === 'PGRST116' || withJoin.error.code === '22P02') return null
-
-  const { data, error } = await supabase.from('beneficiaries').select(SELECT_COLUMNS).eq('id', id).single()
-  if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
-  return trimSignature(data)
+  // ⚠️ שני ה-joins האופציונליים (הדוחה + תווית סיבת האישור) מנוסים יחד
+  // ואז נושרים בזה אחר זה: כל אחד מהם עשוי לא להתקיים עד שהמיגרציה שלו
+  // רצה, והכרטסת חייבת להיפתח בכל מצב ביניים.
+  const REJECTER = 'rejecter:profiles!beneficiaries_rejected_by_fkey(full_name)'
+  const attempts = [
+    `${SELECT_COLUMNS}, ${REJECTER}, ${APPROVAL_LABEL_SELECT}`,
+    `${SELECT_COLUMNS}, ${REJECTER}`,
+    `${SELECT_COLUMNS}, ${APPROVAL_LABEL_SELECT}`,
+    SELECT_COLUMNS,
+  ]
+  for (const cols of attempts) {
+    const res = await supabase.from('beneficiaries').select(cols).eq('id', id).single()
+    if (!res.error) return trimSignature(res.data)
+    // מזהה לא קיים/לא תקין — אין טעם לנסות צירופי עמודות אחרים.
+    if (res.error.code === 'PGRST116' || res.error.code === '22P02') return null
+    if (cols === SELECT_COLUMNS) throw res.error
+  }
+  return null
 }
 
 // הבסיס64 של החתימה משמש רק כדי לדעת *אם* קיימת חתימה; התמונה עצמה נטענת
@@ -434,6 +444,7 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
   // אדם חריג (אינו צאצא) — אין לו ייחוס. מסתירים טאב עץ הדורות ואת באנר
   // הבדיקה המעמיקה. (undefined לפני שהעמודה קיימת → falsy → התנהגות רגילה.)
   const isSpecial = (beneficiary as { is_special?: boolean }).is_special === true
+  const approvalLabel = approvalLabelOf(beneficiary)
 
   // ── Tab: פרטים אישיים ──
   const personalTab = (
@@ -800,8 +811,13 @@ export default async function BeneficiaryDetailPage({ params }: { params: Promis
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/beneficiaries" />
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{fullName}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">{fullName}</h1>
+              <ApprovalLabelTag label={approvalLabel} />
+            </div>
             <p className="text-sm text-slate-500 ltr-num">{beneficiary.id_number}</p>
+            {/* ההסבר המלא של התווית — בכרטסת יש מקום לשורה, בשורת טבלה אין. */}
+            {approvalLabel?.notes && <p className="text-xs text-slate-500 mt-0.5">{approvalLabel.notes}</p>}
           </div>
         </div>
         <div className="flex items-center gap-3">

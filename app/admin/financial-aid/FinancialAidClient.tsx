@@ -11,17 +11,21 @@ import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { useCan, AdminOnly } from '@/components/StaffPermissions'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 
 type Ben = { full_name?: string; family_name?: string; spouse_name?: string; id_number?: string; spouse_id_number?: string; phone?: string }
 const name = (b?: Ben) => b ? ([b.family_name, b.full_name].filter(Boolean).join(' ') || b.full_name || '—') : '—'
 const fmtCur = (n?: number | null) => n != null ? `₪${Number(n).toLocaleString('he-IL')}` : '—'
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('he-IL') : '—'
 
-type ColKey = 'name' | 'id_number' | 'reason' | 'amount' | 'status'
+type ColKey = 'name' | 'id_number' | 'approval_label' | 'reason' | 'amount' | 'status'
 
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'name', label: 'שם', def: true },
   { key: 'id_number', label: 'ת.ז.', def: true },
+  // ⚠️ עמודה משלה בנוסף לתג שליד השם — ריקה אצל הרוב המוחלט, וזו הכוונה.
+  { key: 'approval_label', label: 'סיבת אישור', def: true },
   { key: 'reason', label: 'סיבת הבקשה', def: true },
   { key: 'amount', label: 'סכום מאושר', def: true },
   { key: 'status', label: 'סטטוס', def: true },
@@ -154,8 +158,19 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
   const cell = (c: ColDef<ColKey>, r: FinancialAidRequest) => {
     const b = r.beneficiary as Ben | undefined
     switch (c.key) {
-      case 'name': return <span className="font-medium text-slate-800">{name(b)}</span>
+      case 'name': return (
+        <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
+          {name(b)}
+          {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
+              שהמבקש אינו צאצא רגיל. */}
+          <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
+        </span>
+      )
       case 'id_number': return <span className="ltr-num font-mono text-xs text-slate-600">{b?.id_number ?? b?.spouse_id_number ?? '—'}</span>
+      case 'approval_label': {
+        const lbl = approvalLabelOf(b)
+        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
+      }
       case 'reason': return <span className="text-slate-600">{r.reason ?? '—'}</span>
       case 'amount': return <span className="font-bold text-slate-800 ltr-num">{r.status === 'approved' ? fmtCur(r.amount) : '—'}</span>
       case 'status': return <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${FINANCIAL_AID_STATUS_COLORS[r.status]}`}>{FINANCIAL_AID_STATUS_LABELS[r.status]}</span>

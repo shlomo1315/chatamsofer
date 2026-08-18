@@ -22,15 +22,30 @@ import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import FamilySummary from './FamilySummary'
 import LoanInquiryPanel from './LoanInquiryPanel'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 
 async function getLoan(id: string): Promise<Loan | null> {
   if (!isSupabaseConfigured()) return null
   const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('loans')
-    .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
-    .eq('id', id)
-    .single()
+  // ⚠️ שתי מחרוזות select מפורשות ולא תבנית עם משתנה: הטיפוסים של
+  // supabase-js נגזרים מהמחרוזת *הליטרלית*, ואינטרפולציה הופכת אותה ל-
+  // `${string}` — מה שמבטל את הסקת הטיפוס ומחזיר ParserError.
+  const run = (withLabel: boolean) => withLabel
+    ? supabase.from('loans')
+        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain, approval_label:approval_labels(id, name, color, notes))')
+        .eq('id', id).single()
+    : supabase.from('loans')
+        .select('*, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, spouse_id_number, id_number, email, phone, address, city, marital_status, children_count, eligibility_status, lineage_chain)')
+        .eq('id', id).single()
+
+  // ⚠️ קודם עם תווית סיבת האישור ובנפילה בלעדיה: ה-join אינו קיים עד
+  // שהמיגרציה רצה, והכרטסת חייבת להיפתח גם אז.
+  let { data, error } = await run(true)
+  if (error && error.code !== 'PGRST116' && error.code !== '22P02') {
+    console.error('[loans/:id] approval label join failed, retrying without it:', error)
+    ;({ data, error } = await run(false))
+  }
   // לא נמצא (PGRST116) או מזהה לא תקין (22P02) → notFound; שאר השגיאות מופצות הלאה
   if (error && error.code !== 'PGRST116' && error.code !== '22P02') throw error
   return data
@@ -193,8 +208,15 @@ export default async function LoanDetailPage({ params }: { params: Promise<{ id:
         <div className="flex items-center gap-3">
           <BackButton fallback="/admin/loans" />
           <div>
-            <h1 className="text-xl font-bold text-slate-900">{borrower ?? 'פרטי הלוואה'}</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900">{borrower ?? 'פרטי הלוואה'}</h1>
+              <ApprovalLabelTag label={approvalLabelOf(b)} />
+            </div>
             <p className="text-sm text-slate-500 ltr-num">{b?.id_number}</p>
+            {/* ההסבר המלא של התווית — בכרטסת יש מקום לשורה, בשורת טבלה אין. */}
+            {approvalLabelOf(b)?.notes && (
+              <p className="text-xs text-slate-500 mt-0.5">{approvalLabelOf(b)?.notes}</p>
+            )}
           </div>
         </div>
         {/* ⚠️ כפתורי ההכרעה הוסרו מהכותרת: ההחלטה מתקבלת אחרי קריאת החומר,

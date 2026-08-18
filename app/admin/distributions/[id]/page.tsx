@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { requirePermission } from '@/lib/apiAuth'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 import type { Distribution } from '@/types'
 import StatusBadge from '@/components/ui/StatusBadge'
 import NoPermission from '@/components/ui/NoPermission'
@@ -57,12 +58,28 @@ async function getData(id: string) {
   // ⚠️ הנרשמים נשלפים בדפים: תקרת השורות של PostgREST נאכפת בצד השרת ואינה
   // ניתנת לעקיפה ב-limit, ולכן הרשימה נחתכה ב-1,000 בלי שגיאה ובלי סימן.
   // ראו lib/fetchAllRows.
-  const recRes = await fetchAllRows<Record<string, unknown>>((from, to) => supabase
+  // ⚠️ שתי מחרוזות select מפורשות ולא תבנית עם משתנה: הטיפוסים של
+  // supabase-js נגזרים מהמחרוזת *הליטרלית*, ואינטרפולציה מבטלת את ההסקה.
+  const fetchWithLabel = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
+      .from('distribution_recipients')
+      .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date, approval_label:approval_labels(id, name, color, notes))')
+      .eq('distribution_id', id)
+      .order('registered_at', { ascending: false })
+      .range(from, to))
+  const fetchPlain = () => fetchAllRows<Record<string, unknown>>((from, to) => supabase
       .from('distribution_recipients')
       .select('id, source, registered_at, phone, notified_at, amount, beneficiary_id, approval_status, approved_at, card_number, card_linked_at, card_link_error, notify_error, beneficiary:beneficiaries(id, full_name, family_name, spouse_name, id_number, phone, phone2, email, address, city, community_affiliation, children_count, birth_date, spouse_birth_date)')
       .eq('distribution_id', id)
       .order('registered_at', { ascending: false })
       .range(from, to))
+
+  // ⚠️ תווית סיבת האישור בנפילה-לאחור: ה-join אינו קיים עד שהמיגרציה של
+  // approval_labels רצה, ובלעדיה כל מסך החלוקה היה זורק.
+  let recRes = await fetchWithLabel()
+  if (recRes.error) {
+    console.error(`[admin/distributions/${id}] approval label join failed, retrying without it:`, recRes.error)
+    recRes = await fetchPlain()
+  }
   if (recRes.error) {
     console.error(`[admin/distributions/${id}] recipients query failed:`, recRes.error)
     throw new Error(recRes.error)
@@ -103,6 +120,9 @@ async function getData(id: string) {
       family_name: b?.family_name ?? null,
       first_name: b?.full_name || b?.spouse_name || null,
       id_number: b?.id_number ?? null,
+      // ⚠️ מנורמל בשרת ולא בטבלה: HolidayRecipientsTable משותפת עם דף
+      // השיתוף, ושורה שטוחה שומרת אותה חופשייה מצורת ה-join של PostgREST.
+      approval_label: approvalLabelOf(b),
       spouse_name: b?.spouse_name ?? null,
       ben_phone: b?.phone || b?.phone2 || null,
       email: b?.email ?? null,

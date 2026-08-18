@@ -18,6 +18,8 @@ import { matchesBucket, type MaternityBucket, type BucketAid } from '@/lib/mater
 import { recoveryDaysOf } from '@/lib/maternity'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 
 const formatDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 
@@ -130,7 +132,7 @@ const CARD_STATUS_PILL: Record<string, { label: string; cls: string }> = {
 // לפי אותו מפתח. קודם הכותרות היו במערך נפרד מהתאים, וכל הוספת עמודה
 // במקום אחד ושכחה באחר הסיטה את כל השורה.
 type ColKey =
-  | 'mother' | 'wifeId' | 'baby' | 'benefit' | 'babyId' | 'birth'
+  | 'mother' | 'wifeId' | 'approval_label' | 'baby' | 'benefit' | 'babyId' | 'birth'
   | 'recovery' | 'days' | 'arrived' | 'amount' | 'cert' | 'source'
   | 'loadStatus' | 'loadDate' | 'cardLink' | 'status'
 
@@ -140,6 +142,9 @@ type ColKey =
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'mother', label: 'שם היולדת', def: true },
   { key: 'wifeId', label: 'ת.ז. האישה', def: true },
+  // ⚠️ עמודה משלה בנוסף לתג שליד השם — כך אפשר לסרוק את הרשימה לפי
+  // סיבת האישור. ריקה אצל הרוב המוחלט, וזו הכוונה.
+  { key: 'approval_label', label: 'סיבת אישור', def: true },
   { key: 'baby', label: 'שם התינוק', def: true },
   { key: 'benefit', label: 'הטבה', def: true },
   { key: 'babyId', label: 'ת.ז. התינוק', def: false },
@@ -215,8 +220,19 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
   // תוכן התא לפי מפתח העמודה
   const cell = (key: ColKey, aid: MaternityAid, m?: MotherRef) => {
     switch (key) {
-      case 'mother': return <span className="font-medium text-slate-800">{motherName(m)}</span>
+      case 'mother': return (
+        <span className="inline-flex items-center gap-1.5 flex-wrap font-medium text-slate-800">
+          {motherName(m)}
+          {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך
+              לדעת שהיולדת אינה צאצא רגיל. */}
+          <ApprovalLabelTag label={approvalLabelOf(m)} size="xs" />
+        </span>
+      )
       case 'wifeId': return <span className="ltr-num text-xs font-mono text-slate-600">{m?.spouse_id_number ?? '—'}</span>
+      case 'approval_label': {
+        const lbl = approvalLabelOf(m)
+        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
+      }
       case 'baby': return (
         <span className="inline-flex items-center gap-1.5 flex-wrap text-slate-700">
           {(() => {

@@ -4,19 +4,26 @@ import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import PageHeader from '@/components/ui/PageHeader'
 import WidowsDashboard from './WidowsDashboard'
 import ExportExcelButton from '@/components/admin/ExportExcelButton'
+import { APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
 
 async function getData(): Promise<{ widows: Beneficiary[]; requests: WidowRequest[]; payments: WidowSupportPayment[]; error: string | null }> {
   if (!isSupabaseConfigured()) return { widows: [], requests: [], payments: [], error: null }
   const supabase = await createClient()
+  // ⚡ רק העמודות שהלוח מציג (WidowsDashboard). קודם select('*') משך לכל אלמנה
+  // את החתימה בבסיס64 (20-80KB), את children/lineage_chain, ואת עמודות
+  // ה-portal_* הרגישות — פי כמה מונים יותר מהנדרש, כפול מספר השורות.
+  const WIDOW_BASE = 'id, full_name, family_name, id_number, city, children_count, monthly_support, created_at'
+  const runWidows = (fields: string) => supabase
+    .from('beneficiaries')
+    .select(fields)
+    .in('marital_status', ['אלמן', 'אלמנה'])
+    .order('created_at', { ascending: false })
+
   const [widowsRes, requestsRes, paymentsRes] = await Promise.all([
-    // ⚡ רק העמודות שהלוח מציג (WidowsDashboard). קודם select('*') משך לכל אלמנה
-    // את החתימה בבסיס64 (20-80KB), את children/lineage_chain, ואת עמודות
-    // ה-portal_* הרגישות — פי כמה מונים יותר מהנדרש, כפול מספר השורות.
-    supabase
-      .from('beneficiaries')
-      .select('id, full_name, family_name, id_number, city, children_count, monthly_support, created_at')
-      .in('marital_status', ['אלמן', 'אלמנה'])
-      .order('created_at', { ascending: false }),
+    // ⚠️ תווית סיבת האישור בנפילה-לאחור: אם ה-join אינו קיים (המיגרציה טרם
+    // רצה) הרשימה נשלפת בלעדיו, במקום להישאר ריקה עם באנר שגיאה.
+    runWidows(`${WIDOW_BASE}, ${APPROVAL_LABEL_SELECT}`)
+      .then(r => r.error ? runWidows(WIDOW_BASE) : r),
     // ⚠️ הבקשות משמשות בלוח *רק לספירה מצטברת* — pendingByFamily (תג "N בקשות"
     // ליד שם המשפחה) והמונה העליון. אין תצוגת שורת בקשה, ולכן description,
     // notes, amount, request_type והנתמך המקושר נשלפו לחינם. פרטי הבקשה

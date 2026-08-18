@@ -1,5 +1,13 @@
 export type UserRole = 'admin' | 'secretary' | 'reviewer' | 'collections'
 
+// תווית סיבת אישור לאישורים חריגים — ראו supabase/migrations/20260818_approval_labels.sql
+export interface ApprovalLabel {
+  id: string
+  name: string
+  color?: string | null
+  notes?: string | null
+}
+
 // ⚠️ 'mail' נוסף כמחלקה מלאה ולא נשאר "פתוח לכל איש צוות": עד אז מסלולי
 // /api/admin/mail בדקו requireStaff() בלבד, כלומר כל איש צוות פעיל קרא את
 // תיבות כל המחלקות — בלי שהיה מפתח כלשהו לסמן אותו במסך ההרשאות.
@@ -97,6 +105,11 @@ export interface Beneficiary {
     maternity_aid_id?: string
   }[]
   eligibility_status: EligibilityStatus
+  // תווית סיבת האישור (אישורים חריגים בלבד — "משפחת שטרן"). רוב הצאצאים
+  // בלי תווית, ולכן שני השדות אופציונליים. ה-join מוגדר כמערך אפשרי כי
+  // PostgREST מחזיר לעתים אובייקט ולעתים מערך בן-איבר — ראו lib/approvalLabel.
+  approval_label_id?: string | null
+  approval_label?: ApprovalLabel | ApprovalLabel[] | null
   is_active: boolean
   // ערוץ ההרשמה לאיגוד — portal/nedarim/phone/email/admin. ראו lib/distributionSources.
   registration_source?: string | null

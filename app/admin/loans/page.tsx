@@ -13,6 +13,7 @@ import { AWAITING_RABBI_FORM } from '@/lib/openLoanGuard'
 import Tabs from '@/components/ui/Tabs'
 import LegacyLoansTable, { type LegacyRow } from './LegacyLoansTable'
 import { fetchAllRows } from '@/lib/fetchAllRows'
+import { APPROVAL_LABEL_SELECT } from '@/lib/approvalLabel'
 
 /**
  * ההלוואות מהמערכת הקודמת.
@@ -56,7 +57,10 @@ async function getLoans(): Promise<Loan[]> {
   // ⚡ עמודות מפורשות במקום select('*'): הרשימה משכה לכל הלוואה שדות טקסט
   // כבדים שאינם מוצגים בטבלה — declaration (נוסח ההצהרה המלא), purpose_details,
   // notes ו-document_urls (JSON של כל הקבצים) — כפול כל השורות בכל טעינת דף.
-  const { data, error } = await supabase
+  // ⚠️ השאילתה נבנית פעמיים — עם תווית האישור ובלעדיה. ה-join אינו קיים עד
+  // שהמיגרציה של approval_labels רצה, ובלי הנפילה-לאחור מסך ההלוואות כולו
+  // היה מת בסביבה שטרם עודכנה. התג הוא תוספת הסבר, לא תנאי להצגת הרשימה.
+  const runQuery = (benFields: string) => supabase
     .from('loans')
     // ⚠️ status + amount + approved_amount: לא רק לתצוגה — LoanStatusControl
     // (LoanControls.tsx) מקבל את אובייקט ה-loan ומשתמש בהם בפועל: amount הוא
@@ -66,13 +70,22 @@ async function getLoans(): Promise<Loan[]> {
     // ⚠️ eligibility_status: מודל האישור מסתיר את בורר "היקף האישור" כשהמשפחה
     // כבר מאושרת. בלי השדה הזה הרשימה הייתה מציגה את השאלה תמיד, בעוד הכרטסת
     // מסתירה אותה — אותו אישור, שתי התנהגויות.
-    .select('id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(full_name, family_name, id_number, spouse_name, spouse_id_number, eligibility_status)')
+    .select(`id, amount, approved_amount, installments, purpose, status, disbursed_at, disbursed_by, created_at, beneficiary:beneficiaries(${benFields})`)
     // 🔴 טיוטות שממתינות לטופס אישור רב אינן בקשות שהוגשו, ולכן אינן
     // מוצגות כאן כלל. הן נוצרות ברגע שהמבקש מוריד את הטופס — לפני שהוא
     // החתים רב והחזיר אותו — וכניסתן לרשימה הייתה מציגה למזכיר תיקים
     // שאיש לא ביקש ממנו לטפל בהם, ומנפחת את מוני "ממתין לטיפול".
     .neq('status', AWAITING_RABBI_FORM)
     .order('created_at', { ascending: false })
+
+  const BEN_BASE = 'full_name, family_name, id_number, spouse_name, spouse_id_number, eligibility_status'
+  // ⚠️ תווית סיבת האישור: מסבירה למה אדם שאינו צאצא רשאי להגיש בקשה.
+  // ה-join מקונן בתוך הנתמך, ולכן הוא אינו מוסיף שורות — רק שדה.
+  let { data, error } = await runQuery(`${BEN_BASE}, ${APPROVAL_LABEL_SELECT}`)
+  if (error) {
+    console.error('[loans] approval label join failed, retrying without it:', error)
+    ;({ data, error } = await runQuery(BEN_BASE))
+  }
   if (error) throw error
   // ⚡ ה-select מצומצם בכוונה (ראו למעלה) ולכן ה-cast דרך unknown: שדות שאינם
   // בשימוש בטבלה הושמטו מהשליפה כדי לצמצם את ה-payload.

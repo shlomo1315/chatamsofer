@@ -16,6 +16,7 @@ import { Monitor, Phone, Mail, CreditCard, Pencil, Check, X, Loader2, Columns3 }
 import { SOURCE_LABEL, type RegisterSource } from '@/lib/distributionSources'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useResizableColumns } from '@/components/ui/ResizableTable'
+import ApprovalLabelTag, { type ApprovalLabel } from '@/components/ui/ApprovalLabelTag'
 
 export interface HolidayRow {
   id: string
@@ -35,6 +36,8 @@ export interface HolidayRow {
   family_name?: string | null
   first_name?: string | null
   id_number: string | null
+  /** תווית סיבת אישור — קיימת רק לאישורים חריגים; null אצל הרוב המוחלט. */
+  approval_label?: ApprovalLabel | null
   spouse_name: string | null
   ben_phone: string | null
   email: string | null
@@ -73,7 +76,7 @@ export interface HolidayTableControls {
 // ⚠️ מקור אמת יחיד: הכותרת, התא ומצב ברירת המחדל יושבים יחד. כשהם נפרדו
 // לשלוש רשימות, הוספת עמודה במקום אחד ושכחה באחר הסיטה את כל השורה.
 type ColKey =
-  | 'family_name' | 'first_name' | 'id_number' | 'spouse_name'
+  | 'family_name' | 'first_name' | 'id_number' | 'approval_label' | 'spouse_name'
   | 'approval' | 'card' | 'phone' | 'email' | 'address' | 'city'
   | 'age' | 'children' | 'source' | 'registered_at' | 'amount' | 'message'
 
@@ -89,6 +92,8 @@ const COLUMNS: ColDef[] = [
   { key: 'family_name', label: 'שם משפחה', def: true },
   { key: 'first_name', label: 'שם פרטי', def: true },
   { key: 'id_number', label: 'ת״ז', def: true },
+  // ⚠️ עמודה משלה בנוסף לתג שליד שם המשפחה — ריקה אצל הרוב המוחלט.
+  { key: 'approval_label', label: 'סיבת אישור', def: true },
   { key: 'spouse_name', label: 'בן/בת זוג', def: false },
   { key: 'approval', label: 'אישור הבקשה', def: true },
   { key: 'card', label: 'כרטיס', def: false },
@@ -174,16 +179,23 @@ export default function HolidayRecipientsTable({
     switch (c.key) {
       case 'family_name':
         return (
-          <span className="font-semibold text-slate-800">
+          <span className="inline-flex items-center gap-1.5 flex-wrap font-semibold text-slate-800">
             {r.beneficiary_id && canEdit
               ? <Link href={`/admin/beneficiaries/${r.beneficiary_id}`} className="hover:text-indigo-700 hover:underline">
                   {r.family_name || r.name}
                 </Link>
               : (r.family_name || r.name)}
+            {/* ⚠️ גם ליד השם וגם בעמודה: מי שכיבה את העמודה עדיין צריך לדעת
+                שהנרשם אינו צאצא רגיל. */}
+            <ApprovalLabelTag label={r.approval_label} size="xs" />
           </span>
         )
       case 'first_name': return <span className="text-slate-700">{r.first_name || '—'}</span>
       case 'id_number': return <span className="font-mono text-slate-600 ltr-num">{r.id_number ?? '—'}</span>
+      case 'approval_label':
+        return r.approval_label
+          ? <ApprovalLabelTag label={r.approval_label} size="xs" />
+          : <span className="text-[11px] text-slate-400">—</span>
       case 'spouse_name': return <span className="text-slate-600">{r.spouse_name ?? '—'}</span>
       case 'approval':
         return (

@@ -10,6 +10,8 @@ import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
 import { useIncrementalRows } from '@/lib/useIncrementalRows'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
+import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
+import { approvalLabelOf } from '@/lib/approvalLabel'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // 🔴 ההלוואות נקובות בדולר: הסכום מוקלד בדולרים, וההחזר בשקלים לפי שער
@@ -50,12 +52,15 @@ const CARD_DEFS: CardDef[] = [
 // ⚠️ "פעולות" אינה בבורר: היא הדרך היחידה למחוק ולצפות, והסתרתה משאירה
 // את השורה בלי מוצא. לכן extraCols: 1 והידיות מוסטות באחד.
 type ColKey =
-  | 'borrower' | 'id_number' | 'amount' | 'approved_amount'
+  | 'borrower' | 'id_number' | 'approval_label' | 'amount' | 'approved_amount'
   | 'installments' | 'purpose' | 'created_at' | 'disbursed' | 'status'
 
 const COLUMNS: ColDef<ColKey>[] = [
   { key: 'borrower', label: 'שם הלווה', def: true },
   { key: 'id_number', label: 'ת.ז.', def: true },
+  // ⚠️ עמודה משלה ולא רק תג ליד השם: כך אפשר למיין/לסרוק את הרשימה לפי
+  // סיבת האישור. ריקה אצל הרוב המוחלט — זו בדיוק הכוונה.
+  { key: 'approval_label', label: 'סיבת אישור', def: true },
   { key: 'amount', label: 'סכום מבוקש', def: true },
   { key: 'approved_amount', label: 'סכום מאושר', def: true },
   { key: 'installments', label: 'תשלומים', def: false, align: 'center' },
@@ -168,10 +173,17 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                 חזר מבירור
               </span>
             )}
+            {/* ⚠️ גם ליד השם וגם בעמודה משלה: מי שכיבה את העמודה עדיין
+                צריך לדעת שהמבקש אינו צאצא רגיל. */}
+            <ApprovalLabelTag label={approvalLabelOf(b)} size="xs" />
           </div>
         )
       case 'id_number':
         return <span className="ltr-num text-xs font-mono text-slate-500">{b?.id_number ?? '—'}</span>
+      case 'approval_label': {
+        const lbl = approvalLabelOf(b)
+        return lbl ? <ApprovalLabelTag label={lbl} size="xs" /> : <span className="text-slate-300">—</span>
+      }
       case 'amount':
         return <span className="ltr-num font-semibold text-slate-900">{fmtCur(loan.amount)}</span>
       case 'approved_amount':
