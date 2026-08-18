@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   X, Send, Loader2, Paperclip, Trash2,
   Bold, Italic, Underline, List, ListOrdered, Link2, AlertTriangle,
+  AlignRight, AlignCenter, AlignLeft, Palette,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -31,12 +32,16 @@ interface Att { name: string; size: number; type: string; data: string }
 const MAX_TOTAL = 20 * 1024 * 1024
 
 export default function ComposeDialog({
-  mode, initialTo, initialSubject, accountEmail, onClose, onSent,
+  mode, initialTo, initialSubject, accountEmail, accounts, fromId, onFromChange, onClose, onSent,
 }: {
   mode: 'new' | 'reply'
   initialTo?: string
   initialSubject?: string
   accountEmail?: string | null
+  /** התיבות המחוברות — לבורר "מאת". ריק/יחיד ⇒ הבורר אינו מוצג. */
+  accounts?: { id: string; email: string }[]
+  fromId?: string
+  onFromChange?: (id: string) => void
   onClose: () => void
   onSent: (payload: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: Att[] }) => Promise<boolean>
 }) {
@@ -144,9 +149,22 @@ export default function ComposeDialog({
             {mode === 'reply' ? 'תשובה' : 'אימייל חדש'}
           </h3>
           <div className="flex items-center gap-2">
-            {accountEmail && (
+            {/* 🔴 בורר "מאת" — בחירת התיבה השולחת מתוך החלון.
+                ⚠️ בתשובה הבורר *אינו* מוצג: התשובה חייבת לצאת מהתיבה
+                שאליה ההודעה הגיעה, אחרת המשפחה מקבלת מענה מכתובת שלא
+                כתבה אליה, והשרשור אצלה נשבר.
+                ⚠️ מוצג רק כשמחוברת יותר מתיבה אחת — אחרת אין מה לבחור. */}
+            {mode === 'new' && (accounts?.length ?? 0) > 1 ? (
+              <label className="hidden sm:flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-400">מאת</span>
+                <select value={fromId ?? ''} onChange={e => onFromChange?.(e.target.value)} dir="ltr"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200">
+                  {accounts!.map(a => <option key={a.id} value={a.id}>{a.email}</option>)}
+                </select>
+              </label>
+            ) : accountEmail ? (
               <span dir="ltr" className="text-[11px] text-slate-400 hidden sm:inline">מ: {accountEmail}</span>
-            )}
+            ) : null}
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
           </div>
         </div>
@@ -252,12 +270,45 @@ export default function ComposeDialog({
 
           {/* סרגל עיצוב */}
           <div className="px-5 pb-1 flex items-center gap-0.5 flex-wrap border-b border-slate-100 pb-2">
+            {/* גופן וגודל — ⚠️ execCommand('fontName'/'fontSize') הוא
+                המנגנון היחיד שעובד בכל הדפדפנים בלי ספריית עורך כבדה.
+                fontSize מקבל 1–7 בלבד (ולא פיקסלים) — זה תקן ישן. */}
+            <select onChange={e => { exec('fontName', e.target.value); e.currentTarget.selectedIndex = 0 }}
+              title="גופן"
+              className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-600 focus:outline-none">
+              <option value="">גופן</option>
+              {['Arial', 'David', 'Times New Roman', 'Courier New', 'Verdana'].map(f => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            <select onChange={e => { exec('fontSize', e.target.value); e.currentTarget.selectedIndex = 0 }}
+              title="גודל"
+              className="rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-600 focus:outline-none">
+              <option value="">גודל</option>
+              {[['2', 'קטן'], ['3', 'רגיל'], ['5', 'גדול'], ['7', 'ענק']].map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+            <span className="w-px h-4 bg-slate-200 mx-1" />
             <button onClick={() => exec('bold')} className={tbBtn} title="מודגש"><Bold size={15} /></button>
             <button onClick={() => exec('italic')} className={tbBtn} title="נטוי"><Italic size={15} /></button>
             <button onClick={() => exec('underline')} className={tbBtn} title="קו תחתון"><Underline size={15} /></button>
+            {/* צבע טקסט — ⚠️ input[type=color] ולא בורר מותאם: הוא נתמך
+                בכל הדפדפנים ופותח את בוחר הצבעים של מערכת ההפעלה. */}
+            <label className={`${tbBtn} relative cursor-pointer`} title="צבע טקסט">
+              <Palette size={15} />
+              <input type="color" defaultValue="#000000"
+                onChange={e => exec('foreColor', e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer" />
+            </label>
             <span className="w-px h-4 bg-slate-200 mx-1" />
             <button onClick={() => exec('insertUnorderedList')} className={tbBtn} title="רשימה"><List size={15} /></button>
             <button onClick={() => exec('insertOrderedList')} className={tbBtn} title="רשימה ממוספרת"><ListOrdered size={15} /></button>
+            <span className="w-px h-4 bg-slate-200 mx-1" />
+            {/* יישור — ⚠️ ברירת המחדל בעברית היא ימין, ולכן הוא ראשון. */}
+            <button onClick={() => exec('justifyRight')} className={tbBtn} title="יישור לימין"><AlignRight size={15} /></button>
+            <button onClick={() => exec('justifyCenter')} className={tbBtn} title="מרכוז"><AlignCenter size={15} /></button>
+            <button onClick={() => exec('justifyLeft')} className={tbBtn} title="יישור לשמאל"><AlignLeft size={15} /></button>
             <span className="w-px h-4 bg-slate-200 mx-1" />
             <button title="קישור" className={tbBtn}
               onClick={() => { const u = prompt('כתובת הקישור:'); if (u) exec('createLink', u) }}>

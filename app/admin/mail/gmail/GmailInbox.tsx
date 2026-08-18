@@ -99,6 +99,8 @@ export default function GmailInbox() {
   const [composeMode, setComposeMode] = useState<'new' | 'reply'>('new')
   const [cTo, setCTo] = useState('')
   const [cSubject, setCSubject] = useState('')
+  /** התיבה שממנה תישלח הודעה חדשה (בורר "מאת"). ריק = התיבה הפעילה. */
+  const [composeFrom, setComposeFrom] = useState('')
   const [accountMenu, setAccountMenu] = useState(false)
   /** תפריט קליק-ימני על שורת הודעה (כמו בג'ימייל). null = סגור. */
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; msg: Message } | null>(null)
@@ -289,6 +291,8 @@ export default function GmailInbox() {
   }
 
   function startNew() {
+    // ברירת המחדל בבורר "מאת" — התיבה שנצפית כרגע
+    setComposeFrom(paramsRef.current.account || '')
     setComposeMode('new')
     setCTo(''); setCSubject('')
     setComposeOpen(true)
@@ -306,7 +310,7 @@ export default function GmailInbox() {
           threadId: composeMode === 'reply' ? selected?.thread_id : undefined,
           // ⚠️ התיבה הפעילה קובעת מי השולח. בתשובה — התיבה שאליה הגיעה
           // ההודעה, אחרת המשפחה מקבלת תשובה מכתובת שלא כתבה אליה.
-          accountId: composeMode === 'reply' ? (selected?.account_id ?? undefined) : (account || undefined),
+          accountId: composeMode === 'reply' ? (selected?.account_id ?? undefined) : (composeFrom || account || undefined),
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -716,7 +720,10 @@ export default function GmailInbox() {
           initialSubject={cSubject}
           accountEmail={(composeMode === 'reply'
             ? accounts.find(a => a.id === selected?.account_id)?.email
-            : activeAccount?.email) ?? null}
+            : accounts.find(a => a.id === composeFrom)?.email ?? activeAccount?.email) ?? null}
+          accounts={accounts.map(a => ({ id: a.id, email: a.email }))}
+          fromId={composeFrom}
+          onFromChange={setComposeFrom}
           onClose={() => setComposeOpen(false)}
           onSent={sendMail}
         />
