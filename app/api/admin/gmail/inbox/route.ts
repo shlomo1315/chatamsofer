@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   if (messageId) {
     const { data } = await db.from('gmail_messages')
       .select(LIST_COLS).eq('gmail_message_id', messageId).maybeSingle()
-    if (!data) return NextResponse.json({ error: '׳”׳”׳•׳“׳¢׳” ׳׳ ׳ ׳׳¦׳׳”' }, { status: 404 })
+    if (!data) return NextResponse.json({ error: 'ההודעה לא נמצאה' }, { status: 404 })
 
     const row = data as unknown as Record<string, unknown>
     const { data: acc } = await db.from('gmail_accounts')
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
   // ׳•׳”׳ ׳׳×׳¢׳“׳›׳ ׳•׳× ׳‘׳›׳ ׳¡׳ ׳›׳¨׳•׳. ׳©׳“׳” ׳ ׳’׳–׳¨ ׳”׳™׳” ׳׳×׳™׳™׳©׳.
   if (folder === 'sent') query = query.contains('labels', ['SENT'])
   else if (folder === 'unread') query = query.eq('is_unread', true).contains('labels', ['INBOX'])
-  else if (folder === 'followup') query = query.contains('labels', ['׳׳˜׳™׳₪׳•׳'])
+  else if (folder === 'followup') query = query.contains('labels', ['לטיפול'])
   else if (folder === 'starred') query = query.contains('labels', ['STARRED'])
   else if (folder === 'all') { /* ׳”׳›׳ ג€” ׳‘׳׳™ ׳¡׳™׳ ׳•׳ ׳×׳•׳•׳™׳× */ }
   else query = query.contains('labels', ['INBOX'])
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
 
   if (error) {
-    console.error('[inbox] ׳©׳׳™׳₪׳” ׳ ׳›׳©׳׳”:', error.message)
+    console.error('[inbox] שליפה נכשלה:', error.message)
     return NextResponse.json({ error: '׳©׳׳™׳₪׳× ׳”׳”׳•׳“׳¢׳•׳× ׳ ׳›׳©׳׳”' }, { status: 500 })
   }
 
@@ -156,10 +156,10 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 25)
 
-  // ׳׳•׳ ׳” "׳׳˜׳™׳₪׳•׳" ג€” ׳׳×׳’׳™׳× ׳‘׳₪׳׳ ׳.
+  // ׳׳•׳ ׳” "לטיפול" ג€” ׳׳×׳’׳™׳× ׳‘׳₪׳׳ ׳.
   const { count: followupCount } = await db.from('gmail_messages')
     .select('id', { count: 'exact', head: true })
-    .is('deleted_at', null).contains('labels', ['׳׳˜׳™׳₪׳•׳'])
+    .is('deleted_at', null).contains('labels', ['לטיפול'])
 
   return NextResponse.json({
     messages: data ?? [],

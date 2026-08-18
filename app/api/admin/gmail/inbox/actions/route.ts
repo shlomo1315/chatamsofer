@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic'
 // ׳©׳‘׳• ׳”׳׳¡׳ ׳׳¨׳׳” "׳ ׳§׳¨׳" ׳‘׳¢׳•׳“ ׳©׳‘׳˜׳׳₪׳•׳ ׳”׳”׳•׳“׳¢׳” ׳¢׳“׳™׳™׳ ׳׳•׳“׳’׳©׳×.
 // ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€ג”€
 
-/** ׳”׳×׳•׳•׳™׳× ׳©׳׳¡׳׳ ׳× "׳׳˜׳™׳₪׳•׳ ׳‘׳”׳׳©׳" ג€” ׳ ׳•׳¦׳¨׳× ׳‘-Gmail ׳‘׳₪׳¢׳ ׳”׳¨׳׳©׳•׳ ׳”. */
-const FOLLOWUP_LABEL = '׳׳˜׳™׳₪׳•׳'
+/** ׳”׳×׳•׳•׳™׳× ׳©׳׳¡׳׳ ׳× "לטיפול ׳‘׳”׳׳©׳" ג€” ׳ ׳•׳¦׳¨׳× ׳‘-Gmail ׳‘׳₪׳¢׳ ׳”׳¨׳׳©׳•׳ ׳”. */
+const FOLLOWUP_LABEL = 'לטיפול'
 
 async function accountFor(
   db: NonNullable<ReturnType<typeof getServiceClient>>,
@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
       case 'reply': {
         const to = String(body.to ?? '').trim()
         if (!to) return NextResponse.json({ error: '׳—׳¡׳¨׳” ׳›׳×׳•׳‘׳× ׳ ׳׳¢׳' }, { status: 400 })
-        const subject = String(body.subject ?? '').trim() || '(׳׳׳ ׳ ׳•׳©׳)'
+        const subject = String(body.subject ?? '').trim() || '(ללא נושא)'
         const html = String(body.html ?? '')
         if (!html.replace(/<[^>]*>/g, '').trim()) {
-          return NextResponse.json({ error: '׳”׳”׳•׳“׳¢׳” ׳¨׳™׳§׳”' }, { status: 400 })
+          return NextResponse.json({ error: 'ההודעה ריקה' }, { status: 400 })
         }
         // ג ן¸ threadId ׳‘׳×׳©׳•׳‘׳” ׳‘׳׳‘׳“: ׳‘׳”׳•׳“׳¢׳” ׳—׳“׳©׳” ׳”׳•׳ ׳”׳™׳” ׳׳©׳¨׳©׳¨ ׳׳•׳×׳” ׳׳©׳™׳—׳”
         // ׳׳§׳¨׳׳™׳×, ׳•׳”׳”׳•׳“׳¢׳” ׳”׳™׳™׳×׳” ׳ ׳¢׳׳׳× ׳‘׳×׳•׳ ׳©׳¨׳©׳•׳¨ ׳©׳׳™׳ ׳• ׳§׳©׳•׳¨ ׳׳׳™׳”.
@@ -172,14 +172,14 @@ export async function POST(request: NextRequest) {
             replyTo: acc.email,
           })
         }
-        console.log(`[inbox/actions] ׳ ׳©׳׳— ׳-${acc.email} ׳׳ ${to}`)
+        console.log(`[inbox/actions] נשלח מ-${acc.email} אל ${to}`)
         return NextResponse.json({ ok: true })
       }
 
       // ג”€ג”€ ׳׳¦׳‘ ׳§׳¨׳™׳׳” ג”€ג”€
       case 'mark-read':
       case 'mark-unread': {
-        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
         const unread = body.action === 'mark-unread'
         await gmail.users.messages.modify({
           userId: 'me', id: body.messageId,
@@ -190,10 +190,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true })
       }
 
-      // ג”€ג”€ ׳׳˜׳™׳₪׳•׳ ׳‘׳”׳׳©׳ ג”€ג”€
+      // ג”€ג”€ לטיפול ׳‘׳”׳׳©׳ ג”€ג”€
       case 'followup':
       case 'unfollowup': {
-        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
         const id = await labelId(gmail, FOLLOWUP_LABEL)
         if (!id) return NextResponse.json({ error: '׳™׳¦׳™׳¨׳× ׳”׳×׳•׳•׳™׳× ׳ ׳›׳©׳׳”' }, { status: 500 })
         const add = body.action === 'followup'
@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
           requestBody: add ? { addLabelIds: [id] } : { removeLabelIds: [id] },
         })
         // ג ן¸ ׳”׳×׳•׳•׳™׳× ׳ ׳©׳׳¨׳× ׳’׳ ׳‘׳׳™׳ ׳“׳§׳¡ ׳›׳“׳™ ׳©׳”׳¡׳™׳ ׳•׳ ׳‘׳׳¡׳ ׳™׳¢׳‘׳•׳“ ׳‘׳׳™ ׳׳₪׳ ׳•׳×
-        // ׳-Gmail ׳‘׳›׳ ׳˜׳¢׳™׳ ׳”.
+        // ל-Gmail בכל טעינה.
         const { data: cur } = await db.from('gmail_messages')
           .select('labels').eq('gmail_message_id', body.messageId).maybeSingle()
         const labels = ((cur as { labels?: string[] } | null)?.labels ?? []).filter(l => l !== FOLLOWUP_LABEL)
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
       // ג”€ג”€ ׳׳—׳™׳§׳” / ׳׳¨׳›׳•׳‘ ג”€ג”€
       case 'trash':
       case 'archive': {
-        if (!body.messageId) return NextResponse.json({ error: '׳—׳¡׳¨ ׳׳–׳”׳” ׳”׳•׳“׳¢׳”' }, { status: 400 })
+        if (!body.messageId) return NextResponse.json({ error: 'חסר מזהה הודעה' }, { status: 400 })
         if (body.action === 'trash') {
           await gmail.users.messages.trash({ userId: 'me', id: body.messageId })
           // ג ן¸ ׳׳—׳™׳§׳” ׳¨׳›׳” ׳‘׳׳™׳ ׳“׳§׳¡: ׳”׳©׳™׳•׳ ׳׳›׳¨׳˜׳¡׳× ׳•׳”׳×׳™׳¢׳•׳“ ׳©׳ ׳‘׳ ׳• ׳¢׳ ׳”׳”׳•׳“׳¢׳”
@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error(`[inbox/actions] ${body.action} ׳ ׳›׳©׳:`, msg)
-    return NextResponse.json({ error: `׳”׳₪׳¢׳•׳׳” ׳ ׳›׳©׳׳”: ${msg}` }, { status: 500 })
+    console.error(`[inbox/actions] ${body.action} נכשל:`, msg)
+    return NextResponse.json({ error: `הפעולה נכשלה: ${msg}` }, { status: 500 })
   }
 }
