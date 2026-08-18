@@ -210,6 +210,33 @@ const ACTION_DEPARTMENT: Record<string, string | undefined> = {
 
 // ─── Shared helpers ───
 
+// תאריך לידה לתצוגה — ריק כשאינו תקין.
+//
+// 🔴 `new Date("לא-תאריך")` **אינו זורק חריגה** — הוא מחזיר Invalid Date,
+// ולכן try/catch סביבו לא נתפס לעולם ו-toLocaleDateString מדפיס למסך את
+// המילים "Invalid Date". זה מה שהמשתמשים ראו בכרטיס הרישום המהיר.
+//
+// ⚠️ מוחזר null ולא המחרוזת הגולמית: ערך שאינו תאריך (מחרוזת ריקה, אפסים,
+// טקסט מיובא) אינו מידע שיש להציג לנרשם — עדיף להשמיט את השורה כולה.
+function fmtBirthDate(v?: string | null): string | null {
+  if (!v) return null
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString('he-IL')
+}
+
+// אותו ערך, בפורמט ש-<input type="date"> מקבל (YYYY-MM-DD).
+//
+// 🔴 ערך שאינו בפורמט הזה מפיל את רינדור השדה. זה מה שהקריס את המסך
+// בבחירת "נשואים": תאריך הלידה של הילד הוזרם מהמאגר היישר לתוך הטופס,
+// וכשהוא היה פגום (אותו ערך שהציג "Invalid Date") הדף כולו נשבר.
+function toDateInputValue(v?: string | null): string {
+  if (!v) return ''
+  const d = new Date(v)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().slice(0, 10)
+}
+
 function Field({ label, required, children, hint }: {
   // ReactNode (ולא string) כדי שתווית תוכל להיות <EditableText> במצב עריכה
   label: React.ReactNode; required?: boolean; children: React.ReactNode; hint?: React.ReactNode
@@ -1862,10 +1889,12 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   useEffect(() => {
     if (!childSelf || !regForm.marital_status) return
     const married = regForm.marital_status === 'נשואים'
+    // ⚠️ מסונן לפני ההזרמה לטופס — ראה toDateInputValue.
+    const childBirth = toDateInputValue(childSelf.birth_date)
     if (married && childSelf.gender === 'female') {
-      setRegForm(f => ({ ...f, spouse_name: childSelf.name, spouse_id_number: childSelf.id_number, spouse_birth_date: childSelf.birth_date, gender: 'female', full_name: '', id_number: '', birth_date: '' }))
+      setRegForm(f => ({ ...f, spouse_name: childSelf.name, spouse_id_number: childSelf.id_number, spouse_birth_date: childBirth, gender: 'female', full_name: '', id_number: '', birth_date: '' }))
     } else {
-      setRegForm(f => ({ ...f, full_name: childSelf.name, id_number: childSelf.id_number, birth_date: childSelf.birth_date, gender: childSelf.gender, spouse_name: '', spouse_id_number: '', spouse_birth_date: '' }))
+      setRegForm(f => ({ ...f, full_name: childSelf.name, id_number: childSelf.id_number, birth_date: childBirth, gender: childSelf.gender, spouse_name: '', spouse_id_number: '', spouse_birth_date: '' }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childSelf, regForm.marital_status])
@@ -4338,7 +4367,10 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm mb-4">
                   <p className="col-span-2"><span className="text-slate-400 text-xs block">שם</span><span className="font-medium text-slate-800">{childMatch.childData.name || '—'}</span></p>
                   <p><EditableText k="child.field.id" className="text-slate-400 text-xs block" /><span className="ltr-num text-slate-700">{childMatch.childData.id_number}</span></p>
-                  {childMatch.childData.birth_date && <p><EditableText k="child.field.birthDate" className="text-slate-400 text-xs block" /><span className="text-slate-700 ltr-num">{(() => { try { return new Date(childMatch.childData.birth_date).toLocaleDateString('he-IL') } catch { return childMatch.childData.birth_date } })()}</span></p>}
+                  {childMatch.childData.birth_date && fmtBirthDate(childMatch.childData.birth_date) && (
+                    <p><EditableText k="child.field.birthDate" className="text-slate-400 text-xs block" />
+                      <span className="text-slate-700 ltr-num">{fmtBirthDate(childMatch.childData.birth_date)}</span></p>
+                  )}
                 </div>
                 <p className="text-slate-500 text-sm">
                   כדי שתירשם אתה בעצמך, עבור לרישום מהיר.
