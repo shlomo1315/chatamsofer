@@ -98,6 +98,27 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
   // 🔴 "בקשה ראשונה" חייב להביא בחשבון גם את הישנות — אחרת המסך מצהיר
   // "זו הבקשה הראשונה" למשפחה שכבר לקחה הלוואה במערכת הקודמת.
   const anyHistory = loanHistory.count > 0 || legacy.count > 0
+
+  // ── ההיסטוריה המאוחדת ──
+  //
+  // 🔴 המונים והרשימה כוללים את שתי המערכות. הפרדה בין "המערכת הנוכחית"
+  // ל"המערכת הקודמת" היא פרט טכני של המשרד — למשפחה יש היסטוריית הלוואות
+  // אחת, ושני סכומים נפרדים הכריחו את המזכיר לחבר בראש.
+  //
+  // ⚠️ במערכת הישנה takenAmount הוא הכסף שיצא בפועל (approvedAmount הוא
+  // רק האישור). לכן הוא המקבילה המדויקת ל-disbursed_at החדש, והוא זה
+  // שנספר — אחרת המונה היה מציג כסף שאושר ומעולם לא נלקח.
+  const legacyDisbursed = legacy.loans.filter(l => l.takenAmount !== null && l.takenAmount !== undefined)
+  const mergedCount = loanHistory.approvedCount + legacyDisbursed.length
+  const mergedTotal = loanHistory.totalApproved
+    + legacyDisbursed.reduce((s, l) => s + Number(l.takenAmount ?? 0), 0)
+
+  // ⚠️ הישנות בסוף: אין להן תאריך למיין לפיו, ופיזורן בין החדשות היה
+  // יוצר סדר אקראי שנראה כתקלה.
+  const mergedRows = [
+    ...loanHistory.loans.map(l => ({ kind: 'current' as const, row: l })),
+    ...legacy.loans.map(l => ({ kind: 'legacy' as const, row: l })),
+  ]
   const family = [b.familyName, b.husbandName].filter(Boolean).join(' ')
 
   return (
@@ -188,9 +209,9 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
             <Banknote size={16} className="text-emerald-600" />
             <h3 className="font-semibold text-slate-900 text-sm">היסטוריית הלוואות</h3>
           </div>
-          {loanHistory.count > 0 && (
+          {mergedRows.length > 0 && (
             <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[11px] font-extrabold text-amber-800">
-              {loanHistory.count} בקשות קודמות
+              {mergedRows.length} בקשות קודמות
             </span>
           )}
         </div>
@@ -199,22 +220,16 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
           <p className="px-4 py-5 text-center text-sm text-slate-400">
             זו הבקשה הראשונה של המשפחה
           </p>
-        ) : loanHistory.count === 0 ? (
-          // ⚠️ יש היסטוריה ישנה בלבד — נאמר במפורש, כדי שהמזכיר לא יסיק
-          // מהיעדר בקשות במערכת שזו משפחה חדשה.
-          <p className="px-4 py-3 text-center text-xs text-slate-500">
-            אין בקשות במערכת הנוכחית — ראו הלוואות קודמות למטה
-          </p>
         ) : (
           <>
             <div className="px-4 py-3 grid grid-cols-2 gap-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center">
-                <p className="text-xl font-extrabold text-slate-800 leading-none">{loanHistory.approvedCount}</p>
+                <p className="text-xl font-extrabold text-slate-800 leading-none">{mergedCount}</p>
                 <p className="text-[11px] text-slate-500 mt-1">הלוואות שהועבר בהן כסף</p>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-center">
                 <p className="text-xl font-extrabold text-emerald-800 leading-none tabular-nums">
-                  {fmtCur(loanHistory.totalApproved)}
+                  {fmtCur(mergedTotal)}
                 </p>
                 <p className="text-[11px] text-emerald-700 mt-1">סה״כ שהועבר בפועל</p>
               </div>
@@ -230,90 +245,62 @@ export default function FamilySummary({ loanId, section = 'all' }: { loanId: str
             )}
 
             <div className="px-4 pb-4 flex flex-col gap-1.5">
-              {loanHistory.loans.map(l => (
-                <Link
-                  key={l.id}
-                  href={`/admin/loans/${l.id}`}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 hover:border-slate-200 transition-colors"
-                >
-                  <span className="text-xs text-slate-500">{fmtDate(l.created_at)}</span>
-                  <span className="text-sm font-semibold text-slate-800 tabular-nums">
-                    {fmtCur(Number(l.approved_amount ?? l.amount))}
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-600 bg-slate-100 rounded-full px-2 py-0.5">
-                    {STATUS_HE[l.status] ?? l.status}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ── הלוואות מהמערכת הקודמת ── */}
-        {/* ⚠️ בתוך אותו כרטיס אבל מופרד בקו: מבחינת המזכיר זו אותה שאלה
-            ("מה היה עם המשפחה הזו"), אבל אלה רשומות היסטוריות בלי סטטוס
-            חי ובלי כרטסת לפתוח — ולכן אינן נראות כבקשות פעילות. */}
-        {legacy.count > 0 && (
-          <div className="border-t border-slate-100 bg-slate-50/60">
-            <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">
-                הלוואות במערכת הקודמת
-              </span>
-              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-extrabold text-slate-700">
-                {legacy.count}
-              </span>
-            </div>
-
-            {/* 🔴 שתי הקוביות שמסבירות את ההבחנה: אושר מול נלקח בפועל.
-                כמעט מחצית מההלוואות ההיסטוריות אושרו ומעולם לא נלקחו,
-                וסכום אחד מאוחד היה מטשטש בדיוק את זה. */}
-            <div className="px-4 pb-2.5 grid grid-cols-2 gap-2">
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-center">
-                <p className="text-base font-extrabold text-slate-800 leading-none tabular-nums">
-                  {fmtCur(legacy.totalApproved)}
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1">אושר · {legacy.count} הלוואות</p>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center">
-                <p className="text-base font-extrabold text-emerald-800 leading-none tabular-nums">
-                  {fmtCur(legacy.totalTaken)}
-                </p>
-                <p className="text-[10px] text-emerald-700 mt-1">נלקח בפועל · {legacy.takenCount} הלוואות</p>
-              </div>
-            </div>
-
-            <div className="px-4 pb-4 flex flex-col gap-1.5">
-              {legacy.loans.map(l => {
+              {mergedRows.map(item => {
+                if (item.kind === 'current') {
+                  const l = item.row
+                  return (
+                    <Link
+                      key={l.id}
+                      href={`/admin/loans/${l.id}`}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50 hover:border-slate-200 transition-colors"
+                    >
+                      <span className="text-xs text-slate-500">{fmtDate(l.created_at)}</span>
+                      <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                        {fmtCur(Number(l.approved_amount ?? l.amount))}
+                      </span>
+                      <span className="text-[11px] font-medium text-slate-600 bg-slate-100 rounded-full px-2 py-0.5">
+                        {STATUS_HE[l.status] ?? l.status}
+                      </span>
+                    </Link>
+                  )
+                }
+                // ── שורה מהמערכת הקודמת ──
+                // ⚠️ אותו מבנה שורה בדיוק, אבל לא Link: אין כרטסת לפתוח.
                 // ⚠️ null בלבד = לא נלקח. אפס הוא ערך אמיתי ("בוצע בסכום
                 // אפס") ואינו אותו דבר.
+                const l = item.row
                 const taken = l.takenAmount !== null && l.takenAmount !== undefined
                 return (
                   <div key={l.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-white px-3 py-2">
-                    <span className="text-[11px] text-slate-400 tabular-nums flex-shrink-0">
-                      {l.fileNumber ? `תיק ${l.fileNumber}` : '—'}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                    {/* 🔴 במקום התאריך: לרשומות הישנות אין תאריך במאגר.
+                        תא ריק היה נראה כנתון חסר; המשפט אומר למה. */}
+                    <span className="text-xs text-slate-400">
+                      מהמערכת הישנה{l.fileNumber ? ` · תיק ${l.fileNumber}` : ''}
                     </span>
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                      <span className="text-xs text-slate-500 tabular-nums">
-                        אושר {fmtCur(Number(l.approvedAmount ?? 0))}
+                    <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                      {fmtCur(Number(taken ? l.takenAmount : l.approvedAmount ?? 0))}
+                    </span>
+                    {taken ? (
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                        בוצע
                       </span>
-                      {taken ? (
-                        <span className="text-xs font-semibold text-emerald-700 tabular-nums">
-                          בוצע {fmtCur(Number(l.takenAmount))}
-                        </span>
-                      ) : (
-                        // 🔴 העובדה שביקשת שתהיה גלויה: אושר ולא נלקח.
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
-                          לא נלקח
-                        </span>
-                      )}
-                    </div>
+                    ) : (
+                      // 🔴 העובדה שצריכה להישאר גלויה: אושר ולא נלקח.
+                      <span className="text-[11px] font-medium text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                        לא נלקח
+                      </span>
+                    )}
                   </div>
                 )
               })}
             </div>
-          </div>
+          </>
         )}
+
+        {/* 🔴 הכרטיסים הנפרדים של המערכת הקודמת הוסרו: הסכומים שלהם
+            נכנסים למונים שלמעלה, והשורות שלהם לרשימה המאוחדת. שני
+            סיכומים נפרדים הכריחו את המזכיר לחבר בראש. */}
       </div>
       )}
     </div>
