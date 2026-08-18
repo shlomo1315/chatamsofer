@@ -70,7 +70,9 @@ const REFRESH_MS = 5_000
 
 export default function GmailInbox() {
   const [folder, setFolder] = useState<Folder>('inbox')
-  const [department, setDepartment] = useState('')
+  // ⚠️ נשאר כפרמטר סינון (נשלח ל-API ומשמש במונה), אך אין לו יותר בורר
+  // במסך — הסינון לפי מחלקה נעשה בבחירת התיבה.
+  const [department] = useState('')
   const [account, setAccount] = useState('')
   const [activeLabel, setActiveLabel] = useState('')
   const [q, setQ] = useState('')
@@ -534,14 +536,10 @@ export default function GmailInbox() {
                   className="absolute top-1/2 -translate-y-1/2 left-2 text-slate-400 hover:text-slate-600"><X size={14} /></button>
               )}
             </form>
-            <select value={department} onChange={e => { setDepartment(e.target.value); setPage(0) }}
-              className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-200">
-              <option value="">כל המחלקות</option>
-              {DEPTS.map(d => {
-                const n = unreadByDept[d.key] ?? 0
-                return <option key={d.key} value={d.key}>{d.label}{n > 0 ? ` (${n})` : ''}</option>
-              })}
-            </select>
+            {/* ⚠️ בורר "כל המחלקות" הוסר. הוא היה כפילות של בורר התיבות
+                שבכותרת — כל תיבה שייכת ממילא למחלקה — והציג רשימה ארוכה
+                של 12 מחלקות (כולל "תיבה 8/9/10" ריקות) מעל כל מסך.
+                הסינון לפי מחלקה נעשה בבחירת התיבה. */}
           </div>
 
           {loading ? (
