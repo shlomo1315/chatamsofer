@@ -1,5 +1,5 @@
 'use client'
-import { Gift, Baby, Landmark, ArrowLeft } from 'lucide-react'
+import { Gift, Baby, Landmark, GitBranch, ArrowLeft } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מסך הבית של דף השיתוף — שלוש מחלקות, כניסה אחת לכל אחת.
@@ -13,7 +13,7 @@ import { Gift, Baby, Landmark, ArrowLeft } from 'lucide-react'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DeptSummary {
-  key: 'holidays' | 'maternity' | 'loans'
+  key: 'holidays' | 'maternity' | 'loans' | 'tree'
   /** המספר הראשי — מה שההנהלה מסתכלת עליו. */
   headline: number
   headlineLabel: string
@@ -43,6 +43,14 @@ const META = {
     Icon: Landmark,
     ink: '#1d4ed8', tint: '#eff4ff', ring: '#cfdcfa',
   },
+  // ⚠️ עץ הדורות כמחלקה עצמאית ולא כלשונית בתוך חלוקות חגים: אין ביניהם
+  // שום קשר, והוא גם הכבד ביותר לטעינה — ולכן נטען רק בכניסה אליו.
+  tree: {
+    title: 'צאצאים ועץ הדורות',
+    subtitle: 'שרשרת היוחסין המלאה',
+    Icon: GitBranch,
+    ink: '#7c3aed', tint: '#f5f0ff', ring: '#ddd0fa',
+  },
 } as const
 
 export default function Home({ summaries, onOpen }: {
@@ -69,7 +77,7 @@ export default function Home({ summaries, onOpen }: {
       </div>
 
       {/* ── שלוש המחלקות ── */}
-      <div className="grid gap-5 md:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {summaries.map(s => {
           const m = META[s.key]
           const { Icon } = m

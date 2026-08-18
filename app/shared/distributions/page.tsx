@@ -141,8 +141,8 @@ function PasswordScreen({ onAuth }: { onAuth: () => void }) {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/20 mb-4">
               <Lock size={28} className="text-white" />
             </div>
-            <h1 className="text-xl font-bold text-white">חלוקות חגים</h1>
-            <p className="text-indigo-200 text-sm mt-1">היכל החתם סופר</p>
+            <h1 className="text-xl font-bold text-white">איגוד הצאצאים</h1>
+            <p className="text-indigo-200 text-sm mt-1">שעל ידי היכל החתם סופר</p>
           </div>
           <form onSubmit={submit} className="px-8 py-7 flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
@@ -651,6 +651,11 @@ export default function SharedDistributionsPage() {
   const [distributions, setDistributions] = useState<Distribution[]>([])
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
+  // 🔴 העץ נטען **פעם אחת בלבד**, לפי דרישה, ולעולם לא ברענון האוטומטי.
+  // קודם הוא נשלף בכל טעינה וכל 10 שניות — אלפי צמתים ברשת גם כשאיש
+  // לא הסתכל עליו. הדגל מונע שליפה חוזרת בכל כניסה למחלקה.
+  const [lineageLoaded, setLineageLoaded] = useState(false)
+  const [lineageLoading, setLineageLoading] = useState(false)
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
   const [maternity, setMaternity] = useState<MaternityRow[]>([])
   const [loans, setLoans] = useState<LoanRow[]>([])
@@ -658,7 +663,7 @@ export default function SharedDistributionsPage() {
   // 🔴 ניווט דו-שלבי: מסך בית עם שלוש מחלקות, וכניסה לאחת מהן.
   // ⚠️ החליף שורת טאבים: שלוש מחלקות שונות לגמרי (לא שלוש תצוגות של
   // אותו נתון) — טאבים היו מרמזים שמדובר בחתכים של אותו דבר.
-  const [dept, setDept] = useState<null | 'holidays' | 'maternity' | 'loans'>(null)
+  const [dept, setDept] = useState<null | 'holidays' | 'maternity' | 'loans' | 'tree'>(null)
   const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree' | 'maternity'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -713,8 +718,19 @@ export default function SharedDistributionsPage() {
         progress: loanApproved ? loanOut.length / loanApproved : 0,
         progressLabel: 'שיעור המסירה',
       },
+      {
+        // ⚠️ המונה מגיע מהמסלול הראשי (ספירה בלבד); הצמתים עצמם נטענים
+        // רק בכניסה למחלקה — ראה loadLineage.
+        key: 'tree', headline: beneficiariesCount, headlineLabel: 'צאצאים רשומים',
+        rows: [
+          { label: 'צמתים בעץ', value: lineageNodes.length ? lineageNodes.length.toLocaleString('he-IL') : '—' },
+          { label: 'דורות', value: lineageNodes.length ? String(Math.max(...lineageNodes.map(n => n.generation || 0))) : '—' },
+        ],
+        progress: 1,
+        progressLabel: 'שרשרת היוחסין',
+      },
     ]
-  }, [recipients, distributions, maternity, loans])
+  }, [recipients, distributions, maternity, loans, beneficiariesCount, lineageNodes])
 
   const load = useCallback(async () => {
     try {
@@ -724,7 +740,6 @@ export default function SharedDistributionsPage() {
         const d = await res.json()
         setDistributions(d.distributions ?? [])
         setRecipients(d.recipients ?? [])
-        setLineageNodes(d.lineageNodes ?? [])
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setMaternity(d.maternity ?? [])
         setLoans(d.loans ?? [])
@@ -735,8 +750,26 @@ export default function SharedDistributionsPage() {
     } catch { /* השאר במצב הנוכחי — הטיימר ינסה שוב */ }
   }, [])
 
+  // ⚠️ נטען פעם אחת בכניסה למחלקת עץ הדורות, ולא ברענון האוטומטי.
+  const loadLineage = useCallback(async () => {
+    if (lineageLoaded || lineageLoading) return
+    setLineageLoading(true)
+    try {
+      const r = await fetch('/api/shared/distributions/lineage', { cache: 'no-store' })
+      if (r.ok) {
+        const d = await r.json()
+        setLineageNodes(d.lineageNodes ?? [])
+        setLineageLoaded(true)
+      }
+    } catch { /* נשאר לא-טעון; ניסיון חוזר בכניסה הבאה */ }
+    finally { setLineageLoading(false) }
+  }, [lineageLoaded, lineageLoading])
+
   // טעינה ראשונית
   useEffect(() => { void load() }, [load])
+
+  // ⚠️ נטען רק כשנכנסים למחלקת העץ.
+  useEffect(() => { if (dept === 'tree') void loadLineage() }, [dept, loadLineage])
 
   // ⚠️ רענון חי — ספירה לאחור מ-10 שניות, ואז load. רץ רק כשפתוח ומאומת.
   // polling (ולא Supabase Realtime שהעמיס בעבר). הספירה מוצגת למשתמש.

@@ -22,9 +22,24 @@ export function DeptHeader({ title, subtitle, ink, onBack }: {
   )
 }
 
+/**
+ * סכום בשקלים — הספרות ואז ₪ משמאלן.
+ *
+ * ⚠️ רכיב ולא מחרוזת: המספר חייב להיות מבודד (unicode-bidi) מהסימן, אחרת
+ * ה-₪ קופץ לצד הלא נכון וגם הפסיקים מתערבבים. ראה .ils ב-globals.css.
+ */
+export function Ils({ value }: { value: number }) {
+  return (
+    <span className="ils">
+      <span className="ils-num">{Math.round(value).toLocaleString('he-IL')}</span>
+      <span className="ils-sign">₪</span>
+    </span>
+  )
+}
+
 /** קוביית מספר. ⚠️ tone נושא משמעות ולא סתם צבע — ראה שימושים. */
 export function Stat({ label, value, sub, ink = '#3a3630', tint = '#faf7ef' }: {
-  label: string; value: string; sub?: string; ink?: string; tint?: string
+  label: string; value: React.ReactNode; sub?: string; ink?: string; tint?: string
 }) {
   return (
     <div className="rounded-2xl border border-[#eee6d3] bg-white px-4 py-3.5">
@@ -51,14 +66,14 @@ export function Stat({ label, value, sub, ink = '#3a3630', tint = '#faf7ef' }: {
 export function BarList({ items, ink, fmt, empty = 'אין נתונים', max: maxItems = 12 }: {
   items: { label: string; value: number; sub?: string }[]
   ink: string
-  fmt?: (n: number) => string
+  fmt?: (n: number) => React.ReactNode
   empty?: string
   max?: number
 }) {
   if (!items.length) return <p className="py-8 text-center text-sm text-[#a08a5a]">{empty}</p>
   const shown = items.slice(0, maxItems)
   const max = Math.max(...shown.map(i => i.value), 1)
-  const f = fmt ?? ((n: number) => n.toLocaleString('he-IL'))
+  const f: (n: number) => React.ReactNode = fmt ?? ((n: number) => n.toLocaleString('he-IL'))
 
   return (
     <div className="flex flex-col gap-1.5">

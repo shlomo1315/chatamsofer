@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { DeptHeader, Stat, BarList, Section } from './Chrome'
+import { Search } from 'lucide-react'
+import { DeptHeader, Stat, BarList, Section, Ils } from './Chrome'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // מחלקת עזר יולדות — תצוגה בלבד.
@@ -35,7 +36,8 @@ export interface MaternityRow {
   } | null
 }
 
-const cur = (n: number) => `${Math.round(n).toLocaleString('he-IL')} ₪`
+// ⚠️ רכיב ולא מחרוזת — ראה Ils ב-Chrome.
+const cur = (n: number) => <Ils value={n} />
 const d = (s?: string | null) => (s ? new Date(s).toLocaleDateString('he-IL') : '—')
 
 const monthKey = (s?: string | null) => {
@@ -53,6 +55,7 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [home, setHome] = useState('all')
+  const [q, setQ] = useState('')
 
   // ⚠️ הסינון לפי *תאריך ההגעה* ולא הלידה: השאלה היא כמה שולם בתקופה,
   // והתשלום נגזר מהשהות בבית ההחלמה.
@@ -70,7 +73,7 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
       if (t && ts >= t) return false
       return true
     })
-  }, [rows, from, to, home])
+  }, [rows, from, to, home, q])
 
   const stats = useMemo(() => {
     let arrived = 0, billed = 0, nights = 0, paid = 0, unbilled = 0
@@ -103,17 +106,51 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
     }
   }, [filtered])
 
-  const allHomes = useMemo(
-    () => [...new Set(rows.map(r => r.recovery_home?.trim()).filter(Boolean) as string[])].sort(),
-    [rows],
-  )
+  // ⚠️ עם מונה לכל בית — הכפתור עצמו מספר כמה יולדות שם, בלי להיכנס.
+  const homeCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of rows) {
+      const h = r.recovery_home?.trim()
+      if (h) m.set(h, (m.get(h) ?? 0) + 1)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [rows])
+
+  const homeChip = (on: boolean) =>
+    `rounded-full border px-3 py-1 text-[11px] font-bold transition ${
+      on ? 'border-[#0f766e] bg-[#0f766e] text-white' : 'border-[#e8dfc9] bg-white text-[#6b5d3e] hover:border-[#0f766e]/40'
+    }`
 
   return (
     <div className="flex flex-col gap-5">
       <DeptHeader title="עזר יולדות" subtitle="בתי החלמה · תשלומים · כרטיסי מזון" ink={INK} onBack={onBack} />
 
       {/* ── מסננים ── */}
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#e8dfc9] bg-white px-5 py-4">
+      <div className="flex flex-col gap-3 rounded-2xl border border-[#e8dfc9] bg-white px-5 py-4">
+        {/* ⚠️ חיפוש חופשי על כל השדות — לא צריך לדעת מראש באיזו עמודה. */}
+        <div className="relative">
+          <Search size={15} className="absolute top-1/2 -translate-y-1/2 right-3 text-[#c4b998]" />
+          <input value={q} onChange={e => setQ(e.target.value)}
+            placeholder="חיפוש בשם, עיר, בית החלמה או שם התינוק…"
+            className="w-full rounded-xl border border-[#e8dfc9] py-2.5 pr-9 pl-3 text-[13px] text-[#3a3630] outline-none focus:border-[#d9b95c]" />
+        </div>
+
+        {/* 🔴 כפתורי סינון ולא רשימה נפתחת: הרשימה הסתירה כמה בתי החלמה יש
+            ומה גודלם, וחייבה שתי פעולות לכל בדיקה. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-bold text-[#a08a5a]">בית החלמה:</span>
+          <button type="button" onClick={() => setHome('all')} className={homeChip(home === 'all')}>
+            הכל ({rows.length})
+          </button>
+          {homeCounts.map(([name, count]) => (
+            <button key={name} type="button" onClick={() => setHome(home === name ? 'all' : name)}
+              className={homeChip(home === name)}>
+              {name} ({count})
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-bold text-[#a08a5a]">מתאריך</span>
           <input type="date" value={from} onChange={e => setFrom(e.target.value)}
@@ -124,16 +161,8 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
           <input type="date" value={to} onChange={e => setTo(e.target.value)}
             className="rounded-xl border border-[#e8dfc9] px-3 py-2 text-[12px] text-[#3a3630] outline-none focus:border-[#d9b95c]" />
         </label>
-        <label className="flex flex-col gap-1 min-w-44">
-          <span className="text-[11px] font-bold text-[#a08a5a]">בית החלמה</span>
-          <select value={home} onChange={e => setHome(e.target.value)}
-            className="rounded-xl border border-[#e8dfc9] px-3 py-2 text-[12px] text-[#3a3630] outline-none focus:border-[#d9b95c]">
-            <option value="all">כל בתי ההחלמה</option>
-            {allHomes.map(h => <option key={h} value={h}>{h}</option>)}
-          </select>
-        </label>
-        {(from || to || home !== 'all') && (
-          <button type="button" onClick={() => { setFrom(''); setTo(''); setHome('all') }}
+        {(from || to || home !== 'all' || q) && (
+          <button type="button" onClick={() => { setFrom(''); setTo(''); setHome('all'); setQ('') }}
             className="rounded-xl border border-[#e8dfc9] px-3 py-2 text-[11px] font-bold text-[#8a7a56] transition hover:border-rose-300 hover:text-rose-600">
             ניקוי המסננים
           </button>
@@ -141,6 +170,7 @@ export default function MaternityDept({ rows, onBack }: { rows: MaternityRow[]; 
         <span className="mr-auto text-[11px] text-[#a08a5a]">
           מוצגות <b className="text-[#3a3630] ltr-num">{filtered.length.toLocaleString('he-IL')}</b> רשומות
         </span>
+        </div>
       </div>
 
       {/* ── מספרי ליבה ── */}

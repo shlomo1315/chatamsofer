@@ -47,12 +47,11 @@ export async function GET(req: NextRequest) {
     recipients = rows
   }
 
-  // עץ הדורות — לעץ הוויזואלי בדף השיתוף. קל-משקל, מרונדר בצד הלקוח.
-  const { rows: lineageNodes } = await fetchAllRows<unknown>((from, to) => admin
-    .from('lineage_nodes')
-    .select('id, name, parent_id, generation, status')
-    .order('id')
-    .range(from, to))
+  // 🔴 עץ הדורות **הוצא מכאן** למסלול /lineage הנפרד.
+  //
+  // ⚠️ המסלול הזה רץ בכל טעינה *וכל 10 שניות* ברענון האוטומטי, ולכן
+  // אלפי צמתים עברו ברשת כל 10 שניות גם כשאיש לא הסתכל על העץ. זו
+  // הייתה סיבת האיטיות של הדף כולו.
 
   // סה"כ צאצאים רשומים במערכת (לקוביית הסיכום בדשבורד) — ספירה בלבד, ללא נתונים.
   const { count: beneficiariesCount } = await admin
@@ -97,7 +96,6 @@ export async function GET(req: NextRequest) {
     {
       distributions: distributions ?? [],
       recipients,
-      lineageNodes,
       beneficiariesCount: beneficiariesCount ?? 0,
       maternity,
     },
