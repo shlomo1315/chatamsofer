@@ -6,7 +6,7 @@ import LoansDept, { type LoanRow, type LegacySummary } from './panels/LoansDept'
 import { DeptHeader } from './panels/Chrome'
 import SharedRecipientsTable from './panels/SharedRecipientsTable'
 import Image from 'next/image'
-import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
+import { Lock, LogIn, Loader2, RefreshCw, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
 import type { RegisterSource } from '@/lib/distributionSources'
 import LineageTreeSvg from '@/app/lineage-review/[token]/LineageTreeSvg'
@@ -629,7 +629,7 @@ export default function SharedDistributionsPage() {
   const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree' | 'maternity'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [countdown, setCountdown] = useState(10)
+  const [refreshing, setRefreshing] = useState(false)
 
   // ── סיכומי שלוש המחלקות למסך הבית ──
   // ⚠️ נגזרים מהנתונים שכבר נטענו ולא בשאילתה נוספת: הדף מרענן כל 10
@@ -681,15 +681,15 @@ export default function SharedDistributionsPage() {
         progressLabel: 'שיעור המסירה',
       },
       {
-        // ⚠️ המונה מגיע מהמסלול הראשי (ספירה בלבד); הצמתים עצמם נטענים
-        // רק בכניסה למחלקה — ראה loadLineage.
+        // ⚠️ המונה מגיע מהמסלול הראשי (ספירה בלבד). הצמתים עצמם נטענים רק
+        // בכניסה למחלקה, ולכן אין כאן שורות משנה: הצגת ״—״ נראתה כתקלה,
+        // ופס על 100% קבוע הציג מדד שאינו קיים.
         key: 'tree', headline: beneficiariesCount, headlineLabel: 'צאצאים רשומים',
         rows: [
-          { label: 'צמתים בעץ', value: lineageNodes.length ? lineageNodes.length.toLocaleString('he-IL') : '—' },
-          { label: 'דורות', value: lineageNodes.length ? String(Math.max(...lineageNodes.map(n => n.generation || 0))) : '—' },
+          { label: 'עץ היוחסין', value: 'שרשרת מלאה' },
         ],
-        progress: 1,
-        progressLabel: 'שרשרת היוחסין',
+        progress: null,
+        progressLabel: '',
       },
     ]
   }, [recipients, distributions, maternity, loans, beneficiariesCount, lineageNodes])
@@ -707,7 +707,6 @@ export default function SharedDistributionsPage() {
         setLoans(d.loans ?? [])
         if (d.legacyLoans) setLegacyLoans(d.legacyLoans)
         setState('unlocked')
-        setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
     } catch { /* השאר במצב הנוכחי — הטיימר ינסה שוב */ }
   }, [])
@@ -742,18 +741,14 @@ export default function SharedDistributionsPage() {
   // ⚠️ נטען רק כשנכנסים למחלקת העץ.
   useEffect(() => { if (dept === 'tree') void loadLineage() }, [dept, loadLineage])
 
-  // ⚠️ רענון חי — ספירה לאחור מ-10 שניות, ואז load. רץ רק כשפתוח ומאומת.
-  // polling (ולא Supabase Realtime שהעמיס בעבר). הספירה מוצגת למשתמש.
-  useEffect(() => {
-    if (state !== 'unlocked') return
-    const t = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) { void load(); return 10 }
-        return c - 1
-      })
-    }, 1000)
-    return () => clearInterval(t)
-  }, [state, load])
+  // 🔴 הרענון האוטומטי (כל 10 שניות) הוסר.
+  //
+  // ⚠️ הוא משך מחדש אלפי שורות ורינדר את כל הדף כל 10 שניות — כולל בזמן
+  // שהמשתמש קרא טבלה או הקליד בחיפוש. זו הייתה סיבת ה"תקיעות": לא איטיות
+  // של שליפה בודדת אלא עבודה חוזרת שלא נגמרת.
+  //
+  // ⚠️ הנתונים כאן אינם קריטיים-לשנייה (דוח הנהלה, לא מסך תפעול), ולכן
+  // רענון ידני עדיף על אוטומטי שפוגע בשימוש.
 
   const logout = useCallback(async () => {
     try { await fetch('/api/shared/distributions/logout', { method: 'POST' }) } catch {}
@@ -814,10 +809,12 @@ export default function SharedDistributionsPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-slate-400 hidden sm:inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              רענון בעוד <span className="font-bold text-[#b08d3f] ltr-num">{countdown}</span> שנ׳
-            </span>
+            <button onClick={() => { setRefreshing(true); void load().finally(() => setRefreshing(false)) }}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-xs font-bold text-[#6b5d3e] transition hover:border-[#d9b95c] hover:text-[#8a6a24] disabled:opacity-50">
+              {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              רענון
+            </button>
             <button onClick={logout}
               className="inline-flex items-center gap-1.5 rounded-xl border border-[#e8dfc9] bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:border-rose-300 hover:text-rose-600 transition">
               <LogOut size={14} /> התנתקות
@@ -935,7 +932,7 @@ export default function SharedDistributionsPage() {
         </>}
         </>}
 
-        <p className="text-center text-[11px] text-slate-400 pt-2">מתעדכן אוטומטית · כל הפרטים מוצפנים</p>
+        <p className="text-center text-[11px] text-slate-400 pt-2">לחצו על רענון לעדכון הנתונים · כל הפרטים מוצפנים</p>
       </main>
     </div>
   )

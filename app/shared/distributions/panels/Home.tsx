@@ -19,8 +19,8 @@ export interface DeptSummary {
   headlineLabel: string
   /** שורות משנה: תווית + ערך מוכן לתצוגה. */
   rows: { label: string; value: string }[]
-  /** יחס ההשלמה 0–1 — מזין את הפס התחתון. */
-  progress: number
+  /** יחס ההשלמה 0–1 — מזין את הפס התחתון. null = אין פס (ראה למטה). */
+  progress: number | null
   progressLabel: string
 }
 
@@ -121,7 +121,10 @@ export default function Home({ summaries, onOpen }: {
                 ))}
               </dl>
 
-              {/* ⚠️ הפס הוא נתון: היחס בין מה שהושלם למה שממתין. */}
+              {/* ⚠️ הפס הוא נתון (יחס ההשלמה) ולא קישוט — ולכן כרטיס שאין
+                  לו יחס אמיתי פשוט לא מקבל פס. פס על 100% קבוע היה מציג
+                  מדד שאינו קיים. */}
+              {s.progress !== null && (
               <div className="mt-5">
                 <div className="flex items-baseline justify-between mb-1.5">
                   <span className="text-[10px] font-bold text-[#a08a5a]">{s.progressLabel}</span>
@@ -136,6 +139,7 @@ export default function Home({ summaries, onOpen }: {
                   />
                 </div>
               </div>
+              )}
 
               <span
                 className="mt-5 inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold text-white transition-opacity group-hover:opacity-90"
