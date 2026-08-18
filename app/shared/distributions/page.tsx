@@ -1,5 +1,9 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import Home, { type DeptSummary } from './panels/Home'
+import MaternityDept from './panels/MaternityDept'
+import LoansDept, { type LoanRow, type LegacySummary } from './panels/LoansDept'
+import { DeptHeader } from './panels/Chrome'
 import Image from 'next/image'
 import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
@@ -658,10 +662,68 @@ export default function SharedDistributionsPage() {
   const [lineageNodes, setLineageNodes] = useState<LineageNode[]>([])
   const [beneficiariesCount, setBeneficiariesCount] = useState(0)
   const [maternity, setMaternity] = useState<MaternityRow[]>([])
+  const [loans, setLoans] = useState<LoanRow[]>([])
+  const [legacyLoans, setLegacyLoans] = useState<LegacySummary>({ count: 0, takenCount: 0, totalApproved: 0, totalTaken: 0 })
+  // 🔴 ניווט דו-שלבי: מסך בית עם שלוש מחלקות, וכניסה לאחת מהן.
+  // ⚠️ החליף שורת טאבים: שלוש מחלקות שונות לגמרי (לא שלוש תצוגות של
+  // אותו נתון) — טאבים היו מרמזים שמדובר בחתכים של אותו דבר.
+  const [dept, setDept] = useState<null | 'holidays' | 'maternity' | 'loans'>(null)
   const [activeTab, setActiveTab] = useState<'distributions' | 'breakdown' | 'tree' | 'maternity'>('distributions')
   const [openId, setOpenId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [countdown, setCountdown] = useState(10)
+
+  // ── סיכומי שלוש המחלקות למסך הבית ──
+  // ⚠️ נגזרים מהנתונים שכבר נטענו ולא בשאילתה נוספת: הדף מרענן כל 10
+  // שניות, וקריאה שנייה הייתה מכפילה את העומס בלי להוסיף מידע.
+  const deptSummaries: DeptSummary[] = useMemo(() => {
+    // חלוקות חגים — אישורים מול ממתינים
+    const approved = recipients.filter(r => r.approval_status === 'approved').length
+    const openDists = distributions.filter(d => d.registration_open).length
+
+    // יולדות — מומש מול חויב (הפער הוא כסף שטרם שולם)
+    const arrived = maternity.filter(m => m.recovery_arrived).length
+    const billed = maternity.filter(m => (m.receiptCount ?? 0) > 0).length
+    const paid = maternity.reduce((s, m) => s + ((m.receiptCount ?? 0) > 0 ? Number(m.recovery_amount ?? 0) : 0), 0)
+
+    // הלוואות — אושר מול נמסר שטר
+    const loanApproved = loans.filter(l => ['approved', 'active', 'completed'].includes(String(l.status))).length
+    const loanOut = loans.filter(l => !!l.disbursed_at)
+    const loanOutAmt = loanOut.reduce((s, l) => s + (Number(l.approved_amount ?? l.amount ?? 0) || 0), 0)
+
+    return [
+      {
+        key: 'holidays', headline: recipients.length, headlineLabel: 'נרשמו לחלוקות',
+        rows: [
+          { label: 'חלוקות פתוחות', value: String(openDists) },
+          { label: 'אושרו', value: approved.toLocaleString('he-IL') },
+          { label: 'ממתינים לאישור', value: (recipients.length - approved).toLocaleString('he-IL') },
+        ],
+        progress: recipients.length ? approved / recipients.length : 0,
+        progressLabel: 'שיעור האישורים',
+      },
+      {
+        key: 'maternity', headline: maternity.length, headlineLabel: 'לידות במערכת',
+        rows: [
+          { label: 'הגיעו לבית החלמה', value: arrived.toLocaleString('he-IL') },
+          { label: 'שולם בפועל', value: fmtCurNum(paid) },
+          { label: 'ממתין לקבלה', value: (arrived - billed).toLocaleString('he-IL') },
+        ],
+        progress: arrived ? billed / arrived : 0,
+        progressLabel: 'שיעור החיוב',
+      },
+      {
+        key: 'loans', headline: loans.length, headlineLabel: 'בקשות הלוואה',
+        rows: [
+          { label: 'אושרו', value: loanApproved.toLocaleString('he-IL') },
+          { label: 'נמסר שטר', value: loanOut.length.toLocaleString('he-IL') },
+          { label: 'סכום שנמסר', value: `$${Math.round(loanOutAmt).toLocaleString('he-IL')}` },
+        ],
+        progress: loanApproved ? loanOut.length / loanApproved : 0,
+        progressLabel: 'שיעור המסירה',
+      },
+    ]
+  }, [recipients, distributions, maternity, loans])
 
   const load = useCallback(async () => {
     try {
@@ -674,6 +736,8 @@ export default function SharedDistributionsPage() {
         setLineageNodes(d.lineageNodes ?? [])
         setBeneficiariesCount(d.beneficiariesCount ?? 0)
         setMaternity(d.maternity ?? [])
+        setLoans(d.loans ?? [])
+        if (d.legacyLoans) setLegacyLoans(d.legacyLoans)
         setState('unlocked')
         setCountdown(10) // אחרי כל רענון מוצלח — הספירה מתחילה מחדש
       }
@@ -768,49 +832,45 @@ export default function SharedDistributionsPage() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-8 py-8 flex flex-col gap-7">
-        {/* ── כרטיס-על: כמות הנרשמים במערכת. הנתון היחיד, לכן מוצג גדול ומכובד —
-            "big number" מכוון: זה מדד הליבה שההנהלה מסתכלת עליו. ── */}
-        <div className="relative overflow-hidden rounded-3xl border border-[#e8dfc9] bg-white shadow-[0_2px_20px_-8px_rgba(176,141,63,0.25)]">
-          <div className="absolute inset-y-0 right-0 w-1.5 bg-gradient-to-b from-[#d9b95c] to-[#8a6a24]" />
-          <div className="flex items-center gap-5 px-7 py-6">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#f5ecd4] to-[#e6d5a8] ring-1 ring-[#e0cf9e]">
-              <Users size={26} className="text-[#9a7b2e]" />
-            </div>
-            <div>
-              <p className="text-[12px] font-bold text-[#a08a5a] tracking-wide mb-0.5">
-                מספר הצאצאים שנרשמו לחלוקת {featured?.title ?? 'חגי תשרי תשפ״ז'}
-              </p>
-              <p className="text-5xl font-extrabold text-[#3a3630] ltr-num leading-none">{(featured?.count ?? 0).toLocaleString('he-IL')}</p>
-            </div>
-          </div>
-        </div>
+        {/* ── מסך הבית: שלוש המחלקות ── */}
+        {/* ⚠️ מוצג כשלא נבחרה מחלקה. הכניסה למחלקה מחליפה את כל התוכן
+            ולא מוסיפה טאב — כך היציאה תמיד באותו מקום. */}
+        {dept === null && (
+          <Home summaries={deptSummaries} onOpen={setDept} />
+        )}
 
-        {/* ── טאבים ראשיים — פרוסים לרוחב, גדולים ומרווחים (grid שווה) ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {dept === 'maternity' && (
+          <MaternityDept rows={maternity} onBack={() => setDept(null)} />
+        )}
+
+        {dept === 'loans' && (
+          <LoansDept rows={loans} legacy={legacyLoans} onBack={() => setDept(null)} />
+        )}
+
+        {dept === 'holidays' && <>
+        <DeptHeader title="חלוקות חגים" subtitle="רישום · אישורים · כרטיסי מזון" ink="#b45309" onBack={() => setDept(null)} />
+
+        {/* ⚠️ תת-הטאבים נשארו: כאן הם באמת חתכים של *אותו* נתון (נרשמים,
+            פילוחים, עץ), בשונה משלוש המחלקות שהן נושאים שונים. */}
+        <div className="grid grid-cols-3 gap-3">
           {([
-            { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={20} /> },
-            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={20} /> },
-            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={20} /> },
-            { key: 'maternity', label: 'עזר יולדות', icon: <Baby size={20} /> },
+            { key: 'distributions', label: 'רשימת הנרשמים', icon: <Gift size={18} /> },
+            { key: 'breakdown', label: 'פילוחים', icon: <MapPin size={18} /> },
+            { key: 'tree', label: 'עץ הדורות', icon: <GitBranch size={18} /> },
           ] as const).map(t => (
             <button key={t.key} type="button" onClick={() => setActiveTab(t.key)}
-              className={`flex items-center justify-center gap-2.5 rounded-2xl px-5 py-5 text-base font-bold transition-all ${
+              className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-[13px] font-bold transition-all ${
                 activeTab === t.key
                   ? 'bg-gradient-to-b from-[#b08d3f] to-[#8a6a24] text-white shadow-[0_6px_18px_-6px_rgba(176,141,63,0.6)]'
-                  : 'bg-white border border-[#e8dfc9] text-[#6b5d3e] hover:border-[#d9b95c] hover:text-[#8a6a24] hover:shadow-sm'
+                  : 'bg-white border border-[#e8dfc9] text-[#6b5d3e] hover:border-[#d9b95c] hover:text-[#8a6a24]'
               }`}>
               {t.icon}{t.label}
             </button>
           ))}
         </div>
 
-        {/* ── תוכן הטאב הפעיל ── */}
-
         {activeTab === 'breakdown' && <BreakdownPanels recipients={recipients} />}
-
         {activeTab === 'tree' && <GenerationExplorer nodes={lineageNodes} />}
-
-        {activeTab === 'maternity' && <MaternityPanel rows={maternity} />}
 
         {activeTab === 'distributions' && <>
         {/* חיפוש */}
@@ -877,6 +937,7 @@ export default function SharedDistributionsPage() {
             <p className="text-slate-500 font-medium">{query ? 'לא נמצאו חלוקות לחיפוש זה' : 'אין חלוקות להצגה'}</p>
           </div>
         )}
+        </>}
         </>}
 
         <p className="text-center text-[11px] text-slate-400 pt-2">מתעדכן אוטומטית · כל הפרטים מוצפנים</p>
