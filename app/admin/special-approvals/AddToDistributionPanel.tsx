@@ -78,26 +78,26 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
     return n
   })
 
+  // 🔴 בקשה אחת לכל האצווה. קודם נשלחה בקשה נפרדת לכל אדם בזה אחר זה:
+  // 50 סימונים = 50 הלוך-ושוב ברשת, עשרות שניות שבהן הכפתור נראה תקוע
+  // בלי חיווי, ובלי דרך לדעת מה נכנס אם משהו נפל באמצע.
   const submit = async () => {
     if (!distId || !picked.size) return
     setBusy(true); setResult(null)
-    let added = 0, already = 0, failed = 0
     try {
-      // ⚠️ בזה אחר זה ולא במקביל: 50 בקשות בו-זמנית מציפות את המסד, וגם
-      // הופכות את התיעוד ביומן לבלתי קריא.
-      for (const beneficiaryId of picked) {
-        try {
-          const r = await fetch('/api/admin/distributions/recipients/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ distribution_id: distId, beneficiary_id: beneficiaryId }),
-          })
-          const d = await r.json().catch(() => ({}))
-          if (!r.ok) failed++
-          else if (d.already) already++
-          else added++
-        } catch { failed++ }
+      const r = await fetch('/api/admin/distributions/recipients/add-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ distribution_id: distId, beneficiary_ids: [...picked] }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        toast.error(d?.error || 'הצירוף נכשל')
+        return
       }
+      const added = Number(d.added ?? 0)
+      const already = Number(d.already ?? 0)
+      const failed = Number(d.missing ?? 0)
       setResult({ added, already, failed })
       if (added > 0) {
         toast.success(`${added} צורפו לחלוקה`)
@@ -106,8 +106,10 @@ export default function AddToDistributionPanel({ people }: { people: Person[] })
       } else if (already > 0 && !failed) {
         toast.info('כל הנבחרים כבר רשומים לחלוקה')
       } else if (failed) {
-        toast.error(`${failed} צירופים נכשלו`)
+        toast.error(`${failed} אינם רשומים במאגר`)
       }
+    } catch {
+      toast.error('הצירוף נכשל — בדקו את החיבור')
     } finally { setBusy(false) }
   }
 
