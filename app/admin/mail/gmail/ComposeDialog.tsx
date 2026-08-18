@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  X, Send, Loader2, Paperclip, Search, User, Trash2,
+  X, Send, Loader2, Paperclip, Trash2,
   Bold, Italic, Underline, List, ListOrdered, Link2, AlertTriangle,
 } from 'lucide-react'
 
@@ -143,42 +143,47 @@ export default function ComposeDialog({
         <div className="flex-1 overflow-y-auto">
           {/* נמען + אנשי קשר */}
           <div className="px-5 pt-4 pb-2 relative">
-            <div className="flex items-center gap-2">
-              <input value={to} onChange={e => setTo(e.target.value)} dir="ltr" placeholder="אל…"
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-              <button onClick={() => setShowContacts(s => !s)}
-                title="בחירה מאנשי הקשר"
-                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
-                  showContacts ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-indigo-300'
-                }`}>
-                <User size={14} /> אנשי קשר
-              </button>
+            {/* 🔴 השלמה אוטומטית בתוך שדה "אל" עצמו — בלי כפתור "אנשי קשר".
+                ⚠️ קודם החיפוש היה מאחורי כפתור נפרד: המשתמש נדרש לדעת
+                שהוא קיים, ללחוץ, ולהקליד שוב באותו שדה. עכשיו מקלידים
+                ישירות שם, ת"ז או מייל — והרשימה נפתחת מאליה. */}
+            <div className="relative">
+              <input
+                value={to}
+                onChange={e => { setTo(e.target.value); setContactQ(e.target.value); setShowContacts(true) }}
+                onFocus={() => { if (to.trim().length >= 2) setShowContacts(true) }}
+                // ⚠️ ההשהיה נחוצה: בלעדיה onBlur סוגר את הרשימה לפני
+                // ש-onClick של השורה שנלחצה מספיק לרוץ.
+                onBlur={() => setTimeout(() => setShowContacts(false), 150)}
+                dir="ltr" placeholder="אל…  (שם, ת״ז או כתובת מייל)"
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              {searching && (
+                <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
+              )}
             </div>
 
-            {showContacts && (
-              <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                <div className="relative border-b border-slate-100">
-                  <Search size={14} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-400 pointer-events-none" />
-                  <input value={contactQ} onChange={e => setContactQ(e.target.value)} autoFocus
-                    placeholder="חיפוש לפי שם, ת״ז או מייל…"
-                    className="w-full pr-9 pl-3 py-2 text-xs focus:outline-none" />
-                </div>
-                <div className="max-h-52 overflow-y-auto">
-                  {searching ? (
+            {showContacts && contactQ.trim().length >= 2 && (contacts.length > 0 || searching) && (
+              <div className="absolute z-20 mt-1 w-[calc(100%-2.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+                <div className="max-h-60 overflow-y-auto">
+                  {searching && contacts.length === 0 ? (
                     <p className="px-3 py-3 text-xs text-slate-400 flex items-center gap-2">
                       <Loader2 size={12} className="animate-spin" /> מחפש…
-                    </p>
-                  ) : contacts.length === 0 ? (
-                    <p className="px-3 py-3 text-xs text-slate-400">
-                      {contactQ.trim().length < 2 ? 'הקלידו לפחות שני תווים' : 'לא נמצאו תוצאות'}
                     </p>
                   ) : contacts.map(c => {
                     const name = [c.family_name, c.full_name].filter(Boolean).join(' ') || c.full_name || '—'
                     return (
                       <button key={c.id} disabled={!c.email}
-                        onClick={() => { if (c.email) { setTo(c.email); setShowContacts(false); setContactQ('') } }}
+                        // ⚠️ onMouseDown ולא onClick: onBlur של השדה יורה
+                        // קודם, ובלי זה הלחיצה הייתה מתבטלת.
+                        onMouseDown={e => {
+                          e.preventDefault()
+                          if (c.email) { setTo(c.email); setShowContacts(false); setContactQ('') }
+                        }}
                         className="w-full text-right px-3 py-2 hover:bg-indigo-50 disabled:opacity-40 transition-colors border-b border-slate-50 last:border-0">
-                        <p className="text-xs font-bold text-slate-800">{name}</p>
+                        <p className="text-xs font-bold text-slate-800">
+                          {name}
+                          {c.id_number && <span className="mr-1.5 font-normal text-slate-400 ltr-num">· {c.id_number}</span>}
+                        </p>
                         <p dir="ltr" className="text-[11px] text-slate-500 text-right">
                           {c.email || 'אין כתובת מייל'}{c.city ? ` · ${c.city}` : ''}
                         </p>
