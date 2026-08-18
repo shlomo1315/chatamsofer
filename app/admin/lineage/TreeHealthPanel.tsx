@@ -23,6 +23,10 @@ interface HealthData {
   duplicateIdsCount: number            // הספירה המלאה (גם כשהפרטים חסומים בהרשאה)
   duplicateIdsRestricted: boolean      // אין הרשאת צפייה במשפחות — הפרטים הוסתרו
   duplicateNames: { exact: number; strong: number; possible: number }
+  /** פער העומק — מדוע נרשמים נתקעים. ראו הסעיף בתחתית הפאנל. */
+  depth?: { generation: number; total: number; leaves: number; leafPct: number }[]
+  bottleneck?: { generation: number; total: number; leaves: number; leafPct: number } | null
+  familiesAtBottleneck?: number
 }
 
 export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
@@ -84,6 +88,54 @@ export default function TreeHealthPanel({ onLocate, onOpenDuplicates }: {
             <SummaryCard icon={<IdCard size={15} />} label="ת״ז כפולות" value={data.duplicateIdsCount}
               tone={data.duplicateIdsCount ? 'red' : 'green'} />
           </div>
+
+          {/* 🔴 פער העומק — הסיבה שנרשמים נתקעים ולא משלימים רישום.
+              מוצג ראשון: זו התקלה היחידה כאן שחוסמת משתמשים *עכשיו*. */}
+          {data.depth?.length ? (
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm font-extrabold text-amber-900 mb-1">עומק העץ — היכן נרשמים נתקעים</p>
+              {data.bottleneck ? (
+                <p className="text-[12px] text-amber-900 leading-relaxed mb-2">
+                  העץ נקטע ב<strong>דור {data.bottleneck.generation}</strong>:{' '}
+                  <strong>{data.bottleneck.leaves}</strong> מתוך {data.bottleneck.total} הצמתים שם
+                  ({data.bottleneck.leafPct}%) הם קצה מסלול — אין להם המשך.
+                  {(data.familiesAtBottleneck ?? 0) > 0 && (
+                    <> כ־<strong>{data.familiesAtBottleneck}</strong> משפחות מגיעות לשם ונאלצות
+                    להוסיף את שאר הדורות ידנית.</>
+                  )}
+                </p>
+              ) : (
+                <p className="text-[12px] text-emerald-800 mb-2">אין דור שנקטע — העץ מסועף לכל עומקו. ✅</p>
+              )}
+              <div className="overflow-x-auto">
+                <table className="text-[11px] w-full min-w-[320px]">
+                  <thead>
+                    <tr className="text-amber-700">
+                      <th className="text-right font-bold py-0.5 px-1">דור</th>
+                      <th className="text-right font-bold py-0.5 px-1">צמתים</th>
+                      <th className="text-right font-bold py-0.5 px-1">קצה מסלול</th>
+                      <th className="text-right font-bold py-0.5 px-1">%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.depth.map(d => (
+                      <tr key={d.generation}
+                        className={d.generation === data.bottleneck?.generation ? 'bg-amber-200/60 font-bold' : ''}>
+                        <td className="py-0.5 px-1 text-amber-900">{d.generation}</td>
+                        <td className="py-0.5 px-1 text-amber-900 ltr-num">{d.total}</td>
+                        <td className="py-0.5 px-1 text-amber-900 ltr-num">{d.leaves}</td>
+                        <td className="py-0.5 px-1 text-amber-900 ltr-num">{d.leafPct}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[10px] text-amber-800 leading-relaxed">
+                ⚠️ שיעור גבוה של &quot;קצה מסלול&quot; בדור נמוך פירושו שהעץ נקטע שם — לא שהמשפחות
+                נגמרו. השלמת הדורות החסרים במאגר היא מה שישחרר את הנרשמים.
+              </p>
+            </div>
+          ) : null}
 
           {/* 🔴 צמתים שלא הופיעו בעץ — התקלה החמורה, כי היא בלתי נראית */}
           {invisibleTotal > 0 && (

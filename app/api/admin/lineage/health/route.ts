@@ -30,6 +30,8 @@ interface BenRow {
   id: string; full_name: string | null; family_name: string | null
   spouse_name: string | null; id_number: string | null; spouse_id_number: string | null
   lineage_node_id: string | null
+  /** שרשרת הדורות שהמשפחה בנתה — משמשת למדידת פער העומק. */
+  lineage_chain?: { generation?: number; name?: string }[] | null
 }
 
 // סף "חריג ילדים": צומת עם יותר מזה ילדים ישירים חשוד ככפילות לא-ממוזגת
@@ -75,7 +77,7 @@ export async function GET() {
     fetchAllRows<NodeRow>((from, to) =>
       admin.from('lineage_nodes').select('id, name, parent_id, generation, status, relation').range(from, to)),
     fetchAllRows<BenRow>((from, to) =>
-      admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, lineage_node_id').range(from, to)),
+      admin.from('beneficiaries').select('id, full_name, family_name, spouse_name, id_number, spouse_id_number, lineage_node_id, lineage_chain').range(from, to)),
   ])
   if (nErr) return NextResponse.json({ error: nErr }, { status: 500 })
   if (bErr) return NextResponse.json({ error: bErr }, { status: 500 })
@@ -178,9 +180,58 @@ export async function GET() {
     }
   }
 
+  // ── 🔴 פער העומק: הסיבה שנרשמים נתקעים ──
+  //
+  // דווח שוב ושוב "חסרים לכם נתונים ולכן אי אפשר להשלים את הרישום".
+  // המדידה מראה למה: העץ מתכווץ בחדות אחרי דור מסוים, ומי שהייחוס שלו
+  // ממשיך משם מגיע לרשימה *ריקה* ונאלץ להוסיף הכל ידנית.
+  //
+  // ⚠️ עלה = צומת בלי ילדים. שיעור עלים גבוה בדור נמוך (5-6) פירושו
+  // שהעץ נקטע שם — לא שהמשפחות באמת נגמרו.
+  //
+  // ⚠️ נספרים רק צמתים מאושרים: זה מה שהנרשם באמת רואה בבורר.
+  const verifiedNodes = nodes.filter(n => (n.status ?? 'verified') === 'verified')
+  const parentIds = new Set(verifiedNodes.map(n => n.parent_id).filter(Boolean) as string[])
+  const byGeneration = new Map<number, { total: number; leaves: number }>()
+  for (const n of verifiedNodes) {
+    const g = Number(n.generation ?? 0)
+    const cur = byGeneration.get(g) ?? { total: 0, leaves: 0 }
+    cur.total++
+    if (!parentIds.has(n.id)) cur.leaves++
+    byGeneration.set(g, cur)
+  }
+  const depth = [...byGeneration.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([generation, v]) => ({
+      generation,
+      total: v.total,
+      leaves: v.leaves,
+      leafPct: v.total ? Math.round((v.leaves / v.total) * 100) : 0,
+    }))
+
+  // הדור שבו העץ נקטע: הראשון שבו רוב מוחלט מהצמתים הם קצה מסלול,
+  // ועדיין יש בו מסה משמעותית (לא הזנב הטבעי בדורות האחרונים).
+  const maxTotal = Math.max(1, ...depth.map(d => d.total))
+  const bottleneck = depth.find(d => d.leafPct >= 80 && d.total >= maxTotal * 0.5) ?? null
+
+  // כמה משפחות נעצרות שם בפועל — מוטבים שהשרשרת שלהם מסתיימת בדור החנק.
+  let familiesAtBottleneck = 0
+  if (bottleneck) {
+    for (const b of bens) {
+      const chain = Array.isArray(b.lineage_chain) ? b.lineage_chain : null
+      if (!chain?.length) continue
+      const last = Math.max(...chain.map(c => Number(c?.generation ?? 0)))
+      if (last <= bottleneck.generation) familiesAtBottleneck++
+    }
+  }
+
   return NextResponse.json({
     scannedNodes: nodes.length,
     scannedBeneficiaries: bens.length,
+    // 🔴 פער העומק — ראו ההערה למעלה
+    depth,
+    bottleneck,
+    familiesAtBottleneck,
     // 🔴 צמתים שלא היו מצויירים בעץ כלל לפני התיקון
     invisible,
     dangling,
