@@ -4,6 +4,7 @@ import Home, { type DeptSummary } from './panels/Home'
 import MaternityDept from './panels/MaternityDept'
 import LoansDept, { type LoanRow, type LegacySummary } from './panels/LoansDept'
 import { DeptHeader } from './panels/Chrome'
+import SharedRecipientsTable from './panels/SharedRecipientsTable'
 import Image from 'next/image'
 import { Lock, LogIn, Loader2, Users, Gift, CalendarDays, ShieldCheck, Search, LogOut, MapPin, Baby, GitBranch } from 'lucide-react'
 import HolidayRecipientsTable from '@/app/admin/distributions/[id]/HolidayRecipientsTable'
@@ -287,47 +288,8 @@ function GenerationExplorer({ nodes }: { nodes: LineageNode[] }) {
     </div>
   )
 }
-
-// ── טבלת נרשמים לדף השיתוף — table-fixed + colgroup בפיקסלים ──────────────────
-// ✅ נבנתה מחדש נקי: table-fixed עם רוחב קבוע *מובטח* לכל עמודה (colgroup),
-// whitespace-nowrap + truncate על הטקסטואליות (מלל ארוך נחתך עם title, לא דוחף),
-// 🔴 בלי גלילה אופקית כלל — גם לא בתוך הכרטיס. עמודות מאוחדות במקום.
-function SharedRecipientsTable({ rows }: { rows: Recipient[] }) {
-  if (!rows.length) return <p className="px-4 py-10 text-center text-slate-400 text-sm font-medium">אין נרשמים לחלוקה זו</p>
-  return (
-    // 🔴 כל נתון בעמודה נפרדת. איחוד עמודות נוסה ונפסל — הוא ערבב ערכים
-    // שונים בתא אחד והפך את הטבלה לקשה לסריקה.
-    // ⚠️ ובלי גלילה לרוחב: כאן יש 8 עמודות בלבד (בלי אישור/כרטיס/ערוץ),
-    // והן נכנסות לרוחב המסך.
-    <div className="w-full">
-      <table className="w-full table-auto text-[12px] border-collapse">
-        <thead className="bg-slate-50 text-slate-500">
-          <tr className="[&>th]:px-2.5 [&>th]:py-2.5 [&>th]:font-bold [&>th]:text-right [&>th]:whitespace-nowrap [&>th]:border-l [&>th]:border-slate-200 [&>th:last-child]:border-l-0">
-            <th>שם משפחה</th><th>שם פרטי</th><th>ת״ז</th><th>טלפון</th>
-            <th>עיר</th><th className="text-center">גיל</th><th className="text-center">ילדים</th><th>תאריך רישום</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map(r => {
-            const b = r.beneficiary
-            return (
-              <tr key={r.id} className="hover:bg-indigo-50/40 align-middle [&>td]:px-2.5 [&>td]:py-2 [&>td]:border-l [&>td]:border-slate-100 [&>td:last-child]:border-l-0 [&>td]:whitespace-nowrap">
-                <td className="font-semibold text-slate-800">{b?.family_name ?? '—'}</td>
-                <td className="text-slate-700">{b?.full_name || b?.spouse_name || '—'}</td>
-                <td className="font-mono text-slate-600 ltr-num">{b?.id_number ?? '—'}</td>
-                <td className="font-mono text-slate-600 ltr-num">{b?.phone ?? b?.phone2 ?? r.phone ?? '—'}</td>
-                <td className="text-slate-600">{b?.city ?? '—'}</td>
-                <td className="text-center text-slate-600 ltr-num">{ageOf(b) ?? '—'}</td>
-                <td className="text-center text-slate-600 ltr-num">{b?.children_count ?? '—'}</td>
-                <td className="text-slate-500 ltr-num text-[11px]">{fmtDateTime(r.registered_at)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
+// ⚠️ הטבלה עברה ל-panels/SharedRecipientsTable — היא זהה במבנה לזו של
+// ממשק הניהול (עמודות נפרדות, בורר עמודות, חיפוש חופשי, בלי גלילה לרוחב).
 
 // ── Main ──
 // ─────────────────────────────────────────────────────────────────────────────
@@ -767,6 +729,15 @@ export default function SharedDistributionsPage() {
 
   // טעינה ראשונית
   useEffect(() => { void load() }, [load])
+
+  // ⚠️ החלוקה הראשונה נפתחת מאליה: הרשימה היא *הסיבה* שנכנסים למסך,
+  // ולחיצה נוספת רק כדי לראות אותה היא חיכוך מיותר. נעשה פעם אחת בלבד
+  // (openId מתמלא), כדי שסגירה ידנית לא תיפתח מחדש בכל רענון.
+  useEffect(() => {
+    if (dept === 'holidays' && openId === null && distributions.length) {
+      setOpenId(distributions[0].id)
+    }
+  }, [dept, distributions, openId])
 
   // ⚠️ נטען רק כשנכנסים למחלקת העץ.
   useEffect(() => { if (dept === 'tree') void loadLineage() }, [dept, loadLineage])
