@@ -38,10 +38,15 @@ export default function ComposeDialog({
   initialSubject?: string
   accountEmail?: string | null
   onClose: () => void
-  onSent: (payload: { to: string; subject: string; html: string; attachments: Att[] }) => Promise<boolean>
+  onSent: (payload: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: Att[] }) => Promise<boolean>
 }) {
   const [to, setTo] = useState(initialTo ?? '')
   const [subject, setSubject] = useState(initialSubject ?? '')
+  // עותק / עותק מוסתר — מוסתרים עד שלוחצים, כמו בג'ימייל
+  const [cc, setCc] = useState('')
+  const [bcc, setBcc] = useState('')
+  const [showCc, setShowCc] = useState(false)
+  const [showBcc, setShowBcc] = useState(false)
   const [attachments, setAttachments] = useState<Att[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -115,7 +120,13 @@ export default function ComposeDialog({
       setError('ההודעה ריקה'); return
     }
     setSending(true); setError(null)
-    const ok = await onSent({ to: to.trim(), subject: subject.trim() || '(ללא נושא)', html, attachments })
+    const ok = await onSent({
+      to: to.trim(),
+      cc: cc.trim() || undefined,
+      bcc: bcc.trim() || undefined,
+      subject: subject.trim() || '(ללא נושא)',
+      html, attachments,
+    })
     setSending(false)
     if (ok) onClose()
     else setError('השליחה נכשלה')
@@ -160,7 +171,46 @@ export default function ComposeDialog({
               {searching && (
                 <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
               )}
+              {/* ⚠️ מוסתרים עד שלוחצים, כמו בג'ימייל: רוב ההודעות אינן
+                  צריכות עותק, ושני שדות ריקים קבועים רק מעמיסים. */}
+              {(!showCc || !showBcc) && (
+                <div className="absolute top-1/2 -translate-y-1/2 left-2 flex items-center gap-1">
+                  {!showCc && (
+                    <button type="button" onClick={() => setShowCc(true)}
+                      className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                      עותק
+                    </button>
+                  )}
+                  {!showBcc && (
+                    <button type="button" onClick={() => setShowBcc(true)}
+                      className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                      מוסתר
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+
+            {showCc && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="w-12 flex-shrink-0 text-[11px] font-bold text-slate-500">עותק</span>
+                <input value={cc} onChange={e => setCc(e.target.value)} dir="ltr"
+                  placeholder="כתובות מופרדות בפסיק"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                <button type="button" onClick={() => { setShowCc(false); setCc('') }}
+                  className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+              </div>
+            )}
+            {showBcc && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="w-12 flex-shrink-0 text-[11px] font-bold text-slate-500">מוסתר</span>
+                <input value={bcc} onChange={e => setBcc(e.target.value)} dir="ltr"
+                  placeholder="כתובות מופרדות בפסיק"
+                  className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                <button type="button" onClick={() => { setShowBcc(false); setBcc('') }}
+                  className="text-slate-400 hover:text-slate-600"><X size={14} /></button>
+              </div>
+            )}
 
             {showContacts && contactQ.trim().length >= 2 && (contacts.length > 0 || searching) && (
               <div className="absolute z-20 mt-1 w-[calc(100%-2.5rem)] rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden">

@@ -61,6 +61,9 @@ interface Body {
   messageId?: string
   threadId?: string
   to?: string
+  /** עותק / עותק מוסתר — רשימות מופרדות בפסיקים. */
+  cc?: string
+  bcc?: string
   subject?: string
   html?: string
   attachments?: Attachment[]
@@ -80,7 +83,7 @@ const enc = (s: string) => `=?UTF-8?B?${Buffer.from(s, 'utf8').toString('base64'
  */
 async function sendWithAttachments(
   gmail: ReturnType<typeof getGmailClientForToken>,
-  o: { to: string; subject: string; html: string; from: string; threadId?: string; attachments: Attachment[] },
+  o: { to: string; subject: string; html: string; from: string; threadId?: string; attachments: Attachment[]; cc?: string; bcc?: string },
 ) {
   // ג ן¸ ׳’׳‘׳•׳ ׳׳§׳¨׳׳™ ׳׳¡׳₪׳™׳§ ׳›׳“׳™ ׳©׳׳ ׳™׳•׳₪׳™׳¢ ׳‘׳×׳•׳›׳. ׳”׳•׳₪׳¢׳” ׳׳§׳¨׳™׳× ׳©׳׳• ׳”׳™׳™׳×׳” ׳§׳•׳˜׳¢׳×
   // ׳׳× ׳”׳”׳•׳“׳¢׳” ׳‘׳׳׳¦׳¢.
@@ -88,6 +91,10 @@ async function sendWithAttachments(
   const parts: string[] = [
     `From: ${enc('׳”׳™׳›׳ ׳”׳—׳×׳ ׳¡׳•׳₪׳¨')} <${o.from}>`,
     `To: ${o.to}`,
+    // עותק / עותק מוסתר. ⚠️ Gmail מסיר את כותרת ה-Bcc בשליחה, כך
+    // שהנמענים האחרים אינם רואים אותה — וזו כל תכליתה.
+    ...(o.cc ? [`Cc: ${o.cc}`] : []),
+    ...(o.bcc ? [`Bcc: ${o.bcc}`] : []),
     `Reply-To: ${o.from}`,
     `Subject: ${enc(o.subject)}`,
     'MIME-Version: 1.0',
@@ -158,15 +165,17 @@ export async function POST(request: NextRequest) {
         // ג ן¸ threadId ׳‘׳×׳©׳•׳‘׳” ׳‘׳׳‘׳“: ׳‘׳”׳•׳“׳¢׳” ׳—׳“׳©׳” ׳”׳•׳ ׳”׳™׳” ׳׳©׳¨׳©׳¨ ׳׳•׳×׳” ׳׳©׳™׳—׳”
         // ׳׳§׳¨׳׳™׳×, ׳•׳”׳”׳•׳“׳¢׳” ׳”׳™׳™׳×׳” ׳ ׳¢׳׳׳× ׳‘׳×׳•׳ ׳©׳¨׳©׳•׳¨ ׳©׳׳™׳ ׳• ׳§׳©׳•׳¨ ׳׳׳™׳”.
         const atts = Array.isArray(body.attachments) ? body.attachments : []
+        const cc = String(body.cc ?? '').trim() || undefined
+        const bcc = String(body.bcc ?? '').trim() || undefined
         if (atts.length) {
           await sendWithAttachments(gmail, {
-            to, subject, html, from: acc.email,
+            to, subject, html, from: acc.email, cc, bcc,
             threadId: body.action === 'reply' ? body.threadId : undefined,
             attachments: atts,
           })
         } else {
           await sendGmailMessage(gmail, {
-            to, subject, html,
+            to, subject, html, cc, bcc,
             threadId: body.action === 'reply' ? body.threadId : undefined,
             from: acc.email,
             replyTo: acc.email,

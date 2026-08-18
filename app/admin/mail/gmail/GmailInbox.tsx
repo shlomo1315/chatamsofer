@@ -294,14 +294,14 @@ export default function GmailInbox() {
     setComposeOpen(true)
   }
 
-  async function sendMail(p: { to: string; subject: string; html: string; attachments: { name: string; type: string; data: string }[] }) {
+  async function sendMail(p: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: { name: string; type: string; data: string }[] }) {
     try {
       const res = await fetch('/api/admin/gmail/inbox/actions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: composeMode === 'reply' ? 'reply' : 'send',
-          to: p.to, subject: p.subject, html: p.html,
+          to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, html: p.html,
           attachments: p.attachments,
           threadId: composeMode === 'reply' ? selected?.thread_id : undefined,
           // ⚠️ התיבה הפעילה קובעת מי השולח. בתשובה — התיבה שאליה הגיעה

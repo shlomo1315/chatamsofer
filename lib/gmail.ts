@@ -54,6 +54,9 @@ function _encodeHeader(text: string): string {
 
 export async function sendGmailMessage(gmail: any, opts: {
   to: string; subject: string; html: string; threadId?: string
+  // עותק / עותק מוסתר. ⚠️ Bcc נכתב ככותרת ונמחק ע"י Gmail בשליחה — כך
+  // שהנמענים האחרים אינם רואים אותו, וזו כל תכליתו.
+  cc?: string; bcc?: string
   // כתובת/שם שולח חלופיים. ⚠️ Gmail ישלח בשם כתובת אחרת רק אם היא מוגדרת
   // בחשבון כ-"Send mail as" ומאומתת. אחרת הוא מתעלם ושולח מהכתובת הראשית —
   // ולכן זו הגדרה שחייבת להיעשות גם בצד Gmail, לא רק כאן.
@@ -75,6 +78,8 @@ export async function sendGmailMessage(gmail: any, opts: {
   const raw = [
     `From: ${_encodeHeader(fromName)} <${from}>`,
     `To: ${opts.to}`,
+    ...(opts.cc ? [`Cc: ${opts.cc}`] : []),
+    ...(opts.bcc ? [`Bcc: ${opts.bcc}`] : []),
     ...(opts.replyTo ? [`Reply-To: ${opts.replyTo}`] : []),
     `Subject: ${_encodeHeader(opts.subject)}`,
     ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`] : []),
