@@ -20,6 +20,7 @@ import { LOAN_DECLARATIONS, MATERNITY_SUBMIT_DAYS, LOAN_MAX_AMOUNT } from '@/lib
 import { textOf, errorText, type PublicTexts } from '@/lib/publicTexts'
 import { composeLineageName, findTitles } from '@/lib/lineageNameFormat'
 import { genTone } from '@/lib/lineagePalette'
+import { resolveDeepLinkAction } from '@/lib/deepLinkAction'
 import EditableText, { EditProvider } from './EditableText'
 import {
   Search, AlertCircle, Loader2, CheckCircle2, User,
@@ -3363,15 +3364,26 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     // ולכן אם הפתיחה נחסמה (נתונים שטרם נטענו, שער מחלקה) — הכוונה אבדה
     // לתמיד והמשתמש נשאר באזור האישי בלי שהטופס ייפתח, בלי הסבר ובלי ניסיון
     // חוזר. עכשיו ה-effect רץ שוב כששערי המחלקות נטענים ומנסה שנית.
-    let opened = true
-    // ⚠️ פעולות התלויות בשער מחלקה — לא מנקים את הכוונה עד שהשערים נטענו
-    // (gatesLoaded), אחרת קישור למחלקה פתוחה יאבד בזמן שברירת המחדל סגורה.
-    // אחרי הטעינה: אם המחלקה סגורה gateAllows חוסם בשקט והכוונה מנוקה (חזרה
-    // לדשבורד בלי להזכיר מחלקה סגורה), ואם פתוחה — הטופס נפתח.
-    if ((a === 'birth' || a === 'loan' || a === 'aid') && !gatesLoaded) opened = false
-    else if (a === 'birth') opened = goToBirthForm()
-    else if (a === 'loan') goToLoanForm()
-    else if (a === 'aid') goToAidForm()
+    // 🔴 הכוונה מנוקה בכל תוצאה *חוץ* מהמתנה לנתונים שטרם הגיעו.
+    //
+    // הבאג שהיה כאן: `opened` נגזר מ-goToBirthForm(), שמחזירה false גם כשהיא
+    // *הכריעה* (שער סגור / לא נשוי / מסמכים חסרים) — ולא רק כשהיא ממתינה.
+    // כך הכוונה לא נוקתה לעולם, ה-effect (שתלוי ב-step) רץ שוב על אותם
+    // נתונים, קרא שוב ל-setState, וזה הפעיל אותו מחדש: לולאת רינדור
+    // אינסופית שהרגה את הלשונית — "This page couldn't load" בכניסה מקישור
+    // המייל ?action=birth. ההכרעה עברה ל-lib/deepLinkAction (נבדקת ביחידה).
+    const decision = resolveDeepLinkAction(a, {
+      gatesLoaded, holidayLoaded,
+      canRequestBirth,
+      gateOpen: gateAllows(ACTION_DEPARTMENT[a] ?? ''),
+      isDocsPending,
+    })
+    let opened = decision.clearIntent
+    if (decision.error) setError(decision.error)
+    if (decision.open === 'docs-gate-modal') setDocsGateModal(true)
+    else if (a === 'birth' && decision.open === 'birth-form') goToBirthForm()
+    else if (a === 'loan') { if (decision.open === 'loan-intro') goToLoanForm() }
+    else if (a === 'aid') { if (decision.open === 'aid-modal') goToAidForm() }
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // קישור "עדכון פרטים אישיים" מהמייל — פותח ישירות את מסך העריכה
     else if (a === 'details') openEditDetails()
@@ -3381,7 +3393,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     else if (a === 'holiday') {
       // ⚠️ מחכים שנתוני החלוקה ייטענו לפני שמחליטים מה להציג (holidayLoaded).
       // עד אז — לא מנקים את הכוונה, וה-effect ינסה שוב כשהם יגיעו.
-      if (!holidayLoaded) opened = false
+      if (!holidayLoaded) { /* opened=false כבר נקבע ב-decision */ }
       else if (!holiday) {
         // נטען, אך אין חלוקה פתוחה (מחלקה סגורה בהגדרות או אין חלוקה פעילה) —
         // פופאפ "הרישום סגור", כדי שמי שנכנס מהקישור יקבל משוב ולא מסך ריק.
