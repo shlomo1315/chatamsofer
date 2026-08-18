@@ -91,3 +91,38 @@ describe('מגן מפני לולאה אינסופית', () => {
     expect(renders).toBeLessThan(10)     // לא 10,000
   })
 })
+
+/**
+ * 🔴 רגרסיה: המגן עצמו היה הלולאה.
+ *
+ * הגרסה הראשונה של המגן עשתה `if (tries > 3) return` — בלי לנקות את
+ * הכוונה. התוצאה הפוכה מהכוונה: הכוונה נשארה דרוכה לנצח, וכל שינוי
+ * זהות של beneficiary/deptGates הפעיל את ה-effect מחדש — לולאה.
+ * המגן חייב *לוותר סופית*, כלומר לנקות.
+ */
+describe('מגן הלולאה חייב לנקות את הכוונה כשהוא מוותר', () => {
+  /** מדמה את ה-effect: כל רינדור מפעיל אותו כל עוד הכוונה דרוכה. */
+  function simulate(clearOnGiveUp: boolean) {
+    let tries = 0
+    let intent: string | null = 'birth'
+    let effectRuns = 0
+    for (let render = 0; render < 5_000; render++) {
+      if (!intent) break                 // הכוונה נוקתה — ה-effect לא רץ יותר
+      effectRuns++
+      if (tries > 3) {
+        if (clearOnGiveUp) intent = null // התיקון
+        continue                         // הבאג: return בלי ניקוי
+      }
+      tries += 1
+    }
+    return effectRuns
+  }
+
+  it('🔴 בלי ניקוי — ה-effect רץ בלי סוף', () => {
+    expect(simulate(false)).toBe(5_000)
+  })
+
+  it('✅ עם ניקוי — נעצר אחרי מספר סיבובים קטן', () => {
+    expect(simulate(true)).toBeLessThan(10)
+  })
+})
