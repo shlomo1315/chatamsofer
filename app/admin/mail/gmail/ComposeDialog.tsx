@@ -1,9 +1,9 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   X, Send, Loader2, Paperclip, Trash2,
   Bold, Italic, Underline, List, ListOrdered, Link2, AlertTriangle,
-  AlignRight, AlignCenter, AlignLeft, Palette, Clock,
+  AlignRight, AlignCenter, AlignLeft, Palette, Clock, CalendarClock,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,6 +65,15 @@ export default function ComposeDialog({
   const [scheduledAt, setScheduledAt] = useState('')
   const [showSchedule, setShowSchedule] = useState(false)
 
+  // ── הוספת קישור ──
+  // ⚠️ פאנל בתוך החלון ולא prompt(): prompt חוסם את הדפדפן, נראה זר,
+  // ואינו מאפשר לקבוע את *הטקסט* שיוצג — רק את הכתובת.
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkText, setLinkText] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
+  /** הטווח שנבחר לפני פתיחת הפאנל — הפוקוס עובר לשדה ומאבד אותו. */
+  const savedRange = useRef<Range | null>(null)
+
   const [contactQ, setContactQ] = useState('')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [showContacts, setShowContacts] = useState(false)
@@ -79,9 +88,10 @@ export default function ComposeDialog({
     if (q.trim().length < 2) { setContacts([]); return }
     setSearching(true)
     try {
-      const digits = q.replace(/\D/g, '')
-      const param = digits.length >= 5 ? `id_number=${digits}` : `q=${encodeURIComponent(q)}`
-      const res = await fetch(`/api/admin/beneficiary-search?${param}&limit=8`, { cache: 'no-store' })
+      // ⚠️ ללא סף ספרות: קודם רק ת"ז בת 5+ ספרות נשלחה כ-id_number, וחיפוש
+      // מהיר של 3–4 ספרות לא החזיר דבר. ה-q הכללי מטפל בשם, בת"ז (מלאה או
+      // חלקית) ובטלפון — ראו /api/admin/beneficiary-search.
+      const res = await fetch(`/api/admin/beneficiary-search?q=${encodeURIComponent(q.trim())}&limit=8`, { cache: 'no-store' })
       const json = await res.json()
       setContacts(Array.isArray(json) ? json : (json.results ?? json.beneficiaries ?? []))
     } catch { /* חיפוש שנכשל אינו חוסם הקלדה חופשית */ } finally { setSearching(false) }
@@ -125,6 +135,79 @@ export default function ComposeDialog({
   const exec = (cmd: string, val?: string) => {
     editorRef.current?.focus()
     document.execCommand(cmd, false, val)
+  }
+
+  /** ערך ל-datetime-local (זמן מקומי) — toISOString היה מזיז לפי UTC. */
+  function toLocalValue(d: Date): string {
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+
+  /**
+   * קיצורי התזמון, כמו בג'ימייל: מחר בבוקר / היום בצהריים / יום ראשון.
+   *
+   * ⚠️ מועד שכבר חלף אינו מוצג — "היום בצהריים" בשעה 14:00 הוא הצעה
+   * שתיפסל מיד באימות, ועדיף לא להציע אותה מלכתחילה.
+   */
+  // ⚠️ useMemo התלוי ב-showSchedule ולא חישוב בגוף הרינדור: Date.now()
+  // אינו טהור, והשעה הייתה נגזרת מחדש בכל הקלדה בשדה הנושא.
+  // הקיצורים נקבעים פעם אחת — ברגע שהפאנל נפתח.
+  const schedulePresets = useMemo(() => {
+    if (!showSchedule) return []
+    const now = new Date()
+    const at = (days: number, h: number) => {
+      const d = new Date(now)
+      d.setDate(d.getDate() + days); d.setHours(h, 0, 0, 0)
+      return d
+    }
+    const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+    const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}, ${String(d.getHours()).padStart(2, '0')}:00`
+    // היום הבא בשבוע שאינו שבת — בשבת אין שליחה.
+    const nextWork = (() => {
+      let i = 1
+      while (at(i, 8).getDay() === 6) i++
+      return at(i, 8)
+    })()
+    return [
+      { key: 'morning', label: 'מחר בבוקר', when: at(1, 8) },
+      { key: 'noon', label: 'היום בצהריים', when: at(0, 13) },
+      { key: 'next', label: `יום ${DAYS[nextWork.getDay()]} בבוקר`, when: nextWork },
+    ]
+      .filter(p => p.when.getTime() > now.getTime() + 60_000)
+      .map(p => ({ ...p, sub: fmt(p.when) }))
+  }, [showSchedule])
+
+  /** פותח את פאנל הקישור, ושומר את הטקסט שנבחר בעורך כטקסט ברירת מחדל. */
+  function openLink() {
+    const sel = window.getSelection()
+    const picked = sel?.toString() ?? ''
+    // ⚠️ הטווח נשמר עכשיו: ברגע שהפוקוס עובר לשדה הקלט הבחירה בעורך
+    // אובדת, ובלעדיו הקישור היה נשתל בתחילת ההודעה.
+    savedRange.current = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null
+    setLinkText(picked)
+    setLinkUrl('')
+    setLinkOpen(true)
+  }
+
+  function applyLink() {
+    const rawUrl = linkUrl.trim()
+    if (!rawUrl) return
+    // כתובת בלי סכימה נשלחת כיחסית ונשברת במייל — משלימים https.
+    const href = /^(https?:|mailto:|tel:)/i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
+    const label = (linkText.trim() || rawUrl)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+    editorRef.current?.focus()
+    const sel = window.getSelection()
+    if (savedRange.current && sel) {
+      sel.removeAllRanges()
+      sel.addRange(savedRange.current)
+    }
+    document.execCommand('insertHTML', false,
+      `<a href="${href.replace(/"/g, '&quot;')}" target="_blank" rel="noopener noreferrer">${label}</a>&nbsp;`)
+
+    setLinkOpen(false); setLinkText(''); setLinkUrl('')
+    savedRange.current = null
   }
 
   async function submit() {
@@ -196,48 +279,46 @@ export default function ComposeDialog({
                 ⚠️ קודם החיפוש היה מאחורי כפתור נפרד: המשתמש נדרש לדעת
                 שהוא קיים, ללחוץ, ולהקליד שוב באותו שדה. עכשיו מקלידים
                 ישירות שם, ת"ז או מייל — והרשימה נפתחת מאליה. */}
-            <div className="relative">
-              <input
-                value={to}
-                onChange={e => { setTo(e.target.value); setContactQ(e.target.value); setShowContacts(true) }}
-                onFocus={() => { if (to.trim().length >= 2) setShowContacts(true) }}
-                // ⚠️ ההשהיה נחוצה: בלעדיה onBlur סוגר את הרשימה לפני
-                // ש-onClick של השורה שנלחצה מספיק לרוץ.
-                onBlur={() => setTimeout(() => setShowContacts(false), 150)}
-                // ⚠️ הכפתורים יושבים מימין (right-2), ולכן הריווח שמפנה להם
-                // מקום הוא pr — לא pl. placeholder בעברית על שדה dir="ltr"
-                // מתחיל משמאל, כך שהוא רחוק מהם ואינו נחתך.
-                dir="ltr" placeholder="אל…"
-                className={`w-full rounded-xl border border-slate-200 py-2 pl-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 ${
-                  (!showCc && !showBcc) ? 'pr-24' : (!showCc || !showBcc) ? 'pr-14' : 'pr-3'
-                }`} />
-              {searching && (
-                <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
-              )}
-              {/* ⚠️ מוסתרים עד שלוחצים, כמו בג'ימייל: רוב ההודעות אינן
-                  צריכות עותק, ושני שדות ריקים קבועים רק מעמיסים. */}
-              {(!showCc || !showBcc) && (
-                <div className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center gap-1">
-                  {!showCc && (
-                    <button type="button" onClick={() => setShowCc(true)}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                      עותק
-                    </button>
-                  )}
-                  {!showBcc && (
-                    <button type="button" onClick={() => setShowBcc(true)}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                      מוסתר
-                    </button>
-                  )}
-                </div>
-              )}
+            {/* 🔴 כל שדה בשורה משלו — "אל", ומתחתיו "עותק", ומתחתיו "מוסתר".
+                הכפתורים ישבו *בתוך* שדה "אל" ונדחסו לאותה שורה; עכשיו הם
+                בשורה נפרדת מתחתיו, והתווית מימין כמו בשאר הטפסים. */}
+            <div dir="rtl" className="relative flex items-center gap-2">
+              <span className="w-12 flex-shrink-0 text-right text-[11px] font-bold text-slate-500">אל</span>
+              <div className="relative flex-1">
+                <input
+                  value={to}
+                  onChange={e => { setTo(e.target.value); setContactQ(e.target.value); setShowContacts(true) }}
+                  onFocus={() => { if (to.trim().length >= 2) setShowContacts(true) }}
+                  // ⚠️ ההשהיה נחוצה: בלעדיה onBlur סוגר את הרשימה לפני
+                  // ש-onClick של השורה שנלחצה מספיק לרוץ.
+                  onBlur={() => setTimeout(() => setShowContacts(false), 150)}
+                  // ⚠️ dir="rtl" ולא ltr: השדה מקבל גם שם וגם ת"ז בעברית,
+                  // ו-ltr דחף את הטקסט ואת ה-placeholder לצד שמאל.
+                  dir="rtl" placeholder="שם, ת״ז או כתובת מייל"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                {searching && (
+                  <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
+                )}
+              </div>
             </div>
 
-            {/* ההסבר ירד מה-placeholder (הוא נחתך מול הכפתורים) — כאן הוא
-                נשאר גלוי גם אחרי שמתחילים להקליד. */}
-            {!to.trim() && (
-              <p className="mt-1 px-1 text-right text-[11px] text-slate-400">שם, ת״ז או כתובת מייל</p>
+            {/* ⚠️ מוסתרים עד שלוחצים, כמו בג'ימייל: רוב ההודעות אינן
+                צריכות עותק, ושני שדות ריקים קבועים רק מעמיסים. */}
+            {(!showCc || !showBcc) && (
+              <div dir="rtl" className="mt-1.5 flex items-center gap-1 pr-14">
+                {!showCc && (
+                  <button type="button" onClick={() => setShowCc(true)}
+                    className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    + עותק
+                  </button>
+                )}
+                {!showBcc && (
+                  <button type="button" onClick={() => setShowBcc(true)}
+                    className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    + עותק מוסתר
+                  </button>
+                )}
+              </div>
             )}
 
             {showCc && (
@@ -342,7 +423,7 @@ export default function ComposeDialog({
             <button onClick={() => exec('justifyLeft')} className={tbBtn} title="יישור לשמאל"><AlignLeft size={15} /></button>
             <span className="w-px h-4 bg-slate-200 mx-1" />
             <button title="קישור" className={tbBtn}
-              onClick={() => { const u = prompt('כתובת הקישור:'); if (u) exec('createLink', u) }}>
+              onClick={openLink}>
               <Link2 size={15} />
             </button>
             <span className="w-px h-4 bg-slate-200 mx-1" />
@@ -351,6 +432,40 @@ export default function ComposeDialog({
             </button>
             <input ref={fileRef} type="file" multiple hidden onChange={e => addFiles(e.target.files)} />
           </div>
+
+          {/* פאנל הקישור — בתוך החלון, עם טקסט וכתובת בנפרד */}
+          {linkOpen && (
+            <div dir="rtl" className="mx-5 mb-1 rounded-xl border border-indigo-200 bg-indigo-50/60 p-3">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-indigo-900">טקסט להצגה</span>
+                  <input
+                    value={linkText}
+                    onChange={e => setLinkText(e.target.value)}
+                    placeholder="לחצו כאן"
+                    className="flex-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-16 flex-shrink-0 text-[11px] font-bold text-indigo-900">כתובת</span>
+                  <input
+                    value={linkUrl}
+                    onChange={e => setLinkUrl(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyLink() } }}
+                    dir="ltr" placeholder="https://example.com"
+                    className="flex-1 rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={applyLink} disabled={!linkUrl.trim()}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-40">
+                    הוסף קישור
+                  </button>
+                  <button type="button"
+                    onClick={() => { setLinkOpen(false); setLinkText(''); setLinkUrl(''); savedRange.current = null }}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700">ביטול</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* גוף ההודעה */}
           {/* ⚠️ dir=rtl אך plaintext-only מבוטל: הגוף נשלח כ-HTML ולכן חייב
@@ -382,19 +497,41 @@ export default function ComposeDialog({
           )}
         </div>
 
-        {/* בורר מועד — נפתח מהשעון שבשורת הפעולות */}
+        {/* בורר מועד — קיצורים ואז בחירה מדויקת, כמו בג'ימייל */}
         {showSchedule && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-indigo-50/60 px-5 py-2.5 flex-shrink-0">
-            <Clock size={14} className="text-indigo-600" />
-            <span className="text-[11px] font-bold text-indigo-900">שליחה בתאריך:</span>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={e => { setScheduledAt(e.target.value); setError(null) }}
-              className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
-            <button type="button"
-              onClick={() => { setShowSchedule(false); setScheduledAt(''); setError(null) }}
-              className="text-[11px] font-bold text-indigo-700 hover:underline">ביטול תזמון</button>
+          <div dir="rtl" className="flex-shrink-0 border-t border-slate-100 bg-white px-5 py-3">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-extrabold text-slate-800">תזמון שליחה</p>
+                <p className="text-[11px] text-slate-400">שעון ישראל</p>
+              </div>
+              <button type="button"
+                onClick={() => { setShowSchedule(false); setScheduledAt(''); setError(null) }}
+                className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+
+            <div className="flex flex-col divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden">
+              {schedulePresets.map(p => (
+                <button key={p.key} type="button"
+                  onClick={() => { setScheduledAt(toLocalValue(p.when)); setError(null) }}
+                  className={`flex items-center justify-between px-3 py-2.5 text-right transition hover:bg-slate-50 ${
+                    scheduledAt === toLocalValue(p.when) ? 'bg-indigo-50' : ''
+                  }`}>
+                  <span className="text-xs font-bold text-slate-700">{p.label}</span>
+                  <span className="text-xs text-slate-400">{p.sub}</span>
+                </button>
+              ))}
+
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+                <CalendarClock size={14} className="flex-shrink-0 text-slate-400" />
+                <span className="text-xs font-bold text-slate-700">בחירת תאריך ושעה</span>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={e => { setScheduledAt(e.target.value); setError(null) }}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+              </div>
+            </div>
           </div>
         )}
 

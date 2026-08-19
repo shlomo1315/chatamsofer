@@ -57,9 +57,13 @@ export async function GET(request: NextRequest) {
     if (numericQ) {
       const padded = q.padStart(9, '0')
       const unpadded = q.replace(/^0+/, '') || q
+      // ⚠️ גם התאמה חלקית (ilike) ולא רק eq: חיפוש מהיר מקליד 3–4 ספרות
+      // מתוך הת"ז, ו-eq בלבד החזיר ריק עד שהוקלדו כל תשע הספרות.
+      // ה-eq נשאר ראשון כדי שהתאמה מדויקת (כולל אפסים מובילים) תמיד תימצא.
       query = query.or([
         `id_number.eq.${q}`,`id_number.eq.${padded}`,`id_number.eq.${unpadded}`,
         `spouse_id_number.eq.${q}`,`spouse_id_number.eq.${padded}`,`spouse_id_number.eq.${unpadded}`,
+        `id_number.ilike.%${q}%`,`spouse_id_number.ilike.%${q}%`,
         `phone.ilike.%${q}%`,`phone2.ilike.%${q}%`,
       ].join(','))
     } else {

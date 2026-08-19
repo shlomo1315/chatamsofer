@@ -216,6 +216,38 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 25)
 
+  // 🔴 תוויות התיבות המסונכרנות — הדרך היחידה להגיע לארכיון.
+  //
+  // ⚠️ אלה אינן תוויות Gmail: הן מוגדרות במערכת (mail_label_defs) ומשויכות
+  // לתיבה דרך gmail_accounts.label_id. הן לא נבנו מ-gmail_messages.labels
+  // ולכן נעלמו מהסרגל לגמרי — ומיילי "גמ״ח ישן" נאספו בלי דרך לפתוח אותם.
+  //
+  // הספירה היא לפי התיבה (account_id), לא לפי תווית על ההודעה: התווית
+  // מתארת *מאיפה* המייל הגיע, וזה בדיוק מה שהמשתמש מחפש.
+  const boxLabels: { id: string; name: string; count: number; account: string }[] = []
+  {
+    const { data: defsRow } = await db.from('app_settings')
+      .select('value').eq('key', 'mail_label_defs').maybeSingle()
+    let defs: { id: string; name: string }[] = []
+    try {
+      const raw = (defsRow as { value?: string } | null)?.value
+      if (raw) defs = JSON.parse(raw)
+    } catch { defs = [] }
+
+    for (const acc of (accountsRaw ?? []) as { id: string; label?: string | null; label_id?: string | null; sync_only?: boolean }[]) {
+      if (!acc.sync_only || !acc.label_id) continue
+      const { count: n } = await db.from('gmail_messages')
+        .select('id', { count: 'exact', head: true })
+        .is('deleted_at', null).eq('account_id', acc.id)
+      boxLabels.push({
+        id: acc.label_id,
+        name: defs.find(d => d.id === acc.label_id)?.name ?? acc.label ?? 'ארכיון',
+        count: n ?? 0,
+        account: acc.id,
+      })
+    }
+  }
+
   // ׳׳•׳ ׳” "לטיפול" ג€” ׳׳×׳’׳™׳× ׳‘׳₪׳׳ ׳.
   const { count: followupCount } = await db.from('gmail_messages')
     .select('id', { count: 'exact', head: true })
@@ -223,6 +255,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     messages: data ?? [],
+    boxLabels,
     total: count ?? 0,
     page,
     pageSize: PAGE_SIZE,

@@ -49,6 +49,8 @@ interface Account {
 /** ⚠️ id ולא רק name: האינדקס שומר את *מזהי* התוויות, ולכן הסינון
  *  חייב לרוץ על המזהה. השם משמש לתצוגה בלבד. */
 interface LabelStat { id: string; name: string; count: number }
+/** תווית של תיבת ארכיון — הסינון שלה הוא לפי התיבה, לא לפי תווית על ההודעה. */
+interface BoxLabel { id: string; name: string; count: number; account: string }
 interface Attachment { filename?: string; mimeType?: string; size?: number }
 
 const fmtDate = (d?: string | null) => {
@@ -92,6 +94,7 @@ export default function GmailInbox() {
   const [unreadByAccount, setUnreadByAccount] = useState<Record<string, number>>({})
   const [accounts, setAccounts] = useState<Account[]>([])
   const [labels, setLabels] = useState<LabelStat[]>([])
+  const [boxLabels, setBoxLabels] = useState<BoxLabel[]>([])
   const [followupCount, setFollowupCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -159,6 +162,7 @@ export default function GmailInbox() {
         if (office) { setAccount(office.id); setPage(0) }
       }
       setLabels(json.labels ?? [])
+      setBoxLabels(json.boxLabels ?? [])
       setFollowupCount(json.followupCount ?? 0)
       setError(null)
     } catch { if (!silent) setError('שגיאת רשת') } finally { if (!silent) setLoading(false) }
@@ -528,6 +532,38 @@ export default function GmailInbox() {
               התיבות שבכותרת, ובלבלה: אותה בחירה בשני מקומות שונים במסך.
               זהו אותו טיפול שכבר ניתן לבורר "כל המחלקות" (ראו למטה).
               המעבר בין תיבות נעשה בבורר שבפינה, כמו בג'ימייל. */}
+
+          {/* 🔴 המיילים הישנים שסונכרנו — התיבות עצמן מוסתרות (sync_only),
+              וזו הדרך היחידה להגיע אליהם. בלי הקטע הזה הארכיון נאסף
+              ואינו נגיש כלל.
+
+              ⚠️ הסינון הוא לפי התיבה (setAccount) ולא לפי תווית: התווית
+              מתארת מאיזו תיבה המייל הגיע, והיא אינה מוטבעת על ההודעות. */}
+          {boxLabels.length > 0 && (
+            <>
+              <p className="px-3 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-wide text-slate-400">מיילים ישנים</p>
+              <div className="space-y-0.5">
+                {boxLabels.map(b => (
+                  <button key={b.id}
+                    onClick={() => {
+                      const on = account === b.account
+                      setAccount(on ? '' : b.account)
+                      // 🔴 'all' ולא 'inbox': מיילי הארכיון כמעט אינם ב-INBOX
+                      // (ב"גמ״ח ישן" — 8 מתוך 512), ולכן הרשימה הייתה נראית
+                      // ריקה כאילו הסנכרון נכשל.
+                      if (!on) setFolder('all')
+                      setActiveLabel(''); setPage(0); setSelected(null)
+                    }}
+                    className={navBtn(account === b.account)}
+                    title={`${b.name} — ארכיון`}>
+                    <Archive size={13} className="flex-shrink-0" />
+                    <span className="flex-1 truncate text-[12px]">{b.name}</span>
+                    <span className={`text-[10px] ${account === b.account ? 'text-white/70' : 'text-slate-400'}`}>{b.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* תוויות Gmail */}
           {labels.length > 0 && (
