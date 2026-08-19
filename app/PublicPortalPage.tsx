@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import EmailInput from '@/components/ui/EmailInput'
 import VerifyControl from '@/components/VerifyControl'
 import { childRegisteredSeparatelyMessage, isChildMarried } from '@/lib/childDuplicateMessage'
+import { toSafeDateValue } from '@/lib/safeDateValue'
 import EmailVerifyModal from '@/components/EmailVerifyModal'
 
 // רכיבים כבדים המופיעים רק עמוק בזרימת הרישום (לא במסך הפתיחה id-lookup) — נטענים עצלה
@@ -232,11 +233,11 @@ function fmtBirthDate(v?: string | null): string | null {
 // 🔴 ערך שאינו בפורמט הזה מפיל את רינדור השדה. זה מה שהקריס את המסך
 // בבחירת "נשואים": תאריך הלידה של הילד הוזרם מהמאגר היישר לתוך הטופס,
 // וכשהוא היה פגום (אותו ערך שהציג "Invalid Date") הדף כולו נשבר.
+// ⚠️ המימוש עבר ל-lib/safeDateValue כדי שאותו סינון ישמש בכל מקום שמזרים
+// תאריך מהמאגר לטופס — לא רק כאן. toISOString() הקודם גם הזיז יום אחורה
+// בישראל (UTC+2/3); toSafeDateValue בונה מרכיבים מקומיים ושומר את היום.
 function toDateInputValue(v?: string | null): string {
-  if (!v) return ''
-  const d = new Date(v)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toISOString().slice(0, 10)
+  return toSafeDateValue(v)
 }
 
 function Field({ label, required, children, hint }: {
@@ -434,7 +435,9 @@ function BabyFields({
                   const cd = d.childData
                   if (cd.gender && !gender) onChange('baby_gender', cd.gender)
                   if (cd.name && !name) onChange('baby_name', cd.name)
-                  onExistingChild?.({ birth_date: cd.birth_date ?? '', name: cd.name ?? '', gender: cd.gender ?? '' })
+                  // ⚠️ תאריך הלידה מסונן לפני ההזרמה לטופס. ערך פגום מהמאגר
+                  // הגיע קודם ישירות ל-HebrewDatePicker והפיל את הדף כולו.
+                  onExistingChild?.({ birth_date: toSafeDateValue(cd.birth_date), name: cd.name ?? '', gender: cd.gender ?? '' })
                 }
               } catch { /* תיתפס בעת השליחה */ }
               // ⚠️ בדיקה נוספת — האם כבר קיימת בקשת לידה *בתהליך* על אותו תינוק.
@@ -2186,7 +2189,8 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     })
     setEditChildren((beneficiary.children ?? []).map(c => ({
       name: c.name ?? '', id_number: c.id_number ?? '', gender: c.gender ?? '',
-      birth_date: c.birth_date ?? '', marital_status: c.marital_status ?? '',
+      // ⚠️ מסונן — ערך פגום מהמאגר מפיל את בורר התאריך ואיתו את הדף כולו
+      birth_date: toSafeDateValue(c.birth_date), marital_status: c.marital_status ?? '',
       id_doc_type: c.id_doc_type === 'passport' ? 'passport' as const : 'id' as const,
       existing: true,   // ת"ז נעולה — נקבעה בעת ההוספה
     })))

@@ -23,9 +23,15 @@ const isoOf = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 // ⚠️ פרסור תאריך *מקומי*: new Date('2004-01-16') מפרש חצות UTC, ובישראל (UTC+2/3)
 // זה מוצג כיום הקודם — הבאג של "יום לפני בתצוגה מקדימה". כאן בונים תאריך מקומי
 // מהרכיבים כך שהיום נשמר. לערכי ISO עם שעה (T...) נופלים ל-Date רגיל.
-const parseLocalDate = (v: string): Date => {
+// 🔴 מחזיר null (ולא Invalid Date) לערך פגום. הסיבה: new HDate(InvalidDate)
+// זורק RangeError בזמן render, ושגיאה בזמן render מפילה את *כל* הדף למסך
+// "אירעה תקלה זמנית" — לא רק את השדה. זה גם ההסבר לכך שזה נראה אקראי: הקריסה
+// תלויה בנתונים (רשומה עם תאריך פגום), ולכן אצל חלק מהמשפחות עבד ואצל אחרות לא.
+const parseLocalDate = (v: string): Date | null => {
+  if (!v) return null
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v)
-  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v)
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 const sameYMD = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 
@@ -80,7 +86,7 @@ export default function HebrewDatePicker({ value, onChange, maxToday = true, yea
   useEffect(() => {
     if (value) {
       const d = parseLocalDate(value)
-      if (!isNaN(d.getTime())) { setG(d); const h = new HDate(d); setHc({ hy: h.getFullYear(), hm: h.getMonth() }) }
+      if (d) { setG(d); const h = new HDate(d); setHc({ hy: h.getFullYear(), hm: h.getMonth() }) }
     }
   }, [value])
 
