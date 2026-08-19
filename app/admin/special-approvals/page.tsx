@@ -11,6 +11,7 @@ import { getBeneficiaries } from '@/lib/beneficiariesList'
 import AddToDistributionPanel from './AddToDistributionPanel'
 import ApprovalLabelsPanel from './ApprovalLabelsPanel'
 import AssignLabelPanel from './AssignLabelPanel'
+import ImportExcelPanel from './ImportExcelPanel'
 import { approvalLabelOf } from '@/lib/approvalLabel'
 
 // דף "אישורים חריגים" — אנשים שאינם צאצאים (נכדים) שהמנהל אישר להם להגיש
@@ -40,6 +41,10 @@ export default async function SpecialApprovalsPage({ searchParams }: { searchPar
         title="אישורים חריגים"
         subtitle={`${(counts.all ?? total).toLocaleString('he-IL')} רשומות · אנשים שאושרו ידנית (אינם צאצאים)`}
       />
+
+      {/* ייבוא מאקסל — מעל הטבלה, פותח את עצמו בלחיצה כדי לא לתפוס מקום
+          במסך שרוב הזמן משמש לעיון ולא לייבוא. */}
+      <ImportExcelPanel />
 
       {/* ⚠️ פאנל נפרד מעל הטבלה ולא בתוכה: BeneficiariesTable משותפת עם
           מסך הצאצאים, ושינוי בה היה נוגע גם שם. */}
