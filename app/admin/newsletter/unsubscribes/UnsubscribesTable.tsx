@@ -1,8 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { Loader2, RotateCcw, Ban } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, RotateCcw, Ban, Search } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
+import Pagination from '@/components/ui/Pagination'
+import { useTablePagination } from '@/lib/useTablePagination'
 
 export interface UnsubRow {
   email: string
@@ -31,6 +33,7 @@ export default function UnsubscribesTable() {
   const toast = useToast()
   const [rows, setRows] = useState<UnsubRow[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -44,7 +47,15 @@ export default function UnsubscribesTable() {
     }
   }, [toast])
 
-  useEffect(() => { load() }, [load])
+  // ⚠️ הטעינה פעם אחת בלבד, ולא [load]: load תלוי ב-toast, וכל רינדור
+  // שיוצר מופע toast חדש היה יורה שליפה נוספת. הדגל שומר שהאפקט לא
+  // ירוץ שוב, ו-setRows קורה אחרי await (מחוץ לגוף האפקט הסינכרוני).
+  const started = useRef(false)
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    void load()
+  }, [load])
 
   async function restore(email: string) {
     if (!confirm(`להחזיר את ${email} לרשימת התפוצה?\nהכתובת תקבל שוב דיוור.`)) return
@@ -65,6 +76,19 @@ export default function UnsubscribesTable() {
     }
   }
 
+  // ⚠️ הסינון והדפדוף חייבים לרוץ לפני ה-return המוקדמים: hook שמדולג
+  // בטעינה ורץ אחריה שובר את סדר ה-hooks של React.
+  //
+  // החיפוש על *כל* הרשימה ולא על העמוד המוצג — אחרת "לא נמצא" על כתובת
+  // שקיימת. ראו lib/useTablePagination.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return rows ?? []
+    return (rows ?? []).filter(r =>
+      r.email.toLowerCase().includes(q) || (r.name ?? '').toLowerCase().includes(q))
+  }, [rows, query])
+  const pg = useTablePagination(filtered)
+
   if (rows === null) {
     return (
       <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white py-16">
@@ -84,6 +108,16 @@ export default function UnsubscribesTable() {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
+        <Search size={15} className="flex-shrink-0 text-slate-400" />
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="חיפוש לפי שם או מייל…"
+          className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none" />
+        <span className="flex-shrink-0 text-xs text-slate-400">{pg.total} רשומות</span>
+      </div>
+
       <table className="w-full text-sm">
         <thead className="border-b border-slate-200 bg-slate-50">
           <tr className="text-right text-xs text-slate-500">
@@ -95,7 +129,7 @@ export default function UnsubscribesTable() {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map(r => {
+          {pg.rows.map(r => {
             const isBusy = busy === r.email
             return (
               <tr key={r.email} className={`transition hover:bg-slate-50 ${isBusy ? 'opacity-50' : ''}`}>
@@ -133,6 +167,17 @@ export default function UnsubscribesTable() {
           })}
         </tbody>
       </table>
+
+      {/* ⚠️ נבדל מ"אין מוסרים כלל" (ה-guard למעלה): כאן יש רשומות והחיפוש
+          פשוט לא תאם — הודעה זהה לשניהם הייתה מטעה. */}
+      {!pg.total && (
+        <p className="px-4 py-10 text-center text-sm text-slate-400">
+          לא נמצאו רשומות התואמות לחיפוש
+        </p>
+      )}
+
+      <Pagination page={pg.page} size={pg.size} total={pg.total}
+        onPage={pg.setPage} onSize={pg.setSize} />
     </div>
   )
 }

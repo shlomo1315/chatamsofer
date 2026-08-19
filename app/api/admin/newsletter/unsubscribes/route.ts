@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requirePermission, getServiceClient, forbidden } from '@/lib/apiAuth'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // ניהול רשימת ההסרות — מי ביקש להיות מוסר, והחזרה לרשימה.
 export const dynamic = 'force-dynamic'
@@ -18,13 +19,19 @@ export async function GET() {
   const db = getServiceClient()
   if (!db) return NextResponse.json({ error: 'שגיאת שרת' }, { status: 500 })
 
-  const { data, error } = await db
+  // 🔴 בלי תקרה: רשימת ההסרות רק גדלה, ו-.limit(500) שהיה כאן היה מעלים
+  // בשקט כל מוסר מעבר לחמש-מאות — המסך היה נראה תקין ופשוט חסר.
+  // ראו lib/fetchAllRows והדפוס שחזר כאן ארבע פעמים.
+  const { rows: data, error } = await fetchAllRows<{
+    email: string; reason: string; created_at: string
+    beneficiary_id: string | null; campaign_id: string | null
+  }>((from, to) => db
     .from('unsubscribes')
     .select('email, reason, created_at, beneficiary_id, campaign_id')
     .order('created_at', { ascending: false })
-    .limit(500)
+    .range(from, to))
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   // שמות המוטבים — כדי שהמסך יציג שם ולא רק כתובת
   const ids = (data ?? []).map(r => r.beneficiary_id).filter(Boolean) as string[]
