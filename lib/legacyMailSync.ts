@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLegacyGmailClient, getGmailClientForToken, getBody, getGmailClient, ensureLabel } from './gmail'
 import { departmentByEmail, DEPARTMENTS, type DepartmentKey } from './departments'
 import { isWorkspaceConfigured, getWorkspaceGmailClient, ensureArchiveLabel, importRawMessage } from './googleWorkspace'
+import { fetchAllRows } from './fetchAllRows'
 
 // חשבון Gmail מטבלת gmail_accounts — טוקן, מחלקה, תווית וסמן סנכרון פר-תיבה.
 export interface GmailAccount {
@@ -384,12 +385,43 @@ export async function applyLabelToExistingMail(
   account: GmailAccount,
 ): Promise<number> {
   if (!account.label_id) return 0
-  const { data: rows } = await admin
+
+  // 🔴 השיוך הוא לפי *התיבה*, לא לפי המחלקה.
+  //
+  // ⚠️ הבאג שהיה כאן: הסינון היה .eq('department', ...) בלבד. כששלוש תיבות
+  // משויכות לאותה מחלקה (gemach), לחיצה על "שייך תווית" באחת מהן הדביקה את
+  // התווית שלה על *כל* מיילי המחלקה — כולל אלה שהגיעו מהתיבות האחרות.
+  // בפועל תיבה שאליה שויכו 0 מיילים תייגה 1,000 הודעות בשם עצמה.
+  //
+  // ⚠️ וגם fetchAllRows ולא שאילתה בודדת: התקרה נאכפת בשרת. ה-1,000 שנצפו
+  // לא היו מקריים — זו בדיוק התקרה שחתכה את הרשימה בשקט.
+  const { rows: tagged } = await fetchAllRows<{ id: string }>((from, to) => admin
     .from('inbound_emails')
     .select('id')
     .eq('source', 'legacy')
+    .eq('gmail_account_id', account.id)
+    .range(from, to))
+
+  // נפילה למחלקה *רק* למיילים ישנים שנקלטו לפני עמודת gmail_account_id
+  // (היא NULL אצלם), וגם אז רק כשלמחלקה יש תיבה אחת — אחרת אין דרך לדעת
+  // מאיזו תיבה הגיעו, וניחוש הוא בדיוק מה שיצר את התקלה.
+  let legacyRows: { id: string }[] = []
+  const { count: siblings } = await admin
+    .from('gmail_accounts')
+    .select('id', { count: 'exact', head: true })
     .eq('department', account.department)
-  const ids = (rows ?? []).map(r => String(r.id))
+  if ((siblings ?? 0) <= 1) {
+    const res = await fetchAllRows<{ id: string }>((from, to) => admin
+      .from('inbound_emails')
+      .select('id')
+      .eq('source', 'legacy')
+      .eq('department', account.department)
+      .is('gmail_account_id', null)
+      .range(from, to))
+    legacyRows = res.rows
+  }
+
+  const ids = [...new Set([...tagged, ...legacyRows].map(r => String(r.id)))]
   if (!ids.length) return 0
 
   const { data: cur } = await admin.from('app_settings').select('value').eq('key', 'mail_label_assignments').maybeSingle()

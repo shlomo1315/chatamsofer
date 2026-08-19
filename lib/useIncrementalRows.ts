@@ -35,8 +35,16 @@ export function useIncrementalRows<T>(
   const sentinelRef = useRef<HTMLElement | null>(null)
 
   // איפוס בכל שינוי של הרשימה (סינון/מיון/חיפוש) — ראו ההערה למעלה.
-  // התלות היא באורך *ובזהות המערך*, שכן סינון מחזיר מערך חדש.
-  useEffect(() => { setLimit(initial) }, [all, initial])
+  //
+  // ⚠️ נעשה בזמן הרינדור ולא ב-useEffect (דפוס "state שנגזר מ-props",
+  // זהה ל-useTablePagination): סינון מחזיר מערך חדש בכל הקלדה, ו-effect
+  // שקורא setLimit היה מרנדר את הרשימה פעמיים בכל תו — כלומר בדיוק העומס
+  // שהגלילה ההדרגתית באה למנוע, על הרשימה הגדולה ביותר במסך.
+  const [prev, setPrev] = useState<{ all: T[]; initial: number }>({ all, initial })
+  if (prev.all !== all || prev.initial !== initial) {
+    setPrev({ all, initial })
+    if (limit !== initial) setLimit(initial)
+  }
 
   const total = all.length
   const hasMore = limit < total

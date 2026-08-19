@@ -135,22 +135,24 @@ export async function POST(request: NextRequest) {
   }
 
   const loanId = data?.id ? String(data.id) : null
-  if (loanId) void sendRabbiFormMail(admin, loanId, sessionId, parsedAmount, parsedInstallments)
+  if (loanId) void sendLoanReceivedMail(admin, loanId, sessionId, parsedAmount, parsedInstallments)
 
   return NextResponse.json({ ok: true, loanId })
 }
 
 /**
- * שולח למבקש את המייל שנושא את טופס אישור הרב.
+ * שולח למבקש אישור שהבקשה התקבלה, עם פרטי ההלוואה שהוגשה.
  *
- * ⚠️ המייל אינו רק נוחות: הוא ההודעה שאליה המבקש *משיב* עם הטופס החתום,
- * וכותרות השרשור של התשובה הן הדרך הנקייה לזהות לאיזו בקשה הוא שייך.
- * בלי המייל הזה אין למבקש שרשור להשיב אליו כלל.
+ * ⚠️ כאן נשלח קודם מייל "טופס אישור רב" עם הטופס מצורף. זה הוסר: הטופס
+ * החתום מועלה כבר בתוך ההגשה עצמה, ולכן המייל דרש מהפונה מסמך שהוא זה
+ * עתה מסר — בלבול מיותר בשלב הרגיש ביותר של הבקשה.
  *
- * ⚠️ לא חוסם את הבקשה: המבקש מוריד את הטופס מהדפדפן ממילא, וכישלון
- * שליחה לא אמור למנוע ממנו להתקדם.
+ * ⚠️ מה שאבד עם זה: המייל ההוא שימש גם כשרשור שאליו המבקש משיב עם הטופס.
+ * מכיוון שההעלאה עברה לטופס ההגשה, אין יותר צורך בשרשור הזה.
+ *
+ * ⚠️ לא חוסם את הבקשה: כישלון שליחה לא אמור למנוע מהמבקש להתקדם.
  */
-async function sendRabbiFormMail(
+async function sendLoanReceivedMail(
   admin: ReturnType<typeof getAdminClient>,
   loanId: string,
   beneficiaryId: string,
@@ -166,33 +168,21 @@ async function sendRabbiFormMail(
       .maybeSingle()
     if (!ben?.email) return
 
-    const { buildRabbiFormPdf, lineageFromChain } = await import('@/lib/rabbiFormPdf')
-    const { rabbiFormEmail } = await import('@/lib/emailTemplates')
-    const { loanFormCode } = await import('@/lib/rabbiFormReturn')
+    const { loanReceivedEmail } = await import('@/lib/emailTemplates')
     const { deliverMail } = await import('@/lib/sendMail')
     const { mailFor } = await import('@/lib/departments')
 
-    const code = loanFormCode(loanId)
-    const mail = rabbiFormEmail({
+    const mail = loanReceivedEmail({
       familyName: ben.family_name,
       applicantName: ben.full_name,
       amount,
-      code,
+      installments,
+      submittedAt: new Date().toLocaleDateString('he-IL'),
     })
 
-    const pdf = await buildRabbiFormPdf({
-      applicantName: [ben.family_name, ben.full_name].filter(Boolean).join(' '),
-      idNumber: String(ben.id_number ?? ''),
-      lineage: lineageFromChain(ben.lineage_chain),
-    })
-
-    await deliverMail(ben.email, mail.subject, mail.html, [{
-      filename: 'טופס-אישור-רב.pdf',
-      mimeType: 'application/pdf',
-      contentB64: Buffer.from(pdf).toString('base64'),
-    }], mailFor('gemach'))
+    await deliverMail(ben.email, mail.subject, mail.html, undefined, mailFor('gemach'))
   } catch (e) {
-    console.error('[loan-draft] שליחת טופס אישור רב נכשלה:', e)
+    console.error('[loan-draft] שליחת אישור קבלת הבקשה נכשלה:', e)
   }
 }
 

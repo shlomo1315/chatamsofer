@@ -1769,8 +1769,26 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
   // בקשת הלוואה פתוחה — חוסמת הגשת בקשה נוספת עד לקבלת החלטה.
   // ⚠️ תצוגה בלבד; האכיפה בשרת (loan-request מחזיר 409). המסך רק חוסך
   // למשתמש למלא טופס שלם ורק אז לגלות שהוא נדחה.
-  const [openLoanNotice, setOpenLoanNotice] = useState<{ message: string; since?: string } | null>(null)
+  // ⚠️ פרטי הבקשה הפתוחה במלואם — לא רק ההודעה. המבקש צריך לראות *מה*
+  // הוא הגיש (סכום, תשלומים, תאריך, סטטוס) בלי להתקשר למשרד כדי לברר.
+  const [openLoanNotice, setOpenLoanNotice] = useState<{
+    message: string
+    since?: string
+    status?: string
+    amount?: number | null
+    approvedAmount?: number | null
+    installments?: number | null
+    monthlyPayment?: number | null
+    purpose?: string | null
+  } | null>(null)
   const [openLoanModal, setOpenLoanModal] = useState(false)
+  // 🔴 האם בדיקת ההלוואה הפתוחה כבר חזרה מהשרת.
+  //
+  // ⚠️ בלי הדגל הזה כניסה מקישור המייל (?action=loan) הייתה פותחת את טופס
+  // ההגשה למי שכבר יש לו בקשה בתהליך: ה-deep-link רץ ברגע שהאזור האישי
+  // נטען, בעוד בדיקת ההלוואה עדיין באוויר — ולכן openLoanNotice היה null
+  // ונראה כאילו אין בקשה פתוחה. עכשיו ה-deep-link ממתין לתשובה.
+  const [openLoanLoaded, setOpenLoanLoaded] = useState(false)
   // טיוטה שממתינה לטופס אישור רב — נשמרה כשהמבקש הוריד את הטופס.
   // ⚠️ כשהיא קיימת, הטופס נפתח *נעול*: רק העלאת הטופס החתום, בלי עריכה
   // של הסכום או המטרה — אחרת הפרטים היו משתנים אחרי שהרב כבר חתם עליהם.
@@ -1924,7 +1942,7 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
     } else {
       setRegForm(f => ({ ...f, full_name: childSelf.name, id_number: childSelf.id_number, birth_date: childBirth, gender: childSelf.gender, spouse_name: '', spouse_id_number: '', spouse_birth_date: '' }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [childSelf, regForm.marital_status])
   const [lineageResult, setLineageResult] = useState<LineageResult>({ valid: false, nodeId: null, ancestors: [], selfRelation: null, selfIsExisting: false })
   // מעגל תיקונים: תיקון עץ דורות מהאזור האישי — תוצאת המבורר + מצב שליחה
@@ -3070,12 +3088,21 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
         if (cancelled) return
         // ⚠️ מאפס גם כשאין בקשה פתוחה: אחרת התראה של משתמש קודם הייתה
         // נשארת על המסך אחרי החלפת משתמש באותו דפדפן.
-        setOpenLoanNotice(d?.openLoan ? { message: d.message, since: d.since } : null)
+        setOpenLoanNotice(d?.openLoan ? {
+          message: d.message, since: d.since, status: d.status,
+          amount: d.amount, approvedAmount: d.approvedAmount,
+          installments: d.installments, monthlyPayment: d.monthlyPayment,
+          purpose: d.purpose,
+        } : null)
         setRabbiDraft(d?.awaitingRabbiForm
           ? { loanId: String(d.loanId), amount: d.amount ?? null, since: d.since }
           : null)
       })
+      // ⚠️ הדגל נדלק גם בכישלון: אחרת תקלת רשת הייתה משאירה את ה-deep-link
+      // ממתין לנצח, והמבקש היה נתקע באזור האישי בלי שהטופס ייפתח.
+      // החסימה האמיתית יושבת בשרת ממילא, כך שאין כאן סיכון לבקשה כפולה.
       .catch(() => {})
+      .finally(() => { if (!cancelled) setOpenLoanLoaded(true) })
     return () => { cancelled = true }
   }, [beneficiaryId])
 
@@ -3422,11 +3449,24 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       gateOpen: gateAllows(ACTION_DEPARTMENT[a] ?? ''),
       isDocsPending,
     })
-    let opened = decision.clearIntent
+    // ⚠️ בקשת הלוואה שממתינה לבדיקת "הלוואה פתוחה" אינה הכרעה: הכוונה
+    // חייבת להישאר דרוכה כדי שה-effect ינסה שוב כשהתשובה תגיע (הוא תלוי
+    // ב-openLoanLoaded). ניקוי כאן היה משאיר את המבקש באזור האישי בשקט.
+    const opened = a === 'loan' && !openLoanLoaded ? false : decision.clearIntent
     if (decision.error) setError(decision.error)
     if (decision.open === 'docs-gate-modal') setDocsGateModal(true)
     else if (a === 'birth' && decision.open === 'birth-form') goToBirthForm()
-    else if (a === 'loan') { if (decision.open === 'loan-intro') goToLoanForm() }
+    // 🔴 הלוואה: ממתינים לתשובת בדיקת ההלוואה הפתוחה לפני שמחליטים.
+    //
+    // ⚠️ בלי ההמתנה, מי שכבר יש לו בקשה בתהליך נכנס מקישור המייל וקיבל את
+    // טופס ההגשה — כי הבדיקה עוד לא חזרה ו-openLoanNotice היה null. הוא מילא
+    // בקשה שלמה ורק בשליחה גילה שהיא נחסמת בשרת.
+    // כשיש בקשה פתוחה מציגים את חלונית הפרטים במקום הטופס.
+    else if (a === 'loan') {
+      if (!openLoanLoaded) { /* opened=false — ה-effect ינסה שוב כשהתשובה תגיע */ }
+      else if (openLoanNotice) setOpenLoanModal(true)
+      else if (decision.open === 'loan-intro') goToLoanForm()
+    }
     else if (a === 'aid') { if (decision.open === 'aid-modal') goToAidForm() }
     else if (a === 'docs') { setError(''); setDocsPendingReason(null); setStep('docs-needed') }
     // קישור "עדכון פרטים אישיים" מהמייל — פותח ישירות את מסך העריכה
@@ -3451,15 +3491,17 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
       }
     }
     if (opened) intendedAction.current = null
+    // ⚠️ openLoanLoaded/openLoanNotice בתלויות: בלעדיהם ה-effect לא היה רץ
+    // שוב כשבדיקת ההלוואה חוזרת, והכוונה הייתה נשארת דרוכה בלי שיקרה דבר.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, beneficiary, deptGates, gatesLoaded, holiday])
+  }, [step, beneficiary, deptGates, gatesLoaded, holiday, openLoanLoaded, openLoanNotice])
 
   // משפחה בהשלמת מסמכים — התראה מיידית בכניסה לאזור האישי, פעם אחת.
   useEffect(() => {
     if (step !== 'dashboard' || !beneficiary || !isDocsPending || docsGateShown.current) return
     docsGateShown.current = true
     setDocsGateModal(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [step, beneficiary, isDocsPending])
 
   const handleDocsUpload = async () => {
@@ -7053,11 +7095,40 @@ export default function PublicPortalPage({ texts, editMode, onTextChange, forceS
               <p className="text-sm text-slate-600 leading-relaxed text-center">
                 {openLoanNotice.message}
               </p>
-              {openLoanNotice.since && (
-                <p className="text-xs text-slate-500 text-center">
-                  הבקשה הוגשה בתאריך {new Date(openLoanNotice.since).toLocaleDateString('he-IL')}
-                </p>
-              )}
+
+              {/* פרטי הבקשה הקיימת — כדי שלא יצטרך להתקשר ולברר מה הגיש */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 divide-y divide-slate-200">
+                {(() => {
+                  const st = openLoanNotice.status
+                  const label = st === 'approved' ? 'אושרה — ממתינה לביצוע'
+                    : st === 'inquiry' ? 'בבירור — ממתינה לתשובתכם'
+                    : 'ממתינה לטיפול'
+                  const tone = st === 'approved' ? 'text-emerald-700' : 'text-amber-700'
+                  const rows: [string, string][] = [['סטטוס', label]]
+                  if (openLoanNotice.since) {
+                    rows.push(['תאריך הגשה', new Date(openLoanNotice.since).toLocaleDateString('he-IL')])
+                  }
+                  if (openLoanNotice.amount != null) {
+                    rows.push(['סכום מבוקש', `$${Math.round(Number(openLoanNotice.amount)).toLocaleString('en-US')}`])
+                  }
+                  if (openLoanNotice.approvedAmount != null) {
+                    rows.push(['סכום שאושר', `$${Math.round(Number(openLoanNotice.approvedAmount)).toLocaleString('en-US')}`])
+                  }
+                  if (openLoanNotice.installments != null && Number(openLoanNotice.installments) > 0) {
+                    rows.push(['מספר תשלומים', String(openLoanNotice.installments)])
+                  }
+                  if (openLoanNotice.monthlyPayment != null && Number(openLoanNotice.monthlyPayment) > 0) {
+                    rows.push(['תשלום חודשי', `$${Math.round(Number(openLoanNotice.monthlyPayment)).toLocaleString('en-US')}`])
+                  }
+                  if (openLoanNotice.purpose) rows.push(['מטרת ההלוואה', openLoanNotice.purpose])
+                  return rows.map(([k, v], i) => (
+                    <div key={k} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                      <span className="text-xs text-slate-500">{k}</span>
+                      <span className={`text-sm font-bold ${i === 0 ? tone : 'text-slate-800'}`}>{v}</span>
+                    </div>
+                  ))
+                })()}
+              </div>
               <button type="button" onClick={() => setOpenLoanModal(false)}
                 className="w-full bg-gradient-to-b from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white font-semibold rounded-xl px-4 py-3.5 transition-all duration-150 text-base shadow-[0_6px_16px_-6px_rgba(14,165,233,0.55)]">
                 הבנתי

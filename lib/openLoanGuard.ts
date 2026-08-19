@@ -38,6 +38,12 @@ export type OpenLoan = {
   status: string
   amount: number | null
   created_at: string
+  // ⚠️ נשלפים כדי שהפורטל יציג את פרטי הבקשה הפתוחה במלואם. בלעדיהם
+  // המבקש רואה "יש לך בקשה פתוחה" בלי לדעת על מה מדובר — ופונה למשרד.
+  installments?: number | null
+  monthly_payment?: number | null
+  approved_amount?: number | null
+  purpose?: string | null
 }
 
 /** הודעת החסימה — נוסח אחיד לפורטל, למייל ולממשק. */
@@ -78,7 +84,7 @@ export async function findOpenLoan(
 ): Promise<OpenLoan | null> {
   const { data, error } = await db
     .from('loans')
-    .select('id, status, amount, created_at')
+    .select('id, status, amount, created_at, installments, monthly_payment, approved_amount, purpose')
     .eq('beneficiary_id', beneficiaryId)
     .in('status', OPEN_LOAN_STATUSES as unknown as string[])
     .order('created_at', { ascending: true })
@@ -103,7 +109,7 @@ export async function findDraftAwaitingRabbiForm(
 ): Promise<OpenLoan | null> {
   const { data, error } = await db
     .from('loans')
-    .select('id, status, amount, created_at')
+    .select('id, status, amount, created_at, installments, monthly_payment, approved_amount, purpose')
     .eq('beneficiary_id', beneficiaryId)
     .eq('status', AWAITING_RABBI_FORM)
     .order('created_at', { ascending: false })

@@ -73,7 +73,7 @@ async function getAid(id: string): Promise<MaternityAid | null> {
   // ⚠️ קודם עם תווית סיבת האישור ובנפילה בלעדיה — הכרטסת חייבת להיפתח
   // גם לפני שהמיגרציה של approval_labels רצה.
   const withLabel = await runWithLabel()
-  let { data, error } = withLabel.error && withLabel.error.code !== 'PGRST116' && withLabel.error.code !== '22P02'
+  const { data, error } = withLabel.error && withLabel.error.code !== 'PGRST116' && withLabel.error.code !== '22P02'
     ? await run()
     : withLabel
   if (withLabel.error && withLabel.error.code !== 'PGRST116' && withLabel.error.code !== '22P02') {

@@ -50,7 +50,7 @@ async function buildReceivedForMap(): Promise<{ map: Map<string, string[]>; fetc
   let fetched = 0
 
   // Resend receiving.list מדפדף עם cursor. עד 100 לעמוד; ממשיכים עד has_more=false.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let after: string | undefined
   for (let page = 0; page < 200; page++) {  // תקרה בטוחה: 200 עמודות × 100 = 20K
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

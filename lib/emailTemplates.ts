@@ -2026,7 +2026,7 @@ export function gemachIntakeEmail(opts?: { portalBase?: string; blankFormUrl?: s
     </table>
 
     <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;text-align:center;">
-      הודעה זו נשלחה אוטומטית. לשאלות נוספות ניתן להשיב להודעה זו.
+      הודעה זו נשלחה אוטומטית.
     </p>
   `
   return {
@@ -2052,6 +2052,66 @@ export function gemachIntakeEmail(opts?: { portalBase?: string; blankFormUrl?: s
 // ⚠️ ההוראות מודגשות ויזואלית ולא נטמעות בפסקה: מי שמקבל מייל עם קובץ
 // מצורף סורק אותו בעיניים ומחפש את הקובץ. הוראה שנקברת בטקסט רץ פשוט
 // לא נקראת, והטופס חוזר בדרך הלא נכונה.
+// ─── הלוואות — אישור קבלת הבקשה למבקש (בעת ההגשה) ─────────────────────────────
+//
+// ⚠️ מחליף את מייל "טופס אישור רב" שנשלח כאן קודם. הטופס החתום כבר מועלה
+// בתוך ההגשה עצמה, ולכן בקשה לשלוח אותו שוב הייתה מבלבלת — הפונה קיבל
+// דרישה למסמך שהוא זה עתה מסר. הדגם זהה לאישור הקבלה של סיוע רפואי,
+// בתוספת פרטי ההלוואה כדי שהאישור יהיה גם תיעוד של מה שהוגש.
+export function loanReceivedEmail(opts: {
+  familyName?: string | null
+  applicantName?: string | null
+  amount?: number | null
+  installments?: number | null
+  submittedAt?: string | null
+}): BuiltEmail {
+  const who = [opts.familyName, opts.applicantName].filter(Boolean).join(' ')
+  const greeting = who ? `לכבוד משפחת ${escapeHtml(who)},` : 'שלום וברכה,'
+
+  const row = (label: string, value: string) => `
+    <tr>
+      <td style="padding:7px 0;color:#64748b;font-size:14px;">${label}</td>
+      <td style="padding:7px 0;color:#0f172a;font-size:14px;font-weight:800;text-align:left;" dir="ltr">${value}</td>
+    </tr>`
+
+  const amount = opts.amount != null
+    ? row('סכום מבוקש', `$${Math.round(Number(opts.amount)).toLocaleString('en-US')}`)
+    : ''
+  const installments = opts.installments != null && Number(opts.installments) > 0
+    ? row('מספר תשלומים', String(Math.round(Number(opts.installments))))
+    : ''
+  const submitted = opts.submittedAt
+    ? row('תאריך הגשה', escapeHtml(opts.submittedAt))
+    : ''
+
+  const body = `
+    <p style="margin:0 0 8px;color:#64748b;font-size:13px;font-weight:600;letter-spacing:0.5px;">אישור קבלה</p>
+    <h2 style="margin:0 0 16px;color:#0f172a;font-size:22px;font-weight:900;">${greeting}</h2>
+    <p style="margin:0 0 18px;color:#334155;font-size:15px;line-height:1.8;">
+      בקשתכם ל<strong>הלוואה</strong> התקבלה במערכת היכל החתם סופר והועברה לטיפול המזכירות.
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+           style="border-collapse:collapse;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:6px 18px;margin:0 0 18px;">
+      ${amount}${installments}${submitted}
+    </table>
+
+    <p style="margin:0;color:#334155;font-size:15px;line-height:1.8;">
+      הבקשה נמצאת כעת בבדיקה. בסיום הטיפול תישלח אליכם הודעה.
+    </p>
+  `
+  return {
+    subject: 'בקשתכם להלוואה התקבלה — היכל החתם סופר',
+    html: shell({
+      preheader: 'בקשתכם להלוואה התקבלה והועברה לטיפול המזכירות.',
+      accent: '#10b981',
+      title: 'הבקשה התקבלה',
+      subtitle: 'הלוואות',
+      body,
+    }),
+  }
+}
+
 export function rabbiFormEmail(opts: {
   familyName?: string | null
   applicantName?: string | null
@@ -2120,7 +2180,7 @@ export function rabbiFormEmail(opts: {
     </table>
 
     <p style="margin:0;color:#94a3b8;font-size:13px;line-height:1.7;">
-      הבקשה תיכנס לטיפול רק לאחר קבלת הטופס החתום. בכל שאלה — ניתן להשיב להודעה זו.
+      הבקשה תיכנס לטיפול רק לאחר קבלת הטופס החתום.
     </p>`
 
   return {

@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   // Fetch user names for user map
   const userIds = Object.keys(userMap).filter(id => id !== 'unknown')
-  let userNames: Record<string, string> = {}
+  const userNames: Record<string, string> = {}
   if (userIds.length > 0) {
     const { data: profiles } = await client
       .from('profiles')

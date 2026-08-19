@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ArrowRight, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Database,
-  Inbox, Clock, ShieldCheck, Zap, Plus, Trash2, PowerOff,
+  Inbox, Clock, ShieldCheck, Zap, Plus, Trash2, PowerOff, Pencil,
 } from 'lucide-react'
 import { DEPARTMENTS } from '@/lib/departments'
 import { format } from 'date-fns'
@@ -23,6 +23,8 @@ import { he } from 'date-fns/locale'
 interface Account {
   id: string
   email: string
+  /** שם התיבה כפי שהוא מוצג במסכי המייל. ניתן לעריכה כאן. */
+  label: string | null
   department: string | null
   last_sync_at: string | null
   last_full_sync_at: string | null
@@ -61,6 +63,11 @@ export default function IndexSyncPage() {
   const [now, setNow] = useState(0)
   const [results, setResults] = useState<RunResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // עריכת שם התיבה: מזהה התיבה הנערכת + הטקסט הזמני בשדה.
+  // ⚠️ השם הוא מה שמופיע בסרגל המייל. בלי עריכה כאן שתי תיבות של אותה
+  // מחלקה נראו זהות לגמרי במסך, ולא היה אפשר להבחין ביניהן.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftLabel, setDraftLabel] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -143,6 +150,23 @@ export default function IndexSyncPage() {
     // ללא-מחלקה אחרון — הוא חריג, לא ברירת מחדל.
     return [...m.entries()].sort((x, y) => (x[0] ? 0 : 1) - (y[0] ? 0 : 1))
   })()
+
+  async function saveLabel(a: Account) {
+    const next = draftLabel.trim()
+    if (next === (a.label ?? '')) { setEditingId(null); return }
+    setAcctBusy(a.id); setError(null)
+    try {
+      const res = await fetch('/api/admin/gmail/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: a.id, label: next }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(json.error ?? 'שמירת השם נכשלה'); return }
+      setEditingId(null)
+      await load()
+    } catch { setError('שגיאת רשת') } finally { setAcctBusy(null) }
+  }
 
   async function toggleActive(a: Account) {
     const turningOff = a.is_active !== false
@@ -407,7 +431,40 @@ export default function IndexSyncPage() {
                     <div key={a.id} className={`rounded-xl border p-3 ${a.is_active === false ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0">
-                          <p dir="ltr" className={`font-bold truncate text-right ${a.is_active === false ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                          {/* שם התיבה — זה מה שמופיע בסרגל המייל. לחיצה עורכת. */}
+                          {editingId === a.id ? (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <input
+                                autoFocus
+                                value={draftLabel}
+                                onChange={e => setDraftLabel(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') void saveLabel(a)
+                                  if (e.key === 'Escape') setEditingId(null)
+                                }}
+                                placeholder="שם התיבה"
+                                maxLength={60}
+                                className="rounded-lg border border-indigo-300 px-2 py-1 text-sm font-bold text-slate-800 outline-none focus:border-indigo-500"
+                              />
+                              <button type="button" onClick={() => void saveLabel(a)} disabled={acctBusy === a.id}
+                                className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-40">
+                                {acctBusy === a.id ? <Loader2 size={13} className="animate-spin" /> : 'שמור'}
+                              </button>
+                              <button type="button" onClick={() => setEditingId(null)}
+                                className="text-xs font-bold text-slate-400 hover:text-slate-600">ביטול</button>
+                            </div>
+                          ) : (
+                            <button type="button"
+                              onClick={() => { setEditingId(a.id); setDraftLabel(a.label ?? '') }}
+                              title="לחץ לשינוי שם התיבה"
+                              className="group flex items-center gap-1.5 mb-0.5 text-right">
+                              <span className={`font-bold ${a.label ? 'text-slate-800' : 'text-slate-400 italic'}`}>
+                                {a.label || 'ללא שם'}
+                              </span>
+                              <Pencil size={11} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                            </button>
+                          )}
+                          <p dir="ltr" className={`truncate text-right text-xs ${a.is_active === false ? 'text-slate-400 line-through' : 'text-slate-500'}`}>
                             {a.email}
                           </p>
                           <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">

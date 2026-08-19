@@ -38,9 +38,18 @@ export async function GET(request: NextRequest) {
   const loan = await findOpenLoan(admin, beneficiaryId)
   if (!loan) return NextResponse.json({ openLoan: false })
 
+  // ⚠️ הפרטים המלאים ולא רק ההודעה: "יש לכם בקשה פתוחה" בלי סכום, תאריך
+  // וסטטוס שולח את המבקש להתקשר למשרד כדי לברר מה הוא בעצמו הגיש.
   return NextResponse.json({
     openLoan: true,
     message: openLoanMessageFor(loan),
     since: loan.created_at,
+    loanId: loan.id,
+    status: loan.status,
+    amount: loan.amount,
+    approvedAmount: loan.approved_amount ?? null,
+    installments: loan.installments ?? null,
+    monthlyPayment: loan.monthly_payment ?? null,
+    purpose: loan.purpose ?? null,
   })
 }

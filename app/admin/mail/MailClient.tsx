@@ -1360,10 +1360,17 @@ export default function MailClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDepartment])
 
-  // סנכרון לפי פרמטר ה-URL (לחיצה על מחלקה בתפריט הצד)
+  // סנכרון לפי פרמטר ה-URL (לחיצה על מחלקה בתפריט הצד).
+  //
+  // ⚠️ למחלקה הפעילה *שני* מקורות: פרמטר ה-URL וכפתורי המחלקות במסך.
+  // לכן ה-state נשאר (אי אפשר לגזור אותו מה-URL בלבד), אבל העדכון מותנה:
+  // בלי ההשוואה כאן ה-effect כתב את אותו ערך בכל שינוי searchParams,
+  // וזה הפעיל את ה-effect של [activeDepartment] שקורא load(folder) —
+  // כלומר רינדור נוסף *וטעינת רשת נוספת* על לא כלום.
+  const urlDepartment = searchParams.get('department')
   useEffect(() => {
-    setActiveDepartment(searchParams.get('department'))
-  }, [searchParams])
+    setActiveDepartment(prev => (prev === urlDepartment ? prev : urlDepartment))
+  }, [urlDepartment])
 
   // רענון מיידי לכל מייל בנפרד — Supabase Realtime: כל הוספה/שינוי בטבלת המיילים
   // (נכנס/יוצא) דוחף עדכון חי למסך. רענון נוסף בחזרה לחלון. אין פולינג — Realtime מספיק.
