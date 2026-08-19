@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { Search, MapPin, Baby, FolderOpen, Wallet, CalendarClock, ChevronLeft, Clock, Loader2 } from 'lucide-react'
 import { Beneficiary, WidowRequest, WidowSupportPayment } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
-import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTablePagination } from '@/lib/useTablePagination'
+import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
@@ -71,7 +72,10 @@ export default function WidowsDashboard({
   // נחתך: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגים מתוך הכל.
   // ⚠️ הסטטיסטיקות למעלה נספרות מ-widows/payments המלאים ולא מ-visibleRows —
   // הן חייבות להישאר סכום כללי ולא להשתנות עם הגלילה.
-  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+  // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
+  // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
+  const pg = useTablePagination(visible)
+  const visibleRows = pg.rows
 
   // ⚠️ extraCols=1 — עמודת החץ בקצה אינה בבורר אך נספרת לגרירה. היא האחרונה,
   // ולכן האינדקסים של העמודות שבבורר נשארים 0..n-1.
@@ -164,17 +168,13 @@ export default function WidowsDashboard({
                   <td className="px-4 py-3 text-slate-300 align-top"><ChevronLeft size={16} /></td>
                 </tr>
               ))}
-              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
-              {hasMore && (
-                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={tc.shown.length + 1} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
-                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
-                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
     </div>

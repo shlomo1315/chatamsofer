@@ -224,6 +224,9 @@ export async function syncLegacyMail(
           gmail_message_id: gmailMessageId,
           source: 'legacy',
           department,
+          // התיבה שממנה נמשך המייל — כדי שמסך הסטטוס יספור פר-תיבה ולא פר-מחלקה.
+          // null בסנכרון התיבה הישנה הגלובלית (אין לה שורה ב-gmail_accounts).
+          ...(account?.id ? { gmail_account_id: account.id } : {}),
           from_email: fromEmail,
           from_name: fromName,
           to_email: toEmail,

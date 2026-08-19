@@ -2,16 +2,23 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare, Loader2 } from 'lucide-react'
+import { Clock, Check, X, Eye, Search, Layers, CheckCircle2, Minus, MessageSquare } from 'lucide-react'
 import { LoanStatusControl, DeleteLoanButton } from './LoanControls'
 import type { Loan } from '@/types'
 import { format } from 'date-fns'
 import { he } from 'date-fns/locale'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
-import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTablePagination } from '@/lib/useTablePagination'
+import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
+import {
+  isApproved as isApprovedCat, isRejected as isRejectedCat,
+  isFreshTodo as isFreshTodoCat, isReturned as isReturnedCat,
+  isTodo as isTodoCat, isSentPending as isSentPendingCat,
+  type LoanFilter as Filter, type LoanTodoSub as TodoSub,
+} from '@/lib/loansListFilter'
 
 const fmtDate = (d?: string) => d ? format(new Date(d), 'dd/MM/yy', { locale: he }) : '—'
 // 🔴 ההלוואות נקובות בדולר: הסכום מוקלד בדולרים, וההחזר בשקלים לפי שער
@@ -30,14 +37,12 @@ const borrowerName = (b?: BenRef) =>
 // הציג אותה כאילו ממתינים לו. עכשיו:
 //   ממתין לטיפול  = הכדור אצלנו (טרם טופל · חזר מבירור)
 //   נשלח לבירור   = הכדור אצל המבקש (נשלח ולא הגיב)
-type Filter = 'all' | 'todo' | 'sent' | 'approved' | 'rejected'
-/** תת-סינון בתוך "ממתין לטיפול": ראשוני · חזר מבירור. */
-type TodoSub = 'all' | 'fresh' | 'returned'
-
-const isPending = (l: Loan) => l.status === 'pending'
-const isInquiry = (l: Loan) => l.status === 'inquiry'
-const isApproved = (l: Loan) => l.status === 'approved' || l.status === 'active' || l.status === 'completed'
-const isRejected = (l: Loan) => l.status === 'rejected' || l.status === 'defaulted'
+// ⚠️ הקטגוריות מיובאות מ-lib/loansListFilter ולא מוגדרות כאן: אותה לוגיקה
+// בדיוק משוכפלת ב-SQL (loans_list_counts) לצורך המונים בצד השרת, ויש טסט
+// שנועל אותה. הגדרה כפולה כאן הייתה מחזירה את התקלה שהמונה מציג מספר אחד
+// והרשימה מציגה אחר.
+const isApproved = (l: Loan) => isApprovedCat({ status: l.status })
+const isRejected = (l: Loan) => isRejectedCat({ status: l.status })
 
 interface CardDef { key: Filter; label: string; icon: typeof Clock; base: string; active: string; iconCls: string }
 const CARD_DEFS: CardDef[] = [
@@ -93,13 +98,18 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   //   ראשוני   — הוגש וטרם טופל (pending)
   //   חזר מבירור — נשלח בירור והמבקש ענה. הסטטוס נשאר 'inquiry', אבל
   //                מבחינת העבודה זו בקשה שממתינה *לנו*.
-  const isFreshTodo = (l: Loan) => isPending(l)
-  const isReturned = (l: Loan) => isInquiry(l) && hasReplied(l)
-  const isTodo = (l: Loan) => isFreshTodo(l) || isReturned(l)
+  //
+  // ⚠️ הכללים עצמם ב-lib/loansListFilter (מקור אמת יחיד, משוכפל ל-SQL עם
+  // טסט שנועל). כאן רק הגישור: repliedIds → lastDir, כי בצד הלקוח "מי השיב"
+  // מגיע כרשימת מזהים ולא ככיוון ההודעה האחרונה.
+  const asCat = (l: Loan) => ({ status: l.status, lastDir: hasReplied(l) ? 'applicant' : 'staff' })
+  const isFreshTodo = (l: Loan) => isFreshTodoCat(asCat(l))
+  const isReturned = (l: Loan) => isReturnedCat(asCat(l))
+  const isTodo = (l: Loan) => isTodoCat(asCat(l))
   // 🔴 "נשלח לבירור" = נשלח ועדיין לא הגיב. בקשה שהמבקש ענה עליה יוצאת
   // מכאן ועוברת ל"ממתין לטיפול" — אחרת היא נראית כאילו ממתינים לו, בזמן
   // שהיא בעצם דורשת טיפול מיידי.
-  const isSentPending = (l: Loan) => isInquiry(l) && !hasReplied(l)
+  const isSentPending = (l: Loan) => isSentPendingCat(asCat(l))
 
   const matchesFilter = (l: Loan, f: Filter) => {
     if (f === 'all') return true
@@ -151,7 +161,10 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
   // את מספר העמודות הנראות בעצמו.
   const tc = useTableColumns('loans', COLUMNS, { extraCols: 1 })
 
-  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+  // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
+  // (visible כבר מסונן) ורק אז נחתך לעמוד — ראו lib/useTablePagination.
+  const pg = useTablePagination(visible)
+  const visibleRows = pg.rows
 
   // ── תוכן התא לפי עמודה ──
   // ⚠️ מקור אמת יחיד: הכותרת, התא וברירת המחדל יושבים יחד ב-COLUMNS.
@@ -341,17 +354,13 @@ export default function LoansTable({ data, repliedIds = [] }: { data: Loan[]; re
                   </td>
                 </tr>
               ))}
-              {/* זקיף הגלילה — colSpan נדיב במכוון: מספר העמודות משתנה. */}
-              {hasMore && (
-                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={20} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
-                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
-                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {/* דפדוף + בורר גודל עמוד (20/50/100/200) */}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
     </div>

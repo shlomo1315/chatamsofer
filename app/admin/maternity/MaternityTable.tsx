@@ -16,7 +16,8 @@ import { StatusControl, deleteMaternityAid, STATUS_PILL, type MotherRef } from '
 import { babyNameLabel, type AidNameFields } from '@/lib/babyNames'
 import { matchesBucket, type MaternityBucket, type BucketAid } from '@/lib/maternityBuckets'
 import { recoveryDaysOf } from '@/lib/maternity'
-import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTablePagination } from '@/lib/useTablePagination'
+import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 import ApprovalLabelTag from '@/components/ui/ApprovalLabelTag'
 import { approvalLabelOf } from '@/lib/approvalLabel'
@@ -202,9 +203,12 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
       a => a.created_at,
     ), [filtered, sort])
 
-  // ⚡ גלילה אינסופית — הטבלה רינדרה את כל השורות המסוננות בבת אחת (עד ~1000
-  // שורות × 15 עמודות = ~15,000 תאים), וכל סינון/מיון/הקלדה בנה אותן מחדש.
-  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+  // ⚡ דפדוף אחיד (50 בברירת מחדל, בורר עד 200) — הטבלה רינדרה את כל השורות
+  // המסוננות בבת אחת (עד ~1000 שורות × 15 עמודות = ~15,000 תאים), וכל
+  // סינון/מיון/הקלדה בנה אותן מחדש.
+  // ⚠️ החיפוש רץ על כל הרשימה (visible) ורק אז נחתך לעמוד — ראו useTablePagination.
+  const pg = useTablePagination(visible)
+  const visibleRows = pg.rows
 
   // ⚠️ העמודות שהמסך המארח כיבה (showCard/showArrived) יורדות מהבורר עצמו
   // ולא רק מהטבלה — אחרת המשתמש מסמן עמודה ושום דבר לא קורה.
@@ -431,17 +435,13 @@ export default function MaternityTable({ data, showCard, showArrived, hideFilter
                   </tr>
                 )
               })}
-              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
-              {hasMore && (
-                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={tc.shown.length + 1} className="px-3 py-4 text-center text-slate-400 text-[11px] font-medium">
-                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
-                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
     </div>

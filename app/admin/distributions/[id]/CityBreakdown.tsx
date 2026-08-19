@@ -1,6 +1,6 @@
 'use client'
-import { useState } from 'react'
-import { MapPin, ChevronDown } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { MapPin, ChevronDown, ArrowDownWideNarrow, ArrowDownAZ } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // פילוח הנרשמים לפי עיר — מהגבוה לנמוך.
@@ -27,12 +27,27 @@ export default function CityBreakdown({
   onSelect: (city: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  // מיון: לפי כמות הנרשמים (ברירת מחדל) או לפי א-ב של שם העיר.
+  const [sort, setSort] = useState<'count' | 'alpha'>('count')
+
+  // ⚠️ localeCompare עם 'he' ולא השוואת מחרוזות רגילה — סדר ה-Unicode של
+  // האותיות העבריות אינו סדר הא-ב שהמשתמש מצפה לו.
+  // ⚠️ העתק לפני sort: cities מגיע כ-prop, ומיון במקום היה משנה את מערך ההורה.
+  const sorted = useMemo(
+    () => sort === 'alpha'
+      ? [...cities].sort((a, b) => a[0].localeCompare(b[0], 'he'))
+      : cities,
+    [cities, sort],
+  )
+
   if (!cities.length) return null
 
-  const shown = expanded ? cities : cities.slice(0, TOP_N)
+  const shown = expanded ? sorted : sorted.slice(0, TOP_N)
   // ⚠️ הסקאלה יחסית לגדולה ביותר ולא לסך הכל: רוב הערים קטנות, ופס באחוז
   // מהסך היה קו בלתי נראה לכולן.
-  const max = cities[0][1] || 1
+  // ⚠️ מחושב מ-Math.max ולא מ-cities[0] — במיון א-ב הראשון אינו הגדול ביותר,
+  // וקנה המידה של כל הפסים היה נשבר (פסים ארוכים מ-100%).
+  const max = Math.max(...cities.map(([, n]) => n)) || 1
   const total = cities.reduce((s, [, n]) => s + n, 0)
 
   return (
@@ -42,9 +57,34 @@ export default function CityBreakdown({
           <MapPin size={13} />
           <span className="text-[11px] font-bold">פילוח לפי עיר</span>
         </div>
-        <span className="text-[11px] text-slate-400 tabular-nums">
-          {cities.length} ערים
-        </span>
+        <div className="flex items-center gap-2">
+          {/* מיון: כמות נרשמים / א-ב. עדין ומינימלי, בהתאם לאופי הרכיב. */}
+          <div className="flex items-center gap-0.5 rounded-lg bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setSort('count')}
+              title="מיון לפי כמות הנרשמים"
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
+                sort === 'count' ? 'bg-white text-indigo-600 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <ArrowDownWideNarrow size={11} /> כמות
+            </button>
+            <button
+              type="button"
+              onClick={() => setSort('alpha')}
+              title="מיון לפי א-ב של שם העיר"
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition-colors ${
+                sort === 'alpha' ? 'bg-white text-indigo-600 font-bold shadow-sm' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              <ArrowDownAZ size={11} /> א-ב
+            </button>
+          </div>
+          <span className="text-[11px] text-slate-400 tabular-nums">
+            {cities.length} ערים
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">

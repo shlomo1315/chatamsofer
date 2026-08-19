@@ -175,7 +175,11 @@ export default function EmailVerificationManager() {
           if (!l.trim()) continue
           let ev: { type?: string; sent?: number; failed?: number; total?: number; summary?: string }
           try { ev = JSON.parse(l) } catch { continue }
-          if (ev.type === 'progress' || ev.type === 'start') {
+          if (ev.type === 'start') {
+            // ⚠️ start משדר total בלבד (בלי sent/failed). קודם הוא טופל יחד
+            // עם progress, ו-`ev.sent ?? 0` דרס את המונה באפס.
+            setProgress(p => ({ sent: p?.sent ?? 0, failed: p?.failed ?? 0, total: ev.total ?? count }))
+          } else if (ev.type === 'progress') {
             setProgress({ sent: ev.sent ?? 0, failed: ev.failed ?? 0, total: ev.total ?? count })
           } else if (ev.type === 'done') {
             setProgress({ sent: ev.sent ?? 0, failed: ev.failed ?? 0, total: ev.total ?? count })
@@ -185,8 +189,17 @@ export default function EmailVerificationManager() {
       }
       toast.success(final?.summary ?? 'השליחה הסתיימה')
       await load(true)
-    } catch (e) { toast.error(e instanceof Error ? e.message : 'שגיאה') }
-    finally { setSending(false); setProgress(null) }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'שגיאה')
+      setProgress(null)   // בשגיאה המונה חסר משמעות — מוסר
+    }
+    // 🔴 הסרגל *נשאר* על המסך אחרי הסיום, ומציג את הסיכום הסופי.
+    //
+    // ⚠️ הבאג שהיה כאן: `finally { setProgress(null) }` רץ מיד בתום הלולאה
+    // ומחק את אירוע ה-done שזה עתה התקבל. הסרגל נעלם באותו רגע, והמשתמש
+    // ראה "0 נשלחו" — לא כי דבר לא נשלח, אלא כי המונה נמחק לפני שהספיק
+    // להיקרא. המספרים היו נכונים לאורך כל הדרך ונמחקו בשורה האחרונה.
+    finally { setSending(false) }
   }
 
   if (!loaded) {

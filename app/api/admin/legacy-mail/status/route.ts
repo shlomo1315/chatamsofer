@@ -43,18 +43,41 @@ export async function GET() {
   const db = admin()
   const mailboxes: MailboxStatus[] = []
 
-  // ספירת המיילים בפועל, מפולחת לפי מחלקה — מקור האמת (לא מונה שעלול להתיישן)
+  // ספירת המיילים בפועל — מקור האמת (לא מונה שעלול להתיישן).
+  //
+  // ⚠️ הספירה היא פר-*תיבה* (gmail_account_id) ולא פר-מחלקה. קודם היא הייתה
+  // לפי מחלקה בלבד, ולכן שתי תיבות של אותה מחלקה הציגו כל אחת את הסכום של
+  // שתיהן — תיבה חדשה שזה עתה חוברה נראתה כאילו כבר נקלטו בה מאות מיילים,
+  // בדיוק במסך שאליו מסתכלים כדי לוודא שהחיבור עבד.
+  //
+  // מיילים שנקלטו לפני מיגרציית gmail_account_id נשארים NULL, ולכן נספרים
+  // עדיין לפי מחלקה (byDept) ומיוחסים רק לתיבות שאין להן ספירה משלהן.
   const { data: counts } = await db
     .from('inbound_emails')
-    .select('department, beneficiary_id')
+    .select('department, beneficiary_id, gmail_account_id')
     .eq('source', 'legacy')
 
   const byDept: Record<string, { total: number; unmatched: number }> = {}
-  for (const row of (counts ?? []) as { department?: string | null; beneficiary_id?: string | null }[]) {
+  const byAccount: Record<string, { total: number; unmatched: number }> = {}
+  // מיילים ללא שיוך תיבה — הם ורק הם מזינים את הנפילה לפי מחלקה
+  const legacyByDept: Record<string, { total: number; unmatched: number }> = {}
+  for (const row of (counts ?? []) as { department?: string | null; beneficiary_id?: string | null; gmail_account_id?: string | null }[]) {
     const d = row.department ?? 'main'
+    const unmatched = !row.beneficiary_id
     byDept[d] ??= { total: 0, unmatched: 0 }
     byDept[d].total += 1
-    if (!row.beneficiary_id) byDept[d].unmatched += 1
+    if (unmatched) byDept[d].unmatched += 1
+
+    const acc = row.gmail_account_id ?? ''
+    if (acc) {
+      byAccount[acc] ??= { total: 0, unmatched: 0 }
+      byAccount[acc].total += 1
+      if (unmatched) byAccount[acc].unmatched += 1
+    } else {
+      legacyByDept[d] ??= { total: 0, unmatched: 0 }
+      legacyByDept[d].total += 1
+      if (unmatched) legacyByDept[d].unmatched += 1
+    }
   }
 
   // זמן הסנכרון האחרון בפועל לכל תיבה — מתוך היסטוריית ההרצות (gmail_sync_runs),
@@ -80,10 +103,22 @@ export async function GET() {
     .select('id, email, label, department, is_active, last_sync_at, total_synced, last_sync_count, last_error, import_target_email')
     .order('created_at')
 
+  // תיבות שכבר יש להן מיילים משויכים — כדי לא לייחס להן גם את השורות הישנות
+  // (ללא gmail_account_id) של אותה מחלקה, מה שהיה סופר פעמיים.
+  const deptHasOwnedAccount = new Set(
+    (accounts ?? [])
+      .filter(a => byAccount[String((a as Record<string, unknown>).id)])
+      .map(a => String((a as Record<string, unknown>).department ?? 'main')),
+  )
+
   if (!accErr) {
     for (const a of (accounts ?? []) as Record<string, unknown>[]) {
       const dept = String(a.department ?? 'main')
-      const stats = byDept[dept] ?? { total: 0, unmatched: 0 }
+      const own = byAccount[String(a.id)]
+      // ספירה משלה כשקיימת; אחרת — הירושה הישנה של המחלקה, ורק אם אין תיבה
+      // אחרת באותה מחלקה שכבר תופסת אותה.
+      const stats = own
+        ?? (deptHasOwnedAccount.has(dept) ? { total: 0, unmatched: 0 } : (legacyByDept[dept] ?? { total: 0, unmatched: 0 }))
       mailboxes.push({
         id: String(a.id),
         email: String(a.email ?? ''),
@@ -112,10 +147,12 @@ export async function GET() {
       .maybeSingle()
 
     // מיילים שאין להם תיבה רשומה בטבלה — שויכו לפי כתובת ה-To
+    // רק מיילים שאינם משויכים לתיבה רשומה (legacyByDept) — אחרת מיילים שכבר
+    // נספרו לתיבה שלהם היו נספרים כאן שוב.
     const listed = new Set(mailboxes.map(m => m.department))
-    const orphans = Object.keys(byDept).filter(d => !listed.has(d))
-    const orphanTotal = orphans.reduce((s, d) => s + byDept[d].total, 0)
-    const orphanUnmatched = orphans.reduce((s, d) => s + byDept[d].unmatched, 0)
+    const orphans = Object.keys(legacyByDept).filter(d => !listed.has(d))
+    const orphanTotal = orphans.reduce((s, d) => s + legacyByDept[d].total, 0)
+    const orphanUnmatched = orphans.reduce((s, d) => s + legacyByDept[d].unmatched, 0)
 
     mailboxes.push({
       id: null,

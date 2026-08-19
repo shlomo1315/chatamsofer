@@ -2,6 +2,7 @@
 
 // סנכרון תיבות מייל: דיווח מפולח לכל תיבה — מחלקה, סנכרון אחרון, וכמות מיילים.
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { Loader2, RefreshCw, Link2, CheckCircle2, AlertTriangle, Inbox, Building2, Clock, ArrowLeftRight } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -458,6 +459,15 @@ export default function LegacyMailSettings() {
           </table>
         </details>
       )}
+
+      {/* 🔴 המיילים מתיבה מחוברת נשמרים עם source='legacy', והדואר הנכנס מציג
+          source='resend' בלבד — הם מופיעים אך ורק ב"ארכיון מייל קודם". בלי
+          ההסבר הזה, מי שחיבר תיבה חיפש אותם בדואר הנכנס והסיק שהחיבור נכשל. */}
+      <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 rounded-xl p-3">
+        <strong className="text-slate-700">היכן רואים את המיילים?</strong> מיילים מתיבה מחוברת
+        מופיעים בתיקיית <Link href="/admin/mail?folder=LEGACY" className="text-indigo-600 hover:underline font-semibold">ארכיון מייל קודם</Link> —
+        ולא בדואר הנכנס, שמציג רק מיילים שנקלטו ישירות לכתובות המערכת.
+      </p>
 
       <p className="text-xs text-slate-400 leading-relaxed">
         הסנכרון מושך רק מיילים חדשים שטרם יובאו. הסנכרון הראשון עשוי לקחת זמן רב (כל ההיסטוריה).

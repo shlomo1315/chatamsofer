@@ -1140,8 +1140,17 @@ function MailExtraActions({ msg, folder, labelDefs, onToggleLabel, onCreateLabel
 // ─── Main ──────────────────────────────────────────────────────────────────────
 
 export default function MailClient() {
-  const [folder, setFolder] = useState('INBOX')
-  const [legacySub, setLegacySub] = useState<'unassigned' | 'assigned'>('unassigned')
+  // תיקייה מה-URL (?folder=LEGACY) — כדי שקישור ישיר לארכיון יפתח אותו בפועל.
+  // מאומת מול הרשימה המוכרת; ערך זר נופל ל-INBOX.
+  const initialFolder = useSearchParams().get('folder') ?? ''
+  const [folder, setFolder] = useState(
+    FOLDER_ITEMS.some(f => f.key === initialFolder) ? initialFolder : 'INBOX',
+  )
+  // בכניסה ישירה לארכיון (מקישור) מציגים "הכל" — המשתמש בא לראות את התיבה
+  // כולה, לא רק את מה שטרם שויך.
+  const [legacySub, setLegacySub] = useState<'all' | 'unassigned' | 'assigned'>(
+    initialFolder === 'LEGACY' ? 'all' : 'unassigned',
+  )
   const legacySubRef = useRef(legacySub)
   useEffect(() => { legacySubRef.current = legacySub }, [legacySub])
   const [assigningMsgId, setAssigningMsgId] = useState<string | null>(null)
@@ -1597,6 +1606,10 @@ export default function MailClient() {
 
         {folder === 'LEGACY' && (
           <div className="flex gap-3 px-4 py-2 border-b border-slate-100 text-sm">
+            {/* "הכל" — בלי זה תיבה שזה עתה סונכרנה נראית ריקה כשכל מייליה שויכו
+                ללקוח, כי ברירת המחדל מציגה "לא משויכים" בלבד. */}
+            <button type="button" onClick={() => setLegacySub('all')}
+              className={legacySub === 'all' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>הכל</button>
             <button type="button" onClick={() => setLegacySub('unassigned')}
               className={legacySub === 'unassigned' ? 'font-bold text-indigo-600' : 'text-slate-500 hover:text-slate-700'}>לא משויכים</button>
             <button type="button" onClick={() => setLegacySub('assigned')}

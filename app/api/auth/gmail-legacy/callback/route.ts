@@ -95,16 +95,50 @@ export async function GET(request: NextRequest) {
     }
 
     // רישום התיבה בטבלה — מחלקה + תווית + טוקן פר-תיבה
-    const { error } = await db.from('gmail_accounts').upsert({
+    const { data: saved, error } = await db.from('gmail_accounts').upsert({
       email: mailboxEmail,
       label: label || labelName || DEPARTMENTS[department as DepartmentKey].label,
       department,
       label_id: resolvedLabelId,
       refresh_token: tokens.refresh_token,
       is_active: true,
-    }, { onConflict: 'email' })
+    }, { onConflict: 'email' }).select('id, refresh_token, department, label_id, last_sync_epoch, import_target_email').maybeSingle()
 
     if (error) console.error('[gmail-legacy/callback] gmail_accounts upsert:', error.message)
+
+    // ── משיכה ראשונית מיד אחרי החיבור ──
+    // ⚠️ בלי זה התיבה נשארת ריקה לגמרי עד הסנכרון השעתי (instrumentation.ts),
+    // שרץ בפרודקשן בלבד — כך שמי שחיבר תיבה ראה "אין הודעות" והניח שהחיבור
+    // נכשל. רץ ברקע ולא חוסם את ההפניה חזרה, כי משיכה ראשונה עלולה לקחת דקות.
+    if (saved?.id) {
+      const startedAt = new Date().toISOString()
+      void (async () => {
+        try {
+          const { syncLegacyMail } = await import('@/lib/legacyMailSync')
+          const result = await syncLegacyMail(db, saved.department as string, { account: saved })
+          await db.from('gmail_sync_runs').insert({
+            account_id: saved.id, started_at: startedAt, finished_at: new Date().toISOString(),
+            scanned: result.fetched, imported: result.imported, matched: result.matched,
+            failed: result.failed, error: result.error ?? null,
+          })
+          await db.from('gmail_accounts').update({
+            last_sync_at: new Date().toISOString(),
+            last_sync_count: result.imported,
+            last_error: result.error ?? null,
+          }).eq('id', saved.id)
+          console.log(`[gmail-legacy/callback] initial sync · ${mailboxEmail} imported=${result.imported} failed=${result.failed}`)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          console.error('[gmail-legacy/callback] initial sync failed:', msg)
+          // הכשל חייב להיות גלוי במסך הסטטוס, לא להיבלע בלוג בלבד
+          await db.from('gmail_sync_runs').insert({
+            account_id: saved.id, started_at: startedAt, finished_at: new Date().toISOString(),
+            error: msg.slice(0, 500),
+          })
+          await db.from('gmail_accounts').update({ last_error: msg.slice(0, 500) }).eq('id', saved.id)
+        }
+      })()
+    }
   } else {
     // אין מחלקה בחיבור (זרימה ישנה) — נשמר בטוקן הגלובלי לתאימות לאחור.
     await saveLegacyRefreshToken(tokens.refresh_token)

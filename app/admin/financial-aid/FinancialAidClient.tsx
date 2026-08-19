@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { Search, RefreshCw, Mail, Check, Eye, Loader2, Plus, X, Upload, Trash2, Layers, Clock } from 'lucide-react'
 import type { FinancialAidRequest, FinancialAidStatus } from '@/types'
 import SortButtons, { SortMode, applySortMode } from '@/components/ui/SortButtons'
-import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTablePagination } from '@/lib/useTablePagination'
+import Pagination from '@/components/ui/Pagination'
 import { FINANCIAL_AID_STATUS_LABELS, FINANCIAL_AID_STATUS_COLORS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { UPLOAD_ACCEPT, UPLOAD_HINT } from '@/lib/uploads'
@@ -149,7 +150,10 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
 
   // ⚡ גלילה אינסופית — במקום לרנדר את כל הבקשות המסוננות בבת אחת. שום בקשה
   // לא נחתכת: המנה הבאה נטענת בגלילה, והמונה למטה מראה כמה מוצגות מתוך הכל.
-  const { rows: visibleRows, sentinelRef, hasMore, shown, total } = useIncrementalRows(visible)
+  // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
+  // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
+  const pg = useTablePagination(visible)
+  const visibleRows = pg.rows
 
   // ⚠️ extraCols=1 — עמודת הפעולות ("פרטים"/מחיקה) אינה בבורר אך נספרת לגרירה.
   // היא האחרונה, ולכן האינדקסים של עמודות הבורר נשארים 0..n-1.
@@ -271,17 +275,13 @@ export default function FinancialAidClient({ requests }: { requests: FinancialAi
                   </td>
                 </tr>
               ))}
-              {/* זקיף הגלילה — מוסיף את המנה הבאה כשמגיעים לתחתית */}
-              {hasMore && (
-                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={tc.shown.length + 1} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
-                    <Loader2 size={14} className="inline animate-spin ml-1.5" />
-                    טוען עוד… ({shown.toLocaleString()} מתוך {total.toLocaleString()})
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
 

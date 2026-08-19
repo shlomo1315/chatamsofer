@@ -57,6 +57,25 @@ export async function POST(request: NextRequest) {
   // אינה נפילה של Resend אלא ירידה בדירוג הדומיין — ואז *גם* קודי האימות,
   // המייל היחיד שחוסם אדם מלהיכנס לפורטל, מתחילים ליפול לספאם.
   // מנה יומית מבוקרת מאפשרת לראות את שיעור ה-bounce לפני שנגרם נזק.
+  // 🔴 קדימות למי שטרם קיבל בקשה מעולם.
+  //
+  // ⚠️ הבאג שהיה כאן: הרשימה מגיעה ממוינת לפי created_at בלבד, ו-slice
+  // חתך תמיד את אותן שורות ראשונות. כלומר כל חימום חוזר נשלח *שוב לאותם
+  // אנשים*, בעוד מי שנמצא עמוק ברשימה לא קיבל דבר לעולם — וגם מכסת
+  // החימום היומית התבזבזה על נמענים שכבר קיבלו.
+  //
+  // המיון כאן יציב: קודם מי ש-email_verify_requested_at שלו ריק, ורק
+  // כשנגמרו — מי שכבר קיבל, מהישן לחדש (הוותיק ביותר ראשון). כך סבב שני
+  // מתחיל מאליו אחרי שכולם קיבלו פעם אחת, בלי מתג ובלי התערבות.
+  const byNeverRequested = (a: typeof targets[number], b: typeof targets[number]) => {
+    const aReq = a.requestedAt, bReq = b.requestedAt
+    if (!aReq && bReq) return -1
+    if (aReq && !bReq) return 1
+    if (!aReq && !bReq) return 0
+    return String(aReq).localeCompare(String(bReq))   // הוותיק ביותר ראשון
+  }
+  targets = [...targets].sort(byNeverRequested)
+
   const limit = Number(body.limit)
   if (Number.isFinite(limit) && limit > 0) targets = targets.slice(0, Math.floor(limit))
 

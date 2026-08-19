@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 // ── מקורות הנתונים של data.gov.il (משרד הפנים) ──────────────────────────────
 const CITIES_RESOURCE = '5c78e9fa-c2e2-4771-93ff-7f400a12f7ba'
@@ -382,9 +383,13 @@ async function readAllStreetRows(admin: SupabaseClient, city: string): Promise<{
   // נשמר בכתיב שונה (גרש/רווחים) מהשם שהמשתמש בחר. מאתרים את שם היישוב האמיתי
   // בטבלה שהצורה המנורמלת שלו זהה, וקוראים לפיו. בלי זה יישובים עם גרש עברי
   // ("כפר חב"ד") הראו 0 רחובות למרות שסונכרנו. (ILIKE לא מספיק — הגרש נשאר.)
+  // ⚠️ הרשימה נקראת מ-gov_cities (שורה ליישוב) ולא מ-gov_streets עם
+  // limit גבוה: התקרה נאכפת בשרת, והשליפה הישנה נחתכה ב-1,000 שורות רחוב —
+  // כך שה-fallback הזה עצמו לא ראה את רוב היישובים ולא עשה דבר.
   const want = normalizeCityName(city)
-  const { data: distinctCities } = await admin.from('gov_streets').select('city').limit(100000)
-  const cities = new Set<string>((distinctCities ?? []).map(r => (r as { city: string }).city))
+  const { rows: cityRows } = await fetchAllRows<{ name: string }>((from, to) =>
+    admin.from('gov_cities').select('name').range(from, to))
+  const cities = new Set<string>(cityRows.map(r => r.name))
   for (const c of cities) {
     if (c !== city && normalizeCityName(c) === want) {
       const rows = await readAllStreetRowsExact(admin, c)
@@ -453,12 +458,22 @@ export async function knownCityNames(admin: SupabaseClient): Promise<Set<string>
   if (_cityNamesCache && Date.now() - _cityNamesCache.at < CITY_NAMES_TTL) {
     return _cityNamesCache.set
   }
-  // ⚠️ limit גבוה: יש ~1,300 יישובים, וברירת המחדל של PostgREST (1000)
-  // הייתה קוטעת את הרשימה ופוסלת יישובים אמיתיים בשקט.
-  const { data } = await admin.from('gov_streets').select('city').limit(100000)
+  // 🔴 נקרא מ-gov_cities (טבלת היישובים), לא מ-gov_streets.
+  //
+  // ⚠️ כאן היה `.from('gov_streets').select('city').limit(100000)` בהנחה
+  // ש-limit גבוה עוקף את התקרה. הוא אינו עוקף — התקרה נאכפת בשרת, והשליפה
+  // נחתכה ב-1,000 *שורות רחוב*. מכיוון שכל יישוב מופיע בעשרות שורות, הסט
+  // הכיל קומץ יישובים בלבד מתוך 1,310, ו-isKnownCity פסל יישובים אמיתיים
+  // בשקט — כלומר חסם רישום של משפחות קיימות.
+  //
+  // gov_cities מחזיקה שורה אחת ליישוב (1,406) ומכסה את כל היישובים שמופיעים
+  // ב-gov_streets, כך שהשליפה גם נכונה וגם זולה בסדר גודל. fetchAllRows
+  // נשאר כרשת ביטחון אם מספר היישובים יעבור 1,000.
+  const { rows } = await fetchAllRows<{ name: string }>((from, to) =>
+    admin.from('gov_cities').select('name').range(from, to))
   const set = new Set<string>()
-  for (const r of data ?? []) {
-    const c = normalizeCityName((r as { city: string }).city)
+  for (const r of rows) {
+    const c = normalizeCityName(r.name)
     if (c) set.add(c)
   }
   if (set.size) _cityNamesCache = { at: Date.now(), set }

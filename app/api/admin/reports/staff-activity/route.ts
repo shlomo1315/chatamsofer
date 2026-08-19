@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireAdmin } from '@/lib/apiAuth'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,14 +64,19 @@ export async function GET(request: NextRequest) {
   }
 
   // 1. בקשות — מתוך activity_log
-  let aq = admin.from('activity_log')
-    .select('user_id, action, entity_type, entity_id, details, created_at')
-    .not('user_id', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(5000)
-  if (from) aq = aq.gte('created_at', from)
-  if (to) aq = aq.lte('created_at', to)
-  const { data: acts } = await aq
+  //
+  // ⚠️ fetchAllRows ולא .limit(5000): התקרה נאכפת בשרת ו-.limit() אינו עוקף
+  // אותה. ביומן יש כבר יותר מ-10,000 שורות, כך שהדוח נחתך ב-1,000 והציג
+  // לכל עובד מספר בקשות נמוך מהאמת — בלי שגיאה ובלי סימן שמשהו חסר.
+  const { data: acts } = await fetchAllRows<Record<string, unknown>>((rangeFrom, rangeTo) => {
+    let aq = admin.from('activity_log')
+      .select('user_id, action, entity_type, entity_id, details, created_at')
+      .not('user_id', 'is', null)
+      .order('created_at', { ascending: false })
+    if (from) aq = aq.gte('created_at', from)
+    if (to) aq = aq.lte('created_at', to)
+    return aq.range(rangeFrom, rangeTo)
+  }).then(r => ({ data: r.rows }))
 
   for (const a of acts ?? []) {
     const uid = a.user_id as string
@@ -91,15 +97,18 @@ export async function GET(request: NextRequest) {
   }
 
   // 2. מיילים — מתוך mail_events (טופל / הושב)
-  let mq = admin.from('mail_events')
-    .select('user_id, event_type, subject, from_email, created_at')
-    .not('user_id', 'is', null)
-    .in('event_type', ['handled', 'replied', 'auto_replied'])
-    .order('created_at', { ascending: false })
-    .limit(5000)
-  if (from) mq = mq.gte('created_at', from)
-  if (to) mq = mq.lte('created_at', to)
-  const { data: mails } = await mq
+  // ⚠️ אותו טיפול כמו ביומן הפעילות — mail_events קטן היום, אבל הוא גדל
+  // עם כל מייל שמטופל, והחיתוך השקט יגיע בלי שאיש ישים לב.
+  const { data: mails } = await fetchAllRows<Record<string, unknown>>((rangeFrom, rangeTo) => {
+    let mq = admin.from('mail_events')
+      .select('user_id, event_type, subject, from_email, created_at')
+      .not('user_id', 'is', null)
+      .in('event_type', ['handled', 'replied', 'auto_replied'])
+      .order('created_at', { ascending: false })
+    if (from) mq = mq.gte('created_at', from)
+    if (to) mq = mq.lte('created_at', to)
+    return mq.range(rangeFrom, rangeTo)
+  }).then(r => ({ data: r.rows }))
 
   for (const m of mails ?? []) {
     const uid = m.user_id as string

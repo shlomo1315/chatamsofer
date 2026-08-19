@@ -6,6 +6,7 @@ import { getPurchases, validatePurchase } from '@/lib/cardPurchases'
 import { processAwaitingStock } from '@/lib/maternityCards'
 import { maybeSendLowStockAlert, resetAlertIfAboveThreshold } from '@/lib/cardStockAlert'
 import { isAwaitingCard, AWAITING_SELECT } from '@/lib/awaitingFilter'
+import { fetchAllRows } from '@/lib/fetchAllRows'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' }
@@ -27,14 +28,22 @@ export async function GET() {
   // ⚠️ המלאי לבדו אינו בר-בירור: "הכנסתי 300, אישרתי 48, למה 247?". התשובה
   // דורשת את *כל* היומן (לא 50 שורות) ואת מצבם העכשווי של התיקים שנוכה בגינם
   // כרטיס — ולכן היא מחושבת כאן ומוחזרת עם המלאי, ולא נשארת שאלה פתוחה.
-  const { data: fullLedger, error: fullErr } = await admin
+  // ⚠️ fetchAllRows ולא .limit(5000): תקרת השורות של PostgREST נאכפת בשרת
+  // ו-.limit() מהלקוח אינו עוקף אותה — הבקשה נחתכת ב-1,000 בלי שגיאה.
+  // כאן זה היה מסוכן במיוחד: ההתאמה מחושבת על *כל* היומן, כך שברגע
+  // שהיומן יעבור 1,000 תנועות המלאי המוצג היה נעשה שגוי בשקט.
+  const { rows: fullLedgerRows, error: fullErr } = await fetchAllRows<{
+    id: string; delta: number; reason: string; aid_id: string | null
+    created_at: string; note: string | null
+  }>((from, to) => admin
     .from('card_stock_ledger')
     .select('id, delta, reason, aid_id, created_at, note')
     .order('created_at', { ascending: false })
-    .limit(5000)
-  if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr.message)
+    .range(from, to))
+  const fullLedger = fullLedgerRows
+  if (fullErr) console.error('[card-stock] recon ledger query failed:', fullErr)
 
-  const heldIds = heldAidIds(fullLedger ?? [])
+  const heldIds = heldAidIds(fullLedger)
   const { data: heldAids, error: heldErr } = heldIds.length
     ? await admin
         .from('maternity_aids')
@@ -43,7 +52,7 @@ export async function GET() {
     : { data: [], error: null }
   if (heldErr) console.error('[card-stock] recon aids query failed:', heldErr.message)
 
-  const recon = reconcileStock(fullLedger ?? [], (heldAids ?? []).map(a => {
+  const recon = reconcileStock(fullLedger, (heldAids ?? []).map(a => {
     const benRaw = (a as Record<string, unknown>).beneficiary
     const ben = (Array.isArray(benRaw) ? benRaw[0] : benRaw) as Record<string, string> | null
     return {
@@ -147,7 +156,7 @@ export async function GET() {
   // בספירה יש בו בדרך כלל תנועות בודדות, ולכן הן מוצגות בשמן במקום להשאיר את
   // המנהל לפתוח יומן של חמישים שורות ולנחש איזו מהן נכנסת לחישוב.
   const sinceIds = [...new Set(
-    scopedLedger(fullLedger ?? []).map(r => (r as { aid_id?: string | null }).aid_id).filter(Boolean),
+    scopedLedger(fullLedger).map(r => (r as { aid_id?: string | null }).aid_id).filter(Boolean),
   )] as string[]
   const sinceNames = new Map<string, string>()
   if (sinceIds.length) {
@@ -162,7 +171,7 @@ export async function GET() {
       if (nm) sinceNames.set(r.id as string, nm)
     }
   }
-  const sinceCount = scopedLedger(fullLedger ?? [])
+  const sinceCount = scopedLedger(fullLedger)
     .map(r => {
       const row = r as { id?: string; delta: number; reason: string | null; created_at?: string | null; note?: string | null; aid_id?: string | null }
       return {
@@ -291,12 +300,17 @@ export async function POST(request: NextRequest) {
     const cards = Math.max(1, Math.trunc(Number(body.cards) || 1))
     // ⚠️ אימות מול החישוב ולא אמון בקליינט: בקשה חוזרת (רענון, לחיצה כפולה)
     // הייתה מזרימה כרטיסים שלא היו למלאי.
-    const { data: fullLedger } = await admin
+    // ⚠️ fetchAllRows ולא .limit(5000) — ראו ההסבר בשליפת ההתאמה למעלה.
+    // כאן החיתוך השקט מסוכן במיוחד: זו בדיקת האימות עצמה. יומן שנחתך
+    // ב-1,000 היה "מאבד" תיקים ישנים ודוחה החזרה לגיטימית של כרטיס תלוי.
+    const { rows: fullLedger } = await fetchAllRows<{
+      delta: number; reason: string; aid_id: string | null; created_at: string
+    }>((from, to) => admin
       .from('card_stock_ledger')
       .select('delta, reason, aid_id, created_at')
       .order('created_at', { ascending: false })
-      .limit(5000)
-    if (!heldAidIds(fullLedger ?? []).includes(aidId)) {
+      .range(from, to))
+    if (!heldAidIds(fullLedger).includes(aidId)) {
       return NextResponse.json({ error: 'הכרטיס של תיק זה אינו תלוי — ייתכן שהוחזר כבר' }, { status: 409 })
     }
     // ⚠️ כרטיס שעדיין טעון בנדרים אינו במגירה: הכסף בו וייתכן שהוא בידי

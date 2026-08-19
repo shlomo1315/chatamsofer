@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Download, Loader2, Users, Wallet, Monitor, Phone, Mail, Pencil, CreditCard, Check, X, ShieldCheck, Send } from 'lucide-react'
@@ -14,6 +14,7 @@ import HolidayRecipientsTable, { type HolidayRow } from './HolidayRecipientsTabl
 import type { ApprovalLabel } from '@/types'
 import AddRecipientDialog from './AddRecipientDialog'
 import Pagination from '@/components/ui/Pagination'
+import { useTablePagination } from '@/lib/useTablePagination'
 import CityBreakdown from './CityBreakdown'
 
 export interface RegistrationRow {
@@ -109,8 +110,6 @@ export default function HolidayRegistrations({
   const [city, setCity] = useState<string>('all')
   const [cityOpen, setCityOpen] = useState(false)   // רשימת הערים מכווצת כברירת מחדל
   // ⚡ דפדוף אמיתי: 50 שורות כברירת מחדל במקום כל ~6,000 בבת אחת.
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(50)
   const [toggling, setToggling] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -205,22 +204,17 @@ export default function HolidayRegistrations({
     })
   }, [rows, haystacks, query, source, community, city, ageBucket, kidsBucket, approval])
 
-  // ⚡ הדף המוצג בפועל.
+  // ⚡ הדף המוצג בפועל — דרך ה-hook המשותף (lib/useTablePagination).
   //
   // 🔴 הסינון והחיפוש רצים על *כל* השורות (filtered למעלה), והחיתוך לעמוד
   // קורה רק אחריהם. כך תיבת החיפוש מחזירה תוצאה מכל ~6,000 הרשומות ולא
   // מתוך 50 המוצגות — זו הייתה דרישה מפורשת.
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
-  // ⚠️ עמוד מחוץ לטווח אחרי סינון (היינו בעמוד 40 ונשארו 3) — נצמד לאחרון.
-  const safePage = Math.min(page, pageCount)
-  const paged = useMemo(
-    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
-    [filtered, safePage, pageSize],
-  )
-
-  // ⚠️ חזרה לעמוד 1 בכל שינוי סינון/חיפוש: להישאר בעמוד 12 אחרי סינון
-  // שהותיר 2 עמודים מציג מסך ריק שנראה כתקלה.
-  useEffect(() => { setPage(1) }, [query, source, community, city, ageBucket, kidsBucket, approval, pageSize])
+  //
+  // ⚠️ האיפוס לעמוד 1 מגיע מה-hook, שמזהה רשימה חדשה בזמן הרינדור.
+  // כאן היה useEffect שקרא setPage — הוא רינדר פעמיים בכל הקלדה בחיפוש,
+  // כי filtered הוא מערך חדש בכל תו. זה בדיוק העומס שהדפדוף בא לפתור.
+  const pg = useTablePagination(filtered)
+  const paged = pg.rows
 
   // הצפי התקציבי — של מה שמסונן כרגע ושל הכל. כך גם "כמה יעלה פילוח מסוים".
   const expectedAll = rows.length * amountPerFamily
@@ -560,8 +554,8 @@ export default function HolidayRegistrations({
       {/* ⚠️ הדפדוף היה מחושב אך לא מרונדר — הטבלה קיבלה את כל השורות.
           החיפוש והסינון רצים על המערך המלא (filtered) והחיתוך לעמוד
           קורה רק אחריהם, כך שתוצאה נמצאת מכל הרשומות ולא מתוך העמוד. */}
-      <Pagination page={safePage} size={pageSize} total={filtered.length}
-        onPage={setPage} onSize={setPageSize} />
+      <Pagination page={pg.page} size={pg.size} total={pg.total}
+        onPage={pg.setPage} onSize={pg.setSize} />
     </div>
   )
 }

@@ -6,7 +6,8 @@ import { Search, Pencil, Trash2, Loader2, Check, X, AlertTriangle, Link2, UserPl
 import { validateIsraeliId } from '@/lib/validation'
 import { useToast } from '@/components/ui/Toast'
 import { useCan } from '@/components/StaffPermissions'
-import { useIncrementalRows } from '@/lib/useIncrementalRows'
+import { useTablePagination } from '@/lib/useTablePagination'
+import Pagination from '@/components/ui/Pagination'
 import { useTableColumns, type ColDef } from '@/components/ui/TableColumns'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -127,7 +128,10 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
   // מוסיף לו את מספר העמודות הנראות בעצמו.
   const tc = useTableColumns('legacy-loans', COLUMNS, { extraCols: 1 })
 
-  const { rows: visible, sentinelRef, hasMore, shown, total } = useIncrementalRows(filtered)
+  // דפדוף אחיד: 50 בברירת מחדל, בורר עד 200. החיפוש רץ על כל הרשימה
+  // ורק אז נחתך לעמוד — ראו lib/useTablePagination.
+  const pg = useTablePagination(filtered)
+  const visible = pg.rows
 
   // ── תוכן התא לפי עמודה ──
   const cell = (c: ColDef<ColKey>, r: LegacyRow) => {
@@ -325,16 +329,13 @@ export default function LegacyLoansTable({ rows }: { rows: LegacyRow[] }) {
                   </td>
                 </tr>
               ))}
-              {/* זקיף הגלילה — colSpan נדיב במכוון: מספר העמודות משתנה. */}
-              {hasMore && (
-                <tr ref={sentinelRef as React.Ref<HTMLTableRowElement>}>
-                  <td colSpan={20} className="px-4 py-4 text-center text-slate-400 text-[11px] font-medium">
-                    טוען עוד… ({shown} מתוך {total})
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+        </div>
+
+        {/* דפדוף + בורר גודל עמוד (20/50/100/200) — זהה לכל טבלאות המערכת */}
+        <div className="px-4 py-3 border-t border-slate-100">
+          <Pagination page={pg.page} size={pg.size} total={pg.total} onPage={pg.setPage} onSize={pg.setSize} />
         </div>
       </div>
 
