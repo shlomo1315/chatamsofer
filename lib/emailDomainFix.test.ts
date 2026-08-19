@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { suggestDomainFix, groupFixes } from './emailDomainFix'
+import { suggestDomainFix, groupFixes , stripInvisible } from './emailDomainFix'
 
 describe('suggestDomainFix — מתקן רק שגיאות דומיין ודאיות', () => {
   it('שגיאות כתיב נפוצות ב-gmail מתוקנות', () => {
@@ -124,5 +124,54 @@ describe('nearMissDomain — תיקון מעבר לרשימה הידנית', () 
 
   it('מרחק 2 ומעלה אינו מתוקן — רחוק מדי מכדי להיות ודאי', () => {
     expect(suggestDomainFix('a@gzzil.com')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// תווי בקרה בלתי נראים (RTL/LRM) — נדבקים בהעתקה מוואטסאפ.
+//
+// 🔴 אלה אינן שגיאות הקלדה אלא זבל בלתי נראה סביב כתובת תקינה לחלוטין.
+// הסרתם אינה ניחוש: הכתובת שמתחת נשארת בדיוק כפי שהיא.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('stripInvisible — ניקוי תווי כיווניות', () => {
+  it('מסיר תווי RTL עוטפים ומחזיר את הכתובת כפי שהיא', () => {
+    expect(stripInvisible('\u202Ba0556742891@gmail.com\u202C')).toBe('a0556742891@gmail.com')
+  })
+
+  it('מסיר גם LRM/RLM ורווח דק', () => {
+    expect(stripInvisible('\u200F\u202Aabc0504137354@gmail.com\u202C\u200F')).toBe('abc0504137354@gmail.com')
+  })
+
+  it('אינו נוגע בכתובת נקייה', () => {
+    expect(stripInvisible('plain@gmail.com')).toBe('plain@gmail.com')
+  })
+
+  it('🔴 suggestDomainFix מתקן כתובת שהייתה חסומה בגלל תווי בקרה', () => {
+    // ⚠️ קודם ה-regex על local נכשל בגלל התו הבלתי נראה, והפונקציה החזירה
+    // null — כך שכתובות תקינות לגמרי נותרו מסומנות כפגומות.
+    const fix = suggestDomainFix('\u202Bmoshe@gnail.com\u202C')
+    expect(fix?.fixed).toBe('moshe@gmail.com')
+  })
+
+  it('🔴 כתובת תקינה שרק עטופה בתווי בקרה מדווחת כניתנת לניקוי', () => {
+    const fix = suggestDomainFix('\u202Bmoshe@gmail.com\u202C')
+    expect(fix?.fixed).toBe('moshe@gmail.com')
+    expect(fix?.fromDomain).toBe(fix?.toDomain)
+  })
+})
+
+describe('🔴 stripInvisible אינו נוגע בתווים נראים', () => {
+  it('אינו מסיר אות עברית בסוף הכתובת', () => {
+    // ⚠️ רגרסיה אמיתית: טווח רחב מדי בלע את U+05D0 והפך
+    // "r0583239061@gmail.comא" ל"...@gmail.com" — ניחוש, לא ניקוי.
+    // כתובת עם אות עברית דבוקה היא שגיאת הקלדה לטיפול ידני.
+    expect(stripInvisible('r0583239061@gmail.com\u05D0')).toBe('r0583239061@gmail.com\u05D0')
+    expect(suggestDomainFix('r0583239061@gmail.com\u05D0')).toBeNull()
+  })
+
+  it('אינו מסיר אותיות עבריות כלל', () => {
+    for (const ch of ['\u05D0', '\u05D5', '\u05EA', '\u05B8']) {
+      expect(stripInvisible(`a@b.com${ch}`)).toBe(`a@b.com${ch}`)
+    }
   })
 })

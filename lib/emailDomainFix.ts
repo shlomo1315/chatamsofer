@@ -138,8 +138,26 @@ export interface DomainFix {
  * ⚠️ מחזיר null גם כשהכתובת כבר תקינה — "אין מה לתקן" ו"לא יודע לתקן" הם
  * אותה תשובה מבחינת הקורא: אל תיגע בשורה הזו.
  */
+/**
+ * מסיר תווי כיווניות ורווחים בלתי נראים מכתובת.
+ *
+ * 🔴 אלה אינם שגיאות הקלדה: כתובות שהודבקו מוואטסאפ נעטפות ב-RLE/PDF
+ * (U+202B/U+202C) שאינם נראים על המסך. הכתובת שמתחתם תקינה לחלוטין —
+ * ורבות מהן כבר אומתו בהצלחה — אך כל בדיקת תקינות נכשלת עליהן.
+ *
+ * ⚠️ הסרה בלבד, בלי לגעת בתו נראה אחד. זה ניקוי, לא ניחוש.
+ */
+export function stripInvisible(email: string | null | undefined): string {
+  return (email ?? '')
+    // ⚠️ escapes מפורשים ולא תווים ליטרליים: כשהתווים הודבקו כמות שהם,
+    // אחד הטווחים בלע גם את U+05D0 (האות א׳) — תו *נראה*, שהסרתו היא
+    // בדיוק הניחוש שהכלי הזה נמנע ממנו. כאן רק אפס-רוחב וכיווניות.
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\u00A0]/g, '')
+    .trim()
+}
+
 export function suggestDomainFix(email: string | null | undefined): DomainFix | null {
-  const raw = (email ?? '').trim()
+  const raw = stripInvisible(email)
   if (!raw) return null
 
   const at = raw.lastIndexOf('@')
@@ -148,12 +166,25 @@ export function suggestDomainFix(email: string | null | undefined): DomainFix | 
   const local = raw.slice(0, at)
   const domain = raw.slice(at + 1).toLowerCase()
 
+  // ⚠️ הניקוי לבדו הוא כבר תיקון: כתובת שהייתה עטופה בתווים בלתי נראים
+  // חוזרת להיות שמישה גם כשהדומיין שלה מושלם. בלי הענף הזה היא הייתה
+  // נשארת פגומה במסד, כי ההמשך מחזיר null כשאין מה לשנות בדומיין.
+  const cleaned = stripInvisible(email) !== (email ?? '').trim()
+  if (cleaned && DOMAIN_FIXES[domain] === undefined && REAL_DOMAINS.has(domain)
+      && /^[\x21-\x7E]+$/.test(local) && !local.includes('..')) {
+    return { original: (email ?? '').trim(), fixed: raw, fromDomain: domain, toDomain: domain }
+  }
+
   // ⚠️ החלק שלפני ה-@ חייב להיות שמיש בעצמו. אם גם הוא פגום (רווחים,
   // עברית) — התיקון היה יוצר כתובת שנראית תקינה אך עדיין לא ניתנת לשליחה,
   // וזה גרוע מלהשאיר אותה מסומנת כבעייתית.
   if (!/^[\x21-\x7E]+$/.test(local) || local.includes('..')) return null
 
-  const target = DOMAIN_FIXES[domain] ?? nearMissDomain(domain)
+  // ⚠️ דומיין עם תו לא-ASCII אינו מועמד לתיקון-מרחק. "gmail.comא" רחוק
+  // מרחק 1 מ-"gmail.com", אבל האות הדבוקה מעידה על הקלדה שהשתבשה — ואין
+  // לדעת אם שאר הכתובת נכונה. תיקון כאן היה ניחוש, לא הסקה.
+  const target = DOMAIN_FIXES[domain]
+    ?? (/^[\x21-\x7E]+$/.test(domain) ? nearMissDomain(domain) : null)
   if (!target || target === domain) return null
 
   return { original: raw, fixed: `${local}@${target}`, fromDomain: domain, toDomain: target }
