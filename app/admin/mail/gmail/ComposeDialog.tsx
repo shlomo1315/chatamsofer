@@ -204,12 +204,12 @@ export default function ComposeDialog({
                 // ⚠️ ההשהיה נחוצה: בלעדיה onBlur סוגר את הרשימה לפני
                 // ש-onClick של השורה שנלחצה מספיק לרוץ.
                 onBlur={() => setTimeout(() => setShowContacts(false), 150)}
-                // ⚠️ placeholder בעברית על שדה dir="ltr" מתחיל משמאל — בדיוק
-                // במקום שבו יושבים כפתורי "עותק"/"מוסתר" (absolute left-2),
-                // והשניים נדפסו זה על זה. pl מפנה להם מקום אמיתי.
+                // ⚠️ הכפתורים יושבים מימין (right-2), ולכן הריווח שמפנה להם
+                // מקום הוא pr — לא pl. placeholder בעברית על שדה dir="ltr"
+                // מתחיל משמאל, כך שהוא רחוק מהם ואינו נחתך.
                 dir="ltr" placeholder="אל…"
-                className={`w-full rounded-xl border border-slate-200 py-2 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 ${
-                  (!showCc && !showBcc) ? 'pl-24' : (!showCc || !showBcc) ? 'pl-14' : 'pl-3'
+                className={`w-full rounded-xl border border-slate-200 py-2 pl-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 ${
+                  (!showCc && !showBcc) ? 'pr-24' : (!showCc || !showBcc) ? 'pr-14' : 'pr-3'
                 }`} />
               {searching && (
                 <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
@@ -217,7 +217,7 @@ export default function ComposeDialog({
               {/* ⚠️ מוסתרים עד שלוחצים, כמו בג'ימייל: רוב ההודעות אינן
                   צריכות עותק, ושני שדות ריקים קבועים רק מעמיסים. */}
               {(!showCc || !showBcc) && (
-                <div className="absolute top-1/2 -translate-y-1/2 left-2 flex items-center gap-1">
+                <div className="absolute top-1/2 -translate-y-1/2 right-2 flex items-center gap-1">
                   {!showCc && (
                     <button type="button" onClick={() => setShowCc(true)}
                       className="rounded px-1.5 py-0.5 text-[11px] font-bold text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -237,12 +237,12 @@ export default function ComposeDialog({
             {/* ההסבר ירד מה-placeholder (הוא נחתך מול הכפתורים) — כאן הוא
                 נשאר גלוי גם אחרי שמתחילים להקליד. */}
             {!to.trim() && (
-              <p className="mt-1 px-1 text-[11px] text-slate-400">שם, ת״ז או כתובת מייל</p>
+              <p className="mt-1 px-1 text-right text-[11px] text-slate-400">שם, ת״ז או כתובת מייל</p>
             )}
 
             {showCc && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="w-12 flex-shrink-0 text-[11px] font-bold text-slate-500">עותק</span>
+              <div dir="rtl" className="mt-2 flex items-center gap-2">
+                <span className="w-12 flex-shrink-0 text-right text-[11px] font-bold text-slate-500">עותק</span>
                 <input value={cc} onChange={e => setCc(e.target.value)} dir="ltr"
                   placeholder="כתובות מופרדות בפסיק"
                   className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
@@ -251,8 +251,8 @@ export default function ComposeDialog({
               </div>
             )}
             {showBcc && (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="w-12 flex-shrink-0 text-[11px] font-bold text-slate-500">מוסתר</span>
+              <div dir="rtl" className="mt-2 flex items-center gap-2">
+                <span className="w-12 flex-shrink-0 text-right text-[11px] font-bold text-slate-500">מוסתר</span>
                 <input value={bcc} onChange={e => setBcc(e.target.value)} dir="ltr"
                   placeholder="כתובות מופרדות בפסיק"
                   className="flex-1 rounded-xl border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
