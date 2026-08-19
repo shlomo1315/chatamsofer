@@ -329,7 +329,7 @@ export default function GmailInbox() {
     setComposeOpen(true)
   }
 
-  async function sendMail(p: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: { name: string; type: string; data: string }[] }) {
+  async function sendMail(p: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: { name: string; type: string; data: string }[]; scheduledAt?: string }) {
     try {
       const res = await fetch('/api/admin/gmail/inbox/actions', {
         method: 'POST',
@@ -338,6 +338,8 @@ export default function GmailInbox() {
           action: composeMode === 'reply' ? 'reply' : 'send',
           to: p.to, cc: p.cc, bcc: p.bcc, subject: p.subject, html: p.html,
           attachments: p.attachments,
+          // תזמון — מטופל ב-Resend (Gmail אינו תומך; sendMail מפנה לשם).
+          ...(p.scheduledAt ? { scheduledAt: p.scheduledAt } : {}),
           threadId: composeMode === 'reply' ? selected?.thread_id : undefined,
           // ⚠️ התיבה הפעילה קובעת מי השולח. בתשובה — התיבה שאליה הגיעה
           // ההודעה, אחרת המשפחה מקבלת תשובה מכתובת שלא כתבה אליה.

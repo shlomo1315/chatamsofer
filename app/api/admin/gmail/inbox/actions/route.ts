@@ -1,6 +1,8 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { requireMailAccess, unauthorized, getServiceClient } from '@/lib/apiAuth'
 import { getGmailClientForToken, sendGmailMessage } from '@/lib/gmail'
+// תזמון בלבד — Gmail API אינו תומך בו, ולכן מייל מתוזמן יוצא דרך Resend.
+import { deliverMail } from '@/lib/sendMail'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +71,8 @@ interface Body {
   attachments?: Attachment[]
   /** ׳”׳×׳™׳‘׳” ׳©׳׳׳ ׳” ׳׳©׳׳•׳— ג€” ׳׳‘׳—׳™׳¨׳× ׳”׳©׳•׳׳— ׳›׳©׳™׳© ׳›׳׳”. */
   accountId?: string
+  /** ISO 8601 — מועד שליחה עתידי. מפנה את השליחה ל-Resend (ראו case 'send'). */
+  scheduledAt?: string
 }
 
 /** ׳›׳•׳×׳¨׳× ׳׳§׳•׳“׳“׳× ׳-UTF-8 ג€” ׳ ׳•׳©׳/׳©׳ ׳§׳•׳‘׳¥ ׳‘׳¢׳‘׳¨׳™׳× ׳׳’׳™׳¢ ׳›׳’'׳™׳‘׳¨׳™׳© ׳‘׳׳¢׳“׳™׳”. */
@@ -167,6 +171,40 @@ export async function POST(request: NextRequest) {
         const atts = Array.isArray(body.attachments) ? body.attachments : []
         const cc = String(body.cc ?? '').trim() || undefined
         const bcc = String(body.bcc ?? '').trim() || undefined
+
+        // 🔴 שליחה מתוזמנת עוברת ב-Resend, לא ב-Gmail API.
+        //
+        // ⚠️ ל-Gmail API אין תזמון כלל — הודעה שנשלחת דרכו יוצאת מיד.
+        // בלי ההסתעפות הזו "תזמן שליחה" היה מבטיח מועד עתידי ושולח כאן
+        // ועכשיו, וזה השקר הגרוע ביותר שממשק יכול לספר.
+        //
+        // ⚠️ הסף (30 שניות) זהה לזה שבלקוח וב-/api/admin/gmail/send:
+        // מועד שחלף נדחה במפורש במקום להישלח מיד בהפתעה.
+        const schedRaw = body.scheduledAt ? String(body.scheduledAt) : ''
+        if (schedRaw) {
+          const t = new Date(schedRaw).getTime()
+          if (!Number.isFinite(t) || t <= Date.now() + 30_000) {
+            return NextResponse.json({ error: 'מועד השליחה חייב להיות עתידי' }, { status: 400 })
+          }
+          const mailAtts = atts
+            .filter((a: { name?: string; data?: string }) => a?.data && a?.name)
+            .map((a: { name: string; type?: string; data: string }) => ({
+              filename: a.name,
+              mimeType: a.type || 'application/octet-stream',
+              contentB64: a.data,
+            }))
+          const r = await deliverMail(to, subject, html, mailAtts.length ? mailAtts : undefined, {
+            replyTo: acc.email,
+            fromEmail: acc.email,
+            fromName: acc.email,
+            sentBy: staff.email ?? undefined,
+            scheduledAt: new Date(t).toISOString(),
+          })
+          if (!r.ok) return NextResponse.json({ error: r.error ?? 'התזמון נכשל' }, { status: 500 })
+          console.log(`[inbox/actions] תוזמן מ-${acc.email} אל ${to} ל-${new Date(t).toISOString()}`)
+          return NextResponse.json({ ok: true, scheduled: true })
+        }
+
         if (atts.length) {
           await sendWithAttachments(gmail, {
             to, subject, html, from: acc.email, cc, bcc,

@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
   X, Send, Loader2, Paperclip, Trash2,
   Bold, Italic, Underline, List, ListOrdered, Link2, AlertTriangle,
-  AlignRight, AlignCenter, AlignLeft, Palette,
+  AlignRight, AlignCenter, AlignLeft, Palette, Clock,
 } from 'lucide-react'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ export default function ComposeDialog({
   fromId?: string
   onFromChange?: (id: string) => void
   onClose: () => void
-  onSent: (payload: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: Att[] }) => Promise<boolean>
+  onSent: (payload: { to: string; cc?: string; bcc?: string; subject: string; html: string; attachments: Att[]; scheduledAt?: string }) => Promise<boolean>
 }) {
   const [to, setTo] = useState(initialTo ?? '')
   const [subject, setSubject] = useState(initialSubject ?? '')
@@ -55,6 +55,15 @@ export default function ComposeDialog({
   const [attachments, setAttachments] = useState<Att[]>([])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ── שליחה מתוזמנת ──
+  // 🔴 התזמון מתבצע ב-Resend עצמו (scheduledAt ב-lib/sendMail), לא ב-Cron
+  // שלנו: אין סריקה תקופתית, והמועד מדויק לדקה.
+  //
+  // ⚠️ Gmail אינו תומך בתזמון — sendMail מפנה אוטומטית ל-Resend כשהשדה
+  // מאוכלס. לכן אין מה לחסום כאן לפי סוג הנמען.
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [showSchedule, setShowSchedule] = useState(false)
 
   const [contactQ, setContactQ] = useState('')
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -124,6 +133,16 @@ export default function ComposeDialog({
     if (!html.replace(/<[^>]*>/g, '').trim() && !attachments.length) {
       setError('ההודעה ריקה'); return
     }
+    // ⚠️ אותו סף כמו בשרת (30 שניות): מועד שחלף מתעלמים ממנו שם ושולחים
+    // מיד — עדיף לומר זאת כאן מאשר להפתיע בשליחה מיידית.
+    let scheduledIso: string | undefined
+    if (showSchedule && scheduledAt) {
+      const t = new Date(scheduledAt).getTime()
+      if (!Number.isFinite(t)) { setError('מועד השליחה אינו תקין'); return }
+      if (t <= Date.now() + 30_000) { setError('מועד השליחה חייב להיות עתידי (לפחות דקה מעכשיו)'); return }
+      scheduledIso = new Date(t).toISOString()
+    }
+
     setSending(true); setError(null)
     const ok = await onSent({
       to: to.trim(),
@@ -131,6 +150,7 @@ export default function ComposeDialog({
       bcc: bcc.trim() || undefined,
       subject: subject.trim() || '(ללא נושא)',
       html, attachments,
+      ...(scheduledIso ? { scheduledAt: scheduledIso } : {}),
     })
     setSending(false)
     if (ok) onClose()
@@ -184,8 +204,13 @@ export default function ComposeDialog({
                 // ⚠️ ההשהיה נחוצה: בלעדיה onBlur סוגר את הרשימה לפני
                 // ש-onClick של השורה שנלחצה מספיק לרוץ.
                 onBlur={() => setTimeout(() => setShowContacts(false), 150)}
-                dir="ltr" placeholder="אל…  (שם, ת״ז או כתובת מייל)"
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+                // ⚠️ placeholder בעברית על שדה dir="ltr" מתחיל משמאל — בדיוק
+                // במקום שבו יושבים כפתורי "עותק"/"מוסתר" (absolute left-2),
+                // והשניים נדפסו זה על זה. pl מפנה להם מקום אמיתי.
+                dir="ltr" placeholder="אל…"
+                className={`w-full rounded-xl border border-slate-200 py-2 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 ${
+                  (!showCc && !showBcc) ? 'pl-24' : (!showCc || !showBcc) ? 'pl-14' : 'pl-3'
+                }`} />
               {searching && (
                 <Loader2 size={14} className="absolute top-1/2 -translate-y-1/2 left-3 animate-spin text-slate-400" />
               )}
@@ -208,6 +233,12 @@ export default function ComposeDialog({
                 </div>
               )}
             </div>
+
+            {/* ההסבר ירד מה-placeholder (הוא נחתך מול הכפתורים) — כאן הוא
+                נשאר גלוי גם אחרי שמתחילים להקליד. */}
+            {!to.trim() && (
+              <p className="mt-1 px-1 text-[11px] text-slate-400">שם, ת״ז או כתובת מייל</p>
+            )}
 
             {showCc && (
               <div className="mt-2 flex items-center gap-2">
@@ -351,15 +382,41 @@ export default function ComposeDialog({
           )}
         </div>
 
+        {/* בורר מועד — נפתח מהשעון שבשורת הפעולות */}
+        {showSchedule && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-indigo-50/60 px-5 py-2.5 flex-shrink-0">
+            <Clock size={14} className="text-indigo-600" />
+            <span className="text-[11px] font-bold text-indigo-900">שליחה בתאריך:</span>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={e => { setScheduledAt(e.target.value); setError(null) }}
+              className="rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-200" />
+            <button type="button"
+              onClick={() => { setShowSchedule(false); setScheduledAt(''); setError(null) }}
+              className="text-[11px] font-bold text-indigo-700 hover:underline">ביטול תזמון</button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 bg-slate-50 flex-shrink-0">
           <span className="text-[11px] text-slate-400">
-            {mode === 'reply' ? 'התשובה תישלח בשרשור הקיים' : 'ההודעה תישלח מהתיבה הנבחרת'}
+            {showSchedule && scheduledAt
+              ? 'ההודעה תמתין ותישלח במועד שנבחר'
+              : mode === 'reply' ? 'התשובה תישלח בשרשור הקיים' : 'ההודעה תישלח מהתיבה הנבחרת'}
           </span>
           <div className="flex items-center gap-2">
+            {!showSchedule && (
+              <button type="button" onClick={() => setShowSchedule(true)} title="שליחה מתוזמנת"
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                <Clock size={14} /> תזמון
+              </button>
+            )}
             <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600">ביטול</button>
             <button onClick={submit} disabled={sending || !to.trim()}
               className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-extrabold text-white hover:bg-indigo-700 disabled:opacity-50">
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} שלח
+              {sending ? <Loader2 size={14} className="animate-spin" />
+                : (showSchedule && scheduledAt) ? <Clock size={14} /> : <Send size={14} />}
+              {(showSchedule && scheduledAt) ? 'תזמן שליחה' : 'שלח'}
             </button>
           </div>
         </div>
