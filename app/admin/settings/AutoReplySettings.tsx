@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Loader2, Save, Eye, ChevronDown, Check, AlertCircle, Plus, Trash2, Mail, Clock, Ban, FileText,
 } from 'lucide-react'
-import { REQUEST_MAILTO_PRESETS, requestMailtoUrl } from '@/lib/autoReplyConfig'
+import { REQUEST_MAILTO_PRESETS, requestMailtoUrl, AUTO_REPLY_DEFAULT_TITLE, AUTO_REPLY_DEFAULT_NO_REPLY } from '@/lib/autoReplyConfig'
 import type {
   AutoReplyMap, AutoReplySettings as Settings, AutoReplyButton, AutoReplySection, AutoReplyMode,
 } from '@/lib/autoReplyConfig'
@@ -242,6 +242,16 @@ export default function AutoReplySettings() {
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
                     </Field>
 
+                    <Field label="כותרת ראשית">
+                      <input value={s.title ?? ''}
+                        onChange={e => patch(dept.key, { title: e.target.value })}
+                        placeholder={AUTO_REPLY_DEFAULT_TITLE}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:border-indigo-400 outline-none" />
+                      <p className="text-[11.5px] text-slate-400 mt-1">
+                        הכיתוב הגדול בראש המייל. ריק — יוצג &quot;{AUTO_REPLY_DEFAULT_TITLE}&quot;.
+                      </p>
+                    </Field>
+
                     <Field label="פסקת פתיחה">
                       <textarea value={s.message} rows={5}
                         onChange={e => patch(dept.key, { message: e.target.value })}
@@ -287,6 +297,17 @@ export default function AutoReplySettings() {
                       <textarea value={s.footnote} rows={2}
                         onChange={e => patch(dept.key, { footnote: e.target.value })}
                         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+                    </Field>
+
+                    <Field label='הודעת "אין להשיב"' hint="הבלוק האדום בתחתית המייל">
+                      <textarea value={s.noReplyNotice ?? ''} rows={3}
+                        onChange={e => patch(dept.key, { noReplyNotice: e.target.value })}
+                        placeholder={AUTO_REPLY_DEFAULT_NO_REPLY}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm leading-relaxed focus:border-indigo-400 outline-none resize-y" />
+                      <p className="text-[11.5px] text-slate-400 mt-1">
+                        השורה הראשונה היא הכותרת המודגשת. ריק — יוצג הנוסח הרגיל.
+                        לתיבה שבה כן קוראים תשובות: הקלידו רווח בודד והבלוק לא יוצג כלל.
+                      </p>
                     </Field>
 
                     <Field label="מכסה שבועית לפונה" hint="בולם מפני לולאת מיילים — מומלץ להשאיר על 10">

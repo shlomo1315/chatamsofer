@@ -47,3 +47,45 @@ describe('גוף ההודעה — הכתובות נשמרות', () => {
     expect(mail.html).toContain('10@chasamsofer.info')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// עריכת הכותרת והבלוק האדום פר-תיבה (נוסף לבקשת המשתמש).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('כותרת והודעת "אין להשיב" ניתנות לעריכה פר-תיבה', () => {
+  const base = () => defaultAutoReplyMap().main!
+
+  it('ריק — ברירת המחדל', () => {
+    const mail = renderAutoReply('main', base())
+    expect(mail.html).toContain('ברוכים הבאים')
+    expect(mail.html).toContain('אין להשיב')
+  })
+
+  it('כותרת מותאמת מחליפה את ברירת המחדל', () => {
+    const mail = renderAutoReply('main', { ...base(), title: 'שלום וברכה' })
+    expect(mail.html).toContain('שלום וברכה')
+    expect(mail.html).not.toContain('ברוכים הבאים')
+  })
+
+  it('נוסח "אין להשיב" מותאם מחליף את ברירת המחדל', () => {
+    const mail = renderAutoReply('main', { ...base(), noReplyNotice: 'נא לא להשיב\nהתיבה אינה מנוטרת' })
+    expect(mail.html).toContain('נא לא להשיב')
+    expect(mail.html).toContain('התיבה אינה מנוטרת')
+    expect(countOf(mail.html, 'אינן נקראות')).toBe(0)
+  })
+
+  // 🔴 תיבה שכן קוראים בה תשובות — הבלוק כולו יורד.
+  it('רווח בודד מסתיר את הבלוק לגמרי', () => {
+    const mail = renderAutoReply('main', { ...base(), noReplyNotice: ' ' })
+    expect(countOf(mail.html, 'אין להשיב')).toBe(0)
+    expect(countOf(mail.html, 'ממערכת אוטומטית')).toBe(0)
+  })
+
+  // ⚠️ "אין להשיב" הוא מאפיין של התיבה, לא של הנוסח — הוא חייב לשרוד
+  // גם במעבר להודעה הזמנית, שבה הכפתורים והסעיפים כן יורדים.
+  it('ההתאמה נשמרת גם בנוסח הזמני', () => {
+    const mail = renderAutoReply('main', {
+      ...base(), mode: 'temp', tempMessage: 'נחזור אליכם', noReplyNotice: ' ',
+    })
+    expect(countOf(mail.html, 'אין להשיב')).toBe(0)
+  })
+})

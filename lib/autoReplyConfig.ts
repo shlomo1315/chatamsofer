@@ -139,6 +139,17 @@ export interface AutoReplySection {
  */
 export type AutoReplyMode = 'off' | 'temp' | 'full'
 
+/**
+ * ברירות המחדל לטקסטים הניתנים לעריכה פר-תיבה.
+ *
+ * ⚠️ שדה ריק בהגדרות נופל לכאן במקום להישמר משוכפל ב-11 התיבות. כך שינוי
+ * הנוסח הכללי נעשה במקום אחד, ותיבה ששינתה במפורש שומרת על השינוי שלה.
+ */
+export const AUTO_REPLY_DEFAULT_TITLE = 'ברוכים הבאים'
+export const AUTO_REPLY_DEFAULT_NO_REPLY =
+  'מייל זה נשלח ממערכת אוטומטית — אין להשיב עליו\n'
+  + 'הודעות הנשלחות לכתובת זו אינן נקראות. במידת הצורך ניתן לפנות לכל אגף בנפרד.'
+
 export interface AutoReplySettings {
   /**
    * ⚠️ נשאר כמקור האמת ל"האם התיבה עונה בכלל", ואינו נגזר מ-mode בזמן
@@ -171,6 +182,22 @@ export interface AutoReplySettings {
   sections: AutoReplySection[]
   /** הערת סיום — מתחת לסעיפים (למשל "בכתובת זו לא יינתן מענה בנושאים דלעיל"). */
   footnote: string
+  /**
+   * כותרת המייל — הכיתוב הגדול בראש ההודעה.
+   *
+   * ⚠️ ריק = ברירת המחדל שבקוד (AUTO_REPLY_DEFAULT_TITLE). כך תיבה שלא
+   * נגעו בה ממשיכה להציג את הנוסח הרגיל, ואין צורך למלא אותו ידנית
+   * בכל אחת מ-11 התיבות רק כדי לשמור על המצב הקיים.
+   */
+  title?: string
+  /**
+   * הודעת "אין להשיב" בתחתית המייל — הבלוק האדום.
+   *
+   * ⚠️ ריק = ברירת המחדל. תיבה שכן קוראת את התשובות יכולה לרוקן אותו
+   * (מחרוזת של רווח) ואז הבלוק לא יוצג כלל — קודם הוא הוצג תמיד, גם
+   * בתיבות שבהן ההודעה פשוט אינה נכונה.
+   */
+  noReplyNotice?: string
   /** מכסת מענים שבועית לאותו שולח — הבולם האחרון מפני לולאה. */
   weeklyCap: number
 }
@@ -188,18 +215,24 @@ export interface AutoReplySettings {
 export function activeReplyContent(s: AutoReplySettings): {
   subject: string; message: string; buttons: AutoReplyButton[]
   sections: AutoReplySection[]; footnote: string; isTemp: boolean
+  noReplyNotice?: string
 } {
   if (s.mode === 'temp' && s.tempMessage.trim()) {
     return {
       subject: s.tempSubject.trim() || s.subject,
       message: s.tempMessage,
       buttons: [], sections: [], footnote: '',
+      // ⚠️ עובר גם לנוסח הזמני: הכפתורים והסעיפים אמנם יורדים בו, אבל
+      // "אין להשיב" הוא מאפיין של *התיבה* ולא של הנוסח. תיבה שבה כן
+      // קוראים תשובות הייתה מציגה את הבלוק האדום ברגע המעבר לזמני.
+      noReplyNotice: s.noReplyNotice,
       isTemp: true,
     }
   }
   return {
     subject: s.subject, message: s.message, buttons: s.buttons,
-    sections: s.sections, footnote: s.footnote, isTemp: false,
+    sections: s.sections, footnote: s.footnote,
+    noReplyNotice: s.noReplyNotice, isTemp: false,
   }
 }
 
@@ -270,7 +303,7 @@ function renderButtons(buttons: AutoReplyButton[], accent: string, small = false
 
 /** בונה את גוף המייל: פתיחה, כפתורים כלליים, סעיפים, והערת סיום. */
 export function buildAutoReplyBody(
-  settings: Pick<AutoReplySettings, 'message' | 'buttons'> & Partial<Pick<AutoReplySettings, 'sections' | 'footnote'>>,
+  settings: Pick<AutoReplySettings, 'message' | 'buttons'> & Partial<Pick<AutoReplySettings, 'sections' | 'footnote' | 'noReplyNotice'>>,
   accent: string,
 ): string {
   const intro = settings.message.trim()
@@ -299,17 +332,26 @@ export function buildAutoReplyBody(
   //
   // ⚠️ בלי כתובת מייל: ההפניות לאגפים נמצאות בסעיפים שהמנהל הגדיר, וכתובת
   // נוספת כאן סתרה אותן ("פנו לאגף X" ומיד "לפניות: office@").
-  const noReply = `
+  // ⚠️ ניתן לעריכה פר-תיבה (noReplyNotice). מחרוזת ריקה = ברירת המחדל;
+  // רווח בלבד = הבלוק לא מוצג כלל — לתיבות שבהן כן קוראים תשובות,
+  // ושבהן ההודעה הזו פשוט אינה נכונה.
+  const noReplyText = settings.noReplyNotice === undefined || settings.noReplyNotice === ''
+    ? AUTO_REPLY_DEFAULT_NO_REPLY
+    : settings.noReplyNotice
+  const noReplyLines = noReplyText.trim()
+    ? noReplyText.trim().split(/\n+/)
+    : []
+  const noReply = noReplyLines.length ? `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
       <tr><td style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;padding:16px 20px;">
         <p style="margin:0 0 4px;color:#991b1b;font-size:15px;font-weight:900;line-height:1.6;text-align:center;">
-          מייל זה נשלח ממערכת אוטומטית — אין להשיב עליו
+          ${textToHtml(noReplyLines[0])}
         </p>
-        <p style="margin:0;color:#b91c1c;font-size:13px;line-height:1.8;text-align:center;">
-          הודעות הנשלחות לכתובת זו אינן נקראות. במידת הצורך ניתן לפנות לכל אגף בנפרד.
-        </p>
+        ${noReplyLines.length > 1 ? `<p style="margin:0;color:#b91c1c;font-size:13px;line-height:1.8;text-align:center;">
+          ${textToHtml(noReplyLines.slice(1).join('\n'))}
+        </p>` : ''}
       </td></tr>
-    </table>`
+    </table>` : ''
 
   return `${intro}${renderButtons(settings.buttons, accent)}${sections ? `<div style="margin:22px 0 0;">${sections}</div>` : ''}${footnote}${noReply}`
 }

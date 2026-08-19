@@ -3,7 +3,7 @@ import { deliverMail } from './sendMail'
 import { mailFor, DEPARTMENTS, type DepartmentKey } from './departments'
 import { shell } from './emailTemplates'
 import { shouldSkipAutoReply, isAutoSubmittedMail } from './maintenanceReply'
-import { getAutoReplyConfig, buildAutoReplyBody, activeReplyContent, type AutoReplySettings } from './autoReplyConfig'
+import { getAutoReplyConfig, buildAutoReplyBody, activeReplyContent, AUTO_REPLY_DEFAULT_TITLE, type AutoReplySettings } from './autoReplyConfig'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // שליחת המענה האוטומטי — נקודת הכניסה היחידה.
@@ -56,7 +56,8 @@ export function renderAutoReply(dept: DepartmentKey, settings: AutoReplySettings
     html: shell({
       preheader: active.message.replace(/\s+/g, ' ').slice(0, 90),
       accent: d.color,
-      title: 'פנייתכם התקבלה',
+      // ⚠️ ניתן לעריכה פר-תיבה; ריק נופל לברירת המחדל במקום להישמר משוכפל.
+      title: (settings.title ?? '').trim() || AUTO_REPLY_DEFAULT_TITLE,
       subtitle: `היכל החתם סופר · ${d.label}`,
       body: buildAutoReplyBody(active, d.color),
     }),
